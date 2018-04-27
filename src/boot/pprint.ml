@@ -156,7 +156,7 @@ and pprint basic t =
   | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
   | TmClos(_,x,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmClos(_,x,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
-  | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
+  | TmApp(_,t1,t2) -> us"(" ^. pprint t1 ^. us" " ^. pprint t2 ^. us")"
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
   | TmPEval(_) -> us"peval"

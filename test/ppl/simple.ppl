@@ -3,6 +3,4 @@
 //
 // Simple PPL test
 
-
-
-utest 5 (sample 2 3)
+utest 5 (add 2 3)

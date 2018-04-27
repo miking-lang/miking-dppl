@@ -14,10 +14,14 @@
 
 (* Atom definitions *)
 let atom_sample = "sample"
+let atom_weight = "weight"
+let atom_infer = "infer"
 
 let reserved_strings = [
   (* Atoms *)
   (atom_sample,     fun(i) -> Pplparser.ATOM{i=i;v=usid atom_sample});
+  (atom_weight,     fun(i) -> Pplparser.ATOM{i=i;v=usid atom_weight});
+  (atom_infer,      fun(i) -> Pplparser.ATOM{i=i;v=usid atom_infer});
 
   (* Keywords *)
   ("fun",           fun(i) -> Pplparser.FUNC{i=i;v=()});

@@ -130,3 +130,11 @@ struct
   type t = int
   let compare = compare
 end
+
+(* Generates a list with i values v as elements *)
+let replicate i v =
+  let rec recur i v acc = match i with
+    | 0 -> acc
+    | _ -> recur (i-1) v (v :: acc)
+  in recur i v []
+
