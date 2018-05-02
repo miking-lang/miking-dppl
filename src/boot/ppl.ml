@@ -22,7 +22,7 @@ let ainfer = usid Ppllexer.atom_infer
 (* This is the main hook for new constructs in the mcore *)
 let eval_atom fi id tms v =
   match id,tms,v with
-(* TODO *)
+  (* TODO *)
 
   (* Sample *)
   | id, [], v when id = asample -> v
@@ -54,7 +54,7 @@ let idfun =
 (* Used for unsupported CPS transformations *)
 let failcps tm =
   failwith ("CPS-transformation of " ^
-  Ustring.to_utf8 (pprint false tm) ^ " not supported")
+            Ustring.to_utf8 (pprint false tm) ^ " not supported")
 
 (* Transform constant functions to cps *)
 let cps_const c arity =
@@ -68,7 +68,7 @@ let cps_const c arity =
     (fun v acc ->
        let k = genvar () in
        let k' = TmVar(NoInfo, k, noidx, false) in
-       TmLam(NoInfo, v, TmLam(NoInfo, k, TmApp(NoInfo, k', acc))))
+       TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
     vars inner
 
 (* CPS transformation
@@ -88,7 +88,7 @@ let cps cont t =
     | TmLam(fi,x,t1) ->
       let k = genvar () in
       let k' = TmVar(NoInfo, k, noidx, false) in
-      TmApp(NoInfo, cont, TmLam(fi, x, TmLam(NoInfo, k, recur k' t1)))
+      TmApp(NoInfo, cont, TmLam(NoInfo, k, TmLam(fi, x, recur k' t1)))
 
     (* Should not exist before eval *)
     | TmClos _-> failcps t
@@ -100,7 +100,7 @@ let cps cont t =
       let e = genvar () in
       let f' = TmVar(NoInfo, f, noidx, false) in
       let e' = TmVar(NoInfo, e, noidx, false) in
-      let inner = TmLam(NoInfo, e, TmApp(fi, TmApp(NoInfo, f', e'), cont)) in
+      let inner = TmLam(NoInfo, e, TmApp(fi, TmApp(NoInfo, f', cont), e')) in
       let outer = TmLam(NoInfo, f, recur inner t2) in
       recur outer t1
 
@@ -114,7 +114,8 @@ let cps cont t =
     (* Treat as a constant function with 3 arguments. Since branches are
        wrapped in thunks and therefore also CPS transformed as other lambda
        expressions, apply the branches to the identity function to get rid of
-       the outermost continuation and recover the thunk.
+       the outermost continuation and recover the thunk (similar to below for
+       the fixpoint operator).
        TODO Cleanup *)
     | TmIfexp _ ->
       let vars = List.map genvar (replicate 3 ()) in
@@ -122,23 +123,30 @@ let cps cont t =
       let inner = List.fold_left
           (fun acc v ->
              let v' = TmVar(NoInfo, v, noidx, false) in
-             (* Very messy because of CPS in combination with thunks ... *)
-             let b =
-               TmLam(NoInfo, us"_",
-                     TmApp(NoInfo, TmApp(NoInfo, v', idfun), idfun)) in
-             TmApp(NoInfo, acc, b))
+             TmApp(NoInfo, acc, TmApp(NoInfo, v', idfun)))
           c (List.tl vars) in
       let res =
         List.fold_right
           (fun v acc ->
              let k = genvar () in
              let k' = TmVar(NoInfo, k, noidx, false) in
-             TmLam(NoInfo, v, TmLam(NoInfo, k, TmApp(NoInfo, k', acc))))
+             TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
           vars inner
       in TmApp(NoInfo, cont, res)
 
-    (* Not supported TODO *)
-    | TmFix _ -> TmApp(NoInfo, cont, cps_const t 1)
+    (* Treat similar as constant function with a single argument. We need to
+       apply the id function to the argument before applying fix, since the
+       argument expects a continuation as first argument. *)
+    | TmFix _ ->
+      let v = genvar () in
+      let v' = TmVar(NoInfo, v, noidx, false) in
+      let k = genvar () in
+      let k' = TmVar(NoInfo, k, noidx, false) in
+      let inner =
+         TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
+      let res =
+        TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', inner))) in
+      TmApp(NoInfo, cont, res)
 
 
     (* Treat as constant *)
@@ -162,7 +170,7 @@ let cps cont t =
 
   in recur cont t
 
-(* Main function for the evaluation of a probabilitic program *)
+(* Main function for the evaluation of a probabilistic program *)
 let evalprog debruijn eval builtin filename =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
@@ -175,7 +183,7 @@ let evalprog debruijn eval builtin filename =
         |> Pplparser.main Ppllexer.main in
 
       (*uprint_endline (pprint false tm);
-      print_endline "";*)
+        print_endline "";*)
 
       let builtin = List.map
           (fun (x, y) ->
@@ -185,17 +193,17 @@ let evalprog debruijn eval builtin filename =
 
       (*List.iter uprint_endline
         (List.map (fun (x, y) -> us x ^. us" = " ^. pprint false y) builtin);
-      print_endline "";*)
+        print_endline "";*)
 
       let cps = cps idfun tm in
 
       (*uprint_endline (pprint false cps);
-      print_endline "";*)
+        print_endline "";*)
 
       (*let res =*)
       cps |> debruijn (builtin |> List.split |> fst |> List.map us)
       |> eval (builtin |> List.split |> snd); ()
-      (*in uprint_endline (pprint false res)*)
+    (*in uprint_endline (pprint false res)*)
 
     with
     | Ppllexer.Lex_error m ->
