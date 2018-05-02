@@ -68,7 +68,7 @@ let cps_const c arity =
     (fun v acc ->
        let k = genvar () in
        let k' = TmVar(NoInfo, k, noidx, false) in
-       TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
+       TmLam(NoInfo, v, TmLam(NoInfo, k, TmApp(NoInfo, k', acc))))
     vars inner
 
 (* CPS transformation
@@ -88,7 +88,7 @@ let cps cont t =
     | TmLam(fi,x,t1) ->
       let k = genvar () in
       let k' = TmVar(NoInfo, k, noidx, false) in
-      TmApp(NoInfo, cont, TmLam(NoInfo, k, TmLam(fi, x, recur k' t1)))
+      TmApp(NoInfo, cont, TmLam(fi, x, TmLam(NoInfo, k, recur k' t1)))
 
     (* Should not exist before eval *)
     | TmClos _-> failcps t
@@ -100,7 +100,7 @@ let cps cont t =
       let e = genvar () in
       let f' = TmVar(NoInfo, f, noidx, false) in
       let e' = TmVar(NoInfo, e, noidx, false) in
-      let inner = TmLam(NoInfo, e, TmApp(fi, TmApp(NoInfo, f', cont), e')) in
+      let inner = TmLam(NoInfo, e, TmApp(fi, TmApp(NoInfo, f', e'), cont)) in
       let outer = TmLam(NoInfo, f, recur inner t2) in
       recur outer t1
 
@@ -122,19 +122,23 @@ let cps cont t =
       let inner = List.fold_left
           (fun acc v ->
              let v' = TmVar(NoInfo, v, noidx, false) in
-             TmApp(NoInfo, acc, TmApp(NoInfo, v', idfun)))
+             (* Very messy because of CPS in combination with thunks ... *)
+             let b =
+               TmLam(NoInfo, us"_",
+                     TmApp(NoInfo, TmApp(NoInfo, v', idfun), idfun)) in
+             TmApp(NoInfo, acc, b))
           c (List.tl vars) in
       let res =
         List.fold_right
           (fun v acc ->
              let k = genvar () in
              let k' = TmVar(NoInfo, k, noidx, false) in
-             TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
+             TmLam(NoInfo, v, TmLam(NoInfo, k, TmApp(NoInfo, k', acc))))
           vars inner
       in TmApp(NoInfo, cont, res)
 
     (* Not supported TODO *)
-    | TmFix _ -> failcps t
+    | TmFix _ -> TmApp(NoInfo, cont, cps_const t 1)
 
 
     (* Treat as constant *)
@@ -189,8 +193,8 @@ let evalprog debruijn eval builtin filename =
       print_endline "";*)
 
       (*let res =*)
-        cps |> debruijn (builtin |> List.split |> fst |> List.map us)
-        |> eval (builtin |> List.split |> snd); ()
+      cps |> debruijn (builtin |> List.split |> fst |> List.map us)
+      |> eval (builtin |> List.split |> snd); ()
       (*in uprint_endline (pprint false res)*)
 
     with
