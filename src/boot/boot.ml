@@ -401,7 +401,7 @@ let delta c v  =
     | CPolyNeq(Some(TmUC(_,_,_,_) as v1)),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
     | CPolyNeq(Some(_)),t  -> fail_constapp (tm_info t)
 
-    (* Atom - an untyped lable that can be used to implement
+    (* Atom - an untyped label that can be used to implement
        domain specific constructs *)
     | CAtom(id,tms),t -> !eval_atom (tm_info t) id tms t
 
