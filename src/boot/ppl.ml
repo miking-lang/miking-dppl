@@ -28,25 +28,35 @@ let aweight = usid Ppllexer.atom_weight
 let ainfer = usid Ppllexer.atom_infer
 let auniform = usid Ppllexer.atom_uniform
 
-(* Rudimentary importance sampling with fixed sample size of 100 *)
-let infer model cont =
-  let var = TmVar(NoInfo, us"", 0, false) in
-  let idfun = TmLam(NoInfo, us"", var) in
-  match model with
+(* Generate fresh variable names for CPS transformation.  Avoids clashes by
+   using $ as first char (not allowed in lexer for vars).  Takes a debruijn
+   index as argument (for idfun).
+   TODO Way around having to do this?  *)
+let nextvar = ref 0
+let genvar i =
+  let res = !nextvar in
+  let ustr = us "$" ^. ustring_of_int res in
+  nextvar := res + 1;
+  (ustr, TmVar(NoInfo, ustr, i, false))
 
+let idfun =
+  let var, var' = genvar 0 in
+  TmLam(NoInfo, var, var')
+
+(* Temporary demonstration implementation of importance sampling with fixed
+   sample size of 10 *)
+let infer model cont = match model with
   | TmClos(_, _, TmLam(_,_,tm), env, _) ->
 
     let s = replicate 10 (tm, TmNop::idfun::env, 0.0) in
 
-    let run s = List.map
-        (fun (tm, env, w) -> !eval env tm, w) s in
-
     let rec recur s =
-      let t = run s in
       let d = ref false in
       let s' = List.map
-          (fun (tm, w) ->
+          (fun (tm, env, w) ->
+             let tm = !eval env tm in
              match tm with
+
              | TmConst(fi, CAtom(id, [TmConst(_, CAtom(dist,_));
                                       TmClos(_,_, tm, env, _)]))
                when id = asample && dist = auniform ->
@@ -58,11 +68,9 @@ let infer model cont =
                (tm, TmNop::env, w +. wadj)
 
              | _ -> d := true; (tm, [], w))
-          t in
-      if !d then
-        s'
-      else
-        recur s' in
+          s in
+
+      if !d then s' else recur s' in
 
     let res = recur s in
 
@@ -84,43 +92,32 @@ let eval_atom fi id tms v =
   match id,tms,v with
 
   (* Sample *)
-  | id, [], (TmClos(fi,_,_,_,_) as cont) when id = asample ->
+  | id, [], (TmClos(fi,_,_,_,_) as cont)
+    when id = asample ->
     TmConst(fi, CAtom(id,[cont]))
   | id, [cont], (TmConst(fi, CAtom(vid,[])) as dist)
     when id = asample && vid = auniform ->
     TmConst(fi, CAtom(id, [dist; cont]))
 
   (* Weight *)
-  | id, [], (TmClos(fi,_,_,_,_) as cont) when id = aweight ->
+  | id, [], (TmClos(fi,_,_,_,_) as cont)
+    when id = aweight ->
     TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], (TmConst(fi, CFloat _) as w) when id = aweight ->
+  | id, [cont], (TmConst(fi, CFloat _) as w)
+    when id = aweight ->
     TmConst(fi, CAtom(id, [w; cont]))
 
   (* Infer *)
-  | id, [], (TmClos(fi,_,_,_,_) as cont) when id = ainfer ->
+  | id, [], (TmClos(fi,_,_,_,_) as cont)
+    when id = ainfer ->
     TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], (TmClos(fi,_,_,_,_) as model) when id = ainfer ->
+  | id, [cont], (TmClos(fi,_,_,_,_) as model)
+    when id = ainfer ->
     infer model cont
 
   (* No match *)
-  | _,_,_ ->
-    uprint_endline (ustring_of_sid id);
-    uprint_endline (pprint false v);
-    raise_error fi "Incorrect atom application."
+  | _,_,_ -> raise_error fi "Incorrect atom application."
 
-(* Generate fresh variable names for CPS transformation.
-   Avoids clashes by using $ as first char (not allowed in lexer).
-   TODO Way around having to do this?  *)
-let nextvar = ref 0
-let genvar () =
-  let res = !nextvar in
-  let ustr = us "$" ^. ustring_of_int res in
-  nextvar := res + 1;
-  (ustr, TmVar(NoInfo, ustr, noidx, false))
-
-let idfun =
-  let var, var' = genvar () in
-  TmLam(NoInfo, var, var')
 
 (* Used for unsupported CPS transformations *)
 let failcps tm =
@@ -129,14 +126,14 @@ let failcps tm =
 
 (* Wrap constant functions in CPS forms *)
 let cps_const c arity =
-  let vars = List.map genvar (replicate arity ()) in
+  let vars = List.map genvar (replicate arity noidx) in
   let inner = List.fold_left
       (fun acc (_, v') ->
          TmApp(NoInfo, acc, v'))
       c vars in
   List.fold_right
     (fun (v, _) acc ->
-       let k, k' = genvar () in
+       let k, k' = genvar noidx in
        TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
     vars inner
 
@@ -156,7 +153,7 @@ let cps cont t =
 
     (* Transform lambda to CPS, then apply continuation to the new lambda. *)
     | TmLam(fi,x,t1) ->
-      let k, k' = genvar () in
+      let k, k' = genvar noidx in
       let res = TmLam(NoInfo, k, TmLam(fi, x, recur k' t1)) in
       TmApp(NoInfo, cont, res)
 
@@ -166,8 +163,8 @@ let cps cont t =
     (* Function application.
        TODO Optimization possible when t1 and t2 are not TmApps *)
     | TmApp(fi,t1,t2) ->
-      let f, f' = genvar () in
-      let e, e' = genvar () in
+      let f, f' = genvar noidx in
+      let e, e' = genvar noidx in
       let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
       let inner = TmLam(NoInfo, e, app) in
       let outer = TmLam(NoInfo, f, recur inner t2) in
@@ -186,7 +183,7 @@ let cps cont t =
        the outermost continuation and recover the thunk (similar to below for
        the fixpoint operator). *)
     | TmIfexp _ ->
-      let vars = List.map genvar (replicate 3 ()) in
+      let vars = List.map genvar (replicate 3 noidx) in
       let _, hd' = List.hd vars in
       let c = TmApp(NoInfo, t, hd') in
       let inner = List.fold_left
@@ -196,7 +193,7 @@ let cps cont t =
       let res =
         List.fold_right
           (fun (v, _) acc ->
-             let k, k' = genvar () in
+             let k, k' = genvar noidx in
              TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
           vars inner
       in TmApp(NoInfo, cont, res)
@@ -206,8 +203,8 @@ let cps cont t =
        above for ifexp), since the argument expects a continuation as first
        argument. *)
     | TmFix _ ->
-      let v, v' = genvar () in
-      let k, k' = genvar () in
+      let v, v' = genvar noidx in
+      let k, k' = genvar noidx in
       let inner =
         TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
       let res =
