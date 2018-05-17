@@ -27,7 +27,7 @@ let reserved_strings = [
   (atom_uniform,    fun(i) -> Pplparser.ATOM{i=i;v=usid atom_uniform});
 
   (* Keywords *)
-  ("fun",           fun(i) -> Pplparser.FUNC{i=i;v=()});
+  ("function",      fun(i) -> Pplparser.FUNC{i=i;v=()});
   ("def",           fun(i) -> Pplparser.DEF{i=i;v=()});
   ("in",            fun(i) -> Pplparser.IN{i=i;v=()});
   ("if",            fun(i) -> Pplparser.IF{i=i;v=()});
@@ -49,9 +49,11 @@ let reserved_strings = [
   ("fix",           fun(i) -> Pplparser.FIX{i=i;v=()});
   ("peval",         fun(i) -> Pplparser.PEVAL{i=i;v=()});
   ("ifexp",         fun(i) -> Pplparser.IFEXP{i=i;v=()});
+  ("observe",       fun(i) -> Pplparser.OBSERVE{i=i;v=()});
 
   (* v *)
   ("=",             fun(i) -> Pplparser.EQ{i=i;v=()});
+  ("~",             fun(i) -> Pplparser.TILDE{i=i;v=()});
   ("+",             fun(i) -> Pplparser.ADD{i=i;v=()});
   ("-",             fun(i) -> Pplparser.SUB{i=i;v=()});
   ("*",             fun(i) -> Pplparser.MUL{i=i;v=()});
@@ -170,9 +172,10 @@ let s_escape = "\\'" | "\\\"" | "\\?"  | "\\\\" |
                "\\a"  | "\\b" | "\\f"  | "\\n" | "\\r" | "\\t" | "\\v"
 let nondigit = ('_' | us_letter)
 let ident = (nondigit (digit | nondigit)*)
-let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
-              "!=" | "!" | "&&" | "||" | "++"| "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | "."  | "|" | "->" | "=>"
+let symtok =  "="  | "~" | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">="
+           | "<<" | ">>" | ">>>" | "==" | "!=" | "!" | "&&" | "||" | "++"| "("
+           | ")"  | "["  | "]" | "{"  | "}"  | "::" | ":" | ";" | ","  | "."  |
+           "|" | "->" | "=>"
 
 let line_comment = "//" [^ '\013' '\010']*
 let unsigned_integer = digit+

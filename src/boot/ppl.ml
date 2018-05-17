@@ -30,8 +30,7 @@ let auniform = usid Ppllexer.atom_uniform
 
 (* Generate fresh variable names for CPS transformation.  Avoids clashes by
    using $ as first char (not allowed in lexer for vars).  Takes a debruijn
-   index as argument (for idfun).
-   TODO Way around having to do this?  *)
+   index as argument (for idfun). *)
 let nextvar = ref 0
 let genvar i =
   let res = !nextvar in
@@ -111,7 +110,7 @@ let eval_atom fi id tms v =
   | id, [], (TmClos(fi,_,_,_,_) as cont)
     when id = ainfer ->
     TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], (TmClos(fi,_,_,_,_) as model)
+  | id, [cont], (TmClos _ as model)
     when id = ainfer ->
     infer model cont
 
@@ -170,11 +169,12 @@ let cps cont t =
       let outer = TmLam(NoInfo, f, recur inner t2) in
       recur outer t1
 
-    (* Only true constants (not constant functions) and CAtoms should exist
-       before eval.  *)
-    | TmConst(_,c) -> assert (arity c = 0); TmApp(NoInfo, cont, t)
+    (* Constant transformation  *)
+    | TmConst(_,c) ->
+      let res = if (arity c = 0) then t else cps_const t (arity c)
+      in TmApp(NoInfo, cont, res)
 
-    (* Not supported TODO? *)
+    (* Not supported *)
     | TmPEval _ -> failcps t
 
     (* Treat as a constant function with 3 arguments. Since branches are
@@ -276,6 +276,7 @@ let evalprog debruijn eval' builtin filename =
       let res =
         cps |> debruijn (builtin |> List.split |> fst |> List.map us)
         |> !eval (builtin |> List.split |> snd) in
+
       if enable_debug_cps then
         (printf "\n-- post cps eval -- \n";
          uprint_endline (pprint false res))

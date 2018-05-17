@@ -82,11 +82,13 @@
 %token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> PEVAL
 %token <unit Ast.tokendata> IFEXP
+%token <unit Ast.tokendata> OBSERVE
 
 
 
 
 %token <unit Ast.tokendata> EQ            /* "="  */
+%token <unit Ast.tokendata> TILDE         /* "~"  */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
 %token <unit Ast.tokendata> ADD           /* "+"  */
 %token <unit Ast.tokendata> SUB           /* "-"  */
@@ -126,6 +128,7 @@
 
 %start main
 
+%nonassoc IF
 %left OR  /*prec 2*/
 %left AND  /*prec 3*/
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL /*prec 6*/
@@ -143,90 +146,113 @@
 %%
 
 main:
-  | mcore_scope EOF
-      { $1 }
+  | appletrees_scope EOF { $1 }
 
+/* ************************** APPLETREES ********************************* */
 
-/* ********************************* MCORE **************************************** */
-
-mcore_scope:
+appletrees_scope:
   | { TmNop }
-  | UTEST mc_atom mc_atom mcore_scope
+  | expr appletrees_scope
+      { let fi = tm_info $1 in
+        match $2 with
+        | TmNop -> $1
+        | _ -> TmApp(fi, TmLam(fi, us"_", $2), $1) }
+  | FUNC FUNIDENT params RPAREN expr appletrees_scope
+      { let fi = mkinfo $1.i (tm_info $5) in
+        let rec mkfun lst =
+          (match lst with
+          | x::xs -> TmLam(fi,x,mkfun xs)
+          | [] -> $5 ) in
+        let f = if List.length $3 = 0 then [us"_"] else $3 in
+        TmApp(fi,TmLam(fi,$2.v,$6), addrec $2.v (mkfun f)) }
+  | IDENT EQ expr appletrees_scope
+      { let fi = mkinfo $1.i (tm_info $3) in
+        TmApp(fi,TmLam(fi,$1.v,$4),$3) }
+  | IDENT TILDE expr appletrees_scope
+      { TmNop }
+  | OBSERVE IDENT TILDE expr appletrees_scope
+      { TmNop }
+  | UTEST expr expr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
-  | LET IDENT EQ mc_term mcore_scope
-      { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,$5),$4) }
 
-mc_term:
-  | mc_left
-      { $1 }
-  | LAM IDENT COLON ty DOT mc_term
+expr:
+  | FUNIDENT exprs RPAREN
+      { let fi = mkinfo $1.i $3.i in
+        let rec mkapps lst =
+          match lst with
+          | t::ts ->  TmApp(fi,mkapps ts,t)
+          | [] -> TmVar($1.i,$1.v,noidx,false)
+        in
+        (match Ustring.to_utf8 $1.v with
+         | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued)
+         | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
+  | IF expr THEN expr ELSE expr %prec IF
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmLam(fi,$2.v,$6) }
-  | LET IDENT EQ mc_term IN mc_term
-      { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,$6),$4) }
-
-
-mc_left:
-  | mc_atom
-      { $1 }
-  | mc_left mc_atom
-      { TmApp(NoInfo,$1,$2) }
-
-mc_atom:
-  | LPAREN mc_term RPAREN   { $2 }
+        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
+              TmLam(tm_info $4,us"",$4)),
+              TmLam(tm_info $6,us"",$6)) }
+  | expr ADD expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Caddi(None)),$1),$3) }
+  | expr SUB expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csubi(None)),$1),$3) }
+  | expr MUL expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmuli(None)),$1),$3) }
+  | expr DIV expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdivi(None)),$1),$3) }
+  | expr MOD expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmodi(None)),$1),$3) }
+  | expr LESS expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Clti(None)),$1),$3) }
+  | expr LESSEQUAL expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleqi(None)),$1),$3) }
+  | expr GREAT expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgti(None)),$1),$3)}
+  | expr GREATEQUAL expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeqi(None)),$1),$3) }
+  | expr EQUAL expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq(None)),$1),$3) }
+  | expr NOTEQUAL expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq(None)),$1),$3) }
+  | expr SHIFTLL expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cslli(None)),$1),$3) }
+  | expr SHIFTRL expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrli(None)),$1),$3) }
+  | expr SHIFTRA expr
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrai(None)),$1),$3) }
+  | NOT expr
+      { TmApp($1.i,TmConst($1.i,Cnot),$2) }
+  | expr AND expr
+            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand(None)),$1),$3) }
+  | expr OR expr
+             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
+  | expr CONCAT expr
+         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
+  | LPAREN expr RPAREN   { $2 }
+  | LPAREN SUB expr RPAREN { TmApp($2.i,TmConst($2.i,Cnegi),$3)}
+  | LSQUARE exprs RSQUARE
+       { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
+  | LCURLY appletrees_scope RCURLY  { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
-  | UINT                 { TmConst($1.i,CInt($1.v)) }
-  | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
-  | TRUE                 { TmConst($1.i,CBool(true)) }
-  | FALSE                { TmConst($1.i,CBool(false)) }
-  | NOP                  { TmNop }
-  | FIX                  { TmFix($1.i) }
-  | PEVAL                { TmPEval($1.i) }
-  | IFEXP                { TmIfexp($1.i,None,None) }
-  | ATOM                 { TmConst($1.i,CAtom($1.v,[])) }
+  | UINT                 { TmConst($1.i, CInt($1.v)) }
+  | TRUE                 { TmConst($1.i, CBool(true)) }
+  | FALSE                { TmConst($1.i, CBool(false)) }
 
+params:
+  | { [] }
+  | paramlist { $1 }
 
+paramlist:
+  | IDENT { [$1.v] }
+  | IDENT COMMA paramlist { $1.v :: $3 }
 
+exprs:
+  | { [] }
+  | exprlist { $1 }
 
-ty:
-  | tyatom
-      {}
-  | tyatom ARROW ty
-      {}
+exprlist:
+  | expr %prec LPAREN { [$1] }
+  | expr COMMA exprlist { $1 :: $3 }
 
-tyatom:
-  | IDENT
-      {}
-  | LPAREN RPAREN
-      {}
-  | LPAREN revtypetupleseq RPAREN
-      {}
-  | LSQUARE ty RSQUARE
-      {}
-  | FUNIDENT revtyargs RPAREN
-      {}
-
-
-revtypetupleseq:
-  | ty
-      {}
-  | revtypetupleseq COMMA ty
-      {}
-
-tyarg:
-  | ty
-      {}
-  | IDENT COLON ty
-      {}
-
-revtyargs:
-  |   {}
-  | tyarg
-      {}
-  | revtyargs COMMA tyarg
-      {}

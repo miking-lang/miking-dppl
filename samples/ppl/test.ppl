@@ -1,2 +1,2 @@
-let _ = infer (lam _:(). sub (sample uniform) (sample uniform))
+let _ = infer (lam _:Unit. sub (sample uniform) (sample uniform))
 
