@@ -169,9 +169,17 @@ appletrees_scope:
       { let fi = mkinfo $1.i (tm_info $3) in
         TmApp(fi,TmLam(fi,$1.v,$4),$3) }
   | IDENT TILDE expr appletrees_scope
-      { TmNop }
+      { let fi = mkinfo $1.i (tm_info $3) in
+        let sample = TmVar(fi,us"sample",noidx,false) in
+        TmApp(fi,TmLam(fi,$1.v,$4),TmApp(fi, sample, $3)) }
   | OBSERVE IDENT TILDE expr appletrees_scope
-      { TmNop }
+      { let fi = mkinfo $1.i (tm_info $4) in
+        let prob = TmVar(fi,us"prob",noidx,false) in
+        let v = TmVar($2.i,$2.v,noidx,false) in
+        let inner = TmApp(fi, TmApp(fi, prob, v), $4) in
+        let weight = TmVar(fi,us"weight",noidx,false) in
+        let outer = TmApp(fi, weight, inner) in
+        TmApp(fi,TmLam(fi,us"_",$5),outer) }
   | UTEST expr expr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
@@ -193,13 +201,13 @@ expr:
               TmLam(tm_info $4,us"",$4)),
               TmLam(tm_info $6,us"",$6)) }
   | expr ADD expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Caddi(None)),$1),$3) }
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cadd(TNone)),$1),$3) }
   | expr SUB expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csubi(None)),$1),$3) }
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csub(TNone)),$1),$3) }
   | expr MUL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmuli(None)),$1),$3) }
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmul(TNone)),$1),$3) }
   | expr DIV expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdivi(None)),$1),$3) }
+      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdiv(TNone)),$1),$3) }
   | expr MOD expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmodi(None)),$1),$3) }
   | expr LESS expr
@@ -229,7 +237,7 @@ expr:
   | expr CONCAT expr
          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
   | LPAREN expr RPAREN   { $2 }
-  | LPAREN SUB expr RPAREN { TmApp($2.i,TmConst($2.i,Cnegi),$3)}
+  | LPAREN SUB expr RPAREN { TmApp($2.i,TmConst($2.i,Cneg),$3)}
   | LSQUARE exprs RSQUARE
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY appletrees_scope RCURLY  { $2 }
@@ -237,6 +245,7 @@ expr:
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i, CInt($1.v)) }
+  | UFLOAT               { TmConst($1.i, CFloat($1.v)) }
   | TRUE                 { TmConst($1.i, CBool(true)) }
   | FALSE                { TmConst($1.i, CBool(false)) }
 
