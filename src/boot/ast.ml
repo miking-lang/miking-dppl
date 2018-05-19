@@ -148,6 +148,11 @@ let tm_info t =
   | TmMatch(fi,_,_) -> fi
   | TmNop -> NoInfo
 
+
+(* Atom arity specification. This is changed depending on the DSL *)
+let empty_atom_arity c = failwith "Atom arity must be defined"
+let atom_arity = ref empty_atom_arity
+
 (* Returns the number of expected arguments *)
 let arity c =
   match c with
@@ -198,8 +203,9 @@ let arity c =
   | CPolyNeq(None) -> 2  | CPolyNeq(Some(_)) -> 1
   (* Atom - an untyped lable that can be used to implement
      domain specific constructs *)
-  | CAtom(_,_)     -> 0
+  | CAtom _     -> !atom_arity c
 
+let tm_of_const c = TmConst(NoInfo, c)
 
 type 'a tokendata = {i:info; v:'a}
 

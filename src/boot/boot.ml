@@ -30,7 +30,7 @@ let enable_debug_eval_env = false
 let enable_debug_after_peval = false
 
 (* Evaluation of atoms. This is changed depending on the DSL *)
-let empty_eval_atom fi id tms v = v
+let empty_eval_atom fi id tms v = failwith "Atom evaluation must be defined"
 let eval_atom = ref empty_eval_atom
 
 
@@ -691,6 +691,7 @@ let main =
     let eprog name =
       if Ustring.ends_with (us".ppl") (us name) then
         (eval_atom := Ppl.eval_atom;
+         atom_arity := Ppl.atom_arity;
          (Ppl.evalprog debruijn eval builtin) name)
       else evalprog name
     in
@@ -710,6 +711,7 @@ let main =
     prog_argv := lst;
       if Ustring.ends_with (us".ppl") (us name) then
         (eval_atom := Ppl.eval_atom;
+         atom_arity := Ppl.atom_arity;
          (Ppl.evalprog debruijn eval builtin) name)
       else evalprog name)
 
