@@ -1,2 +1,19 @@
-let _ = infer (lam _:Unit. sub (sample uniform) (sample uniform))
 
+// function f() {
+//   b ~ uniform(false)
+//   if b then 1 else f() + 1
+// }
+//
+// infer(f)
+
+function f() {
+  x ~ uniform(true)
+  d = true
+  observe d ~ uniform(false)
+  if sample(uniform(false)) then
+    x * 3.14
+  else
+    x + f()
+}
+
+infer(f)
