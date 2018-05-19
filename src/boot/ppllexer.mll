@@ -12,20 +12,7 @@
   open Msg
   exception Lex_error of Msg.message
 
-(* Atom definitions *)
-(* Atom definitions *)
-let atom_sample = "sample"
-let atom_weight = "weight"
-let atom_infer = "infer"
-let atom_uniform = "uniform"
-
 let reserved_strings = [
-  (* Atoms *)
-  (atom_sample,     fun(i) -> Pplparser.ATOM{i=i;v=usid atom_sample});
-  (atom_weight,     fun(i) -> Pplparser.ATOM{i=i;v=usid atom_weight});
-  (atom_infer,      fun(i) -> Pplparser.ATOM{i=i;v=usid atom_infer});
-  (atom_uniform,    fun(i) -> Pplparser.ATOM{i=i;v=usid atom_uniform});
-
   (* Keywords *)
   ("function",      fun(i) -> Pplparser.FUNC{i=i;v=()});
   ("def",           fun(i) -> Pplparser.DEF{i=i;v=()});

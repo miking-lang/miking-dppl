@@ -22,11 +22,39 @@ let enable_debug_infer = true
 let empty_eval _ t = t
 let eval = ref empty_eval
 
-(* List of all atom constructs. See ppllexer.mll *)
-let asample = usid Ppllexer.atom_sample
-let aweight = usid Ppllexer.atom_weight
-let ainfer = usid Ppllexer.atom_infer
-let auniform = usid Ppllexer.atom_uniform
+(* List of all CPS transformed atom functions. *)
+let auniform = usid "uniform"
+let ainfer = usid "infer"
+let aprob = usid "prob"
+
+let pre_cps_builtin = [
+  ("uniform", CAtom(auniform, []));
+  ("infer", CAtom(ainfer, []));
+  ("prob", CAtom(aprob, []));
+]
+
+(* List of all non-CPS-transformed atom functions *)
+let asample = usid "sample"
+let aweight = usid "weight"
+let post_cps_builtin = [
+  ("sample", CAtom(asample, []));
+  ("weight", CAtom(aweight, []));
+]
+
+(* Atoms not visible to the user *)
+let adist = usid "dist"
+
+(* Used for constants with unspecified arities *)
+let fail_arity c =
+  failwith ("Arity of " ^
+            Ustring.to_utf8 (pprint_const c) ^ " not specified.")
+
+(* Arity specification for atoms *)
+let atom_arity c = match c with
+  | CAtom(id,_) when id = auniform -> 1
+  | CAtom(id,_) when id = ainfer -> 1
+  | CAtom(id,_) when id = aprob -> 2
+  | _ -> fail_arity c
 
 (* Generate fresh variable names for CPS transformation.  Avoids clashes by
    using $ as first char (not allowed in lexer for vars).  Takes a debruijn
@@ -38,64 +66,119 @@ let genvar i =
   nextvar := res + 1;
   (ustr, TmVar(NoInfo, ustr, i, false))
 
+(* The identity function (with debruijn index) as a tm. Useful for CPS
+   transformations. *)
 let idfun =
   let var, var' = genvar 0 in
   TmLam(NoInfo, var, var')
 
+(* Probability functions for built in distributions. *)
+let prob value dist = match dist with
+  | TmConst(_, CAtom(_, [TmConst(_, CAtom(dist, [TmConst(_, CBool(v))]))]))
+    when dist = auniform ->
+    if v then TmConst(NoInfo, CFloat(0.0))
+    else TmConst(NoInfo, CFloat(-0.693147))
+  | _ -> failwith "Unkown distribution applied as argument to prob."
+
+(* Sample functions for built in distributions. *)
+let sample dist = match dist with
+  | TmConst(_, CAtom(_, [TmConst(_, CAtom(dist, [TmConst(_, CBool(v))]))]))
+    when dist = auniform ->
+    if v then TmConst(NoInfo, CFloat(Random.float 1.0))
+    else TmConst(NoInfo, CBool(Random.float 1.0 > 0.5))
+  | _ -> failwith "Unkown distribution applied as argument to sample."
+
 (* Temporary demonstration implementation of importance sampling with fixed
    sample size of 10 *)
-let infer model cont = match model with
+let infer model = match model with
+  (* Deconstruct continuation and thunk *)
   | TmClos(_, _, TmLam(_,_,tm), env, _) ->
 
-    let s = replicate 10 (tm, TmNop::idfun::env, 0.0) in
+    (* The environment which tm will be evaluated in. Note the idfun which
+       cancels the continuation and the TmNop which unwraps the thunk. *)
+    let env = TmNop::idfun::env in
 
-    let rec recur s =
-      let d = ref false in
-      let s' = List.map
-          (fun (tm, env, w) ->
-             let tm = !eval env tm in
-             match tm with
+    (* Replicate the model for #samples times with an initial log weight of 0.0
+    *)
+    let s = replicate 20 (tm, env, 0.0) in
 
-             | TmConst(fi, CAtom(id, [TmConst(_, CAtom(dist,_));
-                                      TmClos(_,_, tm, env, _)]))
-               when id = asample && dist = auniform ->
-               (tm, (TmConst(NoInfo, CFloat(Random.float 1.0))::env), w)
+    (* Evaluate one sample to the end *)
+    let rec recur (tm, env, w) =
 
-             | TmConst(fi, CAtom(id, [TmConst(_, CFloat(wadj));
-                                      TmClos(_,_, tm, env, _)]))
-               when id = aweight ->
-               (tm, TmNop::env, w +. wadj)
+      (* Evaluate until sample, weight, or result. Continue if sample or
+         weight, stop at result. *)
+      let tm = !eval env tm in
+      match tm with
 
-             | _ -> d := true; (tm, [], w))
-          s in
+      | TmConst(fi, CAtom(id, [dist; TmClos(_,_, tm, env, _)]))
+        when id = asample ->
+        recur (tm, (sample dist)::env, w)
 
-      if !d then s' else recur s' in
+      | TmConst(fi, CAtom(id, [TmConst(_, CFloat(wadj));
+                               TmClos(_,_, tm, env, _)]))
+        when id = aweight ->
+        recur (tm, TmNop::env, w +. wadj)
 
-    let res = recur s in
+      | _ -> tm, [], w in
+
+    let res = List.map recur s in
 
     if enable_debug_infer then
       (printf "\n-- infer result -- \n";
-       List.iter (fun (tm, _, w) ->
-           print_string "Sample: ";
-           uprint_string (pprint false tm);
-           print_string ", Log weight: ";
-           print_endline (string_of_float w))
+       List.iter
+         (fun (tm, _, w) ->
+            print_string "Sample: ";
+            uprint_string (pprint false tm);
+            print_string ", Log weight: ";
+            print_endline (string_of_float w))
          res);
 
-    !eval [] (TmApp(NoInfo, cont, TmNop))
+    TmNop (* Here we should return an empirical distribution *)
 
   | _ -> failwith "Incorrect infer application."
+
+let fail_eval_atom id tms v =
+  let sid = ustring_of_sid id in
+  let stms =
+    List.map (fun t -> pprint false t) tms |> Ustring.concat (us"\n") in
+  let sv = pprint false v in
+  let msg = Ustring.to_utf8
+      (us"Unsupported atom application:\n" ^.
+       us"id = " ^. sid ^. us"\n" ^.
+       us"tms =\n" ^. stms ^. us"\n" ^.
+       us"v = " ^. sv ^. us"\n") in
+  failwith msg
 
 (* This is the main hook for new constructs in the mcore *)
 let eval_atom fi id tms v =
   match id,tms,v with
 
+  (* AUTOMATICALLY CPS TRANSFORMED *)
+  (* Uniform distribution constructor *)
+  | id, [], (TmConst(_, CBool _) as v) when id = auniform ->
+    let f = TmConst(fi, CAtom(id, [v])) in
+    TmConst(fi, CAtom(adist, [f]))
+
+  (* Infer *)
+  | id, [], (TmClos _ as model) when id = ainfer ->
+    infer model
+
+  (* This function (prob) returns the probability or probability density of a
+     value in a given distribution *)
+  | id, [], v when id = aprob ->
+    TmConst(fi, CAtom(id,[v]))
+  | id, [v], (TmConst(_, CAtom(vid, _)) as dist)
+    when id = aprob && vid = adist ->
+    prob v dist
+
+  (* NOT AUTOMATICALLY CPS TRANSFORMED (CONTINUATION MUST BE HANDLED AT THIS
+     POINT)  *)
   (* Sample *)
   | id, [], (TmClos(fi,_,_,_,_) as cont)
     when id = asample ->
     TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], (TmConst(fi, CAtom(vid,[])) as dist)
-    when id = asample && vid = auniform ->
+  | id, [cont], (TmConst(fi, CAtom(vid,_)) as dist)
+    when id = asample && vid = adist ->
     TmConst(fi, CAtom(id, [dist; cont]))
 
   (* Weight *)
@@ -106,131 +189,143 @@ let eval_atom fi id tms v =
     when id = aweight ->
     TmConst(fi, CAtom(id, [w; cont]))
 
-  (* Infer *)
-  | id, [], (TmClos(fi,_,_,_,_) as cont)
-    when id = ainfer ->
-    TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], (TmClos _ as model)
-    when id = ainfer ->
-    infer model cont
-
   (* No match *)
-  | _,_,_ -> raise_error fi "Incorrect atom application."
+  | _ -> fail_eval_atom id tms v
 
 
 (* Used for unsupported CPS transformations *)
-let failcps tm =
+let fail_cps tm =
   failwith ("CPS-transformation of " ^
             Ustring.to_utf8 (pprint false tm) ^ " not supported")
 
 (* Wrap constant functions in CPS forms *)
-let cps_const c arity =
-  let vars = List.map genvar (replicate arity noidx) in
-  let inner = List.fold_left
-      (fun acc (_, v') ->
-         TmApp(NoInfo, acc, v'))
-      c vars in
-  List.fold_right
-    (fun (v, _) acc ->
-       let k, k' = genvar noidx in
-       TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
-    vars inner
+let cps_const t = match t with
+  | TmConst(_, c) ->
+    let vars = List.map genvar (replicate (arity c) noidx) in
+    let inner = List.fold_left
+        (fun acc (_, v') ->
+           TmApp(NoInfo, acc, v'))
+        t vars in
+    List.fold_right
+      (fun (v, _) acc ->
+         let k, k' = genvar noidx in
+         TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
+      vars inner
+  | _ -> failwith "cps_const of non-constant"
 
-(* CPS transformation
+(* CPS transformations
    Requirements:
    - All functions must take one extra parameter: a continuation function with
    exactly one parameter
    - A function never "returns" (i.e., it never returns something that is not a
    TmApp). Instead, it applies its continuation to its "return value". *)
-let cps cont t =
-  let rec recur cont t = match t with
 
-    (* For vars, simply apply continuation. All vars are either builtin and
-       handled by cps_const, or bound by outer lambdas and handled by some
-       other rules below. *)
-    | TmVar _ -> TmApp(NoInfo, cont, t)
+(* Atomic cps transformation (basically everything except function application)
+*)
+let rec cps_atomic t = match t with
+    | TmVar _ -> t
 
-    (* Transform lambda to CPS, then apply continuation to the new lambda. *)
     | TmLam(fi,x,t1) ->
       let k, k' = genvar noidx in
-      let res = TmLam(NoInfo, k, TmLam(fi, x, recur k' t1)) in
-      TmApp(NoInfo, cont, res)
+      TmLam(NoInfo, k, TmLam(fi, x, cps k' t1))
 
     (* Should not exist before eval *)
-    | TmClos _-> failcps t
+    | TmClos _-> fail_cps t
 
-    (* Function application.
-       TODO Optimization possible when t1 and t2 are not TmApps *)
-    | TmApp(fi,t1,t2) ->
-      let f, f' = genvar noidx in
-      let e, e' = genvar noidx in
-      let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
-      let inner = TmLam(NoInfo, e, app) in
-      let outer = TmLam(NoInfo, f, recur inner t2) in
-      recur outer t1
+    (* Function application is not atomic. *)
+    | TmApp _ -> failwith "TmApp is not atomic."
 
     (* Constant transformation  *)
-    | TmConst(_,c) ->
-      let res = if (arity c = 0) then t else cps_const t (arity c)
-      in TmApp(NoInfo, cont, res)
+    | TmConst _ -> cps_const t
 
     (* Not supported *)
-    | TmPEval _ -> failcps t
+    | TmPEval _ -> fail_cps t
 
-    (* Treat as a constant function with 3 arguments. Since branches are
-       wrapped in thunks and therefore also CPS transformed as other lambda
-       expressions, apply the branches to the identity function to get rid of
-       the outermost continuation and recover the thunk (similar to below for
-       the fixpoint operator). *)
+    (* TODO Description *)
     | TmIfexp _ ->
-      let vars = List.map genvar (replicate 3 noidx) in
-      let _, hd' = List.hd vars in
-      let c = TmApp(NoInfo, t, hd') in
-      let inner = List.fold_left
-          (fun acc (_, v') ->
-             TmApp(NoInfo, acc, TmApp(NoInfo, v', idfun)))
-          c (List.tl vars) in
-      let res =
-        List.fold_right
-          (fun (v, _) acc ->
-             let k, k' = genvar noidx in
-             TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
-          vars inner
-      in TmApp(NoInfo, cont, res)
+      let a, a' = genvar noidx in
+      let b, b' = genvar noidx in
+      let c, c' = genvar noidx in
+      let c1, c1' = genvar noidx in
+      let c2, c2' = genvar noidx in
+      let c3, c3' = genvar noidx in
+      let bapp = TmApp(NoInfo, b', c3') in
+      let capp = TmApp(NoInfo, c', c3') in
+      let inner =
+        TmApp(NoInfo, TmApp(NoInfo, TmApp(NoInfo, t, a'), bapp), capp) in
+      let clam =
+        TmLam(NoInfo, c3, TmLam(NoInfo, c, inner)) in
+      let blam =
+        TmLam(NoInfo, c2, TmLam(NoInfo, b, TmApp(NoInfo, c2', clam))) in
+      let alam =
+        TmLam(NoInfo, c1, TmLam(NoInfo, a, TmApp(NoInfo, c1', blam))) in
+      alam
 
     (* Treat similar as constant function with a single argument. We need to
-       apply the id function to the argument before applying fix (similar to
-       above for ifexp), since the argument expects a continuation as first
-       argument. *)
+       apply the id function to the argument before applying fix, since the
+       argument expects a continuation as first argument. TODO Correct? *)
     | TmFix _ ->
       let v, v' = genvar noidx in
       let k, k' = genvar noidx in
       let inner =
         TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
-      let res =
-        TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', inner))) in
-      TmApp(NoInfo, cont, res)
+      TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', inner)))
 
     (* Treat as constant *)
-    | TmChar _ -> TmApp(NoInfo, cont, t)
+    | TmChar _ -> t
 
-    (* Not supported TODO? *)
-    | TmExprSeq _ -> failcps t
+    (* Not supported *)
+    | TmExprSeq _ -> fail_cps t
 
     (* Treat as constant *)
-    | TmUC _ -> TmApp(NoInfo, cont, t)
+    | TmUC _ -> t
 
-    (* Handle specially since only top level *)
+    (* Handle specially since only top level (not safe at the moment since it
+       can appear anywhere) *)
     | TmUtest(fi, t1, t2, tnext) ->
-      TmUtest(fi, recur idfun t1, recur idfun t2, recur idfun tnext)
+      TmUtest(fi, cps idfun t1, cps idfun t2, cps idfun tnext)
 
-    (* Not supported TODO? *)
-    | TmMatch _ -> failcps t
+    (* Not supported *)
+    | TmMatch _ -> fail_cps t
 
     (* Treat as constant *)
-    | TmNop -> TmApp(NoInfo, cont, t)
+    | TmNop -> t
 
-  in recur cont t
+
+(* Complex cps transformation *)
+and cps cont t = match t with
+
+  (* Function application is the only complex expression.
+     TODO Cleanup *)
+  | TmApp(fi,t1,t2) ->
+    (match t1, t2 with
+     | TmApp _, TmApp _ ->
+       let f, f' = genvar noidx in
+       let e, e' = genvar noidx in
+       let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
+       let inner = TmLam(NoInfo, e, app) in
+       let outer = TmLam(NoInfo, f, cps inner t2) in
+       cps outer t1
+     | TmApp _, _ ->
+       let f, f' = genvar noidx in
+       let e' = cps_atomic t2 in
+       let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
+       let outer = TmLam(NoInfo, f, app) in
+       cps outer t1
+     | _, TmApp _ ->
+       let f' = cps_atomic t1 in
+       let e, e' = genvar noidx in
+       let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
+       let outer = TmLam(NoInfo, e, app) in
+       cps outer t2
+     | _ ->
+       let f' = cps_atomic t1 in
+       let e' = cps_atomic t2 in
+       TmApp(fi, TmApp(NoInfo, f', cont), e'))
+
+  (* Everything else is atomic *)
+  | _ -> TmApp(NoInfo, cont, cps_atomic t)
+
 
 (* Main function for the evaluation of a probabilistic program *)
 let evalprog debruijn eval' builtin filename =
@@ -251,13 +346,26 @@ let evalprog debruijn eval' builtin filename =
         (printf "\n-- pre cps -- \n";
          uprint_endline (pprint false tm));
 
-      (* Transform builtins to CPS. Required since we need to wrap constant
-         functions in CPS forms *)
-      let builtin = List.map
-          (fun (x, y) ->
-             let c = TmConst(NoInfo, y) in
-             (x, debruijn [] (cps_const c (arity y))))
-          builtin in
+      (* Function for converting consts in builtin to tms *)
+      let tm_of_builtin b = List.map (fun (x, y) -> x, tm_of_const y) b in
+
+      let builtin = builtin
+        (* Convert builtins from consts to tms *)
+        |> tm_of_builtin
+
+        (* Add PPL builtins that should be CPS transformed *)
+        |> (@) (tm_of_builtin pre_cps_builtin)
+
+        (* Transform builtins to CPS. Required since we need to wrap constant
+           functions in CPS forms *)
+        |> List.map (fun (x, y) -> (x, (cps_const y)))
+
+        (* Add PPL builtins that should not be CPS transformed *)
+        |> (@) (tm_of_builtin post_cps_builtin)
+
+        (* Debruijn transform builtins (since they have now been CPS
+           transformed) *)
+        |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
       if enable_debug_cps_builtin then
         (printf "\n-- cps builtin -- \n";
