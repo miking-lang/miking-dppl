@@ -14,7 +14,7 @@ open Ast
 open Msg
 open Pprint
 
-let enable_debug_cps = false
+let enable_debug_cps = true
 let enable_debug_cps_builtin = false
 let enable_debug_infer = true
 
@@ -36,6 +36,7 @@ let pre_cps_builtin = [
 (* List of all non-CPS-transformed atom functions *)
 let asample = usid "sample"
 let aweight = usid "weight"
+
 let post_cps_builtin = [
   ("sample", CAtom(asample, []));
   ("weight", CAtom(aweight, []));
@@ -76,9 +77,13 @@ let idfun =
 let prob value dist = match dist with
   | TmConst(_, CAtom(_, [TmConst(_, CAtom(dist, [TmConst(_, CBool(v))]))]))
     when dist = auniform ->
-    if v then TmConst(NoInfo, CFloat(0.0))
-    else TmConst(NoInfo, CFloat(-0.693147))
-  | _ -> failwith "Unkown distribution applied as argument to prob."
+    (match v, value with
+     | true, TmConst(_, CFloat(v)) when v >= 0.0 || v <= 1.0 ->
+       TmConst(NoInfo, CFloat(0.0))
+     | false, TmConst(_, CBool(v)) when v == true || v == false ->
+       TmConst(NoInfo, CFloat(-0.693147))
+    | _ -> TmConst(NoInfo, CFloat(neg_infinity)))
+  | _ -> failwith "Unknown distribution applied as argument to prob."
 
 (* Sample functions for built in distributions. *)
 let sample dist = match dist with
@@ -93,6 +98,10 @@ let sample dist = match dist with
 let infer model = match model with
   (* Deconstruct continuation and thunk *)
   | TmClos(_, _, TmLam(_,_,tm), env, _) ->
+
+    (* TODO I think static structure analysis should be done globally before
+       infer is actually called.
+       (Alternative: Static structure analysis here? Maybe CPS transforms as well?) *)
 
     (* The environment which tm will be evaluated in. Note the idfun which
        cancels the continuation and the TmNop which unwraps the thunk. *)
@@ -171,8 +180,8 @@ let eval_atom fi id tms v =
     when id = aprob && vid = adist ->
     prob v dist
 
-  (* NOT AUTOMATICALLY CPS TRANSFORMED (CONTINUATION MUST BE HANDLED AT THIS
-     POINT)  *)
+  (* NOT AUTOMATICALLY CPS TRANSFORMED (CONTINUATION MUST BE HANDLED
+     EXPLICITLY)  *)
   (* Sample *)
   | id, [], (TmClos(fi,_,_,_,_) as cont)
     when id = asample ->
@@ -220,8 +229,9 @@ let cps_const t = match t with
    - A function never "returns" (i.e., it never returns something that is not a
    TmApp). Instead, it applies its continuation to its "return value". *)
 
-(* Atomic cps transformation (basically everything except function application)
-*)
+(* Atomic cps transformation (basically everything except function
+   application).  Atomic means that we can CPS transform the expression without
+   supplying a continuation to the transformation.  *)
 let rec cps_atomic t = match t with
     | TmVar _ -> t
 
@@ -241,7 +251,9 @@ let rec cps_atomic t = match t with
     (* Not supported *)
     | TmPEval _ -> fail_cps t
 
-    (* TODO Description *)
+    (* Transforms similarly to constant functions. The difference is that the
+       last continuation must be supplied to the branches, and not applied to
+       the result. *)
     | TmIfexp _ ->
       let a, a' = genvar noidx in
       let b, b' = genvar noidx in
@@ -267,8 +279,7 @@ let rec cps_atomic t = match t with
     | TmFix _ ->
       let v, v' = genvar noidx in
       let k, k' = genvar noidx in
-      let inner =
-        TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
+      let inner = TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
       TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', inner)))
 
     (* Treat as constant *)
@@ -280,8 +291,8 @@ let rec cps_atomic t = match t with
     (* Treat as constant *)
     | TmUC _ -> t
 
-    (* Handle specially since only top level (not safe at the moment since it
-       can appear anywhere) *)
+    (* CPS transform both lhs and rhs and apply identity function on result.
+       Also transform tnext. *)
     | TmUtest(fi, t1, t2, tnext) ->
       TmUtest(fi, cps idfun t1, cps idfun t2, cps idfun tnext)
 
@@ -292,36 +303,29 @@ let rec cps_atomic t = match t with
     | TmNop -> t
 
 
-(* Complex cps transformation *)
+(* Complex cps transformation. Complex means that in order to do the
+   transformation, a continuation must also be supplied as argument to the
+   transformation. *)
 and cps cont t = match t with
 
   (* Function application is the only complex expression.
-     TODO Cleanup *)
+     Optimize the case when either the function or argument is atomic. *)
   | TmApp(fi,t1,t2) ->
-    (match t1, t2 with
-     | TmApp _, TmApp _ ->
-       let f, f' = genvar noidx in
-       let e, e' = genvar noidx in
-       let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
-       let inner = TmLam(NoInfo, e, app) in
-       let outer = TmLam(NoInfo, f, cps inner t2) in
-       cps outer t1
-     | TmApp _, _ ->
-       let f, f' = genvar noidx in
-       let e' = cps_atomic t2 in
-       let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
-       let outer = TmLam(NoInfo, f, app) in
-       cps outer t1
-     | _, TmApp _ ->
-       let f' = cps_atomic t1 in
-       let e, e' = genvar noidx in
-       let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
-       let outer = TmLam(NoInfo, e, app) in
-       cps outer t2
-     | _ ->
-       let f' = cps_atomic t1 in
-       let e' = cps_atomic t2 in
-       TmApp(fi, TmApp(NoInfo, f', cont), e'))
+    let wrapopt (a, a') = Some a, a' in
+    let f, f' = match t1 with
+      | TmApp _ -> wrapopt (genvar noidx)
+      | _ -> None, cps_atomic t1 in
+    let e, e' = match t2 with
+      | TmApp _ -> wrapopt (genvar noidx)
+      | _ -> None, cps_atomic t2 in
+    let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
+    let inner = match e with
+      | None -> app
+      | Some(e) -> cps (TmLam(NoInfo, e, app)) t2 in
+    let outer = match f with
+      | None -> inner
+      | Some(f) -> cps (TmLam(NoInfo, f, inner)) t1 in
+    outer
 
   (* Everything else is atomic *)
   | _ -> TmApp(NoInfo, cont, cps_atomic t)
