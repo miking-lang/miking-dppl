@@ -706,6 +706,12 @@ let main =
       printf "\nERROR! %d successful tests and %d failed tests.\n"
         (!utest_ok) (!utest_fail))
 
+  (* This is just a temp oml library test. Should be removed later. *)
+  | "oml"::lst -> (
+      let sample = Oml.Statistics.Sampling.normal ~mean:2. ~std:1. () in
+     printf "%f\n%f\n" (sample()) (sample()))
+
+
   (* Run one program with program arguments *)
   | "run"::name::lst | name::lst -> (
     prog_argv := lst;
@@ -714,6 +720,7 @@ let main =
          atom_arity := Ppl.atom_arity;
          (Ppl.evalprog debruijn eval builtin) name)
       else evalprog name)
+
 
   (* Show the menu *)
   | _ -> menu())
