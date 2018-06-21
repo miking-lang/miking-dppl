@@ -172,10 +172,10 @@ appletrees_scope:
       { let fi = mkinfo $1.i (tm_info $3) in
         let sample = TmVar(fi,us"sample",noidx,false) in
         TmApp(fi,TmLam(fi,$1.v,$4),TmApp(fi, sample, $3)) }
-  | OBSERVE IDENT TILDE expr appletrees_scope
+  | OBSERVE expr TILDE expr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $4) in
         let prob = TmVar(fi,us"prob",noidx,false) in
-        let v = TmVar($2.i,$2.v,noidx,false) in
+        let v = $2 in
         let inner = TmApp(fi, TmApp(fi, prob, v), $4) in
         let weight = TmVar(fi,us"weight",noidx,false) in
         let outer = TmApp(fi, weight, inner) in
