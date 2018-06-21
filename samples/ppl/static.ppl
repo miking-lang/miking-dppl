@@ -1,0 +1,69 @@
+/*
+
+TODO
+- Read small book on static program analysis (also ask David for suggestions)
+
+Two sources of stochastic branching:
+- Ifexp with stochastic branching parameter
+- Function sampled from distribution (see tru, fls in pierce)
+
+*/
+
+
+function f2() {
+  x ~ uniform(true)
+  if sample(uniform(false)) then
+    weight(2.0)
+  else {
+    weight(1.0) f2()
+  }
+}
+
+/* The transformation should look like
+function f2_unsafe() {
+  x ~ uniform(true)
+  if sample(uniform(false)) then
+    weight(2.0)
+  else {
+    weight(1.0) f2_unsafe()
+  }
+}
+
+function f2_unsafe2(x) {
+  if sample(uniform(false)) then
+    weight(2.0)
+  else {
+    weight(1.0) f2_unsafe()
+  }
+
+}
+
+function f2() {
+  x ~ uniform(true)
+  f2_unsafe2(x)
+}
+
+*/
+
+
+
+
+
+function f1p() {
+  weight(3.0)
+}
+
+function f1(lambda) {
+  weight(2.0)
+  f2() f2()
+  f1p() f1p()
+}
+
+function model() {
+  lambda ~ uniform(true)
+  f1(lambda)
+  lambda
+}
+
+infer(model)
+

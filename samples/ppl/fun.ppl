@@ -1,0 +1,12 @@
+function f() {
+  observe false ~ uniform(false)
+  if sample(uniform(false)) then {
+    x ~ uniform(true)
+    x * 3.14
+  } else {
+    weight(1.0)
+    f() + f() * 2.0
+  }
+}
+
+infer(f)
