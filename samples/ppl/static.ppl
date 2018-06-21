@@ -1,8 +1,5 @@
 /*
 
-TODO
-- Read small book on static program analysis (also ask David for suggestions)
-
 Two sources of stochastic branching:
 - Ifexp with stochastic branching parameter
 - Function sampled from distribution (see tru, fls in pierce)

@@ -708,8 +708,9 @@ let main =
 
   (* This is just a temp oml library test. Should be removed later. *)
   | "oml"::lst -> (
-      let sample = Oml.Statistics.Sampling.normal ~mean:2. ~std:1. () in
-     printf "%f\n%f\n" (sample()) (sample()))
+      let seed = Gsl.Rng.make (Gsl.Rng.default ()) in
+      let sample = (fun () -> Gsl.Randist.gaussian seed 200.0) in
+      printf "%f\n%f\n" (sample()) (sample()))
 
 
   (* Run one program with program arguments *)

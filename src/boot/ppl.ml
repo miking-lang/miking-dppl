@@ -42,9 +42,6 @@ let post_cps_builtin = [
   ("weight", CAtom(aweight, []));
 ]
 
-(* Atoms not visible to the user *)
-let adist = usid "dist"
-
 (* Used for constants with unspecified arities *)
 let fail_arity c =
   failwith ("Arity of " ^
@@ -67,28 +64,25 @@ let genvar i =
   nextvar := res + 1;
   (ustr, TmVar(NoInfo, ustr, i, false))
 
-(* The identity function (with debruijn index) as a tm. Useful for CPS
-   transformations. *)
+(* The identity function (with debruijn index) as a tm. *)
 let idfun =
   let var, var' = genvar 0 in
   TmLam(NoInfo, var, var')
 
 (* Probability functions for built in distributions. *)
 let prob value dist = match dist with
-  | TmConst(_, CAtom(_, [TmConst(_, CAtom(dist, [TmConst(_, CBool(v))]))]))
-    when dist = auniform ->
+  | TmConst(_, CAtom(dist, [TmConst(_, CBool(v))])) when dist = auniform ->
     (match v, value with
      | true, TmConst(_, CFloat(v)) when v >= 0.0 || v <= 1.0 ->
        TmConst(NoInfo, CFloat(0.0))
      | false, TmConst(_, CBool(v)) when v == true || v == false ->
        TmConst(NoInfo, CFloat(-0.693147))
-    | _ -> TmConst(NoInfo, CFloat(neg_infinity)))
+     | _ -> TmConst(NoInfo, CFloat(neg_infinity)))
   | _ -> failwith "Unknown distribution applied as argument to prob."
 
 (* Sample functions for built in distributions. *)
 let sample dist = match dist with
-  | TmConst(_, CAtom(_, [TmConst(_, CAtom(dist, [TmConst(_, CBool(v))]))]))
-    when dist = auniform ->
+  | TmConst(_, CAtom(dist, [TmConst(_, CBool(v))])) when dist = auniform ->
     if v then TmConst(NoInfo, CFloat(Random.float 1.0))
     else TmConst(NoInfo, CBool(Random.float 1.0 > 0.5))
   | _ -> failwith "Unkown distribution applied as argument to sample."
@@ -101,7 +95,8 @@ let infer model = match model with
 
     (* TODO I think static structure analysis should be done globally before
        infer is actually called.
-       (Alternative: Static structure analysis here? Maybe CPS transforms as well?) *)
+       (Alternative: Static structure analysis here? Maybe CPS transforms as
+       well?) *)
 
     (* The environment which tm will be evaluated in. Note the idfun which
        cancels the continuation and the TmNop which unwraps the thunk. *)
@@ -158,45 +153,32 @@ let fail_eval_atom id tms v =
        us"v = " ^. sv ^. us"\n") in
   failwith msg
 
-(* This is the main hook for new constructs in the mcore *)
+(* This is the main hook for new constructs in the mcore. TODO Check for
+   correct structure of args. *)
 let eval_atom fi id tms v =
   match id,tms,v with
 
   (* AUTOMATICALLY CPS TRANSFORMED *)
-  (* Uniform distribution constructor *)
-  | id, [], (TmConst(_, CBool _) as v) when id = auniform ->
-    let f = TmConst(fi, CAtom(id, [v])) in
-    TmConst(fi, CAtom(adist, [f]))
+  (* Uniform distribution *)
+  | id, [], v when id = auniform -> TmConst(fi, CAtom(auniform, [v]))
 
   (* Infer *)
-  | id, [], (TmClos _ as model) when id = ainfer ->
-    infer model
+  | id, [], model when id = ainfer -> infer model
 
   (* This function (prob) returns the probability or probability density of a
      value in a given distribution *)
-  | id, [], v when id = aprob ->
-    TmConst(fi, CAtom(id,[v]))
-  | id, [v], (TmConst(_, CAtom(vid, _)) as dist)
-    when id = aprob && vid = adist ->
-    prob v dist
+  | id, [], v when id = aprob -> TmConst(fi, CAtom(id,[v]))
+  | id, [v], dist when id = aprob -> prob v dist
 
   (* NOT AUTOMATICALLY CPS TRANSFORMED (CONTINUATION MUST BE HANDLED
      EXPLICITLY)  *)
   (* Sample *)
-  | id, [], (TmClos(fi,_,_,_,_) as cont)
-    when id = asample ->
-    TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], (TmConst(fi, CAtom(vid,_)) as dist)
-    when id = asample && vid = adist ->
-    TmConst(fi, CAtom(id, [dist; cont]))
+  | id, [], cont when id = asample -> TmConst(fi, CAtom(id,[cont]))
+  | id, [cont], dist when id = asample -> TmConst(fi, CAtom(id, [dist; cont]))
 
   (* Weight *)
-  | id, [], (TmClos(fi,_,_,_,_) as cont)
-    when id = aweight ->
-    TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], (TmConst(fi, CFloat _) as w)
-    when id = aweight ->
-    TmConst(fi, CAtom(id, [w; cont]))
+  | id, [], cont when id = aweight -> TmConst(fi, CAtom(id,[cont]))
+  | id, [cont], w when id = aweight -> TmConst(fi, CAtom(id, [w; cont]))
 
   (* No match *)
   | _ -> fail_eval_atom id tms v
@@ -233,74 +215,74 @@ let cps_const t = match t with
    application).  Atomic means that we can CPS transform the expression without
    supplying a continuation to the transformation.  *)
 let rec cps_atomic t = match t with
-    | TmVar _ -> t
+  | TmVar _ -> t
 
-    | TmLam(fi,x,t1) ->
-      let k, k' = genvar noidx in
-      TmLam(NoInfo, k, TmLam(fi, x, cps k' t1))
+  | TmLam(fi,x,t1) ->
+    let k, k' = genvar noidx in
+    TmLam(NoInfo, k, TmLam(fi, x, cps k' t1))
 
-    (* Should not exist before eval *)
-    | TmClos _-> fail_cps t
+  (* Should not exist before eval *)
+  | TmClos _-> fail_cps t
 
-    (* Function application is not atomic. *)
-    | TmApp _ -> failwith "TmApp is not atomic."
+  (* Function application is not atomic. *)
+  | TmApp _ -> failwith "TmApp is not atomic."
 
-    (* Constant transformation  *)
-    | TmConst _ -> cps_const t
+  (* Constant transformation  *)
+  | TmConst _ -> cps_const t
 
-    (* Not supported *)
-    | TmPEval _ -> fail_cps t
+  (* Not supported *)
+  | TmPEval _ -> fail_cps t
 
-    (* Transforms similarly to constant functions. The difference is that the
-       last continuation must be supplied to the branches, and not applied to
-       the result. *)
-    | TmIfexp _ ->
-      let a, a' = genvar noidx in
-      let b, b' = genvar noidx in
-      let c, c' = genvar noidx in
-      let c1, c1' = genvar noidx in
-      let c2, c2' = genvar noidx in
-      let c3, c3' = genvar noidx in
-      let bapp = TmApp(NoInfo, b', c3') in
-      let capp = TmApp(NoInfo, c', c3') in
-      let inner =
-        TmApp(NoInfo, TmApp(NoInfo, TmApp(NoInfo, t, a'), bapp), capp) in
-      let clam =
-        TmLam(NoInfo, c3, TmLam(NoInfo, c, inner)) in
-      let blam =
-        TmLam(NoInfo, c2, TmLam(NoInfo, b, TmApp(NoInfo, c2', clam))) in
-      let alam =
-        TmLam(NoInfo, c1, TmLam(NoInfo, a, TmApp(NoInfo, c1', blam))) in
-      alam
+  (* Transforms similarly to constant functions. The difference is that the
+     last continuation must be supplied to the branches, and not applied to
+     the result. *)
+  | TmIfexp _ ->
+    let a, a' = genvar noidx in
+    let b, b' = genvar noidx in
+    let c, c' = genvar noidx in
+    let c1, c1' = genvar noidx in
+    let c2, c2' = genvar noidx in
+    let c3, c3' = genvar noidx in
+    let bapp = TmApp(NoInfo, b', c3') in
+    let capp = TmApp(NoInfo, c', c3') in
+    let inner =
+      TmApp(NoInfo, TmApp(NoInfo, TmApp(NoInfo, t, a'), bapp), capp) in
+    let clam =
+      TmLam(NoInfo, c3, TmLam(NoInfo, c, inner)) in
+    let blam =
+      TmLam(NoInfo, c2, TmLam(NoInfo, b, TmApp(NoInfo, c2', clam))) in
+    let alam =
+      TmLam(NoInfo, c1, TmLam(NoInfo, a, TmApp(NoInfo, c1', blam))) in
+    alam
 
-    (* Treat similar as constant function with a single argument. We need to
-       apply the id function to the argument before applying fix, since the
-       argument expects a continuation as first argument. TODO Correct? *)
-    | TmFix _ ->
-      let v, v' = genvar noidx in
-      let k, k' = genvar noidx in
-      let inner = TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
-      TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', inner)))
+  (* Treat similar as constant function with a single argument. We need to
+     apply the id function to the argument before applying fix, since the
+     argument expects a continuation as first argument. TODO Correct? *)
+  | TmFix _ ->
+    let v, v' = genvar noidx in
+    let k, k' = genvar noidx in
+    let inner = TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
+    TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', inner)))
 
-    (* Treat as constant *)
-    | TmChar _ -> t
+  (* Treat as constant *)
+  | TmChar _ -> t
 
-    (* Not supported *)
-    | TmExprSeq _ -> fail_cps t
+  (* Not supported *)
+  | TmExprSeq _ -> fail_cps t
 
-    (* Treat as constant *)
-    | TmUC _ -> t
+  (* Treat as constant *)
+  | TmUC _ -> t
 
-    (* CPS transform both lhs and rhs and apply identity function on result.
-       Also transform tnext. *)
-    | TmUtest(fi, t1, t2, tnext) ->
-      TmUtest(fi, cps idfun t1, cps idfun t2, cps idfun tnext)
+  (* CPS transform both lhs and rhs and apply identity function on result.
+     Also transform tnext. *)
+  | TmUtest(fi, t1, t2, tnext) ->
+    TmUtest(fi, cps idfun t1, cps idfun t2, cps idfun tnext)
 
-    (* Not supported *)
-    | TmMatch _ -> fail_cps t
+  (* Not supported *)
+  | TmMatch _ -> fail_cps t
 
-    (* Treat as constant *)
-    | TmNop -> t
+  (* Treat as constant *)
+  | TmNop -> t
 
 
 (* Complex cps transformation. Complex means that in order to do the
@@ -354,22 +336,22 @@ let evalprog debruijn eval' builtin filename =
       let tm_of_builtin b = List.map (fun (x, y) -> x, tm_of_const y) b in
 
       let builtin = builtin
-        (* Convert builtins from consts to tms *)
-        |> tm_of_builtin
+                    (* Convert builtins from consts to tms *)
+                    |> tm_of_builtin
 
-        (* Add PPL builtins that should be CPS transformed *)
-        |> (@) (tm_of_builtin pre_cps_builtin)
+                    (* Add PPL builtins that should be CPS transformed *)
+                    |> (@) (tm_of_builtin pre_cps_builtin)
 
-        (* Transform builtins to CPS. Required since we need to wrap constant
-           functions in CPS forms *)
-        |> List.map (fun (x, y) -> (x, (cps_const y)))
+                    (* Transform builtins to CPS. Required since we need to wrap constant
+                       functions in CPS forms *)
+                    |> List.map (fun (x, y) -> (x, (cps_const y)))
 
-        (* Add PPL builtins that should not be CPS transformed *)
-        |> (@) (tm_of_builtin post_cps_builtin)
+                    (* Add PPL builtins that should not be CPS transformed *)
+                    |> (@) (tm_of_builtin post_cps_builtin)
 
-        (* Debruijn transform builtins (since they have now been CPS
-           transformed) *)
-        |> List.map (fun (x, y) -> (x, debruijn [] y)) in
+                    (* Debruijn transform builtins (since they have now been CPS
+                       transformed) *)
+                    |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
       if enable_debug_cps_builtin then
         (printf "\n-- cps builtin -- \n";
