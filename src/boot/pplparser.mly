@@ -157,7 +157,7 @@ appletrees_scope:
         match $2 with
         | TmNop -> $1
         | _ -> TmApp(fi, TmLam(fi, us"_", $2), $1) }
-  | FUNC FUNIDENT params RPAREN expr appletrees_scope
+  | FUNC FUNIDENT params RPAREN topexpr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $5) in
         let rec mkfun lst =
           (match lst with
@@ -165,14 +165,14 @@ appletrees_scope:
           | [] -> $5 ) in
         let f = if List.length $3 = 0 then [us"_"] else $3 in
         TmApp(fi,TmLam(fi,$2.v,$6), addrec $2.v (mkfun f)) }
-  | IDENT EQ expr appletrees_scope
+  | IDENT EQ topexpr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmApp(fi,TmLam(fi,$1.v,$4),$3) }
-  | IDENT TILDE expr appletrees_scope
+  | IDENT TILDE topexpr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         let sample = TmVar(fi,us"sample",noidx,false) in
         TmApp(fi,TmLam(fi,$1.v,$4),TmApp(fi, sample, $3)) }
-  | OBSERVE expr TILDE expr appletrees_scope
+  | OBSERVE topexpr TILDE topexpr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $4) in
         let prob = TmVar(fi,us"prob",noidx,false) in
         let v = $2 in
@@ -183,6 +183,10 @@ appletrees_scope:
   | UTEST expr expr appletrees_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
+
+topexpr:
+  | SUB expr { TmApp($1.i,TmConst($1.i,Cneg),$2) }
+  | expr { $1 }
 
 expr:
   | FUNIDENT exprs RPAREN
@@ -236,8 +240,7 @@ expr:
              { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
   | expr CONCAT expr
          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
-  | LPAREN expr RPAREN   { $2 }
-  | LPAREN SUB expr RPAREN { TmApp($2.i,TmConst($2.i,Cneg),$3)}
+  | LPAREN topexpr RPAREN   { $2 }
   | LSQUARE exprs RSQUARE
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY appletrees_scope RCURLY  { $2 }
@@ -262,6 +265,6 @@ exprs:
   | exprlist { $1 }
 
 exprlist:
-  | expr %prec LPAREN { [$1] }
-  | expr COMMA exprlist { $1 :: $3 }
+  | topexpr { [$1] }
+  | topexpr COMMA exprlist { $1 :: $3 }
 
