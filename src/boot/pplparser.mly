@@ -259,8 +259,8 @@ expr:
  * foo(-1, -2) instead of foo((-1), (-2)).
  * Also gives other nice properties such as being able to write
  * x = -1 instead of x = (-1). Gives a difference between writing
- * x = -1 -1 x (evaluates to -2) and
- * x = -1 (-1) x (evaluates to -1 because of sequencing)
+ * -1 -1 (evaluates to -2) and
+ * -1 (-1) (evaluates to -1 because of sequencing)
  * Unfortunate with code duplication. TODO Is there a better way?
  */
 sep_expr:

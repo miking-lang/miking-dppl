@@ -18,25 +18,39 @@ let enable_debug_cps = true
 let enable_debug_cps_builtin = false
 let enable_debug_infer = true
 
-(* eval ref *)
+(* eval ref since I can't import Boot (circular) TODO Refactor? *)
 let empty_eval _ t = t
 let eval = ref empty_eval
 
-(* List of all CPS transformed atom functions. *)
+(* Identifiers for atoms *)
+let anormal = usid "normal"
 let auniform = usid "uniform"
+let agamma = usid "gamma"
+let aexp = usid "exp"
+let abern = usid "bern"
 let ainfer = usid "infer"
 let aprob = usid "prob"
+let asample = usid "sample"
+let aweight = usid "weight"
 
+(** All CPS transformed atoms **)
 let pre_cps_builtin = [
+  (** Distributions **)
+  (* Continuous *)
+  ("normal", CAtom(anormal, []));
   ("uniform", CAtom(auniform, []));
+  ("gamma", CAtom(agamma, []));
+  ("exponential", CAtom(aexp, []));
+
+  (* Discrete *)
+  ("bernoulli", CAtom(abern, []));
+
+  (** Other atoms **)
   ("infer", CAtom(ainfer, []));
   ("prob", CAtom(aprob, []));
 ]
 
-(* List of all non-CPS-transformed atom functions *)
-let asample = usid "sample"
-let aweight = usid "weight"
-
+(* All non-CPS-transformed atoms *)
 let post_cps_builtin = [
   ("sample", CAtom(asample, []));
   ("weight", CAtom(aweight, []));
@@ -48,11 +62,25 @@ let fail_arity c =
             Ustring.to_utf8 (pprint_const c) ^ " not specified.")
 
 (* Arity specification for atoms *)
-let atom_arity c = match c with
-  | CAtom(id,_) when id = auniform -> 1
-  | CAtom(id,_) when id = ainfer -> 1
-  | CAtom(id,_) when id = aprob -> 2
-  | _ -> fail_arity c
+let atom_arity c =
+  let id,len = match c with
+    | CAtom(id,ls) -> id, List.length ls
+    | _ -> fail_arity c in
+  let max_arity =
+    (*** CPS transformed ***)
+    if      id = anormal  then 2
+    else if id = auniform then 2
+    else if id = agamma   then 2
+    else if id = aexp     then 1
+    else if id = abern    then 1
+    else if id = ainfer   then 1
+    else if id = aprob    then 2
+
+    (*** Not CPS transformed (continuations included in arity) ***)
+    else if id = asample  then 2
+    else if id = aweight  then 2
+    else fail_arity c
+  in max_arity - len
 
 (* Generate fresh variable names for CPS transformation.  Avoids clashes by
    using $ as first char (not allowed in lexer for vars).  Takes a debruijn
@@ -69,120 +97,84 @@ let idfun =
   let var, var' = genvar 0 in
   TmLam(NoInfo, var, var')
 
+(* Gsl default seed *)
+let seed = Gsl.Rng.make (Gsl.Rng.default ())
+(* let sample = (fun () -> Gsl.Randist.gaussian seed 200.0) *)
+
 (* Probability functions for built in distributions. *)
 let prob value dist = match dist with
-  | TmConst(_, CAtom(dist, [TmConst(_, CBool(v))])) when dist = auniform ->
-    (match v, value with
-     | true, TmConst(_, CFloat(v)) when v >= 0.0 || v <= 1.0 ->
-       TmConst(NoInfo, CFloat(0.0))
-     | false, TmConst(_, CBool(v)) when v == true || v == false ->
-       TmConst(NoInfo, CFloat(-0.693147))
-     | _ -> TmConst(NoInfo, CFloat(neg_infinity)))
-  | _ -> failwith "Unknown distribution applied as argument to prob."
+  | TmConst(fi, CAtom(dist, args)) ->
+    (match value, args with
+     | TmConst(_, CFloat(v)),
+       [TmConst(_, CFloat(sigma));
+        TmConst(_, CFloat(mu))] when dist = anormal ->
+       TmConst(fi, CFloat(Gsl.Randist.gaussian_pdf (v -. mu) sigma))
+     | _ -> failwith "Unknown distribution applied as argument to prob")
+  | _ -> failwith "Incorrect distribution applied as argument to prob"
 
 (* Sample functions for built in distributions. *)
 let sample dist = match dist with
-  | TmConst(_, CAtom(dist, [TmConst(_, CBool(v))])) when dist = auniform ->
-    if v then TmConst(NoInfo, CFloat(Random.float 1.0))
-    else TmConst(NoInfo, CBool(Random.float 1.0 > 0.5))
-  | _ -> failwith "Unkown distribution applied as argument to sample."
+  | TmConst(fi, CAtom(dist, args)) ->
+    (match args with
+     | [TmConst(_, CFloat(sigma));
+        TmConst(_, CFloat(mu))] when dist = anormal ->
+       TmConst(fi, CFloat(mu +. Gsl.Randist.gaussian seed sigma))
+     | _ -> failwith "Unknown distribution applied as argument to sample")
+  | _ -> failwith "Incorrect distribution applied as argument to sample"
 
 (* Temporary demonstration implementation of importance sampling with fixed
-   sample size of 10 *)
-let infer model = match model with
-  (* Deconstruct continuation and thunk *)
-  | TmClos(_, _, TmLam(_,_,tm), env, _) ->
+   sample size of 20 *)
+let infer model =
 
-    (* TODO I think static structure analysis should be done globally before
-       infer is actually called.
-       (Alternative: Static structure analysis here? Maybe CPS transforms as
-       well?) *)
+  (* Remove continuation by applying idfun *)
+  let model = !eval [] (TmApp(NoInfo, model, idfun)) in
 
-    (* The environment which tm will be evaluated in. Note the idfun which
-       cancels the continuation and the TmNop which unwraps the thunk. *)
-    let env = TmNop::idfun::env in
+  (* Replicate model for #samples times with an initial log weight of 0.0 *)
+  let s = replicate 20 (TmApp(NoInfo, model, TmNop), 0.0) in
 
-    (* Replicate the model for #samples times with an initial log weight of 0.0
-    *)
-    let s = replicate 20 (tm, env, 0.0) in
+  (* Evaluate one sample to the end *)
+  let rec sim (t, w) =
+    let t = !eval [] t in
+    match t with
+    (* Sample *)
+    | TmConst(fi, CAtom(id, [dist; cont]))
+      when id = asample ->
+      sim (TmApp(NoInfo, cont, sample dist), w)
 
-    (* Evaluate one sample to the end *)
-    let rec recur (tm, env, w) =
+    (* Weight *)
+    | TmConst(fi, CAtom(id, [TmConst(_, CFloat(wadj)); cont]))
+      when id = aweight ->
+      sim (TmApp(NoInfo, cont, TmNop), w +. wadj)
 
-      (* Evaluate until sample, weight, or result. Continue if sample or
-         weight, stop at result. *)
-      let tm = !eval env tm in
-      match tm with
+    (* Result *)
+    | _ -> t, w in
 
-      | TmConst(fi, CAtom(id, [dist; TmClos(_,_, tm, env, _)]))
-        when id = asample ->
-        recur (tm, (sample dist)::env, w)
+  let res = List.map sim s in
 
-      | TmConst(fi, CAtom(id, [TmConst(_, CFloat(wadj));
-                               TmClos(_,_, tm, env, _)]))
-        when id = aweight ->
-        recur (tm, TmNop::env, w +. wadj)
+  if enable_debug_infer then
+    (print_endline "-- infer result --";
+     List.iter
+       (fun (t, w) ->
+          print_string "Sample: ";
+          uprint_string (pprint false t);
+          print_string ", Log weight: ";
+          print_endline (string_of_float w))
+       res;
+     print_newline ());
 
-      | _ -> tm, [], w in
+  TmNop (* Here we should return an empirical distribution *)
 
-    let res = List.map recur s in
-
-    if enable_debug_infer then
-      (printf "\n-- infer result -- \n";
-       List.iter
-         (fun (tm, _, w) ->
-            print_string "Sample: ";
-            uprint_string (pprint false tm);
-            print_string ", Log weight: ";
-            print_endline (string_of_float w))
-         res);
-
-    TmNop (* Here we should return an empirical distribution *)
-
-  | _ -> failwith "Incorrect infer application."
-
-let fail_eval_atom id tms v =
-  let sid = ustring_of_sid id in
-  let stms =
-    List.map (fun t -> pprint false t) tms |> Ustring.concat (us"\n") in
-  let sv = pprint false v in
-  let msg = Ustring.to_utf8
-      (us"Unsupported atom application:\n" ^.
-       us"id = " ^. sid ^. us"\n" ^.
-       us"tms =\n" ^. stms ^. us"\n" ^.
-       us"v = " ^. sv ^. us"\n") in
-  failwith msg
-
-(* This is the main hook for new constructs in the mcore. TODO Check for
-   correct structure of args. *)
+(* This is the main hook for new constructs in the mcore.*)
 let eval_atom fi id tms v =
-  match id,tms,v with
-
-  (* AUTOMATICALLY CPS TRANSFORMED *)
-  (* Uniform distribution *)
-  | id, [], v when id = auniform -> TmConst(fi, CAtom(auniform, [v]))
-
-  (* Infer *)
-  | id, [], model when id = ainfer -> infer model
-
-  (* This function (prob) returns the probability or probability density of a
-     value in a given distribution *)
-  | id, [], v when id = aprob -> TmConst(fi, CAtom(id,[v]))
-  | id, [v], dist when id = aprob -> prob v dist
-
-  (* NOT AUTOMATICALLY CPS TRANSFORMED (CONTINUATION MUST BE HANDLED
-     EXPLICITLY)  *)
-  (* Sample *)
-  | id, [], cont when id = asample -> TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], dist when id = asample -> TmConst(fi, CAtom(id, [dist; cont]))
-
-  (* Weight *)
-  | id, [], cont when id = aweight -> TmConst(fi, CAtom(id,[cont]))
-  | id, [cont], w when id = aweight -> TmConst(fi, CAtom(id, [w; cont]))
-
-  (* No match *)
-  | _ -> fail_eval_atom id tms v
-
+  let args = v :: tms in
+  let c = CAtom(id, args) in
+  if arity c = 0 then
+    match args with
+    | [model]      when id = ainfer -> infer model
+    | [dist; v]    when id = aprob  -> prob v dist
+    | _ -> TmConst(fi, c)
+  else
+    TmConst(fi, c)
 
 (* Used for unsupported CPS transformations *)
 let fail_cps tm =
@@ -329,8 +321,9 @@ let evalprog debruijn eval' builtin filename =
         |> Pplparser.main Ppllexer.main in
 
       if enable_debug_cps then
-        (printf "\n-- pre cps -- \n";
-         uprint_endline (pprint false tm));
+        (print_endline "-- pre cps --";
+         uprint_endline (pprint false tm);
+         uprint_newline ());
 
       (* Function for converting consts in builtin to tms *)
       let tm_of_builtin b = List.map (fun (x, y) -> x, tm_of_const y) b in
@@ -342,29 +335,31 @@ let evalprog debruijn eval' builtin filename =
                     (* Add PPL builtins that should be CPS transformed *)
                     |> (@) (tm_of_builtin pre_cps_builtin)
 
-                    (* Transform builtins to CPS. Required since we need to wrap constant
-                       functions in CPS forms *)
+                    (* Transform builtins to CPS. Required since we need to
+                       wrap constant functions in CPS forms *)
                     |> List.map (fun (x, y) -> (x, (cps_const y)))
 
                     (* Add PPL builtins that should not be CPS transformed *)
                     |> (@) (tm_of_builtin post_cps_builtin)
 
-                    (* Debruijn transform builtins (since they have now been CPS
-                       transformed) *)
+                    (* Debruijn transform builtins (since they have now been
+                       CPS transformed) *)
                     |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
       if enable_debug_cps_builtin then
-        (printf "\n-- cps builtin -- \n";
+        (print_endline "-- cps builtin --";
          (List.iter uprint_endline
             (List.map
-               (fun (x, y) -> us x ^. us" = " ^. pprint false y) builtin)));
+               (fun (x, y) -> us x ^. us" = " ^. pprint false y) builtin));
+         print_newline ());
 
       (* Perform CPS transformation of main program *)
       let cps = cps idfun tm in
 
       if enable_debug_cps then
-        (printf "\n-- post cps -- \n";
-         uprint_endline (pprint false cps));
+        (print_endline "-- post cps --";
+         uprint_endline (pprint false cps);
+         print_newline ());
 
       (* Evaluate CPS form of main program *)
       let res =
@@ -372,7 +367,7 @@ let evalprog debruijn eval' builtin filename =
         |> !eval (builtin |> List.split |> snd) in
 
       if enable_debug_cps then
-        (printf "\n-- post cps eval -- \n";
+        (print_endline "-- post cps eval --";
          uprint_endline (pprint false res))
 
     with
