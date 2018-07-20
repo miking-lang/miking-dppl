@@ -144,18 +144,34 @@
 %%
 
 main:
-  | appletrees_scope EOF { $1 }
+  | top_treeppl_scope EOF { $1 }
 
-/* ************************** APPLETREES ********************************* */
+/* ************************** TREEPPL ********************************* */
 
-appletrees_scope:
-  | { TmNop }
-  | sepexpr appletrees_scope
+
+/*
+ * Top level treeppl_scope. As an example, this enables writing
+ * { -1 } instead of { (-1) }.
+ */
+top_treeppl_scope:
+  | expr treeppl_scope
       { let fi = tm_info $1 in
         match $2 with
         | TmNop -> $1
         | _ -> TmApp(fi, TmLam(fi, us"_", $2), $1) }
-  | FUNC FUNIDENT params RPAREN expr appletrees_scope
+  | treeppl_scope_aux { $1 }
+
+treeppl_scope:
+  | sep_expr treeppl_scope
+      { let fi = tm_info $1 in
+        match $2 with
+        | TmNop -> $1
+        | _ -> TmApp(fi, TmLam(fi, us"_", $2), $1) }
+  | treeppl_scope_aux { $1 }
+
+treeppl_scope_aux:
+  | { TmNop }
+  | FUNC FUNIDENT params RPAREN expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $5) in
         let rec mkfun lst =
           (match lst with
@@ -163,14 +179,14 @@ appletrees_scope:
           | [] -> $5 ) in
         let f = if List.length $3 = 0 then [us"_"] else $3 in
         TmApp(fi,TmLam(fi,$2.v,$6), addrec $2.v (mkfun f)) }
-  | IDENT EQ expr appletrees_scope
+  | IDENT EQ expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmApp(fi,TmLam(fi,$1.v,$4),$3) }
-  | IDENT TILDE expr appletrees_scope
+  | IDENT TILDE expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         let sample = TmVar(fi,us"sample",noidx,false) in
         TmApp(fi,TmLam(fi,$1.v,$4),TmApp(fi, sample, $3)) }
-  | OBSERVE expr TILDE expr appletrees_scope
+  | OBSERVE expr TILDE expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $4) in
         let prob = TmVar(fi,us"prob",noidx,false) in
         let v = $2 in
@@ -178,7 +194,7 @@ appletrees_scope:
         let weight = TmVar(fi,us"weight",noidx,false) in
         let outer = TmApp(fi, weight, inner) in
         TmApp(fi,TmLam(fi,us"_",$5),outer) }
-  | UTEST expr sepexpr appletrees_scope
+  | UTEST expr sep_expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
 
@@ -235,24 +251,19 @@ expr:
              { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
   | expr CONCAT expr
          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
-  | atomexpr { $1 }
+  | expr_aux { $1 }
 
-atomexpr:
-  | LPAREN expr RPAREN   { $2 }
-  | LSQUARE exprs RSQUARE { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
-  | LCURLY appletrees_scope RCURLY  { $2 }
-  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
-  | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
-  | STRING               { ustring2uctm $1.i $1.v }
-  | UINT                 { TmConst($1.i, CInt($1.v)) }
-  | UFLOAT               { TmConst($1.i, CFloat($1.v)) }
-  | TRUE                 { TmConst($1.i, CBool(true)) }
-  | FALSE                { TmConst($1.i, CBool(false)) }
-
-/* Separable expressions for sequencing.
- * Very unfortunate with code duplication. TODO Is there a better way?
+/*
+ * Separable expressions for sequencing. Combined with expr,
+ * Enables function calls such as
+ * foo(-1, -2) instead of foo((-1), (-2)).
+ * Also gives other nice properties such as being able to write
+ * x = -1 instead of x = (-1). Gives a difference between writing
+ * x = -1 -1 x (evaluates to -2) and
+ * x = -1 (-1) x (evaluates to -1 because of sequencing)
+ * Unfortunate with code duplication. TODO Is there a better way?
  */
-sepexpr:
+sep_expr:
   | FUNIDENT exprs RPAREN
       { let fi = mkinfo $1.i $3.i in
         let rec mkapps lst =
@@ -268,43 +279,55 @@ sepexpr:
         TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
               TmLam(tm_info $4,us"",$4)),
               TmLam(tm_info $6,us"",$6)) }
-  | sepexpr ADD expr
+  | sep_expr ADD expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cadd(TNone)),$1),$3) }
-  | sepexpr SUB expr
+  | sep_expr SUB expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csub(TNone)),$1),$3) }
-  | sepexpr MUL expr
+  | sep_expr MUL expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmul(TNone)),$1),$3) }
-  | sepexpr DIV expr
+  | sep_expr DIV expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdiv(TNone)),$1),$3) }
-  | sepexpr MOD expr
+  | sep_expr MOD expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmodi(None)),$1),$3) }
-  | sepexpr LESS expr
+  | sep_expr LESS expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Clti(None)),$1),$3) }
-  | sepexpr LESSEQUAL expr
+  | sep_expr LESSEQUAL expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleqi(None)),$1),$3) }
-  | sepexpr GREAT expr
+  | sep_expr GREAT expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgti(None)),$1),$3)}
-  | sepexpr GREATEQUAL expr
+  | sep_expr GREATEQUAL expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeqi(None)),$1),$3) }
-  | sepexpr EQUAL expr
+  | sep_expr EQUAL expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq(None)),$1),$3) }
-  | sepexpr NOTEQUAL expr
+  | sep_expr NOTEQUAL expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq(None)),$1),$3) }
-  | sepexpr SHIFTLL expr
+  | sep_expr SHIFTLL expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cslli(None)),$1),$3) }
-  | sepexpr SHIFTRL expr
+  | sep_expr SHIFTRL expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrli(None)),$1),$3) }
-  | sepexpr SHIFTRA expr
+  | sep_expr SHIFTRA expr
       { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrai(None)),$1),$3) }
   | NOT expr
       { TmApp($1.i,TmConst($1.i,Cnot),$2) }
-  | sepexpr AND expr
+  | sep_expr AND expr
             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand(None)),$1),$3) }
-  | sepexpr OR expr
+  | sep_expr OR expr
              { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
-  | sepexpr CONCAT expr
+  | sep_expr CONCAT expr
          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
-  | atomexpr { $1 }
+  | expr_aux { $1 }
+
+expr_aux:
+  | LPAREN expr RPAREN   { $2 }
+  | LSQUARE exprs RSQUARE { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
+  | LCURLY top_treeppl_scope RCURLY  { $2 }
+  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
+  | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
+  | STRING               { ustring2uctm $1.i $1.v }
+  | UINT                 { TmConst($1.i, CInt($1.v)) }
+  | UFLOAT               { TmConst($1.i, CFloat($1.v)) }
+  | TRUE                 { TmConst($1.i, CBool(true)) }
+  | FALSE                { TmConst($1.i, CBool(false)) }
 
 params:
   | { [] }
@@ -316,9 +339,9 @@ paramlist:
 
 exprs:
   | { [] }
-  | exprlist { $1 }
+  | expr_list { $1 }
 
-exprlist:
+expr_list:
   | expr { [$1] }
-  | expr COMMA exprlist { $1 :: $3 }
+  | expr COMMA expr_list { $1 :: $3 }
 
