@@ -149,38 +149,57 @@ and pprint_const c =
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
 and pprint basic t =
-  let pprint = pprint basic in
-  match t with
-  | TmVar(_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
-  | TmVar(_,x,n,true) -> us"$" ^. us(string_of_int n)
-  | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
-  | TmClos(_,x,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
-  | TmClos(_,x,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
-  | TmApp(_,t1,t2) -> us"(" ^. pprint t1 ^. us" " ^. pprint t2 ^. us")"
-  | TmConst(_,c) -> pprint_const c
-  | TmFix(_) -> us"fix"
-  | TmPEval(_) -> us"peval"
-  | TmIfexp(_,None,_) -> us"ifexp"
-  | TmIfexp(_,Some(g),Some(t2)) -> us"ifexp(" ^. usbool g ^. us"," ^. pprint t2 ^. us")"
-  | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
-  | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | TmExprSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
-  | TmUC(fi,uct,ordered,uniqueness) -> (
-    match ordered, uniqueness with
-    | UCOrdered,UCMultivalued when not basic ->
-      let lst = uct2list uct in
-      (match lst with
-      | TmChar(_,_)::_ ->
-        let intlst = uc2ustring lst in
-        us"\"" ^. list2ustring intlst ^.  us"\""
-      | _ -> us"[" ^. (Ustring.concat (us",") (List.map pprint lst)) ^. us"]")
-    | _,_ ->
-        (pprintUCKind ordered uniqueness) ^. us"(" ^.
-          (Ustring.concat (us",") (List.map pprint (uct2list uct))) ^. us")")
-  | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. pprint t1 ^. us" " ^. pprint t2
-  | TmMatch(fi,t1,cases)
-    ->  us"match " ^. pprint t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
-  | TmNop -> us"Nop"
+
+  let rec pprint' prec t =
+    let p = pprint'' t in
+    let paren = match t with
+      | TmExprSeq _ | TmMatch _ -> true (* Conservative defaults.
+                                           TODO Add correct precedence. *)
+      | TmLam _ | TmClos _ -> prec > 0
+      | TmApp _ | TmUtest _ -> prec > 1
+      | TmVar _ | TmConst _ | TmFix _ | TmPEval _
+      | TmIfexp _ | TmChar _ | TmUC _ | TmNop -> false
+    in if paren then us"(" ^. p ^. us")" else p
+
+  and pprint'' t =
+    match t with
+    | TmVar(_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
+    | TmVar(_,x,n,true) -> us"$" ^. us(string_of_int n)
+    | TmLam(_,x,t1) -> us"lam " ^. x ^. us". " ^. pprint' 0 t1
+    | TmClos(_,x,t,_,false) -> us"clos " ^. x ^. us". " ^. pprint' 0 t
+    | TmClos(_,x,t,_,true) -> us"peclos " ^. x ^. us". " ^. pprint' 0 t
+    | TmApp(_,t1,(TmApp _ as t2)) -> pprint' 1 t1 ^. us" " ^. pprint' 2 t2
+    | TmApp(_,t1,t2) -> pprint' 1 t1 ^. us" " ^. pprint' 1 t2
+    | TmConst(_,c) -> pprint_const c
+    | TmFix(_) -> us"fix"
+    | TmPEval(_) -> us"peval"
+    | TmIfexp(_,None,_) -> us"ifexp"
+    | TmIfexp(_,Some(g),Some(t2)) ->
+      us"ifexp(" ^. usbool g ^. us"," ^. pprint' 0 t2 ^. us")"
+    | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
+    | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
+    | TmExprSeq(fi,t1,t2) -> pprint' 0 t1 ^. us"\n" ^. pprint' 0 t2
+    | TmUC(fi,uct,ordered,uniqueness) -> (
+        match ordered, uniqueness with
+        | UCOrdered,UCMultivalued when not basic ->
+          let lst = uct2list uct in
+          (match lst with
+           | TmChar(_,_)::_ ->
+             let intlst = uc2ustring lst in
+             us"\"" ^. list2ustring intlst ^.  us"\""
+           | _ -> us"[" ^.
+                  (Ustring.concat (us",") (List.map (pprint' 0) lst))
+                  ^. us"]")
+        | _,_ ->
+          (pprintUCKind ordered uniqueness) ^. us"(" ^.
+          (Ustring.concat (us",") (List.map (pprint' 0) (uct2list uct))) ^. us")")
+    | TmUtest(fi,t1,t2,tnext) ->
+      us"utest " ^. pprint' 2 t1 ^. us" " ^. pprint' 2 t2
+    | TmMatch(fi,t1,cases)
+      ->  us"match " ^. pprint' 0 t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
+    | TmNop -> us"Nop"
+
+  in pprint' 0 t
 
 (* Pretty prints the environment *)
 let pprint_env env =
