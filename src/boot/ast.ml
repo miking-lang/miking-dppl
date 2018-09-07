@@ -150,7 +150,7 @@ let tm_info t =
 
 
 (* Atom arity specification. This is changed depending on the DSL *)
-let empty_atom_arity c = failwith "Atom arity must be defined"
+let empty_atom_arity _c = failwith "Atom arity must be defined"
 let atom_arity = ref empty_atom_arity
 
 (* Returns the number of expected arguments *)

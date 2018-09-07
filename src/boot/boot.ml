@@ -10,7 +10,6 @@
 *)
 
 
-open Utils
 open Ustring.Op
 open Printf
 open Ast
@@ -30,7 +29,7 @@ let enable_debug_eval_env = false
 let enable_debug_after_peval = false
 
 (* Evaluation of atoms. This is changed depending on the DSL *)
-let empty_eval_atom fi id tms v = failwith "Atom evaluation must be defined"
+let empty_eval_atom _fi _id _tms _v = failwith "Atom evaluation must be defined"
 let eval_atom = ref empty_eval_atom
 
 
@@ -44,7 +43,7 @@ let rec ucmap f uc = match uc with
 let unittest_failed fi t1 t2=
   uprint_endline
     (match fi with
-    | Info(filename,l1,_,_,_) -> us"\n ** Unit test FAILED on line " ^.
+    | Info(_filename,l1,_,_,_) -> us"\n ** Unit test FAILED on line " ^.
         us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint false t1) ^.
         us"\n    RHS: " ^. (pprint false t2)
     | NoInfo -> us"Unit test FAILED ")
@@ -55,7 +54,7 @@ let rec patvars env pat =
   | PatIdent(_,x) -> x::env
   | PatChar(_,_) -> env
   | PatUC(fi,p::ps,o,u) -> patvars (patvars env p) (PatUC(fi,ps,o,u))
-  | PatUC(fi,[],o,u) -> env
+  | PatUC(_fi,[],_o,_u) -> env
   | PatBool(_,_) -> env
   | PatInt(_,_) -> env
   | PatConcat(_,p1,p2) -> patvars (patvars env p1) p2
@@ -70,7 +69,7 @@ let rec debruijn env t =
       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
     in TmVar(fi,x,find env 0,false)
   | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
-  | TmClos(fi,x,t1,env1,_) -> failwith "Closures should not be available."
+  | TmClos(_fi,_x,_t1,_env1,_) -> failwith "Closures should not be available."
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
@@ -137,7 +136,7 @@ let rec uctzero uct =
     - final is used to detect if a sequence be checked to be complete or not *)
 let rec eval_match env pat t final =
     match pat,t with
-  | PatIdent(_,x1),v -> Some(v::env,TmNop)
+  | PatIdent(_,_x1),v -> Some(v::env,TmNop)
   | PatChar(_,c1),TmChar(_,c2) -> if c1 = c2 then Some(env,TmNop) else None
   | PatChar(_,_),_ -> None
   | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCLeaf(t::ts),o2,u2) ->
@@ -145,23 +144,23 @@ let rec eval_match env pat t final =
     | Some(env,_) ->
       eval_match env (PatUC(fi1,ps,o1,u1)) (TmUC(fi2,UCLeaf(ts),o2,u2)) final
     | None -> None)
-  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCLeaf([]),o2,u2) -> None
+  | PatUC(_fi1,_p::_ps,_o1,_u1),TmUC(_fi2,UCLeaf([]),_o2,_u2) -> None
   | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCNode(UCLeaf(t::ts),t2),o2,u2) ->
     (match eval_match env p t true with
     | Some(env,_) ->
       eval_match env (PatUC(fi1,ps,o1,u1))
         (TmUC(fi2,UCNode(UCLeaf(ts),t2),o2,u2)) final
     | None -> None)
-  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCNode(UCLeaf([]),t2),o2,u2) ->
+  | PatUC(_fi1,_p::_ps,_o1,_u1),TmUC(fi2,UCNode(UCLeaf([]),t2),o2,u2) ->
       eval_match env pat (TmUC(fi2,t2,o2,u2)) final
-  | PatUC(fi1,[],o1,u1),TmUC(fi2,uct,_,_) when uctzero uct && final -> Some(env,TmNop)
-  | PatUC(fi1,[],o1,u1),t when not final-> Some(env,t)
-  | PatUC(fi1,lst,o1,u2),t -> None
+  | PatUC(_fi1,[],_o1,_u1),TmUC(_fi2,uct,_,_) when uctzero uct && final -> Some(env,TmNop)
+  | PatUC(_fi1,[],_o1,_u1),t when not final-> Some(env,t)
+  | PatUC(_fi1,_lst,_o1,_u2),_t -> None
   | PatBool(_,b1),TmConst(_,CBool(b2)) -> if b1 = b2 then Some(env,TmNop) else None
   | PatBool(_,_),_ -> None
-  | PatInt(fi,i1),TmConst(_,CInt(i2)) -> if i1 = i2 then Some(env,TmNop) else None
+  | PatInt(_fi,i1),TmConst(_,CInt(i2)) -> if i1 = i2 then Some(env,TmNop) else None
   | PatInt(_,_),_ -> None
-  | PatConcat(_,PatIdent(_,x),p2),_ ->
+  | PatConcat(_,PatIdent(_,_x),_p2),_ ->
       failwith "Pattern variable first is not part of Ragnar--"
   | PatConcat(_,p1,p2),t1 ->
     (match eval_match env p1 t1 false with
@@ -411,19 +410,19 @@ let delta c v  =
 let optimize_const_app fi v1 v2 =
   match v1,v2 with
   (*|   0 * x  ==>  0   |*)
-  | TmConst(_,Cmuli(Some(0))),v2 -> TmConst(fi,CInt(0))
+  | TmConst(_,Cmuli(Some(0))),_v2 -> TmConst(fi,CInt(0))
   (*|   1 * x  ==>  x   |*)
   | TmConst(_,Cmuli(Some(1))),v2 -> v2
   (*|   0 + x  ==>  x   |*)
   | TmConst(_,Caddi(Some(0))),v2 -> v2
   (*|   0 * x  ==>  0   |*)
-  | TmApp(_,TmConst(_,Cmuli(None)),TmConst(_,CInt(0))),vv1 -> TmConst(fi,CInt(0))
+  | TmApp(_,TmConst(_,Cmuli(None)),TmConst(_,CInt(0))),_vv1 -> TmConst(fi,CInt(0))
   (*|   1 * x  ==>  x   |*)
   | TmApp(_,TmConst(_,Cmuli(None)),TmConst(_,CInt(1))),vv1 -> vv1
   (*|   0 + x  ==>  x   |*)
   | TmApp(_,TmConst(_,Caddi(None)),TmConst(_,CInt(0))),vv1 -> vv1
   (*|   x * 0  ==>  0   |*)
-  | TmApp(_,TmConst(_,Cmuli(None)),vv1),TmConst(_,CInt(0)) -> TmConst(fi,CInt(0))
+  | TmApp(_,TmConst(_,Cmuli(None)),_vv1),TmConst(_,CInt(0)) -> TmConst(fi,CInt(0))
   (*|   x * 1  ==>  x   |*)
   | TmApp(_,TmConst(_,Cmuli(None)),vv1),TmConst(_,CInt(1)) -> vv1
   (*|   x + 0  ==>  x   |*)
@@ -431,7 +430,7 @@ let optimize_const_app fi v1 v2 =
   (*|   x - 0  ==>  x   |*)
   | TmApp(_,TmConst(_,Csubi(None)),vv1),TmConst(_,CInt(0)) -> vv1
   (*|   x op y  ==>  res(x op y)   |*)
-  | TmConst(fi1,c1),(TmConst(fi2,c2) as tt)-> delta c1 tt
+  | TmConst(_fi1,c1),(TmConst(_fi2,_c2) as tt)-> delta c1 tt
   (* No optimization *)
   | vv1,vv2 -> TmApp(fi,vv1,vv2)
 
@@ -443,13 +442,13 @@ let rec readback env n t =
   debug_readback env n t;
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
-  | TmVar(fi,x,k,false) -> readback env n (List.nth env k)
+  | TmVar(_fi,_x,k,false) -> readback env n (List.nth env k)
   (* Variables as PE symbol. Convert symbol to de bruijn index. *)
   | TmVar(fi,x,k,true) -> TmVar(fi,x,n-k,false)
   (* Lambda *)
   | TmLam(fi,x,t1) -> TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env) (n+1) t1)
   (* Normal closure *)
-  | TmClos(fi,x,t1,env2,false) -> t
+  | TmClos(_fi,_x,_t1,_env2,false) -> t
   (* PE closure *)
   | TmClos(fi,x,t1,env2,true) ->
       TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env2) (n+1) t1)
@@ -464,7 +463,7 @@ let rec readback env n t =
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) ->
       TmExprSeq(fi,readback env n t1, readback env n t2)
-  | TmUC(fi,uct,o,u) -> t
+  | TmUC(_fi,_uct,_o,_u) -> t
   | TmUtest(fi,t1,t2,tnext) ->
       TmUtest(fi,readback env n t1, readback env n t2,tnext)
   | TmMatch(fi,t1,cases) ->
@@ -483,28 +482,28 @@ let rec normalize env n t =
   debug_normalize env n t;
   match t with
   (* Variables using debruijn indices. *)
-  | TmVar(fi,x,n,false) -> normalize env n (List.nth env n)
+  | TmVar(_fi,_x,n,false) -> normalize env n (List.nth env n)
   (* PEMode variable (symbol) *)
-  | TmVar(fi,x,n,true) -> t
+  | TmVar(_fi,_x,_n,true) -> t
   (* Lambda and closure conversions to PE closure *)
   | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,true)
   (* Closures, both PE and non PE *)
-  | TmClos(fi,x,t2,env2,pemode) -> t
+  | TmClos(_fi,_x,_t2,_env2,_pemode) -> t
   (* Application: closures and delta  *)
   | TmApp(fi,t1,t2) ->
     (match normalize env n t1 with
     (* Closure application (PE on non PE) TODO: use affine lamba check *)
-    | TmClos(fi,x,t3,env2,_) ->
+    | TmClos(_fi,_x,t3,env2,_) ->
          normalize ((normalize env n t2)::env2) n t3
     (* Constant application using the delta function *)
     | TmConst(fi1,c1) ->
         (match normalize env n t2 with
-        | TmConst(fi2,c2) as tt-> delta c1 tt
+        | TmConst(_fi2,_c2) as tt-> delta c1 tt
         | nf -> TmApp(fi,TmConst(fi1,c1),nf))
     (* Partial evaluation *)
     | TmPEval(fi) ->
       (match normalize env n t2 with
-      | TmClos(fi2,x,t2,env2,pemode) ->
+      | TmClos(fi2,x,t2,env2,_pemode) ->
           let pesym = TmVar(NoInfo,us"",n+1,true) in
           let t2' = (TmApp(fi,TmPEval(fi),t2)) in
           TmClos(fi2,x,normalize (pesym::env2) (n+1) t2',env2,true)
@@ -512,15 +511,15 @@ let rec normalize env n t =
     (* If-expression *)
     | TmIfexp(fi2,x1,x2) ->
       (match x1,x2,normalize env n t2 with
-      | None,None,TmConst(fi3,CBool(b)) -> TmIfexp(fi2,Some(b),None)
+      | None,None,TmConst(_fi3,CBool(b)) -> TmIfexp(fi2,Some(b),None)
       | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
         if b then normalize (TmNop::env3) n t3 else normalize (TmNop::env4) n t4
-      | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi2,Some(b),Some(v3))
+      | Some(b),_,(TmClos(_,_,_t3,_,_) as v3) -> TmIfexp(fi2,Some(b),Some(v3))
       | _,_,v2 -> TmApp(fi,TmIfexp(fi2,x1,x2),v2))
     (* Fix *)
     | TmFix(fi2) ->
        (match normalize env n t2 with
-       | TmClos(fi,x,t3,env2,_) as tt ->
+       | TmClos(fi,_x,t3,env2,_) as tt ->
            normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n t3
        | v2 -> TmApp(fi,TmFix(fi2),v2))
     (* Stay in normalized form *)
@@ -533,7 +532,7 @@ let rec normalize env n t =
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) ->
       TmExprSeq(fi,normalize env n t1, normalize env n t2)
-  | TmUC(fi,uct,o,u) -> t
+  | TmUC(_fi,_uct,_o,_u) -> t
   | TmUtest(fi,t1,t2,tnext) ->
       TmUtest(fi,normalize env n t1,normalize env n t2,tnext)
   | TmMatch(fi,t1,cases) ->
@@ -547,24 +546,24 @@ let rec eval env t =
   debug_eval env t;
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
-  | TmVar(fi,x,n,_) -> eval env  (List.nth env n)
+  | TmVar(_fi,_x,n,_) -> eval env  (List.nth env n)
   (* Lambda and closure conversions *)
   | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,false)
-  | TmClos(fi,x,t1,env2,_) -> t
+  | TmClos(_fi,_x,_t1,_env2,_) -> t
   (* Application *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
-       | TmClos(fi,x,t3,env2,_) -> eval ((eval env t2)::env2) t3
+       | TmClos(_fi,_x,t3,env2,_) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
-       | TmConst(fi,c) -> delta c (eval env t2)
+       | TmConst(_fi,c) -> delta c (eval env t2)
        (* Partial evaluation *)
        | TmPEval(fi2) -> normalize env 0 (TmApp(fi,TmPEval(fi2),t2))
            |> readback env 0 |> debug_after_peval |> eval env
        (* Fix *)
-       | TmFix(fi) ->
+       | TmFix(_fi) ->
          (match eval env t2 with
-         | TmClos(fi,x,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
+         | TmClos(fi,_x,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
          | _ -> failwith "Incorrect CFix")
        (* If-expression *)
        | TmIfexp(fi,x1,x2) ->
@@ -572,13 +571,13 @@ let rec eval env t =
          | None,None,TmConst(fi,CBool(b)) -> TmIfexp(fi,Some(b),None)
          | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
               if b then eval (TmNop::env3) t3 else eval (TmNop::env4) t4
-         | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi,Some(b),Some(v3))
+         | Some(b),_,(TmClos(_,_,_t3,_,_) as v3) -> TmIfexp(fi,Some(b),Some(v3))
          | _ -> raise_error fi "Incorrect if-expression in the eval function.")
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* If expression *)
-  | TmIfexp(fi,_,_) -> t
+  | TmIfexp(_fi,_,_) -> t
   (* The rest *)
   | TmChar(_,_) -> t
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
@@ -705,13 +704,6 @@ let main =
             else
       printf "\nERROR! %d successful tests and %d failed tests.\n"
         (!utest_ok) (!utest_fail))
-
-  (* This is just a temp oml library test. Should be removed later. *)
-  | "oml"::lst -> (
-      let seed = Gsl.Rng.make (Gsl.Rng.default ()) in
-      let sample = (fun () -> Gsl.Randist.gaussian seed 200.0) in
-      printf "%f\n%f\n" (sample()) (sample()))
-
 
   (* Run one program with program arguments *)
   | "run"::name::lst | name::lst -> (

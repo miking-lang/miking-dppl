@@ -34,13 +34,13 @@
       | TmIfexp(_,_,Some(t1)) -> hasx t1
       | TmChar(_,_) -> false
       | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
-      | TmUC(fi,uct,ordered,uniqueness) ->
+      | TmUC(_fi,uct,_ordered,_uniqueness) ->
           let rec work uc = match uc with
           | UCNode(uc1,uc2) -> work uc1 || work uc2
           | UCLeaf(tms) -> List.exists hasx tms
           in work uct
-      | TmUtest(fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
-      | TmMatch(fi,t1,cases) ->
+      | TmUtest(_fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
+      | TmMatch(_fi,_t1,cases) ->
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in

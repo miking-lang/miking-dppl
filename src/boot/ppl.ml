@@ -14,9 +14,9 @@ open Ast
 open Msg
 open Pprint
 
-let enable_debug_cps = true
+let enable_debug_cps = false
 let enable_debug_cps_builtin = false
-let enable_debug_infer = true
+let enable_debug_infer = false
 
 (* eval ref since I can't import Boot (circular) TODO Refactor? *)
 let empty_eval _ t = t
@@ -35,17 +35,16 @@ let aweight = usid "weight"
 
 (** All CPS transformed atoms **)
 let pre_cps_builtin = [
-  (** Distributions **)
-  (* Continuous *)
+  (* Continuous distributions *)
   ("normal", CAtom(anormal, []));
   ("uniform", CAtom(auniform, []));
   ("gamma", CAtom(agamma, []));
   ("exponential", CAtom(aexp, []));
 
-  (* Discrete *)
+  (* Discrete distributions *)
   ("bernoulli", CAtom(abern, []));
 
-  (** Other atoms **)
+  (* Other atoms *)
   ("infer", CAtom(ainfer, []));
   ("prob", CAtom(aprob, []));
 ]
@@ -108,7 +107,7 @@ let prob value dist = match dist with
      | TmConst(_, CFloat(v)),
        [TmConst(_, CFloat(sigma));
         TmConst(_, CFloat(mu))] when dist = anormal ->
-       TmConst(fi, CFloat(Gsl.Randist.gaussian_pdf (v -. mu) sigma))
+       TmConst(fi, CFloat(Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
      | _ -> failwith "Unknown distribution applied as argument to prob")
   | _ -> failwith "Incorrect distribution applied as argument to prob"
 
@@ -118,7 +117,7 @@ let sample dist = match dist with
     (match args with
      | [TmConst(_, CFloat(sigma));
         TmConst(_, CFloat(mu))] when dist = anormal ->
-       TmConst(fi, CFloat(mu +. Gsl.Randist.gaussian seed sigma))
+       TmConst(fi, CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma))
      | _ -> failwith "Unknown distribution applied as argument to sample")
   | _ -> failwith "Incorrect distribution applied as argument to sample"
 
@@ -137,12 +136,12 @@ let infer model =
     let t = !eval [] t in
     match t with
     (* Sample *)
-    | TmConst(fi, CAtom(id, [dist; cont]))
+    | TmConst(_, CAtom(id, [dist; cont]))
       when id = asample ->
       sim (TmApp(NoInfo, cont, sample dist), w)
 
     (* Weight *)
-    | TmConst(fi, CAtom(id, [TmConst(_, CFloat(wadj)); cont]))
+    | TmConst(_fi, CAtom(id, [TmConst(_, CFloat(wadj)); cont]))
       when id = aweight ->
       sim (TmApp(NoInfo, cont, TmNop), w +. wadj)
 

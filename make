@@ -9,7 +9,8 @@
 ###################################################
 
 buildboot(){
-    (cd src/boot; jbuilder build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
+  dune build src/boot/boot.exe \
+    && cp -f _build/default/src/boot/boot.exe build/boot
 }
 
 case $1 in
@@ -22,7 +23,7 @@ case $1 in
         ../build/boot test mcore ppl ragnar
         ;;
     clean)
-        rm -rf src/boot/_build
+        rm -rf _build
         rm -f build/boot
         ;;
     all | *)

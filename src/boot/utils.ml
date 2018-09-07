@@ -1,7 +1,3 @@
-
-open Printf
-
-
 module IntSet = Set.Make(
   struct
     let compare = Pervasives.compare
@@ -16,7 +12,7 @@ let rec last xs =
   match xs with
     | [] -> raise (Invalid_argument "Utils.last")
     | [x] -> x
-    | x::xs -> last xs
+    | _x::xs -> last xs
 
 let findindex x l =
   let rec findidx l c =
@@ -71,7 +67,7 @@ let rec option_split lst =
 	(match option_split xs with
 	  | Some xs' -> Some (x::xs')
 	  | None -> None)
-    | (None)::xs -> None
+    | (None)::_xs -> None
     | [] -> Some []
 
 

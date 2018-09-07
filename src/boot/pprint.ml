@@ -164,7 +164,7 @@ and pprint basic t =
   and pprint'' t =
     match t with
     | TmVar(_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
-    | TmVar(_,x,n,true) -> us"$" ^. us(string_of_int n)
+    | TmVar(_,_x,n,true) -> us"$" ^. us(string_of_int n)
     | TmLam(_,x,t1) -> us"lam " ^. x ^. us". " ^. pprint' 0 t1
     | TmClos(_,x,t,_,false) -> us"clos " ^. x ^. us". " ^. pprint' 0 t
     | TmClos(_,x,t,_,true) -> us"peclos " ^. x ^. us". " ^. pprint' 0 t
@@ -177,9 +177,9 @@ and pprint basic t =
     | TmIfexp(_,Some(g),Some(t2)) ->
       us"ifexp(" ^. usbool g ^. us"," ^. pprint' 0 t2 ^. us")"
     | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
-    | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
-    | TmExprSeq(fi,t1,t2) -> pprint' 0 t1 ^. us"\n" ^. pprint' 0 t2
-    | TmUC(fi,uct,ordered,uniqueness) -> (
+    | TmChar(_fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
+    | TmExprSeq(_fi,t1,t2) -> pprint' 0 t1 ^. us"\n" ^. pprint' 0 t2
+    | TmUC(_fi,uct,ordered,uniqueness) -> (
         match ordered, uniqueness with
         | UCOrdered,UCMultivalued when not basic ->
           let lst = uct2list uct in
@@ -193,9 +193,9 @@ and pprint basic t =
         | _,_ ->
           (pprintUCKind ordered uniqueness) ^. us"(" ^.
           (Ustring.concat (us",") (List.map (pprint' 0) (uct2list uct))) ^. us")")
-    | TmUtest(fi,t1,t2,tnext) ->
+    | TmUtest(_fi,t1,t2,_tnext) ->
       us"utest " ^. pprint' 2 t1 ^. us" " ^. pprint' 2 t2
-    | TmMatch(fi,t1,cases)
+    | TmMatch(_fi,t1,cases)
       ->  us"match " ^. pprint' 0 t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
     | TmNop -> us"Nop"
 
