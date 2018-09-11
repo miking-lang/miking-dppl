@@ -52,7 +52,7 @@ let rec pprint_pat pat =
 let uc2ustring uclst =
     List.map
       (fun x -> match x with
-      |TmChar(_,i) -> i
+      |TmChar(_,_,i) -> i
       | _ -> failwith "Not a string list") uclst
 
 
@@ -158,33 +158,33 @@ and pprint basic t =
       | TmLam _ | TmClos _ -> prec > 0
       | TmApp _ | TmUtest _ -> prec > 1
       | TmVar _ | TmConst _ | TmFix _ | TmPEval _
-      | TmIfexp _ | TmChar _ | TmUC _ | TmNop -> false
+      | TmIfexp _ | TmChar _ | TmUC _ | TmNop _ | TmRec _ | TmProj _ -> false
     in if paren then us"(" ^. p ^. us")" else p
 
   and pprint'' t =
     match t with
-    | TmVar(_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
-    | TmVar(_,_x,n,true) -> us"$" ^. us(string_of_int n)
-    | TmLam(_,x,t1) -> us"lam " ^. x ^. us". " ^. pprint' 0 t1
-    | TmClos(_,x,t,_,false) -> us"clos " ^. x ^. us". " ^. pprint' 0 t
-    | TmClos(_,x,t,_,true) -> us"peclos " ^. x ^. us". " ^. pprint' 0 t
-    | TmApp(_,t1,(TmApp _ as t2)) -> pprint' 1 t1 ^. us" " ^. pprint' 2 t2
-    | TmApp(_,t1,t2) -> pprint' 1 t1 ^. us" " ^. pprint' 1 t2
-    | TmConst(_,c) -> pprint_const c
-    | TmFix(_) -> us"fix"
-    | TmPEval(_) -> us"peval"
-    | TmIfexp(_,None,_) -> us"ifexp"
-    | TmIfexp(_,Some(g),Some(t2)) ->
+    | TmVar(_,_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
+    | TmVar(_,_,_x,n,true) -> us"$" ^. us(string_of_int n)
+    | TmLam(_,_,x,t1) -> us"lam " ^. x ^. us". " ^. pprint' 0 t1
+    | TmClos(_,_,x,t,_,false) -> us"clos " ^. x ^. us". " ^. pprint' 0 t
+    | TmClos(_,_,x,t,_,true) -> us"peclos " ^. x ^. us". " ^. pprint' 0 t
+    | TmApp(_,_,t1,(TmApp _ as t2)) -> pprint' 1 t1 ^. us" " ^. pprint' 2 t2
+    | TmApp(_,_,t1,t2) -> pprint' 1 t1 ^. us" " ^. pprint' 1 t2
+    | TmConst(_,_,c) -> pprint_const c
+    | TmFix(_,_) -> us"fix"
+    | TmPEval(_,_) -> us"peval"
+    | TmIfexp(_,_,None,_) -> us"ifexp"
+    | TmIfexp(_,_,Some(g),Some(t2)) ->
       us"ifexp(" ^. usbool g ^. us"," ^. pprint' 0 t2 ^. us")"
-    | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
-    | TmChar(_fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
-    | TmExprSeq(_fi,t1,t2) -> pprint' 0 t1 ^. us"\n" ^. pprint' 0 t2
-    | TmUC(_fi,uct,ordered,uniqueness) -> (
+    | TmIfexp(_,_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
+    | TmChar(_,_fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
+    | TmExprSeq(_,_fi,t1,t2) -> pprint' 0 t1 ^. us"\n" ^. pprint' 0 t2
+    | TmUC(_,_fi,uct,ordered,uniqueness) -> (
         match ordered, uniqueness with
         | UCOrdered,UCMultivalued when not basic ->
           let lst = uct2list uct in
           (match lst with
-           | TmChar(_,_)::_ ->
+           | TmChar(_,_,_)::_ ->
              let intlst = uc2ustring lst in
              us"\"" ^. list2ustring intlst ^.  us"\""
            | _ -> us"[" ^.
@@ -193,13 +193,47 @@ and pprint basic t =
         | _,_ ->
           (pprintUCKind ordered uniqueness) ^. us"(" ^.
           (Ustring.concat (us",") (List.map (pprint' 0) (uct2list uct))) ^. us")")
-    | TmUtest(_fi,t1,t2,_tnext) ->
+    | TmUtest(_,_fi,t1,t2,_tnext) ->
       us"utest " ^. pprint' 2 t1 ^. us" " ^. pprint' 2 t2
-    | TmMatch(_fi,t1,cases)
-      ->  us"match " ^. pprint' 0 t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
-    | TmNop -> us"Nop"
+    | TmMatch(_,_fi,t1,cases) ->
+      us"match " ^. pprint' 0 t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
+    | TmNop _ -> us"Nop"
+
+    | TmRec(_,_,sm) ->
+      let binds = StrMap.bindings sm in
+      let inner = List.map (fun (k, t1) -> k ^. us":" ^. pprint' 0 t1) binds in
+      us"{ " ^. (Ustring.concat (us",") inner) ^. us" }"
+
+    | TmProj(_,_,t1,x) -> pprint' 2 t1 ^. us"." ^. x
 
   in pprint' 0 t
+
+(* Function for pretty printing labelled terms *)
+let rec pprintl = function
+  | TmVar({label;var_label},_,x,_,_) ->
+    x ^. us"|" ^. (ustring_of_int var_label) ^. us":" ^. (ustring_of_int label)
+  | TmLam({label;var_label},_,x,t1) ->
+    us"(lam " ^. x ^. us"|" ^. (ustring_of_int var_label) ^. us". " ^.
+    (pprintl t1) ^. us"):" ^. (ustring_of_int label)
+  | TmApp({label;_},_,t1,t2) -> us"(" ^. pprintl t1 ^. us" " ^. pprintl t2
+                                ^. us"):" ^. (ustring_of_int label)
+  | TmConst({label;_},_,c) -> pprint_const c ^. us":" ^. (ustring_of_int label)
+  | TmIfexp({label;_},_,_,_) -> us"if:" ^. (ustring_of_int label)
+  | TmFix({label;_},_) -> us"fix:" ^. (ustring_of_int label)
+
+  (* Records *)
+  | TmRec({label;_},_,sm) ->
+      let binds = StrMap.bindings sm in
+      let inner = List.map (fun (k, t1) -> k ^. us":" ^. pprintl t1) binds in
+      us"{ " ^. (Ustring.concat (us",") inner) ^. us" }:"
+      ^. (ustring_of_int label)
+  | TmProj({label;_},_,t1,x) -> pprintl t1 ^. us"." ^. x ^. us":" ^.
+                              (ustring_of_int label)
+
+  | TmNop({label;_}) -> us"Nop" ^. us":" ^. (ustring_of_int label)
+
+  | TmChar _ | TmExprSeq _ | TmUC _ | TmUtest _ | TmMatch _
+  | TmPEval _ | TmClos _ -> failwith "Not supported"
 
 (* Pretty prints the environment *)
 let pprint_env env =

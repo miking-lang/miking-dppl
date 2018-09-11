@@ -1,3 +1,5 @@
+tree = { left:{}, right:{ left:{}, right:{} } }
+
 function model() {
   x ~ normal(0.0, 1.0)
   y ~ normal(x, 1.0)
@@ -6,3 +8,5 @@ function model() {
 }
 
 infer(model)
+
+tree.right

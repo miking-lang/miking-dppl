@@ -9,7 +9,6 @@
 open Ustring.Op
 open Msg
 
-
 let utest = ref false           (* Set to true if unit testing is enabled *)
 let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
@@ -17,31 +16,46 @@ let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 
 (* Either an int, a float, or none *)
 type intfloatoption =
-| TInt   of int
-| TFloat of float
-| TNone
+  | TInt   of int
+  | TFloat of float
+  | TNone
+
+(* Attributes of a term. Can easily be extended with more data. *)
+type attr = {
+  label:int;
+  var_label:int;
+}
+
+(* Default attribute. *)
+let def_attr = {
+  label = -1;
+  var_label = -1;
+}
+
+(* String map *)
+module StrMap = Map.Make(struct type t = ustring let compare = compare end)
 
 (* Evaluation environment *)
 type env = tm list
 
 (* Pattern used in match constructs *)
 and pattern =
-| PatIdent      of info * ustring
-| PatChar       of info * int
-| PatUC         of info * pattern list * ucOrder * ucUniqueness
-| PatBool       of info * bool
-| PatInt        of info * int
-| PatConcat     of info * pattern * pattern
+  | PatIdent      of info * ustring
+  | PatChar       of info * int
+  | PatUC         of info * pattern list * ucOrder * ucUniqueness
+  | PatBool       of info * bool
+  | PatInt        of info * int
+  | PatConcat     of info * pattern * pattern
 
 (* One pattern case *)
 and case =
-| Case          of info * pattern * tm
+  | Case          of info * pattern * tm
 
 
 (* Tree fore representing universal collection types (UCT) *)
 and ucTree =
-| UCNode        of ucTree * ucTree
-| UCLeaf        of tm list
+  | UCNode        of ucTree * ucTree
+  | UCLeaf        of tm list
 
 
 (* Properties of Universal Collection types *)
@@ -49,104 +63,127 @@ and ucOrder = UCUnordered | UCOrdered | UCSorted
 and ucUniqueness = UCUnique | UCMultivalued
 
 and const =
-(* MCore intrinsic: Boolean constant and operations *)
-| CBool of bool
-| Cnot
-| Cand  of bool option
-| Cor   of bool option
-(* MCore intrinsic: Integer constant and operations *)
-| CInt  of int
-| Caddi of int option
-| Csubi of int option
-| Cmuli of int option
-| Cdivi of int option
-| Cmodi of int option
-| Cnegi
-| Clti  of int option
-| Cleqi of int option
-| Cgti  of int option
-| Cgeqi of int option
-| Ceqi  of int option
-| Cneqi of int option
-| Cslli of int option
-| Csrli of int option
-| Csrai of int option
-(* MCore intrinsic: Floating-point number constant and operations *)
-| CFloat of float
-| Caddf  of float option
-| Csubf  of float option
-| Cmulf  of float option
-| Cdivf  of float option
-| Cnegf
-(* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
-| Cadd   of intfloatoption
-| Csub   of intfloatoption
-| Cmul   of intfloatoption
-| Cdiv   of intfloatoption
-| Cneg
-(* MCore debug and I/O intrinsics *)
-| CDStr
-| CDPrint
-| CPrint
-| CArgv
-(* MCore unified collection type (UCT) intrinsics *)
-| CConcat of tm option
+  (* MCore intrinsic: Boolean constant and operations *)
+  | CBool of bool
+  | Cnot
+  | Cand  of bool option
+  | Cor   of bool option
+  (* MCore intrinsic: Integer constant and operations *)
+  | CInt  of int
+  | Caddi of int option
+  | Csubi of int option
+  | Cmuli of int option
+  | Cdivi of int option
+  | Cmodi of int option
+  | Cnegi
+  | Clti  of int option
+  | Cleqi of int option
+  | Cgti  of int option
+  | Cgeqi of int option
+  | Ceqi  of int option
+  | Cneqi of int option
+  | Cslli of int option
+  | Csrli of int option
+  | Csrai of int option
+  (* MCore intrinsic: Floating-point number constant and operations *)
+  | CFloat of float
+  | Caddf  of float option
+  | Csubf  of float option
+  | Cmulf  of float option
+  | Cdivf  of float option
+  | Cnegf
+  (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+  | Cadd   of intfloatoption
+  | Csub   of intfloatoption
+  | Cmul   of intfloatoption
+  | Cdiv   of intfloatoption
+  | Cneg
+  (* MCore debug and I/O intrinsics *)
+  | CDStr
+  | CDPrint
+  | CPrint
+  | CArgv
+  (* MCore unified collection type (UCT) intrinsics *)
+  | CConcat of tm option
 
-(* Ragnar temp functions for handling polymorphic arguments *)
-| CPolyEq  of tm option
-| CPolyNeq of tm option
+  (* Ragnar temp functions for handling polymorphic arguments *)
+  | CPolyEq  of tm option
+  | CPolyNeq of tm option
 
-(* Atom - an untyped label that can be used to implement
-   domain specific constructs *)
-| CAtom of sid * tm list
+  (* Atom - an untyped label that can be used to implement
+     domain specific constructs *)
+  | CAtom of sid * tm list
 
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool
 
 (* Term/expression *)
 and tm =
-| TmVar         of info * ustring * int * pemode
-| TmLam         of info * ustring * tm
-| TmClos        of info * ustring * tm * env * pemode
-| TmApp         of info * tm * tm
-| TmConst       of info * const
-| TmPEval       of info
-| TmIfexp       of info * bool option * tm option
-| TmFix         of info
+  | TmVar         of attr * info * ustring * int * pemode
+  | TmLam         of attr * info * ustring * tm
+  | TmClos        of attr * info * ustring * tm * env * pemode
+  | TmApp         of attr * info * tm * tm
+  | TmConst       of attr * info * const
+  | TmPEval       of attr * info
+  | TmIfexp       of attr * info * bool option * tm option
+  | TmFix         of attr * info
 
-| TmChar        of info * int
-| TmExprSeq     of info * tm * tm
-| TmUC          of info * ucTree * ucOrder * ucUniqueness
-| TmUtest       of info * tm * tm * tm
-| TmMatch       of info * tm * case list
-| TmNop
+  (* Records *)
+  | TmRec         of attr * info * tm StrMap.t
+  | TmProj        of attr * info * tm * ustring
 
-
-
-
+  | TmChar        of attr * info * int
+  | TmExprSeq     of attr * info * tm * tm
+  | TmUC          of attr * info * ucTree * ucOrder * ucUniqueness
+  | TmUtest       of attr * info * tm * tm * tm
+  | TmMatch       of attr * info * tm * case list
+  | TmNop         of attr
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
+(* Returns the attr field from a term *)
+let tm_attr = function
+  | TmVar(a,_,_,_,_) -> a
+  | TmLam(a,_,_,_) -> a
+  | TmClos(a,_,_,_,_,_) -> a
+  | TmApp(a,_,_,_) -> a
+  | TmConst(a,_,_) -> a
+  | TmPEval(a,_) -> a
+  | TmIfexp(a,_,_,_) -> a
+  | TmFix(a,_) -> a
+
+  | TmRec(a,_,_) -> a
+  | TmProj(a,_,_,_) -> a
+
+  | TmChar(a,_,_) -> a
+  | TmExprSeq(a,_,_,_) -> a
+  | TmUC(a,_,_,_,_) -> a
+  | TmUtest(a,_,_,_,_) -> a
+  | TmMatch(a,_,_,_) -> a
+  | TmNop(a) -> a
 
 (* Returns the info field from a term *)
 let tm_info t =
   match t with
-  | TmVar(fi,_,_,_) -> fi
-  | TmLam(fi,_,_) -> fi
-  | TmClos(fi,_,_,_,_) -> fi
-  | TmApp(fi,_,_) -> fi
-  | TmConst(fi,_) -> fi
-  | TmPEval(fi) -> fi
-  | TmIfexp(fi,_,_) -> fi
-  | TmFix(fi) -> fi
+  | TmVar(_,fi,_,_,_) -> fi
+  | TmLam(_,fi,_,_) -> fi
+  | TmClos(_,fi,_,_,_,_) -> fi
+  | TmApp(_,fi,_,_) -> fi
+  | TmConst(_,fi,_) -> fi
+  | TmPEval(_,fi) -> fi
+  | TmIfexp(_,fi,_,_) -> fi
+  | TmFix(_,fi) -> fi
 
-  | TmChar(fi,_) -> fi
-  | TmExprSeq(fi,_,_) -> fi
-  | TmUC(fi,_,_,_) -> fi
-  | TmUtest(fi,_,_,_) -> fi
-  | TmMatch(fi,_,_) -> fi
-  | TmNop -> NoInfo
+  | TmRec(_,fi,_) -> fi
+  | TmProj(_,fi,_,_) -> fi
+
+  | TmChar(_,fi,_) -> fi
+  | TmExprSeq(_,fi,_,_) -> fi
+  | TmUC(_,fi,_,_,_) -> fi
+  | TmUtest(_,fi,_,_,_) -> fi
+  | TmMatch(_,fi,_,_) -> fi
+  | TmNop _ -> NoInfo
 
 
 (* Atom arity specification. This is changed depending on the DSL *)
@@ -205,11 +242,11 @@ let arity c =
      domain specific constructs *)
   | CAtom _     -> !atom_arity c
 
-let tm_of_const c = TmConst(NoInfo, c)
+let tm_of_const c = TmConst(def_attr,NoInfo, c)
 
 type 'a tokendata = {i:info; v:'a}
 
 
 let ustring2uctm fi str =
-  let lst = List.map (fun x -> TmChar(NoInfo,x)) (ustring2list str) in
-  TmUC(fi,UCLeaf(lst),UCOrdered,UCMultivalued)
+  let lst = List.map (fun x -> TmChar(def_attr,NoInfo,x)) (ustring2list str) in
+  TmUC(def_attr,fi,UCLeaf(lst),UCOrdered,UCMultivalued)

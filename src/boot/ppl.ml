@@ -89,12 +89,12 @@ let genvar i =
   let res = !nextvar in
   let ustr = us "$" ^. ustring_of_int res in
   nextvar := res + 1;
-  (ustr, TmVar(NoInfo, ustr, i, false))
+  (ustr, TmVar(def_attr,NoInfo, ustr, i, false))
 
 (* The identity function (with debruijn index) as a tm. *)
 let idfun =
   let var, var' = genvar 0 in
-  TmLam(NoInfo, var, var')
+  TmLam(def_attr,NoInfo, var, var')
 
 (* Gsl default seed *)
 let seed = Gsl.Rng.make (Gsl.Rng.default ())
@@ -102,22 +102,24 @@ let seed = Gsl.Rng.make (Gsl.Rng.default ())
 
 (* Probability functions for built in distributions. *)
 let prob value dist = match dist with
-  | TmConst(fi, CAtom(dist, args)) ->
+  | TmConst(_,fi, CAtom(dist, args)) ->
     (match value, args with
-     | TmConst(_, CFloat(v)),
-       [TmConst(_, CFloat(sigma));
-        TmConst(_, CFloat(mu))] when dist = anormal ->
-       TmConst(fi, CFloat(Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
+     | TmConst(_,_, CFloat(v)),
+       [TmConst(_,_, CFloat(sigma));
+        TmConst(_,_, CFloat(mu))] when dist = anormal ->
+       TmConst(def_attr,fi,
+               CFloat(Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
      | _ -> failwith "Unknown distribution applied as argument to prob")
   | _ -> failwith "Incorrect distribution applied as argument to prob"
 
 (* Sample functions for built in distributions. *)
 let sample dist = match dist with
-  | TmConst(fi, CAtom(dist, args)) ->
+  | TmConst(_,fi, CAtom(dist, args)) ->
     (match args with
-     | [TmConst(_, CFloat(sigma));
-        TmConst(_, CFloat(mu))] when dist = anormal ->
-       TmConst(fi, CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma))
+     | [TmConst(_,_, CFloat(sigma));
+        TmConst(_,_, CFloat(mu))] when dist = anormal ->
+       TmConst(def_attr,fi,
+               CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma))
      | _ -> failwith "Unknown distribution applied as argument to sample")
   | _ -> failwith "Incorrect distribution applied as argument to sample"
 
@@ -126,24 +128,24 @@ let sample dist = match dist with
 let infer model =
 
   (* Remove continuation by applying idfun *)
-  let model = !eval [] (TmApp(NoInfo, model, idfun)) in
+  let model = !eval [] (TmApp(def_attr,NoInfo, model, idfun)) in
 
   (* Replicate model for #samples times with an initial log weight of 0.0 *)
-  let s = replicate 20 (TmApp(NoInfo, model, TmNop), 0.0) in
+  let s = replicate 20 (TmApp(def_attr,NoInfo, model, TmNop(def_attr)), 0.0) in
 
   (* Evaluate one sample to the end *)
   let rec sim (t, w) =
     let t = !eval [] t in
     match t with
     (* Sample *)
-    | TmConst(_, CAtom(id, [dist; cont]))
+    | TmConst(_,_, CAtom(id, [dist; cont]))
       when id = asample ->
-      sim (TmApp(NoInfo, cont, sample dist), w)
+      sim (TmApp(def_attr,NoInfo, cont, sample dist), w)
 
     (* Weight *)
-    | TmConst(_fi, CAtom(id, [TmConst(_, CFloat(wadj)); cont]))
+    | TmConst(_,_fi, CAtom(id, [TmConst(_,_, CFloat(wadj)); cont]))
       when id = aweight ->
-      sim (TmApp(NoInfo, cont, TmNop), w +. wadj)
+      sim (TmApp(def_attr,NoInfo, cont, TmNop(def_attr)), w +. wadj)
 
     (* Result *)
     | _ -> t, w in
@@ -161,7 +163,7 @@ let infer model =
        res;
      print_newline ());
 
-  TmNop (* Here we should return an empirical distribution *)
+  TmNop(def_attr) (* Here we should return an empirical distribution *)
 
 (* This is the main hook for new constructs in the mcore.*)
 let eval_atom fi id tms v =
@@ -171,9 +173,9 @@ let eval_atom fi id tms v =
     match args with
     | [model]      when id = ainfer -> infer model
     | [dist; v]    when id = aprob  -> prob v dist
-    | _ -> TmConst(fi, c)
+    | _ -> TmConst(def_attr,fi, c)
   else
-    TmConst(fi, c)
+    TmConst(def_attr,fi, c)
 
 (* Used for unsupported CPS transformations *)
 let fail_cps tm =
@@ -182,16 +184,18 @@ let fail_cps tm =
 
 (* Wrap constant functions in CPS forms *)
 let cps_const t = match t with
-  | TmConst(_, c) ->
+  | TmConst(_,_, c) ->
     let vars = List.map genvar (replicate (arity c) noidx) in
     let inner = List.fold_left
         (fun acc (_, v') ->
-           TmApp(NoInfo, acc, v'))
+           TmApp(def_attr,NoInfo, acc, v'))
         t vars in
     List.fold_right
       (fun (v, _) acc ->
          let k, k' = genvar noidx in
-         TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', acc))))
+         TmLam(def_attr,
+               NoInfo, k, TmLam(def_attr,NoInfo,
+                                v, TmApp(def_attr,NoInfo, k', acc))))
       vars inner
   | _ -> failwith "cps_const of non-constant"
 
@@ -208,15 +212,23 @@ let cps_const t = match t with
 let rec cps_atomic t = match t with
   | TmVar _ -> t
 
-  | TmLam(fi,x,t1) ->
+  | TmLam(_,fi,x,t1) ->
     let k, k' = genvar noidx in
-    TmLam(NoInfo, k, TmLam(fi, x, cps k' t1))
+    TmLam(def_attr,NoInfo, k, TmLam(def_attr,fi, x, cps k' t1))
 
   (* Should not exist before eval *)
   | TmClos _-> fail_cps t
 
   (* Function application is not atomic. *)
   | TmApp _ -> failwith "TmApp is not atomic."
+
+  (* Records are treated as atomic for now, but can actually be complex. TODO
+     Fix? *)
+  | TmRec _ -> t
+
+  (* Tuple projection can also be complex, but is treated as atomic for now.
+     TODO Fix? *)
+  | TmProj _ -> t
 
   (* Constant transformation  *)
   | TmConst _ -> cps_const t
@@ -234,16 +246,21 @@ let rec cps_atomic t = match t with
     let c1, c1' = genvar noidx in
     let c2, c2' = genvar noidx in
     let c3, c3' = genvar noidx in
-    let bapp = TmApp(NoInfo, b', c3') in
-    let capp = TmApp(NoInfo, c', c3') in
+    let bapp = TmApp(def_attr,NoInfo, b', c3') in
+    let capp = TmApp(def_attr,NoInfo, c', c3') in
     let inner =
-      TmApp(NoInfo, TmApp(NoInfo, TmApp(NoInfo, t, a'), bapp), capp) in
+      TmApp(def_attr,NoInfo,
+            TmApp(def_attr,NoInfo,
+                  TmApp(def_attr,NoInfo, t, a'), bapp), capp) in
     let clam =
-      TmLam(NoInfo, c3, TmLam(NoInfo, c, inner)) in
+      TmLam(def_attr,NoInfo,
+            c3, TmLam(def_attr,NoInfo, c, inner)) in
     let blam =
-      TmLam(NoInfo, c2, TmLam(NoInfo, b, TmApp(NoInfo, c2', clam))) in
+      TmLam(def_attr,NoInfo, c2,
+            TmLam(def_attr,NoInfo, b, TmApp(def_attr,NoInfo, c2', clam))) in
     let alam =
-      TmLam(NoInfo, c1, TmLam(NoInfo, a, TmApp(NoInfo, c1', blam))) in
+      TmLam(def_attr,NoInfo, c1,
+            TmLam(def_attr,NoInfo, a, TmApp(def_attr,NoInfo, c1', blam))) in
     alam
 
   (* Treat similar as constant function with a single argument. We need to
@@ -252,8 +269,11 @@ let rec cps_atomic t = match t with
   | TmFix _ ->
     let v, v' = genvar noidx in
     let k, k' = genvar noidx in
-    let inner = TmApp(NoInfo, t, TmApp(NoInfo, v', idfun)) in
-    TmLam(NoInfo, k, TmLam(NoInfo, v, TmApp(NoInfo, k', inner)))
+    let inner = TmApp(def_attr,NoInfo,
+                      t, TmApp(def_attr,NoInfo, v', idfun)) in
+    TmLam(def_attr,NoInfo,
+          k, TmLam(def_attr, NoInfo, v,
+                   TmApp(def_attr,NoInfo, k', inner)))
 
   (* Treat as constant *)
   | TmChar _ -> t
@@ -265,25 +285,25 @@ let rec cps_atomic t = match t with
   | TmUC _ -> t
 
   (* CPS transform both lhs and rhs and apply identity function on result.
-     Also transform tnext. *)
-  | TmUtest(fi, t1, t2, tnext) ->
-    TmUtest(fi, cps idfun t1, cps idfun t2, cps idfun tnext)
+     Also transform tnext. TODO Move to complex? *)
+  | TmUtest(_,fi, t1, t2, tnext) ->
+    TmUtest(def_attr,fi, cps idfun t1, cps idfun t2, cps idfun tnext)
 
   (* Not supported *)
   | TmMatch _ -> fail_cps t
 
   (* Treat as constant *)
-  | TmNop -> t
+  | TmNop _ -> t
 
 
-(* Complex cps transformation. Complex means that in order to do the
-   transformation, a continuation must also be supplied as argument to the
+(* Complex cps transformation. Complex means that the term is a computation
+   (i.e., not a value). A continuation must also be supplied as argument to the
    transformation. *)
-and cps cont t = match t with
-
-  (* Function application is the only complex expression.
+and cps cont t =
+  match t with
+  (* Function application is a complex expression (since it is a computation).
      Optimize the case when either the function or argument is atomic. *)
-  | TmApp(fi,t1,t2) ->
+  | TmApp(_,fi,t1,t2) ->
     let wrapopt (a, a') = Some a, a' in
     let f, f' = match t1 with
       | TmApp _ -> wrapopt (genvar noidx)
@@ -291,18 +311,57 @@ and cps cont t = match t with
     let e, e' = match t2 with
       | TmApp _ -> wrapopt (genvar noidx)
       | _ -> None, cps_atomic t2 in
-    let app = TmApp(fi, TmApp(NoInfo, f', cont), e') in
+    let app = TmApp(def_attr,fi, TmApp(def_attr,NoInfo, f', cont), e') in
     let inner = match e with
       | None -> app
-      | Some(e) -> cps (TmLam(NoInfo, e, app)) t2 in
+      | Some(e) -> cps (TmLam(def_attr,NoInfo, e, app)) t2 in
     let outer = match f with
       | None -> inner
-      | Some(f) -> cps (TmLam(NoInfo, f, inner)) t1 in
+      | Some(f) -> cps (TmLam(def_attr,NoInfo, f, inner)) t1 in
     outer
 
   (* Everything else is atomic *)
-  | _ -> TmApp(NoInfo, cont, cps_atomic t)
+  | _ -> TmApp(def_attr,NoInfo, cont, cps_atomic t)
 
+(** Function for uniquely labeling all subterms and variables in a term **)
+let label tm =
+  let open StrMap in
+  let label = ref 0 in
+  let next () = let res = !label in label := !label + 1; res in
+  let rec label_vars map tm = match tm with
+    | TmVar(a,fi,x,i1,pe) ->
+      (match find_opt x map with
+       | Some i2 -> TmVar({a with var_label = i2},fi,x,i1,pe)
+       | _ -> failwith ("Unbound var: " ^ (Ustring.to_utf8 x)))
+    | TmLam(a,fi,x,t1) ->
+      let i = next() in TmLam({a with var_label = i},fi,x,
+                              label_vars (add x i map) t1)
+    | TmApp(a,fi,t1,t2) -> TmApp(a,fi,label_vars map t1, label_vars map t2)
+    | TmClos _ -> failwith "Closure before eval"
+    | TmConst _ | TmIfexp _ | TmFix _ | TmRec _ | TmProj _ | TmNop _ -> tm
+
+    | _ -> failwith "Not supported" in
+  let rec label_terms tm = match tm with
+    | TmVar(a,fi,x,i1,pe) -> TmVar({a with label=next()},fi,x,i1,pe)
+    | TmLam(a,fi,x,t1) -> TmLam({a with label=next()},fi,x,
+                                label_terms t1)
+    | TmApp(a,fi,t1,t2) -> TmApp({a with label = next()},fi,
+                                 label_terms t1,label_terms t2)
+    | TmConst(a,fi,c) -> TmConst({a with label=next()},fi,c)
+    | TmIfexp(a,fi,c,t1) -> TmIfexp({a with label=next()},fi,c,t1)
+    | TmFix(a,fi) -> TmFix({a with label=next()},fi)
+    | TmRec(a,fi,sm) -> TmRec({a with label=next()},fi,sm)
+    | TmProj(a,fi,t1,x) -> TmProj({a with label=next()},fi,t1,x)
+    | TmNop(a) -> TmNop({a with label=next()})
+
+    | TmClos _ -> failwith "Closure before eval"
+    | _ -> failwith "Not supported" in
+  let tm = tm |> label_vars empty |> label_terms in
+  tm, !label
+
+let analyze tm _ = tm
+
+let align tm _ = tm
 
 (* Main function for the evaluation of a probabilistic program *)
 let evalprog debruijn eval' builtin filename =
@@ -326,6 +385,22 @@ let evalprog debruijn eval' builtin filename =
 
       (* Function for converting consts in builtin to tms *)
       let tm_of_builtin b = List.map (fun (x, y) -> x, tm_of_const y) b in
+
+      (* Label program in preparation for static analysis *)
+      let tm,_nl = label tm in
+
+      (print_endline "-- after labeling --";
+       uprint_endline (pprintl tm);
+       uprint_newline ());
+
+      (* Perform static analysis, returning all dynamic labels *)
+      let dyn = analyze
+          (tm_of_builtin (builtin @ pre_cps_builtin @ post_cps_builtin))
+          tm in
+
+      (* By using the above analysis, transform all dynamic checkpoints. This
+         information will be forwarded to the inference algorithm. *)
+      let tm = align tm dyn in
 
       let builtin = builtin
                     (* Convert builtins from consts to tms *)

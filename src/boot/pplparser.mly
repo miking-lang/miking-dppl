@@ -21,29 +21,34 @@
    (** Add fix-point, if recursive function *)
   let addrec x t =
     let rec hasx t = match t with
-      | TmVar(_,y,_,_) ->  x =. y
-      | TmLam(_,y,t1) -> if x =. y then false else hasx t1
-      | TmClos(_,_,_,_,_) -> failwith "Cannot happen"
-      | TmApp(_,t1,t2) -> hasx t1 || hasx t2
-      | TmConst(_,_) -> false
-      | TmFix(_) -> false
-      | TmPEval(_) -> false
-      | TmIfexp(_,_,None) -> false
-      | TmIfexp(_,_,Some(t1)) -> hasx t1
-      | TmChar(_,_) -> false
-      | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
-      | TmUC(_fi,uct,_ordered,_uniqueness) ->
+      | TmVar(_,_,y,_,_) ->  x =. y
+      | TmLam(_,_,y,t1) -> if x =. y then false else hasx t1
+      | TmClos(_,_,_,_,_,_) -> failwith "Cannot happen"
+      | TmApp(_,_,t1,t2) -> hasx t1 || hasx t2
+      | TmConst(_,_,_) -> false
+      | TmFix(_,_) -> false
+      | TmPEval(_,_) -> false
+      | TmIfexp(_,_,_,None) -> false
+      | TmIfexp(_,_,_,Some(t1)) -> hasx t1
+      | TmChar(_,_,_) -> false
+      | TmExprSeq(_,_,t1,t2) -> hasx t1 || hasx t2
+      | TmUC(_,_fi,uct,_ordered,_uniqueness) ->
           let rec work uc = match uc with
           | UCNode(uc1,uc2) -> work uc1 || work uc2
           | UCLeaf(tms) -> List.exists hasx tms
           in work uct
-      | TmUtest(_fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
-      | TmMatch(_fi,_t1,cases) ->
+      | TmUtest(_,_fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
+      | TmMatch(_,_fi,_t1,cases) ->
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
-      | TmNop -> false
+      | TmNop _ -> false
+      | TmRec _ -> failwith "TODO"
+      | TmProj _ -> failwith "TODO"
     in
-    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,t))) else t
-
+    if hasx t then
+      TmApp(def_attr,NoInfo,TmFix(def_attr,NoInfo),
+        (TmLam(def_attr,NoInfo,x,t)))
+    else
+      t
 
 %}
 
@@ -138,6 +143,7 @@
 %left ADD SUB
 %left MUL DIV MOD
 %nonassoc USUB
+%left DOT
 
 %type <Ast.tm> main
 
@@ -157,105 +163,111 @@ top_treeppl_scope:
   | expr treeppl_scope
       { let fi = tm_info $1 in
         match $2 with
-        | TmNop -> $1
-        | _ -> TmApp(fi, TmLam(fi, us"_", $2), $1) }
+        | TmNop _ -> $1
+        | _ -> TmApp(def_attr,fi, TmLam(def_attr,fi, us"_", $2), $1) }
   | treeppl_scope_aux { $1 }
 
 treeppl_scope:
   | sep_expr treeppl_scope
       { let fi = tm_info $1 in
         match $2 with
-        | TmNop -> $1
-        | _ -> TmApp(fi, TmLam(fi, us"_", $2), $1) }
+        | TmNop _ -> $1
+        | _ -> TmApp(def_attr,fi, TmLam(def_attr,fi, us"_", $2), $1) }
   | treeppl_scope_aux { $1 }
 
 treeppl_scope_aux:
-  | { TmNop }
+  | { TmNop(def_attr) }
   | FUNC FUNIDENT params RPAREN expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $5) in
         let rec mkfun lst =
           (match lst with
-          | x::xs -> TmLam(fi,x,mkfun xs)
+          | x::xs -> TmLam(def_attr,fi,x,mkfun xs)
           | [] -> $5 ) in
         let f = if List.length $3 = 0 then [us"_"] else $3 in
-        TmApp(fi,TmLam(fi,$2.v,$6), addrec $2.v (mkfun f)) }
+        TmApp(def_attr,fi,TmLam(def_attr,fi,$2.v,$6), addrec $2.v (mkfun f)) }
   | IDENT EQ expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmApp(fi,TmLam(fi,$1.v,$4),$3) }
+        TmApp(def_attr,fi,TmLam(def_attr,fi,$1.v,$4),$3) }
   | IDENT TILDE expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $3) in
-        let sample = TmVar(fi,us"sample",noidx,false) in
-        TmApp(fi,TmLam(fi,$1.v,$4),TmApp(fi, sample, $3)) }
+        let sample = TmVar(def_attr,fi,us"sample",noidx,false) in
+        TmApp(def_attr,fi,
+            TmLam(def_attr,fi,$1.v,$4),TmApp(def_attr,fi, sample, $3)) }
   | OBSERVE expr TILDE expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $4) in
-        let prob = TmVar(fi,us"prob",noidx,false) in
+        let prob = TmVar(def_attr,fi,us"prob",noidx,false) in
         let v = $2 in
-        let inner = TmApp(fi, TmApp(fi, prob, v), $4) in
-        let weight = TmVar(fi,us"weight",noidx,false) in
-        let outer = TmApp(fi, weight, inner) in
-        TmApp(fi,TmLam(fi,us"_",$5),outer) }
+        let inner = TmApp(def_attr,fi, TmApp(def_attr,fi, prob, v), $4) in
+        let weight = TmVar(def_attr,fi,us"weight",noidx,false) in
+        let outer = TmApp(def_attr,fi, weight, inner) in
+        TmApp(def_attr,fi,TmLam(def_attr,fi,us"_",$5),outer) }
   | UTEST expr sep_expr treeppl_scope
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmUtest(fi,$2,$3,$4) }
+        TmUtest(def_attr,fi,$2,$3,$4) }
 
 expr:
-  | FUNIDENT exprs RPAREN
-      { let fi = mkinfo $1.i $3.i in
-        let rec mkapps lst =
-          match lst with
-          | t::ts ->  TmApp(fi,mkapps ts,t)
-          | [] -> TmVar($1.i,$1.v,noidx,false)
-        in
-        (match Ustring.to_utf8 $1.v with
-         | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued)
-         | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
-  | IF expr THEN expr ELSE expr %prec IF
-      { let fi = mkinfo $1.i (tm_info $6) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
-              TmLam(tm_info $4,us"",$4)),
-              TmLam(tm_info $6,us"",$6)) }
   | expr ADD expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cadd(TNone)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cadd(TNone)),$1),$3) }
   | expr SUB expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csub(TNone)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csub(TNone)),$1),$3) }
   | expr MUL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmul(TNone)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cmul(TNone)),$1),$3) }
   | expr DIV expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdiv(TNone)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cdiv(TNone)),$1),$3) }
   | expr MOD expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmodi(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cmodi(None)),$1),$3) }
   | expr LESS expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Clti(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Clti(None)),$1),$3) }
   | expr LESSEQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleqi(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cleqi(None)),$1),$3) }
   | expr GREAT expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgti(None)),$1),$3)}
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgti(None)),$1),$3)}
   | expr GREATEQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeqi(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeqi(None)),$1),$3) }
   | expr EQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyEq(None)),$1),$3) }
   | expr NOTEQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyNeq(None)),$1),$3) }
   | expr SHIFTLL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cslli(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cslli(None)),$1),$3) }
   | expr SHIFTRL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrli(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csrli(None)),$1),$3) }
   | expr SHIFTRA expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrai(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csrai(None)),$1),$3) }
   | NOT expr
-      { TmApp($1.i,TmConst($1.i,Cnot),$2) }
-  | SUB expr %prec USUB    { TmApp($1.i,TmConst($1.i,Cneg),$2) }
+      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cnot),$2) }
+  | SUB expr %prec USUB
+      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cneg),$2) }
+  | expr DOT IDENT %prec DOT
+      { TmProj(def_attr,$2.i,$1,$3.v) }
   | expr AND expr
-            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cand(None)),$1),$3) }
   | expr OR expr
-             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cor(None)),$1),$3) }
   | expr CONCAT expr
-         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CConcat(None)),$1),$3) }
   | expr_aux { $1 }
 
 /*
- * Separable expressions for sequencing. Combined with expr,
- * Enables function calls such as
+ * Separable expressions (expressions not starting with a minus sign) for
+ * sequencing. Combined with expr, enables function calls such as
  * foo(-1, -2) instead of foo((-1), (-2)).
  * Also gives other nice properties such as being able to write
  * x = -1 instead of x = (-1). Gives a difference between writing
@@ -264,70 +276,99 @@ expr:
  * Unfortunate with code duplication. TODO Is there a better way?
  */
 sep_expr:
+  | sep_expr ADD expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cadd(TNone)),$1),$3) }
+  | sep_expr SUB expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csub(TNone)),$1),$3) }
+  | sep_expr MUL expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cmul(TNone)),$1),$3) }
+  | sep_expr DIV expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cdiv(TNone)),$1),$3) }
+  | sep_expr MOD expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cmodi(None)),$1),$3) }
+  | sep_expr LESS expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Clti(None)),$1),$3) }
+  | sep_expr LESSEQUAL expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cleqi(None)),$1),$3) }
+  | sep_expr GREAT expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgti(None)),$1),$3)}
+  | sep_expr GREATEQUAL expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeqi(None)),$1),$3) }
+  | sep_expr EQUAL expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyEq(None)),$1),$3) }
+  | sep_expr NOTEQUAL expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyNeq(None)),$1),$3) }
+  | sep_expr SHIFTLL expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cslli(None)),$1),$3) }
+  | sep_expr SHIFTRL expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csrli(None)),$1),$3) }
+  | sep_expr SHIFTRA expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csrai(None)),$1),$3) }
+  | NOT expr
+      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cnot),$2) }
+  | sep_expr DOT IDENT %prec DOT
+      { TmProj(def_attr,$2.i,$1,$3.v) }
+  | sep_expr AND expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cand(None)),$1),$3) }
+  | sep_expr OR expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cor(None)),$1),$3) }
+  | sep_expr CONCAT expr
+      { TmApp(def_attr,$2.i,
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CConcat(None)),$1),$3) }
+  | expr_aux { $1 }
+
+expr_aux:
   | FUNIDENT exprs RPAREN
       { let fi = mkinfo $1.i $3.i in
         let rec mkapps lst =
           match lst with
-          | t::ts ->  TmApp(fi,mkapps ts,t)
-          | [] -> TmVar($1.i,$1.v,noidx,false)
+          | t::ts ->  TmApp(def_attr,fi,mkapps ts,t)
+          | [] -> TmVar(def_attr,$1.i,$1.v,noidx,false)
         in
         (match Ustring.to_utf8 $1.v with
-         | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued)
-         | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
+         | "seq"     -> TmUC(def_attr,$1.i,UCLeaf($2),UCOrdered,UCMultivalued)
+         | _ -> mkapps (
+           if List.length $2 = 0 then [TmNop(def_attr)] else (List.rev $2))) }
   | IF expr THEN expr ELSE expr %prec IF
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
-              TmLam(tm_info $4,us"",$4)),
-              TmLam(tm_info $6,us"",$6)) }
-  | sep_expr ADD expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cadd(TNone)),$1),$3) }
-  | sep_expr SUB expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csub(TNone)),$1),$3) }
-  | sep_expr MUL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmul(TNone)),$1),$3) }
-  | sep_expr DIV expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdiv(TNone)),$1),$3) }
-  | sep_expr MOD expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmodi(None)),$1),$3) }
-  | sep_expr LESS expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Clti(None)),$1),$3) }
-  | sep_expr LESSEQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleqi(None)),$1),$3) }
-  | sep_expr GREAT expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgti(None)),$1),$3)}
-  | sep_expr GREATEQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeqi(None)),$1),$3) }
-  | sep_expr EQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq(None)),$1),$3) }
-  | sep_expr NOTEQUAL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq(None)),$1),$3) }
-  | sep_expr SHIFTLL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cslli(None)),$1),$3) }
-  | sep_expr SHIFTRL expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrli(None)),$1),$3) }
-  | sep_expr SHIFTRA expr
-      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrai(None)),$1),$3) }
-  | NOT expr
-      { TmApp($1.i,TmConst($1.i,Cnot),$2) }
-  | sep_expr AND expr
-            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand(None)),$1),$3) }
-  | sep_expr OR expr
-             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
-  | sep_expr CONCAT expr
-         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
-  | expr_aux { $1 }
-
-expr_aux:
+        TmApp(def_attr,fi,
+            TmApp(def_attr,fi,
+              TmApp(def_attr,fi,TmIfexp(def_attr,fi,None,None),$2),
+              TmLam(def_attr,tm_info $4,us"",$4)),
+            TmLam(def_attr,tm_info $6,us"",$6)) }
   | LPAREN expr RPAREN   { $2 }
-  | LSQUARE exprs RSQUARE { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
+  | LSQUARE exprs RSQUARE { TmUC(def_attr,$1.i,
+                            UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY top_treeppl_scope RCURLY  { $2 }
-  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
-  | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
+  | LCURLY record RCURLY { let fi = mkinfo $1.i $3.i in TmRec(def_attr,fi,$2) }
+  | IDENT                { TmVar(def_attr,$1.i,$1.v,noidx,false) }
+  | CHAR                 { TmChar(def_attr,$1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
-  | UINT                 { TmConst($1.i, CInt($1.v)) }
-  | UFLOAT               { TmConst($1.i, CFloat($1.v)) }
-  | TRUE                 { TmConst($1.i, CBool(true)) }
-  | FALSE                { TmConst($1.i, CBool(false)) }
+  | UINT                 { TmConst(def_attr,$1.i, CInt($1.v)) }
+  | UFLOAT               { TmConst(def_attr,$1.i, CFloat($1.v)) }
+  | TRUE                 { TmConst(def_attr,$1.i, CBool(true)) }
+  | FALSE                { TmConst(def_attr,$1.i, CBool(false)) }
+
+record:
+  | IDENT COLON expr { StrMap.singleton $1.v $3 }
+  | IDENT COLON expr COMMA record
+      { StrMap.add $1.v $3 $5 }
 
 params:
   | { [] }
