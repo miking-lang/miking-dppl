@@ -220,6 +220,8 @@ let builtin =
    ("divf",Cdivf(None));("negf",Cnegf);
    ("add",Cadd(TNone));("sub",Csub(TNone));("mul",Cmul(TNone));
    ("div",Cdiv(TNone));("neg",Cneg);
+   ("lt",Clt(TNone)); ("leq",Cleq(TNone)); ("gt",Cgt(TNone)); ("geq",Cgeq(TNone));
+   ("eq",Ceq(TNone)); ("neq",Cneq(TNone));
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat(None))]
 
@@ -367,6 +369,54 @@ let delta c v  =
     | Cneg,TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,CFloat((-1.0)*.v))
     | Cneg,TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,CInt((-1)*v))
     | Cneg,t -> fail_constapp (tm_info t)
+
+    | Clt(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Clt(TInt(v)))
+    | Clt(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Clt(TFloat(v)))
+    | Clt(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 < v2))
+    | Clt(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 < v2))
+    | Clt(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 < (float_of_int v2)))
+    | Clt(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) < v2))
+    | Clt _,t -> fail_constapp (tm_info t)
+
+    | Cleq(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Cleq(TInt(v)))
+    | Cleq(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Cleq(TFloat(v)))
+    | Cleq(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 <= v2))
+    | Cleq(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 <= v2))
+    | Cleq(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 <= (float_of_int v2)))
+    | Cleq(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) <= v2))
+    | Cleq _,t -> fail_constapp (tm_info t)
+
+    | Cgt(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Cgt(TInt(v)))
+    | Cgt(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Cgt(TFloat(v)))
+    | Cgt(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 > v2))
+    | Cgt(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 > v2))
+    | Cgt(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 > (float_of_int v2)))
+    | Cgt(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) > v2))
+    | Cgt _,t -> fail_constapp (tm_info t)
+
+    | Cgeq(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Cgeq(TInt(v)))
+    | Cgeq(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Cgeq(TFloat(v)))
+    | Cgeq(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 >= v2))
+    | Cgeq(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 >= v2))
+    | Cgeq(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 >= (float_of_int v2)))
+    | Cgeq(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) >= v2))
+    | Cgeq _,t -> fail_constapp (tm_info t)
+
+    | Ceq(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Ceq(TInt(v)))
+    | Ceq(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Ceq(TFloat(v)))
+    | Ceq(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 = v2))
+    | Ceq(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 = v2))
+    | Ceq(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 = (float_of_int v2)))
+    | Ceq(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) = v2))
+    | Ceq _,t -> fail_constapp (tm_info t)
+
+    | Cneq(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Cneq(TInt(v)))
+    | Cneq(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Cneq(TFloat(v)))
+    | Cneq(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 <> v2))
+    | Cneq(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 <> v2))
+    | Cneq(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 <> (float_of_int v2)))
+    | Cneq(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) <> v2))
+    | Cneq _, t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)

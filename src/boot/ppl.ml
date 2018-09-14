@@ -14,7 +14,7 @@ open Ast
 open Msg
 open Pprint
 
-let enable_debug_cps = false
+let enable_debug_cps = true
 let enable_debug_cps_builtin = false
 let enable_debug_infer = false
 
@@ -324,7 +324,7 @@ and cps cont t =
   | _ -> TmApp(def_attr,NoInfo, cont, cps_atomic t)
 
 (** Function for uniquely labeling all subterms and variables in a term **)
-let label tm =
+let label builtin tm =
   let open StrMap in
   let label = ref 0 in
   let next () = let res = !label in label := !label + 1; res in
@@ -343,25 +343,239 @@ let label tm =
     | _ -> failwith "Not supported" in
   let rec label_terms tm = match tm with
     | TmVar(a,fi,x,i1,pe) -> TmVar({a with label=next()},fi,x,i1,pe)
-    | TmLam(a,fi,x,t1) -> TmLam({a with label=next()},fi,x,
-                                label_terms t1)
-    | TmApp(a,fi,t1,t2) -> TmApp({a with label = next()},fi,
-                                 label_terms t1,label_terms t2)
-    | TmConst(a,fi,c) -> TmConst({a with label=next()},fi,c)
-    | TmIfexp(a,fi,c,t1) -> TmIfexp({a with label=next()},fi,c,t1)
-    | TmFix(a,fi) -> TmFix({a with label=next()},fi)
-    | TmRec(a,fi,sm) -> TmRec({a with label=next()},fi,sm)
-    | TmProj(a,fi,t1,x) -> TmProj({a with label=next()},fi,t1,x)
-    | TmNop(a) -> TmNop({a with label=next()})
+    | TmLam(a,fi,x,t1)    -> TmLam({a with label=next()},fi,x,
+                                   label_terms t1)
+    | TmApp(a,fi,t1,t2)   -> TmApp({a with label = next()},fi,
+                                   label_terms t1,label_terms t2)
+    | TmConst(a,fi,c)     -> TmConst({a with label=next()},fi,c)
+    | TmIfexp(a,fi,c,t1)  -> TmIfexp({a with label=next()},fi,c,t1)
+    | TmFix(a,fi)         -> TmFix({a with label=next()},fi)
+    | TmRec(a,fi,sm)      -> TmRec({a with label=next()},fi,sm)
+    | TmProj(a,fi,t1,x)   -> TmProj({a with label=next()},fi,t1,x)
+    | TmNop(a)            -> TmNop({a with label=next()})
 
     | TmClos _ -> failwith "Closure before eval"
     | _ -> failwith "Not supported" in
-  let tm = tm |> label_vars empty |> label_terms in
-  tm, !label
+  let sm = List.fold_left
+             (fun sm x -> add x (next ()) sm)
+      empty builtin in
+  let tm = tm |> label_vars sm |> label_terms in
+  tm, sm, !label
 
-let analyze tm _ = tm
+(** Abstract values used in the 0-CFA analysis **)
+type absval =
+  | Stoch
+  | Fun of { louter:int; linner:int; lvar:int }
+  | Fix
 
-let align tm _ = tm
+(** Returns string representation of abstract values **)
+let string_of_absval = function
+  | Stoch -> "Stoch"
+  | Fun{louter;linner;lvar} ->
+    "Fun(" ^
+    (String.concat "," (List.map string_of_int [louter;linner;lvar])) ^ ")"
+  | Fix -> "Fix"
+
+(** Constraints used in the 0-CFA analysis **)
+type cstr =
+  | Dir of absval * int
+  | Sub of int * int
+  | Impl of absval * int * int * int
+
+(** Returns string representation of constraints **)
+let string_of_cstr = function
+  | Dir(av,n) -> string_of_absval av ^ " in " ^ string_of_int n
+  | Sub(n1,n2) -> string_of_int n1 ^ " in " ^ string_of_int n2
+  | Impl(av,n1,n2,n3) ->
+    string_of_absval av ^ " in " ^ string_of_int n1
+    ^ " => " ^ string_of_int n2 ^ " in " ^ string_of_int n3
+
+(** Returns abstract value representations of all functions in a program **)
+let functions tm =
+  let rec recurse tm funs = match tm with
+    | TmVar _ -> funs
+    | TmLam({label;var_label},_,_,t1) ->
+      Fun{louter=label;linner=tm_label t1;lvar=var_label} :: recurse t1 funs
+    | TmApp(_,_,t1,t2) -> funs |> recurse t1 |> recurse t2
+    | TmConst _ | TmIfexp _ | TmFix _
+    | TmRec _ | TmProj _ | TmNop _ -> funs
+    | TmClos _ -> failwith "Closure before eval"
+    | _ -> failwith "Not supported" in
+  recurse tm []
+
+(** Generate a set of 0-CFA constraints for a program. For now, built in
+    functions must be applied immediately (all arguments) where occuring, and
+    are assumed not to be passed around in the program as values. **)
+let gen_cstrs bmap tm =
+  let idmatch str id =
+    match StrMap.find_opt (us str) bmap with
+    | Some i -> i = id
+    | _ -> false in
+  let funs = functions tm in
+  let rec recurse tm cstrs = match tm with
+    (* Binary operators *)
+    | TmApp({label=l;_},_,TmApp(_,_,TmConst(_,_,const),t1),t2)
+      when arity const = 2 ->
+      let l1 = tm_label t1 in
+      let l2 = tm_label t2 in
+      let cstrs = cstrs |> recurse t1 |> recurse t2 in
+      Sub(l1,l) :: Sub(l2,l) :: cstrs
+
+    (* Unary operators *)
+    | TmApp({label=l;_},_,TmConst(_,_,const),t1)
+      when arity const = 1 ->
+      let l1 = tm_label t1 in
+      let cstrs = cstrs |> recurse t1 in
+      Sub(l1,l) :: cstrs
+
+    (* If expressions *)
+    | TmApp({label=l;_},_, TmApp(_,_, TmApp(_,_,TmIfexp(_,_,_,_),t1),
+                                 TmLam(_,_,_,t2)), TmLam(_,_,_,t3)) ->
+      let l2 = tm_label t2 in
+      let l3 = tm_label t3 in
+      let cstrs = cstrs |> recurse t1 |> recurse t2 |> recurse t3 in
+      Sub(l2,l) :: Sub(l3,l) :: cstrs
+
+    (* Sample *)
+    | TmApp({label=l;_},_,TmVar({var_label;_},_,_,_,_),t1)
+      when idmatch "sample" var_label ->
+      let cstrs = cstrs |> recurse t1 in
+      Dir(Stoch, l) :: cstrs
+
+    (* Fixpoint *)
+    | TmApp({label;_},_,TmFix(_,_), t1) ->
+      let l = label in
+      let l1 = tm_label t1 in
+      let cstrs = cstrs |> recurse t1 in
+      List.fold_left
+        (fun cstrs av -> match av with
+           | Fun{linner=l2;lvar=x;_} ->
+             Impl(av,l1,l2,x) :: Impl(av,l1,l2,l) :: cstrs
+           | _ -> failwith "Non-fun absval in funs")
+        cstrs funs
+
+    (* Variables *)
+    | TmVar({label=l;var_label=x},_,_,_,_) -> Sub(x, l) :: cstrs
+
+    (* Lambdas *)
+    | TmLam({label;var_label},_,_,t1) ->
+      Dir(Fun{louter=label;linner=tm_label t1;lvar=var_label},label)
+      :: recurse t1 cstrs
+
+    (* General applications (not caught by operators/keywords above) *)
+    | TmApp({label=l;_},_,t1,t2) ->
+      let l1 = tm_label t1 in
+      let l2 = tm_label t2 in
+      let cstrs = cstrs |> recurse t1 |> recurse t2 in
+      List.fold_left
+        (fun cstrs av -> match av with
+           | Fun{linner=l3;lvar=x;_} ->
+             Impl(av,l1,l2,x) :: Impl(av,l1,l3,l) :: cstrs
+           | _ -> failwith "Non-fun absval in funs")
+        cstrs funs
+
+    | TmConst _ | TmIfexp _ | TmRec _ | TmProj _ | TmNop _ -> cstrs
+
+    | TmClos _ -> failwith "Closure before eval"
+    | _ -> failwith "Not supported"
+  in recurse tm []
+
+(* Sets of abstract values *)
+module AbsValSet = Set.Make(struct let compare = compare type t = absval end)
+
+(* Analyze the program using 0-CFA to discover dynamic parts *)
+let analyze bmap tm nl =
+  let open AbsValSet in
+  let worklist = ref [] in
+  let data = Array.make nl empty in
+  let edges = Array.make nl [] in
+  let cstrs = gen_cstrs bmap tm in
+  let add q d =
+    if not (subset d data.(q)) then
+      (data.(q) <- union data.(q) d;
+       worklist := q :: !worklist) in
+
+  (print_endline "-- constraints --";
+   List.iter (fun cstr -> print_endline (string_of_cstr cstr)) cstrs;
+   uprint_newline ());
+
+  (* Building the graph *)
+  let f cstr = match cstr with
+    | Dir(t,p) -> add p (singleton t)
+    | Sub(p1,_) -> edges.(p1) <- cstr :: edges.(p1)
+    | Impl(_,p,p1,_) ->
+      edges.(p1) <- cstr :: edges.(p1);
+      edges.(p)  <- cstr :: edges.(p) in
+  List.iter f cstrs;
+
+  (* Iteration *)
+  while match !worklist with [] -> false | _ -> true do
+    let q = List.hd !worklist in
+    worklist := List.tl !worklist;
+    let f cstr = match cstr with
+      | Sub(p1,p2) -> add p2 data.(p1)
+      | Impl(t,p,p1,p2) -> if mem t data.(p) then add p2 data.(p1)
+      | Dir _ -> failwith "Direct constraint in iteration" in
+    List.iter f edges.(q)
+  done;
+
+  (* Mark dynamic parts *)
+  let mark = Array.make nl false in
+  let modified = ref true in
+
+  let mark_labels aset =
+    iter (fun av -> match av with
+        | Fun{louter=l;_} ->
+          if not mark.(l) then (mark.(l) <- true; modified := true)
+        | _ -> ()) aset in
+
+  let rec recurse flag tm =
+    let l = tm_label tm in
+    if flag || mark.(l) then
+      (if not mark.(l) then (mark.(l) <- true; modified := true);
+       mark_labels data.(l));
+    match tm with
+    | TmApp(_,_,TmApp(_,_,TmApp(_,_,TmIfexp(_,_,_,_),t1),t2),t3)
+      when not flag ->
+      recurse flag t1;
+      let flag = mem Stoch data.(tm_label t1) in
+      recurse flag t2; recurse flag t3
+
+    | TmVar _ -> ()
+    | TmLam({label=l;_},_,_,t1) -> recurse (mark.(l) || flag) t1
+
+    | TmApp(_,_,t1,t2) -> recurse flag t1; recurse flag t2;
+
+
+    | TmConst _ | TmIfexp _ | TmFix _ | TmRec _
+    | TmProj _ | TmNop _ -> ()
+
+    | TmClos _ -> failwith "Closure before eval"
+    | _ -> failwith "Not supported" in
+
+  while !modified do
+    modified := false;
+    recurse false tm;
+  done;
+
+  (print_endline "-- data --";
+    Array.iteri (fun i set ->
+         print_string ("Label " ^ string_of_int i ^ ": { ");
+         print_string (String.concat ", "
+                         (List.map string_of_absval (elements set)));
+         print_endline (" }")) data;
+   uprint_newline ());
+
+  (print_endline "-- dynamic --";
+    Array.iteri
+      (fun i b ->
+         print_endline ("Label " ^ string_of_int i ^ " = " ^ string_of_bool b);
+      ) mark;
+   uprint_newline ());
+
+  mark
+
+let align tm _dyn = tm
 
 (* Main function for the evaluation of a probabilistic program *)
 let evalprog debruijn eval' builtin filename =
@@ -386,17 +600,17 @@ let evalprog debruijn eval' builtin filename =
       (* Function for converting consts in builtin to tms *)
       let tm_of_builtin b = List.map (fun (x, y) -> x, tm_of_const y) b in
 
-      (* Label program in preparation for static analysis *)
-      let tm,_nl = label tm in
+      (* Label program and builtins in preparation for static analysis *)
+      let tm,bmap,nl = label
+          ((builtin @ pre_cps_builtin @ post_cps_builtin)
+           |> List.split |> fst |> List.map us) tm in
 
       (print_endline "-- after labeling --";
        uprint_endline (pprintl tm);
        uprint_newline ());
 
       (* Perform static analysis, returning all dynamic labels *)
-      let dyn = analyze
-          (tm_of_builtin (builtin @ pre_cps_builtin @ post_cps_builtin))
-          tm in
+      let dyn = analyze bmap tm nl in
 
       (* By using the above analysis, transform all dynamic checkpoints. This
          information will be forwarded to the inference algorithm. *)

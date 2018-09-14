@@ -98,6 +98,12 @@ and const =
   | Cmul   of intfloatoption
   | Cdiv   of intfloatoption
   | Cneg
+  | Clt    of intfloatoption
+  | Cleq   of intfloatoption
+  | Cgt    of intfloatoption
+  | Cgeq   of intfloatoption
+  | Ceq    of intfloatoption
+  | Cneq   of intfloatoption
   (* MCore debug and I/O intrinsics *)
   | CDStr
   | CDPrint
@@ -142,26 +148,26 @@ and tm =
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
-(* Returns the attr field from a term *)
-let tm_attr = function
-  | TmVar(a,_,_,_,_) -> a
-  | TmLam(a,_,_,_) -> a
-  | TmClos(a,_,_,_,_,_) -> a
-  | TmApp(a,_,_,_) -> a
-  | TmConst(a,_,_) -> a
-  | TmPEval(a,_) -> a
-  | TmIfexp(a,_,_,_) -> a
-  | TmFix(a,_) -> a
+(* Returns the label of a term *)
+let tm_label = function
+  | TmVar({label;_},_,_,_,_)
+  | TmLam({label;_},_,_,_)
+  | TmClos({label;_},_,_,_,_,_)
+  | TmApp({label;_},_,_,_)
+  | TmConst({label;_},_,_)
+  | TmPEval({label;_},_)
+  | TmIfexp({label;_},_,_,_)
+  | TmFix({label;_},_)
 
-  | TmRec(a,_,_) -> a
-  | TmProj(a,_,_,_) -> a
+  | TmRec({label;_},_,_)
+  | TmProj({label;_},_,_,_)
 
-  | TmChar(a,_,_) -> a
-  | TmExprSeq(a,_,_,_) -> a
-  | TmUC(a,_,_,_,_) -> a
-  | TmUtest(a,_,_,_,_) -> a
-  | TmMatch(a,_,_,_) -> a
-  | TmNop(a) -> a
+  | TmChar({label;_},_,_)
+  | TmExprSeq({label;_},_,_,_)
+  | TmUC({label;_},_,_,_,_)
+  | TmUtest({label;_},_,_,_,_)
+  | TmMatch({label;_},_,_,_)
+  | TmNop({label;_}) -> label
 
 (* Returns the info field from a term *)
 let tm_info t =
@@ -228,6 +234,12 @@ let arity c =
   | Cmul(TNone) -> 2  | Cmul(_)        -> 1
   | Cdiv(TNone) -> 2  | Cdiv(_)        -> 1
   | Cneg        -> 1
+  | Clt(TNone)  -> 2  | Clt(_)         -> 1
+  | Cleq(TNone) -> 2  | Cleq(_)        -> 1
+  | Cgt(TNone)  -> 2  | Cgt(_)         -> 1
+  | Cgeq(TNone) -> 2  | Cgeq(_)        -> 1
+  | Ceq(TNone)  -> 2  | Ceq(_)        -> 1
+  | Cneq(TNone) -> 2  | Cneq(_)        -> 1
   (* MCore debug and I/O intrinsics *)
   | CDStr       -> 1
   | CDPrint     -> 1

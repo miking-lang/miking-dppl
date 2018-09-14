@@ -223,22 +223,22 @@ expr:
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cmodi(None)),$1),$3) }
   | expr LESS expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Clti(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Clt(TNone)),$1),$3) }
   | expr LESSEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cleqi(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cleq(TNone)),$1),$3) }
   | expr GREAT expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgti(None)),$1),$3)}
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgt(TNone)),$1),$3)}
   | expr GREATEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeqi(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeq(TNone)),$1),$3) }
   | expr EQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyEq(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Ceq(TNone)),$1),$3) }
   | expr NOTEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyNeq(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cneq(TNone)),$1),$3) }
   | expr SHIFTLL expr
       { TmApp(def_attr,$2.i,
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cslli(None)),$1),$3) }
@@ -293,22 +293,22 @@ sep_expr:
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cmodi(None)),$1),$3) }
   | sep_expr LESS expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Clti(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Clt(TNone)),$1),$3) }
   | sep_expr LESSEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cleqi(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cleq(TNone)),$1),$3) }
   | sep_expr GREAT expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgti(None)),$1),$3)}
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgt(TNone)),$1),$3)}
   | sep_expr GREATEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeqi(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeq(TNone)),$1),$3) }
   | sep_expr EQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyEq(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Ceq(TNone)),$1),$3) }
   | sep_expr NOTEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyNeq(None)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cneq(TNone)),$1),$3) }
   | sep_expr SHIFTLL expr
       { TmApp(def_attr,$2.i,
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cslli(None)),$1),$3) }

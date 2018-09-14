@@ -127,6 +127,25 @@ and pprint_const c =
   | Cdiv(TFloat(v)) -> us(sprintf "div(%f)" v)
   | Cdiv(TNone) -> us"div"
   | Cneg -> us"neg"
+  | Clt(TInt(v)) -> us(sprintf "lt(%d)" v)
+  | Clt(TFloat(v)) -> us(sprintf "lt(%f)" v)
+  | Clt(TNone) -> us"lt"
+  | Cleq(TInt(v)) -> us(sprintf "leq(%d)" v)
+  | Cleq(TFloat(v)) -> us(sprintf "leq(%f)" v)
+  | Cleq(TNone) -> us"leq"
+  | Cgt(TInt(v)) -> us(sprintf "gt(%d)" v)
+  | Cgt(TFloat(v)) -> us(sprintf "gt(%f)" v)
+  | Cgt(TNone) -> us"gt"
+  | Cgeq(TInt(v)) -> us(sprintf "geq(%d)" v)
+  | Cgeq(TFloat(v)) -> us(sprintf "geq(%f)" v)
+  | Cgeq(TNone) -> us"geq"
+  | Ceq(TInt(v)) -> us(sprintf "eq(%d)" v)
+  | Ceq(TFloat(v)) -> us(sprintf "eq(%f)" v)
+  | Ceq(TNone) -> us"eq"
+  | Cneq(TInt(v)) -> us(sprintf "neq(%d)" v)
+  | Cneq(TFloat(v)) -> us(sprintf "neq(%f)" v)
+  | Cneq(TNone) -> us"neq"
+
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
