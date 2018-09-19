@@ -1,0 +1,62 @@
+tree = {age:13.016,left:{age:10.626,left:{age:8.352,left:{age:7.679,left:{age:5.187,left:{age:0},right:{age:0}},right:{age:5.196,left:{age:0},right:{age:4.871,left:{age:2.601,left:{age:0},right:{age:0}},right:{age:0}}}},right:{age:7.361,left:{age:3.818,left:{age:1.143,left:{age:0.829,left:{age:0},right:{age:0}},right:{age:0}},right:{age:1.813,left:{age:0.452,left:{age:0.203,left:{age:0},right:{age:0}},right:{age:0}},right:{age:0}}},right:{age:1.868,left:{age:0.866,left:{age:0},right:{age:0.001,left:{age:0},right:{age:0}}},right:{age:1.06,left:{age:0},right:{age:0}}}}},right:{age:10.536,left:{age:8.291,left:{age:1.396,left:{age:0.215,left:{age:0},right:{age:0}},right:{age:0}},right:{age:0}},right:{age:8.192,left:{age:0.56,left:{age:0},right:{age:0}},right:{age:0}}}},right:{age:8.958,left:{age:3.748,left:{age:0},right:{age:0.033,left:{age:0},right:{age:0}}},right:{age:7.775,left:{age:0.584,left:{age:0},right:{age:0}},right:{age:1.589,left:{age:0},right:{age:0}}}}}
+
+function survival( startTime, lambda, mu ) {
+    t ~ exponential(lambda + mu)
+
+    currentTime = startTime - t
+    if currentTime < 0 then
+      true
+    else {
+      speciation ~ bernoulli(lambda/(lambda + mu))
+      if !speciation then
+          false
+      else
+          survival( currentTime, lambda, mu ) || survival( currentTime, lambda, mu )
+    }
+}
+
+function simBranch( startTime, stopTime, lambda, mu ) {
+
+    t ~ exponential ( lambda )
+
+    currentTime = startTime - t
+
+    if currentTime <= stopTime then nop
+    else {
+
+      weight( log( 2.0 ) )
+      s = if survival( currentTime, lambda, mu ) == false then 0 else infinity
+      weight( s )
+
+      simBranch( currentTime, stopTime, lambda, mu )
+    }
+}
+
+function condBD( tree, parent, lambda, mu )
+{
+    weight( - mu * ( parent.age - tree.age ) )
+
+    simBranch( parent.age, tree.age, lambda, mu )
+
+    if tree.left != nop then {
+        weight( log( 2.0 * lambda ) )
+        condBD( tree.left , tree, lambda, mu)
+        condBD( tree.right, tree, lambda, mu)
+    } else {}
+}
+
+function model() {
+    lambda = gamma( 1.0, 1.0 )
+    mu     = gamma( 1.0, 1.0 )
+
+    condBD( tree.left, tree, lambda, mu )
+    if tree.right != nop then {
+        weight( log( 2.0 ) )
+        condBD( tree.right, tree, lambda, mu )
+    } else {}
+
+    lambda
+}
+
+infer(model)
+
