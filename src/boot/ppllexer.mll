@@ -36,6 +36,10 @@ let reserved_strings = [
   ("ifexp",         fun(i) -> Pplparser.IFEXP{i=i;v=()});
   ("observe",       fun(i) -> Pplparser.OBSERVE{i=i;v=()});
 
+  (* Built-in prefix operators and constants *)
+  ("log",           fun(i) -> Pplparser.LOG{i=i;v=()});
+  ("inf",           fun(i) -> Pplparser.INF{i=i;v=()});
+
   (* v *)
   ("=",             fun(i) -> Pplparser.EQ{i=i;v=()});
   ("~",             fun(i) -> Pplparser.TILDE{i=i;v=()});
@@ -189,10 +193,12 @@ rule main = parse
       { Pplparser.UFLOAT{i=mkinfo_fast str; v=float_of_string str} }
   | (ident as s) "("
       { let s2 = Ustring.from_utf8 s in
+        let i = mkinfo_ustring s2 in
         (match s with
-        | "if" -> Pplparser.IF2{i=mkinfo_ustring s2;v=()}
-        | "fun" -> Pplparser.FUNC2{i=mkinfo_ustring s2;v=()}
-        | _ -> Pplparser.FUNIDENT {i=mkinfo_ustring s2; v=s2})}
+        | "log" -> Pplparser.LOG{i=i;v=()}
+        | "if" -> Pplparser.IF2{i=i;v=()}
+        | "fun" -> Pplparser.FUNC2{i=i;v=()}
+        | _ -> Pplparser.FUNIDENT {i=i;v=s2})}
   | ident | symtok as s
       { mkid s }
   | '\'' (utf8 as c) '\''

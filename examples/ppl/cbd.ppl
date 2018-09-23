@@ -17,23 +17,22 @@ function survival( startTime, lambda, mu ) {
 
 function simBranch( startTime, stopTime, lambda, mu ) {
 
-    t ~ exponential ( lambda )
+    t ~ exponential( lambda )
 
     currentTime = startTime - t
 
     if currentTime <= stopTime then nop
     else {
-
+      s ~ normal(13.37,13.37)
       weight( log( 2.0 ) )
-      s = if survival( currentTime, lambda, mu ) == false then 0 else infinity
+      s = if survival( currentTime, lambda, mu ) == false then 0.0 else -inf
       weight( s )
 
       simBranch( currentTime, stopTime, lambda, mu )
     }
 }
 
-function condBD( tree, parent, lambda, mu )
-{
+function condBD( tree, parent, lambda, mu ) {
     weight( - mu * ( parent.age - tree.age ) )
 
     simBranch( parent.age, tree.age, lambda, mu )
@@ -46,8 +45,11 @@ function condBD( tree, parent, lambda, mu )
 }
 
 function model() {
-    lambda = gamma( 1.0, 1.0 )
-    mu     = gamma( 1.0, 1.0 )
+    // lambda ~ gamma( 1.0, 1.0 )
+    // mu     ~ gamma( 1.0, 1.0 )
+
+    lambda = 0.2
+    mu     = 0.1
 
     condBD( tree.left, tree, lambda, mu )
     if tree.right != nop then {

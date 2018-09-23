@@ -14,15 +14,25 @@ open Ast
 open Msg
 open Pprint
 
-let enable_debug_cps = true
+let enable_debug_cps = false
 let enable_debug_cps_builtin = false
 let enable_debug_infer = false
+let enable_debug_sanalysis = false
 
-(* eval ref since I can't import Boot (circular) TODO Refactor? *)
+let random_seed = true
+
+type inference =
+  | Importance     of int
+  | SMCAligned     of int
+  | SMCUnaligned   of int
+
+let inference = ref (Importance(10))
+
+(** eval ref since I can't import Boot (circular) TODO Refactor? **)
 let empty_eval _ t = t
 let eval = ref empty_eval
 
-(* Identifiers for atoms *)
+(** Identifiers for atoms **)
 let anormal = usid "normal"
 let auniform = usid "uniform"
 let agamma = usid "gamma"
@@ -32,6 +42,7 @@ let ainfer = usid "infer"
 let aprob = usid "prob"
 let asample = usid "sample"
 let aweight = usid "weight"
+let adweight = usid "dweight"
 
 (** All CPS transformed atoms **)
 let pre_cps_builtin = [
@@ -49,18 +60,20 @@ let pre_cps_builtin = [
   ("prob", CAtom(aprob, []));
 ]
 
-(* All non-CPS-transformed atoms *)
-let post_cps_builtin = [
-  ("sample", CAtom(asample, []));
-  ("weight", CAtom(aweight, []));
+(** All non-CPS-transformed atoms **)
+let post_cps = [
+  ("sample", asample);
+  ("weight", aweight);
+  ("dweight", adweight);
 ]
+let post_cps_builtin = List.map (fun (str,id) -> (str,CAtom(id,[]))) post_cps
 
-(* Used for constants with unspecified arities *)
+(** Used for constants with unspecified arities **)
 let fail_arity c =
   failwith ("Arity of " ^
             Ustring.to_utf8 (pprint_const c) ^ " not specified.")
 
-(* Arity specification for atoms *)
+(** Arity specification for atoms **)
 let atom_arity c =
   let id,len = match c with
     | CAtom(id,ls) -> id, List.length ls
@@ -78,12 +91,13 @@ let atom_arity c =
     (*** Not CPS transformed (continuations included in arity) ***)
     else if id = asample  then 2
     else if id = aweight  then 2
+    else if id = adweight then 2
     else fail_arity c
   in max_arity - len
 
-(* Generate fresh variable names for CPS transformation.  Avoids clashes by
-   using $ as first char (not allowed in lexer for vars).  Takes a debruijn
-   index as argument (for idfun). *)
+(** Generate fresh variable names for CPS transformation.  Avoids clashes by
+    using $ as first char (not allowed in lexer for vars).  Takes a debruijn
+    index as argument (for idfun). **)
 let nextvar = ref 0
 let genvar i =
   let res = !nextvar in
@@ -91,61 +105,112 @@ let genvar i =
   nextvar := res + 1;
   (ustr, TmVar(def_attr,NoInfo, ustr, i, false))
 
-(* The identity function (with debruijn index) as a tm. *)
+(** The identity function (with debruijn index) as a tm. **)
 let idfun =
   let var, var' = genvar 0 in
   TmLam(def_attr,NoInfo, var, var')
 
-(* Gsl default seed *)
-let seed = Gsl.Rng.make (Gsl.Rng.default ())
-(* let sample = (fun () -> Gsl.Randist.gaussian seed 200.0) *)
+(** Gsl default seed **)
+let seed =
+  let rng = Gsl.Rng.make (Gsl.Rng.default ()) in
+  if random_seed then
+    (Random.self_init();
+     Gsl.Rng.set rng (Random.nativeint Nativeint.max_int));
+  rng
 
-(* Probability functions for built in distributions. *)
+(** Probability functions for built in distributions. **)
 let prob value dist = match dist with
   | TmConst(_,fi, CAtom(dist, args)) ->
     (match value, args with
+
+     (* Normal distribution *)
      | TmConst(_,_, CFloat(v)),
        [TmConst(_,_, CFloat(sigma));
         TmConst(_,_, CFloat(mu))] when dist = anormal ->
        TmConst(def_attr,fi,
                CFloat(Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
+
+     (* Exponential distribution *)
+     | TmConst(_,_, CFloat(v)),
+       [TmConst(_,_, CFloat(lambda))] when dist = aexp ->
+       let mu = 1.0 /. lambda in
+       TmConst(def_attr,fi, CFloat(Gsl.Randist.exponential_pdf v ~mu:mu))
+
+     (* Bernoulli distribution *)
+     | TmConst(_,_, CBool(v)),
+       [TmConst(_,_, CFloat(p))] when dist = abern ->
+       let i = if v then 1 else 0 in
+       TmConst(def_attr,fi, CFloat(Gsl.Randist.bernoulli_pdf i ~p:p))
+
+     (* Gamma distribution *)
+     | TmConst(_,_, CFloat(v)),
+       [TmConst(_,_, CFloat(a));
+        TmConst(_,_, CFloat(b))] when dist = agamma ->
+       TmConst(def_attr,fi, CFloat(Gsl.Randist.gamma_pdf v ~a:a ~b:b))
+
      | _ -> failwith "Unknown distribution applied as argument to prob")
   | _ -> failwith "Incorrect distribution applied as argument to prob"
 
-(* Sample functions for built in distributions. *)
+(** Sample functions for built in distributions. **)
 let sample dist = match dist with
   | TmConst(_,fi, CAtom(dist, args)) ->
     (match args with
+
+     (* Normal distribution *)
      | [TmConst(_,_, CFloat(sigma));
         TmConst(_,_, CFloat(mu))] when dist = anormal ->
        TmConst(def_attr,fi,
                CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma))
-     | _ -> failwith "Unknown distribution applied as argument to sample")
-  | _ -> failwith "Incorrect distribution applied as argument to sample"
 
-(* Temporary demonstration implementation of importance sampling with fixed
-   sample size of 20 *)
-let infer model =
+     (* Exponential distribution *)
+     | [TmConst(_,_, CFloat(lambda))] when dist = aexp ->
+       let mu = 1.0 /. lambda in
+       TmConst(def_attr,fi, CFloat(Gsl.Randist.exponential seed ~mu:mu))
+
+     (* Bernoulli distribution *)
+     | [TmConst(_,_, CFloat(p))] when dist = abern ->
+       let b = Gsl.Randist.bernoulli seed ~p:p == 1 in
+       TmConst(def_attr,fi, CBool(b))
+
+     (* Gamma distribution *)
+     | [TmConst(_,_, CFloat(a));
+        TmConst(_,_, CFloat(b))] when dist = agamma ->
+       TmConst(def_attr,fi, CFloat(Gsl.Randist.gamma seed ~a:a ~b:b))
+
+     | _ -> failwith "Unknown distribution applied as argument to sample")
+  | _ -> failwith (sprintf
+                     "Incorrect distribution %s applied as argument to sample"
+                     (Ustring.to_utf8 (pprint false dist)))
+
+(** Importance sampling (Likelihood weighting) inference **)
+let infer_is model n =
 
   (* Remove continuation by applying idfun *)
   let model = !eval [] (TmApp(def_attr,NoInfo, model, idfun)) in
 
   (* Replicate model for #samples times with an initial log weight of 0.0 *)
-  let s = replicate 20 (TmApp(def_attr,NoInfo, model, TmNop(def_attr)), 0.0) in
+  let s = replicate n (TmApp(def_attr,NoInfo, model, TmNop(def_attr)), 0.0) in
 
   (* Evaluate one sample to the end *)
   let rec sim (t, w) =
     let t = !eval [] t in
     match t with
+
     (* Sample *)
-    | TmConst(_,_, CAtom(id, [dist; cont]))
-      when id = asample ->
-      sim (TmApp(def_attr,NoInfo, cont, sample dist), w)
+    | TmConst(_,_, CAtom(id, args))
+      when id = asample -> (match args with
+        | [dist; cont] -> sim (TmApp(def_attr,NoInfo, cont, sample dist), w)
+        | _ -> failwith (sprintf "Incorrect sample application in infer: %s"
+                           (Ustring.to_utf8 (pprint false t))))
 
     (* Weight *)
-    | TmConst(_,_fi, CAtom(id, [TmConst(_,_, CFloat(wadj)); cont]))
-      when id = aweight ->
-      sim (TmApp(def_attr,NoInfo, cont, TmNop(def_attr)), w +. wadj)
+    | TmConst(_,_fi, CAtom(id, args))
+      when id = aweight -> (match args with
+        | [TmConst(_,_, CFloat(wadj)); cont] ->
+          if wadj = -. infinity then (TmNop(def_attr),wadj) else
+            sim (TmApp(def_attr,NoInfo, cont, TmNop(def_attr)), w +. wadj)
+        | _ -> failwith (sprintf "Incorrect weight application in infer: %s"
+                           (Ustring.to_utf8 (pprint false t))))
 
     (* Result *)
     | _ -> t, w in
@@ -165,7 +230,122 @@ let infer model =
 
   TmNop(def_attr) (* Here we should return an empirical distribution *)
 
-(* This is the main hook for new constructs in the mcore.*)
+(** SMC inference **)
+let infer_smc model n =
+
+  (* Remove continuation by applying idfun *)
+  let model = !eval [] (TmApp(def_attr,NoInfo, model, idfun)) in
+
+  (* Replicate model for #samples times with an initial log weight of 0.0 *)
+  let s = replicate n (TmApp(def_attr,NoInfo, model, TmNop(def_attr)), 0.0) in
+
+  (* Evaluate a sample until encountering a weight *)
+  let rec sim (t, w) =
+    let t = !eval [] t in
+
+    (*uprint_endline (pprintl t);*)
+
+    match t with
+
+    (* Sample *)
+    | TmConst(_,_, CAtom(id, args))
+      when id = asample ->
+      (match args with
+        | [dist; cont] -> sim (TmApp(def_attr,NoInfo,cont,sample dist), w)
+        | _ -> failwith (sprintf "Incorrect sample application in infer: %s"
+                           (Ustring.to_utf8 (pprint false t))))
+
+    (* Dweight *)
+    | TmConst(_,_fi,CAtom(id,args))
+      when id = adweight ->
+      (match args with
+        | [TmConst(_,_,CFloat(wadj)); cont] ->
+          if wadj = -. infinity then (true,TmNop(def_attr),wadj) else
+            sim (TmApp(def_attr,NoInfo,cont,TmNop(def_attr)), w +. wadj)
+        | _ -> failwith (sprintf "Incorrect dweight application in infer: %s"
+                           (Ustring.to_utf8 (pprint false t))))
+
+    (* Weight *)
+    | TmConst(_,_fi,CAtom(id,args))
+      when id = aweight ->
+      (match args with
+        | [TmConst(_,_, CFloat(wadj)); cont] ->
+          if wadj = -. infinity then (true,TmNop(def_attr),wadj) else
+            (false,TmApp(def_attr,NoInfo,cont,TmNop(def_attr)), w +. wadj)
+        | _ -> failwith (sprintf "Incorrect weight application in infer: %s"
+                           (Ustring.to_utf8 (pprint false t))))
+
+    (* Result *)
+    | _ -> true,t,w in
+
+  (* Systematic resampling *)
+  let resample s =
+    (*List.iter (fun (t,w) ->
+        (uprint_string (pprintl t); print_string " ";
+         print_endline (string_of_float w))
+       ) s;*)
+
+    (* Compute the logarithm of the average of the weights using
+       logsumexp-trick *)
+    let weights = List.map snd s in
+    let max = List.fold_left max (-. infinity) weights in
+    let logavg =
+      log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
+        +. max -. log (float n) in
+
+    (*print_endline (string_of_float logavg);*)
+
+    (* Compute normalized weights from log-weights *)
+    let snorm = List.map (fun (t,w) -> t, exp (w -. logavg)) s in
+
+    (*List.iter (fun (t,w) ->
+        (uprint_string (pprintl t); print_string " ";
+         print_endline (string_of_float w))
+       ) snorm;*)
+
+    (* Draw offset for resampling *)
+    let offset = Random.float 1.0 in
+
+    (*print_endline (string_of_float offset);*)
+
+    (* Perform resampling *)
+    let rec rec1 curr next snorm acc = match snorm with
+      | (_,w)::_ -> let curr = curr +. w in rec2 curr next snorm acc
+      | [] -> acc
+    and rec2 curr next snorm acc = match snorm with
+      | (t,_)::tail ->
+        if curr > next then rec2 curr (next +. 1.0) snorm ((t,0.0)::acc)
+        else rec1 curr next tail acc
+      | [] -> failwith "Error in resampling" in
+
+    (*List.iter (fun (t,w) ->
+        (uprint_string (pprintl t); print_string " ";
+         print_endline (string_of_float w))
+       ) (rec1 0.0 offset snorm []);
+    print_endline "-------------";*)
+    logavg, rec1 0.0 offset snorm [] in
+
+  (* Run SMC *)
+  let rec smc s lw =
+    let res = List.map sim s in
+    let b = List.for_all (fun (b,_,_) -> b) res in
+    let lwadj, res = res |> List.map (fun (_,t,w) -> (t,w)) |> resample in
+    if b then
+      (
+      print_endline (string_of_float (lw +. lwadj));
+      TmNop(def_attr) (* Here we should return an empirical distribution *)
+    )
+    else
+      smc res (lw +. lwadj)
+
+  in smc s 0.0
+
+(** Select correct inference algorithm **)
+let infer model = match !inference with
+  | Importance(i) -> infer_is model i
+  | SMCUnaligned(i) | SMCAligned(i) -> infer_smc model i
+
+(** This is the main hook for new constructs in the mcore.**)
 let eval_atom fi id tms v =
   let args = v :: tms in
   let c = CAtom(id, args) in
@@ -173,18 +353,18 @@ let eval_atom fi id tms v =
     match args with
     | [model]      when id = ainfer -> infer model
     | [dist; v]    when id = aprob  -> prob v dist
-    | _ -> TmConst(def_attr,fi, c)
+    | _ -> TmConst(def_attr,fi,c)
   else
-    TmConst(def_attr,fi, c)
+    TmConst(def_attr,fi,c)
 
-(* Used for unsupported CPS transformations *)
+(** Used for unsupported CPS transformations **)
 let fail_cps tm =
   failwith ("CPS-transformation of " ^
             Ustring.to_utf8 (pprint false tm) ^ " not supported")
 
-(* Wrap constant functions in CPS forms *)
+(** Wrap constant functions in CPS forms **)
 let cps_const t = match t with
-  | TmConst(_,_, c) ->
+  | TmConst(_,_,c) ->
     let vars = List.map genvar (replicate (arity c) noidx) in
     let inner = List.fold_left
         (fun acc (_, v') ->
@@ -199,16 +379,16 @@ let cps_const t = match t with
       vars inner
   | _ -> failwith "cps_const of non-constant"
 
-(* CPS transformations
-   Requirements:
-   - All functions must take one extra parameter: a continuation function with
-   exactly one parameter
-   - A function never "returns" (i.e., it never returns something that is not a
-   TmApp). Instead, it applies its continuation to its "return value". *)
+(** CPS transformations
+    Requirements:
+    - All functions must take one extra parameter: a continuation function with
+    exactly one parameter
+    - A function never "returns" (i.e., it never returns something that is not a
+    TmApp). Instead, it applies its continuation to its "return value". **)
 
-(* Atomic cps transformation (basically everything except function
-   application).  Atomic means that we can CPS transform the expression without
-   supplying a continuation to the transformation.  *)
+(** Atomic cps transformation (basically everything except function
+    application).  Atomic means that we can CPS transform the expression without
+    supplying a continuation to the transformation.  **)
 let rec cps_atomic t = match t with
   | TmVar _ -> t
 
@@ -231,6 +411,13 @@ let rec cps_atomic t = match t with
   | TmProj _ -> t
 
   (* Constant transformation  *)
+  | TmConst(_,_,CAtom(id,[])) ->
+    if List.mem id (post_cps |> List.map snd) then t
+    else cps_const t
+
+  | TmConst(_,_,CAtom(_,_)) ->
+    failwith "Should not exist any arguments for atoms"
+
   | TmConst _ -> cps_const t
 
   (* Not supported *)
@@ -295,10 +482,9 @@ let rec cps_atomic t = match t with
   (* Treat as constant *)
   | TmNop _ -> t
 
-
-(* Complex cps transformation. Complex means that the term is a computation
-   (i.e., not a value). A continuation must also be supplied as argument to the
-   transformation. *)
+(** Complex cps transformation. Complex means that the term is a computation
+    (i.e., not a value). A continuation must also be supplied as argument to the
+    transformation. **)
 and cps cont t =
   match t with
   (* Function application is a complex expression (since it is a computation).
@@ -357,7 +543,7 @@ let label builtin tm =
     | TmClos _ -> failwith "Closure before eval"
     | _ -> failwith "Not supported" in
   let sm = List.fold_left
-             (fun sm x -> add x (next ()) sm)
+      (fun sm x -> add x (next ()) sm)
       empty builtin in
   let tm = tm |> label_vars sm |> label_terms in
   tm, sm, !label
@@ -404,8 +590,7 @@ let functions tm =
   recurse tm []
 
 (** Generate a set of 0-CFA constraints for a program. For now, built in
-    functions must be applied immediately (all arguments) where occuring, and
-    are assumed not to be passed around in the program as values. **)
+    functions must be applied immediately  where occuring (no currying). **)
 let gen_cstrs bmap tm =
   let idmatch str id =
     match StrMap.find_opt (us str) bmap with
@@ -480,10 +665,10 @@ let gen_cstrs bmap tm =
     | _ -> failwith "Not supported"
   in recurse tm []
 
-(* Sets of abstract values *)
+(** Sets of abstract values **)
 module AbsValSet = Set.Make(struct let compare = compare type t = absval end)
 
-(* Analyze the program using 0-CFA to discover dynamic parts *)
+(** Analyze the program using 0-CFA to discover dynamic parts **)
 let analyze bmap tm nl =
   let open AbsValSet in
   let worklist = ref [] in
@@ -495,9 +680,10 @@ let analyze bmap tm nl =
       (data.(q) <- union data.(q) d;
        worklist := q :: !worklist) in
 
-  (print_endline "-- constraints --";
-   List.iter (fun cstr -> print_endline (string_of_cstr cstr)) cstrs;
-   uprint_newline ());
+  if enable_debug_sanalysis then
+    (print_endline "-- constraints --";
+     List.iter (fun cstr -> print_endline (string_of_cstr cstr)) cstrs;
+     uprint_newline ());
 
   (* Building the graph *)
   let f cstr = match cstr with
@@ -523,17 +709,15 @@ let analyze bmap tm nl =
   let mark = Array.make nl false in
   let modified = ref true in
 
-  let mark_labels aset =
-    iter (fun av -> match av with
-        | Fun{louter=l;_} ->
-          if not mark.(l) then (mark.(l) <- true; modified := true)
-        | _ -> ()) aset in
-
   let rec recurse flag tm =
     let l = tm_label tm in
     if flag || mark.(l) then
       (if not mark.(l) then (mark.(l) <- true; modified := true);
-       mark_labels data.(l));
+       iter (fun av -> match av with
+           | Fun{louter=l;_} ->
+             if not mark.(l) then (mark.(l) <- true; modified := true)
+           | _ -> ())
+         data.(l));
     match tm with
     | TmApp(_,_,TmApp(_,_,TmApp(_,_,TmIfexp(_,_,_,_),t1),t2),t3)
       when not flag ->
@@ -558,32 +742,84 @@ let analyze bmap tm nl =
     recurse false tm;
   done;
 
-  (print_endline "-- data --";
-    Array.iteri (fun i set ->
+  if enable_debug_sanalysis then
+    (print_endline "-- data --";
+     Array.iteri (fun i set ->
          print_string ("Label " ^ string_of_int i ^ ": { ");
          print_string (String.concat ", "
                          (List.map string_of_absval (elements set)));
          print_endline (" }")) data;
-   uprint_newline ());
+     uprint_newline ();
 
-  (print_endline "-- dynamic --";
-    Array.iteri
-      (fun i b ->
-         print_endline ("Label " ^ string_of_int i ^ " = " ^ string_of_bool b);
-      ) mark;
-   uprint_newline ());
+     print_endline "-- dynamic --";
+     Array.iteri
+       (fun i b ->
+          print_endline ("Label " ^ string_of_int i ^ " = " ^ string_of_bool b);
+       ) mark;
+     uprint_newline ());
 
   mark
 
-let align tm _dyn = tm
+(** Transform all dynamic weights to dweights. We ignore other synchronization
+    checkpoints for now since we are only dealing with SMC. **)
+let align bmap dyn tm =
+  let idmatch str id =
+    match StrMap.find_opt (us str) bmap with
+    | Some i -> i = id
+    | _ -> false in
+  let rec recurse tm = match tm with
+    | TmVar({label;var_label} as a,fi,_,_,_)
+      when idmatch "weight" var_label ->
+      if dyn.(label) then TmConst(a,fi,CAtom(adweight,[]))
+      else tm
 
-(* Main function for the evaluation of a probabilistic program *)
-let evalprog debruijn eval' builtin filename =
+    | TmLam(a,fi,x,t1) -> TmLam(a,fi,x,recurse t1)
+
+    | TmApp(a,fi,t1,t2) -> TmApp(a,fi,recurse t1,recurse t2)
+
+    | TmFix _ | TmVar _ | TmConst _
+    | TmIfexp _ | TmRec _ | TmProj _ | TmNop _ -> tm
+
+    | TmClos _ -> failwith "Closure before eval"
+    | _ -> failwith "Not supported"
+  in recurse tm
+
+(** Main function for the evaluation of a probabilistic program **)
+let evalprog debruijn eval' builtin argv filename =
   eval := eval';
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   let fs1 = open_in filename in
   let tablength = 8 in
+
+  (* Check for flags if not running tests *)
+  if not (!utest) then begin
+    let argv = Array.of_list ("cmd" :: argv) in
+    let speclist = Arg.align [
+
+        "--inference",
+        String(fun s -> match s with
+            | "is" -> inference := Importance(10)
+            | "smcu" -> inference := SMCUnaligned(10)
+            | "smca" -> inference := SMCAligned(10)
+            | _ -> failwith "Incorrect inference algorithm"
+          ),
+        " Specifies inference method. Options are: is, smcu, smca.";
+
+        "--samples",
+        Int(fun i -> match !inference, i with
+            | _,i when i < 1 -> failwith "Number of samples must be positive"
+            | Importance _,i -> inference := Importance(i)
+            | SMCUnaligned _,i -> inference := SMCUnaligned(i)
+            | SMCAligned _,i -> inference := SMCAligned(i)),
+        " Determines the number of samples (positive).";
+
+      ] in
+    let anon_fun _str = () in
+    let usage_msg = "" in
+    Arg.parse_argv argv speclist anon_fun usage_msg;
+  end;
+
   begin try
 
       (* Get main program *)
@@ -600,21 +836,33 @@ let evalprog debruijn eval' builtin filename =
       (* Function for converting consts in builtin to tms *)
       let tm_of_builtin b = List.map (fun (x, y) -> x, tm_of_const y) b in
 
-      (* Label program and builtins in preparation for static analysis *)
-      let tm,bmap,nl = label
-          ((builtin @ pre_cps_builtin @ post_cps_builtin)
-           |> List.split |> fst |> List.map us) tm in
+      (* If chosen inference is aligned SMC, perform static analysis *)
+      let tm = if match !inference with SMCAligned _ -> true | _ -> false
+        then begin
+          (* Label program and builtins in preparation for static analysis *)
+          let tm,bmap,nl = label
+              ((builtin @ pre_cps_builtin @ post_cps_builtin)
+               |> List.split |> fst |> List.map us) tm in
 
-      (print_endline "-- after labeling --";
-       uprint_endline (pprintl tm);
-       uprint_newline ());
+          if enable_debug_sanalysis then
+            (print_endline "-- after labeling --";
+             uprint_endline (pprintl tm);
+             uprint_newline ());
 
-      (* Perform static analysis, returning all dynamic labels *)
-      let dyn = analyze bmap tm nl in
+          (* Perform static analysis, returning all dynamic labels *)
+          let dyn = analyze bmap tm nl in
 
-      (* By using the above analysis, transform all dynamic checkpoints. This
-         information will be forwarded to the inference algorithm. *)
-      let tm = align tm dyn in
+          (* By using the above analysis results, transform all dynamic
+             checkpoints. This information will be forwarded to the inference
+             algorithm. *)
+          align bmap dyn tm
+        end else tm in
+
+
+      if enable_debug_sanalysis then
+        (print_endline "-- after SMC alignment --";
+         uprint_endline (pprintl tm);
+         uprint_newline ());
 
       let builtin = builtin
                     (* Convert builtins from consts to tms *)

@@ -41,8 +41,8 @@
       | TmMatch(_,_fi,_t1,cases) ->
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop _ -> false
-      | TmRec _ -> failwith "TODO"
-      | TmProj _ -> failwith "TODO"
+      | TmRec _ -> false
+      | TmProj _ -> false
     in
     if hasx t then
       TmApp(def_attr,NoInfo,TmFix(def_attr,NoInfo),
@@ -90,7 +90,8 @@
 %token <unit Ast.tokendata> OBSERVE
 
 
-
+%token <unit Ast.tokendata> LOG           /* "log"  */
+%token <unit Ast.tokendata> INF           /* "inf"  */
 
 %token <unit Ast.tokendata> EQ            /* "="  */
 %token <unit Ast.tokendata> TILDE         /* "~"  */
@@ -139,7 +140,7 @@
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL
 %left CONCAT
 %left SHIFTLL SHIFTRL SHIFTRA
-%nonassoc NOT
+%nonassoc NOT LOG
 %left ADD SUB
 %left MUL DIV MOD
 %nonassoc USUB
@@ -206,6 +207,8 @@ treeppl_scope_aux:
         TmUtest(def_attr,fi,$2,$3,$4) }
 
 expr:
+  | SUB expr %prec USUB
+      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cneg),$2) }
   | expr ADD expr
       { TmApp(def_attr,$2.i,
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cadd(TNone)),$1),$3) }
@@ -235,10 +238,10 @@ expr:
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeq(TNone)),$1),$3) }
   | expr EQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Ceq(TNone)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyEq(None)),$1),$3) }
   | expr NOTEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cneq(TNone)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyNeq(None)),$1),$3) }
   | expr SHIFTLL expr
       { TmApp(def_attr,$2.i,
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cslli(None)),$1),$3) }
@@ -248,10 +251,6 @@ expr:
   | expr SHIFTRA expr
       { TmApp(def_attr,$2.i,
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csrai(None)),$1),$3) }
-  | NOT expr
-      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cnot),$2) }
-  | SUB expr %prec USUB
-      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cneg),$2) }
   | expr DOT IDENT %prec DOT
       { TmProj(def_attr,$2.i,$1,$3.v) }
   | expr AND expr
@@ -305,10 +304,10 @@ sep_expr:
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cgeq(TNone)),$1),$3) }
   | sep_expr EQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Ceq(TNone)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyEq(None)),$1),$3) }
   | sep_expr NOTEQUAL expr
       { TmApp(def_attr,$2.i,
-          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cneq(TNone)),$1),$3) }
+          TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,CPolyNeq(None)),$1),$3) }
   | sep_expr SHIFTLL expr
       { TmApp(def_attr,$2.i,
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Cslli(None)),$1),$3) }
@@ -318,8 +317,6 @@ sep_expr:
   | sep_expr SHIFTRA expr
       { TmApp(def_attr,$2.i,
           TmApp(def_attr,$2.i,TmConst(def_attr,$2.i,Csrai(None)),$1),$3) }
-  | NOT expr
-      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cnot),$2) }
   | sep_expr DOT IDENT %prec DOT
       { TmProj(def_attr,$2.i,$1,$3.v) }
   | sep_expr AND expr
@@ -357,6 +354,10 @@ expr_aux:
                             UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY top_treeppl_scope RCURLY  { $2 }
   | LCURLY record RCURLY { let fi = mkinfo $1.i $3.i in TmRec(def_attr,fi,$2) }
+  | NOT expr { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Cnot),$2) }
+  | LOG expr RPAREN
+      { TmApp(def_attr,$1.i,TmConst(def_attr,$1.i,Clog),$2) }
+  | INF                  { TmConst(def_attr,$1.i, CFloat(infinity)) }
   | IDENT                { TmVar(def_attr,$1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar(def_attr,$1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
@@ -364,6 +365,7 @@ expr_aux:
   | UFLOAT               { TmConst(def_attr,$1.i, CFloat($1.v)) }
   | TRUE                 { TmConst(def_attr,$1.i, CBool(true)) }
   | FALSE                { TmConst(def_attr,$1.i, CBool(false)) }
+  | NOP                  { TmNop(def_attr) }
 
 record:
   | IDENT COLON expr { StrMap.singleton $1.v $3 }

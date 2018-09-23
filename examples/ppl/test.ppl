@@ -1,12 +1,12 @@
-tree = { left:{}, right:{ left:{}, right:{} } }
+function rec() {
+  weight( 2.0 )
+  if sample(bernoulli(0.5)) then
+  rec() else 1337
+}
 
 function model() {
-  x ~ normal(0.0, 1.0)
-  y ~ normal(x, 1.0)
-  observe 3.0 ~ normal(y, 1.0)
-  x
+  weight( 1.0 )
+  rec()
 }
 
 infer(model)
-
-tree.right

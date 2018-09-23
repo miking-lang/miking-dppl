@@ -221,7 +221,6 @@ let builtin =
    ("add",Cadd(TNone));("sub",Csub(TNone));("mul",Cmul(TNone));
    ("div",Cdiv(TNone));("neg",Cneg);
    ("lt",Clt(TNone)); ("leq",Cleq(TNone)); ("gt",Cgt(TNone)); ("geq",Cgeq(TNone));
-   ("eq",Ceq(TNone)); ("neq",Cneq(TNone));
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat(None))]
 
@@ -332,6 +331,9 @@ let delta c v  =
     | Cnegf,TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,CFloat((-1.0)*.v))
     | Cnegf,t -> fail_constapp (tm_info t)
 
+    | Clog,TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,CFloat(log v))
+    | Clog,t -> fail_constapp (tm_info t)
+
     (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
 
     | Cadd(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Cadd(TInt(v)))
@@ -402,22 +404,6 @@ let delta c v  =
     | Cgeq(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) >= v2))
     | Cgeq _,t -> fail_constapp (tm_info t)
 
-    | Ceq(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Ceq(TInt(v)))
-    | Ceq(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Ceq(TFloat(v)))
-    | Ceq(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 = v2))
-    | Ceq(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 = v2))
-    | Ceq(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 = (float_of_int v2)))
-    | Ceq(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) = v2))
-    | Ceq _,t -> fail_constapp (tm_info t)
-
-    | Cneq(TNone),TmConst(_,fi,CInt(v)) -> TmConst(def_attr,fi,Cneq(TInt(v)))
-    | Cneq(TNone),TmConst(_,fi,CFloat(v)) -> TmConst(def_attr,fi,Cneq(TFloat(v)))
-    | Cneq(TInt(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 <> v2))
-    | Cneq(TFloat(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool(v1 <> v2))
-    | Cneq(TFloat(v1)),TmConst(_,fi,CInt(v2)) -> TmConst(def_attr,fi,CBool(v1 <> (float_of_int v2)))
-    | Cneq(TInt(v1)),TmConst(_,fi,CFloat(v2)) -> TmConst(def_attr,fi,CBool((float_of_int v1) <> v2))
-    | Cneq _, t -> fail_constapp (tm_info t)
-
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
     | CDPrint, t -> uprint_endline (pprint true t);TmNop(def_attr)
@@ -444,12 +430,18 @@ let delta c v  =
     | CPolyEq(Some(TmConst(_,_,c1))),TmConst(_,_,c2) -> TmConst(def_attr,NoInfo,CBool(c1 = c2))
     | CPolyEq(Some(TmChar(_,_,v1))),TmChar(_,_,v2) -> TmConst(def_attr,NoInfo,CBool(v1 = v2))
     | CPolyEq(Some(TmUC(_,_,_,_,_) as v1)),(TmUC(_,_,_,_,_) as v2) -> TmConst(def_attr,NoInfo,CBool(val_equal v1 v2))
+    | CPolyEq(Some(TmNop _)), TmNop _ -> TmConst(def_attr,NoInfo,CBool(true))
+    | CPolyEq(_),             TmNop _ -> TmConst(def_attr,NoInfo,CBool(false))
+    | CPolyEq(Some(TmNop _)), _ -> TmConst(def_attr,NoInfo,CBool(false))
     | CPolyEq(Some(_)),t  -> fail_constapp (tm_info t)
 
     | CPolyNeq(None),t -> TmConst(def_attr,NoInfo,CPolyNeq(Some(t)))
     | CPolyNeq(Some(TmConst(_,_,c1))),TmConst(_,_,c2) -> TmConst(def_attr,NoInfo,CBool(c1 <> c2))
     | CPolyNeq(Some(TmChar(_,_,v1))),TmChar(_,_,v2) -> TmConst(def_attr,NoInfo,CBool(v1 <> v2))
     | CPolyNeq(Some(TmUC(_,_,_,_,_) as v1)),(TmUC(_,_,_,_,_) as v2) -> TmConst(def_attr,NoInfo,CBool(not (val_equal v1 v2)))
+    | CPolyNeq(Some(TmNop _)), TmNop _ -> TmConst(def_attr,NoInfo,CBool(false))
+    | CPolyNeq(_),             TmNop _ -> TmConst(def_attr,NoInfo,CBool(true))
+    | CPolyNeq(Some(TmNop _)), _ -> TmConst(def_attr,NoInfo,CBool(true))
     | CPolyNeq(Some(_)),t  -> fail_constapp (tm_info t)
 
     (* Atom - an untyped label that can be used to implement
@@ -667,8 +659,9 @@ let rec eval env t =
     | TmRec(_,_,sm) ->
       (match StrMap.find_opt x sm with
        | Some t1 -> t1
-       | _ -> failwith "Key doesn't exist in record")
-    | _ -> failwith "Record projection on non-record tm"
+       | _ -> TmNop(def_attr))
+    | t -> failwith (sprintf "Record projection on non-record tm: %s"
+                       (Ustring.to_utf8 (pprint false t )))
 
 
 (* Main function for evaluation a function. Performs lexing, parsing
@@ -755,7 +748,7 @@ let main =
       if Ustring.ends_with (us".ppl") (us name) then
         (eval_atom := Ppl.eval_atom;
          atom_arity := Ppl.atom_arity;
-         (Ppl.evalprog debruijn eval builtin) name)
+         (Ppl.evalprog debruijn eval builtin [""]) name)
       else evalprog name
     in
     (* Evaluate each of the programs in turn *)
@@ -775,7 +768,7 @@ let main =
       if Ustring.ends_with (us".ppl") (us name) then
         (eval_atom := Ppl.eval_atom;
          atom_arity := Ppl.atom_arity;
-         (Ppl.evalprog debruijn eval builtin) name)
+         (Ppl.evalprog debruijn eval builtin lst) name)
       else evalprog name)
 
 

@@ -92,6 +92,7 @@ and const =
   | Cmulf  of float option
   | Cdivf  of float option
   | Cnegf
+  | Clog
   (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
   | Cadd   of intfloatoption
   | Csub   of intfloatoption
@@ -102,8 +103,6 @@ and const =
   | Cleq   of intfloatoption
   | Cgt    of intfloatoption
   | Cgeq   of intfloatoption
-  | Ceq    of intfloatoption
-  | Cneq   of intfloatoption
   (* MCore debug and I/O intrinsics *)
   | CDStr
   | CDPrint
@@ -228,6 +227,7 @@ let arity c =
   | Cmulf(None) -> 2  | Cmulf(Some(_)) -> 1
   | Cdivf(None) -> 2  | Cdivf(Some(_)) -> 1
   | Cnegf       -> 1
+  | Clog        -> 1
   (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
   | Cadd(TNone) -> 2  | Cadd(_)        -> 1
   | Csub(TNone) -> 2  | Csub(_)        -> 1
@@ -238,8 +238,6 @@ let arity c =
   | Cleq(TNone) -> 2  | Cleq(_)        -> 1
   | Cgt(TNone)  -> 2  | Cgt(_)         -> 1
   | Cgeq(TNone) -> 2  | Cgeq(_)        -> 1
-  | Ceq(TNone)  -> 2  | Ceq(_)        -> 1
-  | Cneq(TNone) -> 2  | Cneq(_)        -> 1
   (* MCore debug and I/O intrinsics *)
   | CDStr       -> 1
   | CDPrint     -> 1

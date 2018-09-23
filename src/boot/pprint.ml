@@ -113,6 +113,7 @@ and pprint_const c =
   | Cdivf(None) -> us"divf"
   | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
   | Cnegf -> us"negf"
+  | Clog -> us"log"
   (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
   | Cadd(TInt(v)) -> us(sprintf "add(%d)" v)
   | Cadd(TFloat(v)) -> us(sprintf "add(%f)" v)
@@ -139,12 +140,6 @@ and pprint_const c =
   | Cgeq(TInt(v)) -> us(sprintf "geq(%d)" v)
   | Cgeq(TFloat(v)) -> us(sprintf "geq(%f)" v)
   | Cgeq(TNone) -> us"geq"
-  | Ceq(TInt(v)) -> us(sprintf "eq(%d)" v)
-  | Ceq(TFloat(v)) -> us(sprintf "eq(%f)" v)
-  | Ceq(TNone) -> us"eq"
-  | Cneq(TInt(v)) -> us(sprintf "neq(%d)" v)
-  | Cneq(TFloat(v)) -> us(sprintf "neq(%f)" v)
-  | Cneq(TNone) -> us"neq"
 
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
@@ -251,8 +246,10 @@ let rec pprintl = function
 
   | TmNop({label;_}) -> us"Nop" ^. us":" ^. (ustring_of_int label)
 
+  | TmClos _ -> us"Closure"
+
   | TmChar _ | TmExprSeq _ | TmUC _ | TmUtest _ | TmMatch _
-  | TmPEval _ | TmClos _ -> failwith "Not supported"
+  | TmPEval _ -> failwith "Not supported"
 
 (* Pretty prints the environment *)
 let pprint_env env =
