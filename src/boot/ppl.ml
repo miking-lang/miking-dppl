@@ -200,7 +200,7 @@ let infer_is model n =
     | TmConst(_,_, CAtom(id, args))
       when id = asample -> (match args with
         | [dist; cont] -> sim (TmApp(def_attr,NoInfo, cont, sample dist), w)
-        | _ -> failwith (sprintf "Incorrect sample application in infer: %s"
+        | _ -> failwith (sprintf "Incorrect sample application in infer_is: %s"
                            (Ustring.to_utf8 (pprint false t))))
 
     (* Weight *)
@@ -209,7 +209,7 @@ let infer_is model n =
         | [TmConst(_,_, CFloat(wadj)); cont] ->
           if wadj = -. infinity then (TmNop(def_attr),wadj) else
             sim (TmApp(def_attr,NoInfo, cont, TmNop(def_attr)), w +. wadj)
-        | _ -> failwith (sprintf "Incorrect weight application in infer: %s"
+        | _ -> failwith (sprintf "Incorrect weight application in infer_is: %s"
                            (Ustring.to_utf8 (pprint false t))))
 
     (* Result *)
@@ -242,8 +242,6 @@ let infer_smc model n =
   (* Evaluate a sample until encountering a weight *)
   let rec sim (t, w) =
     let t = !eval [] t in
-
-    (*uprint_endline (pprintl t);*)
 
     match t with
 
@@ -280,11 +278,6 @@ let infer_smc model n =
 
   (* Systematic resampling *)
   let resample s =
-    (*List.iter (fun (t,w) ->
-        (uprint_string (pprintl t); print_string " ";
-         print_endline (string_of_float w))
-       ) s;*)
-
     (* Compute the logarithm of the average of the weights using
        logsumexp-trick *)
     let weights = List.map snd s in
@@ -293,20 +286,11 @@ let infer_smc model n =
       log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
         +. max -. log (float n) in
 
-    (*print_endline (string_of_float logavg);*)
-
     (* Compute normalized weights from log-weights *)
     let snorm = List.map (fun (t,w) -> t, exp (w -. logavg)) s in
 
-    (*List.iter (fun (t,w) ->
-        (uprint_string (pprintl t); print_string " ";
-         print_endline (string_of_float w))
-       ) snorm;*)
-
     (* Draw offset for resampling *)
     let offset = Random.float 1.0 in
-
-    (*print_endline (string_of_float offset);*)
 
     (* Perform resampling *)
     let rec rec1 curr next snorm acc = match snorm with
@@ -318,25 +302,21 @@ let infer_smc model n =
         else rec1 curr next tail acc
       | [] -> failwith "Error in resampling" in
 
-    (*List.iter (fun (t,w) ->
-        (uprint_string (pprintl t); print_string " ";
-         print_endline (string_of_float w))
-       ) (rec1 0.0 offset snorm []);
-    print_endline "-------------";*)
+    (* Also return the log average for computing the normalization constant *)
     logavg, rec1 0.0 offset snorm [] in
 
   (* Run SMC *)
-  let rec smc s lw =
+  let rec smc s normconst =
     let res = List.map sim s in
     let b = List.for_all (fun (b,_,_) -> b) res in
-    let lwadj, res = res |> List.map (fun (_,t,w) -> (t,w)) |> resample in
-    if b then
-      (
-      print_endline (string_of_float (lw +. lwadj));
+    let logavg, res = res |> List.map (fun (_,t,w) -> (t,w)) |> resample in
+    let normconst = normconst +. logavg in
+    if b then begin
+      print_endline (string_of_float normconst);
+
       TmNop(def_attr) (* Here we should return an empirical distribution *)
-    )
-    else
-      smc res (lw +. lwadj)
+    end else
+      smc res normconst
 
   in smc s 0.0
 
