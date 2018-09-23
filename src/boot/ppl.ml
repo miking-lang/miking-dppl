@@ -884,7 +884,7 @@ let evalprog debruijn eval' builtin argv filename =
 
       if enable_debug_cps then
         (print_endline "-- post cps eval --";
-         uprint_endline (pprint false res))
+         uprint_endline (pprint false res));
 
     with
     | Ppllexer.Lex_error m ->
@@ -911,4 +911,4 @@ let evalprog debruijn eval' builtin argv filename =
         fprintf stderr "%s\n"
           (Ustring.to_utf8 (Msg.message2str (Ppllexer.parse_error_message())))
   end; close_in fs1;
-  if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
+  if !utest && !utest_fail_local = 0 then printf " OK\n"
