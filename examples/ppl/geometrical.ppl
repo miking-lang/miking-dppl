@@ -1,5 +1,5 @@
 function f() {
-  b ~ uniform(false)
+  b ~ bernoulli(0.5)
   if b then 1 else f() + 1
 }
 

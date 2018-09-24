@@ -16,7 +16,8 @@ open Pprint
 
 let enable_debug_cps = false
 let enable_debug_cps_builtin = false
-let enable_debug_infer = false
+let enable_debug_infer = true
+let enable_debug_norm = false
 let enable_debug_sanalysis = false
 
 let random_seed = true
@@ -128,25 +129,25 @@ let prob value dist = match dist with
        [TmConst(_,_, CFloat(sigma));
         TmConst(_,_, CFloat(mu))] when dist = anormal ->
        TmConst(def_attr,fi,
-               CFloat(Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
+               CFloat(log (Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma)))
 
      (* Exponential distribution *)
      | TmConst(_,_, CFloat(v)),
        [TmConst(_,_, CFloat(lambda))] when dist = aexp ->
        let mu = 1.0 /. lambda in
-       TmConst(def_attr,fi, CFloat(Gsl.Randist.exponential_pdf v ~mu:mu))
+       TmConst(def_attr,fi, CFloat(log (Gsl.Randist.exponential_pdf v ~mu:mu)))
 
      (* Bernoulli distribution *)
      | TmConst(_,_, CBool(v)),
        [TmConst(_,_, CFloat(p))] when dist = abern ->
        let i = if v then 1 else 0 in
-       TmConst(def_attr,fi, CFloat(Gsl.Randist.bernoulli_pdf i ~p:p))
+       TmConst(def_attr,fi, CFloat(log (Gsl.Randist.bernoulli_pdf i ~p:p)))
 
      (* Gamma distribution *)
      | TmConst(_,_, CFloat(v)),
        [TmConst(_,_, CFloat(a));
         TmConst(_,_, CFloat(b))] when dist = agamma ->
-       TmConst(def_attr,fi, CFloat(Gsl.Randist.gamma_pdf v ~a:a ~b:b))
+       TmConst(def_attr,fi, CFloat(log (Gsl.Randist.gamma_pdf v ~a:a ~b:b)))
 
      | _ -> failwith "Unknown distribution applied as argument to prob")
   | _ -> failwith "Incorrect distribution applied as argument to prob"
@@ -159,8 +160,9 @@ let sample dist = match dist with
      (* Normal distribution *)
      | [TmConst(_,_, CFloat(sigma));
         TmConst(_,_, CFloat(mu))] when dist = anormal ->
-       TmConst(def_attr,fi,
-               CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma))
+       let sample = CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma) in
+       uprint_endline (pprint_const sample);
+       TmConst(def_attr,fi, sample)
 
      (* Exponential distribution *)
      | [TmConst(_,_, CFloat(lambda))] when dist = aexp ->
@@ -242,7 +244,6 @@ let infer_smc model n =
   (* Evaluate a sample until encountering a weight *)
   let rec sim (t, w) =
     let t = !eval [] t in
-
     match t with
 
     (* Sample *)
@@ -289,6 +290,9 @@ let infer_smc model n =
     (* Compute normalized weights from log-weights *)
     let snorm = List.map (fun (t,w) -> t, exp (w -. logavg)) s in
 
+    (List.iter (fun (_, w) -> let w = 50.0 -. ((w /. (float n)) *. 50.0) in
+         print_endline ("w:" ^ (string_of_float w))) snorm);
+
     (* Draw offset for resampling *)
     let offset = Random.float 1.0 in
 
@@ -312,7 +316,11 @@ let infer_smc model n =
     let logavg, res = res |> List.map (fun (_,t,w) -> (t,w)) |> resample in
     let normconst = normconst +. logavg in
     if b then begin
-      print_endline (string_of_float normconst);
+      if enable_debug_norm then
+        print_endline (string_of_float normconst);
+
+      if enable_debug_infer then
+        (List.iter (fun (t, _) -> uprint_endline (pprint false t)) res);
 
       TmNop(def_attr) (* Here we should return an empirical distribution *)
     end else
