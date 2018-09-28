@@ -16,8 +16,8 @@ open Pprint
 
 let enable_debug_cps = false
 let enable_debug_cps_builtin = false
-let enable_debug_infer = true
-let enable_debug_norm = false
+let enable_debug_infer = false
+let enable_debug_norm = true
 let enable_debug_sanalysis = false
 
 let random_seed = true
@@ -290,8 +290,8 @@ let infer_smc model n =
     (* Compute normalized weights from log-weights *)
     let snorm = List.map (fun (t,w) -> t, exp (w -. logavg)) s in
 
-    (List.iter (fun (_, w) -> let w = 50.0 -. ((w /. (float n)) *. 50.0) in
-         print_endline ("w:" ^ (string_of_float w))) snorm);
+    (*(List.iter (fun (_, w) -> let w = 50.0 -. ((w /. (float n)) *. 50.0) in*)
+         (*print_endline ("w:" ^ (string_of_float w))) snorm);*)
 
     (* Draw offset for resampling *)
     let offset = Random.float 1.0 in
@@ -319,8 +319,8 @@ let infer_smc model n =
       if enable_debug_norm then
         print_endline (string_of_float normconst);
 
-      if enable_debug_infer then
-        (List.iter (fun (t, _) -> uprint_endline (pprint false t)) res);
+      (*if enable_debug_infer then*)
+        (*(List.iter (fun (t, _) -> uprint_endline (pprint false t)) res);*)
 
       TmNop(def_attr) (* Here we should return an empirical distribution *)
     end else

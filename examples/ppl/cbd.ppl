@@ -23,7 +23,6 @@ function simBranch( startTime, stopTime, lambda, mu ) {
 
     if currentTime <= stopTime then nop
     else {
-      s ~ normal(13.37,13.37)
       weight( log( 2.0 ) )
       s = if survival( currentTime, lambda, mu ) == false then 0.0 else -inf
       weight( s )
