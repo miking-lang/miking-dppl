@@ -1,4 +1,4 @@
-// Timetree monkeys
+// TimeTree, pitheciidae monkeys (source: http://timetree.org/)
 tree = {age:17.99321625,left:{age:11.33054769,left:{age:5.4853,left:{age:0.},right:{age:2.9571,left:{age:0.},right:{age:0.}}},right:{age:7.31,left:{age:3.19694,left:{age:0.},right:{age:1.1078,left:{age:0.2283,left:{age:0.},right:{age:0.}},right:{age:0.}}},right:{age:7.11,left:{age:0.},right:{age:5.9,left:{age:3.2838,left:{age:2.9942,left:{age:0.},right:{age:0.}},right:{age:0.}},right:{age:0.}}}}},right:{age:11.01619834,left:{age:10.23796667,left:{age:6.1354,left:{age:3.04517,left:{age:2.2398,left:{age:1.72,left:{age:0.},right:{age:0.}},right:{age:0.}},right:{age:0.}},right:{age:5.69232,left:{age:4.3404,left:{age:2.81,left:{age:1.33,left:{age:0.},right:{age:0.}},right:{age:0.}},right:{age:0.}},right:{age:0.}}},right:{age:8.34,left:{age:0.},right:{age:4.88882,left:{age:2.0967,left:{age:0.},right:{age:0.}},right:{age:0.}}}},right:{age:4.4329,left:{age:0.},right:{age:2.6,left:{age:0.},right:{age:0.}}}}}
 
 // Bisse tree
