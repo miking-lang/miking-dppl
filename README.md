@@ -1,6 +1,10 @@
 # PPLCore
 
-To be written.
+Installation and running instructions:
+1. Install [opam](https://opam.ocaml.org/).
+2. Install the opam packages [dune](https://opam.ocaml.org/packages/dune/), and [gsl](https://opam.ocaml.org/packages/gsl/).
+3. Run `make` from the project root.
+4. The executable is `build/boot`.
 
 # Miking
 
