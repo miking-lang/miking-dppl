@@ -1,7 +1,0 @@
-(executable
-  (name boot)
-  (libraries gsl))
-
-(ocamlyacc parser pplparser)
-(ocamllex lexer ppllexer)
-

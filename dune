@@ -1,0 +1,10 @@
+(alias
+ (name runtest)
+ (deps
+  src/main.exe
+  (glob_files test/**))
+ (action (run src/main.exe --test test)))
+
+(alias
+ (name default)
+ (deps src/main.exe))

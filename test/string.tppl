@@ -20,7 +20,7 @@ utest "this is ok" != "yes"       true
 utest "this is ok" != ""          true
 
 
-// Test operator ++ for concatination. Note that it supports overloading
+// Test operator ++ for concatenation. Note that it supports overloading
 // and concatenating elements as well. Hence, we do not need a
 utest "st1" ++ "st2"                   "st1st2"
 utest "sas" ++ "love" == "saslove"     true
