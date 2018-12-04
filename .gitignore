@@ -1,7 +1,2 @@
-build/_bootbuildtag
-build/boot
-_build
-\#*
-\.\#*
-temp/
+_build/
 .merlin
