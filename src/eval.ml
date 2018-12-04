@@ -3,6 +3,13 @@ open Ast
 open Pprint
 open Utils
 
+let debug_eval        = false
+let debug_eval_env    = false
+let debug_cps         = false
+let debug_cps_builtin = false
+let debug_infer       = false
+let debug_norm        = true
+
 let utest = ref false         (* Set to true if unit testing is enabled *)
 let utest_ok = ref 0          (* Counts the number of successful unit tests *)
 let utest_fail = ref 0        (* Counts the number of failed unit tests *)
@@ -69,10 +76,10 @@ let fail_constapp () = failwith "Incorrect application "
 
 (* Debug function used in the eval function *)
 let debug_eval env t =
-  if Debug.eval then
+  if debug_eval then
     (printf "\n-- eval -- \n";
      print_endline (pprint t);
-     if Debug.eval_env then
+     if debug_eval_env then
         print_endline (pprint_env env))
   else ()
 
@@ -386,7 +393,7 @@ and infer_is model n =
 
   let res = List.map sim s in
 
-  if Debug.infer then
+  if debug_infer then
     (print_endline "-- infer result --";
      List.iter
        (fun (t, w) ->
@@ -469,10 +476,10 @@ and infer_smc model n =
     let logavg, res = res |> List.map (fun (_,t,w) -> (t,w)) |> resample in
     let normconst = normconst +. logavg in
     if b then begin
-      if Debug.norm then
+      if debug_norm then
         print_endline (string_of_float normconst);
 
-      if Debug.infer then
+      if debug_infer then
         (List.iter (fun (t, _) -> print_endline (pprint t)) res);
 
       TmNop(na) (* Here we should return an empirical distribution *)

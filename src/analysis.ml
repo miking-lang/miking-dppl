@@ -1,6 +1,8 @@
 open Ast
 open Utils
 
+let debug_sanalysis = false
+
 (** Function for uniquely labeling all subterms and variables in a term **)
 let label builtin tm =
   let open StrMap in
@@ -172,7 +174,7 @@ let analyze bmap tm nl =
       (data.(q) <- union data.(q) d;
        worklist := q :: !worklist) in
 
-  if Debug.sanalysis then
+  if debug_sanalysis then
     (print_endline "-- constraints --";
      List.iter (fun cstr -> print_endline (string_of_cstr cstr)) cstrs;
      print_newline ());
@@ -234,7 +236,7 @@ let analyze bmap tm nl =
     recurse false tm;
   done;
 
-  if Debug.sanalysis then
+  if debug_sanalysis then
     (print_endline "-- data --";
      Array.iteri (fun i set ->
          print_string ("Label " ^ string_of_int i ^ ": { ");

@@ -1,13 +1,3 @@
-(*
-   Miking is licensed under the MIT license.
-   Copyright (C) David Broman. See file LICENSE.txt
-
-   boot.ml is the main entry point for first stage of the
-   bootstrapped Miking compiler. The bootstapper is interpreted and
-   implemented in OCaml. Note that the Miking bootstrapper
-   only implements a subset of the Ragnar language.
-*)
-
 open Pprint
 open Eval
 open Ast

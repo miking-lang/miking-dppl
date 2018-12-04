@@ -1,10 +1,3 @@
-(*
-   Miking is licensed under the MIT license.
-   Copyright (C) David Broman. See file LICENSE.txt
-
-   File ast.ml includes the types and definitions for the abstract
-   syntax tree (AST) of the bootstrap interpreter.
-*)
 open Utils
 
 (* Attributes of terms.
