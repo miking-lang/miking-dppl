@@ -33,6 +33,3 @@ utest 'a' ++ "bcd" == "abcd"           true
 utest 'a' ++ "bcd" == "ab"             false
 utest 'a' ++ "bcd" != "ab"             true
 utest "a" ++ "bcd"                     "abcd"
-
-// Print strings and not list of strings.
-// Test dstr, used by dprint.

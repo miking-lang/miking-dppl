@@ -25,9 +25,3 @@ utest ["this"]                  ["this"]
 utest ["this","that"]++["and"]  ["this","that","and"]
 utest ["this"++"that"]++["and"] ["thisthat","and"]
 
-//Test sequences in other form
-utest seq(1,2)                          [1,2]
-utest seq()                             []
-utest seq("hello")                      ["hello"]
-utest seq(true,true)++seq(false)        [true,true,false]
-

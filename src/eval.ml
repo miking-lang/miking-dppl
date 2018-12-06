@@ -1,52 +1,74 @@
+(** The semantics of pplcore *)
+
 open Printf
 open Ast
-open Pprint
+open Const
 open Utils
 
+(** Debug the evaluation *)
 let debug_eval        = false
+
+(** Debug the evaluation environment *)
 let debug_eval_env    = false
+
+(** Debug the CPS transformation *)
 let debug_cps         = false
+
+(** Debug the CPS transformation of the initial environment (builtin) *)
 let debug_cps_builtin = false
+
+(** Debug the inference procedure *)
 let debug_infer       = false
+
+(** Printout the normalization constant when using SMC inference *)
 let debug_norm        = true
 
-let utest = ref false         (* Set to true if unit testing is enabled *)
-let utest_ok = ref 0          (* Counts the number of successful unit tests *)
-let utest_fail = ref 0        (* Counts the number of failed unit tests *)
-let utest_fail_local = ref 0  (* Counts local failed tests for one file *)
+(** Set to true if unit testing is enabled *)
+let utest = ref false
 
-(* Inference types *)
+(** Counts the number of successful unit tests *)
+let utest_ok = ref 0
+
+(** Counts the number of failed unit tests *)
+let utest_fail = ref 0
+
+(** Counts local failed tests for one file *)
+let utest_fail_local = ref 0
+
+(** Inference types *)
 type inference =
   | Importance of int
   | SMC        of int
 
-(* Default inference is importance sampling with 10 particles *)
+(** Default inference is importance sampling with 10 particles *)
 let inference = ref (Importance(10))
+
+(** Reference used for genvar *)
+let nextvar = ref 0
 
 (** Generate fresh variable names for CPS transformation.  Avoids clashes by
     using $ as first char (not allowed in lexer for vars).  Takes a debruijn
     index as argument (for idfun). **)
-let nextvar = ref 0
 let genvar i =
   let res = !nextvar in
   let str = "$" ^ string_of_int res in
   nextvar := res + 1;
   (str, TmVar(na,str,i))
 
-(** The identity function (with debruijn index) as a tm. **)
+(** The identity function (with proper debruijn index) as a tm. **)
 let idfun =
   let var, var' = genvar 0 in
   TmLam(na,var,var')
 
-(* Print out error message when a unit test fails *)
+(** Print out error message when a unit test fails *)
 let unittest_failed pos t1 t2 =
   print_string ("\n ** Unit test FAILED at " ^
-                string_of_position pos ^ " **\n    LHS: " ^ (pprint t1) ^
-                "\n    RHS: " ^ (pprint t2))
+                string_of_position pos ^ " **\n    LHS: " ^
+                (string_of_tm t1) ^
+                "\n    RHS: " ^ (string_of_tm t2))
 
-(* Convert a term into de Bruijn indices *)
-let rec debruijn env t =
-  match t with
+(** Add debruijn indices to a term *)
+let rec debruijn env t = match t with
   | TmVar(_,x,_) ->
     let rec find env n = match env with
       | y::ee -> if y = x then n else find ee (n+1)
@@ -56,311 +78,283 @@ let rec debruijn env t =
   | TmClos _ -> failwith "Closures should not be available."
   | TmApp(a,t1,t2) -> TmApp(a,debruijn env t1,debruijn env t2)
   | TmConst _ -> t
-  | TmIfexp _ -> t
+  | TmIf _ -> t
   | TmFix _ -> t
+
+  | TmUtest(a,t1,t2) -> TmUtest(a,debruijn env t1,debruijn env t2)
 
   | TmRec(a,sm) -> TmRec(a,StrMap.map (debruijn env) sm)
   | TmProj(a,t1,x) -> TmProj(a,debruijn env t1,x)
 
-  | TmUtest(a,t1,t2) -> TmUtest(a,debruijn env t1,debruijn env t2)
-  | TmNop _ -> t
+  | TmList _ -> failwith "TODO"
+  | TmConcat _ -> failwith "TODO"
+
+  | TmInfer _ -> failwith "TODO"
+  | TmLogPdf _ -> failwith "TODO"
+  | TmSample _ -> failwith "TODO"
+  | TmWeight _ -> failwith "TODO"
+  | TmDWeight _ -> failwith "TODO"
 
 
-(* Check if two value terms are equal *)
-let val_equal v1 v2 =
-  match v1,v2 with
+
+(** Check if two value terms are equal *)
+let val_equal v1 v2 = match v1,v2 with
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | _ -> false
 
+(** TODO Add more information about what failed *)
 let fail_constapp () = failwith "Incorrect application "
 
-(* Debug function used in the eval function *)
+(** Debug function used in the eval function *)
 let debug_eval env t =
   if debug_eval then
     (printf "\n-- eval -- \n";
-     print_endline (pprint t);
+     print_endline (string_of_tm t);
      if debug_eval_env then
-        print_endline (pprint_env env))
+       print_endline (string_of_env env))
   else ()
 
-(* Main evaluation loop of a term. Evaluates using big-step semantics *)
+(* Evaluate constant applications *)
+let eval_const c v  = match c,v with
+
+  (* Unit constant *)
+  | CUnit,_ -> fail_constapp()
+
+  (* Boolean constant and operations *)
+  | CBool _,_ -> fail_constapp()
+
+  | CNot,CBool(v) -> CBool(not v)
+  | CNot,_ -> fail_constapp()
+
+  | CAnd(None),CBool(v) -> CAnd(Some(v))
+  | CAnd(Some(v1)),CBool(v2) -> CBool(v1 && v2)
+  | CAnd _,_ -> fail_constapp()
+
+  | COr(None),CBool(v) -> COr(Some(v))
+  | COr(Some(v1)),CBool(v2) -> CBool(v1 || v2)
+  | COr _,_  -> fail_constapp()
+
+  (* Character constant and operations TODO *)
+  | CChar _,_ -> fail_constapp()
+
+  (* String constant and operations TODO *)
+  | CString _,_ -> fail_constapp()
+  | CConcat _,_ -> fail_constapp()
+
+  (* Integer constant and operations *)
+  | CInt _,_ -> fail_constapp()
+
+  | CMod(None),CInt(v) -> CMod(Some(v))
+  | CMod(Some(v1)),CInt(v2) -> CInt(v1 mod v2)
+  | CMod _,_ -> fail_constapp()
+
+  | CSll(None),CInt(v) -> CSll(Some(v))
+  | CSll(Some(v1)),CInt(v2) -> CInt(v1 lsl v2)
+  | CSll _,_  -> fail_constapp()
+
+  | CSrl(None),CInt(v) -> CSrl(Some(v))
+  | CSrl(Some(v1)),CInt(v2) -> CInt(v1 lsr v2)
+  | CSrl _,_  -> fail_constapp()
+
+  | CSra(None),CInt(v) -> CSra(Some(v))
+  | CSra(Some(v1)),CInt(v2) -> CInt(v1 asr v2)
+  | CSra _,_  -> fail_constapp()
+
+  (* Floating-point number constant and operations *)
+  | CFloat(_),_ -> fail_constapp()
+
+  | CLog,CFloat(v) -> CFloat(log v)
+  | CLog,_ -> fail_constapp()
+
+  (* Polymorphic integer/floating-point functions *)
+  | CAdd(None),CInt(v) -> CAdd(Some(CInt(v)))
+  | CAdd(None),CFloat(v) -> CAdd(Some(CFloat(v)))
+  | CAdd(Some(CInt(v1))),CInt(v2) -> CInt(v1 + v2)
+  | CAdd(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 +. v2)
+  | CAdd(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 +. (float_of_int v2))
+  | CAdd(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) +. v2)
+  | CAdd(_),_ -> fail_constapp()
+
+  | CSub(None),CInt(v) -> CSub(Some(CInt(v)))
+  | CSub(None),CFloat(v) -> CSub(Some(CFloat(v)))
+  | CSub(Some(CInt(v1))),CInt(v2) -> CInt(v1 - v2)
+  | CSub(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 -. v2)
+  | CSub(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 -. (float_of_int v2))
+  | CSub(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) -. v2)
+  | CSub(_),_ -> fail_constapp()
+
+  | CMul(None),CInt(v) -> CMul(Some(CInt(v)))
+  | CMul(None),CFloat(v) -> CMul(Some(CFloat(v)))
+  | CMul(Some(CInt(v1))),CInt(v2) -> CInt(v1 * v2)
+  | CMul(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 *. v2)
+  | CMul(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 *. (float_of_int v2))
+  | CMul(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) *. v2)
+  | CMul(_),_ -> fail_constapp()
+
+  | CDiv(None),CInt(v) -> CDiv(Some(CInt(v)))
+  | CDiv(None),CFloat(v) -> CDiv(Some(CFloat(v)))
+  | CDiv(Some(CInt(v1))),CInt(v2) -> CInt(v1 / v2)
+  | CDiv(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 /. v2)
+  | CDiv(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 /. (float_of_int v2))
+  | CDiv(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) /. v2)
+  | CDiv(_),_ -> fail_constapp()
+
+  | CNeg,CFloat(v) -> CFloat((-1.0)*.v)
+  | CNeg,CInt(v) -> CInt((-1)*v)
+  | CNeg,_ -> fail_constapp()
+
+  | CLt(None),CInt(v) -> CLt(Some(CInt(v)))
+  | CLt(None),CFloat(v) -> CLt(Some(CFloat(v)))
+  | CLt(Some(CInt(v1))),CInt(v2) -> CBool(v1 < v2)
+  | CLt(Some(CFloat(v1))),CFloat(v2) -> CBool(v1 < v2)
+  | CLt(Some(CFloat(v1))),CInt(v2) -> CBool(v1 < (float_of_int v2))
+  | CLt(Some(CInt(v1))),CFloat(v2) -> CBool((float_of_int v1) < v2)
+  | CLt _,_ -> fail_constapp()
+
+  | CLeq(None),CInt(v) -> CLeq(Some(CInt(v)))
+  | CLeq(None),CFloat(v) -> CLeq(Some(CFloat(v)))
+  | CLeq(Some(CInt(v1))),CInt(v2) -> CBool(v1 <= v2)
+  | CLeq(Some(CFloat(v1))),CFloat(v2) -> CBool(v1 <= v2)
+  | CLeq(Some(CFloat(v1))),CInt(v2) -> CBool(v1 <= (float_of_int v2))
+  | CLeq(Some(CInt(v1))),CFloat(v2) -> CBool((float_of_int v1) <= v2)
+  | CLeq _,_ -> fail_constapp()
+
+  | CGt(None),CInt(v) -> CGt(Some(CInt(v)))
+  | CGt(None),CFloat(v) -> CGt(Some(CFloat(v)))
+  | CGt(Some(CInt(v1))),CInt(v2) -> CBool(v1 > v2)
+  | CGt(Some(CFloat(v1))),CFloat(v2) -> CBool(v1 > v2)
+  | CGt(Some(CFloat(v1))),CInt(v2) -> CBool(v1 > (float_of_int v2))
+  | CGt(Some(CInt(v1))),CFloat(v2) ->
+    CBool((float_of_int v1) > v2)
+  | CGt _,_ -> fail_constapp()
+
+  | CGeq(None),CInt(v) -> CGeq(Some(CInt(v)))
+  | CGeq(None),CFloat(v) -> CGeq(Some(CFloat(v)))
+  | CGeq(Some(CInt(v1))),CInt(v2) -> CBool(v1 >= v2)
+  | CGeq(Some(CFloat(v1))),CFloat(v2) ->
+    CBool(v1 >= v2)
+  | CGeq(Some(CFloat(v1))),CInt(v2) ->
+    CBool(v1 >= (float_of_int v2))
+  | CGeq(Some(CInt(v1))),CFloat(v2) ->
+    CBool((float_of_int v1) >= v2)
+  | CGeq _,_ -> fail_constapp()
+
+  (* Polymorphic functions *)
+  | CEq(None),c -> CEq(Some(c))
+  | CEq(Some c1), c2 -> CBool(c1 = c2)
+
+  | CNeq(None),c -> CNeq(Some(c))
+  | CNeq(Some(c1)),c2 -> CBool(c1 <> c2)
+
+  (* Probability distributions *)
+  | CNormal(None,None),CFloat(f) -> CNormal(Some f,None)
+  | CNormal(None,None),CInt(i) -> CNormal(Some (float_of_int i),None)
+  | CNormal(Some f1,None),CFloat(f2) -> CNormal(Some f1, Some f2)
+  | CNormal(Some f1,None),CInt(i2) -> CNormal(Some f1, Some (float_of_int i2))
+  | CNormal _,_  -> fail_constapp()
+
+  | CUniform(None,None),CFloat(f) -> CUniform(Some f,None)
+  | CUniform(None,None),CInt(i) -> CUniform(Some (float_of_int i),None)
+  | CUniform(Some f1,None),CFloat(f2) -> CUniform(Some f1, Some f2)
+  | CUniform(Some f1,None),CInt(i2) -> CUniform(Some f1, Some (float_of_int i2))
+  | CUniform _,_  -> fail_constapp()
+
+  | CGamma(None,None),CFloat(f) -> CGamma(Some f,None)
+  | CGamma(None,None),CInt(i) -> CGamma(Some (float_of_int i),None)
+  | CGamma(Some f1,None),CFloat(f2) -> CGamma(Some f1, Some f2)
+  | CGamma(Some f1,None),CInt(i2) -> CGamma(Some f1, Some (float_of_int i2))
+  | CGamma _,_  -> fail_constapp()
+
+  | CExp(None),CFloat(f) -> CExp(Some(f))
+  | CExp(None),CInt(i) -> CExp(Some (float_of_int i))
+  | CExp _,_  -> fail_constapp()
+
+  | CBern(None),CFloat(f) -> CBern(Some(f))
+  | CBern(None),CInt(i) -> CBern(Some (float_of_int i))
+  | CBern _,_  -> fail_constapp()
+
+
+(** Big-step evaluation of terms *)
 let rec eval env t =
   debug_eval env t;
   match t with
+
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
   | TmVar(_,_,n) -> eval env (List.nth env n)
+
   (* Lambda and closure conversions *)
   | TmLam(a,x,t1) -> TmClos(a,x,t1,env)
   | TmClos _ -> t
+
   (* Application *)
-  | TmApp(_,t1,t2) ->
-      (match eval env t1 with
-       (* Closure application *)
-       | TmClos(_,_,t3,env2) -> eval ((eval env t2)::env2) t3
-       (* Constant application using the delta function *)
-       | TmConst(_,c) -> delta c (eval env t2)
-       (* Fix *)
-       | TmFix _ ->
-         (match eval env t2 with
-         | TmClos(_,_,t3,env2) as tt -> eval ((TmApp(na,TmFix na,tt))::env2) t3
-         | _ -> failwith "Incorrect fix application.")
-       (* If-expression *)
-       | TmIfexp(_,x1,x2) ->
-         (match x1,x2,eval env t2 with
-         | None,None,TmConst(_,CBool(b)) -> TmIfexp(na,Some(b),None)
-         | Some(b),Some(TmClos(_,_,t3,env3)),TmClos(_,_,t4,env4) ->
-              if b then eval (TmNop(na)::env3) t3 else eval (TmNop(na)::env4) t4
-         | Some(b),_,(TmClos(_,_,_t3,_) as v3) -> TmIfexp(na,Some(b),Some(v3))
-         | _ -> failwith "Incorrect if-expression in the eval function.")
-       | _ -> failwith "Application to a non closure value.")
+  | TmApp(_,t1,t2) -> (match eval env t1 with
+
+     (* Closure application *)
+     | TmClos(_,_,t3,env2) -> eval ((eval env t2)::env2) t3
+
+     (* Constant application using the delta function *)
+     | TmConst(_,c) -> (match eval env t2 with
+       | TmConst(_,v) -> TmConst(na,eval_const c v)
+       | _ -> failwith "Non constant applied to constant")
+
+     (* Fix *)
+     | TmFix _ ->
+       (match eval env t2 with
+        | TmClos(_,_,t3,env2) as tt -> eval ((TmApp(na,TmFix na,tt))::env2) t3
+        | _ -> failwith "Incorrect fix application.")
+
+     (* If-expression *)
+     | TmIf(_,x1,x2) ->
+       (match x1,x2,eval env t2 with
+        | None,None,TmConst(_,CBool(b)) -> TmIf(na,Some(b),None)
+        | Some(b),None,(TmClos(_,_,_t3,_) as v3) -> TmIf(na,Some(b),Some(v3))
+        | Some(b),Some(TmClos(_,_,t3,env3)),TmClos(_,_,t4,env4) ->
+          if b then eval (nop::env3) t3 else eval (nop::env4) t4
+        | _ -> failwith "Incorrect if-expression in the eval function.")
+
+     | _ -> failwith "Application to a non closure value.")
+
   (* Constant *)
   | TmConst _ | TmFix _ -> t
+
   (* If expression *)
-  | TmIfexp _ -> t
-  (* The rest *)
+  | TmIf _ -> t
+
+  (* Utest *)
   | TmUtest({pos;_},t1,t2) ->
     if !utest then begin
       let (v1,v2) = ((eval env t1),(eval env t2)) in
-        if val_equal v1 v2 then
-         (printf "."; utest_ok := !utest_ok + 1)
-       else (
+      if val_equal v1 v2 then
+        (printf "."; utest_ok := !utest_ok + 1)
+      else (
         unittest_failed pos v1 v2;
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
-     end;
-    TmNop na
-  | TmNop _ -> t
-  | TmRec _ -> t (* We don't actually evaluate inside records for now *)
+    end;
+    nop
+
+  (* Records TODO *)
+  | TmRec _ -> t
+
+  (* Record projection TODO*)
   | TmProj(_,t1,x) ->
-    match eval env t1 with
+    (match eval env t1 with
     | TmRec(_,sm) ->
       (match StrMap.find_opt x sm with
        | Some t1 -> t1
-       | _ -> TmNop(na))
+       | _ -> nop)
     | t -> failwith (sprintf "Record projection on non-record tm: %s"
-                       (pprint t))
+                       (string_of_tm t)))
 
+  | TmList _ -> failwith "TODO"
+  | TmConcat _ -> failwith "TODO"
 
-(* Evaluates a constant application. This is the standard delta function
-   delta(c,v) with the exception that it returns an expression and not
-   a value. This is why the returned value is evaluated in the eval() function.
-   The reason for this is that if-expressions return expressions
-   and not values. *)
-and delta c v  =
-    match c,v with
-    (* MCore boolean intrinsics *)
-    | CBool _,_ -> fail_constapp()
+  | TmInfer _ -> failwith "TODO"
+  | TmLogPdf _ -> failwith "TODO"
+  | TmSample _ -> failwith "TODO"
+  | TmWeight _ -> failwith "TODO"
+  | TmDWeight _ -> failwith "TODO"
 
-    | CNot,TmConst(a,CBool(v)) -> TmConst(a,CBool(not v))
-    | CNot,_ -> fail_constapp()
-
-    | CAnd(None),TmConst(a,CBool(v)) -> TmConst(a,CAnd(Some(v)))
-    | CAnd(Some(v1)),TmConst(a,CBool(v2)) -> TmConst(a,CBool(v1 && v2))
-    | CAnd _,_ -> fail_constapp()
-
-    | COr(None),TmConst(a,CBool(v)) -> TmConst(a,COr(Some(v)))
-    | COr(Some(v1)),TmConst(a,CBool(v2)) -> TmConst(a,CBool(v1 || v2))
-    | COr _,_  -> fail_constapp()
-
-    | CChar _,_ -> fail_constapp()
-
-    | CString _,_ -> fail_constapp()
-
-    (* MCore integer intrinsics *)
-    | CInt _,_ -> fail_constapp()
-
-    | CModi(None),TmConst(a,CInt(v)) -> TmConst(a,CModi(Some(v)))
-    | CModi(Some(v1)),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 mod v2))
-    | CModi _,_ -> fail_constapp()
-
-    | CSlli(None),TmConst(a,CInt(v)) -> TmConst(a,CSlli(Some(v)))
-    | CSlli(Some(v1)),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 lsl v2))
-    | CSlli(None),_ | CSlli(Some(_)),_  -> fail_constapp()
-
-    | CSrli(None),TmConst(a,CInt(v)) -> TmConst(a,CSrli(Some(v)))
-    | CSrli(Some(v1)),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 lsr v2))
-    | CSrli(None),_ | CSrli(Some(_)),_  -> fail_constapp()
-
-    | CSrai(None),TmConst(a,CInt(v)) -> TmConst(a,CSrai(Some(v)))
-    | CSrai(Some(v1)),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 asr v2))
-    | CSrai(None),_ | CSrai(Some(_)),_  -> fail_constapp()
-
-    (* MCore intrinsic: Floating-point number constant and operations *)
-    | CFloat(_),_ -> fail_constapp()
-
-    | CLog,TmConst(a,CFloat(v)) -> TmConst(a,CFloat(log v))
-    | CLog,_ -> fail_constapp()
-
-    (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
-    | CAdd(None),TmConst(a,CInt(v)) -> TmConst(a,CAdd(Some(CInt(v))))
-    | CAdd(None),TmConst(a,CFloat(v)) -> TmConst(a,CAdd(Some(CFloat(v))))
-    | CAdd(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 + v2))
-    | CAdd(Some(CFloat(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat(v1 +. v2))
-    | CAdd(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CFloat(v1 +. (float_of_int v2)))
-    | CAdd(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat((float_of_int v1) +. v2))
-    | CAdd(_),_ -> fail_constapp()
-
-    | CSub(None),TmConst(a,CInt(v)) -> TmConst(a,CSub(Some(CInt(v))))
-    | CSub(None),TmConst(a,CFloat(v)) -> TmConst(a,CSub(Some(CFloat(v))))
-    | CSub(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 - v2))
-    | CSub(Some(CFloat(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat(v1 -. v2))
-    | CSub(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CFloat(v1 -. (float_of_int v2)))
-    | CSub(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat((float_of_int v1) -. v2))
-    | CSub(_),_ -> fail_constapp()
-
-    | CMul(None),TmConst(a,CInt(v)) -> TmConst(a,CMul(Some(CInt(v))))
-    | CMul(None),TmConst(a,CFloat(v)) -> TmConst(a,CMul(Some(CFloat(v))))
-    | CMul(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 * v2))
-    | CMul(Some(CFloat(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat(v1 *. v2))
-    | CMul(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CFloat(v1 *. (float_of_int v2)))
-    | CMul(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat((float_of_int v1) *. v2))
-    | CMul(_),_ -> fail_constapp()
-
-    | CDiv(None),TmConst(a,CInt(v)) -> TmConst(a,CDiv(Some(CInt(v))))
-    | CDiv(None),TmConst(a,CFloat(v)) -> TmConst(a,CDiv(Some(CFloat(v))))
-    | CDiv(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CInt(v1 / v2))
-    | CDiv(Some(CFloat(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat(v1 /. v2))
-    | CDiv(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CFloat(v1 /. (float_of_int v2)))
-    | CDiv(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CFloat((float_of_int v1) /. v2))
-    | CDiv(_),_ -> fail_constapp()
-
-    | CNeg,TmConst(a,CFloat(v)) -> TmConst(a,CFloat((-1.0)*.v))
-    | CNeg,TmConst(a,CInt(v)) -> TmConst(a,CInt((-1)*v))
-    | CNeg,_ -> fail_constapp()
-
-    | CLt(None),TmConst(a,CInt(v)) -> TmConst(a,CLt(Some(CInt(v))))
-    | CLt(None),TmConst(a,CFloat(v)) -> TmConst(a,CLt(Some(CFloat(v))))
-    | CLt(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CBool(v1 < v2))
-    | CLt(Some(CFloat(v1))),TmConst(a,CFloat(v2)) -> TmConst(a,CBool(v1 < v2))
-    | CLt(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CBool(v1 < (float_of_int v2)))
-    | CLt(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CBool((float_of_int v1) < v2))
-    | CLt _,_ -> fail_constapp()
-
-    | CLeq(None),TmConst(a,CInt(v)) -> TmConst(a,CLeq(Some(CInt(v))))
-    | CLeq(None),TmConst(a,CFloat(v)) -> TmConst(a,CLeq(Some(CFloat(v))))
-    | CLeq(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CBool(v1 <= v2))
-    | CLeq(Some(CFloat(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CBool(v1 <= v2))
-    | CLeq(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CBool(v1 <= (float_of_int v2)))
-    | CLeq(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CBool((float_of_int v1) <= v2))
-    | CLeq _,_ -> fail_constapp()
-
-    | CGt(None),TmConst(a,CInt(v)) -> TmConst(a,CGt(Some(CInt(v))))
-    | CGt(None),TmConst(a,CFloat(v)) -> TmConst(a,CGt(Some(CFloat(v))))
-    | CGt(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CBool(v1 > v2))
-    | CGt(Some(CFloat(v1))),TmConst(a,CFloat(v2)) -> TmConst(a,CBool(v1 > v2))
-    | CGt(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CBool(v1 > (float_of_int v2)))
-    | CGt(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CBool((float_of_int v1) > v2))
-    | CGt _,_ -> fail_constapp()
-
-    | CGeq(None),TmConst(a,CInt(v)) -> TmConst(a,CGeq(Some(CInt(v))))
-    | CGeq(None),TmConst(a,CFloat(v)) -> TmConst(a,CGeq(Some(CFloat(v))))
-    | CGeq(Some(CInt(v1))),TmConst(a,CInt(v2)) -> TmConst(a,CBool(v1 >= v2))
-    | CGeq(Some(CFloat(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CBool(v1 >= v2))
-    | CGeq(Some(CFloat(v1))),TmConst(a,CInt(v2)) ->
-      TmConst(a,CBool(v1 >= (float_of_int v2)))
-    | CGeq(Some(CInt(v1))),TmConst(a,CFloat(v2)) ->
-      TmConst(a,CBool((float_of_int v1) >= v2))
-    | CGeq _,_ -> fail_constapp()
-
-    (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter.
-       These functions should be defined using well-defined ad-hoc polymorphism
-       in the real Ragnar compiler. *)
-    | CEq(None),t -> TmConst(na,CEq(Some(t)))
-    | CEq(Some(TmConst(_,c1))),TmConst(_,c2) -> TmConst(na,CBool(c1 = c2))
-    | CEq(Some(TmNop _)), TmNop _ -> TmConst(na,CBool(true))
-    | CEq(_),             TmNop _ -> TmConst(na,CBool(false))
-    | CEq(Some(TmNop _)), _ -> TmConst(na,CBool(false))
-    | CEq _,_  -> fail_constapp()
-
-    | CNeq(None),t -> TmConst(na,CNeq(Some(t)))
-    | CNeq(Some(TmConst(_,c1))),TmConst(_,c2) -> TmConst(na,CBool(c1 <> c2))
-    | CNeq(Some(TmNop _)), TmNop _ -> TmConst(na,CBool(false))
-    | CNeq(_),             TmNop _ -> TmConst(na,CBool(true))
-    | CNeq(Some(TmNop _)), _ -> TmConst(na,CBool(true))
-    | CNeq _,_  -> fail_constapp()
-
-    (* Probabilistic constructs and probability distributions *)
-    | CInfer,(TmClos _ as model) -> infer model
-    | CInfer,_ -> fail_constapp()
-
-    | CLogPdf(None),t -> TmConst(na,CLogPdf(Some(t)))
-    | CLogPdf(Some(t1)),t2 -> Dist.logpdf t1 t2
-
-    | CSample([]),(TmClos _ as cont) -> TmConst(na,CSample([cont]))
-    | CSample([cont]),dist -> TmConst(na,CSample([dist;cont]))
-    | CSample _,_ -> fail_constapp()
-
-    | CWeight([]),(TmClos _ as cont) -> TmConst(na,CWeight([cont]))
-    | CWeight([cont]),(TmConst(_,CFloat _) as t) ->
-      TmConst(na,CWeight([t;cont]))
-    | CWeight([cont]),TmConst(_,CInt(i)) ->
-      let t = TmConst(na,CFloat(float_of_int i)) in
-      TmConst(na,CWeight([t;cont]))
-    | CWeight _,_ -> fail_constapp()
-
-    | CDWeight([]),(TmClos _ as cont) -> TmConst(na,CDWeight([cont]))
-    | CDWeight([cont]),(TmConst(_,CFloat _) as t) ->
-      TmConst(na,CDWeight([t;cont]))
-    | CDWeight([cont]),TmConst(_,CInt(i)) ->
-      let t = TmConst(na,CFloat(float_of_int i)) in
-      TmConst(na,CDWeight([t;cont]))
-    | CDWeight _,_ -> fail_constapp()
-
-    | CNormal([]),TmConst(_,(CFloat _ as mu))  -> TmConst(na,CNormal([mu]))
-    | CNormal([]),TmConst(_,CInt(i)) ->
-      let mu = CFloat(float_of_int i) in TmConst(na,CNormal([mu]))
-    | CNormal([mu]),TmConst(_,(CFloat _ as sigma)) ->
-      TmConst(na,CNormal([sigma;mu]))
-    | CNormal([mu]),TmConst(_,CInt(i)) ->
-      let sigma = CFloat(float_of_int i) in TmConst(na,CNormal([sigma;mu]))
-    | CNormal _,_  -> fail_constapp()
-
-    | CUniform([]),TmConst(_,(CFloat _ as a)) -> TmConst(na,CUniform([a]))
-    | CUniform([]),TmConst(_,CInt(i)) ->
-      let a = CFloat(float_of_int i) in TmConst(na,CUniform([a]))
-    | CUniform([a]),TmConst(_,(CFloat _ as b)) -> TmConst(na,CUniform([b;a]))
-    | CUniform([a]),TmConst(_,CInt(i)) ->
-      let b = CFloat(float_of_int i) in TmConst(na,CUniform([b;a]))
-    | CUniform _,_  -> fail_constapp()
-
-    | CGamma([]),TmConst(_,(CFloat _ as a)) -> TmConst(na,CGamma([a]))
-    | CGamma([]),TmConst(_,CInt(i)) ->
-      let a = CFloat(float_of_int i) in TmConst(na,CGamma([a]))
-    | CGamma([a]),TmConst(_,(CFloat _ as b)) -> TmConst(na,CGamma([b;a]))
-    | CGamma([a]),TmConst(_,CInt(i)) ->
-      let b = CFloat(float_of_int i) in TmConst(na,CGamma([b;a]))
-    | CGamma _,_  -> fail_constapp()
-
-    | CExp(None),TmConst(_,(CFloat _ as lambda)) ->
-      TmConst(na,CExp(Some(lambda)))
-    | CExp(None),TmConst(_,CInt(i)) ->
-      let lambda = CFloat(float_of_int i) in TmConst(na,CExp(Some(lambda)))
-    | CExp _,_  -> fail_constapp()
-
-    | CBern(None),TmConst(_,(CFloat _ as p)) -> TmConst(na,CBern(Some(p)))
-    | CBern(None),TmConst(_,CInt(i)) ->
-      let p = CFloat(float_of_int i) in TmConst(na,CBern(Some(p)))
-    | CBern _,_  -> fail_constapp()
 
 (** Importance sampling (Likelihood weighting) inference **)
 and infer_is model n =
@@ -369,7 +363,7 @@ and infer_is model n =
   let model = eval [] (TmApp(na, model, idfun)) in
 
   (* Replicate model for #samples times with an initial log weight of 0.0 *)
-  let s = replicate n (TmApp(na, model, TmNop(na)), 0.0) in
+  let s = replicate n (TmApp(na, model, nop), 0.0) in
 
   (* Evaluate one sample to the end *)
   let rec sim (t, w) =
@@ -377,16 +371,16 @@ and infer_is model n =
     match t with
 
     (* Sample *)
-    | TmConst(_,CSample([dist;cont])) ->
+    | TmSample(_,Some(cont),Some(dist)) ->
       sim (TmApp(na, cont, Dist.sample dist), w)
 
     (* Weight (and DWeight)*)
-    | TmConst(_,CWeight([TmConst(_,CFloat(wadj));cont]))
-    | TmConst(_,CDWeight([TmConst(_,CFloat(wadj));cont])) ->
+    | TmWeight(_,Some(cont),Some(CFloat(wadj)))
+    | TmDWeight(_,Some(cont),Some(CFloat(wadj))) ->
       if wadj = -. infinity then
-        (TmNop(na),wadj)
+        (nop,wadj)
       else
-        sim (TmApp(na, cont, TmNop(na)), w +. wadj)
+        sim (TmApp(na, cont, nop), w +. wadj)
 
     (* Result *)
     | _ -> t, w in
@@ -398,13 +392,13 @@ and infer_is model n =
      List.iter
        (fun (t, w) ->
           print_string "Sample: ";
-          print_endline (pprint t);
+          print_endline (string_of_tm t);
           print_string ", Log weight: ";
           print_endline (string_of_float w))
        res;
      print_newline ());
 
-  TmNop(na) (* TODO Here we should return an empirical distribution *)
+  nop (* TODO Here we should return a proper distribution *)
 
 (** SMC inference **)
 and infer_smc model n =
@@ -413,7 +407,7 @@ and infer_smc model n =
   let model = eval [] (TmApp(na, model, idfun)) in
 
   (* Replicate model for #samples times with an initial log weight of 0.0 *)
-  let s = replicate n (TmApp(na, model, TmNop(na)), 0.0) in
+  let s = replicate n (TmApp(na, model, nop), 0.0) in
 
   (* Evaluate a sample until encountering a weight *)
   let rec sim (t, w) =
@@ -421,18 +415,18 @@ and infer_smc model n =
     match t with
 
     (* Sample *)
-    | TmConst(_,CSample([dist; cont])) ->
+    | TmSample(_,Some(cont),Some(dist)) ->
       sim (TmApp(na,cont,Dist.sample dist), w)
 
     (* Dweight *)
-    | TmConst(_,CDWeight[TmConst(_,CFloat(wadj)); cont]) ->
-      if wadj = -. infinity then (true,TmNop(na),wadj) else
-        sim (TmApp(na,cont,TmNop(na)), w +. wadj)
+    | TmDWeight(_,Some(cont),Some(CFloat(wadj))) ->
+      if wadj = -. infinity then (true,nop,wadj) else
+        sim (TmApp(na,cont,nop), w +. wadj)
 
     (* Weight *)
-    | TmConst(_,CWeight([TmConst(_,CFloat(wadj)); cont])) ->
-      if wadj = -. infinity then (true,TmNop(na),wadj) else
-        (false,TmApp(na,cont,TmNop(na)), w +. wadj)
+    | TmWeight(_,Some(cont),Some(CFloat(wadj))) ->
+      if wadj = -. infinity then (true,nop,wadj) else
+        (false,TmApp(na,cont,nop), w +. wadj)
 
     (* Result *)
     | _ -> true,t,w in
@@ -445,13 +439,13 @@ and infer_smc model n =
     let max = List.fold_left max (-. infinity) weights in
     let logavg =
       log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
-        +. max -. log (float n) in
+      +. max -. log (float n) in
 
     (* Compute normalized weights from log-weights *)
     let snorm = List.map (fun (t,w) -> t, exp (w -. logavg)) s in
 
     (*(List.iter (fun (_, w) -> let w = 50.0 -. ((w /. (float n)) *. 50.0) in*)
-         (*print_endline ("w:" ^ (string_of_float w))) snorm);*)
+    (*print_endline ("w:" ^ (string_of_float w))) snorm);*)
 
     (* Draw offset for resampling *)
     let offset = Random.float 1.0 in
@@ -480,9 +474,9 @@ and infer_smc model n =
         print_endline (string_of_float normconst);
 
       if debug_infer then
-        (List.iter (fun (t, _) -> print_endline (pprint t)) res);
+        (List.iter (fun (t, _) -> print_endline (string_of_tm t)) res);
 
-      TmNop(na) (* Here we should return an empirical distribution *)
+      nop (* Here we should return a proper distribution *)
     end else
       smc res normconst
 
@@ -495,7 +489,7 @@ and infer model = match !inference with
 
 (** Used for unsupported CPS transformations **)
 let fail_cps tm =
-  failwith ("CPS-transformation of " ^ (pprint tm) ^ " not supported")
+  failwith ("CPS-transformation of " ^ (string_of_tm tm) ^ " not supported")
 
 (** Wrap constant functions in CPS forms **)
 let cps_const t = match t with
@@ -519,12 +513,14 @@ let cps_const t = match t with
     - A function never "returns" (i.e., it never returns something that is not a
     TmApp). Instead, it applies its continuation to its "return value". **)
 
-(** Atomic cps transformation (basically everything except function
-    application).  Atomic means that we can CPS transform the expression without
-    supplying a continuation to the transformation.  **)
-let rec cps_atomic t = match t with
+(** CPS transformation of values. Transforming values means that we can do the
+    CPS transformation without supplying a continuation **)
+let rec cps_value t = match t with
+
+  (* Variables *)
   | TmVar _ -> t
 
+  (* Lambdas *)
   | TmLam(a,x,t1) ->
     let k, k' = genvar noidx in
     TmLam(a, k, TmLam(na, x, cps k' t1))
@@ -532,49 +528,35 @@ let rec cps_atomic t = match t with
   (* Should not exist before eval *)
   | TmClos _-> fail_cps t
 
-  (* Function application is not atomic. *)
-  | TmApp _ -> failwith "TmApp is not atomic."
+  (* Function application is not a value. *)
+  | TmApp _ -> failwith "TmApp is not a value"
 
-  (* Records are treated as atomic for now, but can actually be complex.
-     TODO Fix *)
-  | TmRec _ -> t
+  (* Records can be complex *)
+  | TmRec _ -> failwith "TmRec might be complex"
 
-  (* Tuple projection can also be complex, but is treated as atomic for now.
-     TODO Fix *)
-  | TmProj _ -> t
+  (* Tuple projection can also be complex *)
+  | TmProj _ -> failwith "TmProj might be complex"
 
-  (* Constant transformation  *)
-  | TmConst(_,c) ->
-    (match c with
-     | CSample _ | CWeight _ | CDWeight _-> t
-     | _ -> cps_const t)
+  (* Constant transformation TODO Fix *)
+  | TmConst _ -> cps_const t
 
   (* Transforms similarly to constant functions. The difference is that the
      last continuation must be supplied to the branches, and not applied to
      the result. *)
-  | TmIfexp _ ->
-    let a, a' = genvar noidx in
-    let b, b' = genvar noidx in
-    let c, c' = genvar noidx in
+  | TmIf _ ->
+    let a, a'   = genvar noidx in
+    let b, b'   = genvar noidx in
+    let c, c'   = genvar noidx in
     let c1, c1' = genvar noidx in
     let c2, c2' = genvar noidx in
     let c3, c3' = genvar noidx in
-    let bapp = TmApp(na, b', c3') in
-    let capp = TmApp(na, c', c3') in
-    let inner =
-      TmApp(na,
-            TmApp(na,
-                  TmApp(na, t, a'), bapp), capp) in
-    let clam =
-      TmLam(na,
-            c3, TmLam(na, c, inner)) in
-    let blam =
-      TmLam(na, c2,
-            TmLam(na, b, TmApp(na, c2', clam))) in
-    let alam =
-      TmLam(na, c1,
-            TmLam(na, a, TmApp(na, c1', blam))) in
-    alam
+    let bapp    = TmApp(na, b', c3') in
+    let capp    = TmApp(na, c', c3') in
+    let inner   = TmApp(na, TmApp(na, TmApp(na, t, a'), bapp), capp) in
+    let clam    = TmLam(na, c3, TmLam(na, c, inner)) in
+    let blam    = TmLam(na, c2, TmLam(na, b, TmApp(na, c2', clam))) in
+    let alam    = TmLam(na, c1, TmLam(na, a, TmApp(na, c1', blam)))
+    in alam
 
   (* Treat similar as constant function with a single argument. We need to
      apply the id function to the argument before applying fix, since the
@@ -589,28 +571,36 @@ let rec cps_atomic t = match t with
                    TmApp(na, k', inner)))
 
   (* CPS transform both lhs and rhs and apply identity function on result.
-     Also transform tnext. TODO Move to complex? *)
+     Also transform tnext. TODO Move to complex *)
   | TmUtest(a,t1,t2) ->
     TmUtest(a,cps idfun t1,cps idfun t2)
 
-  (* Treat as constant *)
-  | TmNop _ -> t
+  | TmList _ -> failwith "TODO"
+  | TmConcat _ -> failwith "TODO"
+
+  | TmInfer _ -> failwith "TODO"
+  | TmLogPdf _ -> failwith "TODO"
+  | TmSample _ -> failwith "TODO"
+  | TmWeight _ -> failwith "TODO"
+  | TmDWeight _ -> failwith "TODO"
 
 (** Complex cps transformation. Complex means that the term is a computation
-    (i.e., not a value). A continuation must also be supplied as argument to the
-    transformation. **)
+    (i.e., not a value). A continuation must also be supplied as argument to
+    the transformation, indicating where control is transferred to when the
+    computation has finished. **)
 and cps cont t =
   match t with
+
   (* Function application is a complex expression (since it is a computation).
-     Optimize the case when either the function or argument is atomic. *)
+     Optimize the case when either the function or argument is a value. *)
   | TmApp(a,t1,t2) ->
     let wrapopt (a, a') = Some a, a' in
     let f, f' = match t1 with
       | TmApp _ -> wrapopt (genvar noidx)
-      | _ -> None, cps_atomic t1 in
+      | _ -> None, cps_value t1 in
     let e, e' = match t2 with
       | TmApp _ -> wrapopt (genvar noidx)
-      | _ -> None, cps_atomic t2 in
+      | _ -> None, cps_value t2 in
     let app = TmApp(a,TmApp(a, f', cont), e') in
     let inner = match e with
       | None -> app
@@ -620,7 +610,13 @@ and cps cont t =
       | Some(f) -> cps (TmLam(na, f, inner)) t1 in
     outer
 
-  (* Everything else is atomic *)
-  | _ -> TmApp(na, cont, cps_atomic t)
+  | TmUtest _ -> failwith "TODO"
+  | TmRec _ -> failwith "TODO"
+  | TmProj _ -> failwith "TODO"
+  | TmList _ -> failwith "TODO"
 
+  | TmVar _ | TmLam _ | TmClos _
+  | TmConst _ | TmIf _ | TmFix _ | TmConcat _
+  | TmInfer _ | TmLogPdf _ | TmSample _ | TmWeight _
+  | TmDWeight _ -> TmApp(na, cont, cps_value t)
 

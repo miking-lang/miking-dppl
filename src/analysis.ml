@@ -1,9 +1,45 @@
+(** 0-CFA static analysis for aligning weights in programs
+
+    TODO Records are not handled correctly...
+*)
+
 open Ast
+open Const
 open Utils
 
 let debug_sanalysis = false
 
-(** Function for uniquely labeling all subterms and variables in a term **)
+let align = ref false
+
+(** Abstract values used in the 0-CFA analysis *)
+type absval =
+  | Stoch
+  | Fun of { louter:int; linner:int; lvar:int }
+  | Fix
+
+(** Constraints used in the 0-CFA analysis *)
+type cstr =
+  | Dir of absval * int
+  | Sub of int * int
+  | Impl of absval * int * int * int
+
+(** Returns string representation of abstract values *)
+let string_of_absval = function
+  | Stoch -> "Stoch"
+  | Fun{louter;linner;lvar} ->
+    "Fun(" ^
+    (String.concat "," (List.map string_of_int [louter;linner;lvar])) ^ ")"
+  | Fix -> "Fix"
+
+(** Returns string representation of constraints *)
+let string_of_cstr = function
+  | Dir(av,n) -> string_of_absval av ^ " in " ^ string_of_int n
+  | Sub(n1,n2) -> string_of_int n1 ^ " in " ^ string_of_int n2
+  | Impl(av,n1,n2,n3) ->
+    string_of_absval av ^ " in " ^ string_of_int n1
+    ^ " => " ^ string_of_int n2 ^ " in " ^ string_of_int n3
+
+(** Function for uniquely labeling all subterms and variables in a term *)
 let label builtin tm =
   let open StrMap in
   let label = ref 0 in
@@ -18,73 +54,73 @@ let label builtin tm =
                               label_vars (add x i map) t1)
     | TmApp(a,t1,t2) -> TmApp(a,label_vars map t1, label_vars map t2)
     | TmClos _ -> failwith "Closure before eval"
-    | TmConst _ | TmIfexp _ | TmFix _ | TmRec _ | TmProj _ | TmNop _ -> tm
+    | TmConst _ | TmIf _ | TmFix _ | TmRec _ | TmProj _ -> tm
+    | TmUtest _ -> failwith "Not supported"
 
-    | _ -> failwith "Not supported" in
-  let rec label_terms tm = match tm with
+    | TmList _ -> failwith "TODO"
+    | TmConcat _ -> failwith "TODO"
+
+    | TmInfer _ -> failwith "TODO"
+    | TmLogPdf _ -> failwith "TODO"
+    | TmSample _ -> failwith "TODO"
+    | TmWeight _ -> failwith "TODO"
+    | TmDWeight _ -> failwith "TODO"
+
+  in let rec label_terms tm = match tm with
     | TmVar(a,x,i1)    -> TmVar({a with label=next()},x,i1)
     | TmLam(a,x,t1)    -> TmLam({a with label=next()},x,
                                    label_terms t1)
+    | TmClos _ -> failwith "Closure before eval"
     | TmApp(a,t1,t2)   -> TmApp({a with label = next()},
                                    label_terms t1,label_terms t2)
     | TmConst(a,c)     -> TmConst({a with label=next()},c)
-    | TmIfexp(a,c,t1)  -> TmIfexp({a with label=next()},c,t1)
+    | TmIf(a,c,t1)  -> TmIf({a with label=next()},c,t1)
     | TmFix(a)      -> TmFix({a with label=next()})
+    | TmUtest _ -> failwith "Not supported"
+
     | TmRec(a,sm)      -> TmRec({a with label=next()},sm)
     | TmProj(a,t1,x)   -> TmProj({a with label=next()},t1,x)
-    | TmNop(a)         -> TmNop({a with label=next()})
 
-    | TmClos _ -> failwith "Closure before eval"
-    | _ -> failwith "Not supported" in
-  let sm = List.fold_left
+    | TmList _ -> failwith "TODO"
+    | TmConcat _ -> failwith "TODO"
+
+    | TmInfer _ -> failwith "TODO"
+    | TmLogPdf _ -> failwith "TODO"
+    | TmSample _ -> failwith "TODO"
+    | TmWeight _ -> failwith "TODO"
+    | TmDWeight _ -> failwith "TODO"
+
+  in let sm = List.fold_left
       (fun sm x -> add x (next ()) sm)
       empty builtin in
   let tm = tm |> label_vars sm |> label_terms in
   tm, sm, !label
 
-(** Abstract values used in the 0-CFA analysis **)
-type absval =
-  | Stoch
-  | Fun of { louter:int; linner:int; lvar:int }
-  | Fix
-
-(** Returns string representation of abstract values **)
-let string_of_absval = function
-  | Stoch -> "Stoch"
-  | Fun{louter;linner;lvar} ->
-    "Fun(" ^
-    (String.concat "," (List.map string_of_int [louter;linner;lvar])) ^ ")"
-  | Fix -> "Fix"
-
-(** Constraints used in the 0-CFA analysis **)
-type cstr =
-  | Dir of absval * int
-  | Sub of int * int
-  | Impl of absval * int * int * int
-
-(** Returns string representation of constraints **)
-let string_of_cstr = function
-  | Dir(av,n) -> string_of_absval av ^ " in " ^ string_of_int n
-  | Sub(n1,n2) -> string_of_int n1 ^ " in " ^ string_of_int n2
-  | Impl(av,n1,n2,n3) ->
-    string_of_absval av ^ " in " ^ string_of_int n1
-    ^ " => " ^ string_of_int n2 ^ " in " ^ string_of_int n3
-
-(** Returns abstract value representations of all functions in a program **)
+(** Returns abstract value representations of all functions in a program *)
 let functions tm =
   let rec recurse tm funs = match tm with
     | TmVar _ -> funs
     | TmLam({label;var_label;_},_,t1) ->
       Fun{louter=label;linner=tm_label t1;lvar=var_label} :: recurse t1 funs
     | TmApp(_,t1,t2) -> funs |> recurse t1 |> recurse t2
-    | TmConst _ | TmIfexp _ | TmFix _
-    | TmRec _ | TmProj _ | TmNop _ -> funs
+    | TmConst _ | TmIf _ | TmFix _
+    | TmRec _ | TmProj _ -> funs
     | TmClos _ -> failwith "Closure before eval"
-    | _ -> failwith "Not supported" in
-  recurse tm []
+    | TmUtest _ -> failwith "Not supported"
+
+    | TmList _ -> failwith "TODO"
+    | TmConcat _ -> failwith "TODO"
+
+    | TmInfer _ -> failwith "TODO"
+    | TmLogPdf _ -> failwith "TODO"
+    | TmSample _ -> failwith "TODO"
+    | TmWeight _ -> failwith "TODO"
+    | TmDWeight _ -> failwith "TODO"
+
+  in recurse tm []
 
 (** Generate a set of 0-CFA constraints for a program. For now, built in
-    functions must be applied immediately  where occuring (no currying). **)
+    functions must be applied immediately  where occuring (no currying). *)
 let gen_cstrs bmap tm =
   let idmatch str id =
     match StrMap.find_opt str bmap with
@@ -92,6 +128,7 @@ let gen_cstrs bmap tm =
     | _ -> false in
   let funs = functions tm in
   let rec recurse tm cstrs = match tm with
+
     (* Binary operators *)
     | TmApp({label=l;_},TmApp(_,TmConst(_,const),t1),t2)
       when arity const = 2 ->
@@ -108,7 +145,7 @@ let gen_cstrs bmap tm =
       Sub(l1,l) :: cstrs
 
     (* If expressions *)
-    | TmApp({label=l;_}, TmApp(_, TmApp(_,TmIfexp(_,_,_),t1),
+    | TmApp({label=l;_}, TmApp(_, TmApp(_,TmIf(_,_,_),t1),
                                  TmLam(_,_,t2)), TmLam(_,_,t3)) ->
       let l2 = tm_label t2 in
       let l3 = tm_label t3 in
@@ -153,16 +190,28 @@ let gen_cstrs bmap tm =
            | _ -> failwith "Non-fun absval in funs")
         cstrs funs
 
-    | TmConst _ | TmIfexp _ | TmRec _ | TmProj _ | TmNop _ -> cstrs
+    | TmConst _ | TmIf _ | TmRec _ | TmProj _ -> cstrs
 
     | TmClos _ -> failwith "Closure before eval"
-    | _ -> failwith "Not supported"
+    | TmUtest _ -> failwith "Not supported"
+
+    | TmFix _ -> failwith "TODO"
+
+    | TmList _ -> failwith "TODO"
+    | TmConcat _ -> failwith "TODO"
+
+    | TmInfer _ -> failwith "TODO"
+    | TmLogPdf _ -> failwith "TODO"
+    | TmSample _ -> failwith "TODO"
+    | TmWeight _ -> failwith "TODO"
+    | TmDWeight _ -> failwith "TODO"
+
   in recurse tm []
 
-(** Sets of abstract values **)
+(** Sets of abstract values *)
 module AbsValSet = Set.Make(struct let compare = compare type t = absval end)
 
-(** Analyze the program using 0-CFA to discover dynamic parts **)
+(** Analyze the program using 0-CFA to discover dynamic parts *)
 let analyze bmap tm nl =
   let open AbsValSet in
   let worklist = ref [] in
@@ -213,7 +262,7 @@ let analyze bmap tm nl =
            | _ -> ())
          data.(l));
     match tm with
-    | TmApp(_,TmApp(_,TmApp(_,TmIfexp(_,_,_),t1),t2),t3)
+    | TmApp(_,TmApp(_,TmApp(_,TmIf(_,_,_),t1),t2),t3)
       when not flag ->
       recurse flag t1;
       let flag = mem Stoch data.(tm_label t1) in
@@ -225,13 +274,22 @@ let analyze bmap tm nl =
     | TmApp(_,t1,t2) -> recurse flag t1; recurse flag t2;
 
 
-    | TmConst _ | TmIfexp _ | TmFix _ | TmRec _
-    | TmProj _ | TmNop _ -> ()
+    | TmConst _ | TmIf _ | TmFix _ | TmRec _
+    | TmProj _ -> ()
 
     | TmClos _ -> failwith "Closure before eval"
-    | _ -> failwith "Not supported" in
+    | TmUtest _ -> failwith "Not supported"
 
-  while !modified do
+    | TmList _ -> failwith "TODO"
+    | TmConcat _ -> failwith "TODO"
+
+    | TmInfer _ -> failwith "TODO"
+    | TmLogPdf _ -> failwith "TODO"
+    | TmSample _ -> failwith "TODO"
+    | TmWeight _ -> failwith "TODO"
+    | TmDWeight _ -> failwith "TODO"
+
+  in while !modified do
     modified := false;
     recurse false tm;
   done;
@@ -255,8 +313,8 @@ let analyze bmap tm nl =
   mark
 
 (** Transform all dynamic weights to dweights. We ignore other synchronization
-    checkpoints for now since we are only dealing with SMC. **)
-let align bmap dyn tm =
+    checkpoints for now since we are only dealing with SMC. *)
+let align_weight bmap dyn tm =
   let idmatch str id =
     match StrMap.find_opt str bmap with
     | Some i -> i = id
@@ -264,7 +322,7 @@ let align bmap dyn tm =
   let rec recurse tm = match tm with
     | TmVar({label;var_label;_} as a,_,_)
       when idmatch "weight" var_label ->
-      if dyn.(label) then TmConst(a,CDWeight([]))
+      if dyn.(label) then TmDWeight(a,None,None)
       else tm
 
     | TmLam(a,x,t1) -> TmLam(a,x,recurse t1)
@@ -272,10 +330,20 @@ let align bmap dyn tm =
     | TmApp(a,t1,t2) -> TmApp(a,recurse t1,recurse t2)
 
     | TmFix _ | TmVar _ | TmConst _
-    | TmIfexp _ | TmRec _ | TmProj _ | TmNop _ -> tm
+    | TmIf _ | TmRec _ | TmProj _ -> tm
 
     | TmClos _ -> failwith "Closure before eval"
-    | _ -> failwith "Not supported"
+    | TmUtest _ -> failwith "Not supported"
+
+    | TmList _ -> failwith "TODO"
+    | TmConcat _ -> failwith "TODO"
+
+    | TmInfer _ -> failwith "TODO"
+    | TmLogPdf _ -> failwith "TODO"
+    | TmSample _ -> failwith "TODO"
+    | TmWeight _ -> failwith "TODO"
+    | TmDWeight _ -> failwith "TODO"
+
   in recurse tm
 
 

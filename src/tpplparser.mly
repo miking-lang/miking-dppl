@@ -1,4 +1,10 @@
 %{
+(* TODO The first special comment of the file is the comment associated with
+   the whole module.
+
+   TODO Add anonymous functions, records, tuples, and lists
+
+   TODO Go through where TmVar are used for sample, replace with TmSample *)
 
 open Ast
 open Utils
@@ -12,14 +18,22 @@ let addrec x t =
     | TmApp(_,t1,t2) -> hasx t1 || hasx t2
     | TmConst(_,_) -> false
     | TmFix _ -> false
-    | TmIfexp(_,_,None) -> false
-    | TmIfexp(_,_,Some(t1)) -> hasx t1
+    | TmIf(_,_,None) -> false
+    | TmIf(_,_,Some(t1)) -> hasx t1
 
     | TmRec _ -> false
     | TmProj _ -> false
 
     | TmUtest(_,t1,t2) -> hasx t1 || hasx t2
-    | TmNop _ -> false
+
+    | TmList _ -> failwith "TODO"
+    | TmConcat _ -> failwith "TODO"
+
+    | TmInfer _ -> failwith "TODO"
+    | TmLogPdf _ -> failwith "TODO"
+    | TmSample _ -> failwith "TODO"
+    | TmWeight _ -> failwith "TODO"
+    | TmDWeight _ -> failwith "TODO"
   in if hasx t then
     TmApp(na,TmFix(na),TmLam(na,x,t))
   else t
@@ -30,8 +44,6 @@ let addrec x t =
 %token EOF
 %token <string> IDENT
 %token <string> FUNIDENT
-%token <string> STRING
-%token <char> CHAR
 
 /* Keywords */
 %token FUNC
@@ -39,7 +51,6 @@ let addrec x t =
 %token THEN
 %token ELSE
 %token UTEST
-%token NOP
 %token OBSERVE
 
 /* Literals */
@@ -47,6 +58,8 @@ let addrec x t =
 %token FALSE
 %token <int> INT
 %token <float> FLOAT
+%token <string> STRING
+%token <char> CHAR
 
 /* Symbolic tokens */
 %token TILDE         /* "~"  */
@@ -106,19 +119,19 @@ main:
 treeppl_scope:
   | expr sep_treeppl_scope
       { match $2 with
-        | TmNop _ -> $1
+        | TmConst(_,CUnit) -> $1
         | _ -> TmApp(na,TmLam(na,"_",$2),$1) }
   | treeppl_scope_aux { $1 }
 
 sep_treeppl_scope:
   | sep_expr sep_treeppl_scope
       { match $2 with
-        | TmNop _ -> $1
+        | TmConst(_,CUnit) -> $1
         | _ -> TmApp(na,TmLam(na,"_",$2),$1) }
   | treeppl_scope_aux { $1 }
 
 treeppl_scope_aux:
-  | { TmNop(na) }
+  | { TmConst(na,CUnit) }
   | FUNC FUNIDENT params RPAREN expr sep_treeppl_scope
       { let rec mkfun lst =
           (match lst with
@@ -148,16 +161,16 @@ expr:
   | expr SUB expr        { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
   | expr MUL expr        { TmApp(na,TmApp(na,TmConst(na,CMul(None)),$1),$3) }
   | expr DIV expr        { TmApp(na,TmApp(na,TmConst(na,CDiv(None)),$1),$3) }
-  | expr MOD expr        { TmApp(na,TmApp(na,TmConst(na,CModi(None)),$1),$3) }
+  | expr MOD expr        { TmApp(na,TmApp(na,TmConst(na,CMod(None)),$1),$3) }
   | expr LESS expr       { TmApp(na,TmApp(na,TmConst(na,CLt(None)),$1),$3) }
   | expr LESSEQUAL expr  { TmApp(na,TmApp(na,TmConst(na,CLeq(None)),$1),$3) }
   | expr GREAT expr      { TmApp(na,TmApp(na,TmConst(na,CGt(None)),$1),$3)}
   | expr GREATEQUAL expr { TmApp(na,TmApp(na,TmConst(na,CGeq(None)),$1),$3) }
   | expr EQUAL expr      { TmApp(na,TmApp(na,TmConst(na,CEq(None)),$1),$3) }
   | expr NOTEQUAL expr   { TmApp(na,TmApp(na,TmConst(na,CNeq(None)),$1),$3) }
-  | expr SHIFTLL expr    { TmApp(na,TmApp(na,TmConst(na,CSlli(None)),$1),$3) }
-  | expr SHIFTRL expr    { TmApp(na,TmApp(na,TmConst(na,CSrli(None)),$1),$3) }
-  | expr SHIFTRA expr    { TmApp(na,TmApp(na,TmConst(na,CSrai(None)),$1),$3) }
+  | expr SHIFTLL expr    { TmApp(na,TmApp(na,TmConst(na,CSll(None)),$1),$3) }
+  | expr SHIFTRL expr    { TmApp(na,TmApp(na,TmConst(na,CSrl(None)),$1),$3) }
+  | expr SHIFTRA expr    { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
   | expr AND expr        { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
   | expr OR expr         { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
   | expr DOT IDENT %prec DOT { TmProj(na,$1,$3) }
@@ -178,7 +191,7 @@ sep_expr:
   | sep_expr SUB expr { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
   | sep_expr MUL expr { TmApp(na,TmApp(na,TmConst(na,CMul(None)),$1),$3) }
   | sep_expr DIV expr { TmApp(na,TmApp(na,TmConst(na,CDiv(None)),$1),$3) }
-  | sep_expr MOD expr { TmApp(na,TmApp(na,TmConst(na,CModi(None)),$1),$3) }
+  | sep_expr MOD expr { TmApp(na,TmApp(na,TmConst(na,CMod(None)),$1),$3) }
   | sep_expr LESS expr { TmApp(na,TmApp(na,TmConst(na,CLt(None)),$1),$3) }
   | sep_expr LESSEQUAL expr
       { TmApp(na,TmApp(na,TmConst(na,CLeq(None)),$1),$3) }
@@ -188,9 +201,9 @@ sep_expr:
   | sep_expr EQUAL expr { TmApp(na,TmApp(na,TmConst(na,CEq(None)),$1),$3) }
   | sep_expr NOTEQUAL expr
       { TmApp(na,TmApp(na,TmConst(na,CNeq(None)),$1),$3) }
-  | sep_expr SHIFTLL expr { TmApp(na,TmApp(na,TmConst(na,CSlli(None)),$1),$3) }
-  | sep_expr SHIFTRL expr { TmApp(na,TmApp(na,TmConst(na,CSrli(None)),$1),$3) }
-  | sep_expr SHIFTRA expr { TmApp(na,TmApp(na,TmConst(na,CSrai(None)),$1),$3) }
+  | sep_expr SHIFTLL expr { TmApp(na,TmApp(na,TmConst(na,CSll(None)),$1),$3) }
+  | sep_expr SHIFTRL expr { TmApp(na,TmApp(na,TmConst(na,CSrl(None)),$1),$3) }
+  | sep_expr SHIFTRA expr { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
   | sep_expr DOT IDENT %prec DOT { TmProj(na,$1,$3) }
   | sep_expr AND expr { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
   | sep_expr OR expr { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
@@ -203,11 +216,11 @@ expr_aux:
           | t::ts ->  TmApp(na,mkapps ts,t)
           | [] -> TmVar(na,$1,noidx)
         in mkapps
-          (if List.length $2 = 0 then [TmNop(na)] else (List.rev $2)) }
+          (if List.length $2 = 0 then [nop] else (List.rev $2)) }
   | IF expr THEN expr ELSE expr %prec IF
       { TmApp(na,
             TmApp(na,
-              TmApp(na,TmIfexp(na,None,None),$2),
+              TmApp(na,TmIf(na,None,None),$2),
               TmLam(na,"",$4)),
             TmLam(na,"",$6)) }
   | LPAREN expr RPAREN   { $2 }
@@ -221,7 +234,6 @@ expr_aux:
   | FLOAT      { TmConst(na, CFloat($1)) }
   | TRUE       { TmConst(na, CBool(true)) }
   | FALSE      { TmConst(na, CBool(false)) }
-  | NOP        { TmNop(na) }
 
 record:
   | IDENT COLON expr { StrMap.singleton $1 $3 }

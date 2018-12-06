@@ -1,59 +1,66 @@
-open Pprint
+(** The entrypoint for the pplcore executable *)
+
 open Eval
 open Ast
+open Const
 open Printf
+open Analysis
 
-(* TODO Move? *)
-let align = ref false
+(** Mapping between predefined variable names and constants *)
+let builtin_const = [
+  "not",CNot;
+  "and",CAnd(None);
+  "or",COr(None);
 
-(* Mapping between named builtin functions (intrinsics) and the
-   correspond constants *)
+  "mod",CMod(None);
+  "sll",CSll(None);
+  "srl",CSrl(None);
+  "sra",CSra(None);
+
+  "log",CLog;
+
+  "add",CAdd(None);
+  "sub",CSub(None);
+  "mul",CMul(None);
+  "div",CDiv(None);
+  "neg",CNeg;
+  "lt",CLt(None);
+  "leq",CLeq(None);
+  "gt",CGt(None);
+  "geq",CGeq(None);
+
+  "eq",CEq(None);
+  "neq",CNeq(None);
+
+  "normal",CNormal(None,None);
+  "uniform",CUniform(None,None);
+  "gamma",CGamma(None,None);
+  "exponential",CExp(None);
+  "bernoulli",CBern(None);
+]
+
+(** Mapping between predefined variable names and terms *)
+let builtin_tm = [
+  "infer",TmInfer(na);
+  "logpdf",TmLogPdf(na,None);
+
+  "sample",TmSample(na,None,None);
+  "weight",TmWeight(na,None,None);
+  "dweight",TmDWeight(na,None,None);
+]
+
+(** Combined mapping of builtin_const and builtin_tm *)
 let builtin =
-  [("not",CNot);
-   ("and",CAnd(None));
-   ("or",COr(None));
-
-   ("modi",CModi(None));
-   ("slli",CSlli(None));
-   ("srli",CSrli(None));
-   ("srai",CSrai(None));
-
-   ("log",CLog);
-
-   ("add",CAdd(None));
-   ("sub",CSub(None));
-   ("mul",CMul(None));
-   ("div",CDiv(None));
-   ("neg",CNeg);
-   ("lt",CLt(None));
-   ("leq",CLeq(None));
-   ("gt",CGt(None));
-   ("geq",CGeq(None));
-
-   ("eq",CEq(None));
-   ("neq",CNeq(None));
-
-   ("infer",CInfer);
-   ("logpdf",CLogPdf(None));
-
-   ("sample",CSample([]));
-   ("weight",CWeight([]));
-   ("dweight",CDWeight([]));
-
-   ("normal",CNormal([]));
-   ("uniform",CUniform([]));
-   ("gamma",CGamma([]));
-   ("exponential",CExp(None));
-   ("bernoulli",CBern(None));
-  ]
+  List.map (fun (x, y) -> x, tm_of_const y) builtin_const
+  @ builtin_tm
 
 
-(* Add a slash at the end "/" if not already available *)
+(** Add a slash at the end "/" if not already available *)
 let add_slash s =
   if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> "/"
   then s ^ "/" else s
 
-(* Expand a list of files and folders into a list of file names *)
+(** Expand a list of files and folders into a list of file names *)
 let files_of_folders lst = List.fold_left (fun a v ->
   if Sys.is_directory v then
     (Sys.readdir v
@@ -66,8 +73,7 @@ let files_of_folders lst = List.fold_left (fun a v ->
   else v::a
 ) [] lst
 
-(* Main function for evaluation a function. Performs lexing and parsing. Does
-   not perform any type checking *)
+(** Function for lexing and parsing a file. *)
 let parse par filename =
   begin try
       let file = open_in filename in
@@ -85,6 +91,7 @@ let parse par filename =
       raise e (* TODO Handle error instead of crashing *)
   end
 
+(** Function for executing a file. *)
 let exec filename =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
@@ -92,23 +99,20 @@ let exec filename =
     | ".tppl" -> parse (Tpplparser.main Tppllexer.main) filename
     | s -> failwith ("Unsupported file type: " ^ s) in
 
-  if Debug.cps then
+  if debug_cps then
     (print_endline "-- pre cps --";
-     print_endline (pprint tm);
+     print_endline (string_of_tm tm);
      print_newline ());
 
-  (* Function for converting consts in builtin to tms *)
-  let tm_of_builtin b = List.map (fun (x, y) -> x, tm_of_const y) b in
-
   (* If chosen inference is aligned SMC, perform static analysis *)
-  let tm = if !align
+  let tm = if !Analysis.align
     then begin
       (* Label program and builtins in preparation for static analysis *)
       let tm,bmap,nl = Analysis.label (builtin |> List.split |> fst) tm in
 
-      if Debug.sanalysis then
+      if debug_sanalysis then
         (print_endline "-- after labeling --";
-         print_endline (pprintl tm);
+         print_endline (lstring_of_tm tm);
          print_newline ());
 
       (* Perform static analysis, returning all dynamic labels *)
@@ -117,39 +121,36 @@ let exec filename =
       (* By using the above analysis results, transform all dynamic
          checkpoints. This information will be handled by the inference
          algorithm. *)
-      Analysis.align bmap dyn tm
+      Analysis.align_weight bmap dyn tm
     end else tm in
 
-  if Debug.sanalysis then
+  if debug_sanalysis then
     (print_endline "-- after SMC alignment --";
-     print_endline (pprintl tm);
+     print_endline (lstring_of_tm tm);
      print_newline ());
 
   let builtin = builtin
-                (* Convert builtins from consts to tms *)
-                |> tm_of_builtin
-
                 (* Transform builtins to CPS. Required since we need to
                        wrap constant functions in CPS forms *)
-                |> List.map (fun (x, y) -> (x, (cps_atomic y)))
+                |> List.map (fun (x, y) -> (x, (cps_value y)))
 
                 (* Debruijn transform builtins (since they have now been
                    CPS transformed) *)
                 |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
-  if Debug.cps_builtin then
+  if debug_cps_builtin then
     (print_endline "-- cps builtin --";
      (List.iter print_endline
         (List.map
-           (fun (x, y) -> x ^ " = " ^ pprint y) builtin));
+           (fun (x, y) -> x ^ " = " ^ string_of_tm y) builtin));
      print_newline ());
 
   (* Perform CPS transformation of main program *)
   let cps = cps idfun tm in
 
-  if Debug.cps then
+  if debug_cps then
     (print_endline "-- post cps --";
-     print_endline (pprint cps);
+     print_endline (string_of_tm cps);
      print_newline ());
 
   (* Evaluate CPS form of main program *)
@@ -157,13 +158,13 @@ let exec filename =
     cps |> debruijn (builtin |> List.split |> fst)
     |> eval (builtin |> List.split |> snd) in
 
-  if Debug.cps then
+  if debug_cps then
     (print_endline "-- post cps eval --";
-     print_endline (pprint res));
+     print_endline (string_of_tm res));
 
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
-(* Main function. Checks arguments and reads file names *)
+(** Main function. Checks arguments and reads file names *)
 let main =
   let speclist = [
 
@@ -171,8 +172,8 @@ let main =
     Arg.Unit(fun _ -> utest := true),
     " Enable unit tests.";
 
-    "--align",
-    Arg.Unit(fun _ -> align := true),
+    "--align-weight",
+    Arg.Unit(fun _ -> Analysis.align := true),
     " Enable program alignment using static analysis.";
 
     "--inference",
@@ -191,6 +192,7 @@ let main =
     " Determines the number of samples (positive).";
 
   ] in
+
   let speclist = Arg.align speclist in
   let lst = ref [] in
   let anon_fun arg = lst := arg :: !lst in

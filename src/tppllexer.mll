@@ -1,4 +1,6 @@
 {
+(** TODO The first special comment of the file is the comment associated with
+    the whole module.*)
 open Tpplparser
 
 let keyword_table = Hashtbl.create 64
@@ -12,7 +14,6 @@ let _ =
       "then",          THEN;
       "else",          ELSE;
       "utest",         UTEST;
-      "nop",           NOP;
       "observe",       OBSERVE;
 
       (* Literals *)
@@ -73,8 +74,6 @@ let symtok =
   "]" | "{"  | "}"  | "::" | ":" | "," | "."  | "|" | "->" | "=>"
 
 let line_comment = "//" [^'\n']*
-let block_comment = "/*" ( [^'*'] | ( '*'+ [^'*''/'] ) )* '*'+ '/'
-let block_comment_unterminated = "/*" ( [^'*'] | ( '*'+ [^'*''/'] ) )* '*'* eof
 
 rule main = parse
   | whitespace+ | line_comment { main lexbuf }
@@ -82,7 +81,8 @@ rule main = parse
   | "/*" { block_comment (Lexing.lexeme_start_p lexbuf) lexbuf; main lexbuf}
   | integer as str { INT(int_of_string str) }
   | real as str { FLOAT(float_of_string str) }
-  | (ident as s) '(' { FUNIDENT(s) }
+  | (ident as s) '('
+      { FUNIDENT(s) }
   | ident | symtok as s
       { try Hashtbl.find keyword_table s with Not_found -> IDENT(s) }
   | '\'' (_ as c) '\'' { CHAR(c) }
