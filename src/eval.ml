@@ -18,6 +18,9 @@ let debug_cps         = false
 (** Debug the CPS transformation of the initial environment (builtin) *)
 let debug_cps_builtin = false
 
+(** TODO *)
+let debug_lift_apps   = false
+
 (** Debug the inference procedure *)
 let debug_infer       = false
 
@@ -126,11 +129,6 @@ let rec debruijn env t = match t with
   | TmWeight _ -> failwith "Should not exist before eval"
   | TmDWeight(_,None,None) -> t
   | TmDWeight _ -> failwith "Should not exist before eval"
-
-(** Check if two value terms are equal *)
-let val_equal v1 v2 = match v1,v2 with
-  | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
-  | _ -> false
 
 (** TODO Add more information about what failed *)
 let fail_constapp () = failwith "Incorrect application "
@@ -400,7 +398,9 @@ let rec eval env t =
      | TmConcat(_,Some TmConst(_,CString s1)),TmConst(_,CString s2) ->
        TmConst(na,CString (s1 ^ s2))
      | TmConcat(_,Some TmList(_,ls1)),TmList(_,ls2) -> TmList(na,ls1 @ ls2)
-     | TmConcat _,_ -> failwith "Incorrect concatenation application"
+     | (TmConcat _ as t1),t2 ->
+       failwith (sprintf "Incorrect concatenation application: %s %s"
+                        (string_of_tm t1) (string_of_tm t2))
 
      | TmInfer _,(TmClos _ as model) -> infer model
      | TmInfer _,_ -> failwith "Incorrect infer application"
@@ -647,8 +647,8 @@ let cps_const t = match t with
 
 (** Lift applications in a term *)
 let rec lift_apps t =
-  let lift t apps = match t with
-    | TmApp _ | TmMatch _ when not (is_value t) ->
+  let lift t apps = match lift_apps t with
+    | TmApp _ | TmMatch _ as t when not (is_value t) ->
       let var,var' = genvar noidx in
       var',(var,t)::apps
     | _ -> t,apps in
@@ -673,40 +673,40 @@ let rec lift_apps t =
   | TmFix _ -> t
 
   | TmUtest(a,t1,t2) ->
-    let t1,apps = lift (lift_apps t1) [] in
-    let t2,apps = lift (lift_apps t2) apps in
+    let t1,apps = lift t1 [] in
+    let t2,apps = lift t2 apps in
     wrap_app (TmUtest(a,t1,t2)) apps
 
   | TmMatch(a,t1,cases) ->
     let cases = List.map (fun (p,t) -> p,lift_apps t) cases in
-    let t1,apps = lift (lift_apps t1) [] in
+    let t1,apps = lift t1 [] in
     wrap_app (TmMatch(a,t1,cases)) apps
 
   | TmRec(a,rels) ->
     let f (rels,apps) (p,t) =
       let t,apps = lift t apps in (p,t)::rels,apps in
     let rels,apps = List.fold_left f ([],[]) rels in
-    wrap_app (TmRec(a,rels)) apps
+    wrap_app (TmRec(a,List.rev rels)) apps
 
   | TmRecProj(a,t1,s) ->
-    let t1,apps = lift (lift_apps t1) [] in
+    let t1,apps = lift t1 [] in
     wrap_app (TmRecProj(a,t1,s)) apps
 
   | TmTup(a,tarr) ->
     let f (tls,apps) t =
       let t,apps = lift t apps in t::tls,apps in
     let tarr,apps = Array.fold_left f ([],[]) tarr in
-    wrap_app (TmTup(a,Array.of_list tarr)) apps
+    wrap_app (TmTup(a,Array.of_list (List.rev tarr))) apps
 
   | TmTupProj(a,t1,i) ->
-    let t1,apps = lift (lift_apps t1) [] in
+    let t1,apps = lift t1 [] in
     wrap_app (TmTupProj(a,t1,i)) apps
 
   | TmList(a,tls) ->
     let f (tls,apps) t =
       let t,apps = lift t apps in t::tls,apps in
     let tls,apps = List.fold_left f ([],[]) tls in
-    wrap_app (TmList(a,tls)) apps
+    wrap_app (TmList(a,List.rev tls)) apps
 
   | TmConcat(_,None) -> t
   | TmConcat _ -> failwith "Should not happen before eval"
@@ -846,7 +846,7 @@ and cps_app cont t =
     outer
 
   (* All applications in a match construct can not be lifted, since all but one
-     of them will be discarded. Hence, they need to be handled separately.
+     of them will be discarded. Hence, they need to be handled separately here.
   *)
   | TmMatch(a,v1,cases) ->
     TmMatch(a,v1,List.map (fun (p,t) -> p, cps_app cont t) cases)
@@ -860,4 +860,9 @@ and cps_app cont t =
 
 let cps tm =
   let tm = lift_apps tm in
+  if debug_lift_apps then
+    (print_endline "-- after lift_apps --";
+     print_endline (string_of_tm tm);
+     print_newline ());
+
   cps_app idfun tm

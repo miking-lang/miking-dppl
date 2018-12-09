@@ -98,8 +98,8 @@ let exec filename =
     | ".tppl" -> parse (Tpplparser.main Tppllexer.main) filename
     | s -> failwith ("Unsupported file type: " ^ s) in
 
-  if debug_cps then
-    (print_endline "-- pre cps --";
+  if debug_cps || debug_lift_apps then
+    (print_endline "-- input term --";
      print_endline (string_of_tm tm);
      print_newline ());
 

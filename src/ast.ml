@@ -61,6 +61,14 @@ type tm =
 (** Evaluation environment *)
 and env = tm list
 
+(** Check if two value terms are equal *)
+let rec val_equal v1 v2 = match v1,v2 with
+  | TmList(_,l1::ls1),TmList(_,l2::ls2) ->
+    val_equal l1 l2 && val_equal (TmList(na,ls1)) (TmList(na,ls2))
+  | TmList(_,[]),TmList(_,[]) -> true
+  | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
+  | _ -> false
+
 (** Value terms *)
 let rec is_value = function
   (* Assuming the existence of an evaluation environment, both TmVar and TmLam
@@ -126,12 +134,11 @@ let string_of_tm t =
   let rec rec1 prec t =
     let p = rec2 t in
     let paren = match t with
-      | TmMatch _ | TmTup _ | TmTupProj _ -> failwith "TODO"
-      | TmLam _ | TmClos _ -> prec > 0
-      | TmApp _ | TmUtest _ -> prec > 1
-      | TmVar _ | TmConst _ | TmFix _
-      | TmIf _ | TmRec _ | TmRecProj _ | TmList _
-      | TmInfer _ | TmLogPdf _ | TmSample _
+      | TmMatch _ | TmLam _ | TmClos _ -> prec > 0
+      | TmApp _  -> prec > 1
+      | TmTup _ | TmVar _ | TmConst _ | TmFix _
+      | TmIf _ | TmRec _ | TmTupProj _ | TmRecProj _ | TmList _
+      | TmInfer _ | TmLogPdf _ | TmSample _ | TmUtest _
       | TmWeight _ | TmDWeight _ | TmConcat _ -> false
     in if paren then "(" ^ p ^ ")" else p
 
@@ -148,9 +155,11 @@ let string_of_tm t =
       "if(" ^ string_of_bool g ^ "," ^ rec1 0 t2 ^ ")"
     | TmIf(_,Some(g),_) -> "if(" ^ string_of_bool g ^ ")"
     | TmFix _ -> "fix"
-    | TmUtest(_,t1,t2) -> "utest " ^ rec1 2 t1 ^ " " ^ rec1 2 t2
+    | TmUtest(_,t1,t2) -> "utest(" ^ rec1 0 t1 ^ "," ^ rec1 0 t2 ^ ")"
 
-    | TmMatch _ -> failwith "TODO"
+    | TmMatch(_,t,cases) ->
+      let inner = List.map (fun (_,t1) -> "| p -> " ^ rec1 0 t1) cases in
+      "match " ^ rec1 0 t ^ " with " ^ (String.concat "" inner)
 
     | TmRec(_,sm) ->
       let inner = List.map (fun (k, t1) -> k ^ ":" ^ rec1 0 t1) sm in
@@ -158,20 +167,39 @@ let string_of_tm t =
 
     | TmRecProj(_,t1,x) -> rec1 2 t1 ^ "." ^ x
 
-    | TmTup _ -> failwith "TODO"
+    | TmTup(_,tarr) ->
+      let inner = Array.map (fun t1 -> rec1 0 t1) tarr in
+      "( " ^ (String.concat (",") (Array.to_list inner)) ^ " )"
 
-    | TmTupProj _ -> failwith "TODO"
+    | TmTupProj(_,t1,i) -> rec1 2 t1 ^ "." ^ (string_of_int i)
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList(_,ls) ->
+      let inner = List.map (fun t1 -> rec1 0 t1) ls in
+      "[ " ^ (String.concat (";") inner) ^ " ]"
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmConcat(_,None) -> "concat"
+    | TmConcat(_,Some t1) -> sprintf "concat(%s)" (rec1 0 t1)
 
-  in rec1 0 t
+    | TmInfer _ -> "infer"
+    | TmLogPdf(_,None) -> "logpdf"
+    | TmLogPdf(_,Some t1) -> sprintf "logpdf(%s)" (rec1 0 t1)
+    | TmSample(_,None,None) -> "sample"
+    | TmSample(_,Some t1,None) -> sprintf "sample(%s)" (rec1 0 t1)
+    | TmSample(_,Some t1,Some t2) ->
+      sprintf "sample(%s,%s)" (rec1 0 t1) (rec1 0 t2)
+    | TmSample _ -> failwith "Incorrect sample in string_of_tm"
+    | TmWeight(_,None,None) -> "weight"
+    | TmWeight(_,Some t1,None) -> sprintf "weight(%s)" (rec1 0 t1)
+    | TmWeight(_,Some t1,Some c2) ->
+      sprintf "weight(%s,%s)" (rec1 0 t1) (string_of_const c2)
+    | TmWeight _ -> failwith "Incorrect weight in string_of_tm"
+    | TmDWeight(_,None,None) -> "dweight"
+    | TmDWeight(_,Some t1,None) -> sprintf "dweight(%s)" (rec1 0 t1)
+    | TmDWeight(_,Some t1,Some c2) ->
+      sprintf "dweight(%s,%s)" (rec1 0 t1) (string_of_const c2)
+    | TmDWeight _ -> failwith "Incorrect dweight in string_of_tm"
+
+  in rec1 (-1) t
 
 (* Convert terms to string with labels included *)
 let rec lstring_of_tm = function

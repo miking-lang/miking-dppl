@@ -18,22 +18,23 @@ let addrec x t =
 
     | TmUtest(_,t1,t2) -> hasx t1 || hasx t2
 
-    | TmMatch _ -> failwith "TODO"
+    | TmMatch(_,t1,pls) -> hasx t1 || List.exists (fun (_,te) -> hasx te) pls
 
-    | TmRec _ -> false
-    | TmRecProj _ -> false
+    | TmRec(_,rels) -> List.exists (fun (_,te) -> hasx te) rels
+    | TmRecProj(_,t1,_) -> hasx t1
 
-    | TmTup _ -> false
-    | TmTupProj _ -> false
+    | TmTup(_,tarr) -> Array.exists hasx tarr
+    | TmTupProj(_,t1,_) -> hasx t1
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList(_,tls) -> List.exists hasx tls
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmConcat _ -> false
+
+    | TmInfer _ -> false
+    | TmLogPdf _ -> false
+    | TmSample _ -> false
+    | TmWeight _ -> false
+    | TmDWeight _ -> false
   in if hasx t then
     TmApp(na,TmFix(na),TmLam(na,x,t))
   else t
@@ -115,11 +116,11 @@ let rec mkapps args func = match args with
 %nonassoc LOW
 %nonassoc VBAR
 
-%left CONCAT
 %left OR
 %left AND
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL
 %left SHIFTLL SHIFTRL SHIFTRA
+%left CONCAT
 %right DCOLON
 %left ADD SUB
 %left MUL DIV MOD
@@ -132,12 +133,10 @@ let rec mkapps args func = match args with
 
 main:
   | seq EOF { $1 }
-  | EOF { nop }
 
 /* ************************** TREEPPL ********************************* */
 
 seq:
-  | texpr { $1 }
   | texpr sep_seq
       { match $2 with
         | TmConst(_,CUnit) -> $1
@@ -145,7 +144,6 @@ seq:
   | seq_aux { $1 }
 
 sep_seq:
-  | sep_texpr { $1 }
   | sep_texpr sep_seq
       { match $2 with
         | TmConst(_,CUnit) -> $1
@@ -153,6 +151,7 @@ sep_seq:
   | seq_aux { $1 }
 
 seq_aux:
+  | { nop }
   | FUNC FUNIDENT params RPAREN texpr sep_seq
       { TmApp(na,TmLam(na,$2,$6), addrec $2 (mkfun $3 $5)) }
 
