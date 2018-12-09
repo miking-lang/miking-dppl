@@ -1,6 +1,7 @@
 (** The entrypoint for the pplcore executable *)
 
 open Eval
+open Cps
 open Ast
 open Const
 open Printf

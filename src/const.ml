@@ -194,3 +194,165 @@ let rec string_of_const c = match c with
 
   | CBern(None)   -> "bern"
   | CBern(Some f) -> sprintf "bern(%f)" f
+
+(** TODO Add more information about what failed *)
+let fail_constapp () = failwith "Incorrect application "
+
+(* Evaluate constant applications *)
+let eval_const c v  = match c,v with
+
+  (* Unit constant *)
+  | CUnit,_ -> fail_constapp()
+
+  (* Boolean constant and operations *)
+  | CBool _,_ -> fail_constapp()
+
+  | CNot,CBool(v) -> CBool(not v)
+  | CNot,_ -> fail_constapp()
+
+  | CAnd(None),CBool(v) -> CAnd(Some(v))
+  | CAnd(Some(v1)),CBool(v2) -> CBool(v1 && v2)
+  | CAnd _,_ -> fail_constapp()
+
+  | COr(None),CBool(v) -> COr(Some(v))
+  | COr(Some(v1)),CBool(v2) -> CBool(v1 || v2)
+  | COr _,_  -> fail_constapp()
+
+  (* Character constant and operations *)
+  | CChar _,_ -> fail_constapp()
+
+  (* String constant and operations *)
+  | CString _,_ -> fail_constapp()
+
+  (* Integer constant and operations *)
+  | CInt _,_ -> fail_constapp()
+
+  | CMod(None),CInt(v) -> CMod(Some(v))
+  | CMod(Some(v1)),CInt(v2) -> CInt(v1 mod v2)
+  | CMod _,_ -> fail_constapp()
+
+  | CSll(None),CInt(v) -> CSll(Some(v))
+  | CSll(Some(v1)),CInt(v2) -> CInt(v1 lsl v2)
+  | CSll _,_  -> fail_constapp()
+
+  | CSrl(None),CInt(v) -> CSrl(Some(v))
+  | CSrl(Some(v1)),CInt(v2) -> CInt(v1 lsr v2)
+  | CSrl _,_  -> fail_constapp()
+
+  | CSra(None),CInt(v) -> CSra(Some(v))
+  | CSra(Some(v1)),CInt(v2) -> CInt(v1 asr v2)
+  | CSra _,_  -> fail_constapp()
+
+  (* Floating-point number constant and operations *)
+  | CFloat(_),_ -> fail_constapp()
+
+  | CLog,CFloat(v) -> CFloat(log v)
+  | CLog,_ -> fail_constapp()
+
+  (* Polymorphic integer/floating-point functions *)
+  | CAdd(None),CInt(v) -> CAdd(Some(CInt(v)))
+  | CAdd(None),CFloat(v) -> CAdd(Some(CFloat(v)))
+  | CAdd(Some(CInt(v1))),CInt(v2) -> CInt(v1 + v2)
+  | CAdd(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 +. v2)
+  | CAdd(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 +. (float_of_int v2))
+  | CAdd(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) +. v2)
+  | CAdd(_),_ -> fail_constapp()
+
+  | CSub(None),CInt(v) -> CSub(Some(CInt(v)))
+  | CSub(None),CFloat(v) -> CSub(Some(CFloat(v)))
+  | CSub(Some(CInt(v1))),CInt(v2) -> CInt(v1 - v2)
+  | CSub(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 -. v2)
+  | CSub(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 -. (float_of_int v2))
+  | CSub(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) -. v2)
+  | CSub(_),_ -> fail_constapp()
+
+  | CMul(None),CInt(v) -> CMul(Some(CInt(v)))
+  | CMul(None),CFloat(v) -> CMul(Some(CFloat(v)))
+  | CMul(Some(CInt(v1))),CInt(v2) -> CInt(v1 * v2)
+  | CMul(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 *. v2)
+  | CMul(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 *. (float_of_int v2))
+  | CMul(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) *. v2)
+  | CMul(_),_ -> fail_constapp()
+
+  | CDiv(None),CInt(v) -> CDiv(Some(CInt(v)))
+  | CDiv(None),CFloat(v) -> CDiv(Some(CFloat(v)))
+  | CDiv(Some(CInt(v1))),CInt(v2) -> CInt(v1 / v2)
+  | CDiv(Some(CFloat(v1))),CFloat(v2) -> CFloat(v1 /. v2)
+  | CDiv(Some(CFloat(v1))),CInt(v2) -> CFloat(v1 /. (float_of_int v2))
+  | CDiv(Some(CInt(v1))),CFloat(v2) -> CFloat((float_of_int v1) /. v2)
+  | CDiv(_),_ -> fail_constapp()
+
+  | CNeg,CFloat(v) -> CFloat((-1.0)*.v)
+  | CNeg,CInt(v) -> CInt((-1)*v)
+  | CNeg,_ -> fail_constapp()
+
+  | CLt(None),CInt(v) -> CLt(Some(CInt(v)))
+  | CLt(None),CFloat(v) -> CLt(Some(CFloat(v)))
+  | CLt(Some(CInt(v1))),CInt(v2) -> CBool(v1 < v2)
+  | CLt(Some(CFloat(v1))),CFloat(v2) -> CBool(v1 < v2)
+  | CLt(Some(CFloat(v1))),CInt(v2) -> CBool(v1 < (float_of_int v2))
+  | CLt(Some(CInt(v1))),CFloat(v2) -> CBool((float_of_int v1) < v2)
+  | CLt _,_ -> fail_constapp()
+
+  | CLeq(None),CInt(v) -> CLeq(Some(CInt(v)))
+  | CLeq(None),CFloat(v) -> CLeq(Some(CFloat(v)))
+  | CLeq(Some(CInt(v1))),CInt(v2) -> CBool(v1 <= v2)
+  | CLeq(Some(CFloat(v1))),CFloat(v2) -> CBool(v1 <= v2)
+  | CLeq(Some(CFloat(v1))),CInt(v2) -> CBool(v1 <= (float_of_int v2))
+  | CLeq(Some(CInt(v1))),CFloat(v2) -> CBool((float_of_int v1) <= v2)
+  | CLeq _,_ -> fail_constapp()
+
+  | CGt(None),CInt(v) -> CGt(Some(CInt(v)))
+  | CGt(None),CFloat(v) -> CGt(Some(CFloat(v)))
+  | CGt(Some(CInt(v1))),CInt(v2) -> CBool(v1 > v2)
+  | CGt(Some(CFloat(v1))),CFloat(v2) -> CBool(v1 > v2)
+  | CGt(Some(CFloat(v1))),CInt(v2) -> CBool(v1 > (float_of_int v2))
+  | CGt(Some(CInt(v1))),CFloat(v2) ->
+    CBool((float_of_int v1) > v2)
+  | CGt _,_ -> fail_constapp()
+
+  | CGeq(None),CInt(v) -> CGeq(Some(CInt(v)))
+  | CGeq(None),CFloat(v) -> CGeq(Some(CFloat(v)))
+  | CGeq(Some(CInt(v1))),CInt(v2) -> CBool(v1 >= v2)
+  | CGeq(Some(CFloat(v1))),CFloat(v2) ->
+    CBool(v1 >= v2)
+  | CGeq(Some(CFloat(v1))),CInt(v2) ->
+    CBool(v1 >= (float_of_int v2))
+  | CGeq(Some(CInt(v1))),CFloat(v2) ->
+    CBool((float_of_int v1) >= v2)
+  | CGeq _,_ -> fail_constapp()
+
+  (* Polymorphic functions *)
+  | CEq(None),c -> CEq(Some(c))
+  | CEq(Some c1), c2 -> CBool(c1 = c2)
+
+  | CNeq(None),c -> CNeq(Some(c))
+  | CNeq(Some(c1)),c2 -> CBool(c1 <> c2)
+
+  (* Probability distributions *)
+  | CNormal(None,None),CFloat(f) -> CNormal(Some f,None)
+  | CNormal(None,None),CInt(i) -> CNormal(Some (float_of_int i),None)
+  | CNormal(Some f1,None),CFloat(f2) -> CNormal(Some f1, Some f2)
+  | CNormal(Some f1,None),CInt(i2) -> CNormal(Some f1, Some (float_of_int i2))
+  | CNormal _,_  -> fail_constapp()
+
+  | CUniform(None,None),CFloat(f) -> CUniform(Some f,None)
+  | CUniform(None,None),CInt(i) -> CUniform(Some (float_of_int i),None)
+  | CUniform(Some f1,None),CFloat(f2) -> CUniform(Some f1, Some f2)
+  | CUniform(Some f1,None),CInt(i2) -> CUniform(Some f1, Some (float_of_int i2))
+  | CUniform _,_  -> fail_constapp()
+
+  | CGamma(None,None),CFloat(f) -> CGamma(Some f,None)
+  | CGamma(None,None),CInt(i) -> CGamma(Some (float_of_int i),None)
+  | CGamma(Some f1,None),CFloat(f2) -> CGamma(Some f1, Some f2)
+  | CGamma(Some f1,None),CInt(i2) -> CGamma(Some f1, Some (float_of_int i2))
+  | CGamma _,_  -> fail_constapp()
+
+  | CExp(None),CFloat(f) -> CExp(Some(f))
+  | CExp(None),CInt(i) -> CExp(Some (float_of_int i))
+  | CExp _,_  -> fail_constapp()
+
+  | CBern(None),CFloat(f) -> CBern(Some(f))
+  | CBern(None),CInt(i) -> CBern(Some (float_of_int i))
+  | CBern _,_  -> fail_constapp()
+

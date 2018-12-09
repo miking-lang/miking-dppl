@@ -258,3 +258,21 @@ let tm_of_const c = TmConst(na, c)
 (** Used for indicating uninitialized debruijn indices *)
 let noidx = -1
 
+(** Reference used for genvar *)
+let nextvar = ref 0
+
+(** Generate fresh variable names for CPS transformation.  Avoids clashes by
+    using $ as first char (not allowed in lexer for vars).  Takes a debruijn
+    index as argument (for idfun). *)
+let genvar i =
+  let res = !nextvar in
+  let str = "$" ^ string_of_int res in
+  nextvar := res + 1;
+  (str, TmVar(na,str,i))
+
+(** The identity function (with proper debruijn index) as a tm. *)
+let idfun =
+  let var, var' = genvar 0 in
+  TmLam(na,var,var')
+
+

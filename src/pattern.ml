@@ -17,3 +17,7 @@ type pat =
   | PatString of string
   | PatInt    of int
   | PatFloat  of float
+
+let string_of_pat _pat = "TODO"
+
+
