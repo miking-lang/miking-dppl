@@ -3,6 +3,7 @@
 open Printf
 open Ast
 open Const
+open Pattern
 open Utils
 
 (** Debug the evaluation *)
@@ -48,14 +49,14 @@ let nextvar = ref 0
 
 (** Generate fresh variable names for CPS transformation.  Avoids clashes by
     using $ as first char (not allowed in lexer for vars).  Takes a debruijn
-    index as argument (for idfun). **)
+    index as argument (for idfun). *)
 let genvar i =
   let res = !nextvar in
   let str = "$" ^ string_of_int res in
   nextvar := res + 1;
   (str, TmVar(na,str,i))
 
-(** The identity function (with proper debruijn index) as a tm. **)
+(** The identity function (with proper debruijn index) as a tm. *)
 let idfun =
   let var, var' = genvar 0 in
   TmLam(na,var,var')
@@ -66,6 +67,24 @@ let unittest_failed pos t1 t2 =
                 string_of_position pos ^ " **\n    LHS: " ^
                 (string_of_tm t1) ^
                 "\n    RHS: " ^ (string_of_tm t2))
+
+(** Extends an environment used in debruijn conversion with the identifiers
+    found in the given pattern *)
+let rec patenv env pat = match pat with
+  | PatVar(s) -> s :: env
+
+  | PatRec((_,p)::ps) -> patenv (patenv env p) (PatRec(ps))
+  | PatRec([]) -> env
+
+  | PatList(p::ps) -> patenv (patenv env p) (PatList(ps))
+  | PatList([]) -> env
+
+  | PatTup(p::ps) -> patenv (patenv env p) (PatTup(ps))
+  | PatTup([]) -> env
+
+  | PatCons(p1,p2) -> patenv (patenv env p1) p2
+
+  | PatUnit | PatChar _ | PatString _ | PatInt _ | PatFloat _ -> env
 
 (** Add debruijn indices to a term *)
 let rec debruijn env t = match t with
@@ -83,19 +102,30 @@ let rec debruijn env t = match t with
 
   | TmUtest(a,t1,t2) -> TmUtest(a,debruijn env t1,debruijn env t2)
 
-  | TmRec(a,sm) -> TmRec(a,StrMap.map (debruijn env) sm)
-  | TmProj(a,t1,x) -> TmProj(a,debruijn env t1,x)
+  | TmMatch(a,tm,cases) ->
+    TmMatch(a,debruijn env tm,
+            List.map (fun (p,tm) -> (p, debruijn (patenv env p) tm)) cases)
 
-  | TmList _ -> failwith "TODO"
-  | TmConcat _ -> failwith "TODO"
+  | TmTup(a,arr) -> TmTup(a, Array.map (debruijn env) arr)
+  | TmTupProj(a,t1,i) -> TmTupProj(a,debruijn env t1,i)
 
-  | TmInfer _ -> failwith "TODO"
-  | TmLogPdf _ -> failwith "TODO"
-  | TmSample _ -> failwith "TODO"
-  | TmWeight _ -> failwith "TODO"
-  | TmDWeight _ -> failwith "TODO"
+  | TmRec(a,sm) -> TmRec(a,List.map (fun (k,v) -> k,debruijn env v) sm)
+  | TmRecProj(a,t1,x) -> TmRecProj(a,debruijn env t1,x)
 
+  | TmList(a,ls) -> TmList(a,List.map (debruijn env) ls)
 
+  | TmConcat(_,None) -> t
+  | TmConcat _ -> failwith "Should not exist before eval"
+
+  | TmInfer _  -> t
+  | TmLogPdf(_,None) -> t
+  | TmLogPdf _ -> failwith "Should not exist before eval"
+  | TmSample(_,None,None) -> t
+  | TmSample _ -> failwith "Should not exist before eval"
+  | TmWeight(_,None,None) -> t
+  | TmWeight _ -> failwith "Should not exist before eval"
+  | TmDWeight(_,None,None) -> t
+  | TmDWeight _ -> failwith "Should not exist before eval"
 
 (** Check if two value terms are equal *)
 let val_equal v1 v2 = match v1,v2 with
@@ -134,12 +164,11 @@ let eval_const c v  = match c,v with
   | COr(Some(v1)),CBool(v2) -> CBool(v1 || v2)
   | COr _,_  -> fail_constapp()
 
-  (* Character constant and operations TODO *)
+  (* Character constant and operations *)
   | CChar _,_ -> fail_constapp()
 
-  (* String constant and operations TODO *)
+  (* String constant and operations *)
   | CString _,_ -> fail_constapp()
-  | CConcat _,_ -> fail_constapp()
 
   (* Integer constant and operations *)
   | CInt _,_ -> fail_constapp()
@@ -273,6 +302,62 @@ let eval_const c v  = match c,v with
   | CBern(None),CInt(i) -> CBern(Some (float_of_int i))
   | CBern _,_  -> fail_constapp()
 
+(** If the pattern matches the given value, return the extended environment
+    where the variables in the pattern are bound to the corresponding terms in
+    the value. IMPORTANT: Follows the same traversal order of the pattern as in
+    the patenv function to get the correct debruijn indices. *)
+let rec match_case env pattern value = match pattern,value with
+  | PatVar _,v ->  Some(v :: env)
+
+  | PatRec((k,p)::ps),(TmRec(_,es) as v) ->
+    (match List.assoc_opt k es with
+     | Some v1 ->
+       (match match_case env p v1 with
+        | Some env -> match_case env (PatRec(ps)) v
+        | None -> None)
+     | None -> None)
+  | PatRec([]),TmRec _ -> Some env
+  | PatRec _,_ -> None
+
+  | PatList(p::ps),TmList(a,v::vs) ->
+    (match match_case env p v with
+     | Some env -> match_case env (PatList(ps)) (TmList(a,vs))
+     | None -> None)
+  | PatList([]),TmList(_,[]) -> Some env
+  | PatList _,_ -> None
+
+  | PatTup(ps),TmTup(_,varr) ->
+    let rec fold env ps i = match ps with
+      | p::ps when i < Array.length varr ->
+        (match match_case env p varr.(i) with
+         | Some env -> fold env ps (i + 1)
+         | None -> None)
+      | [] when i = Array.length varr -> Some env
+      | _ -> None
+    in fold env ps 0
+  | PatTup _,_ -> None
+
+  | PatCons(p1,p2),TmList(a,v::vs) ->
+    (match match_case env p1 v with
+     | Some env -> match_case env p2 (TmList(a,vs))
+     | None -> None)
+  | PatCons _,_ -> None
+
+  | PatUnit, TmConst(_,CUnit) -> Some env
+  | PatUnit, _ -> None
+
+  | PatChar(c1), TmConst(_,CChar(c2)) when c1 = c2 -> Some env
+  | PatChar _,_ -> None
+
+  | PatString(s1), TmConst(_,CString(s2)) when s1 = s2 -> Some env
+  | PatString _,_ -> None
+
+  | PatInt(i1), TmConst(_,CInt(i2)) when i1 = i2 -> Some env
+  | PatInt _,_ -> None
+
+  | PatFloat(f1), TmConst(_,CFloat(f2)) when f1 = f2 -> Some env
+  | PatFloat _,_ -> None
+
 
 (** Big-step evaluation of terms *)
 let rec eval env t =
@@ -287,30 +372,55 @@ let rec eval env t =
   | TmClos _ -> t
 
   (* Application *)
-  | TmApp(_,t1,t2) -> (match eval env t1 with
+  | TmApp(_,t1,t2) -> (match eval env t1,eval env t2 with
 
      (* Closure application *)
-     | TmClos(_,_,t3,env2) -> eval ((eval env t2)::env2) t3
+     | TmClos(_,_,t3,env2),v2 -> eval (v2::env2) t3
 
      (* Constant application using the delta function *)
-     | TmConst(_,c) -> (match eval env t2 with
-       | TmConst(_,v) -> TmConst(na,eval_const c v)
-       | _ -> failwith "Non constant applied to constant")
+     | TmConst(_,c),TmConst(_,v) -> TmConst(na,eval_const c v)
+     | TmConst _,_ -> failwith "Non constant applied to constant"
 
      (* Fix *)
-     | TmFix _ ->
-       (match eval env t2 with
-        | TmClos(_,_,t3,env2) as tt -> eval ((TmApp(na,TmFix na,tt))::env2) t3
-        | _ -> failwith "Incorrect fix application.")
+     | TmFix _,(TmClos(_,_,t3,env2) as tt) ->
+       eval ((TmApp(na,TmFix na,tt))::env2) t3
+     | TmFix _,_ -> failwith "Incorrect fix application."
 
      (* If-expression *)
-     | TmIf(_,x1,x2) ->
-       (match x1,x2,eval env t2 with
+     | TmIf(_,x1,x2),v2 ->
+       (match x1,x2,v2 with
         | None,None,TmConst(_,CBool(b)) -> TmIf(na,Some(b),None)
         | Some(b),None,(TmClos(_,_,_t3,_) as v3) -> TmIf(na,Some(b),Some(v3))
         | Some(b),Some(TmClos(_,_,t3,env3)),TmClos(_,_,t4,env4) ->
           if b then eval (nop::env3) t3 else eval (nop::env4) t4
         | _ -> failwith "Incorrect if-expression in the eval function.")
+
+     | TmConcat(a,None),(TmConst(_,CString _) as v2)
+     | TmConcat(a,None),(TmList _ as v2) -> TmConcat(a,Some v2)
+     | TmConcat(_,Some TmConst(_,CString s1)),TmConst(_,CString s2) ->
+       TmConst(na,CString (s1 ^ s2))
+     | TmConcat(_,Some TmList(_,ls1)),TmList(_,ls2) -> TmList(na,ls1 @ ls2)
+     | TmConcat _,_ -> failwith "Incorrect concatenation application"
+
+     | TmInfer _,(TmClos _ as model) -> infer model
+     | TmInfer _,_ -> failwith "Incorrect infer application"
+
+     | TmLogPdf(a,None),v2 -> TmLogPdf(a,Some v2)
+     | TmLogPdf(_,Some v1),v2 -> Dist.logpdf v1 v2
+
+     | TmSample(a,None,None),(TmClos _ as cont) -> TmSample(a,Some cont,None)
+     | TmSample(a,Some cont,None),v2 -> TmSample(a,Some cont,Some v2)
+     | TmSample _,_ -> failwith "Incorrect sample application"
+
+     | TmWeight(a,None,None),(TmClos _ as cont) -> TmWeight(a,Some cont,None)
+     | TmWeight(a,Some cont,None),TmConst(_,(CFloat _ as w)) ->
+       TmWeight(a,Some cont,Some w)
+     | TmWeight _,_ -> failwith "Incorrect weight application"
+
+     | TmDWeight(a,None,None),(TmClos _ as cont) -> TmDWeight(a,Some cont,None)
+     | TmDWeight(a,Some cont,None),TmConst(_,(CFloat _ as w)) ->
+       TmDWeight(a,Some cont,Some w)
+     | TmDWeight _,_ -> failwith "Incorrect dweight application"
 
      | _ -> failwith "Application to a non closure value.")
 
@@ -333,30 +443,48 @@ let rec eval env t =
     end;
     nop
 
-  (* Records TODO *)
-  | TmRec _ -> t
+  | TmMatch(_,t1,cases) ->
+    let v1 = eval env t1 in
+    let rec match_cases cases = match cases with
+      | (p,t) :: cases ->
+        (match match_case env p v1 with
+         | Some env -> eval env t
+         | None -> match_cases cases)
+      | [] -> failwith "Pattern matching failed TODO"
 
-  (* Record projection TODO*)
-  | TmProj(_,t1,x) ->
+    in match_cases cases
+
+  | TmTup(a,tarr) -> TmTup(a,Array.map (eval env) tarr)
+  | TmTupProj(_,t1,i) ->
     (match eval env t1 with
-    | TmRec(_,sm) ->
-      (match StrMap.find_opt x sm with
-       | Some t1 -> t1
-       | _ -> nop)
-    | t -> failwith (sprintf "Record projection on non-record tm: %s"
-                       (string_of_tm t)))
-
-  | TmList _ -> failwith "TODO"
-  | TmConcat _ -> failwith "TODO"
-
-  | TmInfer _ -> failwith "TODO"
-  | TmLogPdf _ -> failwith "TODO"
-  | TmSample _ -> failwith "TODO"
-  | TmWeight _ -> failwith "TODO"
-  | TmDWeight _ -> failwith "TODO"
+     | TmTup(_,varr) -> varr.(i)
+     | _ -> failwith "Tuple projection on non-tuple TODO")
 
 
-(** Importance sampling (Likelihood weighting) inference **)
+  (* Records *)
+  | TmRec(a,tls) -> TmRec(a,List.map (fun (k,tm) -> k,eval env tm) tls)
+
+  (* Record projection *)
+  | TmRecProj(_,t1,x) ->
+    (match eval env t1 with
+     | TmRec(_,vls) ->
+       (match List.assoc_opt x vls with
+        | Some v1 -> v1
+        | _ -> failwith "Record projection where Key TODO not found in record")
+     | t -> failwith (sprintf "Record projection on non-record %s"
+                        (string_of_tm t)))
+
+  | TmList(a,tls) -> TmList(a,List.map (eval env) tls)
+
+  | TmConcat _ -> t
+
+  | TmInfer _ -> t
+  | TmLogPdf _ -> t
+  | TmSample _ -> t
+  | TmWeight _ -> t
+  | TmDWeight _ -> t
+
+(** Importance sampling (Likelihood weighting) inference *)
 and infer_is model n =
 
   (* Remove continuation by applying idfun *)
@@ -400,7 +528,7 @@ and infer_is model n =
 
   nop (* TODO Here we should return a proper distribution *)
 
-(** SMC inference **)
+(** SMC inference *)
 and infer_smc model n =
 
   (* Remove continuation by applying idfun *)
@@ -482,39 +610,119 @@ and infer_smc model n =
 
   in smc s 0.0
 
-(** Select correct inference algorithm **)
+(** Select correct inference algorithm *)
 and infer model = match !inference with
   | Importance(i) -> infer_is model i
   | SMC(i) -> infer_smc model i
 
-(** Used for unsupported CPS transformations **)
-let fail_cps tm =
-  failwith ("CPS-transformation of " ^ (string_of_tm tm) ^ " not supported")
 
-(** Wrap constant functions in CPS forms **)
-let cps_const t = match t with
-  | TmConst(_,c) ->
-    let vars = List.map genvar (replicate (arity c) noidx) in
-    let inner = List.fold_left
-        (fun acc (_, v') ->
-           TmApp(na, acc, v'))
-        t vars in
-    List.fold_right
-      (fun (v, _) acc ->
-         let k, k' = genvar noidx in
-         TmLam(na, k, TmLam(na, v, TmApp(na, k', acc))))
-      vars inner
-  | _ -> failwith "cps_const of non-constant"
-
-(** CPS transformations
+(* CPS transformations
     Requirements:
     - All functions must take one extra parameter: a continuation function with
     exactly one parameter
     - A function never "returns" (i.e., it never returns something that is not a
-    TmApp). Instead, it applies its continuation to its "return value". **)
+    TmApp). Instead, it applies its continuation to its "return value". *)
+
+(** Used for unsupported CPS transformations *)
+let fail_cps tm =
+  failwith ("CPS-transformation of " ^ (string_of_tm tm) ^ " not supported")
+
+(** Wrap opaque builtin functions in CPS forms *)
+let cps_builtin t arity =
+  let vars = List.map genvar (replicate arity noidx) in
+  let inner = List.fold_left
+      (fun acc (_, v') ->
+         TmApp(na, acc, v'))
+      t vars in
+  List.fold_right
+    (fun (v, _) acc ->
+       let k, k' = genvar noidx in
+       TmLam(na, k, TmLam(na, v, TmApp(na, k', acc))))
+    vars inner
+
+(** Wrap constant functions in CPS forms *)
+let cps_const t = match t with
+  | TmConst(_,c) -> cps_builtin t (arity c)
+  | _ -> failwith "cps_const of non-constant"
+
+(** Lift applications in a term *)
+let rec lift_apps t =
+  let lift t apps = match t with
+    | TmApp _ | TmMatch _ when not (is_value t) ->
+      let var,var' = genvar noidx in
+      var',(var,t)::apps
+    | _ -> t,apps in
+
+  let wrap_app t apps =
+    let lam = List.fold_left (fun t (var,_) -> TmLam(na,var,t)) t apps in
+    List.fold_right (fun (_,app) t -> TmApp(na,t,app)) apps lam in
+
+  match t with
+  | TmVar _ -> t
+  | TmLam(a,s,t) -> TmLam(a,s,lift_apps t)
+
+  | TmClos _ -> failwith "Should not exist before eval"
+
+  | TmApp(a,t1,t2) -> TmApp(a,lift_apps t1, lift_apps t2)
+
+  | TmConst _ -> t
+
+  | TmIf(_,None,None) -> t
+  | TmIf _ -> failwith "Should not exist before eval"
+
+  | TmFix _ -> t
+
+  | TmUtest(a,t1,t2) ->
+    let t1,apps = lift (lift_apps t1) [] in
+    let t2,apps = lift (lift_apps t2) apps in
+    wrap_app (TmUtest(a,t1,t2)) apps
+
+  | TmMatch(a,t1,cases) ->
+    let cases = List.map (fun (p,t) -> p,lift_apps t) cases in
+    let t1,apps = lift (lift_apps t1) [] in
+    wrap_app (TmMatch(a,t1,cases)) apps
+
+  | TmRec(a,rels) ->
+    let f (rels,apps) (p,t) =
+      let t,apps = lift t apps in (p,t)::rels,apps in
+    let rels,apps = List.fold_left f ([],[]) rels in
+    wrap_app (TmRec(a,rels)) apps
+
+  | TmRecProj(a,t1,s) ->
+    let t1,apps = lift (lift_apps t1) [] in
+    wrap_app (TmRecProj(a,t1,s)) apps
+
+  | TmTup(a,tarr) ->
+    let f (tls,apps) t =
+      let t,apps = lift t apps in t::tls,apps in
+    let tarr,apps = Array.fold_left f ([],[]) tarr in
+    wrap_app (TmTup(a,Array.of_list tarr)) apps
+
+  | TmTupProj(a,t1,i) ->
+    let t1,apps = lift (lift_apps t1) [] in
+    wrap_app (TmTupProj(a,t1,i)) apps
+
+  | TmList(a,tls) ->
+    let f (tls,apps) t =
+      let t,apps = lift t apps in t::tls,apps in
+    let tls,apps = List.fold_left f ([],[]) tls in
+    wrap_app (TmList(a,tls)) apps
+
+  | TmConcat(_,None) -> t
+  | TmConcat _ -> failwith "Should not happen before eval"
+
+  | TmInfer _ -> t
+  | TmLogPdf(_,None) -> t
+  | TmLogPdf _ -> failwith "Should not happen before eval"
+  | TmSample(_,None,None) -> t
+  | TmSample _ -> failwith "Should not happen before eval"
+  | TmWeight(_,None,None) -> t
+  | TmWeight _ -> failwith "Should not happen before eval"
+  | TmDWeight(_,None,None) -> t
+  | TmDWeight _ -> failwith "Should not happen before eval"
 
 (** CPS transformation of values. Transforming values means that we can do the
-    CPS transformation without supplying a continuation **)
+    CPS transformation without supplying a continuation *)
 let rec cps_value t = match t with
 
   (* Variables *)
@@ -523,7 +731,7 @@ let rec cps_value t = match t with
   (* Lambdas *)
   | TmLam(a,x,t1) ->
     let k, k' = genvar noidx in
-    TmLam(a, k, TmLam(na, x, cps k' t1))
+    TmLam(a, k, TmLam(na, x, cps_app k' t1))
 
   (* Should not exist before eval *)
   | TmClos _-> fail_cps t
@@ -531,13 +739,26 @@ let rec cps_value t = match t with
   (* Function application is not a value. *)
   | TmApp _ -> failwith "TmApp is not a value"
 
-  (* Records can be complex *)
-  | TmRec _ -> failwith "TmRec might be complex"
+  (* Pattern matching might not be a value *)
+  | TmMatch(a,t1,pls) ->
+    let pls = List.map (fun (p,te) -> p,cps_value te) pls in
+    TmMatch(a,cps_value t1, pls)
 
-  (* Tuple projection can also be complex *)
-  | TmProj _ -> failwith "TmProj might be complex"
+  (* Tuples might not be values *)
+  | TmTup(a,tarr) -> TmTup(a,Array.map cps_value tarr)
 
-  (* Constant transformation TODO Fix *)
+  (* Tuple projections might not be values *)
+  | TmTupProj(a,t1,s) -> TmTupProj(a,cps_value t1,s)
+
+  (* Records might not be values *)
+  | TmRec(a,rels) ->
+    let rels = List.map (fun (s,te) -> s,cps_value te) rels in
+    TmRec(a,rels)
+
+  (* Tuple projections might not be values *)
+  | TmRecProj(a,t1,i) -> TmRecProj(a,cps_value t1,i)
+
+  (* Constant transformation *)
   | TmConst _ -> cps_const t
 
   (* Transforms similarly to constant functions. The difference is that the
@@ -570,53 +791,73 @@ let rec cps_value t = match t with
           k, TmLam(na, v,
                    TmApp(na, k', inner)))
 
-  (* CPS transform both lhs and rhs and apply identity function on result.
-     Also transform tnext. TODO Move to complex *)
-  | TmUtest(a,t1,t2) ->
-    TmUtest(a,cps idfun t1,cps idfun t2)
+  (* Unit tests might not be values *)
+  | TmUtest(a,t1,t2) -> TmUtest(a,cps_value t1,cps_value t2)
 
-  | TmList _ -> failwith "TODO"
-  | TmConcat _ -> failwith "TODO"
+  (* Lists might not be values *)
+  | TmList(a,tls) -> TmList(a, List.map cps_value tls)
 
-  | TmInfer _ -> failwith "TODO"
-  | TmLogPdf _ -> failwith "TODO"
-  | TmSample _ -> failwith "TODO"
-  | TmWeight _ -> failwith "TODO"
-  | TmDWeight _ -> failwith "TODO"
+  (* Concatenations *)
+  | TmConcat(_,None)  -> cps_builtin t 2
+  | TmConcat _  -> failwith "Should not exist before eval"
+
+  (* Transform some builtin probabilistic constructs in the same way as
+     constants.  It is required that the original arity of the function is
+     passed to cps_builtin *)
+  | TmInfer _ -> cps_builtin t 1
+  | TmLogPdf(_,None) -> cps_builtin t 2
+  | TmLogPdf _ -> failwith "Should not exist before eval"
+
+  (* Already in CPS form (the whole reason why we are performing the CPS
+     transformation in the first place...) *)
+  | TmSample(_,None,None) -> t
+  | TmSample _ -> failwith "Should not exist before eval"
+  | TmWeight(_,None,None) -> t
+  | TmWeight _ -> failwith "Should not exist before eval"
+  | TmDWeight(_,None,None) -> t
+  | TmDWeight _ -> failwith "Should not exist before eval"
 
 (** Complex cps transformation. Complex means that the term is a computation
     (i.e., not a value). A continuation must also be supplied as argument to
     the transformation, indicating where control is transferred to when the
-    computation has finished. **)
-and cps cont t =
+    computation has finished. *)
+and cps_app cont t =
   match t with
 
   (* Function application is a complex expression (since it is a computation).
      Optimize the case when either the function or argument is a value. *)
   | TmApp(a,t1,t2) ->
-    let wrapopt (a, a') = Some a, a' in
-    let f, f' = match t1 with
-      | TmApp _ -> wrapopt (genvar noidx)
-      | _ -> None, cps_value t1 in
-    let e, e' = match t2 with
-      | TmApp _ -> wrapopt (genvar noidx)
-      | _ -> None, cps_value t2 in
-    let app = TmApp(a,TmApp(a, f', cont), e') in
+    let wrapopt (a, a') = Some a,a' in
+    let f, f' =
+      if is_value t1
+      then None, cps_value t1
+      else wrapopt (genvar noidx) in
+    let e, e' =
+      if is_value t2
+      then None, cps_value t2
+      else wrapopt (genvar noidx) in
+    let app = TmApp(a,TmApp(a,f',cont),e') in
     let inner = match e with
       | None -> app
-      | Some(e) -> cps (TmLam(na, e, app)) t2 in
+      | Some(e) -> cps_app (TmLam(na,e,app)) t2 in
     let outer = match f with
       | None -> inner
-      | Some(f) -> cps (TmLam(na, f, inner)) t1 in
+      | Some(f) -> cps_app (TmLam(na,f,inner)) t1 in
     outer
 
-  | TmUtest _ -> failwith "TODO"
-  | TmRec _ -> failwith "TODO"
-  | TmProj _ -> failwith "TODO"
-  | TmList _ -> failwith "TODO"
+  (* All applications in a match construct can not be lifted, since all but one
+     of them will be discarded. Hence, they need to be handled separately.
+  *)
+  | TmMatch(a,v1,cases) ->
+    TmMatch(a,v1,List.map (fun (p,t) -> p, cps_app cont t) cases)
 
-  | TmVar _ | TmLam _ | TmClos _
-  | TmConst _ | TmIf _ | TmFix _ | TmConcat _
-  | TmInfer _ | TmLogPdf _ | TmSample _ | TmWeight _
-  | TmDWeight _ -> TmApp(na, cont, cps_value t)
+  (* If we have lifted applications, everything else is values. *)
+  | TmTup _ | TmTupProj _ | TmUtest _
+  | TmRec _ | TmRecProj _ | TmList _ | TmVar _
+  | TmLam _ | TmClos _ | TmConst _ | TmIf _
+  | TmFix _ | TmConcat _ | TmInfer _ | TmLogPdf _
+  | TmSample _ | TmWeight _ | TmDWeight _ -> TmApp(na, cont, cps_value t)
 
+let cps tm =
+  let tm = lift_apps tm in
+  cps_app idfun tm

@@ -54,8 +54,15 @@ let label builtin tm =
                               label_vars (add x i map) t1)
     | TmApp(a,t1,t2) -> TmApp(a,label_vars map t1, label_vars map t2)
     | TmClos _ -> failwith "Closure before eval"
-    | TmConst _ | TmIf _ | TmFix _ | TmRec _ | TmProj _ -> tm
-    | TmUtest _ -> failwith "Not supported"
+    | TmConst _ | TmIf _ | TmFix _ -> tm
+
+    | TmMatch _ -> failwith "TODO"
+    | TmTup _ -> failwith "TODO"
+    | TmTupProj _ -> failwith "TODO"
+
+    | TmRec _ -> failwith "TODO"
+    | TmRecProj _ -> failwith "TODO"
+    | TmUtest _ -> failwith "TODO"
 
     | TmList _ -> failwith "TODO"
     | TmConcat _ -> failwith "TODO"
@@ -76,10 +83,14 @@ let label builtin tm =
     | TmConst(a,c)     -> TmConst({a with label=next()},c)
     | TmIf(a,c,t1)  -> TmIf({a with label=next()},c,t1)
     | TmFix(a)      -> TmFix({a with label=next()})
-    | TmUtest _ -> failwith "Not supported"
+    | TmUtest _ -> failwith "TODO"
 
-    | TmRec(a,sm)      -> TmRec({a with label=next()},sm)
-    | TmProj(a,t1,x)   -> TmProj({a with label=next()},t1,x)
+    | TmMatch _ -> failwith "TODO"
+    | TmTup _ -> failwith "TODO"
+    | TmTupProj _ -> failwith "TODO"
+
+    | TmRec _     -> failwith "TODO"
+    | TmRecProj _ -> failwith "TODO"
 
     | TmList _ -> failwith "TODO"
     | TmConcat _ -> failwith "TODO"
@@ -104,9 +115,14 @@ let functions tm =
       Fun{louter=label;linner=tm_label t1;lvar=var_label} :: recurse t1 funs
     | TmApp(_,t1,t2) -> funs |> recurse t1 |> recurse t2
     | TmConst _ | TmIf _ | TmFix _
-    | TmRec _ | TmProj _ -> funs
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "Not supported"
+    | TmUtest _ -> failwith "TODO"
+
+    | TmMatch _ -> failwith "TODO"
+    | TmTup _ -> failwith "TODO"
+    | TmTupProj _ -> failwith "TODO"
+
+    | TmRec _ | TmRecProj _ -> failwith "TODO"
 
     | TmList _ -> failwith "TODO"
     | TmConcat _ -> failwith "TODO"
@@ -190,10 +206,16 @@ let gen_cstrs bmap tm =
            | _ -> failwith "Non-fun absval in funs")
         cstrs funs
 
-    | TmConst _ | TmIf _ | TmRec _ | TmProj _ -> cstrs
+    | TmConst _ | TmIf _ -> cstrs
+
+    | TmRec _ | TmRecProj _ -> failwith "TODO"
+
+    | TmMatch _ -> failwith "TODO"
+    | TmTup _ -> failwith "TODO"
+    | TmTupProj _ -> failwith "TODO"
 
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "Not supported"
+    | TmUtest _ -> failwith "TODO"
 
     | TmFix _ -> failwith "TODO"
 
@@ -274,11 +296,16 @@ let analyze bmap tm nl =
     | TmApp(_,t1,t2) -> recurse flag t1; recurse flag t2;
 
 
-    | TmConst _ | TmIf _ | TmFix _ | TmRec _
-    | TmProj _ -> ()
+    | TmConst _ | TmIf _ | TmFix _ -> ()
 
+    | TmMatch _ -> failwith "TODO"
+    | TmTup _ -> failwith "TODO"
+    | TmTupProj _ -> failwith "TODO"
+
+    | TmRec _ -> failwith "TODO"
+    | TmRecProj _ -> failwith "TODO"
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "Not supported"
+    | TmUtest _ -> failwith "TODO"
 
     | TmList _ -> failwith "TODO"
     | TmConcat _ -> failwith "TODO"
@@ -330,10 +357,16 @@ let align_weight bmap dyn tm =
     | TmApp(a,t1,t2) -> TmApp(a,recurse t1,recurse t2)
 
     | TmFix _ | TmVar _ | TmConst _
-    | TmIf _ | TmRec _ | TmProj _ -> tm
+    | TmIf _ -> tm
+
+    | TmMatch _ -> failwith "TODO"
+    | TmTup _ -> failwith "TODO"
+    | TmTupProj _ -> failwith "TODO"
+
+    | TmRec _ | TmRecProj _ -> failwith "TODO"
 
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "Not supported"
+    | TmUtest _ -> failwith "TODO"
 
     | TmList _ -> failwith "TODO"
     | TmConcat _ -> failwith "TODO"

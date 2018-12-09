@@ -1,8 +1,8 @@
 (** Definitions and operations on the pplcore abstract syntax tree and
     environment *)
 
-open Utils
 open Const
+open Pattern
 open Printf
 
 (** Attributes of terms.
@@ -33,12 +33,22 @@ type tm =
   (* Construct for performing unit tests *)
   | TmUtest       of attr * tm * tm
 
-  (* Records and record projection *)
-  | TmRec         of attr * tm StrMap.t
-  | TmProj        of attr * tm * string
+  (* Pattern matching construct *)
+  | TmMatch       of attr * tm * (pat * tm) list
+
+  (* Records and record projection. Use linear search for projection
+     TODO Use hashtable for larger records? Probably not worth it *)
+  | TmRec         of attr * (string * tm) list
+  | TmRecProj     of attr * tm * string
+
+  (* Tuples and tuple projection. Uses O(1) array lookup for projection *)
+  | TmTup         of attr * tm array
+  | TmTupProj     of attr * tm * int
 
   (* Lists *)
   | TmList        of attr * tm list
+
+  (* Concatenation of lists and strings *)
   | TmConcat      of attr * tm option
 
   (* Probabilistic programming constructs *)
@@ -51,6 +61,42 @@ type tm =
 (** Evaluation environment *)
 and env = tm list
 
+(** Value terms *)
+let rec is_value = function
+  (* Assuming the existence of an evaluation environment, both TmVar and TmLam
+     are values if only closed terms are considered. *)
+  | TmVar _ -> true
+  | TmLam _ -> true
+  | TmClos _ -> true
+  | TmApp _ -> false
+
+  | TmConst _ -> true
+
+  | TmIf _ -> true
+
+  | TmFix _ -> true
+
+  | TmUtest(_,t1,t2) -> is_value t1 && is_value t2
+
+  | TmMatch(_,t1,pls) ->
+    is_value t1 && List.for_all (fun (_,te) -> is_value te) pls
+
+  | TmRec(_,rels) -> List.for_all (fun (_,te) -> is_value te) rels
+  | TmRecProj(_,t1,_) -> is_value t1
+
+  | TmTup(_,tarr) -> Array.for_all is_value tarr
+  | TmTupProj(_,t1,_) -> is_value t1
+
+  | TmList(_,tls) -> List.for_all is_value tls
+
+  | TmConcat _ -> true
+
+  | TmInfer _
+  | TmLogPdf _
+  | TmSample _
+  | TmWeight _
+  | TmDWeight _ -> true
+
 (** Returns the label of a term *)
 let tm_label = function
   | TmVar({label;_},_,_)
@@ -61,8 +107,11 @@ let tm_label = function
   | TmIf({label;_},_,_)
   | TmFix({label;_})
   | TmUtest({label;_},_,_)
+  | TmMatch({label;_},_,_)
   | TmRec({label;_},_)
-  | TmProj({label;_},_,_)
+  | TmRecProj({label;_},_,_)
+  | TmTup({label;_},_)
+  | TmTupProj({label;_},_,_)
   | TmList({label;_},_)
   | TmConcat({label;_},_)
   | TmInfer{label;_}
@@ -77,10 +126,11 @@ let string_of_tm t =
   let rec rec1 prec t =
     let p = rec2 t in
     let paren = match t with
+      | TmMatch _ | TmTup _ | TmTupProj _ -> failwith "TODO"
       | TmLam _ | TmClos _ -> prec > 0
       | TmApp _ | TmUtest _ -> prec > 1
       | TmVar _ | TmConst _ | TmFix _
-      | TmIf _ | TmRec _ | TmProj _ | TmList _
+      | TmIf _ | TmRec _ | TmRecProj _ | TmList _
       | TmInfer _ | TmLogPdf _ | TmSample _
       | TmWeight _ | TmDWeight _ | TmConcat _ -> false
     in if paren then "(" ^ p ^ ")" else p
@@ -100,12 +150,17 @@ let string_of_tm t =
     | TmFix _ -> "fix"
     | TmUtest(_,t1,t2) -> "utest " ^ rec1 2 t1 ^ " " ^ rec1 2 t2
 
+    | TmMatch _ -> failwith "TODO"
+
     | TmRec(_,sm) ->
-      let binds = StrMap.bindings sm in
-      let inner = List.map (fun (k, t1) -> k ^ ":" ^ rec1 0 t1) binds in
+      let inner = List.map (fun (k, t1) -> k ^ ":" ^ rec1 0 t1) sm in
       "{ " ^ (String.concat (",") inner) ^ " }"
 
-    | TmProj(_,t1,x) -> rec1 2 t1 ^ "." ^ x
+    | TmRecProj(_,t1,x) -> rec1 2 t1 ^ "." ^ x
+
+    | TmTup _ -> failwith "TODO"
+
+    | TmTupProj _ -> failwith "TODO"
 
     | TmList _ -> failwith "TODO"
     | TmConcat _ -> failwith "TODO"
@@ -138,14 +193,19 @@ let rec lstring_of_tm = function
 
   | TmUtest _ -> failwith "TODO"
 
+  | TmMatch _ -> failwith "TODO"
+
   (* Records *)
   | TmRec({label;_},sm) ->
-      let binds = StrMap.bindings sm in
-      let inner = List.map (fun (k, t1) -> k ^ ":" ^ lstring_of_tm t1) binds in
+      let inner = List.map (fun (k, t1) -> k ^ ":" ^ lstring_of_tm t1) sm in
       "{ " ^ (String.concat (",") inner) ^ " }:"
       ^ (string_of_int label)
-  | TmProj({label;_},t1,x) -> lstring_of_tm t1 ^ "." ^ x ^ ":" ^
+  | TmRecProj({label;_},t1,x) -> lstring_of_tm t1 ^ "." ^ x ^ ":" ^
                               (string_of_int label)
+
+  | TmTup _ -> failwith "TODO"
+
+  | TmTupProj _ -> failwith "TODO"
 
   | TmList _ -> failwith "TODO"
   | TmConcat _ -> failwith "TODO"

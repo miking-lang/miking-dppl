@@ -54,7 +54,6 @@ let builtin =
   List.map (fun (x, y) -> x, tm_of_const y) builtin_const
   @ builtin_tm
 
-
 (** Add a slash at the end "/" if not already available *)
 let add_slash s =
   if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> "/"
@@ -146,7 +145,7 @@ let exec filename =
      print_newline ());
 
   (* Perform CPS transformation of main program *)
-  let cps = cps idfun tm in
+  let cps = cps tm in
 
   if debug_cps then
     (print_endline "-- post cps --";

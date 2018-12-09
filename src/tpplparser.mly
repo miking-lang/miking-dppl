@@ -1,13 +1,8 @@
 %{
 (* TODO The first special comment of the file is the comment associated with
-   the whole module.
-
-   TODO Add anonymous functions, records, tuples, and lists
-
-   TODO Go through where TmVar are used for sample, replace with TmSample *)
+   the whole module. *)
 
 open Ast
-open Utils
 
 (** Add fix-point, if recursive function *)
 let addrec x t =
@@ -21,10 +16,15 @@ let addrec x t =
     | TmIf(_,_,None) -> false
     | TmIf(_,_,Some(t1)) -> hasx t1
 
-    | TmRec _ -> false
-    | TmProj _ -> false
-
     | TmUtest(_,t1,t2) -> hasx t1 || hasx t2
+
+    | TmMatch _ -> failwith "TODO"
+
+    | TmRec _ -> false
+    | TmRecProj _ -> false
+
+    | TmTup _ -> false
+    | TmTupProj _ -> false
 
     | TmList _ -> failwith "TODO"
     | TmConcat _ -> failwith "TODO"
@@ -38,6 +38,14 @@ let addrec x t =
     TmApp(na,TmFix(na),TmLam(na,x,t))
   else t
 
+let rec mkfun params body = match params with
+  | x::xs -> TmLam(na,x,mkfun xs body)
+  | [] -> body
+
+let rec mkapps args func = match args with
+  | t::ts -> TmApp(na,mkapps ts func,t)
+  | [] -> TmVar(na,func,noidx)
+
 %}
 
 /* Misc */
@@ -47,11 +55,14 @@ let addrec x t =
 
 /* Keywords */
 %token FUNC
+%token LAM
 %token IF
 %token THEN
 %token ELSE
 %token UTEST
 %token OBSERVE
+%token MATCH
+%token WITH
 
 /* Literals */
 %token TRUE
@@ -67,10 +78,17 @@ let addrec x t =
 %token RPAREN        /* ")"  */
 %token LCURLY        /* "{"  */
 %token RCURLY        /* "}"  */
+%token LSQUARE       /* "["  */
+%token RSQUARE       /* "]"  */
 %token COLON         /* ":"  */
+%token DCOLON        /* "::"  */
+%token SEMICOLON     /* ";"  */
 %token COMMA         /* ","  */
 %token DOT           /* "."  */
+%token VBAR          /* "|"  */
+%token RARROW        /* "->"  */
 
+/* Operators */
 %token EQ            /* "="  */
 %token ADD           /* "+"  */
 %token SUB           /* "-"  */
@@ -89,71 +107,72 @@ let addrec x t =
 %token NOT           /* "!"   */
 %token OR            /* "||" */
 %token AND           /* "&&" */
+%token CONCAT        /* "++" */
 
 %start main
 
-%nonassoc IF
+
+%nonassoc LOW
+%nonassoc VBAR
+
+%left CONCAT
 %left OR
 %left AND
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL
 %left SHIFTLL SHIFTRL SHIFTRA
-%nonassoc NOT LOG
+%right DCOLON
 %left ADD SUB
 %left MUL DIV MOD
-%nonassoc USUB
-%left DOT
+%nonassoc NOT USUB
+%nonassoc DOT
 
 %type <Ast.tm> main
 
 %%
 
 main:
-  | treeppl_scope EOF { $1 }
+  | seq EOF { $1 }
+  | EOF { nop }
 
 /* ************************** TREEPPL ********************************* */
 
-/*
- * Outermost treeppl_scope. As an example, this enables writing
- * { -1 } instead of { (-1) }.
- */
-treeppl_scope:
-  | expr sep_treeppl_scope
+seq:
+  | texpr { $1 }
+  | texpr sep_seq
       { match $2 with
         | TmConst(_,CUnit) -> $1
         | _ -> TmApp(na,TmLam(na,"_",$2),$1) }
-  | treeppl_scope_aux { $1 }
+  | seq_aux { $1 }
 
-sep_treeppl_scope:
-  | sep_expr sep_treeppl_scope
+sep_seq:
+  | sep_texpr { $1 }
+  | sep_texpr sep_seq
       { match $2 with
         | TmConst(_,CUnit) -> $1
         | _ -> TmApp(na,TmLam(na,"_",$2),$1) }
-  | treeppl_scope_aux { $1 }
+  | seq_aux { $1 }
 
-treeppl_scope_aux:
-  | { TmConst(na,CUnit) }
-  | FUNC FUNIDENT params RPAREN expr sep_treeppl_scope
-      { let rec mkfun lst =
-          (match lst with
-          | x::xs -> TmLam(na,x,mkfun xs)
-          | [] -> $5 ) in
-        let f = if List.length $3 = 0 then ["_"] else $3
-        in TmApp(na,TmLam(na,$2,$6), addrec $2 (mkfun f)) }
-  | IDENT EQ expr sep_treeppl_scope
+seq_aux:
+  | FUNC FUNIDENT params RPAREN texpr sep_seq
+      { TmApp(na,TmLam(na,$2,$6), addrec $2 (mkfun $3 $5)) }
+
+  | FUNC FUNIDENT RPAREN texpr sep_seq
+      { TmApp(na,TmLam(na,$2,$5), addrec $2 (mkfun [""] $4)) }
+
+  | IDENT EQ texpr sep_seq
       { TmApp(na,TmLam(na,$1,$4),$3) }
-  | IDENT TILDE expr sep_treeppl_scope
-      { let sample = TmVar(na,"sample",noidx) in
+
+  | IDENT TILDE texpr sep_seq
+      { let sample = TmSample(na,None,None) in
         TmApp(na,TmLam(na,$1,$4),TmApp(na,sample,$3)) }
-  | OBSERVE expr TILDE expr sep_treeppl_scope
-      { let logpdf = TmVar(na,"logpdf",noidx) in
-        let v = $2 in
-        let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
-        let weight = TmVar(na,"weight",noidx) in
-        let outer = TmApp(na,weight,inner) in
-        TmApp(na,TmLam(na,"_",$5),outer) }
-  | UTEST expr sep_expr sep_treeppl_scope
-      { let a = { na with pos = Parsing.symbol_start_pos () } in
-        TmApp(na,TmLam(na,"_",$4),TmUtest(a,$2,$3)) }
+
+texpr:
+  | expr { $1 }
+  | expr COMMA exprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
+
+sep_texpr:
+  | sep_expr { $1 }
+  | sep_expr COMMA exprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
 
 expr:
   | SUB expr %prec USUB  { TmApp(na,TmConst(na,CNeg),$2) }
@@ -166,14 +185,17 @@ expr:
   | expr LESSEQUAL expr  { TmApp(na,TmApp(na,TmConst(na,CLeq(None)),$1),$3) }
   | expr GREAT expr      { TmApp(na,TmApp(na,TmConst(na,CGt(None)),$1),$3)}
   | expr GREATEQUAL expr { TmApp(na,TmApp(na,TmConst(na,CGeq(None)),$1),$3) }
-  | expr EQUAL expr      { TmApp(na,TmApp(na,TmConst(na,CEq(None)),$1),$3) }
-  | expr NOTEQUAL expr   { TmApp(na,TmApp(na,TmConst(na,CNeq(None)),$1),$3) }
-  | expr SHIFTLL expr    { TmApp(na,TmApp(na,TmConst(na,CSll(None)),$1),$3) }
-  | expr SHIFTRL expr    { TmApp(na,TmApp(na,TmConst(na,CSrl(None)),$1),$3) }
-  | expr SHIFTRA expr    { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
-  | expr AND expr        { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
-  | expr OR expr         { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
-  | expr DOT IDENT %prec DOT { TmProj(na,$1,$3) }
+  | expr EQUAL expr     { TmApp(na,TmApp(na,TmConst(na,CEq(None)),$1),$3) }
+  | expr NOTEQUAL expr  { TmApp(na,TmApp(na,TmConst(na,CNeq(None)),$1),$3) }
+  | expr SHIFTLL expr   { TmApp(na,TmApp(na,TmConst(na,CSll(None)),$1),$3) }
+  | expr SHIFTRL expr   { TmApp(na,TmApp(na,TmConst(na,CSrl(None)),$1),$3) }
+  | expr SHIFTRA expr   { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
+  | expr AND expr       { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
+  | expr OR expr        { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
+  | expr DOT IDENT     { TmRecProj(na,$1,$3) }
+  | expr DOT INT       { TmTupProj(na,$1,$3) }
+  | expr CONCAT expr   { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
+
   | expr_aux { $1 }
 
 /*
@@ -187,11 +209,11 @@ expr:
  * Unfortunate with code duplication. TODO Is there a better way?
  */
 sep_expr:
-  | sep_expr ADD expr { TmApp(na,TmApp(na,TmConst(na,CAdd(None)),$1),$3) }
-  | sep_expr SUB expr { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
-  | sep_expr MUL expr { TmApp(na,TmApp(na,TmConst(na,CMul(None)),$1),$3) }
-  | sep_expr DIV expr { TmApp(na,TmApp(na,TmConst(na,CDiv(None)),$1),$3) }
-  | sep_expr MOD expr { TmApp(na,TmApp(na,TmConst(na,CMod(None)),$1),$3) }
+  | sep_expr ADD expr  { TmApp(na,TmApp(na,TmConst(na,CAdd(None)),$1),$3) }
+  | sep_expr SUB expr  { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
+  | sep_expr MUL expr  { TmApp(na,TmApp(na,TmConst(na,CMul(None)),$1),$3) }
+  | sep_expr DIV expr  { TmApp(na,TmApp(na,TmConst(na,CDiv(None)),$1),$3) }
+  | sep_expr MOD expr  { TmApp(na,TmApp(na,TmConst(na,CMod(None)),$1),$3) }
   | sep_expr LESS expr { TmApp(na,TmApp(na,TmConst(na,CLt(None)),$1),$3) }
   | sep_expr LESSEQUAL expr
       { TmApp(na,TmApp(na,TmConst(na,CLeq(None)),$1),$3) }
@@ -199,60 +221,107 @@ sep_expr:
   | sep_expr GREATEQUAL expr
       { TmApp(na,TmApp(na,TmConst(na,CGeq(None)),$1),$3) }
   | sep_expr EQUAL expr { TmApp(na,TmApp(na,TmConst(na,CEq(None)),$1),$3) }
-  | sep_expr NOTEQUAL expr
-      { TmApp(na,TmApp(na,TmConst(na,CNeq(None)),$1),$3) }
+  | sep_expr NOTEQUAL expr { TmApp(na,TmApp(na,TmConst(na,CNeq(None)),$1),$3) }
   | sep_expr SHIFTLL expr { TmApp(na,TmApp(na,TmConst(na,CSll(None)),$1),$3) }
   | sep_expr SHIFTRL expr { TmApp(na,TmApp(na,TmConst(na,CSrl(None)),$1),$3) }
   | sep_expr SHIFTRA expr { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
-  | sep_expr DOT IDENT %prec DOT { TmProj(na,$1,$3) }
-  | sep_expr AND expr { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
-  | sep_expr OR expr { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
+  | sep_expr AND expr     { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
+  | sep_expr OR expr      { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
+  | sep_expr DOT IDENT    { TmRecProj(na,$1,$3) }
+  | sep_expr CONCAT expr  { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
+
   | expr_aux { $1 }
 
 expr_aux:
-  | FUNIDENT exprs RPAREN
-      { let rec mkapps lst =
-          match lst with
-          | t::ts ->  TmApp(na,mkapps ts,t)
-          | [] -> TmVar(na,$1,noidx)
-        in mkapps
-          (if List.length $2 = 0 then [nop] else (List.rev $2)) }
-  | IF expr THEN expr ELSE expr %prec IF
-      { TmApp(na,
-            TmApp(na,
-              TmApp(na,TmIf(na,None,None),$2),
-              TmLam(na,"",$4)),
-            TmLam(na,"",$6)) }
-  | LPAREN expr RPAREN   { $2 }
-  | LCURLY treeppl_scope RCURLY  { $2 }
+  | UTEST expr sep_expr %prec LOW
+      { let a = { na with pos = Parsing.symbol_start_pos () } in
+        TmUtest(a,$2,$3) }
+
+  | OBSERVE expr TILDE expr %prec LOW
+      { let logpdf = TmLogPdf(na,None) in
+        let v = $2 in
+        let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
+        let weight = TmWeight(na,None,None) in
+        TmApp(na,weight,inner) }
+
+  | IF expr THEN expr ELSE expr %prec LOW
+      { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
+                 TmLam(na,"",$6)) }
+
+  | LAM params RPAREN expr %prec LOW { (mkfun $2 $4) }
+  | LAM RPAREN expr %prec LOW        { (mkfun ["_"] $3) }
+
+  | FUNIDENT exprs_comma RPAREN { mkapps (List.rev $2) $1 }
+  | FUNIDENT RPAREN       { mkapps [nop] $1 }
+
+  | MATCH expr WITH cases { TmMatch(na,$2,$4) }
+
+  | LPAREN texpr RPAREN  { $2 }
+  | LPAREN RPAREN { nop }
+
   | LCURLY record RCURLY { TmRec(na,$2) }
+
+  | LSQUARE exprs_semicolon RSQUARE { TmList(na,$2) }
+  | LSQUARE RSQUARE { TmList(na,[]) }
+
+  | LCURLY seq RCURLY  { $2 }
+
   | NOT expr   { TmApp(na,TmConst(na,CNot),$2) }
   | IDENT      { TmVar(na,$1,noidx) }
-  | CHAR       { TmConst(na, CChar($1)) }
-  | STRING     { TmConst(na, CString($1)) }
-  | INT        { TmConst(na, CInt($1)) }
-  | FLOAT      { TmConst(na, CFloat($1)) }
-  | TRUE       { TmConst(na, CBool(true)) }
-  | FALSE      { TmConst(na, CBool(false)) }
+  | CHAR       { TmConst(na,CChar($1)) }
+  | STRING     { TmConst(na,CString($1)) }
+  | INT        { TmConst(na,CInt($1)) }
+  | FLOAT      { TmConst(na,CFloat($1)) }
+  | TRUE       { TmConst(na,CBool(true)) }
+  | FALSE      { TmConst(na,CBool(false)) }
 
 record:
-  | IDENT COLON expr { StrMap.singleton $1 $3 }
-  | IDENT COLON expr COMMA record { StrMap.add $1 $3 $5 }
+  | IDENT COLON expr { [($1,$3)] }
+  | IDENT COLON expr SEMICOLON record { ($1,$3) :: $5 }
 
 params:
-  | { [] }
-  | paramlist { $1 }
-
-paramlist:
   | IDENT { [$1] }
-  | IDENT COMMA paramlist { $1 :: $3 }
+  | IDENT COMMA params { $1 :: $3 }
 
-exprs:
-  | { [] }
-  | expr_list { $1 }
-
-expr_list:
+exprs_comma:
   | expr { [$1] }
-  | expr COMMA expr_list { $1 :: $3 }
+  | expr COMMA exprs_comma { $1 :: $3 }
 
+exprs_semicolon:
+  | expr { [$1] }
+  | expr SEMICOLON exprs_semicolon { $1 :: $3 }
 
+cases:
+  | VBAR tpattern RARROW expr %prec LOW { [($2,$4)] }
+  | VBAR tpattern RARROW expr cases     { ($2,$4) :: $5 }
+
+tpattern:
+  | pattern                       { $1 }
+  | pattern COMMA patterns_comma  { PatTup($1 :: $3) }
+
+pattern:
+  | LPAREN tpattern RPAREN             { $2 }
+  | IDENT                              { PatVar($1) }
+  | LCURLY pattern_rec RCURLY          { PatRec($2) }
+  | LSQUARE patterns_semicolon RSQUARE { PatList($2) }
+  | LSQUARE RSQUARE                    { PatList([]) }
+  | pattern DCOLON pattern             { PatCons($1,$3) }
+  | LPAREN RPAREN                      { PatUnit }
+  | CHAR                               { PatChar($1) }
+  | STRING                             { PatString($1) }
+  | INT                                { PatInt($1) }
+  | FLOAT                              { PatFloat($1) }
+
+pattern_rec:
+  | IDENT                                     { [($1,PatVar($1))] }
+  | IDENT COLON pattern                       { [($1,$3)] }
+  | IDENT SEMICOLON pattern_rec               { ($1,PatVar($1)) :: $3 }
+  | IDENT COLON pattern SEMICOLON pattern_rec { ($1,$3) :: $5 }
+
+patterns_comma:
+  | pattern { [$1] }
+  | pattern COMMA patterns_comma { $1 :: $3 }
+
+patterns_semicolon:
+  | pattern { [$1] }
+  | pattern SEMICOLON patterns_semicolon { $1 :: $3 }

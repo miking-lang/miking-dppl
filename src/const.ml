@@ -19,7 +19,6 @@ type const =
 
   (* String constant and operations *)
   | CString  of string
-  | CConcat  of string option
 
   (* Integer constant and operations *)
   | CInt     of int
@@ -66,7 +65,6 @@ let arity c = match c with
   | CChar _       -> 0
 
   | CString _     -> 0
-  | CConcat(None) -> 2  | CConcat(Some _) -> 1
 
   | CInt _        -> 0
   | CMod(None)    -> 2  | CMod(Some _) -> 1
@@ -123,8 +121,6 @@ let rec string_of_const c = match c with
   | CChar(c) -> String.make 1 c
 
   | CString(s) -> "\"" ^ s ^ "\""
-  | CConcat(None) -> "string_concat"
-  | CConcat(Some(v)) -> sprintf "string_concat(%s)" v
 
   | CInt(v) -> sprintf "%d" v
   | CMod(None) -> "mod"

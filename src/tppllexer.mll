@@ -15,6 +15,8 @@ let _ =
       "else",          ELSE;
       "utest",         UTEST;
       "observe",       OBSERVE;
+      "match",         MATCH;
+      "with",          WITH;
 
       (* Literals *)
       "true",          TRUE;
@@ -26,9 +28,15 @@ let _ =
       ")",             RPAREN;
       "{",             LCURLY;
       "}",             RCURLY;
+      "[",             LSQUARE;
+      "]",             RSQUARE;
       ":",             COLON;
+      ";",             SEMICOLON;
+      "::",            DCOLON;
       ",",             COMMA;
       ".",             DOT;
+      "|",             VBAR;
+      "->",            RARROW;
 
       (* Operators *)
       "=",             EQ;
@@ -49,6 +57,7 @@ let _ =
       "!",             NOT;
       "||",            OR;
       "&&",            AND;
+      "++",            CONCAT;
     ]
 
 }
@@ -69,9 +78,9 @@ let string_escape =
   "\\\\" | "\\\"" | "\\'" | "\\n" | "\\t" | "\\b" | "\\r" | "\\ "
 
 let symtok =
-  "="  | "~" | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<"
-  | ">>" | ">>>" | "==" | "!=" | "!" | "&&" | "||" | "++"| "("  | ")"  | "["  |
-  "]" | "{"  | "}"  | "::" | ":" | "," | "."  | "|" | "->" | "=>"
+  "~" | "(" | ")" | "{" | "}" | "[" | "]" | ":" | ";" | "::" |"," | "." | "|" |
+  "->" | "=" | "+" | "-" | "*" | "/" | "%" | "<" | "<=" | ">" | ">=" | "<<" |
+  ">>" | ">>>" | "==" | "!=" | "!" | "||" | "&&" | "++"
 
 let line_comment = "//" [^'\n']*
 
@@ -82,7 +91,9 @@ rule main = parse
   | integer as str { INT(int_of_string str) }
   | real as str { FLOAT(float_of_string str) }
   | (ident as s) '('
-      { FUNIDENT(s) }
+      { match s with
+        | "lam" -> LAM
+        | _ -> FUNIDENT(s) }
   | ident | symtok as s
       { try Hashtbl.find keyword_table s with Not_found -> IDENT(s) }
   | '\'' (_ as c) '\'' { CHAR(c) }
@@ -92,7 +103,7 @@ rule main = parse
 
 and block_comment start_pos = parse
   | "*/" { }
-  | eof { failwith "Unterminated block comment" }
+  | eof { failwith "Unterminated block comment starting at TODO" }
   | newline { Lexing.new_line lexbuf; block_comment start_pos lexbuf }
   | _ { block_comment start_pos lexbuf }
 
@@ -110,10 +121,14 @@ and read_string buf = parse
           | "\\ "  -> ' '
           | _ -> failwith "Should not happen"
         in Buffer.add_char buf c; read_string buf lexbuf }
+  | '\\' newline whitespace*
+    { Lexing.new_line lexbuf; read_string buf lexbuf }
   | '\\' { failwith "Invalid escape sequence (TODO)" }
   | eof { failwith "String not terminated (TODO)" }
-  | [^ '"' '\\' ]+
+  | [^ '"' '\\' '\n' ]+
       { Buffer.add_string buf (Lexing.lexeme lexbuf);
         read_string buf lexbuf }
+  | newline { failwith "Unexpected line break in string. TODO" }
+  | _ { failwith "Unexpected char in string. TODO" }
 
 
