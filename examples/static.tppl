@@ -4,12 +4,11 @@ function f1p() {
 
 function f1(lambda) {
   weight(2.0)
-  f2() f2()
   f1p() f1p()
 }
 
 function model() {
-  lambda ~ uniform(true)
+  lambda ~ bernoulli(0.5)
   f1(lambda)
   lambda
 }

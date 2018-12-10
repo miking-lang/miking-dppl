@@ -193,9 +193,9 @@ expr:
   | expr SHIFTRA expr   { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
   | expr AND expr       { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
   | expr OR expr        { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
-  | expr DOT IDENT     { TmRecProj(na,$1,$3) }
-  | expr DOT INT       { TmTupProj(na,$1,$3) }
-  | expr CONCAT expr   { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
+  | expr DOT IDENT             { TmRecProj(na,$1,$3) }
+  | expr DOT LPAREN INT RPAREN { TmTupProj(na,$1,$4-1) }
+  | expr CONCAT expr           { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
 
   | expr_aux { $1 }
 
@@ -228,8 +228,9 @@ sep_expr:
   | sep_expr SHIFTRA expr { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
   | sep_expr AND expr     { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
   | sep_expr OR expr      { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
-  | sep_expr DOT IDENT    { TmRecProj(na,$1,$3) }
-  | sep_expr CONCAT expr  { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
+  | sep_expr DOT IDENT             { TmRecProj(na,$1,$3) }
+  | sep_expr DOT LPAREN INT RPAREN { TmTupProj(na,$1,$4-1) }
+  | sep_expr CONCAT expr     { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
 
   | expr_aux { $1 }
 

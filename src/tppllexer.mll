@@ -71,7 +71,7 @@ let nondigit = '_' | letter
 let ident = (nondigit (digit | nondigit)*)
 
 let integer = digit+
-let real = digit* '.'? digit+ ( ['e''E'] ['+''-']? digit+ )?
+let floating_point = digit* '.' digit+ ( ['e''E'] ['+''-']? digit+ )?
 
 let string_escape =
   "\\\\" | "\\\"" | "\\'" | "\\n" | "\\t" | "\\b" | "\\r" | "\\ "
@@ -88,7 +88,7 @@ rule main = parse
   | '\n' { Lexing.new_line lexbuf; main lexbuf }
   | "/*" { block_comment (Lexing.lexeme_start_p lexbuf) lexbuf; main lexbuf}
   | integer as str { INT(int_of_string str) }
-  | real as str { FLOAT(float_of_string str) }
+  | floating_point as str { FLOAT(float_of_string str) }
   | (ident as s) '('
       { match s with
         | "lam" -> LAM

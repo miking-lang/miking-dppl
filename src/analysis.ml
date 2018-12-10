@@ -1,6 +1,4 @@
 (** 0-CFA static analysis for aligning weights in programs
-
-    TODO Records are not handled correctly...
 *)
 
 open Ast
@@ -56,22 +54,22 @@ let label builtin tm =
     | TmClos _ -> failwith "Closure before eval"
     | TmConst _ | TmIf _ | TmFix _ -> tm
 
-    | TmMatch _ -> failwith "TODO"
-    | TmTup _ -> failwith "TODO"
-    | TmTupProj _ -> failwith "TODO"
+    | TmMatch _ -> failwith "TODO analysis.ml"
+    | TmTup _ -> failwith "TODO analysis.ml"
+    | TmTupProj _ -> failwith "TODO analysis.ml"
 
-    | TmRec _ -> failwith "TODO"
-    | TmRecProj _ -> failwith "TODO"
-    | TmUtest _ -> failwith "TODO"
+    | TmRec _ -> failwith "TODO analysis.ml"
+    | TmRecProj _ -> failwith "TODO analysis.ml"
+    | TmUtest _ -> failwith "TODO analysis.ml"
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList _ -> failwith "TODO analysis.ml"
+    | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmInfer _ -> failwith "TODO analysis.ml"
+    | TmLogPdf _ -> failwith "TODO analysis.ml"
+    | TmSample _ -> failwith "TODO analysis.ml"
+    | TmWeight _ -> failwith "TODO analysis.ml"
+    | TmDWeight _ -> failwith "TODO analysis.ml"
 
   in let rec label_terms tm = match tm with
     | TmVar(a,x,i1)    -> TmVar({a with label=next()},x,i1)
@@ -83,23 +81,23 @@ let label builtin tm =
     | TmConst(a,c)     -> TmConst({a with label=next()},c)
     | TmIf(a,c,t1)  -> TmIf({a with label=next()},c,t1)
     | TmFix(a)      -> TmFix({a with label=next()})
-    | TmUtest _ -> failwith "TODO"
+    | TmUtest _ -> failwith "TODO analysis.ml"
 
-    | TmMatch _ -> failwith "TODO"
-    | TmTup _ -> failwith "TODO"
-    | TmTupProj _ -> failwith "TODO"
+    | TmMatch _ -> failwith "TODO analysis.ml"
+    | TmTup _ -> failwith "TODO analysis.ml"
+    | TmTupProj _ -> failwith "TODO analysis.ml"
 
-    | TmRec _     -> failwith "TODO"
-    | TmRecProj _ -> failwith "TODO"
+    | TmRec _     -> failwith "TODO analysis.ml"
+    | TmRecProj _ -> failwith "TODO analysis.ml"
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList _ -> failwith "TODO analysis.ml"
+    | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmInfer _ -> failwith "TODO analysis.ml"
+    | TmLogPdf _ -> failwith "TODO analysis.ml"
+    | TmSample _ -> failwith "TODO analysis.ml"
+    | TmWeight _ -> failwith "TODO analysis.ml"
+    | TmDWeight _ -> failwith "TODO analysis.ml"
 
   in let sm = List.fold_left
       (fun sm x -> add x (next ()) sm)
@@ -116,22 +114,22 @@ let functions tm =
     | TmApp(_,t1,t2) -> funs |> recurse t1 |> recurse t2
     | TmConst _ | TmIf _ | TmFix _
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO"
+    | TmUtest _ -> failwith "TODO analysis.ml"
 
-    | TmMatch _ -> failwith "TODO"
-    | TmTup _ -> failwith "TODO"
-    | TmTupProj _ -> failwith "TODO"
+    | TmMatch _ -> failwith "TODO analysis.ml"
+    | TmTup _ -> failwith "TODO analysis.ml"
+    | TmTupProj _ -> failwith "TODO analysis.ml"
 
-    | TmRec _ | TmRecProj _ -> failwith "TODO"
+    | TmRec _ | TmRecProj _ -> failwith "TODO analysis.ml"
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList _ -> failwith "TODO analysis.ml"
+    | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmInfer _ -> failwith "TODO analysis.ml"
+    | TmLogPdf _ -> failwith "TODO analysis.ml"
+    | TmSample _ -> failwith "TODO analysis.ml"
+    | TmWeight _ -> failwith "TODO analysis.ml"
+    | TmDWeight _ -> failwith "TODO analysis.ml"
 
   in recurse tm []
 
@@ -208,25 +206,25 @@ let gen_cstrs bmap tm =
 
     | TmConst _ | TmIf _ -> cstrs
 
-    | TmRec _ | TmRecProj _ -> failwith "TODO"
+    | TmRec _ | TmRecProj _ -> failwith "TODO analysis.ml"
 
-    | TmMatch _ -> failwith "TODO"
-    | TmTup _ -> failwith "TODO"
-    | TmTupProj _ -> failwith "TODO"
+    | TmMatch _ -> failwith "TODO analysis.ml"
+    | TmTup _ -> failwith "TODO analysis.ml"
+    | TmTupProj _ -> failwith "TODO analysis.ml"
 
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO"
+    | TmUtest _ -> failwith "TODO analysis.ml"
 
-    | TmFix _ -> failwith "TODO"
+    | TmFix _ -> failwith "TODO analysis.ml"
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList _ -> failwith "TODO analysis.ml"
+    | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmInfer _ -> failwith "TODO analysis.ml"
+    | TmLogPdf _ -> failwith "TODO analysis.ml"
+    | TmSample _ -> failwith "TODO analysis.ml"
+    | TmWeight _ -> failwith "TODO analysis.ml"
+    | TmDWeight _ -> failwith "TODO analysis.ml"
 
   in recurse tm []
 
@@ -298,23 +296,23 @@ let analyze bmap tm nl =
 
     | TmConst _ | TmIf _ | TmFix _ -> ()
 
-    | TmMatch _ -> failwith "TODO"
-    | TmTup _ -> failwith "TODO"
-    | TmTupProj _ -> failwith "TODO"
+    | TmMatch _ -> failwith "TODO analysis.ml"
+    | TmTup _ -> failwith "TODO analysis.ml"
+    | TmTupProj _ -> failwith "TODO analysis.ml"
 
-    | TmRec _ -> failwith "TODO"
-    | TmRecProj _ -> failwith "TODO"
+    | TmRec _ -> failwith "TODO analysis.ml"
+    | TmRecProj _ -> failwith "TODO analysis.ml"
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO"
+    | TmUtest _ -> failwith "TODO analysis.ml"
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList _ -> failwith "TODO analysis.ml"
+    | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmInfer _ -> failwith "TODO analysis.ml"
+    | TmLogPdf _ -> failwith "TODO analysis.ml"
+    | TmSample _ -> failwith "TODO analysis.ml"
+    | TmWeight _ -> failwith "TODO analysis.ml"
+    | TmDWeight _ -> failwith "TODO analysis.ml"
 
   in while !modified do
     modified := false;
@@ -359,23 +357,23 @@ let align_weight bmap dyn tm =
     | TmFix _ | TmVar _ | TmConst _
     | TmIf _ -> tm
 
-    | TmMatch _ -> failwith "TODO"
-    | TmTup _ -> failwith "TODO"
-    | TmTupProj _ -> failwith "TODO"
+    | TmMatch _ -> failwith "TODO analysis.ml"
+    | TmTup _ -> failwith "TODO analysis.ml"
+    | TmTupProj _ -> failwith "TODO analysis.ml"
 
-    | TmRec _ | TmRecProj _ -> failwith "TODO"
+    | TmRec _ | TmRecProj _ -> failwith "TODO analysis.ml"
 
     | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO"
+    | TmUtest _ -> failwith "TODO analysis.ml"
 
-    | TmList _ -> failwith "TODO"
-    | TmConcat _ -> failwith "TODO"
+    | TmList _ -> failwith "TODO analysis.ml"
+    | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO"
-    | TmLogPdf _ -> failwith "TODO"
-    | TmSample _ -> failwith "TODO"
-    | TmWeight _ -> failwith "TODO"
-    | TmDWeight _ -> failwith "TODO"
+    | TmInfer _ -> failwith "TODO analysis.ml"
+    | TmLogPdf _ -> failwith "TODO analysis.ml"
+    | TmSample _ -> failwith "TODO analysis.ml"
+    | TmWeight _ -> failwith "TODO analysis.ml"
+    | TmDWeight _ -> failwith "TODO analysis.ml"
 
   in recurse tm
 

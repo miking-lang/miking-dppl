@@ -1,7 +1,4 @@
-// Miking is licensed under the MIT license.
-// Copyright (C) David Broman. See file LICENSE.txt
-//
-// Test different way of specifying funcions
+// Test different ways of specifying funcions
 
 //Test a recursive function
 function fact(n) {

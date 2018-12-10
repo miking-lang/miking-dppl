@@ -14,3 +14,4 @@ function model() {
   lambda
 }
 
+infer(model)

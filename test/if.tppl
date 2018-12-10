@@ -1,7 +1,4 @@
-// Miking is licensed under the MIT license.
-// Copyright (C) David Broman. See file LICENSE.txt
-//
-// File ifexpr.mz tests if-expressions with variable
+// Test if-expressions with variable
 // definitions
 
 x = 55

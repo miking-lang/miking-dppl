@@ -15,12 +15,46 @@ let debug_cps         = false
 (** Debug the CPS transformation of the initial environment (builtin) *)
 let debug_cps_builtin = false
 
-(** TODO *)
+(** Debug the lifting transformation *)
 let debug_lift_apps   = false
 
-(** Used for unsupported CPS transformations *)
-let fail_cps tm =
-  failwith ("CPS-transformation of " ^ (string_of_tm tm) ^ " not supported")
+(** Check if a term is atomic (contains no computation). TmApp
+    is a special case that is never atomic, even if both its function and
+    argument are atomic (otherwise, everything would be atomic!). *)
+let rec is_atomic = function
+  | TmApp _   -> false
+
+  | TmVar _ -> true
+  | TmLam _ -> true
+  | TmClos _ -> true
+
+  | TmConst _ -> true
+
+  | TmIf _ -> true
+
+  | TmFix _ -> true
+
+  | TmUtest(_,t1,t2) -> is_atomic t1 && is_atomic t2
+
+  | TmMatch(_,t1,pls) ->
+    is_atomic t1 && List.for_all (fun (_,te) -> is_atomic te) pls
+
+  | TmRec(_,rels) -> List.for_all (fun (_,te) -> is_atomic te) rels
+  | TmRecProj(_,t1,_) -> is_atomic t1
+
+  | TmTup(_,tarr) -> Array.for_all is_atomic tarr
+  | TmTupProj(_,t1,_) -> is_atomic t1
+
+  | TmList(_,tls) -> List.for_all is_atomic tls
+
+  | TmConcat _ -> true
+
+  | TmInfer _
+  | TmLogPdf _
+  | TmSample _
+  | TmWeight _
+  | TmDWeight _ -> true
+
 
 (** Wrap opaque builtin functions in CPS forms *)
 let cps_builtin t arity =
@@ -40,14 +74,22 @@ let cps_const t = match t with
   | TmConst(_,c) -> cps_builtin t (arity c)
   | _ -> failwith "cps_const of non-constant"
 
-(** Lift applications in a term *)
+(** Lift applications as far up as possible in a term. This has the consequence
+    of making everything except TmApp and TmMatch (TODO and TmIf?) terms
+    atomic. As an effect, CPS transformation is simplified. *)
 let rec lift_apps t =
-  let lift t apps = match lift_apps t with
-    | TmApp _ | TmMatch _ as t when not (is_value t) ->
-      let var,var' = genvar noidx in
-      var',(var,t)::apps
+
+  (* Extract complex terms replacing them with variables, using the argument
+     apps as an accumulator. *)
+  let extract_complex t apps =
+    let res t = let var,var' = genvar noidx in var',(var,t)::apps in
+    match lift_apps t with
+    | TmApp _ as t -> res t
+    | TmMatch _ as t when not (is_atomic t) -> res t
     | _ -> t,apps in
 
+  (* Wrap a term t in applications, binding variables in t to applications as
+     specified by apps *)
   let wrap_app t apps =
     let lam = List.fold_left (fun t (var,_) -> TmLam(na,var,t)) t apps in
     List.fold_right (fun (_,app) t -> TmApp(na,t,app)) apps lam in
@@ -68,57 +110,58 @@ let rec lift_apps t =
   | TmFix _ -> t
 
   | TmUtest(a,t1,t2) ->
-    let t1,apps = lift t1 [] in
-    let t2,apps = lift t2 apps in
+    let t1,apps = extract_complex t1 [] in
+    let t2,apps = extract_complex t2 apps in
     wrap_app (TmUtest(a,t1,t2)) apps
 
   | TmMatch(a,t1,cases) ->
     let cases = List.map (fun (p,t) -> p,lift_apps t) cases in
-    let t1,apps = lift t1 [] in
+    let t1,apps = extract_complex t1 [] in
     wrap_app (TmMatch(a,t1,cases)) apps
 
   | TmRec(a,rels) ->
     let f (rels,apps) (p,t) =
-      let t,apps = lift t apps in (p,t)::rels,apps in
+      let t,apps = extract_complex t apps in (p,t)::rels,apps in
     let rels,apps = List.fold_left f ([],[]) rels in
     wrap_app (TmRec(a,List.rev rels)) apps
 
   | TmRecProj(a,t1,s) ->
-    let t1,apps = lift t1 [] in
+    let t1,apps = extract_complex t1 [] in
     wrap_app (TmRecProj(a,t1,s)) apps
 
   | TmTup(a,tarr) ->
     let f (tls,apps) t =
-      let t,apps = lift t apps in t::tls,apps in
+      let t,apps = extract_complex t apps in t::tls,apps in
     let tarr,apps = Array.fold_left f ([],[]) tarr in
     wrap_app (TmTup(a,Array.of_list (List.rev tarr))) apps
 
   | TmTupProj(a,t1,i) ->
-    let t1,apps = lift t1 [] in
+    let t1,apps = extract_complex t1 [] in
     wrap_app (TmTupProj(a,t1,i)) apps
 
   | TmList(a,tls) ->
     let f (tls,apps) t =
-      let t,apps = lift t apps in t::tls,apps in
+      let t,apps = extract_complex t apps in t::tls,apps in
     let tls,apps = List.fold_left f ([],[]) tls in
     wrap_app (TmList(a,List.rev tls)) apps
 
   | TmConcat(_,None) -> t
-  | TmConcat _ -> failwith "Should not happen before eval"
+  | TmConcat _ -> failwith "Should not exist before eval"
 
   | TmInfer _ -> t
   | TmLogPdf(_,None) -> t
-  | TmLogPdf _ -> failwith "Should not happen before eval"
+  | TmLogPdf _ -> failwith "Should not exist before eval"
   | TmSample(_,None,None) -> t
-  | TmSample _ -> failwith "Should not happen before eval"
+  | TmSample _ -> failwith "Should not exist before eval"
   | TmWeight(_,None,None) -> t
-  | TmWeight _ -> failwith "Should not happen before eval"
+  | TmWeight _ -> failwith "Should not exist before eval"
   | TmDWeight(_,None,None) -> t
-  | TmDWeight _ -> failwith "Should not happen before eval"
+  | TmDWeight _ -> failwith "Should not exist before eval"
 
-(** CPS transformation of values. Transforming values means that we can do the
-    CPS transformation without supplying a continuation *)
-let rec cps_value t = match t with
+(** CPS transformation of atomic terms (terms containing no computation).
+    Transforming atomic terms means that we can perform the CPS transformation
+    without supplying a continuation *)
+let rec cps_atomic t = match t with
 
   (* Variables *)
   | TmVar _ -> t
@@ -126,39 +169,39 @@ let rec cps_value t = match t with
   (* Lambdas *)
   | TmLam(a,x,t1) ->
     let k, k' = genvar noidx in
-    TmLam(a, k, TmLam(na, x, cps_app k' t1))
+    TmLam(a, k, TmLam(na, x, cps_complex k' t1))
 
   (* Should not exist before eval *)
-  | TmClos _-> fail_cps t
+  | TmClos _-> failwith "Closure in cps_atomic"
 
-  (* Function application is not a value. *)
-  | TmApp _ -> failwith "TmApp is not a value"
+  (* Function application is never atomic. *)
+  | TmApp _ -> failwith "Complex term in cps_atomic"
 
-  (* Pattern matching might not be a value *)
+  (* Pattern matching *)
   | TmMatch(a,t1,pls) ->
-    let pls = List.map (fun (p,te) -> p,cps_value te) pls in
-    TmMatch(a,cps_value t1, pls)
+    let pls = List.map (fun (p,te) -> p,cps_atomic te) pls in
+    TmMatch(a,cps_atomic t1, pls)
 
-  (* Tuples might not be values *)
-  | TmTup(a,tarr) -> TmTup(a,Array.map cps_value tarr)
+  (* Tuples *)
+  | TmTup(a,tarr) -> TmTup(a,Array.map cps_atomic tarr)
 
-  (* Tuple projections might not be values *)
-  | TmTupProj(a,t1,s) -> TmTupProj(a,cps_value t1,s)
+  (* Tuple projections *)
+  | TmTupProj(a,t1,s) -> TmTupProj(a,cps_atomic t1,s)
 
-  (* Records might not be values *)
+  (* Records *)
   | TmRec(a,rels) ->
-    let rels = List.map (fun (s,te) -> s,cps_value te) rels in
+    let rels = List.map (fun (s,te) -> s,cps_atomic te) rels in
     TmRec(a,rels)
 
-  (* Tuple projections might not be values *)
-  | TmRecProj(a,t1,i) -> TmRecProj(a,cps_value t1,i)
+  (* Tuple projections *)
+  | TmRecProj(a,t1,i) -> TmRecProj(a,cps_atomic t1,i)
 
-  (* Constant transformation *)
+  (* Constants *)
   | TmConst _ -> cps_const t
 
   (* Transforms similarly to constant functions. The difference is that the
      last continuation must be supplied to the branches, and not applied to
-     the result. *)
+     the result. TODO Make if non-curried and simplify this. *)
   | TmIf _ ->
     let a, a'   = genvar noidx in
     let b, b'   = genvar noidx in
@@ -176,7 +219,8 @@ let rec cps_value t = match t with
 
   (* Treat similar as constant function with a single argument. We need to
      apply the id function to the argument before applying fix, since the
-     argument expects a continuation as first argument. TODO Correct? *)
+     argument expects a continuation as first argument. TODO Correct? Seems to
+     work fine *)
   | TmFix _ ->
     let v, v' = genvar noidx in
     let k, k' = genvar noidx in
@@ -186,19 +230,17 @@ let rec cps_value t = match t with
           k, TmLam(na, v,
                    TmApp(na, k', inner)))
 
-  (* Unit tests might not be values *)
-  | TmUtest(a,t1,t2) -> TmUtest(a,cps_value t1,cps_value t2)
+  (* Unit tests *)
+  | TmUtest(a,t1,t2) -> TmUtest(a,cps_atomic t1,cps_atomic t2)
 
-  (* Lists might not be values *)
-  | TmList(a,tls) -> TmList(a, List.map cps_value tls)
+  (* Lists *)
+  | TmList(a,tls) -> TmList(a, List.map cps_atomic tls)
 
-  (* Concatenations *)
+  (* Transform some builtin constructs in the same way as
+     constants. It is required that the original arity of the function is
+     passed to cps_builtin *)
   | TmConcat(_,None)  -> cps_builtin t 2
   | TmConcat _  -> failwith "Should not exist before eval"
-
-  (* Transform some builtin probabilistic constructs in the same way as
-     constants.  It is required that the original arity of the function is
-     passed to cps_builtin *)
   | TmInfer _ -> cps_builtin t 1
   | TmLogPdf(_,None) -> cps_builtin t 2
   | TmLogPdf _ -> failwith "Should not exist before eval"
@@ -212,47 +254,52 @@ let rec cps_value t = match t with
   | TmDWeight(_,None,None) -> t
   | TmDWeight _ -> failwith "Should not exist before eval"
 
-(** Complex cps transformation. Complex means that the term is a computation
-    (i.e., not a value). A continuation must also be supplied as argument to
-    the transformation, indicating where control is transferred to when the
-    computation has finished. *)
-and cps_app cont t =
+(** Complex cps transformation. Complex means that the term contains
+    computations (i.e., not atomic). A continuation must also be supplied as
+    argument to the transformation, indicating where control is transferred to
+    when the computation has finished. *)
+and cps_complex cont t =
   match t with
 
-  (* Function application is a complex expression (since it is a computation).
-     Optimize the case when either the function or argument is a value. *)
+  (* Function application is a complex expression.
+     Optimize the case when either the function or argument is atomic. *)
   | TmApp(a,t1,t2) ->
     let wrapopt (a, a') = Some a,a' in
     let f, f' =
-      if is_value t1
-      then None, cps_value t1
+      if is_atomic t1
+      then None, cps_atomic t1
       else wrapopt (genvar noidx) in
     let e, e' =
-      if is_value t2
-      then None, cps_value t2
+      if is_atomic t2
+      then None, cps_atomic t2
       else wrapopt (genvar noidx) in
     let app = TmApp(a,TmApp(a,f',cont),e') in
     let inner = match e with
       | None -> app
-      | Some(e) -> cps_app (TmLam(na,e,app)) t2 in
+      | Some(e) -> cps_complex (TmLam(na,e,app)) t2 in
     let outer = match f with
       | None -> inner
-      | Some(f) -> cps_app (TmLam(na,f,inner)) t1 in
+      | Some(f) -> cps_complex (TmLam(na,f,inner)) t1 in
     outer
 
   (* All possible applications in a match construct can not be lifted, since
-     some of them might be discarded due to the patterns. Hence, TmMatch needs
-     to be handled separately here. *)
+     some of them might be discarded due to the patterns. Hence, TmMatch might
+     not be atomic and needs to be handled separately here. We assume that any
+     complex terms in v1 has been lifted. Optimize the case when TmMatch is in
+     fact atomic (does not replicate the continuation!). TODO Should probably
+     make TmIf non-curried and move it here as well for consistency *)
+  | TmMatch _ when is_atomic t -> TmApp(na, cont, cps_atomic t)
   | TmMatch(a,v1,cases) ->
-    TmMatch(a,v1,List.map (fun (p,t) -> p, cps_app cont t) cases)
+    TmMatch(a,v1,List.map (fun (p,t) -> p, cps_complex cont t) cases)
 
-  (* If we have lifted applications, everything else is values. *)
+  (* If we have lifted applications, everything else is atomic! *)
   | TmTup _ | TmTupProj _ | TmUtest _
   | TmRec _ | TmRecProj _ | TmList _ | TmVar _
   | TmLam _ | TmClos _ | TmConst _ | TmIf _
   | TmFix _ | TmConcat _ | TmInfer _ | TmLogPdf _
-  | TmSample _ | TmWeight _ | TmDWeight _ -> TmApp(na, cont, cps_value t)
+  | TmSample _ | TmWeight _ | TmDWeight _ -> TmApp(na, cont, cps_atomic t)
 
+(** CPS transforms a term, with the identity function as continuation *)
 let cps tm =
   let tm = lift_apps tm in
 
@@ -261,4 +308,4 @@ let cps tm =
      print_endline (string_of_tm tm);
      print_newline ());
 
-  cps_app idfun tm
+  cps_complex idfun tm

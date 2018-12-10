@@ -30,14 +30,11 @@ type tm =
   (* Fixed-point combinator (not really needed since untyped) *)
   | TmFix         of attr
 
-  (* Construct for performing unit tests *)
-  | TmUtest       of attr * tm * tm
-
   (* Pattern matching construct *)
   | TmMatch       of attr * tm * (pat * tm) list
 
   (* Records and record projection. Use linear search for projection
-     TODO Use hashtable for larger records? Probably not worth it *)
+     TODO Use hashtable for larger records? *)
   | TmRec         of attr * (string * tm) list
   | TmRecProj     of attr * tm * string
 
@@ -48,62 +45,36 @@ type tm =
   (* Lists *)
   | TmList        of attr * tm list
 
-  (* Concatenation of lists and strings *)
+  (* Polymorphic concatenation function (Lists and Strings for now) *)
   | TmConcat      of attr * tm option
 
-  (* Probabilistic programming constructs *)
+  (* Probabilistic programming functions *)
   | TmInfer       of attr
   | TmLogPdf      of attr * tm option
   | TmSample      of attr * tm option * tm option
   | TmWeight      of attr * tm option * const option
   | TmDWeight     of attr * tm option * const option
 
+  (* Construct for performing unit tests TODO move to toplevel? *)
+  | TmUtest       of attr * tm * tm
+
 (** Evaluation environment *)
 and env = tm list
 
-(** Check if two value terms are equal *)
+(** Check if two value terms are equal. Does not check for equality of lambdas,
+    which in general should be undecidable *)
 let rec val_equal v1 v2 = match v1,v2 with
-  | TmList(_,l1::ls1),TmList(_,l2::ls2) ->
-    val_equal l1 l2 && val_equal (TmList(na,ls1)) (TmList(na,ls2))
-  | TmList(_,[]),TmList(_,[]) -> true
+  | TmRec(_,rels1),TmRec(_,rels2) ->
+    let comp (k1,v1) (k2,v2) = k1 = k2 && val_equal v1 v2 in
+    (try List.for_all2 comp rels1 rels2 with Invalid_argument _ -> false)
+  | TmList(_,ls1),TmList(_,ls2) ->
+    (try List.for_all2 val_equal ls1 ls2 with Invalid_argument _ -> false)
+  | TmTup(_,tarr1),TmTup(_,tarr2) ->
+    let ls1 = Array.to_list tarr1 in
+    let ls2 = Array.to_list tarr2 in
+    (try List.for_all2 val_equal ls1 ls2 with Invalid_argument _ -> false)
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | _ -> false
-
-(** Value terms *)
-let rec is_value = function
-  (* Assuming the existence of an evaluation environment, both TmVar and TmLam
-     are values if only closed terms are considered. *)
-  | TmVar _ -> true
-  | TmLam _ -> true
-  | TmClos _ -> true
-  | TmApp _ -> false
-
-  | TmConst _ -> true
-
-  | TmIf _ -> true
-
-  | TmFix _ -> true
-
-  | TmUtest(_,t1,t2) -> is_value t1 && is_value t2
-
-  | TmMatch(_,t1,pls) ->
-    is_value t1 && List.for_all (fun (_,te) -> is_value te) pls
-
-  | TmRec(_,rels) -> List.for_all (fun (_,te) -> is_value te) rels
-  | TmRecProj(_,t1,_) -> is_value t1
-
-  | TmTup(_,tarr) -> Array.for_all is_value tarr
-  | TmTupProj(_,t1,_) -> is_value t1
-
-  | TmList(_,tls) -> List.for_all is_value tls
-
-  | TmConcat _ -> true
-
-  | TmInfer _
-  | TmLogPdf _
-  | TmSample _
-  | TmWeight _
-  | TmDWeight _ -> true
 
 (** Returns the label of a term *)
 let tm_label = function
@@ -128,7 +99,7 @@ let tm_label = function
   | TmWeight({label;_},_,_)
   | TmDWeight({label;_},_,_) -> label
 
-(* Convert terms to strings *)
+(** Convert terms to strings TODO Clean this up *)
 let string_of_tm t =
 
   let rec rec1 prec t =
@@ -159,23 +130,23 @@ let string_of_tm t =
 
     | TmMatch(_,t,cases) ->
       let inner = List.map (fun (_,t1) -> "| p -> " ^ rec1 0 t1) cases in
-      "match " ^ rec1 0 t ^ " with " ^ (String.concat "" inner)
+      "match " ^ rec1 0 t ^ " with " ^ (String.concat " " inner)
 
     | TmRec(_,sm) ->
       let inner = List.map (fun (k, t1) -> k ^ ":" ^ rec1 0 t1) sm in
-      "{ " ^ (String.concat (",") inner) ^ " }"
+      "{" ^ (String.concat (",") inner) ^ "}"
 
     | TmRecProj(_,t1,x) -> rec1 2 t1 ^ "." ^ x
 
     | TmTup(_,tarr) ->
       let inner = Array.map (fun t1 -> rec1 0 t1) tarr in
-      "( " ^ (String.concat (",") (Array.to_list inner)) ^ " )"
+      "(" ^ (String.concat (",") (Array.to_list inner)) ^ ")"
 
     | TmTupProj(_,t1,i) -> rec1 2 t1 ^ "." ^ (string_of_int i)
 
     | TmList(_,ls) ->
       let inner = List.map (fun t1 -> rec1 0 t1) ls in
-      "[ " ^ (String.concat (";") inner) ^ " ]"
+      "[" ^ (String.concat (";") inner) ^ "]"
 
     | TmConcat(_,None) -> "concat"
     | TmConcat(_,Some t1) -> sprintf "concat(%s)" (rec1 0 t1)
@@ -201,7 +172,7 @@ let string_of_tm t =
 
   in rec1 (-1) t
 
-(* Convert terms to string with labels included *)
+(** Convert terms to string with labels included. TODO Reuse code from the above *)
 let rec lstring_of_tm = function
 
   | TmVar({label;var_label;_},x,_) ->
@@ -244,7 +215,7 @@ let rec lstring_of_tm = function
   | TmWeight _ -> failwith "TODO"
   | TmDWeight _ -> failwith "TODO"
 
-(* Convert environments to strings *)
+(** Convert environments to strings *)
 let string_of_env env =
   "[" ^ (List.mapi (fun i t -> sprintf " %d -> " i ^ string_of_tm t) env
             |> String.concat ",") ^ "]"

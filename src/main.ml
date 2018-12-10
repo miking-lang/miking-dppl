@@ -6,8 +6,9 @@ open Ast
 open Const
 open Printf
 open Analysis
+open Utils
 
-(** Mapping between predefined variable names and constants *)
+(** Mapping between predefined variable names and builtin constants *)
 let builtin_const = [
   "not",CNot;
   "and",CAnd(None);
@@ -18,6 +19,7 @@ let builtin_const = [
   "srl",CSrl(None);
   "sra",CSra(None);
 
+  "inf",CFloat(infinity);
   "log",CLog;
 
   "add",CAdd(None);
@@ -41,19 +43,13 @@ let builtin_const = [
 ]
 
 (** Mapping between predefined variable names and terms *)
-let builtin_tm = [
+let builtin = [
   "infer",TmInfer(na);
   "logpdf",TmLogPdf(na,None);
-
   "sample",TmSample(na,None,None);
   "weight",TmWeight(na,None,None);
   "dweight",TmDWeight(na,None,None);
-]
-
-(** Combined mapping of builtin_const and builtin_tm *)
-let builtin =
-  List.map (fun (x, y) -> x, tm_of_const y) builtin_const
-  @ builtin_tm
+] @ List.map (fun (x, y) -> x, tm_of_const y) builtin_const
 
 (** Add a slash at the end "/" if not already available *)
 let add_slash s =
@@ -75,20 +71,21 @@ let files_of_folders lst = List.fold_left (fun a v ->
 
 (** Function for lexing and parsing a file. *)
 let parse par filename =
+  let file = open_in filename in
+  let lexbuf = Lexing.from_channel file in
   begin try
-      let file = open_in filename in
-      let lexbuf = Lexing.from_channel file in
       lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
       let tm = par lexbuf in
       close_in file; tm
-    with
-    | e ->
-      (* TODO Nice error messages using the lexbuf position *)
+    with | Parsing.Parse_error ->
       if !utest then (
         printf "\n ** %s" "TODO";
         utest_fail := !utest_fail + 1;
-        utest_fail_local := !utest_fail_local + 1);
-      raise e (* TODO Handle error instead of crashing *)
+        utest_fail_local := !utest_fail_local + 1;
+        nop)
+      else
+        failwith (sprintf "Parse error at %s"
+                    (string_of_position (lexbuf.lex_curr_p )))
   end
 
 (** Function for executing a file. *)
@@ -132,7 +129,7 @@ let exec filename =
   let builtin = builtin
                 (* Transform builtins to CPS. Required since we need to
                        wrap constant functions in CPS forms *)
-                |> List.map (fun (x, y) -> (x, (cps_value y)))
+                |> List.map (fun (x, y) -> (x, (cps_atomic y)))
 
                 (* Debruijn transform builtins (since they have now been
                    CPS transformed) *)

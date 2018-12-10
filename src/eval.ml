@@ -13,7 +13,7 @@ let debug_eval        = false
 let debug_eval_env    = false
 
 (** Debug the inference procedure *)
-let debug_infer       = false
+let debug_infer       = true
 
 (** Printout the normalization constant when using SMC inference *)
 let debug_norm        = true
@@ -332,7 +332,7 @@ and infer_is model n =
      List.iter
        (fun (t, w) ->
           print_string "Sample: ";
-          print_endline (string_of_tm t);
+          print_string (string_of_tm t);
           print_string ", Log weight: ";
           print_endline (string_of_float w))
        res;
