@@ -133,10 +133,12 @@ let rec mkapps args func = match args with
 
 main:
   | seq EOF { $1 }
+  | EOF { nop }
 
 /* ************************** TREEPPL ********************************* */
 
 seq:
+  | texpr { $1 }
   | texpr sep_seq
       { match $2 with
         | TmConst(_,CUnit) -> $1
@@ -144,6 +146,7 @@ seq:
   | seq_aux { $1 }
 
 sep_seq:
+  | sep_texpr { $1 }
   | sep_texpr sep_seq
       { match $2 with
         | TmConst(_,CUnit) -> $1
@@ -151,7 +154,6 @@ sep_seq:
   | seq_aux { $1 }
 
 seq_aux:
-  | { nop }
   | FUNC FUNIDENT params RPAREN texpr sep_seq
       { TmApp(na,TmLam(na,$2,$6), addrec $2 (mkfun $3 $5)) }
 
@@ -236,14 +238,14 @@ expr_aux:
       { let a = { na with pos = Parsing.symbol_start_pos () } in
         TmUtest(a,$2,$3) }
 
-  | OBSERVE expr TILDE expr %prec LOW
+  | OBSERVE texpr TILDE expr %prec LOW
       { let logpdf = TmLogPdf(na,None) in
         let v = $2 in
         let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
         let weight = TmWeight(na,None,None) in
         TmApp(na,weight,inner) }
 
-  | IF expr THEN expr ELSE expr %prec LOW
+  | IF seq THEN seq ELSE expr %prec LOW
       { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
                  TmLam(na,"",$6)) }
 
@@ -251,16 +253,16 @@ expr_aux:
   | LAM RPAREN expr %prec LOW        { (mkfun ["_"] $3) }
 
   | FUNIDENT exprs_comma RPAREN { mkapps (List.rev $2) $1 }
-  | FUNIDENT RPAREN       { mkapps [nop] $1 }
+  | FUNIDENT RPAREN             { mkapps [nop] $1 }
 
-  | MATCH expr WITH cases { TmMatch(na,$2,$4) }
+  | MATCH seq WITH cases { TmMatch(na,$2,$4) }
 
-  | LPAREN texpr RPAREN  { $2 }
+  | LPAREN seq RPAREN  { $2 }
   | LPAREN RPAREN { nop }
 
   | LCURLY record RCURLY { TmRec(na,$2) }
 
-  | LSQUARE exprs_semicolon RSQUARE { TmList(na,$2) }
+  | LSQUARE texprs_semicolon RSQUARE { TmList(na,$2) }
   | LSQUARE RSQUARE { TmList(na,[]) }
 
   | LCURLY seq RCURLY  { $2 }
@@ -275,8 +277,8 @@ expr_aux:
   | FALSE      { TmConst(na,CBool(false)) }
 
 record:
-  | IDENT COLON expr { [($1,$3)] }
-  | IDENT COLON expr SEMICOLON record { ($1,$3) :: $5 }
+  | IDENT COLON seq { [($1,$3)] }
+  | IDENT COLON seq SEMICOLON record { ($1,$3) :: $5 }
 
 params:
   | IDENT { [$1] }
@@ -286,9 +288,9 @@ exprs_comma:
   | expr { [$1] }
   | expr COMMA exprs_comma { $1 :: $3 }
 
-exprs_semicolon:
-  | expr { [$1] }
-  | expr SEMICOLON exprs_semicolon { $1 :: $3 }
+texprs_semicolon:
+  | texpr { [$1] }
+  | texpr SEMICOLON texprs_semicolon { $1 :: $3 }
 
 cases:
   | VBAR tpattern RARROW expr %prec LOW { [($2,$4)] }
@@ -302,7 +304,7 @@ pattern:
   | LPAREN tpattern RPAREN             { $2 }
   | IDENT                              { PatVar($1) }
   | LCURLY pattern_rec RCURLY          { PatRec($2) }
-  | LSQUARE patterns_semicolon RSQUARE { PatList($2) }
+  | LSQUARE tpatterns_semicolon RSQUARE { PatList($2) }
   | LSQUARE RSQUARE                    { PatList([]) }
   | pattern DCOLON pattern             { PatCons($1,$3) }
   | LPAREN RPAREN                      { PatUnit }
@@ -321,6 +323,6 @@ patterns_comma:
   | pattern { [$1] }
   | pattern COMMA patterns_comma { $1 :: $3 }
 
-patterns_semicolon:
-  | pattern { [$1] }
-  | pattern SEMICOLON patterns_semicolon { $1 :: $3 }
+tpatterns_semicolon:
+  | tpattern { [$1] }
+  | tpattern SEMICOLON tpatterns_semicolon { $1 :: $3 }

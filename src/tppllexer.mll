@@ -62,7 +62,6 @@ let _ =
 
 }
 
-let newline = '\n'
 let whitespace = ['\t'' ']
 
 let letter = ['A'-'Z''a'-'z']
@@ -86,7 +85,7 @@ let line_comment = "//" [^'\n']*
 
 rule main = parse
   | whitespace+ | line_comment { main lexbuf }
-  | newline { Lexing.new_line lexbuf; main lexbuf }
+  | '\n' { Lexing.new_line lexbuf; main lexbuf }
   | "/*" { block_comment (Lexing.lexeme_start_p lexbuf) lexbuf; main lexbuf}
   | integer as str { INT(int_of_string str) }
   | real as str { FLOAT(float_of_string str) }
@@ -104,7 +103,7 @@ rule main = parse
 and block_comment start_pos = parse
   | "*/" { }
   | eof { failwith "Unterminated block comment starting at TODO" }
-  | newline { Lexing.new_line lexbuf; block_comment start_pos lexbuf }
+  | '\n' { Lexing.new_line lexbuf; block_comment start_pos lexbuf }
   | _ { block_comment start_pos lexbuf }
 
 and read_string buf = parse
@@ -121,14 +120,14 @@ and read_string buf = parse
           | "\\ "  -> ' '
           | _ -> failwith "Should not happen"
         in Buffer.add_char buf c; read_string buf lexbuf }
-  | '\\' newline whitespace*
+  | "\\\n" whitespace*
     { Lexing.new_line lexbuf; read_string buf lexbuf }
   | '\\' { failwith "Invalid escape sequence (TODO)" }
   | eof { failwith "String not terminated (TODO)" }
-  | [^ '"' '\\' '\n' ]+
+  | [^ '"' '\\' '\n']+
       { Buffer.add_string buf (Lexing.lexeme lexbuf);
         read_string buf lexbuf }
-  | newline { failwith "Unexpected line break in string. TODO" }
+  | '\n' { failwith "Unexpected line break in string. TODO" }
   | _ { failwith "Unexpected char in string. TODO" }
 
 
