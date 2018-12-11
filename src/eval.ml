@@ -16,7 +16,7 @@ let debug_eval_env    = false
 let debug_infer       = true
 
 (** Printout the normalization constant when using SMC inference *)
-let debug_norm        = true
+let debug_norm        = false
 
 (** Set to true if unit testing is enabled *)
 let utest = ref false
@@ -225,13 +225,17 @@ let rec eval env t =
      | TmSample _,_ -> failwith "Incorrect sample application"
 
      | TmWeight(a,None,None),(TmClos _ as cont) -> TmWeight(a,Some cont,None)
-     | TmWeight(a,Some cont,None),TmConst(_,(CFloat _ as w)) ->
+     | TmWeight(a,Some cont,None),TmConst(_,CFloat w) ->
        TmWeight(a,Some cont,Some w)
+     | TmWeight(a,Some cont,None),TmConst(_,CInt w) ->
+       TmWeight(a,Some cont,Some (float_of_int w))
      | TmWeight _,_ -> failwith "Incorrect weight application"
 
      | TmDWeight(a,None,None),(TmClos _ as cont) -> TmDWeight(a,Some cont,None)
-     | TmDWeight(a,Some cont,None),TmConst(_,(CFloat _ as w)) ->
+     | TmDWeight(a,Some cont,None),TmConst(_,CFloat w) ->
        TmDWeight(a,Some cont,Some w)
+     | TmDWeight(a,Some cont,None),TmConst(_,CInt w) ->
+       TmDWeight(a,Some cont,Some (float_of_int w))
      | TmDWeight _,_ -> failwith "Incorrect dweight application"
 
      | _ -> failwith "Application to a non closure value.")
@@ -315,8 +319,8 @@ and infer_is model n =
       sim (TmApp(na, cont, Dist.sample dist), w)
 
     (* Weight (and DWeight)*)
-    | TmWeight(_,Some(cont),Some(CFloat(wadj)))
-    | TmDWeight(_,Some(cont),Some(CFloat(wadj))) ->
+    | TmWeight(_,Some(cont),Some wadj)
+    | TmDWeight(_,Some(cont),Some wadj) ->
       if wadj = -. infinity then
         (nop,wadj)
       else
@@ -359,12 +363,12 @@ and infer_smc model n =
       sim (TmApp(na,cont,Dist.sample dist), w)
 
     (* Dweight *)
-    | TmDWeight(_,Some(cont),Some(CFloat(wadj))) ->
+    | TmDWeight(_,Some(cont),Some wadj) ->
       if wadj = -. infinity then (true,nop,wadj) else
         sim (TmApp(na,cont,nop), w +. wadj)
 
     (* Weight *)
-    | TmWeight(_,Some(cont),Some(CFloat(wadj))) ->
+    | TmWeight(_,Some(cont),Some wadj) ->
       if wadj = -. infinity then (true,nop,wadj) else
         (false,TmApp(na,cont,nop), w +. wadj)
 

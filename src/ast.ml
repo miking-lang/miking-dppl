@@ -52,8 +52,8 @@ type tm =
   | TmInfer       of attr
   | TmLogPdf      of attr * tm option
   | TmSample      of attr * tm option * tm option
-  | TmWeight      of attr * tm option * const option
-  | TmDWeight     of attr * tm option * const option
+  | TmWeight      of attr * tm option * float option
+  | TmDWeight     of attr * tm option * float option
 
   (* Construct for performing unit tests TODO move to toplevel? *)
   | TmUtest       of attr * tm * tm
@@ -162,12 +162,12 @@ let string_of_tm t =
     | TmWeight(_,None,None) -> "weight"
     | TmWeight(_,Some t1,None) -> sprintf "weight(%s)" (rec1 0 t1)
     | TmWeight(_,Some t1,Some c2) ->
-      sprintf "weight(%s,%s)" (rec1 0 t1) (string_of_const c2)
+      sprintf "weight(%s,%s)" (rec1 0 t1) (string_of_float c2)
     | TmWeight _ -> failwith "Incorrect weight in string_of_tm"
     | TmDWeight(_,None,None) -> "dweight"
     | TmDWeight(_,Some t1,None) -> sprintf "dweight(%s)" (rec1 0 t1)
     | TmDWeight(_,Some t1,Some c2) ->
-      sprintf "dweight(%s,%s)" (rec1 0 t1) (string_of_const c2)
+      sprintf "dweight(%s,%s)" (rec1 0 t1) (string_of_float c2)
     | TmDWeight _ -> failwith "Incorrect dweight in string_of_tm"
 
   in rec1 (-1) t

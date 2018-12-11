@@ -1,0 +1,17 @@
+function flip() {
+  sample(bernoulli(0.5))
+}
+
+function model() {
+  weight(5)
+  if flip() then {
+    weight(5)
+    weight(3)
+    false
+  } else {
+    weight(8)
+    true
+  }
+}
+
+infer(model)
