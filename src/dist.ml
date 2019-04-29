@@ -14,9 +14,10 @@ let seed =
      Gsl.Rng.set rng (Random.nativeint Nativeint.max_int));
   rng
 
-(** Probability functions for built in distributions.
+(** Probability density/mass functions for built in distributions.
     TODO Split between const distributions and tm distributions **)
 let logpdf value dist = match value,dist with
+
   (* Normal distribution *)
   | TmConst(_,CFloat(v)),
     TmConst(_,CNormal(Some sigma, Some mu)) ->

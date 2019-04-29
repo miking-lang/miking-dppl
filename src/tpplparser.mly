@@ -3,49 +3,7 @@
    the whole module. *)
 
 open Ast
-
-(** Add fix-point, if recursive function *)
-let addrec x t =
-  let rec hasx t = match t with
-    | TmVar(_,y,_) ->  x = y
-    | TmLam(_,y,t1) -> if x = y then false else hasx t1
-    | TmClos(_,_,_,_) -> failwith "Cannot happen"
-    | TmApp(_,t1,t2) -> hasx t1 || hasx t2
-    | TmConst(_,_) -> false
-    | TmFix _ -> false
-    | TmIf(_,_,None) -> false
-    | TmIf(_,_,Some(t1)) -> hasx t1
-
-    | TmUtest(_,t1,t2) -> hasx t1 || hasx t2
-
-    | TmMatch(_,t1,pls) -> hasx t1 || List.exists (fun (_,te) -> hasx te) pls
-
-    | TmRec(_,rels) -> List.exists (fun (_,te) -> hasx te) rels
-    | TmRecProj(_,t1,_) -> hasx t1
-
-    | TmTup(_,tarr) -> Array.exists hasx tarr
-    | TmTupProj(_,t1,_) -> hasx t1
-
-    | TmList(_,tls) -> List.exists hasx tls
-
-    | TmConcat _ -> false
-
-    | TmInfer _ -> false
-    | TmLogPdf _ -> false
-    | TmSample _ -> false
-    | TmWeight _ -> false
-    | TmDWeight _ -> false
-  in if hasx t then
-    TmApp(na,TmFix(na),TmLam(na,x,t))
-  else t
-
-let rec mkfun params body = match params with
-  | x::xs -> TmLam(na,x,mkfun xs body)
-  | [] -> body
-
-let rec mkapps args func = match args with
-  | t::ts -> TmApp(na,mkapps ts func,t)
-  | [] -> TmVar(na,func,noidx)
+open Parserutils
 
 %}
 

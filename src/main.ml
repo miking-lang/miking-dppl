@@ -58,16 +58,16 @@ let add_slash s =
 
 (** Expand a list of files and folders into a list of file names *)
 let files_of_folders lst = List.fold_left (fun a v ->
-  if Sys.is_directory v then
-    (Sys.readdir v
-        |> Array.to_list
-        |> List.filter (fun x ->
-            not (String.length x >= 1 && String.get x 0 = '.'))
-        |> List.map (fun x -> (add_slash v) ^ x)
-        |> List.filter (fun x -> not (Sys.is_directory x))
-    ) @ a
-  else v::a
-) [] lst
+    if Sys.is_directory v then
+      (Sys.readdir v
+       |> Array.to_list
+       |> List.filter (fun x ->
+           not (String.length x >= 1 && String.get x 0 = '.'))
+       |> List.map (fun x -> (add_slash v) ^ x)
+       |> List.filter (fun x -> not (Sys.is_directory x))
+      ) @ a
+    else v::a
+  ) [] lst
 
 (** Function for lexing and parsing a file. *)
 let parse par filename =
@@ -92,6 +92,7 @@ let parse par filename =
 let exec filename =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
+
   let tm = match Filename.extension filename with
     | ".tppl" -> parse (Tpplparser.main Tppllexer.main) filename
     | s -> failwith ("Unsupported file type: " ^ s) in
@@ -175,17 +176,16 @@ let main =
 
     "--inference",
     Arg.String(fun s -> match s with
-        | "is" -> inference := Importance(10)
-        | "smc" -> inference := SMC(10)
+        | "is" -> inference := Importance
+        | "smc" -> inference := SMC
         | _ -> failwith "Incorrect inference algorithm"
       ),
-    " Specifies inference method. Options are: is, smcu, smca.";
+    " Specifies inference method. Options are: is, smc.";
 
     "--samples",
-    Arg.Int(fun i -> match !inference, i with
-        | _,i when i < 1 -> failwith "Number of samples must be positive"
-        | Importance _,i -> inference := Importance(i)
-        | SMC _,i -> inference := SMC(i)),
+    Arg.Int(fun i -> match i with
+        | i when i < 1 -> failwith "Number of samples must be positive"
+        | i -> particles := i),
     " Determines the number of samples (positive).";
 
   ] in

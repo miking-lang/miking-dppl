@@ -55,14 +55,14 @@ type tm =
   | TmWeight      of attr * tm option * float option
   | TmDWeight     of attr * tm option * float option
 
-  (* Construct for performing unit tests TODO move to toplevel? *)
+  (* Construct for performing unit tests *)
   | TmUtest       of attr * tm * tm
 
 (** Evaluation environment *)
 and env = tm list
 
-(** Check if two value terms are equal. Does not check for equality of lambdas,
-    which in general should be undecidable *)
+(** Check if two value terms are equal.
+    Does not check for equality of lambdas. *)
 let rec val_equal v1 v2 = match v1,v2 with
   | TmRec(_,rels1),TmRec(_,rels2) ->
     let comp (k1,v1) (k2,v2) = k1 = k2 && val_equal v1 v2 in
@@ -220,7 +220,7 @@ let string_of_env env =
   "[" ^ (List.mapi (fun i t -> sprintf " %d -> " i ^ string_of_tm t) env
             |> String.concat ",") ^ "]"
 
-(** Unit shortcut *)
+(** Unit shorthand *)
 let nop = TmConst(na, CUnit)
 
 (** Function for wrapping a const in a tm *)
@@ -232,7 +232,7 @@ let noidx = -1
 (** Reference used for genvar *)
 let nextvar = ref 0
 
-(** Generate fresh variable names for CPS transformation.  Avoids clashes by
+(** Generate fresh variable names (used for CPS transformation).  Avoids clashes by
     using $ as first char (not allowed in lexer for vars).  Takes a debruijn
     index as argument (for idfun). *)
 let genvar i =

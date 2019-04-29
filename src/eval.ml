@@ -32,11 +32,14 @@ let utest_fail_local = ref 0
 
 (** Inference types *)
 type inference =
-  | Importance of int
-  | SMC        of int
+  | Importance
+  | SMC
 
 (** Default inference is importance sampling with 10 particles *)
-let inference = ref (Importance(10))
+let inference = ref Importance
+
+(** Number of particles for inference algorithms *)
+let particles = ref 10
 
 (** Print out error message when a unit test fails *)
 let unittest_failed pos t1 t2 =
@@ -174,7 +177,8 @@ let rec eval env t =
   debug_eval env t;
   match t with
 
-  (* Variables using debruijn indices. Need to evaluate because fix point. *)
+  (* Variables using debruijn indices.
+     Need to evaluate because of fix point. *)
   | TmVar(_,_,n) -> eval env (List.nth env n)
 
   (* Lambda and closure conversions *)
@@ -427,7 +431,7 @@ and infer_smc model n =
   in smc s 0.0
 
 (** Select correct inference algorithm *)
-and infer model = match !inference with
-  | Importance(i) -> infer_is model i
-  | SMC(i) -> infer_smc model i
+and infer model = match !inference,!particles with
+  | Importance,i -> infer_is model i
+  | SMC,i -> infer_smc model i
 
