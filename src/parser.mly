@@ -40,7 +40,6 @@ open Parserutils
 %token LSQUARE       /* "["  */
 %token RSQUARE       /* "]"  */
 %token COLON         /* ":"  */
-%token DCOLON        /* "::"  */
 %token SEMICOLON     /* ";"  */
 %token COMMA         /* ","  */
 %token DOT           /* "."  */
@@ -72,19 +71,20 @@ open Parserutils
 
 %nonassoc LOW
 
-%nonassoc SEMICOLON
+%left SEMICOLON
 %left OR
 %left AND
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL
 %left SHIFTLL SHIFTRL SHIFTRA
 %left CONCAT
-%right DCOLON
+%right COLON
 %left ADD SUB
 %left MUL DIV MOD
-%nonassoc NOT
 
 %left APP TRUE FALSE INT STRING FLOAT IDENT UTEST CHAR
           OBSERVE MATCH LSQUARE LPAREN LET LCURLY LAM IF
+
+%left NOT
 
 %nonassoc DOT VBAR
 
@@ -103,7 +103,7 @@ texpr:
   | usubexpr { $1 }
 
 usubexpr:
-  | SUB expr { TmApp(na,TmConst(na,CNeg),$2) }
+  | SUB usubexpr { TmApp(na,TmConst(na,CNeg),$2) }
   | expr { $1 }
 
 expr:
@@ -156,7 +156,7 @@ expr:
   | IDENT { TmVar(na,$1,noidx) }
 
   | UTEST { let a = { na with pos = Parsing.symbol_start_pos () } in
-            TmUtest(a) }
+            TmUtest(a,None) }
 
   | LPAREN texpr RPAREN { $2 }
   | LPAREN RPAREN { nop }
@@ -179,7 +179,7 @@ usubexprs_comma:
 
 record:
   | IDENT COLON expr { [($1,$3)] }
-  | IDENT COLON expr SEMICOLON record { ($1,$3) :: $5 }
+  | IDENT COLON expr COMMA record { ($1,$3) :: $5 }
 
 params:
   | IDENT { [$1] }
@@ -189,13 +189,17 @@ cases:
   | VBAR tpattern RARROW expr %prec LOW  { [($2,$4)] }
   | VBAR tpattern RARROW expr cases      { ($2,$4) :: $5 }
 
+tpattern:
+  | pattern                       { $1 }
+  | pattern COMMA patterns_comma  { PatTup($1 :: $3) }
+
 pattern:
   | LPAREN tpattern RPAREN              { $2 }
   | IDENT                               { PatVar($1) }
   | LCURLY pattern_rec RCURLY           { PatRec($2) }
-  | LSQUARE tpatterns_semicolon RSQUARE { PatList($2) }
+  | LSQUARE patterns_comma RSQUARE      { PatList($2) }
   | LSQUARE RSQUARE                     { PatList([]) }
-  | pattern DCOLON pattern              { PatCons($1,$3) }
+  | pattern COLON pattern               { PatCons($1,$3) }
   | LPAREN RPAREN                       { PatUnit }
   | CHAR                                { PatChar($1) }
   | STRING                              { PatString($1) }
@@ -203,20 +207,13 @@ pattern:
   | FLOAT                               { PatFloat($1) }
 
 pattern_rec:
-  | IDENT                                     { [($1,PatVar($1))] }
-  | IDENT COLON pattern                       { [($1,$3)] }
-  | IDENT SEMICOLON pattern_rec               { ($1,PatVar($1)) :: $3 }
-  | IDENT COLON pattern SEMICOLON pattern_rec { ($1,$3) :: $5 }
-
-tpattern:
-  | pattern                       { $1 }
-  | pattern COMMA patterns_comma  { PatTup($1 :: $3) }
+  | IDENT                                 { [($1,PatVar($1))] }
+  | IDENT COLON pattern                   { [($1,$3)] }
+  | IDENT COMMA pattern_rec               { ($1,PatVar($1)) :: $3 }
+  | IDENT COLON pattern COMMA pattern_rec { ($1,$3) :: $5 }
 
 patterns_comma:
   | pattern { [$1] }
   | pattern COMMA patterns_comma  { $1 :: $3 }
 
-tpatterns_semicolon:
-  | tpattern { [$1] }
-  | tpattern SEMICOLON tpatterns_semicolon { $1 :: $3 }
 

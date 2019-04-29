@@ -1,0 +1,4 @@
+// Test record projection
+
+utest {a:1, b:{c:2, d:4}, e:5}.b            {c:2, d:4}
+utest {a:1, b:{c:2, d:4}, e:5}.b.d          4

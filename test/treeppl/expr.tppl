@@ -5,7 +5,6 @@ utest ()                ()
 
 // Testing integer binary operators '+' '-' '*' '/' '%' '<<' '>>' '>>>' and unary operator '-'.
 utest 3+2               5
-utest 3+2               5
 utest 2+4*5             22
 utest (2+4)*5           30
 utest 1+2-4             (-1)

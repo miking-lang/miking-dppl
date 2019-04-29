@@ -240,7 +240,7 @@ let rec cps_atomic t = match t with
   | TmLogPdf _ -> failwith "Should not exist before eval"
 
   (* Unit tests *)
-  | TmUtest(_,None) -> cps_builtin t 1
+  | TmUtest(_,None) -> cps_builtin t 2
   | TmUtest _ -> failwith "Should not exist before eval"
 
   (* Already in CPS form (the whole reason why we are performing the CPS

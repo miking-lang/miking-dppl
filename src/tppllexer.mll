@@ -31,8 +31,6 @@ let _ =
       "[",             LSQUARE;
       "]",             RSQUARE;
       ":",             COLON;
-      ";",             SEMICOLON;
-      "::",            DCOLON;
       ",",             COMMA;
       ".",             DOT;
       "|",             VBAR;

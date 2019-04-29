@@ -79,13 +79,14 @@ let parse par filename =
       close_in file; tm
     with | Parsing.Parse_error ->
       if !utest then (
-        printf "\n ** %s" "TODO";
+        print_string
+          ("\n ** Parse error at " ^ string_of_position lexbuf.lex_curr_p);
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1;
         nop)
       else
         failwith (sprintf "Parse error at %s"
-                    (string_of_position (lexbuf.lex_curr_p )))
+                    (string_of_position (lexbuf.lex_curr_p)))
   end
 
 (** Function for executing a file. *)

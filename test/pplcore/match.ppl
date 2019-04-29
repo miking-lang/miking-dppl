@@ -11,17 +11,17 @@ utest match 1.0 with | 1.0 -> true              true
 utest match 1+2*3 with | 7 -> 1+2*3             7
 
 // Record patterns
-utest match {a:1; b:2; c:3} with | {a} -> a     1
-utest match {a:1; b:2; c:3} with | {a:d} -> d   1
-utest match {a:1; b:2; c:3} with
-        | {b;c:d} -> (d,b)                      (3,2)
+utest match {a:1, b:2, c:3} with | {a} -> a     1
+utest match {a:1, b:2, c:3} with | {a:d} -> d   1
+utest match {a:1, b:2, c:3} with
+        | {b,c:d} -> (d,b)                      (3,2)
 
 // List patterns
-utest match [1;2;[3]] with
+utest match [1,2,[3]] with
         | [] -> false
-        | head :: tail -> (head,tail)           (1, [2;[3]])
-utest match [1;2;3] with
-        | e1 :: e2 :: e3 :: [] -> (e1,e2,e3)    (1,2,3)
+        | head : tail -> (head,tail)           (1, [2,[3]])
+utest match [1,2,3] with
+        | e1 : e2 : e3 : [] -> (e1,e2,e3)    (1,2,3)
 
 // Tuple patterns
 utest match (1,2,(3,4)) with

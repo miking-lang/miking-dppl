@@ -32,7 +32,6 @@ let _ =
       "]",             RSQUARE;
       ":",             COLON;
       ";",             SEMICOLON;
-      "::",            DCOLON;
       ",",             COMMA;
       ".",             DOT;
       "|",             VBAR;

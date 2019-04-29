@@ -40,8 +40,6 @@ open Parserutils
 %token LSQUARE       /* "["  */
 %token RSQUARE       /* "]"  */
 %token COLON         /* ":"  */
-%token DCOLON        /* "::"  */
-%token SEMICOLON     /* ";"  */
 %token COMMA         /* ","  */
 %token DOT           /* "."  */
 %token VBAR          /* "|"  */
@@ -72,18 +70,18 @@ open Parserutils
 
 
 %nonassoc LOW
-%nonassoc VBAR
 
 %left OR
 %left AND
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL
 %left SHIFTLL SHIFTRL SHIFTRA
 %left CONCAT
-%right DCOLON
+%right COLON
 %left ADD SUB
 %left MUL DIV MOD
-%nonassoc NOT USUB
-%nonassoc DOT
+%left NOT
+
+%nonassoc DOT VBAR
 
 %type <Ast.tm> main
 
@@ -97,44 +95,34 @@ main:
 
 seq:
   | texpr { $1 }
-  | texpr sep_seq
+
+  | texpr seq
       { match $2 with
         | TmConst(_,CUnit) -> $1
         | _ -> TmApp(na,TmLam(na,"_",$2),$1) }
-  | seq_aux { $1 }
 
-sep_seq:
-  | sep_texpr { $1 }
-  | sep_texpr sep_seq
-      { match $2 with
-        | TmConst(_,CUnit) -> $1
-        | _ -> TmApp(na,TmLam(na,"_",$2),$1) }
-  | seq_aux { $1 }
-
-seq_aux:
-  | FUNC FUNIDENT params RPAREN texpr sep_seq
+  | FUNC FUNIDENT params RPAREN texpr seq
       { TmApp(na,TmLam(na,$2,$6), addrec $2 (mkfun $3 $5)) }
 
-  | FUNC FUNIDENT RPAREN texpr sep_seq
+  | FUNC FUNIDENT RPAREN texpr seq
       { TmApp(na,TmLam(na,$2,$5), addrec $2 (mkfun [""] $4)) }
 
-  | IDENT EQ texpr sep_seq
+  | IDENT EQ texpr seq
       { TmApp(na,TmLam(na,$1,$4),$3) }
 
-  | IDENT TILDE texpr sep_seq
+  | IDENT TILDE texpr seq
       { let sample = TmSample(na,None,None) in
         TmApp(na,TmLam(na,$1,$4),TmApp(na,sample,$3)) }
 
 texpr:
-  | expr { $1 }
-  | expr COMMA exprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
+  | usubexpr COMMA usubexprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
+  | usubexpr { $1 }
 
-sep_texpr:
-  | sep_expr { $1 }
-  | sep_expr COMMA exprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
+usubexpr:
+  | SUB expr             { TmApp(na,TmConst(na,CNeg),$2) }
+  | expr %prec LOW       { $1 }
 
 expr:
-  | SUB expr %prec USUB  { TmApp(na,TmConst(na,CNeg),$2) }
   | expr ADD expr        { TmApp(na,TmApp(na,TmConst(na,CAdd(None)),$1),$3) }
   | expr SUB expr        { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
   | expr MUL expr        { TmApp(na,TmApp(na,TmConst(na,CMul(None)),$1),$3) }
@@ -155,47 +143,9 @@ expr:
   | expr DOT LPAREN INT RPAREN { TmTupProj(na,$1,$4-1) }
   | expr CONCAT expr           { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
 
-  | expr_aux { $1 }
-
-/*
- * Separable expressions (expressions not starting with a minus sign) for
- * sequencing. Combined with expr, enables function calls such as
- * foo(-1, -2) instead of foo((-1), (-2)).
- * Also gives other nice properties such as being able to write
- * x = -1 instead of x = (-1). Gives a difference between writing
- * -1 -1 (evaluates to -2) and
- * -1 (-1) (evaluates to -1 because of sequencing)
- * Unfortunate with code duplication. TODO Is there a better way?
- */
-sep_expr:
-  | sep_expr ADD expr  { TmApp(na,TmApp(na,TmConst(na,CAdd(None)),$1),$3) }
-  | sep_expr SUB expr  { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
-  | sep_expr MUL expr  { TmApp(na,TmApp(na,TmConst(na,CMul(None)),$1),$3) }
-  | sep_expr DIV expr  { TmApp(na,TmApp(na,TmConst(na,CDiv(None)),$1),$3) }
-  | sep_expr MOD expr  { TmApp(na,TmApp(na,TmConst(na,CMod(None)),$1),$3) }
-  | sep_expr LESS expr { TmApp(na,TmApp(na,TmConst(na,CLt(None)),$1),$3) }
-  | sep_expr LESSEQUAL expr
-      { TmApp(na,TmApp(na,TmConst(na,CLeq(None)),$1),$3) }
-  | sep_expr GREAT expr { TmApp(na,TmApp(na,TmConst(na,CGt(None)),$1),$3)}
-  | sep_expr GREATEQUAL expr
-      { TmApp(na,TmApp(na,TmConst(na,CGeq(None)),$1),$3) }
-  | sep_expr EQUAL expr { TmApp(na,TmApp(na,TmConst(na,CEq(None)),$1),$3) }
-  | sep_expr NOTEQUAL expr { TmApp(na,TmApp(na,TmConst(na,CNeq(None)),$1),$3) }
-  | sep_expr SHIFTLL expr { TmApp(na,TmApp(na,TmConst(na,CSll(None)),$1),$3) }
-  | sep_expr SHIFTRL expr { TmApp(na,TmApp(na,TmConst(na,CSrl(None)),$1),$3) }
-  | sep_expr SHIFTRA expr { TmApp(na,TmApp(na,TmConst(na,CSra(None)),$1),$3) }
-  | sep_expr AND expr     { TmApp(na,TmApp(na,TmConst(na,CAnd(None)),$1),$3) }
-  | sep_expr OR expr      { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
-  | sep_expr DOT IDENT             { TmRecProj(na,$1,$3) }
-  | sep_expr DOT LPAREN INT RPAREN { TmTupProj(na,$1,$4-1) }
-  | sep_expr CONCAT expr     { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
-
-  | expr_aux { $1 }
-
-expr_aux:
-  | UTEST expr sep_expr %prec LOW
+  | UTEST expr expr %prec LOW
       { let a = { na with pos = Parsing.symbol_start_pos () } in
-        TmUtest(a,$2,$3) }
+        TmApp(na,TmApp(na,TmUtest(a,None),$2),$3) }
 
   | OBSERVE texpr TILDE expr %prec LOW
       { let logpdf = TmLogPdf(na,None) in
@@ -211,7 +161,7 @@ expr_aux:
   | LAM params RPAREN expr %prec LOW { (mkfun $2 $4) }
   | LAM RPAREN expr %prec LOW        { (mkfun ["_"] $3) }
 
-  | FUNIDENT exprs_comma RPAREN { mkapps (List.rev $2) $1 }
+  | FUNIDENT usubexprs_comma RPAREN { mkapps (List.rev $2) $1 }
   | FUNIDENT RPAREN             { mkapps [nop] $1 }
 
   | MATCH seq WITH cases { TmMatch(na,$2,$4) }
@@ -221,7 +171,7 @@ expr_aux:
 
   | LCURLY record RCURLY { TmRec(na,$2) }
 
-  | LSQUARE texprs_semicolon RSQUARE { TmList(na,$2) }
+  | LSQUARE usubexprs_comma RSQUARE { TmList(na,$2) }
   | LSQUARE RSQUARE { TmList(na,[]) }
 
   | LCURLY seq RCURLY  { $2 }
@@ -235,21 +185,17 @@ expr_aux:
   | TRUE       { TmConst(na,CBool(true)) }
   | FALSE      { TmConst(na,CBool(false)) }
 
+usubexprs_comma:
+  | usubexpr { [$1] }
+  | usubexpr COMMA usubexprs_comma { $1 :: $3 }
+
 record:
-  | IDENT COLON seq { [($1,$3)] }
-  | IDENT COLON seq SEMICOLON record { ($1,$3) :: $5 }
+  | IDENT COLON usubexpr { [($1,$3)] }
+  | IDENT COLON usubexpr COMMA record { ($1,$3) :: $5 }
 
 params:
   | IDENT { [$1] }
   | IDENT COMMA params { $1 :: $3 }
-
-exprs_comma:
-  | expr { [$1] }
-  | expr COMMA exprs_comma { $1 :: $3 }
-
-texprs_semicolon:
-  | texpr { [$1] }
-  | texpr SEMICOLON texprs_semicolon { $1 :: $3 }
 
 cases:
   | VBAR tpattern RARROW expr %prec LOW { [($2,$4)] }
@@ -260,28 +206,26 @@ tpattern:
   | pattern COMMA patterns_comma  { PatTup($1 :: $3) }
 
 pattern:
-  | LPAREN tpattern RPAREN             { $2 }
-  | IDENT                              { PatVar($1) }
-  | LCURLY pattern_rec RCURLY          { PatRec($2) }
-  | LSQUARE tpatterns_semicolon RSQUARE { PatList($2) }
-  | LSQUARE RSQUARE                    { PatList([]) }
-  | pattern DCOLON pattern             { PatCons($1,$3) }
-  | LPAREN RPAREN                      { PatUnit }
-  | CHAR                               { PatChar($1) }
-  | STRING                             { PatString($1) }
-  | INT                                { PatInt($1) }
-  | FLOAT                              { PatFloat($1) }
+  | LPAREN tpattern RPAREN              { $2 }
+  | IDENT                               { PatVar($1) }
+  | LCURLY pattern_rec RCURLY           { PatRec($2) }
+  | LSQUARE patterns_comma RSQUARE      { PatList($2) }
+  | LSQUARE RSQUARE                     { PatList([]) }
+  | pattern COLON pattern               { PatCons($1,$3) }
+  | LPAREN RPAREN                       { PatUnit }
+  | CHAR                                { PatChar($1) }
+  | STRING                              { PatString($1) }
+  | INT                                 { PatInt($1) }
+  | FLOAT                               { PatFloat($1) }
 
 pattern_rec:
-  | IDENT                                     { [($1,PatVar($1))] }
-  | IDENT COLON pattern                       { [($1,$3)] }
-  | IDENT SEMICOLON pattern_rec               { ($1,PatVar($1)) :: $3 }
-  | IDENT COLON pattern SEMICOLON pattern_rec { ($1,$3) :: $5 }
+  | IDENT                                 { [($1,PatVar($1))] }
+  | IDENT COLON pattern                   { [($1,$3)] }
+  | IDENT COMMA pattern_rec               { ($1,PatVar($1)) :: $3 }
+  | IDENT COLON pattern COMMA pattern_rec { ($1,$3) :: $5 }
 
 patterns_comma:
   | pattern { [$1] }
-  | pattern COMMA patterns_comma { $1 :: $3 }
+  | pattern COMMA patterns_comma  { $1 :: $3 }
 
-tpatterns_semicolon:
-  | tpattern { [$1] }
-  | tpattern SEMICOLON tpatterns_semicolon { $1 :: $3 }
+
