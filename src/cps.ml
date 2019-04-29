@@ -34,7 +34,7 @@ let rec is_atomic = function
 
   | TmFix _ -> true
 
-  | TmUtest(_,t1,t2) -> is_atomic t1 && is_atomic t2
+  | TmUtest _ -> true
 
   | TmMatch(_,t1,pls) ->
     is_atomic t1 && List.for_all (fun (_,te) -> is_atomic te) pls
@@ -109,10 +109,7 @@ let rec lift_apps t =
 
   | TmFix _ -> t
 
-  | TmUtest(a,t1,t2) ->
-    let t1,apps = extract_complex t1 [] in
-    let t2,apps = extract_complex t2 apps in
-    wrap_app (TmUtest(a,t1,t2)) apps
+  | TmUtest _ -> t
 
   | TmMatch(a,t1,cases) ->
     let cases = List.map (fun (p,t) -> p,lift_apps t) cases in
@@ -230,9 +227,6 @@ let rec cps_atomic t = match t with
           k, TmLam(na, v,
                    TmApp(na, k', inner)))
 
-  (* Unit tests *)
-  | TmUtest(a,t1,t2) -> TmUtest(a,cps_atomic t1,cps_atomic t2)
-
   (* Lists *)
   | TmList(a,tls) -> TmList(a, List.map cps_atomic tls)
 
@@ -244,6 +238,10 @@ let rec cps_atomic t = match t with
   | TmInfer _ -> cps_builtin t 1
   | TmLogPdf(_,None) -> cps_builtin t 2
   | TmLogPdf _ -> failwith "Should not exist before eval"
+
+  (* Unit tests *)
+  | TmUtest(_,None) -> cps_builtin t 1
+  | TmUtest _ -> failwith "Should not exist before eval"
 
   (* Already in CPS form (the whole reason why we are performing the CPS
      transformation in the first place...) *)

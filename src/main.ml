@@ -94,6 +94,7 @@ let exec filename =
   utest_fail_local := 0;
 
   let tm = match Filename.extension filename with
+    | ".ppl" -> parse (Parser.main Lexer.main) filename
     | ".tppl" -> parse (Tpplparser.main Tppllexer.main) filename
     | s -> failwith ("Unsupported file type: " ^ s) in
 

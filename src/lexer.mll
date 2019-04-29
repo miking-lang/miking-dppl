@@ -1,7 +1,7 @@
 {
 (** TODO The first special comment of the file is the comment associated with
     the whole module.*)
-open Tpplparser
+open Parser
 
 let keyword_table = Hashtbl.create 64
 let _ =
@@ -9,7 +9,6 @@ let _ =
     [
 
       (* Keywords *)
-      "function",      FUNC;
       "if",            IF;
       "then",          THEN;
       "else",          ELSE;
@@ -17,6 +16,7 @@ let _ =
       "observe",       OBSERVE;
       "match",         MATCH;
       "with",          WITH;
+      "lam",           LAM;
 
       (* Literals *)
       "true",          TRUE;
@@ -89,10 +89,6 @@ rule main = parse
   | "/*" { block_comment (Lexing.lexeme_start_p lexbuf) lexbuf; main lexbuf}
   | integer as str { INT(int_of_string str) }
   | floating_point as str { FLOAT(float_of_string str) }
-  | (ident as s) '('
-      { match s with
-        | "lam" -> LAM
-        | _ -> FUNIDENT(s) }
   | ident | symtok as s
       { try Hashtbl.find keyword_table s with Not_found -> IDENT(s) }
   | '\'' (_ as c) '\'' { CHAR(c) }

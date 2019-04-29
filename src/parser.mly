@@ -83,7 +83,7 @@ open Parserutils
 %left MUL DIV MOD
 %nonassoc NOT
 
-%left APP TRUE FALSE INT STRING FLOAT IDENT CHAR
+%left APP TRUE FALSE INT STRING FLOAT IDENT UTEST CHAR
           OBSERVE MATCH LSQUARE LPAREN LET LCURLY LAM IF
 
 %nonassoc DOT VBAR
@@ -107,10 +107,6 @@ usubexpr:
   | expr { $1 }
 
 expr:
-  /* | UTEST expr expr
-      { let a = { na with pos = Parsing.symbol_start_pos () } in
-        TmUtest(a,$2,$3) } */
-
   | expr expr %prec APP  { TmApp(na,$1,$2) }
   | expr SEMICOLON expr  { TmApp(na,TmLam(na,"_",$3),$1) }
   | expr ADD expr        { TmApp(na,TmApp(na,TmConst(na,CAdd(None)),$1),$3) }
@@ -158,6 +154,9 @@ expr:
   | MATCH expr WITH cases { TmMatch(na,$2,$4) }
 
   | IDENT { TmVar(na,$1,noidx) }
+
+  | UTEST { let a = { na with pos = Parsing.symbol_start_pos () } in
+            TmUtest(a) }
 
   | LPAREN texpr RPAREN { $2 }
   | LPAREN RPAREN { nop }

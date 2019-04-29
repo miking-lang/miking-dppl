@@ -80,7 +80,7 @@ let rec debruijn env t = match t with
   | TmIf _ -> t
   | TmFix _ -> t
 
-  | TmUtest(a,t1,t2) -> TmUtest(a,debruijn env t1,debruijn env t2)
+  | TmUtest _ -> t
 
   | TmMatch(a,tm,cases) ->
     TmMatch(a,debruijn env tm,
@@ -218,6 +218,19 @@ let rec eval env t =
        failwith (sprintf "Incorrect concatenation application: %s %s"
                         (string_of_tm t1) (string_of_tm t2))
 
+     | TmUtest(a,None),v1 -> TmUtest(a,Some v1)
+     | TmUtest({pos;_},Some v1),v2 ->
+       if !utest then begin
+         if val_equal v1 v2 then
+           (printf "."; utest_ok := !utest_ok + 1)
+         else (
+           unittest_failed pos v1 v2;
+           utest_fail := !utest_fail + 1;
+           utest_fail_local := !utest_fail_local + 1)
+       end;
+       nop
+
+
      | TmInfer _,(TmClos _ as model) -> infer model
      | TmInfer _,_ -> failwith "Incorrect infer application"
 
@@ -251,17 +264,7 @@ let rec eval env t =
   | TmIf _ -> t
 
   (* Utest *)
-  | TmUtest({pos;_},t1,t2) ->
-    if !utest then begin
-      let (v1,v2) = ((eval env t1),(eval env t2)) in
-      if val_equal v1 v2 then
-        (printf "."; utest_ok := !utest_ok + 1)
-      else (
-        unittest_failed pos v1 v2;
-        utest_fail := !utest_fail + 1;
-        utest_fail_local := !utest_fail_local + 1)
-    end;
-    nop
+  | TmUtest _ -> t
 
   | TmMatch(_,t1,cases) ->
     let v1 = eval env t1 in

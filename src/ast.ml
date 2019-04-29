@@ -48,15 +48,15 @@ type tm =
   (* Polymorphic concatenation function (Lists and Strings for now) *)
   | TmConcat      of attr * tm option
 
+  (* Construct for performing unit tests *)
+  | TmUtest       of attr * tm option
+
   (* Probabilistic programming functions *)
   | TmInfer       of attr
   | TmLogPdf      of attr * tm option
   | TmSample      of attr * tm option * tm option
   | TmWeight      of attr * tm option * float option
   | TmDWeight     of attr * tm option * float option
-
-  (* Construct for performing unit tests *)
-  | TmUtest       of attr * tm * tm
 
 (** Evaluation environment *)
 and env = tm list
@@ -85,7 +85,7 @@ let tm_label = function
   | TmConst({label;_},_)
   | TmIf({label;_},_,_)
   | TmFix({label;_})
-  | TmUtest({label;_},_,_)
+  | TmUtest({label;_},_)
   | TmMatch({label;_},_,_)
   | TmRec({label;_},_)
   | TmRecProj({label;_},_,_)
@@ -126,7 +126,8 @@ let string_of_tm t =
       "if(" ^ string_of_bool g ^ "," ^ rec1 0 t2 ^ ")"
     | TmIf(_,Some(g),_) -> "if(" ^ string_of_bool g ^ ")"
     | TmFix _ -> "fix"
-    | TmUtest(_,t1,t2) -> "utest(" ^ rec1 0 t1 ^ "," ^ rec1 0 t2 ^ ")"
+    | TmUtest(_,Some t1) -> "utest(" ^ rec1 0 t1 ^ ")"
+    | TmUtest _ -> "utest"
 
     | TmMatch(_,t,cases) ->
       let inner = List.map (fun (_,t1) -> "| p -> " ^ rec1 0 t1) cases in
