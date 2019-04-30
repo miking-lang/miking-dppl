@@ -1,2 +1,1 @@
-utest 2 2;
-utest 3 4;
+(let fact n = n + n in fact 3)

@@ -67,48 +67,52 @@ open Parserutils
 %token AND           /* "&&" */
 %token CONCAT        /* "++" */
 
+/* Start symbol */
 %start main
 
-%nonassoc LOW
+/* Associativity */
 
-%left SEMICOLON
+%nonassoc OBSERVE LET MATCH
+%nonassoc VBAR
+
+%right SEMICOLON
+
+%nonassoc IF
+
 %left OR
 %left AND
-%left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL
+%left EQUAL NOTEQUAL
+%left LESS LESSEQUAL GREAT GREATEQUAL
 %left SHIFTLL SHIFTRL SHIFTRA
 %left CONCAT
 %right COLON
 %left ADD SUB
 %left MUL DIV MOD
 
-%left APP TRUE FALSE INT STRING FLOAT IDENT UTEST CHAR
-          OBSERVE MATCH LSQUARE LPAREN LET LCURLY LAM IF
-
-%left NOT
-
-%nonassoc DOT VBAR
+%nonassoc NOT DOT
 
 %type <Ast.tm> main
 
 %%
 
 main:
-  | texpr EOF { $1 }
+  | seq EOF { $1 }
   | EOF { nop }
 
 /* ************************** PPLCORE ********************************* */
 
-texpr:
-  | usubexpr COMMA usubexprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
-  | usubexpr { $1 }
+seq:
+  | seq SEMICOLON { $1 }
+  | seq SEMICOLON seq  { TmApp(na,TmLam(na,"_",$3),$1) }
+  | texpr { $1 }
 
-usubexpr:
-  | SUB usubexpr { TmApp(na,TmConst(na,CNeg),$2) }
+texpr:
+  | expr COMMA exprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
   | expr { $1 }
 
 expr:
-  | expr expr %prec APP  { TmApp(na,$1,$2) }
-  | expr SEMICOLON expr  { TmApp(na,TmLam(na,"_",$3),$1) }
+  | app { $1 }
+
   | expr ADD expr        { TmApp(na,TmApp(na,TmConst(na,CAdd(None)),$1),$3) }
   | expr MUL expr        { TmApp(na,TmApp(na,TmConst(na,CMul(None)),$1),$3) }
   | expr DIV expr        { TmApp(na,TmApp(na,TmConst(na,CDiv(None)),$1),$3) }
@@ -126,44 +130,47 @@ expr:
   | expr OR expr         { TmApp(na,TmApp(na,TmConst(na,COr(None)),$1),$3) }
   | expr CONCAT expr     { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
   | expr SUB expr        { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
-  | expr DOT IDENT             { TmRecProj(na,$1,$3) }
-  | expr DOT LPAREN INT RPAREN { TmTupProj(na,$1,$4-1) }
 
-  | NOT expr { TmApp(na,TmConst(na,CNot),$2) }
-
-  | LAM params DOT expr %prec LOW { mkfun $2 $4 }
-  | LET IDENT EQ expr IN expr %prec LOW { TmApp(na,TmLam(na,$2,$6),$4) }
-  | LET IDENT params EQ texpr IN expr %prec LOW
-      { TmApp(na,TmLam(na,$2,$7), addrec $2 (mkfun $3 $5)) }
-
-  | LET IDENT TILDE texpr IN expr %prec LOW
-      { let sample = TmSample(na,None,None) in
-        TmApp(na,TmLam(na,$2,$6),TmApp(na,sample,$4)) }
-
-  | OBSERVE expr TILDE expr %prec LOW
+  | OBSERVE seq TILDE expr %prec OBSERVE
       { let logpdf = TmLogPdf(na,None) in
         let v = $2 in
         let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
         let weight = TmWeight(na,None,None) in
         TmApp(na,weight,inner) }
 
-  | IF expr THEN expr ELSE expr %prec LOW
-      { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
+  | SUB expr { TmApp(na,TmConst(na,CNeg),$2) }
+
+  | LAM params DOT expr { mkfun $2 $4 }
+  | LET IDENT EQ seq IN expr %prec LET { TmApp(na,TmLam(na,$2,$6),$4) }
+  | LET IDENT params EQ seq IN expr %prec LET
+       { TmApp(na,TmLam(na,$2,$7), addrec $2 (mkfun $3 $5)) }
+
+  | LET IDENT TILDE seq IN expr %prec LET
+       { let sample = TmSample(na,None,None) in
+        TmApp(na,TmLam(na,$2,$6),TmApp(na,sample,$4)) }
+
+  | IF seq THEN seq ELSE expr %prec IF
+       { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
                  TmLam(na,"",$6)) }
 
-  | MATCH expr WITH cases { TmMatch(na,$2,$4) }
+  | MATCH seq WITH cases { TmMatch(na,$2,$4) }
 
+app:
+  | app atom { TmApp(na,$1,$2) }
+  | atom { $1 }
+
+atom:
   | IDENT { TmVar(na,$1,noidx) }
 
   | UTEST { let a = { na with pos = Parsing.symbol_start_pos () } in
             TmUtest(a,None) }
 
-  | LPAREN texpr RPAREN { $2 }
+  | LPAREN seq RPAREN { $2 }
   | LPAREN RPAREN { nop }
 
   | LCURLY record RCURLY { TmRec(na,$2) }
 
-  | LSQUARE usubexprs_comma RSQUARE { TmList(na,$2) }
+  | LSQUARE exprs_comma RSQUARE { TmList(na,$2) }
   | LSQUARE RSQUARE { TmList(na,[]) }
 
   | CHAR       { TmConst(na,CChar($1)) }
@@ -173,9 +180,14 @@ expr:
   | TRUE       { TmConst(na,CBool(true)) }
   | FALSE      { TmConst(na,CBool(false)) }
 
-usubexprs_comma:
-  | usubexpr { [$1] }
-  | usubexpr COMMA usubexprs_comma { $1 :: $3 }
+  | NOT atom   { TmApp(na,TmConst(na,CNot),$2) }
+
+  | atom DOT IDENT             { TmRecProj(na,$1,$3) }
+  | atom DOT LPAREN INT RPAREN { TmTupProj(na,$1,$4-1) }
+
+exprs_comma:
+  | expr { [$1] }
+  | expr COMMA exprs_comma { $1 :: $3 }
 
 record:
   | IDENT COLON expr { [($1,$3)] }
@@ -186,15 +198,15 @@ params:
   | IDENT params { $1 :: $2 }
 
 cases:
-  | VBAR tpattern RARROW expr %prec LOW  { [($2,$4)] }
-  | VBAR tpattern RARROW expr cases      { ($2,$4) :: $5 }
+  | VBAR tuplepattern RARROW expr %prec MATCH { [($2,$4)] }
+  | VBAR tuplepattern RARROW expr cases       { ($2,$4) :: $5 }
 
-tpattern:
+tuplepattern:
   | pattern                       { $1 }
   | pattern COMMA patterns_comma  { PatTup($1 :: $3) }
 
 pattern:
-  | LPAREN tpattern RPAREN              { $2 }
+  | LPAREN tuplepattern RPAREN          { $2 }
   | IDENT                               { PatVar($1) }
   | LCURLY pattern_rec RCURLY           { PatRec($2) }
   | LSQUARE patterns_comma RSQUARE      { PatList($2) }
