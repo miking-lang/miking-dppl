@@ -47,7 +47,7 @@ open Parserutils
 %token RARROW        /* "->"  */
 
 /* Operators */
-%token EQ            /* "="  */
+%token EQUAL         /* "="  */
 %token ADD           /* "+"  */
 %token SUB           /* "-"  */
 %token MUL           /* "*"  */
@@ -60,7 +60,6 @@ open Parserutils
 %token SHIFTLL       /* "<<" */
 %token SHIFTRL       /* ">>" */
 %token SHIFTRA       /* ">>>" */
-%token EQUAL         /* "==" */
 %token NOTEQUAL      /* "!=" */
 %token NOT           /* "!"   */
 %token OR            /* "||" */
@@ -72,7 +71,7 @@ open Parserutils
 
 /* Associativity */
 
-%nonassoc OBSERVE LET MATCH
+%nonassoc OBSERVE LET LAM MATCH
 %nonassoc VBAR
 
 %right SEMICOLON
@@ -102,8 +101,32 @@ main:
 /* ************************** PPLCORE ********************************* */
 
 seq:
+  | LET IDENT EQUAL seq IN seq %prec LET { TmApp(na,TmLam(na,$2,$6),$4) }
+  | LET IDENT params EQUAL seq IN seq %prec LET
+       { TmApp(na,TmLam(na,$2,$7), addrec $2 (mkfun $3 $5)) }
+
+  | LET IDENT TILDE seq IN seq %prec LET
+       { let sample = TmSample(na,None,None) in
+        TmApp(na,TmLam(na,$2,$6),TmApp(na,sample,$4)) }
+
+  | OBSERVE seq TILDE seq %prec OBSERVE
+      { let logpdf = TmLogPdf(na,None) in
+        let v = $2 in
+        let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
+        let weight = TmWeight(na,None,None) in
+        TmApp(na,weight,inner) }
+
+  | MATCH seq WITH cases { TmMatch(na,$2,$4) }
+
+  | IF seq THEN seq ELSE seq %prec IF
+       { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
+                 TmLam(na,"",$6)) }
+
+  | LAM params DOT seq %prec LAM { mkfun $2 $4 }
+
   | seq SEMICOLON { $1 }
   | seq SEMICOLON seq  { TmApp(na,TmLam(na,"_",$3),$1) }
+
   | texpr { $1 }
 
 texpr:
@@ -131,29 +154,7 @@ expr:
   | expr CONCAT expr     { TmApp(na,TmApp(na,TmConcat(na,None),$1),$3) }
   | expr SUB expr        { TmApp(na,TmApp(na,TmConst(na,CSub(None)),$1),$3) }
 
-  | OBSERVE seq TILDE expr %prec OBSERVE
-      { let logpdf = TmLogPdf(na,None) in
-        let v = $2 in
-        let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
-        let weight = TmWeight(na,None,None) in
-        TmApp(na,weight,inner) }
-
   | SUB expr { TmApp(na,TmConst(na,CNeg),$2) }
-
-  | LAM params DOT expr { mkfun $2 $4 }
-  | LET IDENT EQ seq IN expr %prec LET { TmApp(na,TmLam(na,$2,$6),$4) }
-  | LET IDENT params EQ seq IN expr %prec LET
-       { TmApp(na,TmLam(na,$2,$7), addrec $2 (mkfun $3 $5)) }
-
-  | LET IDENT TILDE seq IN expr %prec LET
-       { let sample = TmSample(na,None,None) in
-        TmApp(na,TmLam(na,$2,$6),TmApp(na,sample,$4)) }
-
-  | IF seq THEN seq ELSE expr %prec IF
-       { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
-                 TmLam(na,"",$6)) }
-
-  | MATCH seq WITH cases { TmMatch(na,$2,$4) }
 
 app:
   | app atom { TmApp(na,$1,$2) }
@@ -198,8 +199,8 @@ params:
   | IDENT params { $1 :: $2 }
 
 cases:
-  | VBAR tuplepattern RARROW expr %prec MATCH { [($2,$4)] }
-  | VBAR tuplepattern RARROW expr cases       { ($2,$4) :: $5 }
+  | VBAR tuplepattern RARROW seq %prec MATCH { [($2,$4)] }
+  | VBAR tuplepattern RARROW seq cases       { ($2,$4) :: $5 }
 
 tuplepattern:
   | pattern                       { $1 }

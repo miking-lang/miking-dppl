@@ -9,6 +9,7 @@ let _ =
     [
 
       (* Keywords *)
+      "lam",           LAM;
       "if",            IF;
       "then",          THEN;
       "else",          ELSE;
@@ -16,7 +17,8 @@ let _ =
       "observe",       OBSERVE;
       "match",         MATCH;
       "with",          WITH;
-      "lam",           LAM;
+      "let",           LET;
+      "in",            IN;
 
       (* Literals *)
       "true",          TRUE;
@@ -38,7 +40,7 @@ let _ =
       "->",            RARROW;
 
       (* Operators *)
-      "=",             EQ;
+      "=",             EQUAL;
       "+",             ADD;
       "-",             SUB;
       "*",             MUL;
@@ -51,12 +53,12 @@ let _ =
       "<<",            SHIFTLL;
       ">>",            SHIFTRL;
       ">>>",           SHIFTRA;
-      "==",            EQUAL;
       "!=",            NOTEQUAL;
       "!",             NOT;
       "||",            OR;
       "&&",            AND;
       "++",            CONCAT;
+
     ]
 
 }

@@ -33,8 +33,8 @@ type tm =
   (* Pattern matching construct *)
   | TmMatch       of attr * tm * (pat * tm) list
 
-  (* Records and record projection. Use linear search for projection
-     TODO Use hashtable for larger records? *)
+  (* Records and record projection. Use linear search for projection.
+     Use hashtable for larger records? *)
   | TmRec         of attr * (string * tm) list
   | TmRecProj     of attr * tm * string
 
@@ -42,7 +42,7 @@ type tm =
   | TmTup         of attr * tm array
   | TmTupProj     of attr * tm * int
 
-  (* Lists *)
+  (* Lists TODO Add functions for building lists *)
   | TmList        of attr * tm list
 
   (* Polymorphic concatenation function (Lists and Strings for now) *)
@@ -99,79 +99,90 @@ let tm_label = function
   | TmWeight({label;_},_,_)
   | TmDWeight({label;_},_,_) -> label
 
-(** Convert terms to strings TODO Clean this up *)
+(** Precedence constants for printing *)
+type prec =
+  | MATCH
+  | LAM
+  | IF
+  | TUP
+  | APP
+  | ATOM
+
+(** Convert terms to strings *)
 let string_of_tm t =
 
-  let rec rec1 prec t =
-    let p = rec2 t in
+  let rec recurse prec t =
+    let p = bare t in
     let paren = match t with
-      | TmMatch _ | TmLam _ | TmClos _ -> prec > 0
-      | TmApp _  -> prec > 1
-      | TmTup _ | TmVar _ | TmConst _ | TmFix _
-      | TmIf _ | TmRec _ | TmTupProj _ | TmRecProj _ | TmList _
-      | TmInfer _ | TmLogPdf _ | TmSample _ | TmUtest _
-      | TmWeight _ | TmDWeight _ | TmConcat _ -> false
+      | TmMatch _ -> prec > MATCH
+      | TmLam _ | TmClos _ -> prec > LAM
+      | TmIf _ -> prec > IF
+      | TmTup _ -> prec > TUP
+      | TmApp _  -> prec > APP
+      | TmVar _ | TmConst _ | TmFix _ | TmRec _ | TmTupProj _ | TmRecProj _
+      | TmList _ | TmInfer _ | TmLogPdf _ | TmSample _ | TmUtest _
+      | TmWeight _ | TmDWeight _ | TmConcat _ -> prec > ATOM
     in if paren then "(" ^ p ^ ")" else p
 
-  and rec2 t =
+  and bare t =
     match t with
-    | TmVar(_,x,n) -> x ^ "#" ^ string_of_int n
-    | TmLam(_,x,t1) -> "lam " ^ x ^ ". " ^ rec1 0 t1
-    | TmClos(_,x,t,_) -> "clos " ^ x ^ ". " ^ rec1 0 t
-    | TmApp(_,t1,(TmApp _ as t2)) -> rec1 1 t1 ^ " " ^ rec1 2 t2
-    | TmApp(_,t1,t2) -> rec1 1 t1 ^ " " ^ rec1 1 t2
-    | TmConst(_,c) -> string_of_const c
-    | TmIf(_,None,_) -> "if"
-    | TmIf(_,Some(g),Some(t2)) ->
-      "if(" ^ string_of_bool g ^ "," ^ rec1 0 t2 ^ ")"
-    | TmIf(_,Some(g),_) -> "if(" ^ string_of_bool g ^ ")"
-    | TmFix _ -> "fix"
-    | TmUtest(_,Some t1) -> "utest(" ^ rec1 0 t1 ^ ")"
-    | TmUtest _ -> "utest"
 
     | TmMatch(_,t,cases) ->
-      let inner = List.map (fun (_,t1) -> "| p -> " ^ rec1 0 t1) cases in
-      "match " ^ rec1 0 t ^ " with " ^ (String.concat " " inner)
+      let inner = List.map (fun (_,t1) -> "| p -> " ^ recurse LAM t1) cases in
+      "match " ^ recurse MATCH t ^ " with " ^ (String.concat " " inner)
 
-    | TmRec(_,sm) ->
-      let inner = List.map (fun (k, t1) -> k ^ ":" ^ rec1 0 t1) sm in
-      "{" ^ (String.concat (",") inner) ^ "}"
+    | TmLam(_,x,t1) -> "lam " ^ x ^ ". " ^ recurse MATCH t1
+    | TmClos(_,x,t,_) -> "clos " ^ x ^ ". " ^ recurse MATCH t
 
-    | TmRecProj(_,t1,x) -> rec1 2 t1 ^ "." ^ x
+    (* TODO Make if non-curried *)
+    | TmIf(_,None,None) -> "if"
+    | TmIf(_,Some(g),None) -> "if(" ^ string_of_bool g ^ ")"
+    | TmIf(_,Some(g),Some(t2)) ->
+      "if(" ^ string_of_bool g ^ "," ^ recurse MATCH t2 ^ ")"
+    | TmIf(_,_,_) -> failwith "Invalid if"
 
     | TmTup(_,tarr) ->
-      let inner = Array.map (fun t1 -> rec1 0 t1) tarr in
+      let inner = Array.map (fun t1 -> recurse APP t1) tarr in
       "(" ^ (String.concat (",") (Array.to_list inner)) ^ ")"
 
-    | TmTupProj(_,t1,i) -> rec1 2 t1 ^ "." ^ (string_of_int i)
+    | TmApp(_,t1,(TmApp _ as t2)) -> recurse APP t1 ^ " " ^ recurse ATOM t2
+    | TmApp(_,t1,t2) -> recurse APP t1 ^ " " ^ recurse APP t2
 
+    | TmVar(_,x,n) -> x ^ "#" ^ string_of_int n
+    | TmConst(_,c) -> string_of_const c
+    | TmFix _ -> "fix"
+    | TmUtest(_,Some t1) -> "utest(" ^ recurse MATCH t1 ^ ")"
+    | TmUtest _ -> "utest"
+    | TmRec(_,sm) ->
+      let inner = List.map (fun (k, t1) -> k ^ ":" ^ recurse MATCH t1) sm in
+      "{" ^ (String.concat (",") inner) ^ "}"
+    | TmRecProj(_,t1,x) -> recurse APP t1 ^ "." ^ x
+    | TmTupProj(_,t1,i) -> recurse APP t1 ^ "." ^ (string_of_int i)
     | TmList(_,ls) ->
-      let inner = List.map (fun t1 -> rec1 0 t1) ls in
-      "[" ^ (String.concat (";") inner) ^ "]"
-
+      let inner = List.map (fun t1 -> recurse MATCH t1) ls in
+      "[" ^ (String.concat (",") inner) ^ "]"
     | TmConcat(_,None) -> "concat"
-    | TmConcat(_,Some t1) -> sprintf "concat(%s)" (rec1 0 t1)
-
+    | TmConcat(_,Some t1) -> sprintf "concat(%s)" (recurse MATCH t1)
     | TmInfer _ -> "infer"
     | TmLogPdf(_,None) -> "logpdf"
-    | TmLogPdf(_,Some t1) -> sprintf "logpdf(%s)" (rec1 0 t1)
+    | TmLogPdf(_,Some t1) -> sprintf "logpdf(%s)" (recurse MATCH t1)
     | TmSample(_,None,None) -> "sample"
-    | TmSample(_,Some t1,None) -> sprintf "sample(%s)" (rec1 0 t1)
+    | TmSample(_,Some t1,None) -> sprintf "sample(%s)" (recurse MATCH t1)
     | TmSample(_,Some t1,Some t2) ->
-      sprintf "sample(%s,%s)" (rec1 0 t1) (rec1 0 t2)
+      sprintf "sample(%s,%s)" (recurse APP t1) (recurse APP t2)
     | TmSample _ -> failwith "Incorrect sample in string_of_tm"
     | TmWeight(_,None,None) -> "weight"
-    | TmWeight(_,Some t1,None) -> sprintf "weight(%s)" (rec1 0 t1)
+    | TmWeight(_,Some t1,None) -> sprintf "weight(%s)" (recurse MATCH t1)
     | TmWeight(_,Some t1,Some c2) ->
-      sprintf "weight(%s,%s)" (rec1 0 t1) (string_of_float c2)
+      sprintf "weight(%s,%s)" (recurse APP t1) (string_of_float c2)
     | TmWeight _ -> failwith "Incorrect weight in string_of_tm"
     | TmDWeight(_,None,None) -> "dweight"
-    | TmDWeight(_,Some t1,None) -> sprintf "dweight(%s)" (rec1 0 t1)
+    | TmDWeight(_,Some t1,None) -> sprintf "dweight(%s)" (recurse MATCH t1)
     | TmDWeight(_,Some t1,Some c2) ->
-      sprintf "dweight(%s,%s)" (rec1 0 t1) (string_of_float c2)
+      sprintf "dweight(%s,%s)" (recurse APP t1) (string_of_float c2)
     | TmDWeight _ -> failwith "Incorrect dweight in string_of_tm"
 
-  in rec1 (-1) t
+  in recurse MATCH t
 
 (** Convert terms to string with labels included. TODO Reuse code from the above *)
 let rec lstring_of_tm = function

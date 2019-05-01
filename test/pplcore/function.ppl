@@ -1,7 +1,7 @@
 // Test different ways of specifying funcions
 
 // Test a recursive function
-let fact n = if (n <= 1) then 1 else n * fact(n-1) in
+let fact n = if (n <= 1) then 1 else n * fact (n-1) in
 
 utest (fact 0)   1;
 utest (fact 1)   1;
@@ -17,20 +17,17 @@ utest (foo1 ())    5;
 utest (foo2 ())    8;
 
 //Test functions with many arguments
-function foo3(x,f,str){
-    f(x)
-}
-function incr(x) x + 3
-utest foo3(8,incr,"something")          11
+let foo3 x f str = f x in
+let incr x = x + 3 in
+utest (foo3 8 incr "something") 11;
 
 //Return a function with several arguments. Several scopes
-function foo4(f,x) {
-    function internal(s1,s2) {
-        f(x) ++ s1 ++ s2
-    }
-    internal
-}
-function foo5(s) s ++ "|"
-foo6 = foo4(foo5,"first")
-utest foo6("second","last")       "first|secondlast"
+let foo4 f x =
+  let internal s1 s2 = f x ++ s1 ++ s2 in
+  internal
+in
+
+let foo5 s = s ++ "|" in
+let foo6 = foo4 foo5 "first" in
+utest (foo6 "second" "last") "first|secondlast";
 
