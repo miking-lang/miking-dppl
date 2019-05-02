@@ -1,4 +1,4 @@
-(** Constants and constant operations (intrinsics) used as part of pplcore *)
+(** Constants and constant operations (intrinsics) used as part of pplcore. *)
 
 open Printf
 
@@ -109,7 +109,7 @@ let arity c = match c with
 
 (* Convert constants to pretty printed strings *)
 let rec string_of_const c = match c with
-  | CUnit -> "unit"
+  | CUnit -> "()"
 
   | CBool(b) -> string_of_bool b
   | CNot -> "not"

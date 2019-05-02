@@ -1,5 +1,4 @@
-(** 0-CFA static analysis for aligning weights in programs
-*)
+(** 0-CFA static analysis for aligning weights in programs. *)
 
 open Ast
 open Const
@@ -52,7 +51,7 @@ let label builtin tm =
                               label_vars (add x i map) t1)
     | TmApp(a,t1,t2) -> TmApp(a,label_vars map t1, label_vars map t2)
     | TmClos _ -> failwith "Closure before eval"
-    | TmConst _ | TmIf _ | TmFix _ -> tm
+    | TmConst _ | TmIf _ | TmFix _ -> tm (* TODO if *)
 
     | TmMatch _ -> failwith "TODO analysis.ml"
     | TmTup _ -> failwith "TODO analysis.ml"
@@ -79,7 +78,8 @@ let label builtin tm =
     | TmApp(a,t1,t2)   -> TmApp({a with label = next()},
                                    label_terms t1,label_terms t2)
     | TmConst(a,c)     -> TmConst({a with label=next()},c)
-    | TmIf(a,c,t1)  -> TmIf({a with label=next()},c,t1)
+    | TmIf(a,t,t1,t2)  -> TmIf({a with label=next()},label_terms t,
+                               label_terms t1, label_terms t2)
     | TmFix(a)      -> TmFix({a with label=next()})
     | TmUtest _ -> failwith "TODO analysis.ml"
 
@@ -112,7 +112,7 @@ let functions tm =
     | TmLam({label;var_label;_},_,t1) ->
       Fun{louter=label;linner=tm_label t1;lvar=var_label} :: recurse t1 funs
     | TmApp(_,t1,t2) -> funs |> recurse t1 |> recurse t2
-    | TmConst _ | TmIf _ | TmFix _
+    | TmConst _ | TmIf _ | TmFix _ (* TODO if *)
     | TmClos _ -> failwith "Closure before eval"
     | TmUtest _ -> failwith "TODO analysis.ml"
 
@@ -159,8 +159,7 @@ let gen_cstrs bmap tm =
       Sub(l1,l) :: cstrs
 
     (* If expressions *)
-    | TmApp({label=l;_}, TmApp(_, TmApp(_,TmIf(_,_,_),t1),
-                                 TmLam(_,_,t2)), TmLam(_,_,t3)) ->
+    | TmIf({label=l;_}, t1, t2, t3) ->
       let l2 = tm_label t2 in
       let l3 = tm_label t3 in
       let cstrs = cstrs |> recurse t1 |> recurse t2 |> recurse t3 in
@@ -204,7 +203,7 @@ let gen_cstrs bmap tm =
            | _ -> failwith "Non-fun absval in funs")
         cstrs funs
 
-    | TmConst _ | TmIf _ -> cstrs
+    | TmConst _ -> cstrs
 
     | TmRec _ | TmRecProj _ -> failwith "TODO analysis.ml"
 
@@ -282,7 +281,7 @@ let analyze bmap tm nl =
            | _ -> ())
          data.(l));
     match tm with
-    | TmApp(_,TmApp(_,TmApp(_,TmIf(_,_,_),t1),t2),t3)
+    | TmIf(_,t1,t2,t3)
       when not flag ->
       recurse flag t1;
       let flag = mem Stoch data.(tm_label t1) in
@@ -294,7 +293,7 @@ let analyze bmap tm nl =
     | TmApp(_,t1,t2) -> recurse flag t1; recurse flag t2;
 
 
-    | TmConst _ | TmIf _ | TmFix _ -> ()
+    | TmConst _ | TmIf _ | TmFix _ -> () (* TODO if *)
 
     | TmMatch _ -> failwith "TODO analysis.ml"
     | TmTup _ -> failwith "TODO analysis.ml"
@@ -355,7 +354,7 @@ let align_weight bmap dyn tm =
     | TmApp(a,t1,t2) -> TmApp(a,recurse t1,recurse t2)
 
     | TmFix _ | TmVar _ | TmConst _
-    | TmIf _ -> tm
+    | TmIf _ -> tm (* TODO if *)
 
     | TmMatch _ -> failwith "TODO analysis.ml"
     | TmTup _ -> failwith "TODO analysis.ml"

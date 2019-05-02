@@ -1,3 +1,5 @@
+(** Parser utilities *)
+
 open Ast
 
 (** Function for adding fix-point if a function is recursive*)
@@ -9,8 +11,7 @@ let addrec x t =
     | TmApp(_,t1,t2) -> hasx t1 || hasx t2
     | TmConst _ -> false
     | TmFix _ -> false
-    | TmIf(_,_,None) -> false
-    | TmIf(_,_,Some(t1)) -> hasx t1
+    | TmIf(_,t,t1,t2) -> hasx t || hasx t1 || hasx t2
 
     | TmUtest _ -> false
 

@@ -77,7 +77,7 @@ let rec debruijn env t = match t with
   | TmClos _ -> failwith "Closures should not be available."
   | TmApp(a,t1,t2) -> TmApp(a,debruijn env t1,debruijn env t2)
   | TmConst _ -> t
-  | TmIf _ -> t
+  | TmIf(a,t,t1,t2) -> TmIf(a,debruijn env t,debruijn env t1,debruijn env t2)
   | TmFix _ -> t
 
   | TmUtest _ -> t
@@ -181,6 +181,11 @@ let rec eval env t =
      Need to evaluate because of fix point. *)
   | TmVar(_,_,n) -> eval env (List.nth env n)
 
+  (* Constants and intrinsics *)
+  | TmConst _ | TmFix _ | TmUtest _
+  | TmConcat _ | TmInfer _ | TmLogPdf _
+  | TmSample _ | TmWeight _ | TmDWeight _ -> t
+
   (* Lambda and closure conversions *)
   | TmLam(a,x,t1) -> TmClos(a,x,t1,env)
   | TmClos _ -> t
@@ -199,15 +204,6 @@ let rec eval env t =
      | TmFix _,(TmClos(_,_,t3,env2) as tt) ->
        eval ((TmApp(na,TmFix na,tt))::env2) t3
      | TmFix _,_ -> failwith "Incorrect fix application."
-
-     (* If-expression *)
-     | TmIf(_,x1,x2),v2 ->
-       (match x1,x2,v2 with
-        | None,None,TmConst(_,CBool(b)) -> TmIf(na,Some(b),None)
-        | Some(b),None,(TmClos(_,_,_t3,_) as v3) -> TmIf(na,Some(b),Some(v3))
-        | Some(b),Some(TmClos(_,_,t3,env3)),TmClos(_,_,t4,env4) ->
-          if b then eval (nop::env3) t3 else eval (nop::env4) t4
-        | _ -> failwith "Incorrect if-expression in the eval function.")
 
      | TmConcat(a,None),(TmConst(_,CString _) as v2)
      | TmConcat(a,None),(TmList _ as v2) -> TmConcat(a,Some v2)
@@ -257,14 +253,12 @@ let rec eval env t =
 
      | _ -> failwith "Application to a non closure value.")
 
-  (* Constant *)
-  | TmConst _ | TmFix _ -> t
-
-  (* If expression *)
-  | TmIf _ -> t
-
-  (* Utest *)
-  | TmUtest _ -> t
+  (* If-expression *)
+  | TmIf(_,t,t1,t2) ->
+    (match eval env t with
+    | TmConst(_,CBool(true)) -> eval env t1
+    | TmConst(_,CBool(false)) -> eval env t2
+    | _ -> failwith "Incorrect condition in if-expression.")
 
   | TmMatch(_,t1,cases) ->
     let v1 = eval env t1 in
@@ -274,7 +268,6 @@ let rec eval env t =
          | Some env -> eval env t
          | None -> match_cases cases)
       | [] -> failwith "Pattern matching failed TODO"
-
     in match_cases cases
 
   | TmTup(a,tarr) -> TmTup(a,Array.map (eval env) tarr)
@@ -282,7 +275,6 @@ let rec eval env t =
     (match eval env t1 with
      | TmTup(_,varr) -> varr.(i)
      | _ -> failwith "Tuple projection on non-tuple TODO")
-
 
   (* Records *)
   | TmRec(a,tls) -> TmRec(a,List.map (fun (k,tm) -> k,eval env tm) tls)
@@ -297,15 +289,9 @@ let rec eval env t =
      | t -> failwith (sprintf "Record projection on non-record %s"
                         (string_of_tm t)))
 
+  (* List eval *)
   | TmList(a,tls) -> TmList(a,List.map (eval env) tls)
 
-  | TmConcat _ -> t
-
-  | TmInfer _ -> t
-  | TmLogPdf _ -> t
-  | TmSample _ -> t
-  | TmWeight _ -> t
-  | TmDWeight _ -> t
 
 (** Importance sampling (Likelihood weighting) inference *)
 and infer_is model n =

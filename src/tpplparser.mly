@@ -1,6 +1,6 @@
+/* Parser for TreePPL. */
+
 %{
-(* TODO The first special comment of the file is the comment associated with
-   the whole module. *)
 
 open Ast
 open Parserutils
@@ -105,7 +105,7 @@ seq:
       { TmApp(na,TmLam(na,$2,$6), addrec $2 (mkfun $3 $5)) }
 
   | FUNC FUNIDENT RPAREN texpr seq
-      { TmApp(na,TmLam(na,$2,$5), addrec $2 (mkfun [""] $4)) }
+      { TmApp(na,TmLam(na,$2,$5), addrec $2 (mkfun ["_"] $4)) }
 
   | IDENT EQ texpr seq
       { TmApp(na,TmLam(na,$1,$4),$3) }
@@ -155,8 +155,7 @@ expr:
         TmApp(na,weight,inner) }
 
   | IF seq THEN seq ELSE expr %prec LOW
-      { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
-                 TmLam(na,"",$6)) }
+       { TmIf(na, $2, $4, $6) }
 
   | LAM params RPAREN expr %prec LOW { (mkfun $2 $4) }
   | LAM RPAREN expr %prec LOW        { (mkfun ["_"] $3) }

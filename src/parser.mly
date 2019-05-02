@@ -1,6 +1,6 @@
+/* Parser for PPLCore. */
+
 %{
-(* TODO The first special comment of the file is the comment associated with
-   the whole module. *)
 
 open Ast
 open Parserutils
@@ -119,8 +119,7 @@ seq:
   | MATCH seq WITH cases { TmMatch(na,$2,$4) }
 
   | IF seq THEN seq ELSE seq %prec IF
-       { TmApp(na,TmApp(na,TmApp(na,TmIf(na,None,None),$2),TmLam(na,"",$4)),
-                 TmLam(na,"",$6)) }
+       { TmIf(na, $2, $4, $6) }
 
   | LAM params DOT seq %prec LAM { mkfun $2 $4 }
 

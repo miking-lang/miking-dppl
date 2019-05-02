@@ -1,6 +1,6 @@
+(** Lexer for TreePPL *)
+
 {
-(** TODO The first special comment of the file is the comment associated with
-    the whole module.*)
 open Tpplparser
 
 let keyword_table = Hashtbl.create 64

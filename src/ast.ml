@@ -1,5 +1,5 @@
 (** Definitions and operations on the pplcore abstract syntax tree and
-    environment *)
+    environment. *)
 
 open Const
 open Pattern
@@ -24,14 +24,14 @@ type tm =
   (* Constants *)
   | TmConst       of attr * const
 
-  (* If expressions using the bool constants to dictate control flow *)
-  | TmIf          of attr * bool option * tm option
+  (* Pattern matching construct *)
+  | TmMatch       of attr * tm * (pat * tm) list
+
+  (* If expressions using the bool constants (could be encoded as TmMatch) *)
+  | TmIf          of attr * tm * tm * tm
 
   (* Fixed-point combinator (not really needed since untyped) *)
   | TmFix         of attr
-
-  (* Pattern matching construct *)
-  | TmMatch       of attr * tm * (pat * tm) list
 
   (* Records and record projection. Use linear search for projection.
      Use hashtable for larger records? *)
@@ -83,7 +83,7 @@ let tm_label = function
   | TmClos({label;_},_,_,_)
   | TmApp({label;_},_,_)
   | TmConst({label;_},_)
-  | TmIf({label;_},_,_)
+  | TmIf({label;_},_,_,_)
   | TmFix({label;_})
   | TmUtest({label;_},_)
   | TmMatch({label;_},_,_)
@@ -99,21 +99,59 @@ let tm_label = function
   | TmWeight({label;_},_,_)
   | TmDWeight({label;_},_,_) -> label
 
+(** Size function, used for making decisions when pretty printing *)
+let rec tm_size = function
+  | TmVar _ | TmConst _ | TmConcat _ | TmInfer _ | TmLogPdf _ | TmSample _
+  | TmWeight _ | TmUtest _ | TmFix _ | TmDWeight _ -> 1
+
+  | TmLam(_,_,t) | TmClos(_,_,t,_) | TmRecProj(_,t,_)
+  | TmTupProj(_,t,_) -> 1 + tm_size t
+
+  | TmApp(_,t1,t2) -> 1 + tm_size t1 + tm_size t2
+
+  | TmIf(_,t,t1,t2) -> 1 + tm_size t + tm_size t1 + tm_size t2
+
+  | TmMatch(_,t,tls) ->
+    1 + tm_size t + List.fold_left (fun a (_,t) -> a + tm_size t) 0 tls
+
+  | TmRec(_,tls) ->
+    1 + List.fold_left (fun a (_,t) -> a + tm_size t) 0 tls
+
+  | TmTup(_,tls) ->
+    1 + Array.fold_left (fun a t -> a + tm_size t) 0 tls
+
+  | TmList(_,tls) ->
+    1 + List.fold_left (fun a t -> a + tm_size t) 0 tls
+
 (** Precedence constants for printing *)
 type prec =
   | MATCH
   | LAM
+  | SEMICOLON
   | IF
   | TUP
   | APP
   | ATOM
 
-(** Convert terms to strings *)
-let string_of_tm t =
+(** Convert terms to strings. TODO Labels *)
+let string_of_tm
+    ?(debruijn = false)
+    ?(pretty = true)
+    ?(break = true)
+    ?(indent = 2)
+    ?(threshold = 20)
+    t =
 
-  let rec recurse prec t =
-    let p = bare t in
+  let rec recurse depth prec t =
+
+    (* Line break and indent to depth given as argument *)
+    let sep depth = if break then "\n" ^ String.make depth ' ' else " " in
+
+    (* Check if this term should be parenthesized *)
     let paren = match t with
+      | TmApp(_,TmLam(_,"_",_),_) when pretty -> prec > SEMICOLON
+      | TmApp(_,TmLam(_,_,_),_) when pretty -> prec > LAM
+
       | TmMatch _ -> prec > MATCH
       | TmLam _ | TmClos _ -> prec > LAM
       | TmIf _ -> prec > IF
@@ -122,67 +160,162 @@ let string_of_tm t =
       | TmVar _ | TmConst _ | TmFix _ | TmRec _ | TmTupProj _ | TmRecProj _
       | TmList _ | TmInfer _ | TmLogPdf _ | TmSample _ | TmUtest _
       | TmWeight _ | TmDWeight _ | TmConcat _ -> prec > ATOM
-    in if paren then "(" ^ p ^ ")" else p
+    in
 
-  and bare t =
-    match t with
+    (* Increment the printing depth if the expression is parenthesized *)
+    let depth = depth + if paren then 1 else 0 in
 
-    | TmMatch(_,t,cases) ->
-      let inner = List.map (fun (_,t1) -> "| p -> " ^ recurse LAM t1) cases in
-      "match " ^ recurse MATCH t ^ " with " ^ (String.concat " " inner)
+    (* Check if term size is larger than threshold *)
+    let big t = tm_size t > threshold in
 
-    | TmLam(_,x,t1) -> "lam " ^ x ^ ". " ^ recurse MATCH t1
-    | TmClos(_,x,t,_) -> "clos " ^ x ^ ". " ^ recurse MATCH t
+    (* Shortcut for building a string from  a prefix followed by a recursive
+       call with correctly incremented depth. *)
+    let recurse_pre pre depth prec t =
+      pre ^ recurse (depth + String.length pre) prec t in
 
-    (* TODO Make if non-curried *)
-    | TmIf(_,None,None) -> "if"
-    | TmIf(_,Some(g),None) -> "if(" ^ string_of_bool g ^ ")"
-    | TmIf(_,Some(g),Some(t2)) ->
-      "if(" ^ string_of_bool g ^ "," ^ recurse MATCH t2 ^ ")"
-    | TmIf(_,_,_) -> failwith "Invalid if"
+    (* Similar to the above function, but with line break and indentation. *)
+    let recurse_indent pre depth prec t =
+      pre ^ sep (depth + indent) ^ recurse (depth + indent) prec t in
 
-    | TmTup(_,tarr) ->
-      let inner = Array.map (fun t1 -> recurse APP t1) tarr in
-      "(" ^ (String.concat (",") (Array.to_list inner)) ^ ")"
+    (* Function for bare printing (no syntactic sugar) *)
+    let bare t = match t with
 
-    | TmApp(_,t1,(TmApp _ as t2)) -> recurse APP t1 ^ " " ^ recurse ATOM t2
-    | TmApp(_,t1,t2) -> recurse APP t1 ^ " " ^ recurse APP t2
+      | TmMatch(_,t,cases) ->
+        let inner =
+          List.map (fun (p,t1) ->
+              recurse_pre ("| " ^ string_of_pat p ^ " -> ") depth LAM t1)
+            cases in
+        recurse_pre "match " depth MATCH t ^ " with"
+        ^ sep (depth + indent)
+        ^ (String.concat (sep (depth + indent)) inner)
 
-    | TmVar(_,x,n) -> x ^ "#" ^ string_of_int n
-    | TmConst(_,c) -> string_of_const c
-    | TmFix _ -> "fix"
-    | TmUtest(_,Some t1) -> "utest(" ^ recurse MATCH t1 ^ ")"
-    | TmUtest _ -> "utest"
-    | TmRec(_,sm) ->
-      let inner = List.map (fun (k, t1) -> k ^ ":" ^ recurse MATCH t1) sm in
-      "{" ^ (String.concat (",") inner) ^ "}"
-    | TmRecProj(_,t1,x) -> recurse APP t1 ^ "." ^ x
-    | TmTupProj(_,t1,i) -> recurse APP t1 ^ "." ^ (string_of_int i)
-    | TmList(_,ls) ->
-      let inner = List.map (fun t1 -> recurse MATCH t1) ls in
-      "[" ^ (String.concat (",") inner) ^ "]"
-    | TmConcat(_,None) -> "concat"
-    | TmConcat(_,Some t1) -> sprintf "concat(%s)" (recurse MATCH t1)
-    | TmInfer _ -> "infer"
-    | TmLogPdf(_,None) -> "logpdf"
-    | TmLogPdf(_,Some t1) -> sprintf "logpdf(%s)" (recurse MATCH t1)
-    | TmSample(_,None,None) -> "sample"
-    | TmSample(_,Some t1,None) -> sprintf "sample(%s)" (recurse MATCH t1)
-    | TmSample(_,Some t1,Some t2) ->
-      sprintf "sample(%s,%s)" (recurse APP t1) (recurse APP t2)
-    | TmSample _ -> failwith "Incorrect sample in string_of_tm"
-    | TmWeight(_,None,None) -> "weight"
-    | TmWeight(_,Some t1,None) -> sprintf "weight(%s)" (recurse MATCH t1)
-    | TmWeight(_,Some t1,Some c2) ->
-      sprintf "weight(%s,%s)" (recurse APP t1) (string_of_float c2)
-    | TmWeight _ -> failwith "Incorrect weight in string_of_tm"
-    | TmDWeight(_,None,None) -> "dweight"
-    | TmDWeight(_,Some t1,None) -> sprintf "dweight(%s)" (recurse MATCH t1)
-    | TmDWeight(_,Some t1,Some c2) ->
-      sprintf "dweight(%s,%s)" (recurse APP t1) (string_of_float c2)
-    | TmDWeight _ -> failwith "Incorrect dweight in string_of_tm"
+      | TmLam(_,x,t1) ->
+        let pre = "lam " ^ x ^ ". " in
+        if big t then
+          recurse_indent pre depth MATCH t1
+        else
+          recurse_pre pre depth MATCH t1
 
-  in recurse MATCH t
+      | TmClos(_,x,t1,_) ->
+        let pre = "clos " ^ x ^ ". " in
+        if big t then
+          recurse_indent pre depth MATCH t1
+        else
+          recurse_pre pre depth MATCH t1
+
+      | TmIf(_,t1,t11,t12) ->
+        if big t then
+          recurse_pre "if " depth MATCH t1
+          ^ sep depth ^ recurse_pre "then " depth MATCH t11
+          ^ sep depth ^ recurse_pre "else " depth MATCH t12
+
+        (* The size of the subterms are always strictly smaller than the
+           current term. Hence, we won't have any line breaks in subterms with
+           a fixed threshold. *)
+        else
+          "if " ^ recurse (-1) MATCH t1
+          ^ " then " ^ recurse (-1) MATCH t11
+          ^ " else " ^ recurse (-1) MATCH t12
+
+      | TmTup(_,tarr) ->
+        let inner = Array.map (fun t1 -> recurse depth APP t1) tarr in
+        (String.concat
+           (if big t then "," ^ sep depth else ",")
+           (Array.to_list inner))
+
+      (* TODO Special rules to make applications look nicer? *)
+      | TmApp(_,t1,(TmApp _ as t2)) ->
+        recurse depth APP t1
+        ^ (if big t then sep depth else " ")
+        ^ recurse depth ATOM t2
+
+      | TmApp(_,t1,t2) ->
+        recurse depth APP t1
+        ^ (if big t then sep depth else " ")
+        ^ recurse depth APP t2
+
+      | TmVar(_,x,n) -> if debruijn then x ^ "#" ^ string_of_int n else x
+
+      | TmConst(_,c) -> string_of_const c
+
+      | TmFix _ -> "fix"
+
+      | TmUtest(_,Some t1) -> recurse_pre "utest(" depth MATCH t1 ^ ")"
+      | TmUtest _ -> "utest"
+
+      (* TODO depth from here and downwards *)
+
+      | TmRec(_,sm) ->
+        let inner =
+          List.map (fun (k, t1) -> k ^ ":" ^ recurse depth MATCH t1) sm in
+        "{" ^ (String.concat (",") inner) ^ "}"
+
+      | TmRecProj(_,t1,x) -> recurse depth APP t1 ^ "." ^ x
+
+      | TmTupProj(_,t1,i) -> recurse depth APP t1 ^ "." ^ (string_of_int i)
+
+      | TmList(_,ls) ->
+        let inner = List.map (fun t1 -> recurse depth MATCH t1) ls in
+        "[" ^ (String.concat (",") inner) ^ "]"
+
+      | TmConcat(_,None) -> "concat"
+      | TmConcat(_,Some t1) -> sprintf "concat(%s)" (recurse depth MATCH t1)
+
+      | TmInfer _ -> "infer"
+
+      | TmLogPdf(_,None) -> "logpdf"
+      | TmLogPdf(_,Some t1) -> sprintf "logpdf(%s)" (recurse depth MATCH t1)
+
+      | TmSample(_,None,None) -> "sample"
+      | TmSample(_,Some t1,None) -> sprintf "sample(%s)"
+                                      (recurse depth MATCH t1)
+      | TmSample(_,Some t1,Some t2) -> sprintf "sample(%s,%s)"
+                                         (recurse depth APP t1)
+                                         (recurse depth APP t2)
+      | TmSample _ -> failwith "Incorrect sample in string_of_tm"
+
+      | TmWeight(_,None,None) -> "weight"
+      | TmWeight(_,Some t1,None) -> sprintf "weight(%s)"
+                                      (recurse depth MATCH t1)
+      | TmWeight(_,Some t1,Some c2) -> sprintf "weight(%s,%s)"
+                                         (recurse depth APP t1)
+                                         (string_of_float c2)
+      | TmWeight _ -> failwith "Incorrect weight in string_of_tm"
+
+      | TmDWeight(_,None,None) -> "dweight"
+      | TmDWeight(_,Some t1,None) -> sprintf "dweight(%s)"
+                                       (recurse depth MATCH t1)
+      | TmDWeight(_,Some t1,Some c2) -> sprintf "dweight(%s,%s)"
+                                          (recurse depth APP t1)
+                                          (string_of_float c2)
+      | TmDWeight _ -> failwith "Incorrect dweight in string_of_tm"
+    in
+
+    (* Syntactic sugar printing *)
+    let sugar t = match t with
+      (* Sequencing (right associative) *)
+      | TmApp(_,TmLam(_,"_",t2),
+              (TmApp(_,TmLam(_,"_",_),_) as t1)) ->
+        recurse depth IF t1 ^ ";" ^ sep depth
+        ^ recurse depth LAM t2
+      | TmApp(_,TmLam(_,"_",t2),t1) ->
+        recurse depth SEMICOLON t1 ^ ";" ^ sep depth
+        ^ recurse depth LAM t2
+
+      (* Let. TODO Handle 3+ or more lambdas in application sequence *)
+      | TmApp(_,TmLam(_,x,t1),t2) ->
+        recurse_pre ("let " ^ x ^ " = ") depth MATCH t2
+        ^ " in" ^ sep depth
+        ^ recurse depth MATCH t1
+
+      | _ -> bare t
+    in
+
+    let p = if pretty then sugar t else bare t in
+
+    if paren then "(" ^ p ^ ")" else p
+
+  in recurse 0 MATCH t
 
 (** Convert terms to string with labels included. TODO Reuse code from the above *)
 let rec lstring_of_tm = function
@@ -199,7 +332,7 @@ let rec lstring_of_tm = function
   | TmApp({label;_},t1,t2) -> "(" ^ lstring_of_tm t1 ^ " " ^ lstring_of_tm t2
                                 ^ "):" ^ (string_of_int label)
   | TmConst({label;_},c) -> string_of_const c ^ ":" ^ (string_of_int label)
-  | TmIf({label;_},_,_) -> "if:" ^ (string_of_int label)
+  | TmIf({label;_},_,_,_) -> "if:" ^ (string_of_int label) (* TODO *)
   | TmFix({label;_}) -> "fix:" ^ (string_of_int label)
 
   | TmUtest _ -> failwith "TODO"
