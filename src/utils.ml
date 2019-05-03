@@ -18,4 +18,10 @@ let replicate i v =
     | _ -> recurse (i-1) v (v :: acc)
   in recurse i v []
 
+(** Debugging printout *)
+let debug cond heading info =
+  if cond then begin
+    printf "--- %s ---\n" (String.uppercase_ascii heading);
+    printf "%s\n\n" (info ());
+  end
 

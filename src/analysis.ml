@@ -3,6 +3,7 @@
 open Ast
 open Const
 open Utils
+open Printf
 
 let debug_sanalysis = false
 
@@ -242,10 +243,9 @@ let analyze bmap tm nl =
       (data.(q) <- union data.(q) d;
        worklist := q :: !worklist) in
 
-  if debug_sanalysis then
-    (print_endline "-- constraints --";
-     List.iter (fun cstr -> print_endline (string_of_cstr cstr)) cstrs;
-     print_newline ());
+  debug debug_sanalysis "Constraints"
+    (fun () ->
+       String.concat "\n" (List.map (fun cstr -> string_of_cstr cstr) cstrs));
 
   (* Building the graph *)
   let f cstr = match cstr with
@@ -318,21 +318,19 @@ let analyze bmap tm nl =
     recurse false tm;
   done;
 
-  if debug_sanalysis then
-    (print_endline "-- data --";
-     Array.iteri (fun i set ->
-         print_string ("Label " ^ string_of_int i ^ ": { ");
-         print_string (String.concat ", "
-                         (List.map string_of_absval (elements set)));
-         print_endline (" }")) data;
-     print_newline ();
+  debug debug_sanalysis "Data"
+    (fun () -> String.concat "\n"
+     (List.mapi (fun i set ->
+           sprintf "Label %d: { %s }" i
+             (String.concat ", "
+                (List.map string_of_absval (elements set))))
+        (Array.to_list data)));
 
-     print_endline "-- dynamic --";
-     Array.iteri
-       (fun i b ->
-          print_endline ("Label " ^ string_of_int i ^ " = " ^ string_of_bool b);
-       ) mark;
-     print_newline ());
+  debug debug_sanalysis "Dynamic"
+    (fun () -> String.concat "\n"
+       (List.mapi
+          (fun i b ->
+             sprintf "Label %d = %B" i b) (Array.to_list mark)));
 
   mark
 
@@ -375,5 +373,4 @@ let align_weight bmap dyn tm =
     | TmDWeight _ -> failwith "TODO analysis.ml"
 
   in recurse tm
-
 

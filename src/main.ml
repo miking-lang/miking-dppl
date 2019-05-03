@@ -10,48 +10,48 @@ open Utils
 
 (** Mapping between predefined variable names and builtin constants *)
 let builtin_const = [
-  "not",CNot;
-  "and",CAnd(None);
-  "or",COr(None);
+  "not",          CNot;
+  "and",          CAnd(None);
+  "or",           COr(None);
 
-  "mod",CMod(None);
-  "sll",CSll(None);
-  "srl",CSrl(None);
-  "sra",CSra(None);
+  "mod",          CMod(None);
+  "sll",          CSll(None);
+  "srl",          CSrl(None);
+  "sra",          CSra(None);
 
-  "inf",CFloat(infinity);
-  "log",CLog;
+  "inf",          CFloat(infinity);
+  "log",          CLog;
 
-  "add",CAdd(None);
-  "sub",CSub(None);
-  "mul",CMul(None);
-  "div",CDiv(None);
-  "neg",CNeg;
-  "lt",CLt(None);
-  "leq",CLeq(None);
-  "gt",CGt(None);
-  "geq",CGeq(None);
+  "add",          CAdd(None);
+  "sub",          CSub(None);
+  "mul",          CMul(None);
+  "div",          CDiv(None);
+  "neg",          CNeg;
+  "lt",           CLt(None);
+  "leq",          CLeq(None);
+  "gt",           CGt(None);
+  "geq",          CGeq(None);
 
-  "eq",CEq(None);
-  "neq",CNeq(None);
+  "eq",           CEq(None);
+  "neq",          CNeq(None);
 
-  "normal",CNormal(None,None);
-  "uniform",CUniform(None,None);
-  "gamma",CGamma(None,None);
-  "exponential",CExp(None);
-  "bernoulli",CBern(None);
+  "normal",       CNormal(None, None);
+  "uniform",      CUniform(None, None);
+  "gamma",        CGamma(None, None);
+  "exponential",  CExp(None);
+  "bernoulli",    CBern(None);
 ]
 
 (** Mapping between predefined variable names and terms *)
 let builtin = [
-  "infer",TmInfer(na);
-  "logpdf",TmLogPdf(na,None);
-  "sample",TmSample(na,None,None);
-  "weight",TmWeight(na,None,None);
-  "dweight",TmDWeight(na,None,None);
+  "infer"    ,TmInfer(na);
+  "logpdf"   ,TmLogPdf(na,None);
+  "sample"   ,TmSample(na,None,None);
+  "weight"   ,TmWeight(na,None,None);
+  "dweight"  ,TmDWeight(na,None,None);
 ] @ List.map (fun (x, y) -> x, tm_of_const y) builtin_const
 
-(** Add a slash at the end "/" if not already available *)
+(** Add a slash at the end of a path if not already available *)
 let add_slash s =
   if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> "/"
   then s ^ "/" else s
@@ -79,8 +79,8 @@ let parse par filename =
       close_in file; tm
     with | Parsing.Parse_error ->
       if !utest then (
-        print_string
-          ("\n ** Parse error at " ^ string_of_position lexbuf.lex_curr_p);
+        printf "\n ** Parse error at %s"
+          (string_of_position (lexbuf.lex_curr_p));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1;
         nop)
@@ -95,14 +95,12 @@ let exec filename =
   utest_fail_local := 0;
 
   let tm = match Filename.extension filename with
-    | ".ppl" -> parse (Parser.main Lexer.main) filename
+    | ".ppl"  -> parse (Parser.main Lexer.main) filename
     | ".tppl" -> parse (Tpplparser.main Tppllexer.main) filename
-    | s -> failwith ("Unsupported file type: " ^ s) in
+    | s       -> failwith ("Unsupported file type: " ^ s) in
 
-  if debug_cps || debug_lift_apps then
-    (print_endline "-- input term --";
-     print_endline (string_of_tm tm);
-     print_newline ());
+  debug (debug_cps || debug_lift_apps) "Input term"
+    (fun () -> string_of_tm tm);
 
   (* If chosen inference is aligned SMC, perform static analysis *)
   let tm = if !Analysis.align
@@ -110,10 +108,7 @@ let exec filename =
       (* Label program and builtins in preparation for static analysis *)
       let tm,bmap,nl = Analysis.label (builtin |> List.split |> fst) tm in
 
-      if debug_sanalysis then
-        (print_endline "-- after labeling --";
-         print_endline (lstring_of_tm tm);
-         print_newline ());
+      debug debug_sanalysis "After labeling" (fun () -> string_of_tm tm);
 
       (* Perform static analysis, returning all dynamic labels *)
       let dyn = Analysis.analyze bmap tm nl in
@@ -124,47 +119,40 @@ let exec filename =
       Analysis.align_weight bmap dyn tm
     end else tm in
 
-  if debug_sanalysis then
-    (print_endline "-- after SMC alignment --";
-     print_endline (lstring_of_tm tm);
-     print_newline ());
+  debug debug_sanalysis "After SMC alignment" (fun () -> string_of_tm tm);
 
-  let builtin = builtin
-                (* Transform builtins to CPS. Required since we need to
-                       wrap constant functions in CPS forms *)
-                |> List.map (fun (x, y) -> (x, (cps_atomic y)))
+  let builtin =
+    builtin
 
-                (* Debruijn transform builtins (since they have now been
-                   CPS transformed) *)
-                |> List.map (fun (x, y) -> (x, debruijn [] y)) in
+    (* Transform builtins to CPS. Required since we need to wrap constant
+       functions in CPS forms *)
+    |> List.map (fun (x, y) -> (x, (cps_atomic y)))
 
-  if debug_cps_builtin then
-    (print_endline "-- cps builtin --";
-     (List.iter print_endline
+    (* Debruijn transform builtins (since they have now been
+       CPS transformed) *)
+    |> List.map (fun (x, y) -> (x, debruijn [] y)) in
+
+  debug debug_cps_builtin "CPS builtin"
+     (fun () -> String.concat "\n"
         (List.map
-           (fun (x, y) -> x ^ " = " ^ string_of_tm y) builtin));
-     print_newline ());
+           (fun (x, y) -> sprintf "%s = %s" x
+               (string_of_tm ~margin:1000 y)) builtin));
 
   (* Perform CPS transformation of main program *)
-  let cps = cps tm in
+  let tm = cps tm in
 
-  if debug_cps then
-    (print_endline "-- post cps --";
-     print_endline (string_of_tm cps);
-     print_newline ());
+  debug debug_cps "Post CPS" (fun () -> string_of_tm ~pretty:false tm);
 
   (* Evaluate CPS form of main program *)
   let res =
-    cps |> debruijn (builtin |> List.split |> fst)
+    tm |> debruijn (builtin |> List.split |> fst)
     |> eval (builtin |> List.split |> snd) in
 
-  if debug_cps then
-    (print_endline "-- post cps eval --";
-     print_endline (string_of_tm res));
+  debug debug_cps "Post CPS eval" (fun () -> string_of_tm res);
 
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
-(** Main function. Checks arguments and reads file names *)
+(** Main function. Parses command line arguments *)
 let main =
   let speclist = [
 
@@ -178,17 +166,17 @@ let main =
 
     "--inference",
     Arg.String(fun s -> match s with
-        | "is" -> inference := Importance
+        | "is"  -> inference := Importance
         | "smc" -> inference := SMC
-        | _ -> failwith "Incorrect inference algorithm"
+        | _     -> failwith "Incorrect inference algorithm"
       ),
     " Specifies inference method. Options are: is, smc.";
 
     "--samples",
     Arg.Int(fun i -> match i with
         | i when i < 1 -> failwith "Number of samples must be positive"
-        | i -> particles := i),
-    " Determines the number of samples (positive).";
+        | i            -> particles := i),
+    " Specifies the number of samples.";
 
   ] in
 
@@ -209,3 +197,4 @@ let main =
     else
       printf "\nERROR! %d successful tests and %d failed tests.\n"
         (!utest_ok) (!utest_fail)
+

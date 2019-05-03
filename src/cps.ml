@@ -13,45 +13,35 @@ open Utils
 let debug_cps         = true
 
 (** Debug the CPS transformation of the initial environment (builtin) *)
-let debug_cps_builtin = false
+let debug_cps_builtin = true
 
 (** Debug the lifting transformation *)
-let debug_lift_apps   = false
+let debug_lift_apps   = true
 
 (** Check if a term is atomic (contains no computation). *)
 let rec is_atomic = function
-  | TmApp _   -> false
-
-  | TmVar _ -> true
-  | TmLam _ -> true
-  | TmClos _ -> true
-
-  | TmConst _ -> true
-
-  | TmFix _ -> true
-
-  | TmUtest _ -> true
-
-  | TmIf(_,t,t1,t2) -> is_atomic t && is_atomic t1 && is_atomic t2
+  | TmApp _           -> false
+  | TmVar _           -> true
+  | TmLam _           -> true
+  | TmClos _          -> true
+  | TmConst _         -> true
+  | TmFix _           -> true
+  | TmUtest _         -> true
+  | TmIf(_,t,t1,t2)   -> is_atomic t && is_atomic t1 && is_atomic t2
+  | TmRec(_,rels)     -> List.for_all (fun (_,te) -> is_atomic te) rels
+  | TmRecProj(_,t1,_) -> is_atomic t1
+  | TmTup(_,tarr)     -> Array.for_all is_atomic tarr
+  | TmTupProj(_,t1,_) -> is_atomic t1
+  | TmList(_,tls)     -> List.for_all is_atomic tls
+  | TmConcat _        -> true
 
   | TmMatch(_,t1,pls) ->
-    is_atomic t1 && List.for_all (fun (_,te) -> is_atomic te) pls
-
-  | TmRec(_,rels) -> List.for_all (fun (_,te) -> is_atomic te) rels
-  | TmRecProj(_,t1,_) -> is_atomic t1
-
-  | TmTup(_,tarr) -> Array.for_all is_atomic tarr
-  | TmTupProj(_,t1,_) -> is_atomic t1
-
-  | TmList(_,tls) -> List.for_all is_atomic tls
-
-  | TmConcat _ -> true
+    is_atomic t1 &&
+    List.for_all (fun (_,te) -> is_atomic te) pls
 
   | TmInfer _
-  | TmLogPdf _
-  | TmSample _
-  | TmWeight _
-  | TmDWeight _ -> true
+  | TmLogPdf _ | TmSample _
+  | TmWeight _ | TmDWeight _ -> true
 
 
 (** Wrap opaque builtin functions in CPS forms *)
@@ -93,22 +83,10 @@ let rec lift_apps t =
     List.fold_right (fun (_,app) t -> TmApp(na,t,app)) apps lam in
 
   match t with
-  | TmVar _ -> t
-  | TmLam(a,s,t) -> TmLam(a,s,lift_apps t)
-
-  | TmClos _ -> failwith "Should not exist before eval"
-
-  | TmApp(a,t1,t2) -> TmApp(a,lift_apps t1, lift_apps t2)
-
-  | TmConst _ -> t
 
   | TmIf(a,t,t1,t2) ->
     let t,apps = extract_complex t [] in
     wrap_app (TmIf(a,t,lift_apps t1,lift_apps t2)) apps
-
-  | TmFix _ -> t
-
-  | TmUtest _ -> t
 
   | TmMatch(a,t1,cases) ->
     let cases = List.map (fun (p,t) -> p,lift_apps t) cases in
@@ -141,18 +119,29 @@ let rec lift_apps t =
     let tls,apps = List.fold_left f ([],[]) tls in
     wrap_app (TmList(a,List.rev tls)) apps
 
+  | TmVar _        -> t
+  | TmLam(a,s,t)   -> TmLam(a,s,lift_apps t)
+  | TmClos _       -> failwith "Should not exist before eval"
+  | TmApp(a,t1,t2) -> TmApp(a,lift_apps t1, lift_apps t2)
+  | TmConst _      -> t
+  | TmFix _        -> t
+  | TmUtest _      -> t
+  | TmInfer _      -> t
+
   | TmConcat(_,None) -> t
   | TmConcat _ -> failwith "Should not exist before eval"
 
-  | TmInfer _ -> t
   | TmLogPdf(_,None) -> t
-  | TmLogPdf _ -> failwith "Should not exist before eval"
+  | TmLogPdf _       -> failwith "Should not exist before eval"
+
   | TmSample(_,None,None) -> t
-  | TmSample _ -> failwith "Should not exist before eval"
+  | TmSample _            -> failwith "Should not exist before eval"
+
   | TmWeight(_,None,None) -> t
-  | TmWeight _ -> failwith "Should not exist before eval"
+  | TmWeight _            -> failwith "Should not exist before eval"
+
   | TmDWeight(_,None,None) -> t
-  | TmDWeight _ -> failwith "Should not exist before eval"
+  | TmDWeight _            -> failwith "Should not exist before eval"
 
 (** CPS transformation of atomic terms (terms containing no computation).
     Transforming atomic terms means that we can perform the CPS transformation
@@ -212,24 +201,24 @@ let rec cps_atomic t = match t with
   (* Transform some builtin constructs in the same way as
      constants. It is required that the original arity of the function is
      passed to cps_builtin *)
-  | TmConcat(_,None)  -> cps_builtin t 2
-  | TmConcat _  -> failwith "Should not exist before eval"
-  | TmInfer _ -> cps_builtin t 1
+  | TmConcat(_,None) -> cps_builtin t 2
+  | TmConcat _       -> failwith "Should not exist before eval"
+  | TmInfer _        -> cps_builtin t 1
   | TmLogPdf(_,None) -> cps_builtin t 2
-  | TmLogPdf _ -> failwith "Should not exist before eval"
+  | TmLogPdf _       -> failwith "Should not exist before eval"
 
   (* Unit tests *)
   | TmUtest(_,None) -> cps_builtin t 2
-  | TmUtest _ -> failwith "Should not exist before eval"
+  | TmUtest _       -> failwith "Should not exist before eval"
 
   (* Already in CPS form (the whole reason why we are performing the CPS
      transformation in the first place...) *)
-  | TmSample(_,None,None) -> t
-  | TmSample _ -> failwith "Should not exist before eval"
-  | TmWeight(_,None,None) -> t
-  | TmWeight _ -> failwith "Should not exist before eval"
+  | TmSample(_,None,None)  -> t
+  | TmSample _             -> failwith "Should not exist before eval"
+  | TmWeight(_,None,None)  -> t
+  | TmWeight _             -> failwith "Should not exist before eval"
   | TmDWeight(_,None,None) -> t
-  | TmDWeight _ -> failwith "Should not exist before eval"
+  | TmDWeight _            -> failwith "Should not exist before eval"
 
 (** Complex cps transformation. Complex means that the term contains
     computations (i.e., not atomic). A continuation must also be supplied as
@@ -280,19 +269,22 @@ and cps_complex cont t =
     TmApp(na, TmLam(na, c, inner), cont)
 
   (* If we have lifted applications, everything else is atomic. *)
-  | TmTup _ | TmTupProj _ | TmUtest _
-  | TmRec _ | TmRecProj _ | TmList _ | TmVar _
-  | TmLam _ | TmClos _ | TmConst _
-  | TmFix _ | TmConcat _ | TmInfer _ | TmLogPdf _
-  | TmSample _ | TmWeight _ | TmDWeight _ -> TmApp(na, cont, cps_atomic t)
+  | TmTup _    | TmTupProj _
+  | TmRec _    | TmRecProj _ | TmList _
+  | TmVar _    | TmLam _     | TmClos _
+  | TmConst _  | TmFix _     | TmConcat _
+  | TmInfer _  | TmLogPdf _  | TmSample _
+  | TmWeight _ | TmDWeight _ | TmUtest _ -> TmApp(na, cont, cps_atomic t)
 
-(** CPS transforms a term, with the identity function as continuation *)
+(** CPS transforms a term, with the identity function as continuation if it is
+    complex*)
 let cps tm =
+
   let tm = lift_apps tm in
 
-  if debug_lift_apps then
-    (print_endline "-- after lift_apps --";
-     print_endline (string_of_tm tm);
-     print_newline ());
+  debug debug_lift_apps "After lifting apps" (fun () -> string_of_tm tm);
 
-  cps_complex idfun tm
+  if is_atomic tm then
+    cps_atomic tm
+  else
+    cps_complex idfun tm

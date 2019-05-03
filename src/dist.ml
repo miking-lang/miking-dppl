@@ -4,7 +4,7 @@ open Ast
 open Const
 
 (** Whether to use a random seed or not *)
-let random_seed = true
+let random_seed = false
 
 (** Gsl default seed **)
 let seed =
@@ -14,8 +14,7 @@ let seed =
      Gsl.Rng.set rng (Random.nativeint Nativeint.max_int));
   rng
 
-(** Probability density/mass functions for built in distributions.
-    TODO Split between const distributions and tm distributions **)
+(** Probability density/mass functions for built in distributions. *)
 let logpdf value dist = match value,dist with
 
   (* Normal distribution *)
@@ -40,11 +39,10 @@ let logpdf value dist = match value,dist with
     TmConst(_,CGamma(Some b, Some a)) ->
     TmConst(na,CFloat(log (Gsl.Randist.gamma_pdf v ~a:a ~b:b)))
 
-  | _ ->
-    failwith "Incorrect distribution or value applied as argument to logpdf"
+  | _ -> failwith "Incorrect distribution\
+                   or value applied as argument to logpdf"
 
-(** Sample functions for built in distributions.
-    TODO Split between const distributions and tm distributions **)
+(** Sample functions for built in distributions. **)
 let sample dist = match dist with
 
   (* Normal distribution *)
@@ -66,5 +64,4 @@ let sample dist = match dist with
   | TmConst(_,CGamma(Some a,Some b)) ->
     TmConst(na,CFloat(Gsl.Randist.gamma seed ~a:a ~b:b))
 
-  | _ ->
-    failwith "Incorrect distribution applied as argument to sample."
+  | _ -> failwith "Incorrect distribution applied as argument to sample."

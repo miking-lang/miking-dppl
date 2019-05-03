@@ -7,16 +7,16 @@ open Pattern
 open Utils
 
 (** Debug the evaluation *)
-let debug_eval        = false
+let debug_eval = false
 
 (** Debug the evaluation environment *)
-let debug_eval_env    = false
+let debug_eval_env = false
 
 (** Debug the inference procedure *)
-let debug_infer       = true
+let debug_infer = true
 
 (** Printout the normalization constant when using SMC inference *)
-let debug_norm        = false
+let debug_norm = false
 
 (** Set to true if unit testing is enabled *)
 let utest = ref false
@@ -51,70 +51,52 @@ let unittest_failed pos t1 t2 =
 (** Extends an environment used in debruijn conversion with the identifiers
     found in the given pattern *)
 let rec patenv env pat = match pat with
-  | PatVar(s) -> s :: env
-
+  | PatVar(s)         -> s :: env
   | PatRec((_,p)::ps) -> patenv (patenv env p) (PatRec(ps))
-  | PatRec([]) -> env
-
-  | PatList(p::ps) -> patenv (patenv env p) (PatList(ps))
-  | PatList([]) -> env
-
-  | PatTup(p::ps) -> patenv (patenv env p) (PatTup(ps))
-  | PatTup([]) -> env
-
-  | PatCons(p1,p2) -> patenv (patenv env p1) p2
-
-  | PatUnit | PatChar _ | PatString _ | PatInt _ | PatFloat _ -> env
+  | PatRec([])        -> env
+  | PatList(p::ps)    -> patenv (patenv env p) (PatList(ps))
+  | PatList([])       -> env
+  | PatTup(p::ps)     -> patenv (patenv env p) (PatTup(ps))
+  | PatTup([])        -> env
+  | PatCons(p1,p2)    -> patenv (patenv env p1) p2
+  | PatUnit     | PatChar _
+  | PatString _ | PatInt _  | PatFloat _ -> env
 
 (** Add debruijn indices to a term *)
 let rec debruijn env t = match t with
   | TmVar(_,x,_) ->
     let rec find env n = match env with
       | y::ee -> if y = x then n else find ee (n+1)
-      | [] -> failwith ("Unknown variable: " ^ x)
+      | [] -> failwith ("Unknown variable in debruijn conversion: " ^ x)
     in TmVar(na,x,find env 0)
-  | TmLam(a,x,t1) -> TmLam(a,x,debruijn (x::env) t1)
-  | TmClos _ -> failwith "Closures should not be available."
-  | TmApp(a,t1,t2) -> TmApp(a,debruijn env t1,debruijn env t2)
-  | TmConst _ -> t
-  | TmIf(a,t,t1,t2) -> TmIf(a,debruijn env t,debruijn env t1,debruijn env t2)
-  | TmFix _ -> t
-
-  | TmUtest _ -> t
 
   | TmMatch(a,tm,cases) ->
     TmMatch(a,debruijn env tm,
             List.map (fun (p,tm) -> (p, debruijn (patenv env p) tm)) cases)
 
-  | TmTup(a,arr) -> TmTup(a, Array.map (debruijn env) arr)
+  | TmLam(a,x,t1)     -> TmLam(a,x,debruijn (x::env) t1)
+  | TmClos _          -> failwith "Closures should not be available."
+  | TmApp(a,t1,t2)    -> TmApp(a,debruijn env t1,debruijn env t2)
+  | TmIf(a,t,t1,t2)   -> TmIf(a,debruijn env t,debruijn env t1,debruijn env t2)
+  | TmTup(a,arr)      -> TmTup(a, Array.map (debruijn env) arr)
   | TmTupProj(a,t1,i) -> TmTupProj(a,debruijn env t1,i)
-
-  | TmRec(a,sm) -> TmRec(a,List.map (fun (k,v) -> k,debruijn env v) sm)
+  | TmRec(a,sm)       -> TmRec(a,List.map (fun (k,v) -> k,debruijn env v) sm)
   | TmRecProj(a,t1,x) -> TmRecProj(a,debruijn env t1,x)
+  | TmList(a,ls)      -> TmList(a,List.map (debruijn env) ls)
 
-  | TmList(a,ls) -> TmList(a,List.map (debruijn env) ls)
-
-  | TmConcat(_,None) -> t
-  | TmConcat _ -> failwith "Should not exist before eval"
-
-  | TmInfer _  -> t
-  | TmLogPdf(_,None) -> t
-  | TmLogPdf _ -> failwith "Should not exist before eval"
-  | TmSample(_,None,None) -> t
-  | TmSample _ -> failwith "Should not exist before eval"
-  | TmWeight(_,None,None) -> t
-  | TmWeight _ -> failwith "Should not exist before eval"
+  | TmConcat(_,None)       -> t
+  | TmConcat _             -> failwith "Should not exist before eval"
+  | TmLogPdf(_,None)       -> t
+  | TmLogPdf _             -> failwith "Should not exist before eval"
+  | TmSample(_,None,None)  -> t
+  | TmSample _             -> failwith "Should not exist before eval"
+  | TmWeight(_,None,None)  -> t
+  | TmWeight _             -> failwith "Should not exist before eval"
   | TmDWeight(_,None,None) -> t
-  | TmDWeight _ -> failwith "Should not exist before eval"
+  | TmDWeight _            -> failwith "Should not exist before eval"
 
-(** Debug function used in the eval function *)
-let debug_eval env t =
-  if debug_eval then
-    (printf "\n-- eval -- \n";
-     print_endline (string_of_tm t);
-     if debug_eval_env then
-       print_endline (string_of_env env))
-  else ()
+  | TmInfer _ | TmConst _
+  | TmFix _   | TmUtest _ -> t
 
 (** If the pattern matches the given value, return the extended environment
     where the variables in the pattern are bound to the corresponding terms in
@@ -128,67 +110,69 @@ let rec match_case env pattern value = match pattern,value with
      | Some v1 ->
        (match match_case env p v1 with
         | Some env -> match_case env (PatRec(ps)) v
-        | None -> None)
+        | None     -> None)
      | None -> None)
   | PatRec([]),TmRec _ -> Some env
-  | PatRec _,_ -> None
+  | PatRec _,_        -> None
 
   | PatList(p::ps),TmList(a,v::vs) ->
     (match match_case env p v with
      | Some env -> match_case env (PatList(ps)) (TmList(a,vs))
-     | None -> None)
+     | None     -> None)
   | PatList([]),TmList(_,[]) -> Some env
-  | PatList _,_ -> None
+  | PatList _,_              -> None
 
   | PatTup(ps),TmTup(_,varr) ->
     let rec fold env ps i = match ps with
       | p::ps when i < Array.length varr ->
         (match match_case env p varr.(i) with
          | Some env -> fold env ps (i + 1)
-         | None -> None)
+         | None     -> None)
       | [] when i = Array.length varr -> Some env
-      | _ -> None
+      | _                             -> None
     in fold env ps 0
   | PatTup _,_ -> None
 
   | PatCons(p1,p2),TmList(a,v::vs) ->
     (match match_case env p1 v with
      | Some env -> match_case env p2 (TmList(a,vs))
-     | None -> None)
+     | None     -> None)
   | PatCons _,_ -> None
 
   | PatUnit, TmConst(_,CUnit) -> Some env
-  | PatUnit, _ -> None
+  | PatUnit, _                -> None
 
   | PatChar(c1), TmConst(_,CChar(c2)) when c1 = c2 -> Some env
-  | PatChar _,_ -> None
+  | PatChar _,_                                    -> None
 
   | PatString(s1), TmConst(_,CString(s2)) when s1 = s2 -> Some env
-  | PatString _,_ -> None
+  | PatString _,_                                      -> None
 
   | PatInt(i1), TmConst(_,CInt(i2)) when i1 = i2 -> Some env
-  | PatInt _,_ -> None
+  | PatInt _,_                                   -> None
 
   | PatFloat(f1), TmConst(_,CFloat(f2)) when f1 = f2 -> Some env
-  | PatFloat _,_ -> None
+  | PatFloat _,_                                     -> None
 
 (** Big-step evaluation of terms *)
 let rec eval env t =
-  debug_eval env t;
+
+  debug debug_eval "Eval" (fun () -> string_of_tm t);
+
   match t with
 
   (* Variables using debruijn indices.
      Need to evaluate because of fix point. *)
   | TmVar(_,_,n) -> eval env (List.nth env n)
 
-  (* Constants and intrinsics *)
-  | TmConst _ | TmFix _ | TmUtest _
-  | TmConcat _ | TmInfer _ | TmLogPdf _
+  (* Constants and builtins *)
+  | TmConst _  | TmFix _    | TmUtest _
+  | TmConcat _ | TmInfer _  | TmLogPdf _
   | TmSample _ | TmWeight _ | TmDWeight _ -> t
 
   (* Lambda and closure conversions *)
   | TmLam(a,x,t1) -> TmClos(a,x,t1,env)
-  | TmClos _ -> t
+  | TmClos _      -> t
 
   (* Application *)
   | TmApp(_,t1,t2) -> (match eval env t1,eval env t2 with
@@ -198,7 +182,7 @@ let rec eval env t =
 
      (* Constant application using the delta function *)
      | TmConst(_,c),TmConst(_,v) -> TmConst(na,eval_const c v)
-     | TmConst _,_ -> failwith "Non constant applied to constant"
+     | TmConst _,_               -> failwith "Non constant applied to constant"
 
      (* Fix *)
      | TmFix _,(TmClos(_,_,t3,env2) as tt) ->
@@ -211,10 +195,12 @@ let rec eval env t =
        TmConst(na,CString (s1 ^ s2))
      | TmConcat(_,Some TmList(_,ls1)),TmList(_,ls2) -> TmList(na,ls1 @ ls2)
      | (TmConcat _ as t1),t2 ->
-       failwith (sprintf "Incorrect concatenation application: %s %s"
-                        (string_of_tm t1) (string_of_tm t2))
+       failwith (sprintf "Incorrect concatenation application:\
+                          LHS: %s \n\
+                          RHS: %s"
+                   (string_of_tm t1) (string_of_tm t2))
 
-     | TmUtest(a,None),v1 -> TmUtest(a,Some v1)
+     | TmUtest(a,None),v1          -> TmUtest(a,Some v1)
      | TmUtest({pos;_},Some v1),v2 ->
        if !utest then begin
          if val_equal v1 v2 then
@@ -226,11 +212,10 @@ let rec eval env t =
        end;
        nop
 
-
      | TmInfer _,(TmClos _ as model) -> infer model
-     | TmInfer _,_ -> failwith "Incorrect infer application"
+     | TmInfer _,_                   -> failwith "Incorrect infer application"
 
-     | TmLogPdf(a,None),v2 -> TmLogPdf(a,Some v2)
+     | TmLogPdf(a,None),v2    -> TmLogPdf(a,Some v2)
      | TmLogPdf(_,Some v1),v2 -> Dist.logpdf v1 v2
 
      | TmSample(a,None,None),(TmClos _ as cont) -> TmSample(a,Some cont,None)
@@ -260,6 +245,7 @@ let rec eval env t =
     | TmConst(_,CBool(false)) -> eval env t2
     | _ -> failwith "Incorrect condition in if-expression.")
 
+  (* Match expression *)
   | TmMatch(_,t1,cases) ->
     let v1 = eval env t1 in
     let rec match_cases cases = match cases with
@@ -270,6 +256,7 @@ let rec eval env t =
       | [] -> failwith "Pattern matching failed TODO"
     in match_cases cases
 
+  (* Tuples *)
   | TmTup(a,tarr) -> TmTup(a,Array.map (eval env) tarr)
   | TmTupProj(_,t1,i) ->
     (match eval env t1 with
@@ -278,8 +265,6 @@ let rec eval env t =
 
   (* Records *)
   | TmRec(a,tls) -> TmRec(a,List.map (fun (k,tm) -> k,eval env tm) tls)
-
-  (* Record projection *)
   | TmRecProj(_,t1,x) ->
     (match eval env t1 with
      | TmRec(_,vls) ->
@@ -324,16 +309,12 @@ and infer_is model n =
 
   let res = List.map sim s in
 
-  if debug_infer then
-    (print_endline "-- infer result --";
-     List.iter
-       (fun (t, w) ->
-          print_string "Sample: ";
-          print_string (string_of_tm t);
-          print_string ", Log weight: ";
-          print_endline (string_of_float w))
-       res;
-     print_newline ());
+  debug debug_infer "Infer result"
+    (fun () -> String.concat "\n"
+        (List.map
+           (fun (t, w) ->
+              sprintf "Sample: %s, Log weight: %f" (string_of_tm t) w)
+           res));
 
   nop (* TODO Here we should return a proper distribution *)
 
@@ -407,11 +388,15 @@ and infer_smc model n =
     let logavg, res = res |> List.map (fun (_,t,w) -> (t,w)) |> resample in
     let normconst = normconst +. logavg in
     if b then begin
-      if debug_norm then
-        print_endline (string_of_float normconst);
 
-      if debug_infer then
-        (List.iter (fun (t, _) -> print_endline (string_of_tm t)) res);
+      debug debug_norm "Normalizing constant"
+        (fun () -> sprintf "%f" normconst);
+
+      debug debug_infer "Infer result"
+        (fun () -> String.concat "\n"
+            (List.map
+               (fun (t, _) -> sprintf "Sample: %s" (string_of_tm t))
+               res));
 
       nop (* Here we should return a proper distribution *)
     end else

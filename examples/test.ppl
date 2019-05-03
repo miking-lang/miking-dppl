@@ -1,7 +1,1 @@
-let x = 55 in
-let y = 25 in
-
-utest (if x<1 then 7 else 8+3)             11;
-utest (if (77>x) then 7+1 else 8+3)         8;
-utest (if x > y + 5 then 33 else 77)       33;
-utest (if x > y + 30 then 33 else 77)      77;
+if true then 1 else 3 + 2
