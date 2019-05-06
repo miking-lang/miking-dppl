@@ -4,8 +4,7 @@ open Ast
 open Const
 open Utils
 open Printf
-
-let debug_sanalysis = false
+open Debug
 
 let align = ref false
 
@@ -65,11 +64,10 @@ let label builtin tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO analysis.ml"
     | TmLogPdf _ -> failwith "TODO analysis.ml"
     | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmDWeight _ -> failwith "TODO analysis.ml"
+    | TmResamp _ -> failwith "TODO analysis.ml"
 
   in let rec label_terms tm = match tm with
     | TmVar(a,x,i1)    -> TmVar({a with label=next()},x,i1)
@@ -94,11 +92,10 @@ let label builtin tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO analysis.ml"
     | TmLogPdf _ -> failwith "TODO analysis.ml"
     | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmDWeight _ -> failwith "TODO analysis.ml"
+    | TmResamp _ -> failwith "TODO analysis.ml"
 
   in let sm = List.fold_left
       (fun sm x -> add x (next ()) sm)
@@ -126,11 +123,10 @@ let functions tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO analysis.ml"
     | TmLogPdf _ -> failwith "TODO analysis.ml"
     | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmDWeight _ -> failwith "TODO analysis.ml"
+    | TmResamp _ -> failwith "TODO analysis.ml"
 
   in recurse tm []
 
@@ -220,11 +216,10 @@ let gen_cstrs bmap tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO analysis.ml"
     | TmLogPdf _ -> failwith "TODO analysis.ml"
     | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmDWeight _ -> failwith "TODO analysis.ml"
+    | TmResamp _ -> failwith "TODO analysis.ml"
 
   in recurse tm []
 
@@ -307,11 +302,10 @@ let analyze bmap tm nl =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO analysis.ml"
     | TmLogPdf _ -> failwith "TODO analysis.ml"
     | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmDWeight _ -> failwith "TODO analysis.ml"
+    | TmResamp _ -> failwith "TODO analysis.ml"
 
   in while !modified do
     modified := false;
@@ -342,9 +336,19 @@ let align_weight bmap dyn tm =
     | Some i -> i = id
     | _ -> false in
   let rec recurse tm = match tm with
-    | TmVar({label;var_label;_} as a,_,_)
+
+    (* Replace static weight with a weight followed by resample.
+       TODO Cleanup *)
+    | TmVar({label;var_label;_},_,_)
       when idmatch "weight" var_label ->
-      if dyn.(label) then TmDWeight(a,None,None)
+      if not dyn.(label) then
+        let var_name = "f" in
+        let var = TmVar(na,var_name,noidx) in
+        TmLam(na,var_name,
+              TmApp(na,
+                    TmLam(na,"_",TmResamp(na,None)),
+                    TmApp(na,tm,var)))
+
       else tm
 
     | TmLam(a,x,t1) -> TmLam(a,x,recurse t1)
@@ -366,11 +370,10 @@ let align_weight bmap dyn tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmInfer _ -> failwith "TODO analysis.ml"
     | TmLogPdf _ -> failwith "TODO analysis.ml"
     | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmDWeight _ -> failwith "TODO analysis.ml"
+    | TmResamp _ -> failwith "TODO analysis.ml"
 
   in recurse tm
 

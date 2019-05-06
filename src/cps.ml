@@ -8,15 +8,7 @@
 open Ast
 open Const
 open Utils
-
-(** Debug the CPS transformation *)
-let debug_cps         = true
-
-(** Debug the CPS transformation of the initial environment (builtin) *)
-let debug_cps_builtin = true
-
-(** Debug the lifting transformation *)
-let debug_lift_apps   = true
+open Debug
 
 (** Check if a term is atomic (contains no computation). *)
 let rec is_atomic = function
@@ -39,9 +31,8 @@ let rec is_atomic = function
     is_atomic t1 &&
     List.for_all (fun (_,te) -> is_atomic te) pls
 
-  | TmInfer _
   | TmLogPdf _ | TmSample _
-  | TmWeight _ | TmDWeight _ -> true
+  | TmWeight _ | TmResamp _ -> true
 
 
 (** Wrap opaque builtin functions in CPS forms *)
@@ -126,7 +117,6 @@ let rec lift_apps t =
   | TmConst _      -> t
   | TmFix _        -> t
   | TmUtest _      -> t
-  | TmInfer _      -> t
 
   | TmConcat(_,None) -> t
   | TmConcat _ -> failwith "Should not exist before eval"
@@ -134,14 +124,11 @@ let rec lift_apps t =
   | TmLogPdf(_,None) -> t
   | TmLogPdf _       -> failwith "Should not exist before eval"
 
-  | TmSample(_,None,None) -> t
-  | TmSample _            -> failwith "Should not exist before eval"
+  | TmSample _ -> t
 
-  | TmWeight(_,None,None) -> t
-  | TmWeight _            -> failwith "Should not exist before eval"
+  | TmWeight _ -> t
 
-  | TmDWeight(_,None,None) -> t
-  | TmDWeight _            -> failwith "Should not exist before eval"
+  | TmResamp _ -> t
 
 (** CPS transformation of atomic terms (terms containing no computation).
     Transforming atomic terms means that we can perform the CPS transformation
@@ -203,22 +190,18 @@ let rec cps_atomic t = match t with
      passed to cps_builtin *)
   | TmConcat(_,None) -> cps_builtin t 2
   | TmConcat _       -> failwith "Should not exist before eval"
-  | TmInfer _        -> cps_builtin t 1
   | TmLogPdf(_,None) -> cps_builtin t 2
   | TmLogPdf _       -> failwith "Should not exist before eval"
+  | TmSample _       -> cps_builtin t 1
+  | TmWeight _       -> cps_builtin t 1
 
   (* Unit tests *)
   | TmUtest(_,None) -> cps_builtin t 2
   | TmUtest _       -> failwith "Should not exist before eval"
 
   (* Already in CPS form (the whole reason why we are performing the CPS
-     transformation in the first place...) *)
-  | TmSample(_,None,None)  -> t
-  | TmSample _             -> failwith "Should not exist before eval"
-  | TmWeight(_,None,None)  -> t
-  | TmWeight _             -> failwith "Should not exist before eval"
-  | TmDWeight(_,None,None) -> t
-  | TmDWeight _            -> failwith "Should not exist before eval"
+     transformation in the first place) *)
+  | TmResamp _ -> t
 
 (** Complex cps transformation. Complex means that the term contains
     computations (i.e., not atomic). A continuation must also be supplied as
@@ -273,8 +256,8 @@ and cps_complex cont t =
   | TmRec _    | TmRecProj _ | TmList _
   | TmVar _    | TmLam _     | TmClos _
   | TmConst _  | TmFix _     | TmConcat _
-  | TmInfer _  | TmLogPdf _  | TmSample _
-  | TmWeight _ | TmDWeight _ | TmUtest _ -> TmApp(na, cont, cps_atomic t)
+  | TmLogPdf _ | TmSample _  | TmWeight _
+  | TmResamp _ | TmUtest _ -> TmApp(na, cont, cps_atomic t)
 
 (** CPS transforms a term, with the identity function as continuation if it is
     complex*)

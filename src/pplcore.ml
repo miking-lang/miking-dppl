@@ -1,12 +1,13 @@
-(** The entrypoint for the pplcore executable *)
+(** The entrypoint for the pplcore executable. Handles command line argument
+    parsing, and lexing/parsing. *)
 
 open Eval
 open Cps
 open Ast
 open Const
 open Printf
-open Analysis
 open Utils
+open Debug
 
 (** Mapping between predefined variable names and builtin constants *)
 let builtin_const = [
@@ -44,11 +45,9 @@ let builtin_const = [
 
 (** Mapping between predefined variable names and terms *)
 let builtin = [
-  "infer"    ,TmInfer(na);
-  "logpdf"   ,TmLogPdf(na,None);
-  "sample"   ,TmSample(na,None,None);
-  "weight"   ,TmWeight(na,None,None);
-  "dweight"  ,TmDWeight(na,None,None);
+  "logpdf",       TmLogPdf(na,None);
+  "sample",       TmSample(na);
+  "weight",       TmWeight(na);
 ] @ List.map (fun (x, y) -> x, tm_of_const y) builtin_const
 
 (** Add a slash at the end of a path if not already available *)
@@ -144,9 +143,9 @@ let exec filename =
   debug debug_cps "Post CPS" (fun () -> string_of_tm ~pretty:false tm);
 
   (* Evaluate CPS form of main program *)
-  let res =
+  let _w,res = (* TODO *)
     tm |> debruijn (builtin |> List.split |> fst)
-    |> eval (builtin |> List.split |> snd) in
+    |> eval (builtin |> List.split |> snd) 0.0 in
 
   debug debug_cps "Post CPS eval" (fun () -> string_of_tm res);
 
@@ -176,7 +175,7 @@ let main =
     Arg.Int(fun i -> match i with
         | i when i < 1 -> failwith "Number of samples must be positive"
         | i            -> particles := i),
-    " Specifies the number of samples.";
+    " Specifies the number of samples in affected inference algorithms.";
 
   ] in
 
@@ -189,12 +188,5 @@ let main =
 
   List.iter exec (files_of_folders !lst);
 
-  (* Print out unit test results, if applicable *)
-  if !utest then
-    if !utest_fail = 0 then
-      printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
-        (!utest_ok)
-    else
-      printf "\nERROR! %d successful tests and %d failed tests.\n"
-        (!utest_ok) (!utest_fail)
+  Debug.utest_print ();
 

@@ -18,10 +18,29 @@ let replicate i v =
     | _ -> recurse (i-1) v (v :: acc)
   in recurse i v []
 
-(** Debugging printout *)
-let debug cond heading info =
-  if cond then begin
-    printf "--- %s ---\n" (String.uppercase_ascii heading);
-    printf "%s\n\n" (info ());
-  end
+(** Map accumulate for lists. Maps f over the array while also carrying an
+    accumulator between applications of f. *)
+let map_accum f acc ls =
+  let rec recurse acc ls = match ls with
+    | x::ls ->
+      let acc,x = f acc x in
+      let acc,ls = recurse acc ls in
+      acc,x::ls
+    | [] -> acc,[]
+  in recurse acc ls
+
+(** Map accumulate for arrays. Maps f over the array while also carrying an
+    accumulator between applications of f. *)
+let arr_map_accum f acc arr =
+  let len = Array.length arr in
+  let acc,elem = f acc arr.(0) in
+  let res = (Array.make len elem) in
+  let rec recurse acc i =
+    if i < len then
+      let acc,elem = f acc arr.(i) in
+      res.(i) <- elem;
+      recurse acc (i+1)
+    else
+      acc,res
+  in recurse acc 1
 

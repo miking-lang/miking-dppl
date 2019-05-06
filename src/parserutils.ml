@@ -27,11 +27,10 @@ let addrec x t =
 
     | TmConcat _ -> false
 
-    | TmInfer _ -> false
     | TmLogPdf _ -> false
     | TmSample _ -> false
     | TmWeight _ -> false
-    | TmDWeight _ -> false
+    | TmResamp _ -> false
   in if hasx t then
     TmApp(na,TmFix(na),TmLam(na,x,t))
   else t

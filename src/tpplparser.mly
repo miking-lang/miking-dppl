@@ -111,8 +111,7 @@ seq:
       { TmApp(na,TmLam(na,$1,$4),$3) }
 
   | IDENT TILDE texpr seq
-      { let sample = TmSample(na,None,None) in
-        TmApp(na,TmLam(na,$1,$4),TmApp(na,sample,$3)) }
+      { TmApp(na,TmLam(na,$1,$4),TmApp(na,TmSample(na),$3)) }
 
 texpr:
   | usubexpr COMMA usubexprs_comma { TmTup(na,Array.of_list ($1 :: $3)) }
@@ -151,7 +150,7 @@ expr:
       { let logpdf = TmLogPdf(na,None) in
         let v = $2 in
         let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
-        let weight = TmWeight(na,None,None) in
+        let weight = TmWeight(na) in
         TmApp(na,weight,inner) }
 
   | IF seq THEN seq ELSE expr %prec LOW

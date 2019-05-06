@@ -5,30 +5,7 @@ open Ast
 open Const
 open Pattern
 open Utils
-
-(** Debug the evaluation *)
-let debug_eval = false
-
-(** Debug the evaluation environment *)
-let debug_eval_env = false
-
-(** Debug the inference procedure *)
-let debug_infer = true
-
-(** Printout the normalization constant when using SMC inference *)
-let debug_norm = false
-
-(** Set to true if unit testing is enabled *)
-let utest = ref false
-
-(** Counts the number of successful unit tests *)
-let utest_ok = ref 0
-
-(** Counts the number of failed unit tests *)
-let utest_fail = ref 0
-
-(** Counts local failed tests for one file *)
-let utest_fail_local = ref 0
+open Debug
 
 (** Inference types *)
 type inference =
@@ -88,15 +65,12 @@ let rec debruijn env t = match t with
   | TmConcat _             -> failwith "Should not exist before eval"
   | TmLogPdf(_,None)       -> t
   | TmLogPdf _             -> failwith "Should not exist before eval"
-  | TmSample(_,None,None)  -> t
-  | TmSample _             -> failwith "Should not exist before eval"
-  | TmWeight(_,None,None)  -> t
-  | TmWeight _             -> failwith "Should not exist before eval"
-  | TmDWeight(_,None,None) -> t
-  | TmDWeight _            -> failwith "Should not exist before eval"
+  | TmSample _             -> t
+  | TmWeight _             -> t
 
-  | TmInfer _ | TmConst _
-  | TmFix _   | TmUtest _ -> t
+  | TmResamp _             -> t
+
+  | TmConst _ | TmFix _ | TmUtest _ -> t
 
 (** If the pattern matches the given value, return the extended environment
     where the variables in the pattern are bound to the corresponding terms in
@@ -154,8 +128,8 @@ let rec match_case env pattern value = match pattern,value with
   | PatFloat(f1), TmConst(_,CFloat(f2)) when f1 = f2 -> Some env
   | PatFloat _,_                                     -> None
 
-(** Big-step evaluation of terms *)
-let rec eval env t =
+(** Big-step evaluation of terms TODO Optimize for degenerate weights *)
+let rec eval env weight t =
 
   debug debug_eval "Eval" (fun () -> string_of_tm t);
 
@@ -163,44 +137,44 @@ let rec eval env t =
 
   (* Variables using debruijn indices.
      Need to evaluate because of fix point. *)
-  | TmVar(_,_,n) -> eval env (List.nth env n)
+  | TmVar(_,_,n) -> eval env weight (List.nth env n)
 
   (* Constants and builtins *)
   | TmConst _  | TmFix _    | TmUtest _
-  | TmConcat _ | TmInfer _  | TmLogPdf _
-  | TmSample _ | TmWeight _ | TmDWeight _ -> t
+  | TmConcat _ | TmLogPdf _ | TmSample _
+  | TmWeight _ | TmResamp _ -> 0.0,t
 
   (* Lambda and closure conversions *)
-  | TmLam(a,x,t1) -> TmClos(a,x,t1,env)
-  | TmClos _      -> t
+  | TmLam(a,x,t1) -> 0.0,TmClos(a,x,t1,env)
+  | TmClos _      -> 0.0,t
 
   (* Application *)
-  | TmApp(_,t1,t2) -> (match eval env t1,eval env t2 with
+  | TmApp(_,t1,t2) ->
+    let weight,v1 = eval env weight t1 in
+    let weight,v2 = eval env weight t2 in
+    (match v1,v2 with
 
      (* Closure application *)
-     | TmClos(_,_,t3,env2),v2 -> eval (v2::env2) t3
+     | TmClos(_,_,t3,env2),v2 -> eval (v2::env2) weight t3
 
      (* Constant application using the delta function *)
-     | TmConst(_,c),TmConst(_,v) -> TmConst(na,eval_const c v)
+     | TmConst(_,c),TmConst(_,v) -> weight,TmConst(na,eval_const c v)
      | TmConst _,_               -> failwith "Non constant applied to constant"
 
      (* Fix *)
      | TmFix _,(TmClos(_,_,t3,env2) as tt) ->
-       eval ((TmApp(na,TmFix na,tt))::env2) t3
+       eval ((TmApp(na,TmFix na,tt))::env2) weight t3
      | TmFix _,_ -> failwith "Incorrect fix application."
 
+     | TmConcat(a,None),(TmList _ as v2)
      | TmConcat(a,None),(TmConst(_,CString _) as v2)
-     | TmConcat(a,None),(TmList _ as v2) -> TmConcat(a,Some v2)
-     | TmConcat(_,Some TmConst(_,CString s1)),TmConst(_,CString s2) ->
-       TmConst(na,CString (s1 ^ s2))
-     | TmConcat(_,Some TmList(_,ls1)),TmList(_,ls2) -> TmList(na,ls1 @ ls2)
-     | (TmConcat _ as t1),t2 ->
-       failwith (sprintf "Incorrect concatenation application:\
-                          LHS: %s \n\
-                          RHS: %s"
-                   (string_of_tm t1) (string_of_tm t2))
+       -> weight,TmConcat(a,Some v2)
+     | TmConcat(_,Some TmConst(_,CString s1)),TmConst(_,CString s2)
+       -> weight,TmConst(na,CString (s1 ^ s2))
+     | TmConcat(_,Some TmList(_,ls1)),TmList(_,ls2)
+       -> weight,TmList(na,ls1 @ ls2)
 
-     | TmUtest(a,None),v1          -> TmUtest(a,Some v1)
+     | TmUtest(a,None),v1          -> weight,TmUtest(a,Some v1)
      | TmUtest({pos;_},Some v1),v2 ->
        if !utest then begin
          if val_equal v1 v2 then
@@ -210,202 +184,168 @@ let rec eval env t =
            utest_fail := !utest_fail + 1;
            utest_fail_local := !utest_fail_local + 1)
        end;
-       nop
+       weight,nop
 
-     | TmInfer _,(TmClos _ as model) -> infer model
-     | TmInfer _,_                   -> failwith "Incorrect infer application"
+     | TmLogPdf(a,None),v2    -> weight,TmLogPdf(a,Some v2)
+     | TmLogPdf(_,Some v1),v2 -> weight,Dist.logpdf v1 v2
 
-     | TmLogPdf(a,None),v2    -> TmLogPdf(a,Some v2)
-     | TmLogPdf(_,Some v1),v2 -> Dist.logpdf v1 v2
+     | TmSample _,dist        -> weight,Dist.sample dist
 
-     | TmSample(a,None,None),(TmClos _ as cont) -> TmSample(a,Some cont,None)
-     | TmSample(a,Some cont,None),v2 -> TmSample(a,Some cont,Some v2)
-     | TmSample _,_ -> failwith "Incorrect sample application"
-
-     | TmWeight(a,None,None),(TmClos _ as cont) -> TmWeight(a,Some cont,None)
-     | TmWeight(a,Some cont,None),TmConst(_,CFloat w) ->
-       TmWeight(a,Some cont,Some w)
-     | TmWeight(a,Some cont,None),TmConst(_,CInt w) ->
-       TmWeight(a,Some cont,Some (float_of_int w))
+     | TmWeight _,TmConst(_,CFloat w) -> w +. weight, nop
+     | TmWeight _,TmConst(_,CInt w) -> (float_of_int w) +. weight, nop
      | TmWeight _,_ -> failwith "Incorrect weight application"
 
-     | TmDWeight(a,None,None),(TmClos _ as cont) -> TmDWeight(a,Some cont,None)
-     | TmDWeight(a,Some cont,None),TmConst(_,CFloat w) ->
-       TmDWeight(a,Some cont,Some w)
-     | TmDWeight(a,Some cont,None),TmConst(_,CInt w) ->
-       TmDWeight(a,Some cont,Some (float_of_int w))
-     | TmDWeight _,_ -> failwith "Incorrect dweight application"
+     | TmResamp(a,None),(TmClos _ as cont) -> weight,TmResamp(a,Some cont)
 
-     | _ -> failwith "Application to a non closure value.")
+     | _ -> failwith (sprintf "Incorrect application:\
+                               LHS: %s\n\
+                               RHS: %s\n"
+                        (string_of_tm v1) (string_of_tm v2)))
 
   (* If-expression *)
   | TmIf(_,t,t1,t2) ->
-    (match eval env t with
-    | TmConst(_,CBool(true)) -> eval env t1
-    | TmConst(_,CBool(false)) -> eval env t2
+    let weight,v = eval env weight t in
+    (match v with
+    | TmConst(_,CBool(true)) -> eval env weight t1
+    | TmConst(_,CBool(false)) -> eval env weight t2
     | _ -> failwith "Incorrect condition in if-expression.")
 
   (* Match expression *)
-  | TmMatch(_,t1,cases) ->
-    let v1 = eval env t1 in
+  | TmMatch(_,t,cases) ->
+    let weight,v = eval env weight t in
     let rec match_cases cases = match cases with
       | (p,t) :: cases ->
-        (match match_case env p v1 with
-         | Some env -> eval env t
+        (match match_case env p v with
+         | Some env -> eval env weight t
          | None -> match_cases cases)
       | [] -> failwith "Pattern matching failed TODO"
     in match_cases cases
 
   (* Tuples *)
-  | TmTup(a,tarr) -> TmTup(a,Array.map (eval env) tarr)
+  | TmTup(a,tarr) ->
+    let f = (fun weight e -> eval env weight e) in
+    let weight,tarr = arr_map_accum f weight tarr in
+    weight,TmTup(a,tarr)
   | TmTupProj(_,t1,i) ->
-    (match eval env t1 with
-     | TmTup(_,varr) -> varr.(i)
-     | _ -> failwith "Tuple projection on non-tuple TODO")
+    let weight,v = eval env weight t1 in
+    (match v with
+     | TmTup(_,varr) -> weight,varr.(i)
+     | _ -> failwith "Tuple projection on non-tuple")
 
   (* Records *)
-  | TmRec(a,tls) -> TmRec(a,List.map (fun (k,tm) -> k,eval env tm) tls)
+  | TmRec(a,tls) ->
+    let f = (fun weight (k,tm) ->
+        let weight,tm = eval env weight tm in weight,(k,tm)) in
+    let weight,tls = map_accum f weight tls
+    in weight,TmRec(a,tls)
   | TmRecProj(_,t1,x) ->
-    (match eval env t1 with
+    let weight,v = eval env weight t1 in
+    (match v with
      | TmRec(_,vls) ->
        (match List.assoc_opt x vls with
-        | Some v1 -> v1
-        | _ -> failwith "Record projection where Key TODO not found in record")
+        | Some v1 -> weight,v1
+        | _ -> failwith "Key not found in record")
      | t -> failwith (sprintf "Record projection on non-record %s"
                         (string_of_tm t)))
 
   (* List eval *)
-  | TmList(a,tls) -> TmList(a,List.map (eval env) tls)
+  | TmList(a,tls) ->
+    let f = (fun weight e -> eval env weight e) in
+    let weight,tls = map_accum f weight tls in
+    weight,TmList(a,tls)
 
 
 (** Importance sampling (Likelihood weighting) inference *)
-and infer_is model n =
+and infer_is env n program =
 
-  (* Remove continuation by applying idfun *)
-  let model = eval [] (TmApp(na, model, idfun)) in
+  (* Replicate program for #samples times with an initial log weight of 0.0 *)
+  let s = replicate n program in
 
-  (* Replicate model for #samples times with an initial log weight of 0.0 *)
-  let s = replicate n (TmApp(na, model, nop), 0.0) in
+  (* Evaluate everything to the end, producing a set of weighted samples *)
+  List.map (eval env 0.0) s
 
-  (* Evaluate one sample to the end *)
-  let rec sim (t, w) =
-    let t = eval [] t in
-    match t with
+  (*debug debug_infer "Infer result"*)
+    (*(fun () -> String.concat "\n"*)
+        (*(List.map*)
+           (*(fun (t, w) ->*)
+              (*sprintf "Sample: %s, Log weight: %f" (string_of_tm t) w)*)
+           (*res));*)
 
-    (* Sample *)
-    | TmSample(_,Some(cont),Some(dist)) ->
-      sim (TmApp(na, cont, Dist.sample dist), w)
-
-    (* Weight (and DWeight)*)
-    | TmWeight(_,Some(cont),Some wadj)
-    | TmDWeight(_,Some(cont),Some wadj) ->
-      if wadj = -. infinity then
-        (nop,wadj)
-      else
-        sim (TmApp(na, cont, nop), w +. wadj)
-
-    (* Result *)
-    | _ -> t, w in
-
-  let res = List.map sim s in
-
-  debug debug_infer "Infer result"
-    (fun () -> String.concat "\n"
-        (List.map
-           (fun (t, w) ->
-              sprintf "Sample: %s, Log weight: %f" (string_of_tm t) w)
-           res));
-
-  nop (* TODO Here we should return a proper distribution *)
-
-(** SMC inference *)
-and infer_smc model n =
-
-  (* Remove continuation by applying idfun *)
-  let model = eval [] (TmApp(na, model, idfun)) in
-
-  (* Replicate model for #samples times with an initial log weight of 0.0 *)
-  let s = replicate n (TmApp(na, model, nop), 0.0) in
-
-  (* Evaluate a sample until encountering a weight *)
-  let rec sim (t, w) =
-    let t = eval [] t in
-    match t with
-
-    (* Sample *)
-    | TmSample(_,Some(cont),Some(dist)) ->
-      sim (TmApp(na,cont,Dist.sample dist), w)
-
-    (* Dweight *)
-    | TmDWeight(_,Some(cont),Some wadj) ->
-      if wadj = -. infinity then (true,nop,wadj) else
-        sim (TmApp(na,cont,nop), w +. wadj)
-
-    (* Weight *)
-    | TmWeight(_,Some(cont),Some wadj) ->
-      if wadj = -. infinity then (true,nop,wadj) else
-        (false,TmApp(na,cont,nop), w +. wadj)
-
-    (* Result *)
-    | _ -> true,t,w in
+(** SMC inference TODO Cleanup *)
+and infer_smc env n program =
 
   (* Systematic resampling *)
   let resample s =
     (* Compute the logarithm of the average of the weights using
        logsumexp-trick *)
-    let weights = List.map snd s in
+    let weights = List.map fst s in
     let max = List.fold_left max (-. infinity) weights in
     let logavg =
       log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
       +. max -. log (float n) in
 
     (* Compute normalized weights from log-weights *)
-    let snorm = List.map (fun (t,w) -> t, exp (w -. logavg)) s in
-
-    (*(List.iter (fun (_, w) -> let w = 50.0 -. ((w /. (float n)) *. 50.0) in*)
-    (*print_endline ("w:" ^ (string_of_float w))) snorm);*)
+    let snorm = List.map (fun (w,t) -> exp (w -. logavg),t) s in
 
     (* Draw offset for resampling *)
     let offset = Random.float 1.0 in
 
     (* Perform resampling *)
     let rec rec1 curr next snorm acc = match snorm with
-      | (_,w)::_ -> let curr = curr +. w in rec2 curr next snorm acc
+      | (w,_)::_ -> let curr = curr +. w in rec2 curr next snorm acc
       | [] -> acc
     and rec2 curr next snorm acc = match snorm with
-      | (t,_)::tail ->
-        if curr > next then rec2 curr (next +. 1.0) snorm ((t,0.0)::acc)
+      | (_,t)::tail ->
+        if curr > next then rec2 curr (next +. 1.0) snorm ((0.0,t)::acc)
         else rec1 curr next tail acc
       | [] -> failwith "Error in resampling" in
 
     (* Also return the log average for computing the normalization constant *)
     logavg, rec1 0.0 offset snorm [] in
 
+  (* Replicate program for #samples times with an initial log weight of 0.0 *)
+  let s = replicate n program in
+
+  (* Run until first resample, attaching the initial environment *)
+  let s = List.map (eval env 0.0) s in
+
   (* Run SMC *)
   let rec smc s normconst =
+
+    (* Evaluate a program until encountering a resample *)
+    let sim (weight,tm) =
+      let weight,tm = eval [] weight tm in
+      match tm with
+
+      (* Resample *)
+      | TmResamp(_,Some(cont)) -> false,weight,TmApp(na,cont,nop)
+
+      (* Result *)
+      | _ -> true,weight,tm in
+
+
     let res = List.map sim s in
     let b = List.for_all (fun (b,_,_) -> b) res in
-    let logavg, res = res |> List.map (fun (_,t,w) -> (t,w)) |> resample in
+    let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample in
     let normconst = normconst +. logavg in
     if b then begin
-
-      debug debug_norm "Normalizing constant"
-        (fun () -> sprintf "%f" normconst);
-
-      debug debug_infer "Infer result"
-        (fun () -> String.concat "\n"
-            (List.map
-               (fun (t, _) -> sprintf "Sample: %s" (string_of_tm t))
-               res));
-
-      nop (* Here we should return a proper distribution *)
+      res
     end else
       smc res normconst
-
   in smc s 0.0
 
+(*debug debug_norm "Normalizing constant"*)
+(*(fun () -> sprintf "%f" normconst);*)
+
+(*debug debug_infer "Infer result"*)
+(*(fun () -> String.concat "\n"*)
+(*(List.map*)
+(*(fun (t, _) -> sprintf "Sample: %s" (string_of_tm t))*)
+(*res));*)
+
+
 (** Select correct inference algorithm *)
-and infer model = match !inference,!particles with
-  | Importance,i -> infer_is model i
-  | SMC,i -> infer_smc model i
+and infer program = match !inference,!particles with
+  | Importance,i -> infer_is program i
+  | SMC,i -> infer_smc program i
 

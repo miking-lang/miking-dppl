@@ -106,14 +106,13 @@ seq:
        { TmApp(na,TmLam(na,$2,$7), addrec $2 (mkfun $3 $5)) }
 
   | LET IDENT TILDE seq IN seq %prec LET
-       { let sample = TmSample(na,None,None) in
-        TmApp(na,TmLam(na,$2,$6),TmApp(na,sample,$4)) }
+       { TmApp(na,TmLam(na,$2,$6),TmApp(na,TmSample(na),$4)) }
 
   | OBSERVE seq TILDE seq %prec OBSERVE
       { let logpdf = TmLogPdf(na,None) in
         let v = $2 in
         let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
-        let weight = TmWeight(na,None,None) in
+        let weight = TmWeight(na) in
         TmApp(na,weight,inner) }
 
   | MATCH seq WITH cases { TmMatch(na,$2,$4) }

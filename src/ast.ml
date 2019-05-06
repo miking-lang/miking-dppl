@@ -50,12 +50,16 @@ type tm =
   (* Construct for performing unit tests *)
   | TmUtest   of attr * tm option
 
-  (* Probabilistic programming functions *)
-  | TmInfer   of attr
+  (* Distribution functions (We could move these to separate data type,
+     analogous to const.ml) *)
   | TmLogPdf  of attr * tm option
-  | TmSample  of attr * tm option * tm option
-  | TmWeight  of attr * tm option * float option
-  | TmDWeight of attr * tm option * float option
+  | TmSample  of attr
+
+  (* Weighting of executions *)
+  | TmWeight  of attr
+
+  (* Resample checkpoint for SMC inference *)
+  | TmResamp  of attr * tm option
 
 (** Evaluation environment *)
 and env = tm list
@@ -97,11 +101,10 @@ let tm_label = function
   | TmTupProj ({label;_},_,_)
   | TmList    ({label;_},_)
   | TmConcat  ({label;_},_)
-  | TmInfer   ({label;_})
   | TmLogPdf  ({label;_},_)
-  | TmSample  ({label;_},_,_)
-  | TmWeight  ({label;_},_,_)
-  | TmDWeight ({label;_},_,_) -> label
+  | TmSample  ({label;_})
+  | TmWeight  ({label;_})
+  | TmResamp  ({label;_},_) -> label
 
 (** Precedence constants for printing *)
 type prec =
@@ -204,44 +207,28 @@ let string_of_tm
         if debruijn then fprintf fmt "%s#%d" x n
         else fprintf fmt "%s" x
 
-      | TmRecProj(_,t1,x) -> fprintf fmt "%a.%s" recurse (APP, t1) x
-      | TmTupProj(_,t1,i) -> fprintf fmt "%a.%d" recurse (APP, t1) i
+      | TmRecProj(_,t1,x)   -> fprintf fmt "%a.%s" recurse (APP, t1) x
+      | TmTupProj(_,t1,i)   -> fprintf fmt "%a.%d" recurse (APP, t1) i
 
-      | TmConst(_,c) -> fprintf fmt "%s" (string_of_const c)
+      | TmConst(_,c)        -> fprintf fmt "%s" (string_of_const c)
 
-      | TmFix _ -> fprintf fmt "fix"
+      | TmFix _             -> fprintf fmt "fix"
 
-      | TmUtest(_,Some t1) -> fprintf fmt "utest(%a)" recurse (MATCH, t1)
-      | TmUtest _          -> fprintf fmt "utest"
+      | TmUtest(_,Some t1)  -> fprintf fmt "utest(%a)" recurse (MATCH, t1)
+      | TmUtest _           -> fprintf fmt "utest"
 
       | TmConcat(_,None)    -> fprintf fmt "concat"
       | TmConcat(_,Some t1) -> fprintf fmt "concat(%a)" recurse (MATCH, t1)
 
-      | TmInfer _ -> fprintf fmt "infer"
-
       | TmLogPdf(_,None)    -> fprintf fmt "logpdf"
       | TmLogPdf(_,Some t1) -> fprintf fmt "logpdf(%a)" recurse (MATCH, t1)
 
-      | TmSample(_,None,None)    -> fprintf fmt "sample"
-      | TmSample(_,Some t1,None) -> fprintf fmt "sample(%a)"
-                                         recurse (MATCH, t1)
-      | TmSample(_,Some t1,Some t2) -> fprintf fmt "sample(%a,%a)"
-                                         recurse (APP, t1) recurse (APP, t2)
-      | TmSample _ -> failwith "Incorrect sample in string_of_tm"
+      | TmSample _    -> fprintf fmt "sample"
 
-      | TmWeight(_,None,None)    -> fprintf fmt "weight"
-      | TmWeight(_,Some t1,None) -> fprintf fmt "weight(%a)"
-                                         recurse (MATCH, t1)
-      | TmWeight(_,Some t1,Some c2) -> fprintf fmt "weight(%a,%f)"
-                                         recurse (APP, t1) c2
-      | TmWeight _ -> failwith "Incorrect weight in string_of_tm"
+      | TmWeight _    -> fprintf fmt "weight"
 
-      | TmDWeight(_,None,None)    -> fprintf fmt "dweight"
-      | TmDWeight(_,Some t1,None) -> fprintf fmt "dweight(%a)"
-                                       recurse (MATCH, t1)
-      | TmDWeight(_,Some t1,Some c2) -> fprintf fmt "dweight(%a,%f)"
-                                          recurse (APP, t1) c2
-      | TmDWeight _ -> failwith "Incorrect dweight in string_of_tm"
+      | TmResamp _         -> fprintf fmt "resample"
+
     in
 
     (* Syntactic sugar printing *)
@@ -278,9 +265,9 @@ let string_of_tm
       | TmApp _            -> prec > APP
       | TmVar _     | TmConst _
       | TmFix _     | TmRec _     | TmTupProj _
-      | TmRecProj _ | TmList _    | TmInfer _
-      | TmLogPdf _  | TmSample _  | TmUtest _
-      | TmWeight _  | TmDWeight _ | TmConcat _ -> prec > ATOM
+      | TmRecProj _ | TmList _    | TmLogPdf _
+      | TmSample _  | TmUtest _   | TmWeight _
+      | TmConcat _  | TmResamp _ -> prec > ATOM
 
     in
 
@@ -289,7 +276,7 @@ let string_of_tm
 
   in recurse str_formatter (MATCH, t); flush_str_formatter ()
 
-(** Convert environments to strings TODO Merge with TmClos in string_of_tm ? *)
+(** Convert environments to strings TODO Merge with TmClos in string_of_tm *)
 let string_of_env env =
   "[" ^ (List.mapi (fun i t -> Printf.sprintf " %d -> " i ^ string_of_tm t) env
             |> String.concat ",") ^ "]"
@@ -306,9 +293,9 @@ let noidx = -1
 (** Reference used for genvar *)
 let nextvar = ref 0
 
-(** Generate fresh variable names (used for CPS transformation).  Avoids clashes by
-    using $ as first char (not allowed in lexer for vars).  Takes a debruijn
-    index as argument (for idfun). *)
+(** Generate fresh variable names (used for CPS transformation).  Avoids
+    clashes by using $ as first char (not allowed in lexer for vars).  Takes a
+    debruijn index as argument (for idfun). *)
 let genvar i =
   let res = !nextvar in
   let str = "$" ^ string_of_int res in

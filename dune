@@ -1,11 +1,15 @@
 (alias
  (name runtest)
  (deps
-  src/main.exe
+  src/pplcore.exe
   (glob_files test/treeppl/**)
   (glob_files test/pplcore/**))
- (action (run src/main.exe --test test/treeppl test/pplcore)))
+ (action (run src/pplcore.exe --test
+              test/pplcore
+              test/treeppl
+              )))
 
 (alias
  (name default)
- (deps src/main.exe))
+ (deps src/pplcore.exe))
+
