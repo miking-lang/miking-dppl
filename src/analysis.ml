@@ -1,10 +1,12 @@
-(** 0-CFA static analysis for aligning weights in programs. *)
+(** 0-CFA static analysis for aligning weights in programs.
+    TODO Broken, needs updating *)
 
 open Ast
 open Const
 open Utils
 open Printf
 open Debug
+open Label
 
 let align = ref false
 
@@ -36,73 +38,6 @@ let string_of_cstr = function
     string_of_absval av ^ " in " ^ string_of_int n1
     ^ " => " ^ string_of_int n2 ^ " in " ^ string_of_int n3
 
-(** Function for uniquely labeling all subterms and variables in a term *)
-let label builtin tm =
-  let open StrMap in
-  let label = ref 0 in
-  let next () = let res = !label in label := !label + 1; res in
-  let rec label_vars map tm = match tm with
-    | TmVar(a,x,i1) ->
-      (match find_opt x map with
-       | Some i2 -> TmVar({a with var_label = i2},x,i1)
-       | _ -> failwith ("Unbound var: " ^ x))
-    | TmLam(a,x,t1) ->
-      let i = next() in TmLam({a with var_label = i},x,
-                              label_vars (add x i map) t1)
-    | TmApp(a,t1,t2) -> TmApp(a,label_vars map t1, label_vars map t2)
-    | TmClos _ -> failwith "Closure before eval"
-    | TmConst _ | TmIf _ | TmFix _ -> tm (* TODO if *)
-
-    | TmMatch _ -> failwith "TODO analysis.ml"
-    | TmTup _ -> failwith "TODO analysis.ml"
-    | TmTupProj _ -> failwith "TODO analysis.ml"
-
-    | TmRec _ -> failwith "TODO analysis.ml"
-    | TmRecProj _ -> failwith "TODO analysis.ml"
-    | TmUtest _ -> failwith "TODO analysis.ml"
-
-    | TmList _ -> failwith "TODO analysis.ml"
-    | TmConcat _ -> failwith "TODO analysis.ml"
-
-    | TmLogPdf _ -> failwith "TODO analysis.ml"
-    | TmSample _ -> failwith "TODO analysis.ml"
-    | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmResamp _ -> failwith "TODO analysis.ml"
-
-  in let rec label_terms tm = match tm with
-    | TmVar(a,x,i1)    -> TmVar({a with label=next()},x,i1)
-    | TmLam(a,x,t1)    -> TmLam({a with label=next()},x,
-                                   label_terms t1)
-    | TmClos _ -> failwith "Closure before eval"
-    | TmApp(a,t1,t2)   -> TmApp({a with label = next()},
-                                   label_terms t1,label_terms t2)
-    | TmConst(a,c)     -> TmConst({a with label=next()},c)
-    | TmIf(a,t,t1,t2)  -> TmIf({a with label=next()},label_terms t,
-                               label_terms t1, label_terms t2)
-    | TmFix(a)      -> TmFix({a with label=next()})
-    | TmUtest _ -> failwith "TODO analysis.ml"
-
-    | TmMatch _ -> failwith "TODO analysis.ml"
-    | TmTup _ -> failwith "TODO analysis.ml"
-    | TmTupProj _ -> failwith "TODO analysis.ml"
-
-    | TmRec _     -> failwith "TODO analysis.ml"
-    | TmRecProj _ -> failwith "TODO analysis.ml"
-
-    | TmList _ -> failwith "TODO analysis.ml"
-    | TmConcat _ -> failwith "TODO analysis.ml"
-
-    | TmLogPdf _ -> failwith "TODO analysis.ml"
-    | TmSample _ -> failwith "TODO analysis.ml"
-    | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmResamp _ -> failwith "TODO analysis.ml"
-
-  in let sm = List.fold_left
-      (fun sm x -> add x (next ()) sm)
-      empty builtin in
-  let tm = tm |> label_vars sm |> label_terms in
-  tm, sm, !label
-
 (** Returns abstract value representations of all functions in a program *)
 let functions tm =
   let rec recurse tm funs = match tm with
@@ -131,12 +66,8 @@ let functions tm =
   in recurse tm []
 
 (** Generate a set of 0-CFA constraints for a program. For now, built in
-    functions must be applied immediately  where occuring (no currying). *)
+    functions must be applied immediately where occuring (no currying). *)
 let gen_cstrs bmap tm =
-  let idmatch str id =
-    match StrMap.find_opt str bmap with
-    | Some i -> i = id
-    | _ -> false in
   let funs = functions tm in
   let rec recurse tm cstrs = match tm with
 
@@ -164,7 +95,7 @@ let gen_cstrs bmap tm =
 
     (* Sample *)
     | TmApp({label=l;_},TmVar({var_label;_},_,_),t1)
-      when idmatch "sample" var_label ->
+      when idmatch bmap "sample" var_label ->
       let cstrs = cstrs |> recurse t1 in
       Dir(Stoch, l) :: cstrs
 
@@ -346,7 +277,7 @@ let align_weight bmap dyn tm =
         let var = TmVar(na,var_name,noidx) in
         TmLam(na,var_name,
               TmApp(na,
-                    TmLam(na,"_",TmResamp(na,None)),
+                    TmLam(na,"_",TmResamp(na,None,None)),
                     TmApp(na,tm,var)))
 
       else tm

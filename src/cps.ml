@@ -9,6 +9,7 @@ open Ast
 open Const
 open Utils
 open Debug
+open Print
 
 (** Check if a term is atomic (contains no computation). *)
 let rec is_atomic = function
@@ -252,12 +253,12 @@ and cps_complex cont t =
     TmApp(na, TmLam(na, c, inner), cont)
 
   (* If we have lifted applications, everything else is atomic. *)
-  | TmTup _    | TmTupProj _
+  | TmTup _    | TmTupProj _ | TmResamp _
   | TmRec _    | TmRecProj _ | TmList _
   | TmVar _    | TmLam _     | TmClos _
   | TmConst _  | TmFix _     | TmConcat _
   | TmLogPdf _ | TmSample _  | TmWeight _
-  | TmResamp _ | TmUtest _ -> TmApp(na, cont, cps_atomic t)
+  | TmUtest _ -> TmApp(na, cont, cps_atomic t)
 
 (** CPS transforms a term, with the identity function as continuation if it is
     complex*)
@@ -271,3 +272,4 @@ let cps tm =
     cps_atomic tm
   else
     cps_complex idfun tm
+

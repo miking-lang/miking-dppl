@@ -1,9 +1,6 @@
-function f() {
-  function plus(a, b) { a + b }
-  function app(f, x, y) { f(x, y) }
-  x ~ normal(0, 1.0)
-  y ~ normal(x, 1.0)
-  observe 0.13 ~ normal(app(plus, x, y), 1.0)
-}
-
-infer(f)
+function plus(a, b) { a + b }
+function app(f, x, y) { f(x, y) }
+x ~ normal(0, 1.0)
+y ~ normal(x, 1.0)
+observe 0.13 ~ normal(app(plus, x, y), 1.0)
+x

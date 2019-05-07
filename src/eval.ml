@@ -2,21 +2,11 @@
 
 open Printf
 open Ast
+open Print
 open Const
 open Pattern
 open Utils
 open Debug
-
-(** Inference types *)
-type inference =
-  | Importance
-  | SMC
-
-(** Default inference is importance sampling with 10 particles *)
-let inference = ref Importance
-
-(** Number of particles for inference algorithms *)
-let particles = ref 10
 
 (** Print out error message when a unit test fails *)
 let unittest_failed pos t1 t2 =
@@ -53,24 +43,8 @@ let rec debruijn env t = match t with
 
   | TmLam(a,x,t1)     -> TmLam(a,x,debruijn (x::env) t1)
   | TmClos _          -> failwith "Closures should not be available."
-  | TmApp(a,t1,t2)    -> TmApp(a,debruijn env t1,debruijn env t2)
-  | TmIf(a,t,t1,t2)   -> TmIf(a,debruijn env t,debruijn env t1,debruijn env t2)
-  | TmTup(a,arr)      -> TmTup(a, Array.map (debruijn env) arr)
-  | TmTupProj(a,t1,i) -> TmTupProj(a,debruijn env t1,i)
-  | TmRec(a,sm)       -> TmRec(a,List.map (fun (k,v) -> k,debruijn env v) sm)
-  | TmRecProj(a,t1,x) -> TmRecProj(a,debruijn env t1,x)
-  | TmList(a,ls)      -> TmList(a,List.map (debruijn env) ls)
 
-  | TmConcat(_,None)       -> t
-  | TmConcat _             -> failwith "Should not exist before eval"
-  | TmLogPdf(_,None)       -> t
-  | TmLogPdf _             -> failwith "Should not exist before eval"
-  | TmSample _             -> t
-  | TmWeight _             -> t
-
-  | TmResamp _             -> t
-
-  | TmConst _ | TmFix _ | TmUtest _ -> t
+  | _ -> tm_traverse (debruijn env) t
 
 (** If the pattern matches the given value, return the extended environment
     where the variables in the pattern are bound to the corresponding terms in
@@ -131,7 +105,7 @@ let rec match_case env pattern value = match pattern,value with
 (** Big-step evaluation of terms TODO Optimize for degenerate weights *)
 let rec eval env weight t =
 
-  debug debug_eval "Eval" (fun () -> string_of_tm t);
+  debug debug_eval "Eval" (fun () -> string_of_tm ~pretty:false t);
 
   match t with
 
@@ -142,11 +116,11 @@ let rec eval env weight t =
   (* Constants and builtins *)
   | TmConst _  | TmFix _    | TmUtest _
   | TmConcat _ | TmLogPdf _ | TmSample _
-  | TmWeight _ | TmResamp _ -> 0.0,t
+  | TmWeight _ | TmResamp _ -> weight,t
 
   (* Lambda and closure conversions *)
-  | TmLam(a,x,t1) -> 0.0,TmClos(a,x,t1,env)
-  | TmClos _      -> 0.0,t
+  | TmLam(a,x,t1) -> weight,TmClos(a,x,t1,env)
+  | TmClos _      -> weight,t
 
   (* Application *)
   | TmApp(_,t1,t2) ->
@@ -195,7 +169,10 @@ let rec eval env weight t =
      | TmWeight _,TmConst(_,CInt w) -> (float_of_int w) +. weight, nop
      | TmWeight _,_ -> failwith "Incorrect weight application"
 
-     | TmResamp(a,None),(TmClos _ as cont) -> weight,TmResamp(a,Some cont)
+     | TmResamp(a,None,None),(TmClos _ as cont)
+       -> weight,TmResamp(a,Some cont,None)
+     | TmResamp(a,cont,None),TmConst(_,CUnit)
+       -> weight,TmResamp(a,cont,Some CUnit)
 
      | _ -> failwith (sprintf "Incorrect application:\
                                LHS: %s\n\
@@ -253,99 +230,4 @@ let rec eval env weight t =
     let f = (fun weight e -> eval env weight e) in
     let weight,tls = map_accum f weight tls in
     weight,TmList(a,tls)
-
-
-(** Importance sampling (Likelihood weighting) inference *)
-and infer_is env n program =
-
-  (* Replicate program for #samples times with an initial log weight of 0.0 *)
-  let s = replicate n program in
-
-  (* Evaluate everything to the end, producing a set of weighted samples *)
-  List.map (eval env 0.0) s
-
-  (*debug debug_infer "Infer result"*)
-    (*(fun () -> String.concat "\n"*)
-        (*(List.map*)
-           (*(fun (t, w) ->*)
-              (*sprintf "Sample: %s, Log weight: %f" (string_of_tm t) w)*)
-           (*res));*)
-
-(** SMC inference TODO Cleanup *)
-and infer_smc env n program =
-
-  (* Systematic resampling *)
-  let resample s =
-    (* Compute the logarithm of the average of the weights using
-       logsumexp-trick *)
-    let weights = List.map fst s in
-    let max = List.fold_left max (-. infinity) weights in
-    let logavg =
-      log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
-      +. max -. log (float n) in
-
-    (* Compute normalized weights from log-weights *)
-    let snorm = List.map (fun (w,t) -> exp (w -. logavg),t) s in
-
-    (* Draw offset for resampling *)
-    let offset = Random.float 1.0 in
-
-    (* Perform resampling *)
-    let rec rec1 curr next snorm acc = match snorm with
-      | (w,_)::_ -> let curr = curr +. w in rec2 curr next snorm acc
-      | [] -> acc
-    and rec2 curr next snorm acc = match snorm with
-      | (_,t)::tail ->
-        if curr > next then rec2 curr (next +. 1.0) snorm ((0.0,t)::acc)
-        else rec1 curr next tail acc
-      | [] -> failwith "Error in resampling" in
-
-    (* Also return the log average for computing the normalization constant *)
-    logavg, rec1 0.0 offset snorm [] in
-
-  (* Replicate program for #samples times with an initial log weight of 0.0 *)
-  let s = replicate n program in
-
-  (* Run until first resample, attaching the initial environment *)
-  let s = List.map (eval env 0.0) s in
-
-  (* Run SMC *)
-  let rec smc s normconst =
-
-    (* Evaluate a program until encountering a resample *)
-    let sim (weight,tm) =
-      let weight,tm = eval [] weight tm in
-      match tm with
-
-      (* Resample *)
-      | TmResamp(_,Some(cont)) -> false,weight,TmApp(na,cont,nop)
-
-      (* Result *)
-      | _ -> true,weight,tm in
-
-
-    let res = List.map sim s in
-    let b = List.for_all (fun (b,_,_) -> b) res in
-    let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample in
-    let normconst = normconst +. logavg in
-    if b then begin
-      res
-    end else
-      smc res normconst
-  in smc s 0.0
-
-(*debug debug_norm "Normalizing constant"*)
-(*(fun () -> sprintf "%f" normconst);*)
-
-(*debug debug_infer "Infer result"*)
-(*(fun () -> String.concat "\n"*)
-(*(List.map*)
-(*(fun (t, _) -> sprintf "Sample: %s" (string_of_tm t))*)
-(*res));*)
-
-
-(** Select correct inference algorithm *)
-and infer program = match !inference,!particles with
-  | Importance,i -> infer_is program i
-  | SMC,i -> infer_smc program i
 

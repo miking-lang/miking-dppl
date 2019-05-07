@@ -1,0 +1,238 @@
+(** Inference algorithms *)
+
+open Const
+open Ast
+open Print
+open Debug
+open Utils
+open Eval
+open Cps
+open Printf
+open Label
+
+(** Mapping between predefined variable names and builtin constants *)
+let builtin_const = [
+
+  "not",          CNot;
+  "and",          CAnd(None);
+  "or",           COr(None);
+
+  "mod",          CMod(None);
+  "sll",          CSll(None);
+  "srl",          CSrl(None);
+  "sra",          CSra(None);
+
+  "inf",          CFloat(infinity);
+  "log",          CLog;
+
+  "add",          CAdd(None);
+  "sub",          CSub(None);
+  "mul",          CMul(None);
+  "div",          CDiv(None);
+  "neg",          CNeg;
+  "lt",           CLt(None);
+  "leq",          CLeq(None);
+  "gt",           CGt(None);
+  "geq",          CGeq(None);
+
+  "eq",           CEq(None);
+  "neq",          CNeq(None);
+
+  "normal",       CNormal(None, None);
+  "uniform",      CUniform(None, None);
+  "gamma",        CGamma(None, None);
+  "exponential",  CExp(None);
+  "bernoulli",    CBern(None);
+
+]
+
+(** Mapping between predefined variable names and terms *)
+let builtin = [
+
+  "logpdf",       TmLogPdf(na,None);
+  "sample",       TmSample(na);
+  "weight",       TmWeight(na);
+
+] @ List.map (fun (x, y) -> x, tm_of_const y) builtin_const
+
+(** Inference types *)
+type inference =
+  | Eval
+  | Importance
+  | SMC
+
+(** Default inference is simply weighted evaluation *)
+let inference = ref Eval
+
+(** Number of particles for inference algorithms *)
+let particles = ref 10
+
+(** Importance sampling
+    (or more specifically, likelihood weighting) inference *)
+let infer_is env n program =
+
+  (* Replicate program for #samples times *)
+  let s = replicate n program in
+
+  (* Evaluate everything to the end, producing a set of weighted samples *)
+  List.map (eval env 0.0) s
+
+(* Systematic resampling of n particles *)
+let resample n s =
+  (* Compute the logarithm of the average of the weights using
+       logsumexp-trick *)
+  let weights = List.map fst s in
+  let max = List.fold_left max (-. infinity) weights in
+  let logavg =
+    log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
+    +. max -. log (float n) in
+
+  (* Compute normalized weights from log-weights *)
+  let snorm = List.map (fun (w,t) -> exp (w -. logavg),t) s in
+
+  (* Draw offset for resampling *)
+  let offset = Random.float 1.0 in
+
+  (* Perform resampling *)
+  let rec rec1 curr next snorm acc = match snorm with
+    | (w,_)::_ -> let curr = curr +. w in rec2 curr next snorm acc
+    | [] -> acc
+  and rec2 curr next snorm acc = match snorm with
+    | (_,t)::tail ->
+      if curr > next then rec2 curr (next +. 1.0) snorm ((0.0,t)::acc)
+      else rec1 curr next tail acc
+    | [] -> failwith "Error in resampling" in
+
+  (* Also return the log average for computing the normalization constant *)
+  logavg, rec1 0.0 offset snorm []
+
+
+(** SMC inference TODO Cleanup *)
+let infer_smc env n program =
+
+  (* Replicate program for #samples times with an initial log weight of 0.0 *)
+  let s = replicate n program in
+
+  (* Run until first resample, attaching the initial environment *)
+  let s = List.map (eval env 0.0) s in
+
+  (* Run SMC *)
+  let rec recurse s normconst =
+
+    (* Evaluate a program until encountering a resample *)
+    let sim (weight,tm) =
+      let weight,tm = eval [] weight tm in
+      match tm with
+
+      (* Resample *)
+      | TmResamp(_,Some(cont),_) -> false,weight,TmApp(na,cont,nop)
+
+      (* Result *)
+      | _ -> true,weight,tm in
+
+    let res = List.map sim s in
+    let b = List.for_all (fun (b,_,_) -> b) res in
+    let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample n in
+    let normconst = normconst +. logavg in
+    if b then begin
+      res
+    end else
+      recurse res normconst
+
+  in recurse s 0.0
+
+(** Convert all calls to weight to calls to weight followed by a resample *)
+let rec add_resample builtin_map tm =
+
+  let seq_with_resample tm =
+    let var, var'  = makevar "w" noidx in
+    let weight_app = TmApp(na,tm,var') in
+    let resamp     = TmApp(na,TmResamp(na,None,None),nop) in
+    TmLam(na,var,seq weight_app resamp)
+  in
+
+  match tm with
+  | TmWeight _ -> seq_with_resample tm
+  | TmVar({var_label;_},_,_) when idmatch builtin_map "weight" var_label
+    -> seq_with_resample tm
+
+  | _ -> tm_traverse (add_resample builtin_map) tm
+
+(** Preprocess term and redirect to inference algorithm provided by user.
+    TODO Cleanup *)
+let infer tm =
+
+  let tm,builtin = match !inference with
+
+    (* Nothing more required if not running SMC *)
+    | Eval | Importance -> tm,builtin
+
+    (* Perform SMC specific transformations *)
+    | SMC ->
+
+      (* Label program and builtins *)
+      let tm,builtin_map,nl = label (builtin |> List.split |> fst) tm in
+
+      debug debug_labeling "After labeling"
+        (fun () -> string_of_tm ~labels:true tm);
+
+      (* If alignment is turned on, perform the corresponding static analysis.
+         Otherwise, simply add resamples after each call to weight. *)
+      let tm = if !Analysis.align
+        then begin
+          (* TODO Move this section to the Analysis module *)
+
+          (* Perform static analysis, returning all dynamic labels *)
+          let dyn = Analysis.analyze builtin_map tm nl in
+
+          (* By using the above analysis result, transform all dynamic
+             checkpoints. This information will be handled by the inference
+             algorithm. *)
+          Analysis.align_weight builtin_map dyn tm
+
+        end else
+
+          add_resample builtin_map tm
+
+      in
+
+      debug debug_resample_transform
+        "After attaching resamples" (fun () -> string_of_tm tm);
+
+      let builtin =
+        builtin
+
+        (* Transform builtins to CPS. Required since we need to wrap constant
+           functions in CPS forms *)
+        |> List.map (fun (x, y) -> (x, (cps_atomic y)))
+
+        (* Debruijn transform builtins (since they have now been
+           CPS transformed) *)
+        |> List.map (fun (x, y) -> (x, debruijn [] y)) in
+
+      debug debug_cps_builtin "Post CPS builtin"
+        (fun () -> String.concat "\n"
+            (List.map
+               (fun (x, y) -> sprintf "%s = %s" x
+                   (string_of_tm ~margin:1000 y)) builtin));
+
+      (* Perform CPS transformation of main program *)
+      let tm = cps tm in
+
+      debug debug_cps "Post CPS" (fun () -> string_of_tm ~pretty:false tm);
+
+      tm,builtin
+
+  in
+
+  (* Calculate debruijn indices *)
+  let tm = debruijn (builtin |> List.split |> fst) tm in
+
+  (* Variable names no longer required due to debruijn indices *)
+  let env = (builtin |> List.split |> snd) in
+
+  match !inference,!particles with
+  | Eval,_ -> [eval env 0.0 tm]
+  | Importance,n -> infer_is env n tm
+  | SMC,n -> infer_smc env n tm
+

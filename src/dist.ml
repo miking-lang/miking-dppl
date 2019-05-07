@@ -19,7 +19,7 @@ let logpdf value dist = match value,dist with
 
   (* Normal distribution *)
   | TmConst(_,CFloat(v)),
-    TmConst(_,CNormal(Some sigma, Some mu)) ->
+    TmConst(_,CNormal(Some mu,Some sigma)) ->
     TmConst(na,CFloat(log (Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma)))
 
   (* Exponential distribution *)
@@ -46,7 +46,7 @@ let logpdf value dist = match value,dist with
 let sample dist = match dist with
 
   (* Normal distribution *)
-  | TmConst(_,CNormal(Some sigma,Some mu)) ->
+  | TmConst(_,CNormal(Some mu,Some sigma)) ->
     let sample = CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma) in
     TmConst(na,sample)
 

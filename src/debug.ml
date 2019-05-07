@@ -2,6 +2,27 @@
 
 open Printf
 
+(** Debug the input term *)
+let debug_input       = true
+
+(** Debug the static analysis *)
+let debug_sanalysis   = false
+
+(** Debug the labelling *)
+let debug_labeling    = true
+
+(** Debug the resample transformation *)
+let debug_resample_transform = true
+
+(** Debug the lifting transformation *)
+let debug_lift_apps   = true
+
+(** Debug the CPS transformation of the initial environment (builtin) *)
+let debug_cps_builtin = false
+
+(** Debug the CPS transformation *)
+let debug_cps         = false
+
 (** Debug the evaluation *)
 let debug_eval        = false
 
@@ -11,19 +32,7 @@ let debug_eval_env    = false
 (** Debug the inference procedure *)
 let debug_infer       = true
 
-(** Debug the static analysis *)
-let debug_sanalysis   = false
-
-(** Debug the CPS transformation *)
-let debug_cps         = true
-
-(** Debug the CPS transformation of the initial environment (builtin) *)
-let debug_cps_builtin = true
-
-(** Debug the lifting transformation *)
-let debug_lift_apps   = true
-
-(** Printout the normalization constant when using SMC inference *)
+(** Printout the normalization constant *)
 let debug_norm        = false
 
 (** Set to true if unit testing is enabled *)

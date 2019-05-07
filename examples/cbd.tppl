@@ -48,22 +48,18 @@ function condBD( tree, parent, lambda, mu ) {
       | _ -> ()
 }
 
-function model() {
-    // lambda ~ gamma( 1.0, 1.0 )
-    // mu     ~ gamma( 1.0, 1.0 )
+// lambda ~ gamma( 1.0, 1.0 )
+// mu     ~ gamma( 1.0, 1.0 )
 
-    lambda = 0.2
-    mu     = 0.1
+lambda = 0.2
+mu     = 0.1
 
-    condBD( tree.left, tree, lambda, mu )
-    match tree with
-      | {right} ->
-          { weight( log( 2.0 ) )
-            condBD( tree.right, tree, lambda, mu ) }
-      | _ -> ()
+condBD( tree.left, tree, lambda, mu )
+match tree with
+  | {right} ->
+      { weight( log( 2.0 ) )
+        condBD( tree.right, tree, lambda, mu ) }
+  | _ -> ()
 
-    lambda
-}
-
-infer(model)
+lambda
 

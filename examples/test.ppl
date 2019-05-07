@@ -1,1 +1,2 @@
-if true then 1 else 3 + 2
+weight(1.0)
+

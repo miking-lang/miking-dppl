@@ -7,11 +7,7 @@ function f1(lambda) {
   f1p() f1p()
 }
 
-function model() {
-  lambda ~ bernoulli(0.5)
-  f1(lambda)
-  lambda
-}
-
-infer(model)
+lambda ~ bernoulli(0.5)
+f1(lambda)
+lambda
 

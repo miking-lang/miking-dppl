@@ -6,12 +6,8 @@ function sim(stop, lambda) {
   } else t
 }
 
-function model() {
-  lambda ~ gamma(1.0, 1.0)
-  stop ~ gamma(10.0, 3.0)
-  sim = sim(stop, lambda)
-  weight(sim + lambda)
-  lambda
-}
-
-infer(model)
+lambda ~ gamma(1.0, 1.0)
+stop ~ gamma(10.0, 3.0)
+sim = sim(stop, lambda)
+weight(sim + lambda)
+lambda
