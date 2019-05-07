@@ -35,7 +35,6 @@ let rec is_atomic = function
   | TmLogPdf _ | TmSample _
   | TmWeight _ | TmResamp _ -> true
 
-
 (** Wrap opaque builtin functions in CPS forms *)
 let cps_builtin t arity =
   let vars = List.map genvar (replicate arity noidx) in
@@ -49,14 +48,14 @@ let cps_builtin t arity =
        TmLam(na, k, TmLam(na, v, TmApp(na, k', acc))))
     vars inner
 
-(** Wrap constant functions in CPS forms *)
+(** Wrap constant functions in CPS forms. Looks up the arity automatically. *)
 let cps_const t = match t with
   | TmConst(_,c) -> cps_builtin t (arity c)
   | _ -> failwith "cps_const of non-constant"
 
 (** Lift applications as far up as possible in a term. This has the consequence
-    of making everything except TmApp, TmIf, and TmMatch  terms
-    atomic. As an effect, CPS transformation is simplified. *)
+    of making everything except TmApp, TmIf, and TmMatch terms
+    atomic. As an effect, CPS transformation is simplified. TODO Cleanup *)
 let rec lift_apps t =
 
   (* Extract complex terms replacing them with variables, using the argument
@@ -111,25 +110,19 @@ let rec lift_apps t =
     let tls,apps = List.fold_left f ([],[]) tls in
     wrap_app (TmList(a,List.rev tls)) apps
 
-  | TmVar _        -> t
   | TmLam(a,s,t)   -> TmLam(a,s,lift_apps t)
   | TmClos _       -> failwith "Should not exist before eval"
   | TmApp(a,t1,t2) -> TmApp(a,lift_apps t1, lift_apps t2)
-  | TmConst _      -> t
-  | TmFix _        -> t
-  | TmUtest _      -> t
+
+  | TmVar _ | TmConst _ | TmFix _
+  | TmUtest _ | TmSample _ | TmWeight _
+  | TmResamp _ -> t
 
   | TmConcat(_,None) -> t
-  | TmConcat _ -> failwith "Should not exist before eval"
+  | TmConcat _       -> failwith "Should not exist before eval"
 
   | TmLogPdf(_,None) -> t
   | TmLogPdf _       -> failwith "Should not exist before eval"
-
-  | TmSample _ -> t
-
-  | TmWeight _ -> t
-
-  | TmResamp _ -> t
 
 (** CPS transformation of atomic terms (terms containing no computation).
     Transforming atomic terms means that we can perform the CPS transformation

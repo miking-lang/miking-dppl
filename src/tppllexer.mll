@@ -56,8 +56,8 @@ let _ =
       "||",            OR;
       "&&",            AND;
       "++",            CONCAT;
-    ]
 
+    ]
 }
 
 let whitespace = ['\t'' ']

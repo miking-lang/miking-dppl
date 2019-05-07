@@ -180,6 +180,7 @@ let string_of_tm
     in
 
     let p = if pretty then sugar else bare in
+
     if labels then
       match t with
       | TmResamp _ | TmVar _  | TmConst _
@@ -190,7 +191,8 @@ let string_of_tm
       | _          -> fprintf fmt "(%a):%d" p t (tm_label t)
     else if paren then
       fprintf fmt "(%a)" p t
-    else fprintf fmt "%a" p t
+    else
+      fprintf fmt "%a" p t
 
   in recurse str_formatter (MATCH, t); flush_str_formatter ()
 

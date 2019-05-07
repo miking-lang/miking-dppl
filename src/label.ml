@@ -4,6 +4,7 @@ open Ast
 open Utils
 open StrMap
 
+(** Reference used when generating new labels *)
 let label = ref 0
 
 (** Function for generating a new label *)
@@ -11,19 +12,22 @@ let next () =
   let res = !label
   in label := !label + 1; res
 
-(** Label variables *)
+(** Label all variables in a term. Takes a map from strings to labels as
+    argument, providing the initial environment (builtins) *)
 let rec label_vars map tm = match tm with
+
   | TmVar(a,x,i1) ->
     (match find_opt x map with
      | Some i2 -> TmVar({a with var_label = i2},x,i1)
      | _ -> failwith ("Unbound var: " ^ x))
+
   | TmLam(a,x,t1) ->
-    let i = next() in
-    TmLam({a with var_label = i},x,label_vars (add x i map) t1)
+      let i = next() in
+      TmLam({a with var_label = i},x,label_vars (add x i map) t1)
 
   | _ -> tm_traverse (label_vars map) tm
 
-(** Label terms *)
+(** Label all terms in a term. *)
 let rec label_terms tm =
 
   let a = {(tm_attr tm) with label=next()} in
@@ -58,9 +62,9 @@ let idmatch map str id = match StrMap.find_opt str map with
   | Some i -> i = id
   | _ -> false
 
-(** Function for labeling both variables and terms. Returns the resulting tm, a
-    convenient map from builtin variable names to variable labels, and the
-    total number of labels (vars and regular) *)
+(** Function for labeling both variables and terms in a term. Returns the
+    resulting tm, a convenient map from builtin variable names to variable
+    labels, and the total number of labels (vars and regular) *)
 let label builtin tm =
 
   (* Reset label ref *)

@@ -11,8 +11,8 @@ open Debug
 (** Print out error message when a unit test fails *)
 let unittest_failed pos t1 t2 =
   print_string ("\n ** Unit test FAILED at " ^
-                string_of_position pos ^ " **\n    LHS: " ^
-                (string_of_tm t1) ^
+                string_of_position pos ^
+                " **\n    LHS: " ^ (string_of_tm t1) ^
                 "\n    RHS: " ^ (string_of_tm t2))
 
 (** Extends an environment used in debruijn conversion with the identifiers
@@ -131,14 +131,12 @@ let rec eval env weight t =
      (* Closure application *)
      | TmClos(_,_,t3,env2),v2 -> eval (v2::env2) weight t3
 
-     (* Constant application using the delta function *)
+     (* Constant application *)
      | TmConst(_,c),TmConst(_,v) -> weight,TmConst(na,eval_const c v)
-     | TmConst _,_               -> failwith "Non constant applied to constant"
 
      (* Fix *)
      | TmFix _,(TmClos(_,_,t3,env2) as tt) ->
        eval ((TmApp(na,TmFix na,tt))::env2) weight t3
-     | TmFix _,_ -> failwith "Incorrect fix application."
 
      | TmConcat(a,None),(TmList _ as v2)
      | TmConcat(a,None),(TmConst(_,CString _) as v2)
@@ -167,7 +165,6 @@ let rec eval env weight t =
 
      | TmWeight _,TmConst(_,CFloat w) -> w +. weight, nop
      | TmWeight _,TmConst(_,CInt w) -> (float_of_int w) +. weight, nop
-     | TmWeight _,_ -> failwith "Incorrect weight application"
 
      | TmResamp(a,None,None),(TmClos _ as cont)
        -> weight,TmResamp(a,Some cont,None)
@@ -195,7 +192,7 @@ let rec eval env weight t =
         (match match_case env p v with
          | Some env -> eval env weight t
          | None -> match_cases cases)
-      | [] -> failwith "Pattern matching failed TODO"
+      | [] -> failwith "Pattern matching failed"
     in match_cases cases
 
   (* Tuples *)

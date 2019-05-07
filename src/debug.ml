@@ -29,11 +29,11 @@ let debug_eval        = false
 (** Debug the evaluation environment *)
 let debug_eval_env    = false
 
-(** Debug the inference procedure *)
+(** Debug the inference procedure TODO Rework *)
 let debug_infer       = true
 
-(** Printout the normalization constant *)
-let debug_norm        = false
+(** Printout the normalization constant TODO Rework *)
+let debug_norm        = true
 
 (** Set to true if unit testing is enabled *)
 let utest             = ref false
@@ -47,13 +47,6 @@ let utest_fail        = ref 0
 (** Counts local failed tests for one file *)
 let utest_fail_local  = ref 0
 
-(** Debugging printout *)
-let debug cond heading info =
-  if cond && not !utest then begin
-    printf "--- %s ---\n" (String.uppercase_ascii heading);
-    printf "%s\n\n" (info ());
-  end
-
 (* Print out unit test results, if applicable *)
 let utest_print () =
   if !utest then
@@ -63,3 +56,11 @@ let utest_print () =
     else
       printf "\nERROR! %d successful tests and %d failed tests.\n"
         (!utest_ok) (!utest_fail)
+
+(** Debug printout *)
+let debug cond heading info =
+  if cond && not !utest then begin
+    printf "--- %s ---\n" (String.uppercase_ascii heading);
+    printf "%s\n\n" (info ());
+  end
+

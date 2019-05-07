@@ -8,8 +8,11 @@ open Pattern
    Can easily be extended with more data fields as needed. *)
 type attr = { label:int; var_label:int; pos:Lexing.position }
 
+(** Dummy value for labels *)
+let no_label = -1
+
 (** Default attribute with dummy values *)
-let na = { label = -1; var_label = -1; pos = Lexing.dummy_pos }
+let na = { label = no_label; var_label = no_label; pos = Lexing.dummy_pos }
 
 (** Core terms/expressions *)
 type tm =
@@ -100,11 +103,11 @@ let tm_traverse f tm = match tm with
   | TmMatch(a,tm,cases)
     -> TmMatch(a,f tm, List.map (fun (p,tm) -> (p, f tm)) cases)
 
-  | TmClos _             -> failwith "WARNING: Traversing a closure\n"
-  | TmConcat(_,Some _)   -> failwith "WARNING: Traversing a concat\n"
-  | TmLogPdf(_,Some _)   -> failwith "WARNING: Traversing a logpdf\n"
-  | TmResamp(_,Some _,_) -> failwith "WARNING: Traversing a resample\n"
-  | TmUtest(_,Some _)    -> failwith "WARNING: Traversing a utest\n"
+  | TmClos _             -> failwith "ERROR: Traversing a closure\n"
+  | TmConcat(_,Some _)   -> failwith "ERROR: Traversing a concat\n"
+  | TmLogPdf(_,Some _)   -> failwith "ERROR: Traversing a logpdf\n"
+  | TmResamp(_,Some _,_) -> failwith "ERROR: Traversing a resample\n"
+  | TmUtest(_,Some _)    -> failwith "ERROR: Traversing a utest\n"
 
   | TmConcat _ | TmLogPdf _ | TmResamp _
   | TmWeight _ | TmVar _ | TmFix _
@@ -166,5 +169,4 @@ let tm_of_const c = TmConst(na, c)
 
 (** Used for indicating uninitialized debruijn indices *)
 let noidx = -1
-
 
