@@ -106,10 +106,10 @@ seq:
        { TmApp(na,TmLam(na,$2,$7), addrec $2 (mkfun $3 $5)) }
 
   | LET IDENT TILDE seq IN seq %prec LET
-       { TmApp(na,TmLam(na,$2,$6),TmApp(na,TmSample(na),$4)) }
+       { TmApp(na,TmLam(na,$2,$6),TmApp(na,TmConst(na,CSample),$4)) }
 
   | OBSERVE seq TILDE seq %prec OBSERVE
-      { let logpdf = TmLogPdf(na,None) in
+      { let logpdf = TmConst(na,CLogPdf(None)) in
         let v = $2 in
         let inner = TmApp(na,TmApp(na,logpdf,v),$4) in
         let weight = TmWeight(na) in

@@ -9,7 +9,6 @@ open Ast
 open Const
 open Utils
 open Debug
-open Print
 
 (** Check if a term is atomic (contains no computation). *)
 let rec is_atomic = function
@@ -32,7 +31,6 @@ let rec is_atomic = function
     is_atomic t1 &&
     List.for_all (fun (_,te) -> is_atomic te) pls
 
-  | TmLogPdf _ | TmSample _
   | TmWeight _ | TmResamp _ -> true
 
 (** Wrap opaque builtin functions in CPS forms *)
@@ -115,14 +113,11 @@ let rec lift_apps t =
   | TmApp(a,t1,t2) -> TmApp(a,lift_apps t1, lift_apps t2)
 
   | TmVar _ | TmConst _ | TmFix _
-  | TmUtest _ | TmSample _ | TmWeight _
+  | TmUtest _| TmWeight _
   | TmResamp _ -> t
 
   | TmConcat(_,None) -> t
   | TmConcat _       -> failwith "Should not exist before eval"
-
-  | TmLogPdf(_,None) -> t
-  | TmLogPdf _       -> failwith "Should not exist before eval"
 
 (** CPS transformation of atomic terms (terms containing no computation).
     Transforming atomic terms means that we can perform the CPS transformation
@@ -184,9 +179,6 @@ let rec cps_atomic t = match t with
      passed to cps_builtin *)
   | TmConcat(_,None) -> cps_builtin t 2
   | TmConcat _       -> failwith "Should not exist before eval"
-  | TmLogPdf(_,None) -> cps_builtin t 2
-  | TmLogPdf _       -> failwith "Should not exist before eval"
-  | TmSample _       -> cps_builtin t 1
   | TmWeight _       -> cps_builtin t 1
 
   (* Unit tests *)
@@ -250,8 +242,7 @@ and cps_complex cont t =
   | TmRec _    | TmRecProj _ | TmList _
   | TmVar _    | TmLam _     | TmClos _
   | TmConst _  | TmFix _     | TmConcat _
-  | TmLogPdf _ | TmSample _  | TmWeight _
-  | TmUtest _ -> TmApp(na, cont, cps_atomic t)
+  | TmWeight _ | TmUtest _ -> TmApp(na, cont, cps_atomic t)
 
 (** CPS transforms a term, with the identity function as continuation if it is
     complex*)

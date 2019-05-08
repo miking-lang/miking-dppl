@@ -48,8 +48,6 @@ let rec label_terms tm =
     | TmRecProj(_,t1,s)   -> TmRecProj(a,t1,s)
     | TmList(_,ls)        -> TmList(a,ls)
     | TmConcat(_,t1)      -> TmConcat(a,t1)
-    | TmLogPdf(_,t1)      -> TmLogPdf(a,t1)
-    | TmSample _          -> TmSample a
     | TmWeight _          -> TmWeight a
     | TmResamp(_,t,c)     -> TmResamp(a,t,c)
 
@@ -70,10 +68,19 @@ let label builtin tm =
   (* Reset label ref *)
   label := 0;
 
-  let builtin_map =
-    List.fold_left (fun map x -> add x (next ()) map) empty builtin in
+  (* Begin by labeling terms in builtins *)
+  let builtin = builtin
+                |> List.map (fun (x,t) ->
+                    x, t |> label_vars empty |> label_terms) in
 
+  (* The term tm has builtin as environment. Initialize the map required
+     by label_vars from builtins *)
+  let builtin_map =
+    List.fold_left (fun map x -> add x (next ()) map)
+      empty (builtin |> List.split |> fst) in
+
+  (* Finally label the actual term *)
   let tm = tm |> label_vars builtin_map |> label_terms in
 
-  tm, builtin_map, !label
+  tm, builtin, !label
 

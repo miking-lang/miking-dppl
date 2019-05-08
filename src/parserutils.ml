@@ -27,8 +27,6 @@ let addrec x t =
 
     | TmConcat _ -> false
 
-    | TmLogPdf _ -> false
-    | TmSample _ -> false
     | TmWeight _ -> false
     | TmResamp _ -> false
   in if hasx t then

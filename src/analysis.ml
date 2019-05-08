@@ -58,8 +58,6 @@ let functions tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmLogPdf _ -> failwith "TODO analysis.ml"
-    | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
     | TmResamp _ -> failwith "TODO analysis.ml"
 
@@ -147,8 +145,6 @@ let gen_cstrs bmap tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmLogPdf _ -> failwith "TODO analysis.ml"
-    | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
     | TmResamp _ -> failwith "TODO analysis.ml"
 
@@ -233,8 +229,6 @@ let analyze bmap tm nl =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmLogPdf _ -> failwith "TODO analysis.ml"
-    | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
     | TmResamp _ -> failwith "TODO analysis.ml"
 
@@ -261,7 +255,11 @@ let analyze bmap tm nl =
 
 (** Transform all dynamic weights to dweights. We ignore other synchronization
     checkpoints for now since we are only dealing with SMC. *)
-let align_weight bmap dyn tm =
+let align_weight bmap tm nl =
+
+  (* Perform static analysis, returning all dynamic labels *)
+  let dyn = analyze bmap tm nl in
+
   let idmatch str id =
     match StrMap.find_opt str bmap with
     | Some i -> i = id
@@ -301,8 +299,6 @@ let align_weight bmap dyn tm =
     | TmList _ -> failwith "TODO analysis.ml"
     | TmConcat _ -> failwith "TODO analysis.ml"
 
-    | TmLogPdf _ -> failwith "TODO analysis.ml"
-    | TmSample _ -> failwith "TODO analysis.ml"
     | TmWeight _ -> failwith "TODO analysis.ml"
     | TmResamp _ -> failwith "TODO analysis.ml"
 

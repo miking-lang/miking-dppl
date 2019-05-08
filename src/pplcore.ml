@@ -2,7 +2,6 @@
     parsing, unit testing, and lexing/parsing. *)
 
 open Ast
-open Print
 open Printf
 open Utils
 open Debug

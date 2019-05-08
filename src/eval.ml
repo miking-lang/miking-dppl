@@ -2,7 +2,6 @@
 
 open Printf
 open Ast
-open Print
 open Const
 open Pattern
 open Utils
@@ -115,8 +114,7 @@ let rec eval env weight t =
 
   (* Constants and builtins *)
   | TmConst _  | TmFix _    | TmUtest _
-  | TmConcat _ | TmLogPdf _ | TmSample _
-  | TmWeight _ | TmResamp _ -> weight,t
+  | TmConcat _ | TmWeight _ | TmResamp _ -> weight,t
 
   (* Lambda and closure conversions *)
   | TmLam(a,x,t1) -> weight,TmClos(a,x,t1,env)
@@ -157,11 +155,6 @@ let rec eval env weight t =
            utest_fail_local := !utest_fail_local + 1)
        end;
        weight,nop
-
-     | TmLogPdf(a,None),v2    -> weight,TmLogPdf(a,Some v2)
-     | TmLogPdf(_,Some v1),v2 -> weight,Dist.logpdf v1 v2
-
-     | TmSample _,dist        -> weight,Dist.sample dist
 
      | TmWeight _,TmConst(_,CFloat w) -> w +. weight, nop
      | TmWeight _,TmConst(_,CInt w) -> (float_of_int w) +. weight, nop

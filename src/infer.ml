@@ -2,7 +2,6 @@
 
 open Const
 open Ast
-open Print
 open Debug
 open Utils
 open Eval
@@ -44,16 +43,24 @@ let builtin_const = [
   "exponential",  CExp(None);
   "bernoulli",    CBern(None);
 
+  "logpdf",       CLogPdf(None);
+  "sample",       CSample;
+
 ]
 
 (** Mapping between predefined variable names and terms *)
 let builtin = [
 
-  "logpdf",       TmLogPdf(na,None);
-  "sample",       TmSample(na);
   "weight",       TmWeight(na);
+  "fix",          TmFix(na);
 
 ] @ List.map (fun (x, y) -> x, tm_of_const y) builtin_const
+
+(** Create a string representation of builtins *)
+let string_of_builtin ?(labels = false) builtin =
+  String.concat "\n"
+    (List.map (fun (x, y) -> sprintf "%s = %s" x
+                  (string_of_tm ~labels:labels ~pretty:false y)) builtin)
 
 (** Inference types *)
 type inference =
@@ -74,6 +81,7 @@ let logavg n weights =
   log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
   +. max -. log (float n)
 
+
 (** Importance sampling
     (or more specifically, likelihood weighting) inference *)
 let infer_is env n program =
@@ -86,6 +94,7 @@ let infer_is env n program =
 
   (* Calculate normalizing constant and return *)
   logavg n (List.map fst res),res
+
 
 (* Systematic resampling of n particles *)
 let resample n s =
@@ -111,6 +120,7 @@ let resample n s =
 
   (* Also return the log average for computing the normalization constant *)
   logavg, rec1 0.0 offset snorm []
+
 
 (** SMC inference TODO Cleanup *)
 let infer_smc env n program =
@@ -146,21 +156,20 @@ let infer_smc env n program =
 
   in recurse s 0.0
 
+
 (** Convert all weighting to
     weighting followed by a call to resample *)
-let rec add_resample builtin_map tm =
+let add_resample builtin tm =
 
-  let seq_with_resample tm =
-    let var, var'  = makevar "w" noidx in
-    let weight_app = TmApp(na,tm,var') in
-    let resamp     = TmApp(na,TmResamp(na,None,None),nop) in
-    TmLam(na,var,seq weight_app resamp)
+  let rec recurse tm = match tm with
+    | TmWeight _ ->
+      let var, var'  = makevar "w" noidx in
+      let weight_app = TmApp(na,tm,var') in
+      let resamp     = TmApp(na,TmResamp(na,None,None),nop) in
+      TmLam(na,var,seq weight_app resamp)
+    | _ -> tm_traverse recurse tm in
 
-  in match tm with
-  | TmWeight _ -> seq_with_resample tm
-  | TmVar({var_label;_},_,_) when idmatch builtin_map "weight" var_label
-    -> seq_with_resample tm
-  | _ -> tm_traverse (add_resample builtin_map) tm
+  recurse tm, List.map (fun (x,t) -> x,recurse t) builtin
 
 (** Preprocess term and redirect to inference algorithm provided by user.
     TODO Cleanup *)
@@ -175,33 +184,27 @@ let infer tm =
     | SMC ->
 
       (* Label program and builtins *)
-      let tm,builtin_map,nl = label (builtin |> List.split |> fst) tm in
+      let tm,builtin,_nl = label builtin tm in
 
-      debug debug_labeling "After labeling"
+      debug debug_label_builtin "After labeling builtins"
+        (fun () -> string_of_builtin ~labels:true builtin);
+
+      debug debug_label "After labeling program"
         (fun () -> string_of_tm ~labels:true tm);
 
       (* If alignment is turned on, perform the corresponding static analysis.
-         Otherwise, simply add resamples after each call to weight. *)
-      let tm = if !Analysis.align
-        then begin
-          (* TODO Move this section to the Analysis module *)
-
-          (* Perform static analysis, returning all dynamic labels *)
-          let dyn = Analysis.analyze builtin_map tm nl in
-
-          (* By using the above analysis result, transform all dynamic
-             checkpoints. This information will be handled by the inference
-             algorithm. *)
-          Analysis.align_weight builtin_map dyn tm
-
-        end else
-
-          add_resample builtin_map tm
-
+         Otherwise, simply add resamples after each call to weight. TODO *)
+      let tm,builtin = if !Analysis.align
+        then tm,builtin (*TODO Analysis.align_weight builtin_map tm nl*)
+        else add_resample builtin tm
       in
 
-      debug debug_resample_transform
-        "After attaching resamples" (fun () -> string_of_tm tm);
+
+      debug debug_resample_transform "After attaching resamples to builtins"
+        (fun () -> string_of_builtin builtin);
+
+      debug debug_resample_transform "After attaching resamples"
+        (fun () -> string_of_tm tm);
 
       let builtin =
         builtin
@@ -215,15 +218,13 @@ let infer tm =
         |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
       debug debug_cps_builtin "Post CPS builtin"
-        (fun () -> String.concat "\n"
-            (List.map
-               (fun (x, y) -> sprintf "%s = %s" x
-                   (string_of_tm ~margin:1000 y)) builtin));
+        (fun () -> string_of_builtin builtin);
 
       (* Perform CPS transformation of main program *)
       let tm = cps tm in
 
-      debug debug_cps "Post CPS" (fun () -> string_of_tm ~pretty:false tm);
+      debug debug_cps "Post CPS"
+        (fun () -> string_of_tm ~pretty:false tm);
 
       tm,builtin
 

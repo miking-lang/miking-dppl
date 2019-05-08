@@ -53,6 +53,11 @@ type const =
   | CExp     of float option
   | CBern    of float option
 
+  (* Functions operating on probability distributions *)
+  | CLogPdf  of const option
+  | CSample
+
+
 (** Returns the number of expected arguments for constants *)
 let arity c = match c with
   | CUnit -> 0
@@ -103,9 +108,13 @@ let arity c = match c with
   | CGamma(Some _, Some _) -> 0
   | CGamma _               -> failwith "Should not happen"
 
-  | CExp(None) -> 1 | CExp _ -> 1
+  | CExp(None) -> 1  | CExp _ -> 1
 
   | CBern(None) -> 1 | CBern _ -> 1
+
+  | CLogPdf(None) -> 2 | CLogPdf(Some _) -> 1
+
+  | CSample -> 1
 
 (* Convert constants to pretty printed strings *)
 let rec string_of_const c = match c with
@@ -195,12 +204,82 @@ let rec string_of_const c = match c with
   | CBern(None)   -> "bern"
   | CBern(Some f) -> sprintf "bern(%f)" f
 
+  | CLogPdf(None) -> "logpdf"
+  | CLogPdf(Some c) -> sprintf "logpdf(%s)" (string_of_const c)
+
+  | CSample -> "sample"
+
 (** Error message for incorrect constant applications *)
 let fail_constapp left right =
     failwith (sprintf "Incorrect constant application:\
                        LHS: %s\n\
                        RHS: %s\n"
                 (string_of_const left) (string_of_const right))
+
+
+(** Whether to use a random seed or not for probability distributions *)
+let random_seed = false
+
+(** Gsl default seed **)
+let seed =
+  let rng = Gsl.Rng.make (Gsl.Rng.default ()) in
+  if random_seed then
+    (Random.self_init();
+     Gsl.Rng.set rng (Random.nativeint Nativeint.max_int));
+  rng
+
+(** Probability density/mass functions for built in distributions. *)
+let logpdf value dist = match value,dist with
+
+  (* Normal distribution *)
+  | CFloat(v),
+    CNormal(Some mu,Some sigma) ->
+    CFloat(log (Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
+
+  (* Exponential distribution *)
+  | CFloat(v),
+    CExp Some lambda ->
+    let mu = 1.0 /. lambda in
+    CFloat(log (Gsl.Randist.exponential_pdf v ~mu:mu))
+
+  (* Bernoulli distribution *)
+  | CBool(v),
+    CBern Some p ->
+    let i = if v then 1 else 0 in
+    CFloat(log (Gsl.Randist.bernoulli_pdf i ~p:p))
+
+  (* Gamma distribution *)
+  | CFloat(v),
+    CGamma(Some b, Some a) ->
+    CFloat(log (Gsl.Randist.gamma_pdf v ~a:a ~b:b))
+
+  | _ -> failwith "Incorrect distribution\
+                   or value applied as argument to logpdf"
+
+(** Sample functions for built in distributions. **)
+let sample dist = match dist with
+
+  (* Normal distribution *)
+  | CNormal(Some mu,Some sigma) ->
+    let sample = CFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma) in
+    sample
+
+  (* Exponential distribution *)
+  | CExp Some lambda ->
+    let mu = 1.0 /. lambda in
+    CFloat(Gsl.Randist.exponential seed ~mu:mu)
+
+  (* Bernoulli distribution *)
+  | CBern Some p ->
+    let b = Gsl.Randist.bernoulli seed ~p:p == 1 in
+    CBool(b)
+
+  (* Gamma distribution *)
+  | CGamma(Some a,Some b) ->
+    CFloat(Gsl.Randist.gamma seed ~a:a ~b:b)
+
+  | _ -> failwith "Incorrect distribution applied as argument to sample."
+
 
 (* Evaluate constant applications *)
 let eval_const c v  = match c,v with
@@ -355,4 +434,9 @@ let eval_const c v  = match c,v with
   | CBern(None),CFloat(f) -> CBern(Some(f))
   | CBern(None),CInt(i)   -> CBern(Some (float_of_int i))
   | CBern _,_             -> fail_constapp c v
+
+  | CLogPdf(None),v1      -> CLogPdf(Some v1)
+  | CLogPdf(Some v1),v2   -> logpdf v1 v2
+
+  | CSample,dist        -> sample dist
 
