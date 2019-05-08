@@ -101,8 +101,10 @@ let rec match_case env pattern value = match pattern,value with
   | PatFloat(f1), TmConst(_,CFloat(f2)) when f1 = f2 -> Some env
   | PatFloat _,_                                     -> None
 
-(** Big-step evaluation of terms TODO Optimize for degenerate weights *)
-let rec eval env weight t =
+(** Big-step evaluation of terms
+    TODO Optimize for degenerate weights
+    TODO Cleanup *)
+let rec eval stoch_ctrl env weight t =
 
   debug debug_eval "Eval" (fun () -> string_of_tm ~pretty:false t);
 
@@ -110,7 +112,7 @@ let rec eval env weight t =
 
   (* Variables using debruijn indices.
      Need to evaluate because of fix point. *)
-  | TmVar(_,_,n) -> eval env weight (List.nth env n)
+  | TmVar(_,_,n) -> eval stoch_ctrl env weight (List.nth env n)
 
   (* Constants and builtins *)
   | TmConst _  | TmFix _    | TmUtest _
@@ -122,102 +124,170 @@ let rec eval env weight t =
 
   (* Application *)
   | TmApp(_,t1,t2) ->
-    let weight,v1 = eval env weight t1 in
-    let weight,v2 = eval env weight t2 in
+    let weight,v1 = eval stoch_ctrl env weight t1 in
+    let weight,v2 = eval stoch_ctrl env weight t2 in
+
     (match v1,v2 with
 
-     (* Closure application *)
-     | TmClos(_,_,t3,env2),v2 -> eval (v2::env2) weight t3
+     (* Closure application. If LHS is stochastic, the result is stochastic *)
+     | TmClos({stoch;_},_,t3,env2),v2 ->
+       let weight,tm = eval stoch_ctrl (v2::env2) weight t3 in
+       if stoch then weight,make_stoch tm
+       else          weight,tm
 
-     (* Constant application *)
-     | TmConst(_,c),TmConst(_,v) -> weight,TmConst(na,eval_const c v)
+     (* Constant application with sample as LHS. Always stochastic. *)
+     | TmConst(_,(CSample as c)),TmConst(_,v) ->
+       weight,make_stoch (TmConst(na,eval_const c v))
 
-     (* Fix *)
-     | TmFix _,(TmClos(_,_,t3,env2) as tt) ->
-       eval ((TmApp(na,TmFix na,tt))::env2) weight t3
+     (* Other constant applications. Stochastic if LHS or RHS is stochastic *)
+     | TmConst({stoch = s1;_},c),
+       TmConst({stoch = s2;_},v) ->
+       weight,TmConst({na with stoch = s1 || s2},eval_const c v)
 
+     (* Fixpoint application *)
+     | TmFix{stoch;_},(TmClos(_,_,t3,env2) as tt) ->
+       let weight,tm =
+         eval stoch_ctrl ((TmApp(na,TmFix na,tt))::env2) weight t3 in
+       if stoch then weight,make_stoch tm
+       else          weight,tm
+
+     (* Concatenation application. Stochastic if the concatenation itself or
+        any argument is stochastic *)
      | TmConcat(a,None),(TmList _ as v2)
-     | TmConcat(a,None),(TmConst(_,CString _) as v2)
-       -> weight,TmConcat(a,Some v2)
-     | TmConcat(_,Some TmConst(_,CString s1)),TmConst(_,CString s2)
-       -> weight,TmConst(na,CString (s1 ^ s2))
-     | TmConcat(_,Some TmList(_,ls1)),TmList(_,ls2)
-       -> weight,TmList(na,ls1 @ ls2)
+     | TmConcat(a,None),(TmConst(_,CString _) as v2) ->
+       weight,TmConcat(a,Some v2)
+     | TmConcat({stoch=s;_},Some TmConst({stoch=s1;_},CString str1)),
+       TmConst({stoch=s2;_},CString str2) ->
+       weight,TmConst({na with stoch = s || s1 || s2},CString (str1 ^ str2))
+     | TmConcat({stoch=s;_},Some TmList({stoch=s1;_},ls1)),
+       TmList({stoch=s2;_},ls2) ->
+       weight,TmList({na with stoch = s || s1 || s2},ls1 @ ls2)
 
+     (* Unit testing application. Since the arguments to utest are discarded,
+        it is only stochastic if the utest itself is stochastic. *)
      | TmUtest(a,None),v1          -> weight,TmUtest(a,Some v1)
-     | TmUtest({pos;_},Some v1),v2 ->
+     | TmUtest({stoch;pos;_},Some v1),v2 ->
        if !utest then begin
-         if val_equal v1 v2 then
+         if tm_compare v1 v2 = 0 then
            (printf "."; utest_ok := !utest_ok + 1)
          else (
            unittest_failed pos v1 v2;
            utest_fail := !utest_fail + 1;
            utest_fail_local := !utest_fail_local + 1)
        end;
-       weight,nop
+       if stoch then weight,make_stoch nop
+       else          weight,nop
 
-     | TmWeight _,TmConst(_,CFloat w) -> w +. weight, nop
-     | TmWeight _,TmConst(_,CInt w) -> (float_of_int w) +. weight, nop
+     (* Weighting application. Stochastic if the weight itself is
+        stochastic *)
+     | TmWeight({stoch;_}),TmConst(_,CFloat w) ->
+       let w = w +. weight in
+       if stoch then w, make_stoch nop
+       else          w, nop
+     | TmWeight({stoch;_}),TmConst(_,CInt w) ->
+       let w = (float_of_int w) +. weight in
+       if stoch then w, make_stoch nop
+       else          w, nop
 
-     | TmResamp(a,None,None),(TmClos _ as cont)
-       -> weight,TmResamp(a,Some cont,None)
-     | TmResamp(a,cont,None),TmConst(_,CUnit)
-       -> weight,TmResamp(a,cont,Some CUnit)
+     (* Resampling application, in CPS form natively. Stochastic if the
+        resample is itself stochastic. Note the usage of stoch_ctrl here. *)
+     | TmResamp(a,None,None),(TmClos _ as cont) ->
+       weight,TmResamp(a,Some cont,None)
+     | TmResamp({stoch;_} as a,Some cont,None),TmConst(_,CUnit) ->
+       let tm = TmResamp(a,Some cont,Some stoch_ctrl) in
+       if stoch then weight,make_stoch tm
+       else          weight,tm
 
      | _ -> failwith (sprintf "Incorrect application:\
                                LHS: %s\n\
                                RHS: %s\n"
                         (string_of_tm v1) (string_of_tm v2)))
 
-  (* If-expression *)
-  | TmIf(_,t,t1,t2) ->
-    let weight,v = eval env weight t in
+  (* If-expression. Evaluate the chosen branch with stoch_ctrl set if the
+     condition is stochastic. Furthermore, the result itself is stochastic if
+     the condition (or the if expression itself) is stochastic. *)
+  | TmIf({stoch;_},t,t1,t2) ->
+    let weight,v = eval stoch_ctrl env weight t in
     (match v with
-    | TmConst(_,CBool(true)) -> eval env weight t1
-    | TmConst(_,CBool(false)) -> eval env weight t2
-    | _ -> failwith "Incorrect condition in if-expression.")
+     | TmConst({stoch=stoch_cond;_},CBool(b)) ->
+       let stoch_ctrl = stoch_cond || stoch_ctrl in
+       let weight,tm = (match b with
+        | true -> eval stoch_ctrl env weight t1
+        | false -> eval stoch_ctrl env weight t2) in
+       if stoch || stoch_cond then weight,make_stoch tm
+       else                        weight,tm
+     | _ -> failwith "Incorrect condition in if-expression.")
 
-  (* Match expression *)
-  | TmMatch(_,t,cases) ->
-    let weight,v = eval env weight t in
+  (* Match expression. Evaluate the chosen term with stoch_ctrl set if the
+     condition is stochastic. Furthermore, the result itself is stochastic if
+     the condition (or the if expression itself) is stochastic. *)
+  | TmMatch({stoch;_},t,cases) ->
+    let weight,v = eval stoch_ctrl env weight t in
+    let {stoch=stoch_cond;_} = tm_attr v in
+    let stoch_ctrl = stoch_cond || stoch_ctrl in
     let rec match_cases cases = match cases with
       | (p,t) :: cases ->
         (match match_case env p v with
-         | Some env -> eval env weight t
+         | Some env -> eval stoch_ctrl env weight t
          | None -> match_cases cases)
-      | [] -> failwith "Pattern matching failed"
-    in match_cases cases
+      | [] -> failwith "Pattern matching failed" in
+    let weight,tm = match_cases cases in
+    if stoch || stoch_cond then weight,make_stoch tm
+    else                        weight,tm
 
-  (* Tuples *)
-  | TmTup(a,tarr) ->
-    let f = (fun weight e -> eval env weight e) in
+  (* Tuples. If the tuple itself or any of its components are stochastic, the
+     result is stochastic. *)
+  | TmTup({stoch;_} as a,tarr) ->
+    let f = (fun weight e -> eval stoch_ctrl env weight e) in
     let weight,tarr = arr_map_accum f weight tarr in
-    weight,TmTup(a,tarr)
-  | TmTupProj(_,t1,i) ->
-    let weight,v = eval env weight t1 in
-    (match v with
-     | TmTup(_,varr) -> weight,varr.(i)
-     | _ -> failwith "Tuple projection on non-tuple")
+    let stoch_tarr = Array.exists is_stoch tarr in
+    let tm = TmTup(a,tarr) in
+    if stoch || stoch_tarr then weight,make_stoch tm
+    else                        weight,tm
 
-  (* Records *)
-  | TmRec(a,tls) ->
+  (* Tuple projection. Stochastic if itself or its subterm is stochastic. *)
+  | TmTupProj({stoch;_},t1,i) ->
+    let weight,v = eval stoch_ctrl env weight t1 in
+    let {stoch=stoch_inner;_} = tm_attr v in
+    let tm =
+      (match v with
+       | TmTup(_,varr) -> varr.(i)
+       | _ -> failwith "Tuple projection on non-tuple") in
+    if stoch || stoch_inner then weight,make_stoch tm
+    else                         weight,tm
+
+  (* Records. If the record itself or any of its components are stochastic, the
+     result is stochastic. *)
+  | TmRec({stoch;_} as a,tls) ->
     let f = (fun weight (k,tm) ->
-        let weight,tm = eval env weight tm in weight,(k,tm)) in
-    let weight,tls = map_accum f weight tls
-    in weight,TmRec(a,tls)
-  | TmRecProj(_,t1,x) ->
-    let weight,v = eval env weight t1 in
-    (match v with
-     | TmRec(_,vls) ->
-       (match List.assoc_opt x vls with
-        | Some v1 -> weight,v1
-        | _ -> failwith "Key not found in record")
-     | t -> failwith (sprintf "Record projection on non-record %s"
-                        (string_of_tm t)))
-
-  (* List eval *)
-  | TmList(a,tls) ->
-    let f = (fun weight e -> eval env weight e) in
+        let weight,tm = eval stoch_ctrl env weight tm in weight,(k,tm)) in
     let weight,tls = map_accum f weight tls in
-    weight,TmList(a,tls)
+    let stoch_tls = List.exists (fun (_,tm) -> is_stoch tm) tls in
+    let tm = TmRec(a,tls) in
+    if stoch || stoch_tls then weight,make_stoch tm
+    else                       weight,tm
+
+  (* Record projection. Stochastic if itself or its subterm is stochastic *)
+  | TmRecProj({stoch;_},t1,x) ->
+    let weight,v = eval stoch_ctrl env weight t1 in
+    let {stoch=stoch_inner;_} = tm_attr v in
+    let tm =
+      (match v with
+       | TmRec(_,vls) ->
+         (match List.assoc_opt x vls with
+          | Some v1 -> v1
+          | _ -> failwith "Key not found in record")
+       | t -> failwith (sprintf "Record projection on non-record %s"
+                          (string_of_tm t))) in
+    if stoch || stoch_inner then weight,make_stoch tm
+    else                         weight,tm
+
+  (* List eval. Stochastic if itself or any of its elements are stochastic. *)
+  | TmList({stoch;_} as a,tls) ->
+    let f = (fun weight e -> eval stoch_ctrl env weight e) in
+    let weight,tls = map_accum f weight tls in
+    let stoch_tls = List.exists is_stoch tls in
+    let tm = TmList(a,tls) in
+    if stoch || stoch_tls then weight,make_stoch tm
+    else                       weight,tm
 

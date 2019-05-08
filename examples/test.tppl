@@ -1,0 +1,6 @@
+weight(sample(normal(0,1)))
+if sample(bernoulli(0.5)) then
+  sample(normal(0,1))
+else
+  sample(normal(0,100))
+

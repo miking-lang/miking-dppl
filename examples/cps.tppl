@@ -1,7 +1,7 @@
 function sim(stop, lambda) {
   t ~ exponential(lambda)
   if t <= stop then {
-    weight (2.0)
+    weight(2.0)
     sim(stop-t, lambda+0.1)
   } else t
 }

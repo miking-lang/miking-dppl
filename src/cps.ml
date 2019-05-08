@@ -250,7 +250,7 @@ let cps tm =
 
   let tm = lift_apps tm in
 
-  debug debug_lift_apps "After lifting apps" (fun () -> string_of_tm tm);
+  debug debug_cps "After lifting apps" (fun () -> string_of_tm tm);
 
   if is_atomic tm then
     cps_atomic tm

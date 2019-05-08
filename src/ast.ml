@@ -7,13 +7,26 @@ open Format
 
 (** Attributes of terms.
    Can easily be extended with more data fields as needed. *)
-type attr = { label:int; var_label:int; pos:Lexing.position }
+type attr =
+  {
+    label:int; (* Term labels *)
+    var_label:int; (* Variable labels *)
+    pos:Lexing.position; (* Term position in source code *)
+    stoch:bool; (* Whether or not the term is the result of some stochastic
+                   computation*)
+  }
 
 (** Dummy value for labels *)
 let no_label = -1
 
 (** Default attribute with dummy values *)
-let na = { label = no_label; var_label = no_label; pos = Lexing.dummy_pos }
+let na =
+  {
+    label = no_label;
+    var_label = no_label;
+    pos = Lexing.dummy_pos;
+    stoch = false;
+  }
 
 (** Core terms/expressions *)
 type tm =
@@ -58,30 +71,35 @@ type tm =
   | TmWeight  of attr
 
   (* Resample checkpoint for SMC inference (natively in CPS form) *)
-  | TmResamp  of attr * tm option * const option
+  | TmResamp  of attr * tm option * bool option
 
 (** Evaluation environment *)
 and env = tm list
 
 (** Check if two value terms are equal.
     Does not check for equality of lambdas. *)
-let rec val_equal v1 v2 = match v1,v2 with
+let rec tm_compare v1 v2 = match v1,v2 with
 
   | TmRec(_,rels1),TmRec(_,rels2) ->
-    let comp (k1,v1) (k2,v2) = k1 = k2 && val_equal v1 v2 in
-    (try List.for_all2 comp rels1 rels2 with Invalid_argument _ -> false)
+    let eq (k1,v1) (k2,v2) = k1 = k2 && tm_compare v1 v2 = 0 in
+    if (try List.for_all2 eq rels1 rels2 with Invalid_argument _ -> false)
+    then 0 else compare v1 v2
 
   | TmList(_,ls1),TmList(_,ls2) ->
-    (try List.for_all2 val_equal ls1 ls2 with Invalid_argument _ -> false)
+    let eq v1 v2 = tm_compare v1 v2 = 0 in
+    if (try List.for_all2 eq ls1 ls2 with Invalid_argument _ -> false)
+    then 0 else compare v1 v2
 
   | TmTup(_,tarr1),TmTup(_,tarr2) ->
     let ls1 = Array.to_list tarr1 in
     let ls2 = Array.to_list tarr2 in
-    (try List.for_all2 val_equal ls1 ls2 with Invalid_argument _ -> false)
+    let eq v1 v2 = tm_compare v1 v2 = 0 in
+    if (try List.for_all2 eq ls1 ls2 with Invalid_argument _ -> false)
+    then 0 else compare v1 v2
 
-  | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
+  | TmConst(_,c1),TmConst(_,c2) -> compare c1 c2
 
-  | _ -> false
+  | _ -> compare v1 v2
 
 (* Convenience function for recursively traversing the abstract syntax tree of
    a program. The argument f is a function that handles a tm in some way, or
@@ -130,6 +148,32 @@ let tm_attr = function
 
 (** Returns the label of a term *)
 let tm_label tm = match tm_attr tm with {label;_} -> label
+
+(** Change the attribute of a given tm *)
+let change_attr attr tm = match tm with
+  | TmLam     (_,x,t1)     -> TmLam     (attr,x,t1)
+  | TmClos    (_,x,t1,env) -> TmClos    (attr,x,t1,env)
+  | TmIf      (_,t,t1,t2)  -> TmIf      (attr,t,t1,t2)
+  | TmApp     (_,t1,t2)    -> TmApp     (attr,t1,t2)
+  | TmTup     (_,arr)      -> TmTup     (attr,arr)
+  | TmTupProj (_,t1,i)     -> TmTupProj (attr,t1,i)
+  | TmRec     (_,sm)       -> TmRec     (attr,sm)
+  | TmRecProj (_,t1,x)     -> TmRecProj (attr,t1,x)
+  | TmList    (_,ls)       -> TmList    (attr,ls)
+  | TmMatch   (_,tm,cases) -> TmMatch   (attr,tm,cases)
+  | TmConcat  (_,ot)       -> TmConcat  (attr,ot)
+  | TmResamp  (_,ot,oc)    -> TmResamp  (attr,ot,oc)
+  | TmUtest   (_,ot)       -> TmUtest   (attr,ot)
+  | TmWeight  (_)          -> TmWeight  (attr)
+  | TmVar     (_,x,i)      -> TmVar     (attr,x,i)
+  | TmFix     (_)          -> TmFix     (attr)
+  | TmConst   (_,c)        -> TmConst   (attr,c)
+
+(** Make a term stochastic *)
+let make_stoch tm = change_attr {(tm_attr tm) with stoch=true} tm
+
+(** Check if a term is stochastic *)
+let is_stoch tm = let {stoch;_} = tm_attr tm in stoch
 
 (** Reference used for genvar *)
 let nextvar = ref 0
@@ -283,9 +327,9 @@ let string_of_tm
       | TmResamp(_,None,None)       -> fprintf fmt "resample"
       | TmResamp(_,Some t1,None)    -> fprintf fmt "resample(%a)"
                                          recurse (MATCH, t1)
-      | TmResamp(_,Some t1,Some c1) -> fprintf fmt "resample(%a,%s)"
+      | TmResamp(_,Some t1,Some b1) -> fprintf fmt "resample(%a,%B)"
                                          recurse (APP, t1)
-                                         (string_of_const c1)
+                                         b1
       | TmResamp _                  -> failwith "Invalid TmResamp"
 
     in

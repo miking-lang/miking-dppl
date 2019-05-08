@@ -8,8 +8,6 @@ open Printf
 open Debug
 open Label
 
-let align = ref false
-
 (** Abstract values used in the 0-CFA analysis *)
 type absval =
   | Stoch

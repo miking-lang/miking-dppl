@@ -64,12 +64,8 @@ let exec filename =
   (* TODO Cleanup, this should not be a debug printout. Also, aggregate equal
      samples if possible ("print_emp_dist").
      TODO Make a plot using some library? *)
-  debug debug_infer "Infer result"
-    (fun () -> String.concat "\n"
-        (List.map
-           (fun (w, t) ->
-              sprintf "Sample: %s, Log weight: %f" (string_of_tm t) w)
-           res));
+  debug debug_infer "Inference result"
+    (fun () -> string_of_empirical res);
 
   debug debug_norm "Log Normalizing constant"
   (fun () -> sprintf "%f" normconst);
@@ -85,8 +81,12 @@ let main =
     " Enable unit tests.";
 
     "--align",
-    Arg.Unit(fun _ -> Analysis.align := true),
-    " Enable program alignment using static analysis.";
+    Arg.String(fun s -> match s with
+        | "static"   -> align := Static
+        | "dynamic"  -> align := Dynamic
+        | "disable"  -> align := Disable
+        | _          -> failwith "Incorrect alignment type"),
+    " Enable static or dynamic program alignment.";
 
     "--inference",
     Arg.String(fun s -> match s with
@@ -100,7 +100,7 @@ let main =
     "--samples",
     Arg.Int(fun i -> match i with
         | i when i < 1 -> failwith "Number of samples must be positive"
-        | i            -> particles := i),
+        | i            -> samples := i),
     " Specifies the number of samples in affected inference algorithms.";
 
   ] in

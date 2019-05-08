@@ -71,8 +71,17 @@ type inference =
 (** Default inference is simply weighted evaluation *)
 let inference = ref Eval
 
-(** Number of particles for inference algorithms *)
-let particles = ref 10
+(** Number of samples for inference algorithms *)
+let samples = ref 10
+
+(** SMC Alignment types *)
+type align =
+  | Static
+  | Dynamic
+  | Disable
+
+(** Whether or not to align SMC. Disabled by default. *)
+let align = ref Disable
 
 (** Compute the logarithm of the average of a list of n weights using
     logsumexp-trick *)
@@ -90,13 +99,13 @@ let infer_is env n program =
   let s = replicate n program in
 
   (* Evaluate everything to the end, producing a set of weighted samples *)
-  let res = List.map (eval env 0.0) s in
+  let res = List.map (eval false env 0.0) s in
 
   (* Calculate normalizing constant and return *)
   logavg n (List.map fst res),res
 
 
-(* Systematic resampling of n particles *)
+(* Systematic resampling of n samples *)
 let resample n s =
 
   (* Compute part of the normalizing constant *)
@@ -129,26 +138,34 @@ let infer_smc env n program =
   let s = replicate n program in
 
   (* Run until first resample, attaching the initial environment *)
-  let s = List.map (eval env 0.0) s in
+  let s = List.map (eval false env 0.0) s in
 
   (* Run SMC *)
   let rec recurse s normconst =
 
     (* Evaluate a program until encountering a resample *)
-    let sim (weight,tm) =
-      let weight,tm = eval [] weight tm in
+    let rec sim (weight,tm) =
+      let weight,tm = eval false [] weight tm in
       match tm with
 
       (* Resample *)
-      | TmResamp(_,Some(cont),_) -> false,weight,TmApp(na,cont,nop)
+      | TmResamp(_,Some(cont),Some b) ->
 
-      (* Result *)
+        (* If dynamic alignment is enabled and we are in stochastic control,
+           skip this resampling point. Otherwise, resample here. *)
+        if b && !align = Dynamic then
+          sim (weight,TmApp(na,cont,nop))
+        else
+          false,weight,TmApp(na,cont,nop)
+
+      (* Final result *)
       | _ -> true,weight,tm in
 
     let res = List.map sim s in
     let b = List.for_all (fun (b,_,_) -> b) res in
     let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample n in
     let normconst = normconst +. logavg in
+    printf "Resampling!\n%!";
     if b then begin
       normconst,res
     end else
@@ -171,6 +188,37 @@ let add_resample builtin tm =
 
   recurse tm, List.map (fun (x,t) -> x,recurse t) builtin
 
+(* Function for producing a nicely formatted string representation of the
+   empirical distributions returned by infer below. Aggregates samples with the
+   same value to produce a more compact output. TODO Cleanup *)
+let string_of_empirical ls =
+
+  (* Start by sorting the list *)
+  let sorted = List.sort (fun (_,t1) (_,t2) -> compare t1 t2) ls in
+
+  (* Compute the logarithm of the average of the weights *)
+  let logavg = logavg !samples (List.map fst sorted) in
+
+  (* Compute normalized samples from log-weights *)
+  let normalized = List.map
+      (fun (w,t) -> exp (w -. logavg -. (log (float_of_int !samples))),t)
+      sorted in
+
+  let rec aggregate acc ls = match acc,ls with
+    | (w1,t1)::acc,(w2,t2)::ls when t1 = t2 -> aggregate ((w1+.w2,t1)::acc) ls
+    | acc, (w,t)::ls                        -> aggregate  ((w,t)::acc) ls
+    | acc, [] -> acc in
+
+  let aggr = aggregate [] normalized in
+
+  (* Sort based on weight to show the most important sample at the top *)
+  let last = List.sort (fun (w1,_) (w2,_) -> - compare w1 w2) aggr in
+
+  let line (w,t) = sprintf "  %-15s%-15f" (string_of_tm t) w in
+
+  sprintf "%-15s%-15s\n" "SAMPLE" "WEIGHT"
+  ^ (String.concat "\n" (List.map line last))
+
 (** Preprocess term and redirect to inference algorithm provided by user.
     TODO Cleanup *)
 let infer tm =
@@ -186,19 +234,19 @@ let infer tm =
       (* Label program and builtins *)
       let tm,builtin,_nl = label builtin tm in
 
-      debug debug_label_builtin "After labeling builtins"
+      debug debug_label "After labeling builtins"
         (fun () -> string_of_builtin ~labels:true builtin);
 
       debug debug_label "After labeling program"
         (fun () -> string_of_tm ~labels:true tm);
 
       (* If alignment is turned on, perform the corresponding static analysis.
-         Otherwise, simply add resamples after each call to weight. TODO *)
-      let tm,builtin = if !Analysis.align
+         Otherwise, simply add resamples after each call to weight.
+         TODO Note that dynamic is enabled by default if not static. *)
+      let tm,builtin = if !align = Static
         then tm,builtin (*TODO Analysis.align_weight builtin_map tm nl*)
         else add_resample builtin tm
       in
-
 
       debug debug_resample_transform "After attaching resamples to builtins"
         (fun () -> string_of_builtin builtin);
@@ -217,7 +265,7 @@ let infer tm =
            CPS transformed) *)
         |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
-      debug debug_cps_builtin "Post CPS builtin"
+      debug debug_cps "Post CPS builtin"
         (fun () -> string_of_builtin builtin);
 
       (* Perform CPS transformation of main program *)
@@ -236,7 +284,7 @@ let infer tm =
   (* Variable names no longer required due to debruijn indices *)
   let env = (builtin |> List.split |> snd) in
 
-  match !inference,!particles with
+  match !inference,!samples with
   | Eval,_ -> infer_is env 1 tm
   | Importance,n -> infer_is env n tm
   | SMC,n -> infer_smc env n tm

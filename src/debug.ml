@@ -5,9 +5,6 @@ open Printf
 (** Debug the input term *)
 let debug_input = false
 
-(** Debug the labelling of builtins *)
-let debug_label_builtin = false
-
 (** Debug the labelling *)
 let debug_label = false
 
@@ -16,12 +13,6 @@ let debug_sanalysis = false
 
 (** Debug the resample transformation *)
 let debug_resample_transform = false
-
-(** Debug the lifting transformation *)
-let debug_lift_apps = false
-
-(** Debug the CPS transformation of the initial environment (builtin) *)
-let debug_cps_builtin = false
 
 (** Debug the CPS transformation *)
 let debug_cps = false
@@ -38,7 +29,7 @@ let debug_infer = true
 (** Printout the normalization constant TODO Rework *)
 let debug_norm = true
 
-(** Set to true if unit testing is enabled *)
+(** Enable unit testing *)
 let utest = ref false
 
 (** Counts the number of successful unit tests *)
