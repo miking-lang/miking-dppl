@@ -16,49 +16,36 @@ let next () =
     argument, providing the initial environment (builtins) *)
 let rec label_vars map tm = match tm with
 
-  | TmVar(a,x,i1) ->
+  | TVar(a,x,i1) ->
     (match find_opt x map with
-     | Some i2 -> TmVar({a with var_label = i2},x,i1)
+     | Some i2 -> TVar({a with var_label = i2},x,i1)
      | _ -> failwith ("Unbound var: " ^ x))
 
-  | TmLam(a,x,t1) ->
-      let i = next() in
-      TmLam({a with var_label = i},x,label_vars (add x i map) t1)
+  | TApp(a,t1,t2) -> TApp(a,label_vars map t1,label_vars map t2)
 
-  | _ -> tm_traverse (label_vars map) tm
+  | TLam(a,x,t1) ->
+      let i = next() in
+      TLam({a with var_label = i},x,label_vars (add x i map) t1)
+
+  | TIf(a,t1,t2) -> TIf(a,label_vars map t1,label_vars map t2)
+
+  (* TODO Also label variables bound by TmMatch *)
+  | TMatch(a,cls) -> TMatch(a,List.map (fun (p,t) -> p,label_vars map t) cls)
+
+  | TVal _ -> tm
 
 (** Label all terms in a term. *)
 let rec label_terms tm =
 
   let a = {(tm_attr tm) with label=next()} in
 
-  let tm = match tm with
-    | TmApp(_,t1,t2)      -> TmApp(a,t1,t2)
-    | TmVar(_,x,i1)       -> TmVar(a,x,i1)
-    | TmLam(_,x,t1)       -> TmLam(a,x,t1)
-    | TmClos(_,x,t1,env)  -> TmClos(a,x,t1,env)
-    | TmConst(_,c)        -> TmConst(a,c)
-    | TmIf(_,t,t1,t2)     -> TmIf(a,t, t1, t2)
-    | TmFix _             -> TmFix a
-    | TmUtest(_,t)        -> TmUtest(a,t)
-    | TmMatch(_,t1,cases) -> TmMatch(a,t1,cases)
-    | TmTup(_,arr)        -> TmTup(a,arr)
-    | TmTupProj(_,t1,i)   -> TmTupProj(a,t1,i)
-    | TmRec(_,ls)         -> TmRec(a,ls)
-    | TmRecProj(_,t1,s)   -> TmRecProj(a,t1,s)
-    | TmList(_,ls)        -> TmList(a,ls)
-    | TmConcat(_,t1)      -> TmConcat(a,t1)
-    | TmWeight _          -> TmWeight a
-    | TmResamp(_,t,c)     -> TmResamp(a,t,c)
-
-  in tm_traverse label_terms tm
-
-(** Given a map from strings to variable labels, a string, and a variable
-    label, return true if the mapping from the string to the variable label
-    exists in the map. *)
-let idmatch map str id = match StrMap.find_opt str map with
-  | Some i -> i = id
-  | _ -> false
+  match tm with
+    | TVar(_,x,i1)  -> TVar(a,x,i1)
+    | TApp(_,t1,t2) -> TApp(a,label_terms t1,label_terms t2)
+    | TLam(_,x,t1)  -> TLam(a,x,label_terms t1)
+    | TIf(_,t1,t2)  -> TIf(a,label_terms t1,label_terms t2)
+    | TMatch(_,cls) -> TMatch(a,List.map (fun (p,t) -> p,label_terms t) cls)
+    | TVal(_,c)     -> TVal(a,c)
 
 (** Function for labeling both variables and terms in a term. Returns the
     resulting tm, a convenient map from builtin variable names to variable

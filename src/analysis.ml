@@ -1,8 +1,7 @@
 (** 0-CFA static analysis for aligning weights in programs.
-    TODO Broken, needs updating *)
+    TODO Broken (and incorrect), needs updating *)
 
 open Ast
-open Const
 open Utils
 open Printf
 open Debug
@@ -43,21 +42,8 @@ let functions tm =
     | TmLam({label;var_label;_},_,t1) ->
       Fun{louter=label;linner=tm_label t1;lvar=var_label} :: recurse t1 funs
     | TmApp(_,t1,t2) -> funs |> recurse t1 |> recurse t2
-    | TmConst _ | TmIf _ | TmFix _ (* TODO if *)
-    | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO analysis.ml"
 
-    | TmMatch _ -> failwith "TODO analysis.ml"
-    | TmTup _ -> failwith "TODO analysis.ml"
-    | TmTupProj _ -> failwith "TODO analysis.ml"
-
-    | TmRec _ | TmRecProj _ -> failwith "TODO analysis.ml"
-
-    | TmList _ -> failwith "TODO analysis.ml"
-    | TmConcat _ -> failwith "TODO analysis.ml"
-
-    | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmResamp _ -> failwith "TODO analysis.ml"
+    | _ -> failwith "TODO analysis.ml"
 
   in recurse tm []
 
@@ -82,18 +68,18 @@ let gen_cstrs bmap tm =
       let cstrs = cstrs |> recurse t1 in
       Sub(l1,l) :: cstrs
 
-    (* If expressions *)
-    | TmIf({label=l;_}, t1, t2, t3) ->
-      let l2 = tm_label t2 in
-      let l3 = tm_label t3 in
-      let cstrs = cstrs |> recurse t1 |> recurse t2 |> recurse t3 in
-      Sub(l2,l) :: Sub(l3,l) :: cstrs
+    (* If expressions TODO *)
+    (*| TmIf({label=l;_}, t1, t2, t3) ->*)
+      (*let l2 = tm_label t2 in*)
+      (*let l3 = tm_label t3 in*)
+      (*let cstrs = cstrs |> recurse t1 |> recurse t2 |> recurse t3 in*)
+      (*Sub(l2,l) :: Sub(l3,l) :: cstrs*)
 
-    (* Sample *)
-    | TmApp({label=l;_},TmVar({var_label;_},_,_),t1)
-      when idmatch bmap "sample" var_label ->
-      let cstrs = cstrs |> recurse t1 in
-      Dir(Stoch, l) :: cstrs
+    (* Sample TODO *)
+    (*| TmApp({label=l;_},TmVar({var_label;_},_,_),t1)*)
+      (*when idmatch bmap "sample" var_label ->*)
+      (*let cstrs = cstrs |> recurse t1 in*)
+      (*Dir(Stoch, l) :: cstrs*)
 
     (* Fixpoint *)
     | TmApp({label;_},TmFix(_), t1) ->
@@ -129,22 +115,7 @@ let gen_cstrs bmap tm =
 
     | TmConst _ -> cstrs
 
-    | TmRec _ | TmRecProj _ -> failwith "TODO analysis.ml"
-
-    | TmMatch _ -> failwith "TODO analysis.ml"
-    | TmTup _ -> failwith "TODO analysis.ml"
-    | TmTupProj _ -> failwith "TODO analysis.ml"
-
-    | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO analysis.ml"
-
-    | TmFix _ -> failwith "TODO analysis.ml"
-
-    | TmList _ -> failwith "TODO analysis.ml"
-    | TmConcat _ -> failwith "TODO analysis.ml"
-
-    | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmResamp _ -> failwith "TODO analysis.ml"
+    | _ -> failwith "TODO analysis.ml"
 
   in recurse tm []
 
@@ -201,11 +172,12 @@ let analyze bmap tm nl =
            | _ -> ())
          data.(l));
     match tm with
-    | TmIf(_,t1,t2,t3)
-      when not flag ->
-      recurse flag t1;
-      let flag = mem Stoch data.(tm_label t1) in
-      recurse flag t2; recurse flag t3
+    (* TODO *)
+    (*| TmIf(_,t1,t2,t3)*)
+      (*when not flag ->*)
+      (*recurse flag t1;*)
+      (*let flag = mem Stoch data.(tm_label t1) in*)
+      (*recurse flag t2; recurse flag t3*)
 
     | TmVar _ -> ()
     | TmLam({label=l;_},_,t1) -> recurse (mark.(l) || flag) t1
@@ -215,20 +187,7 @@ let analyze bmap tm nl =
 
     | TmConst _ | TmIf _ | TmFix _ -> () (* TODO if *)
 
-    | TmMatch _ -> failwith "TODO analysis.ml"
-    | TmTup _ -> failwith "TODO analysis.ml"
-    | TmTupProj _ -> failwith "TODO analysis.ml"
-
-    | TmRec _ -> failwith "TODO analysis.ml"
-    | TmRecProj _ -> failwith "TODO analysis.ml"
-    | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO analysis.ml"
-
-    | TmList _ -> failwith "TODO analysis.ml"
-    | TmConcat _ -> failwith "TODO analysis.ml"
-
-    | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmResamp _ -> failwith "TODO analysis.ml"
+    | _ -> failwith "TODO analysis.ml"
 
   in while !modified do
     modified := false;
@@ -255,28 +214,30 @@ let analyze bmap tm nl =
     checkpoints for now since we are only dealing with SMC. *)
 let align_weight bmap tm nl =
 
-  (* Perform static analysis, returning all dynamic labels *)
-  let dyn = analyze bmap tm nl in
+  (* Perform static analysis, returning all dynamic labels
+     TODO *)
+  (*let dyn = analyze bmap tm nl in*)
 
-  let idmatch str id =
-    match StrMap.find_opt str bmap with
-    | Some i -> i = id
-    | _ -> false in
+  (* TODO *)
+  (*let idmatch str id =*)
+    (*match StrMap.find_opt str bmap with*)
+    (*| Some i -> i = id*)
+    (*| _ -> false in*)
   let rec recurse tm = match tm with
 
     (* Replace static weight with a weight followed by resample.
-       TODO Cleanup *)
-    | TmVar({label;var_label;_},_,_)
-      when idmatch "weight" var_label ->
-      if not dyn.(label) then
-        let var_name = "f" in
-        let var = TmVar(na,var_name,noidx) in
-        TmLam(na,var_name,
-              TmApp(na,
-                    TmLam(na,"_",TmResamp(na,None,None)),
-                    TmApp(na,tm,var)))
+       TODO *)
+    (*| TmVar({label;var_label;_},_,_)*)
+      (*when idmatch "weight" var_label ->*)
+      (*if not dyn.(label) then*)
+        (*let var_name = "f" in*)
+        (*let var = TmVar(na,var_name,noidx) in*)
+        (*TmLam(na,var_name,*)
+              (*TmApp(na,*)
+                    (*TmLam(na,"_",TmResamp(na,None,None)),*)
+                    (*TmApp(na,tm,var)))*)
 
-      else tm
+      (*else tm*)
 
     | TmLam(a,x,t1) -> TmLam(a,x,recurse t1)
 
@@ -285,20 +246,7 @@ let align_weight bmap tm nl =
     | TmFix _ | TmVar _ | TmConst _
     | TmIf _ -> tm (* TODO if *)
 
-    | TmMatch _ -> failwith "TODO analysis.ml"
-    | TmTup _ -> failwith "TODO analysis.ml"
-    | TmTupProj _ -> failwith "TODO analysis.ml"
-
-    | TmRec _ | TmRecProj _ -> failwith "TODO analysis.ml"
-
-    | TmClos _ -> failwith "Closure before eval"
-    | TmUtest _ -> failwith "TODO analysis.ml"
-
-    | TmList _ -> failwith "TODO analysis.ml"
-    | TmConcat _ -> failwith "TODO analysis.ml"
-
-    | TmWeight _ -> failwith "TODO analysis.ml"
-    | TmResamp _ -> failwith "TODO analysis.ml"
+    | _ -> failwith "TODO analysis.ml"
 
   in recurse tm
 

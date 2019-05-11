@@ -3,7 +3,7 @@
 open Printf
 
 (** Debug the input term *)
-let debug_input = false
+let debug_input = true
 
 (** Debug the labelling *)
 let debug_label = false

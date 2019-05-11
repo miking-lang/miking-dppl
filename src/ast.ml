@@ -1,12 +1,10 @@
 (** Definitions and operations on the pplcore abstract syntax tree and
     environment. *)
 
-open Const
 open Pattern
-open Format
 
-(** Attributes of terms.
-   Can easily be extended with more data fields as needed. *)
+(** Attributes of terms TODO Values also need to have attributes.
+    Can easily be extended with more data fields as needed. *)
 type attr =
   {
     label:int; (* Term labels *)
@@ -28,149 +26,214 @@ let na =
     stoch = false;
   }
 
-(** Core terms/expressions *)
-type tm =
+(** Lambda calculus terms *)
+type term =
 
-  (* Lambda Calculus *)
-  | TmVar     of attr * string * int
-  | TmLam     of attr * string * tm
-  | TmClos    of attr * string * tm * env
-  | TmApp     of attr * tm * tm
+  (* Variables *)
+  | TVar     of attr * string * int
 
-  (* Constants *)
-  | TmConst   of attr * const
+  (* Applications *)
+  | TApp     of attr * term * term
 
-  (* Pattern matching construct *)
-  | TmMatch   of attr * tm * (pat * tm) list
+  (* Lambdas (All can be encoded as TmMatch really) *)
+  | TLam     of attr * string * term
+  | TIf      of attr * term * term
+  | TMatch   of attr * (pat * term) list
 
-  (* If expressions using the bool constants (could be encoded as TmMatch) *)
-  | TmIf      of attr * tm * tm * tm
+  (* Value terms *)
+  | TVal     of attr * value
+
+(** Evaluation environment. Can not be of type value list because of fixpoint
+    operator. *)
+and env = term list
+
+(** Value terms *)
+and value =
+
+  (* Closures *)
+  | VClos      of string * term * env
+  | VClosIf    of term * term * env
+  | VClosMatch of (pat * term) list * env
 
   (* Fixed-point combinator (not really needed since untyped) *)
-  | TmFix     of attr
+  | VFix
 
-  (* Records and record projection. Use linear search for projection.
-     Should we use hashtable for larger records? *)
-  | TmRec     of attr * (string * tm) list
-  | TmRecProj of attr * tm * string
+  (* Record construction and record projection. Use linear search for
+     projection.  Should we use hashtable for larger records? *)
+  | VRec     of string list * (string * value) list
+  | VRecProj of string
 
   (* Tuples and tuple projection. Uses O(1) array lookup for projection *)
-  | TmTup     of attr * tm array
-  | TmTupProj of attr * tm * int
+  | VTup     of int * value array
+  | VTupProj of int
 
-  (* Lists TODO Add functions for building lists *)
-  | TmList    of attr * tm list
-
-  (* Polymorphic concatenation function (Lists and Strings for now) *)
-  | TmConcat  of attr * tm option
+  (* Lists. Works both as a cons function and a list value *)
+  | VList    of value list
 
   (* Construct for performing unit tests *)
-  | TmUtest   of attr * tm option
+  | VUtest   of value option
+
+  (* Probability distributions *)
+  | VNormal  of float option * float option
+  | VUniform of float option * float option
+  | VGamma   of float option * float option
+  | VExp     of float option
+  | VBern    of float option
+
+  (* Functions operating on probability distributions *)
+  | VSample
+  | VLogPdf  of value option
 
   (* Weighting of executions *)
-  | TmWeight  of attr
+  | VWeight
 
   (* Resample checkpoint for SMC inference (natively in CPS form) *)
-  | TmResamp  of attr * tm option * bool option
+  | VResamp  of value option * bool option
 
-(** Evaluation environment *)
-and env = tm list
+  (* Unit constant *)
+  | VUnit
 
-(** Check if two value terms are equal.
-    Does not check for equality of lambdas. *)
-let rec tm_compare v1 v2 = match v1,v2 with
+  (* Boolean constant and operations *)
+  | VBool    of bool
+  | VNot
+  | VAnd     of bool option
+  | VOr      of bool option
 
-  | TmRec(_,rels1),TmRec(_,rels2) ->
-    let eq (k1,v1) (k2,v2) = k1 = k2 && tm_compare v1 v2 = 0 in
-    if (try List.for_all2 eq rels1 rels2 with Invalid_argument _ -> false)
-    then 0 else compare v1 v2
+  (* Character constant and operations *)
+  | VChar    of char
 
-  | TmList(_,ls1),TmList(_,ls2) ->
-    let eq v1 v2 = tm_compare v1 v2 = 0 in
-    if (try List.for_all2 eq ls1 ls2 with Invalid_argument _ -> false)
-    then 0 else compare v1 v2
+  (* String constant and operations *)
+  | VString  of string
 
-  | TmTup(_,tarr1),TmTup(_,tarr2) ->
-    let ls1 = Array.to_list tarr1 in
-    let ls2 = Array.to_list tarr2 in
-    let eq v1 v2 = tm_compare v1 v2 = 0 in
-    if (try List.for_all2 eq ls1 ls2 with Invalid_argument _ -> false)
-    then 0 else compare v1 v2
+  (* Integer constant and operations *)
+  | VInt     of int
+  | VMod     of int option
+  | VSll     of int option
+  | VSrl     of int option
+  | VSra     of int option
 
-  | TmConst(_,c1),TmConst(_,c2) -> compare c1 c2
+  (* Floating-point number constant and operations *)
+  | VFloat   of float
+  | VLog
 
-  | _ -> compare v1 v2
+  (* Polymorphic integer/floating-point functions *)
+  | VAdd     of value option
+  | VSub     of value option
+  | VMul     of value option
+  | VDiv     of value option
+  | VNeg
+  | VLt      of value option
+  | VLeq     of value option
+  | VGt      of value option
+  | VGeq     of value option
 
-(* Convenience function for recursively traversing the abstract syntax tree of
-   a program. The argument f is a function that handles a tm in some way, or
-   simply calls traverse to reach other parts of the tree *)
-let tm_traverse f tm = match tm with
+  (* Polymorphic functions *)
+  | VEq      of value option
+  | VNeq     of value option
 
-  | TmLam(a,x,t1)     -> TmLam(a,x,f t1)
-  | TmIf(a,t,t1,t2)   -> TmIf(a,f t,f t1,f t2)
-  | TmApp(a,t1,t2)    -> TmApp(a,f t1,f t2)
-  | TmTup(a,arr)      -> TmTup(a,Array.map f arr)
-  | TmTupProj(a,t1,i) -> TmTupProj(a,f t1,i)
-  | TmRec(a,sm)       -> TmRec(a,List.map (fun (k,v) -> k,f v) sm)
-  | TmRecProj(a,t1,x) -> TmRecProj(a,f t1,x)
-  | TmList(a,ls)      -> TmList(a,List.map f ls)
-  | TmMatch(a,tm,cases)
-    -> TmMatch(a,f tm, List.map (fun (p,tm) -> (p, f tm)) cases)
+  (* Polymorphic List/String functions *)
+  | VConcat  of value option
 
-  | TmClos _             -> failwith "ERROR: Traversing a closure\n"
-  | TmConcat(_,Some _)   -> failwith "ERROR: Traversing a concat\n"
-  | TmResamp(_,Some _,_) -> failwith "ERROR: Traversing a resample\n"
-  | TmUtest(_,Some _)    -> failwith "ERROR: Traversing a utest\n"
+(** Returns the number of expected arguments for constants *)
+let arity c = match c with
 
-  | TmConcat _ | TmResamp _
-  | TmWeight _ | TmVar _    | TmFix _
-  | TmConst _  | TmUtest _ -> tm
+  | VClos _ | VClosIf _ | VClosMatch _ -> 1
+
+  | VFix         -> 1
+
+  | VRec(strs,_) -> List.length strs
+  | VRecProj _   -> 1
+
+  | VTup(i,_)    -> i
+  | VTupProj _   -> 1
+
+  | VList _      -> 1
+
+  | VUtest(None) -> 2 | VUtest(Some _) -> 1
+
+  | VNormal(None,None)       -> 2
+  | VNormal(Some _,None)     -> 1
+  | VNormal(Some _,Some _)   -> 0
+  | VNormal _                -> failwith "Should not happen"
+  | VUniform(None,None)      -> 2
+  | VUniform(Some _, None)   -> 1
+  | VUniform(Some _, Some _) -> 0
+  | VUniform _               -> failwith "Should not happen"
+  | VGamma(None,None)        -> 2
+  | VGamma(Some _, None)     -> 1
+  | VGamma(Some _, Some _)   -> 0
+  | VGamma _                 -> failwith "Should not happen"
+  | VExp(None)               -> 1
+  | VExp _                   -> 1
+  | VBern(None)              -> 1
+  | VBern _                  -> 1
+
+  | VSample -> 1
+
+  | VLogPdf(None) -> 2 | VLogPdf(Some _) -> 1
+
+  | VWeight -> 1
+
+  | VResamp _ -> failwith "Resample arity should not be checked"
+
+  | VUnit -> 0
+
+  | VBool _    -> 0
+  | VNot       -> 1
+  | VAnd(None) -> 2  | VAnd(Some _) -> 1
+  | VOr(None)  -> 2  | VOr(Some _)  -> 1
+
+  | VChar _ -> 0
+
+  | VString _ -> 0
+
+  | VInt _     -> 0
+  | VMod(None) -> 2  | VMod(Some _) -> 1
+  | VSll(None) -> 2  | VSll(Some _) -> 1
+  | VSrl(None) -> 2  | VSrl(Some _) -> 1
+  | VSra(None) -> 2  | VSra(Some _) -> 1
+
+  | VFloat _ -> 0
+  | VLog     -> 1
+
+  | VAdd(None) -> 2  | VAdd _ -> 1
+  | VSub(None) -> 2  | VSub _ -> 1
+  | VMul(None) -> 2  | VMul _ -> 1
+  | VDiv(None) -> 2  | VDiv _ -> 1
+  | VNeg       -> 1
+  | VLt(None)  -> 2  | VLt _  -> 1
+  | VLeq(None) -> 2  | VLeq _ -> 1
+  | VGt(None)  -> 2  | VGt _  -> 1
+  | VGeq(None) -> 2  | VGeq _ -> 1
+
+  | VEq(None)  -> 2  | VEq(Some _)  -> 1
+  | VNeq(None) -> 2  | VNeq(Some _) -> 1
+
+  | VConcat(None) -> 2 | VConcat(Some _) -> 1
 
 (** Returns the attribute of a term *)
 let tm_attr = function
-  | TmVar     (a,_,_)
-  | TmLam     (a,_,_)
-  | TmClos    (a,_,_,_)
-  | TmApp     (a,_,_)
-  | TmConst   (a,_)
-  | TmIf      (a,_,_,_)
-  | TmFix     (a)
-  | TmUtest   (a,_)
-  | TmMatch   (a,_,_)
-  | TmRec     (a,_)
-  | TmRecProj (a,_,_)
-  | TmTup     (a,_)
-  | TmTupProj (a,_,_)
-  | TmList    (a,_)
-  | TmConcat  (a,_)
-  | TmWeight  (a)
-  | TmResamp  (a,_,_) -> a
+  | TVar     (a,_,_)
+  | TApp     (a,_,_)
+  | TLam     (a,_,_)
+  | TIf      (a,_,_)
+  | TMatch   (a,_)
+  | TVal     (a,_) -> a
 
 (** Returns the label of a term *)
 let tm_label tm = match tm_attr tm with {label;_} -> label
 
 (** Change the attribute of a given tm *)
 let change_attr attr tm = match tm with
-  | TmLam     (_,x,t1)     -> TmLam     (attr,x,t1)
-  | TmClos    (_,x,t1,env) -> TmClos    (attr,x,t1,env)
-  | TmIf      (_,t,t1,t2)  -> TmIf      (attr,t,t1,t2)
-  | TmApp     (_,t1,t2)    -> TmApp     (attr,t1,t2)
-  | TmTup     (_,arr)      -> TmTup     (attr,arr)
-  | TmTupProj (_,t1,i)     -> TmTupProj (attr,t1,i)
-  | TmRec     (_,sm)       -> TmRec     (attr,sm)
-  | TmRecProj (_,t1,x)     -> TmRecProj (attr,t1,x)
-  | TmList    (_,ls)       -> TmList    (attr,ls)
-  | TmMatch   (_,tm,cases) -> TmMatch   (attr,tm,cases)
-  | TmConcat  (_,ot)       -> TmConcat  (attr,ot)
-  | TmResamp  (_,ot,oc)    -> TmResamp  (attr,ot,oc)
-  | TmUtest   (_,ot)       -> TmUtest   (attr,ot)
-  | TmWeight  (_)          -> TmWeight  (attr)
-  | TmVar     (_,x,i)      -> TmVar     (attr,x,i)
-  | TmFix     (_)          -> TmFix     (attr)
-  | TmConst   (_,c)        -> TmConst   (attr,c)
+  | TVar   (_,x,i)   -> TVar   (attr,x,i)
+  | TLam   (_,x,t1)  -> TLam   (attr,x,t1)
+  | TApp   (_,t1,t2) -> TApp   (attr,t1,t2)
+  | TVal   (_,c)     -> TVal   (attr,c)
+  | TIf    (_,t1,t2) -> TIf    (attr,t1,t2)
+  | TMatch (_,cases) -> TMatch (attr,cases)
 
 (** Make a term stochastic *)
-let make_stoch tm = change_attr {(tm_attr tm) with stoch=true} tm
+let set_stoch stoch tm = change_attr {(tm_attr tm) with stoch=stoch} tm
 
 (** Check if a term is stochastic *)
 let is_stoch tm = let {stoch;_} = tm_attr tm in stoch
@@ -185,213 +248,26 @@ let genvar i =
   let res = !nextvar in
   let str = "$" ^ string_of_int res in
   nextvar := res + 1;
-  (str, TmVar(na,str,i))
+  (str,TVar(na,str,i))
 
 (** Similar to genvar, but specify your own variable name *)
-let makevar str i = (str, TmVar(na,str,i))
+let makevar str i = (str,TVar(na,str,i))
 
-(** Unit shorthand *)
-let nop = TmConst(na, CUnit)
+(** Shorthands *)
+let nop = TVal(na,VUnit)
+let fix = TVal(na,VFix)
 
 (** The identity function (with proper debruijn index) as a tm. *)
 let idfun =
-  let var, var' = genvar 0 in
-  TmLam(na,var,var')
+  let var,var' = genvar 0 in
+  TLam(na,var,var')
 
 (** Convenience function for creating a sequence of two tms *)
-let seq t1 t2 = TmApp(na,TmLam(na,"_",t2),t1)
+let seq t1 t2 = TApp(na,TLam(na,"_",t2),t1)
 
-(** Function for wrapping a const in a tm *)
-let tm_of_const c = TmConst(na, c)
+(** Function for wrapping a value in a tm *)
+let tm_of_val c = TVal(na, c)
 
 (** Used for indicating uninitialized debruijn indices *)
 let noidx = -1
-
-(** Precedence constants for printing *)
-type prec =
-  | MATCH
-  | LAM
-  | SEMICOLON
-  | IF
-  | TUP
-  | APP
-  | ATOM
-
-(** Simple enum used in the concat function in string_of_tm *)
-type sep =
-  | SPACE
-  | COMMA
-
-(** Convert terms to strings. *)
-let string_of_tm
-    ?(debruijn   = false)
-    ?(labels     = false)
-    ?(pretty     = true)
-    ?(indent     = 2)
-    ?(max_indent = 68)
-    ?(margin     = 80)
-    t =
-
-  (* Set right margin and maximum indentation *)
-  pp_set_margin str_formatter margin;
-  pp_set_max_indent str_formatter max_indent;
-
-  (* Function for concatenating a list of fprintf calls using a given
-     separator. *)
-  let rec concat fmt (sep, ls) = match ls with
-    | [] -> ()
-    | [f] -> f fmt
-    | f :: ls -> match sep with
-      | SPACE -> fprintf fmt "%t@ %a" f concat (sep, ls)
-      | COMMA -> fprintf fmt "%t,@,%a" f concat (sep, ls)
-  in
-
-  let rec recurse fmt (prec, t) =
-
-    (* Function for bare printing (no syntactic sugar) *)
-    let bare fmt t = match t with
-
-      | TmMatch(_,t,cases) ->
-        let inner = List.map (fun (p,t1) ->
-            (fun fmt -> fprintf fmt "@[<hov %d>| %s ->@ %a@]" indent
-                (string_of_pat p) recurse (LAM, t1)))
-            cases in
-        fprintf fmt "@[<hov %d>match@ %a@ with@ @[<hv 0>%a@]@]"
-          indent
-          recurse (MATCH, t)
-          concat (SPACE,inner)
-
-      | TmLam(_,x,t1) ->
-        fprintf fmt "@[<hov %d>lam %s.@ %a@]" indent x recurse (MATCH, t1)
-
-      (* TODO Also print closure environment if an argument is given *)
-      | TmClos(_,x,t1,_) ->
-        fprintf fmt "@[<hov %d>clos %s.@ %a@]" indent x recurse (MATCH, t1)
-
-      | TmIf(_,t1,t11,t12) ->
-        fprintf fmt "@[<hv 0>\
-                     @[<hov %d>if %a then@ %a@]\
-                     @ \
-                     @[<hov %d>else@ %a@]\
-                     @]"
-          indent recurse (MATCH, t1) recurse (MATCH, t11)
-          indent recurse (MATCH, t12)
-
-      | TmTup(_,tarr) ->
-        let inner = Array.map (fun t1 ->
-            (fun fmt -> fprintf fmt "%a" recurse (APP, t1))) tarr in
-        fprintf fmt "@[<hov 0>%a@]"
-          concat (COMMA,Array.to_list inner)
-
-      | TmRec(_,sm) ->
-        let inner = List.map (fun (k, t1) ->
-           (fun fmt -> fprintf fmt "%s:%a" k recurse (MATCH, t1))) sm in
-        fprintf fmt "{@[<hov 0>%a@]}"
-          concat (COMMA,inner)
-
-      | TmList(_,ls) ->
-        let inner = List.map (fun t1 ->
-           (fun fmt -> fprintf fmt "%a" recurse (MATCH, t1))) ls in
-        fprintf fmt "[@[<hov 0>%a@]]"
-          concat (COMMA,inner)
-
-      (* TODO Make applications look nicer *)
-      | TmApp(_,t1,(TmApp _ as t2)) ->
-        fprintf fmt "@[<hv 0>%a@ %a@]" recurse (APP, t1) recurse (ATOM, t2)
-
-      | TmApp(_,t1,t2) ->
-        fprintf fmt "@[<hv 0>%a@ %a@]" recurse (APP, t1) recurse (APP, t2)
-
-      | TmVar({var_label;_},x,n) ->
-        let vl = if debruijn then Printf.sprintf "#%d" n else "" in
-        let d = if labels then Printf.sprintf "|%d" var_label else "" in
-        if labels || debruijn then
-          fprintf fmt "<%s%s%s>" x vl d
-        else fprintf fmt "%s" x
-
-      | TmRecProj(_,t1,x)   -> fprintf fmt "%a.%s" recurse (APP, t1) x
-      | TmTupProj(_,t1,i)   -> fprintf fmt "%a.%d" recurse (APP, t1) i
-
-      | TmConst(_,c)        -> fprintf fmt "%s" (string_of_const c)
-
-      | TmFix _             -> fprintf fmt "fix"
-
-      | TmUtest(_,Some t1)  -> fprintf fmt "utest(%a)" recurse (MATCH, t1)
-      | TmUtest _           -> fprintf fmt "utest"
-
-      | TmConcat(_,None)    -> fprintf fmt "concat"
-      | TmConcat(_,Some t1) -> fprintf fmt "concat(%a)" recurse (MATCH, t1)
-
-      | TmWeight _          -> fprintf fmt "weight"
-
-      | TmResamp(_,None,None)       -> fprintf fmt "resample"
-      | TmResamp(_,Some t1,None)    -> fprintf fmt "resample(%a)"
-                                         recurse (MATCH, t1)
-      | TmResamp(_,Some t1,Some b1) -> fprintf fmt "resample(%a,%B)"
-                                         recurse (APP, t1)
-                                         b1
-      | TmResamp _                  -> failwith "Invalid TmResamp"
-
-    in
-
-    (* Syntactic sugar printing *)
-    let sugar fmt t = match t with
-
-      (* Sequencing (right associative) *)
-      | TmApp(_,TmLam(_,"_",t2),
-              (TmApp(_,TmLam(_,"_",_),_) as t1)) ->
-        fprintf fmt "@[<hv 0>%a;@ %a@]"
-          recurse (IF, t1) recurse (MATCH, t2)
-      | TmApp(_,TmLam(_,"_",t2),t1) ->
-        fprintf fmt "@[<hv 0>%a;@ %a@]"
-          recurse (SEMICOLON, t1) recurse (MATCH, t2)
-
-      (* Let expressions *)
-      | TmApp(_,TmLam(_,x,t1),t2) ->
-        fprintf fmt "@[<hv 0>\
-                     @[<hov %d>let %s =@ %a in@]\
-                     @ %a@]"
-          indent x recurse (MATCH, t2) recurse (MATCH, t1)
-
-      | _ -> bare fmt t
-    in
-
-    (* Check if this term should be parenthesized *)
-    let paren = match t with
-
-      | TmApp(_,TmLam(_,"_",_),_) when pretty -> prec > SEMICOLON
-      | TmApp(_,TmLam(_,_,_),_) when pretty   -> prec > LAM
-
-      | TmMatch _          -> prec > MATCH
-      | TmLam _ | TmClos _ -> prec > LAM
-      | TmIf _             -> prec > IF
-      | TmTup _            -> prec > TUP
-      | TmApp _            -> prec > APP
-      | TmVar _     | TmConst _
-      | TmFix _     | TmRec _     | TmTupProj _
-      | TmRecProj _ | TmList _ | TmUtest _   | TmWeight _
-      | TmConcat _  | TmResamp _ -> prec > ATOM
-
-    in
-
-    let p = if pretty then sugar else bare in
-
-    if labels then
-      match t with
-      | TmResamp _ | TmVar _  | TmConst _
-      | TmWeight _ | TmFix _  | TmRec _
-      | TmTupProj _ | TmRecProj _ | TmList _ | TmUtest _
-      | TmConcat _ -> fprintf fmt "%a:%d"   p t (tm_label t)
-      | _          -> fprintf fmt "(%a):%d" p t (tm_label t)
-    else if paren then
-      fprintf fmt "(%a)" p t
-    else
-      fprintf fmt "%a" p t
-
-  in recurse str_formatter (MATCH, t); flush_str_formatter ()
-
-(** Convert environments to strings TODO Merge with TmClos in string_of_tm *)
-let string_of_env env =
-  "[" ^ (List.mapi (fun i t -> Printf.sprintf " %d -> " i ^ string_of_tm t) env
-            |> String.concat ",") ^ "]"
 

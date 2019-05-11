@@ -1,7 +1,7 @@
 (** Inference algorithms *)
 
-open Const
 open Ast
+open Sprint
 open Debug
 open Utils
 open Eval
@@ -10,51 +10,46 @@ open Printf
 open Label
 
 (** Mapping between predefined variable names and builtin constants *)
-let builtin_const = [
-
-  "not",          CNot;
-  "and",          CAnd(None);
-  "or",           COr(None);
-
-  "mod",          CMod(None);
-  "sll",          CSll(None);
-  "srl",          CSrl(None);
-  "sra",          CSra(None);
-
-  "inf",          CFloat(infinity);
-  "log",          CLog;
-
-  "add",          CAdd(None);
-  "sub",          CSub(None);
-  "mul",          CMul(None);
-  "div",          CDiv(None);
-  "neg",          CNeg;
-  "lt",           CLt(None);
-  "leq",          CLeq(None);
-  "gt",           CGt(None);
-  "geq",          CGeq(None);
-
-  "eq",           CEq(None);
-  "neq",          CNeq(None);
-
-  "normal",       CNormal(None, None);
-  "uniform",      CUniform(None, None);
-  "gamma",        CGamma(None, None);
-  "exponential",  CExp(None);
-  "bernoulli",    CBern(None);
-
-  "logpdf",       CLogPdf(None);
-  "sample",       CSample;
-
-]
-
-(** Mapping between predefined variable names and terms *)
 let builtin = [
 
-  "weight",       TmWeight(na);
-  "fix",          TmFix(na);
+  "not",          VNot;
+  "and",          VAnd(None);
+  "or",           VOr(None);
 
-] @ List.map (fun (x, y) -> x, tm_of_const y) builtin_const
+  "mod",          VMod(None);
+  "sll",          VSll(None);
+  "srl",          VSrl(None);
+  "sra",          VSra(None);
+
+  "inf",          VFloat(infinity);
+  "log",          VLog;
+
+  "add",          VAdd(None);
+  "sub",          VSub(None);
+  "mul",          VMul(None);
+  "div",          VDiv(None);
+  "neg",          VNeg;
+  "lt",           VLt(None);
+  "leq",          VLeq(None);
+  "gt",           VGt(None);
+  "geq",          VGeq(None);
+
+  "eq",           VEq(None);
+  "neq",          VNeq(None);
+
+  "normal",       VNormal(None, None);
+  "uniform",      VUniform(None, None);
+  "gamma",        VGamma(None, None);
+  "exponential",  VExp(None);
+  "bernoulli",    VBern(None);
+
+  "logpdf",       VLogPdf(None);
+  "sample",       VSample;
+
+  "weight",       VWeight;
+  "fix",          VFix;
+
+] |> List.map (fun (x, y) -> x, tm_of_val y)
 
 (** Create a string representation of builtins *)
 let string_of_builtin ?(labels = false) builtin =
@@ -108,6 +103,9 @@ let infer_is env n program =
 (* Systematic resampling of n samples *)
 let resample n s =
 
+  printf "Resampling!\n%!";
+  (*List.iter (fun (w,_) -> printf "%f " w) s;*)
+  (*print_newline();*)
   (* Compute part of the normalizing constant *)
   let logavg = logavg n (List.map fst s) in
 
@@ -149,14 +147,14 @@ let infer_smc env n program =
       match tm with
 
       (* Resample *)
-      | TmResamp(_,Some(cont),Some b) ->
+      | TVal(_,VResamp(Some(cont),Some b)) ->
 
         (* If dynamic alignment is enabled and we are in stochastic control,
            skip this resampling point. Otherwise, resample here. *)
         if b && !align = Dynamic then
-          sim (weight,TmApp(na,cont,nop))
+          sim (weight,TApp(na,tm_of_val cont,nop))
         else
-          false,weight,TmApp(na,cont,nop)
+          false,weight,TApp(na,tm_of_val cont,nop)
 
       (* Final result *)
       | _ -> true,weight,tm in
@@ -165,7 +163,6 @@ let infer_smc env n program =
     let b = List.for_all (fun (b,_,_) -> b) res in
     let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample n in
     let normconst = normconst +. logavg in
-    printf "Resampling!\n%!";
     if b then begin
       normconst,res
     end else
@@ -176,17 +173,29 @@ let infer_smc env n program =
 
 (** Convert all weighting to
     weighting followed by a call to resample *)
-let add_resample builtin tm =
+let add_resample builtin t =
 
-  let rec recurse tm = match tm with
-    | TmWeight _ ->
+  let rec recurse t = match t with
+    | TVar _ -> t
+
+    | TApp(a,t1,t2) -> TApp(a,recurse t1,recurse t2)
+
+    | TLam(a,x,t1) -> TLam(a,x,recurse t1)
+
+    | TIf(a,t1,t2) -> TIf(a,recurse t1,recurse t2)
+
+    | TMatch(a,cls) -> TMatch(a,List.map (fun (p,t) -> p,recurse t) cls)
+
+    | TVal(_,VWeight) ->
       let var, var'  = makevar "w" noidx in
-      let weight_app = TmApp(na,tm,var') in
-      let resamp     = TmApp(na,TmResamp(na,None,None),nop) in
-      TmLam(na,var,seq weight_app resamp)
-    | _ -> tm_traverse recurse tm in
+      let weight_app = TApp(na,t,var') in
+      let resamp     = TApp(na,TVal(na,VResamp(None,None)),nop) in
+      TLam(na,var,seq weight_app resamp)
 
-  recurse tm, List.map (fun (x,t) -> x,recurse t) builtin
+    | TVal _ -> t
+
+  in
+  recurse t, List.map (fun (x,t) -> x,recurse t) builtin
 
 (* Function for producing a nicely formatted string representation of the
    empirical distributions returned by infer below. Aggregates samples with the
@@ -257,21 +266,21 @@ let infer tm =
       let builtin =
         builtin
 
-        (* Transform builtins to CPS. Required since we need to wrap constant
-           functions in CPS forms *)
+        (* Transform builtins to VPS. Required since we need to wrap constant
+           functions in VPS forms *)
         |> List.map (fun (x, y) -> (x, (cps_atomic y)))
 
         (* Debruijn transform builtins (since they have now been
-           CPS transformed) *)
+           VPS transformed) *)
         |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
-      debug debug_cps "Post CPS builtin"
+      debug debug_cps "Post VPS builtin"
         (fun () -> string_of_builtin builtin);
 
-      (* Perform CPS transformation of main program *)
+      (* Perform VPS transformation of main program *)
       let tm = cps tm in
 
-      debug debug_cps "Post CPS"
+      debug debug_cps "Post VPS"
         (fun () -> string_of_tm ~pretty:false tm);
 
       tm,builtin

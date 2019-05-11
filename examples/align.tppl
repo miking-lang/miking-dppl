@@ -1,0 +1,18 @@
+
+function flip(p) {
+  sample(bernoulli(p))
+}
+
+p = 0.0000227
+b = flip(p)
+function rec(n) {
+  if b then weight(1)
+  else      weight(-1)
+  if n > 1 then rec(n-1)
+  else          b
+}
+
+rec(10)
+
+b
+

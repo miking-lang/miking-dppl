@@ -2,74 +2,86 @@
 
 open Printf
 open Ast
-open Const
 open Pattern
+open Sprint
 open Utils
 open Debug
 
 (** Print out error message when a unit test fails *)
-let unittest_failed pos t1 t2 =
+let unittest_failed pos v1 v2 =
   print_string ("\n ** Unit test FAILED at " ^
                 string_of_position pos ^
-                " **\n    LHS: " ^ (string_of_tm t1) ^
-                "\n    RHS: " ^ (string_of_tm t2))
+                " **\n    LHS: " ^ (string_of_tm (tm_of_val v1)) ^
+                "\n    RHS: " ^ (string_of_tm (tm_of_val v2)))
+
+(** Error message for incorrect constant applications *)
+let fail_app left right =
+  (Printf.printf "\n  Incorrect application:\n\
+                  \    LHS: %s\n\
+                  \    RHS: %s\n"
+     (string_of_tm (tm_of_val left))
+     (string_of_tm (tm_of_val right)));
+  failwith "fail_app"
 
 (** Extends an environment used in debruijn conversion with the identifiers
     found in the given pattern *)
 let rec patenv env pat = match pat with
-  | PatVar(s)         -> s :: env
-  | PatRec((_,p)::ps) -> patenv (patenv env p) (PatRec(ps))
-  | PatRec([])        -> env
-  | PatList(p::ps)    -> patenv (patenv env p) (PatList(ps))
-  | PatList([])       -> env
-  | PatTup(p::ps)     -> patenv (patenv env p) (PatTup(ps))
-  | PatTup([])        -> env
-  | PatCons(p1,p2)    -> patenv (patenv env p1) p2
-  | PatUnit     | PatChar _
-  | PatString _ | PatInt _  | PatFloat _ -> env
+  | PVar(s)         -> s :: env
+  | PRec((_,p)::ps) -> patenv (patenv env p) (PRec(ps))
+  | PRec([])        -> env
+  | PList(p::ps)    -> patenv (patenv env p) (PList(ps))
+  | PList([])       -> env
+  | PTup(p::ps)     -> patenv (patenv env p) (PTup(ps))
+  | PTup([])        -> env
+  | PCons(p1,p2)    -> patenv (patenv env p1) p2
+
+  | PUnit     | PChar _
+  | PString _ | PInt _  | PFloat _ -> env
 
 (** Add debruijn indices to a term *)
 let rec debruijn env t = match t with
-  | TmVar(_,x,_) ->
+  | TVar(a,x,_) ->
     let rec find env n = match env with
       | y::ee -> if y = x then n else find ee (n+1)
       | [] -> failwith ("Unknown variable in debruijn conversion: " ^ x)
-    in TmVar(na,x,find env 0)
+    in TVar(a,x,find env 0)
 
-  | TmMatch(a,tm,cases) ->
-    TmMatch(a,debruijn env tm,
-            List.map (fun (p,tm) -> (p, debruijn (patenv env p) tm)) cases)
+  | TApp(a,t1,t2) -> TApp(a,debruijn env t1,debruijn env t2)
 
-  | TmLam(a,x,t1)     -> TmLam(a,x,debruijn (x::env) t1)
-  | TmClos _          -> failwith "Closures should not be available."
+  | TLam(a,x,t1) -> TLam(a,x,debruijn (x::env) t1)
 
-  | _ -> tm_traverse (debruijn env) t
+  | TIf(a,t1,t2) -> TIf(a,debruijn env t1,debruijn env t2)
+
+  | TMatch(a,cls) ->
+    TMatch(a, List.map (fun (p,t) -> p,debruijn (patenv env p) t) cls)
+
+  | TVal _ -> t
 
 (** If the pattern matches the given value, return the extended environment
     where the variables in the pattern are bound to the corresponding terms in
     the value. IMPORTANT: Follows the same traversal order of the pattern as in
     the patenv function to get the correct debruijn indices. *)
 let rec match_case env pattern value = match pattern,value with
-  | PatVar _,v -> Some(v :: env)
+  | PVar _,v -> Some(tm_of_val v :: env)
 
-  | PatRec((k,p)::ps),(TmRec(_,es) as v) ->
+  | PRec((k,p)::ps),(VRec([],es) as v) ->
     (match List.assoc_opt k es with
      | Some v1 ->
        (match match_case env p v1 with
-        | Some env -> match_case env (PatRec(ps)) v
+        | Some env -> match_case env (PRec(ps)) v
         | None     -> None)
      | None -> None)
-  | PatRec([]),TmRec _ -> Some env
-  | PatRec _,_        -> None
+  | PRec([]),VRec _ -> Some env
+  | PRec _,_        -> None
 
-  | PatList(p::ps),TmList(a,v::vs) ->
+  | PList(p::ps),VList(v::vs) ->
     (match match_case env p v with
-     | Some env -> match_case env (PatList(ps)) (TmList(a,vs))
+     | Some env -> match_case env (PList(ps)) (VList(vs))
      | None     -> None)
-  | PatList([]),TmList(_,[]) -> Some env
-  | PatList _,_              -> None
+  | PList([]),VList [] -> Some env
+  | PList _,_              -> None
 
-  | PatTup(ps),TmTup(_,varr) ->
+  | PTup(ps),VTup(0,varr) ->
     let rec fold env ps i = match ps with
       | p::ps when i < Array.length varr ->
         (match match_case env p varr.(i) with
@@ -78,32 +90,27 @@ let rec match_case env pattern value = match pattern,value with
       | [] when i = Array.length varr -> Some env
       | _                             -> None
     in fold env ps 0
-  | PatTup _,_ -> None
+  | PTup _,_ -> None
 
-  | PatCons(p1,p2),TmList(a,v::vs) ->
+  | PCons(p1,p2),VList(v::vs) ->
     (match match_case env p1 v with
-     | Some env -> match_case env p2 (TmList(a,vs))
+     | Some env -> match_case env p2 (VList(vs))
      | None     -> None)
-  | PatCons _,_ -> None
+  | PCons _,_ -> None
 
-  | PatUnit, TmConst(_,CUnit) -> Some env
-  | PatUnit, _                -> None
-
-  | PatChar(c1), TmConst(_,CChar(c2)) when c1 = c2 -> Some env
-  | PatChar _,_                                    -> None
-
-  | PatString(s1), TmConst(_,CString(s2)) when s1 = s2 -> Some env
-  | PatString _,_                                      -> None
-
-  | PatInt(i1), TmConst(_,CInt(i2)) when i1 = i2 -> Some env
-  | PatInt _,_                                   -> None
-
-  | PatFloat(f1), TmConst(_,CFloat(f2)) when f1 = f2 -> Some env
-  | PatFloat _,_                                     -> None
+  | PUnit,        VUnit                    -> Some env
+  | PUnit,        _                        -> None
+  | PChar(c1),    VChar(c2)   when c1 = c2 -> Some env
+  | PChar _,      _                        -> None
+  | PString(s1),  VString(s2) when s1 = s2 -> Some env
+  | PString _,    _                        -> None
+  | PInt(i1),     VInt(i2)    when i1 = i2 -> Some env
+  | PInt _,       _                        -> None
+  | PFloat(f1),   VFloat(f2)  when f1 = f2 -> Some env
+  | PFloat _,     _                        -> None
 
 (** Big-step evaluation of terms
-    TODO Optimize for degenerate weights
-    TODO Cleanup *)
+    TODO Optimize for degenerate weights *)
 let rec eval stoch_ctrl env weight t =
 
   debug debug_eval "Eval" (fun () -> string_of_tm ~pretty:false t);
@@ -111,183 +118,272 @@ let rec eval stoch_ctrl env weight t =
   match t with
 
   (* Variables using debruijn indices.
-     Need to evaluate because of fix point. *)
-  | TmVar(_,_,n) -> eval stoch_ctrl env weight (List.nth env n)
+     Need to evaluate because fix point might exist in env. *)
+  | TVar(_,_,n) -> eval stoch_ctrl env weight (List.nth env n)
 
-  (* Constants and builtins *)
-  | TmConst _  | TmFix _    | TmUtest _
-  | TmConcat _ | TmWeight _ | TmResamp _ -> weight,t
+  (* Lambdas, ifs, and matches *)
+  | TLam(a,x,t1)  -> weight,TVal(a,VClos(x,t1,env))
+  | TIf(a,t1,t2)  -> weight,TVal(a,VClosIf(t1,t2,env))
+  | TMatch(a,cls) -> weight,TVal(a,VClosMatch(cls,env))
 
-  (* Lambda and closure conversions *)
-  | TmLam(a,x,t1) -> weight,TmClos(a,x,t1,env)
-  | TmClos _      -> weight,t
+  (* Values *)
+  | TVal _ -> weight,t
 
-  (* Application *)
-  | TmApp(_,t1,t2) ->
+  (* Applications *)
+  | TApp(_,t1,t2) ->
     let weight,v1 = eval stoch_ctrl env weight t1 in
     let weight,v2 = eval stoch_ctrl env weight t2 in
+    eval_app stoch_ctrl weight v1 v2
 
-    (match v1,v2 with
+(* Evaluate constant applications
+   TODO Cleanup*)
+and eval_app stoch_ctrl weight t1 t2 =
 
-     (* Closure application. If LHS is stochastic, the result is stochastic *)
-     | TmClos({stoch;_},_,t3,env2),v2 ->
-       let weight,tm = eval stoch_ctrl (v2::env2) weight t3 in
-       if stoch then weight,make_stoch tm
-       else          weight,tm
+  (* Extract values *)
+  let v1,v2 = match t1,t2 with
+    | TVal(_,v1),TVal(_,v2) -> v1,v2
+    | _ -> failwith "Non-value in eval_app" in
 
-     (* Constant application with sample as LHS. Always stochastic. *)
-     | TmConst(_,(CSample as c)),TmConst(_,v) ->
-       weight,make_stoch (TmConst(na,eval_const c v))
+  (* Extract stochasticness *)
+  let ({stoch=s1;_} as a1),({stoch=s2;_} as _a2) = tm_attr t1,tm_attr t2 in
 
-     (* Other constant applications. Stochastic if LHS or RHS is stochastic *)
-     | TmConst({stoch = s1;_},c),
-       TmConst({stoch = s2;_},v) ->
-       weight,TmConst({na with stoch = s1 || s2},eval_const c v)
+  (* Default attribute *)
+  let da = {a1 with stoch = s1 || s2} in
 
-     (* Fixpoint application *)
-     | TmFix{stoch;_},(TmClos(_,_,t3,env2) as tt) ->
-       let weight,tm =
-         eval stoch_ctrl ((TmApp(na,TmFix na,tt))::env2) weight t3 in
-       if stoch then weight,make_stoch tm
-       else          weight,tm
+  match v1,v2 with
 
-     (* Concatenation application. Stochastic if the concatenation itself or
-        any argument is stochastic *)
-     | TmConcat(a,None),(TmList _ as v2)
-     | TmConcat(a,None),(TmConst(_,CString _) as v2) ->
-       weight,TmConcat(a,Some v2)
-     | TmConcat({stoch=s;_},Some TmConst({stoch=s1;_},CString str1)),
-       TmConst({stoch=s2;_},CString str2) ->
-       weight,TmConst({na with stoch = s || s1 || s2},CString (str1 ^ str2))
-     | TmConcat({stoch=s;_},Some TmList({stoch=s1;_},ls1)),
-       TmList({stoch=s2;_},ls2) ->
-       weight,TmList({na with stoch = s || s1 || s2},ls1 @ ls2)
+  (* Closure application. If LHS is stochastic, the result is stochastic *)
+  | VClos(_,t11,env),_ ->
+    let weight,t = eval stoch_ctrl (t2::env) weight t11 in
+    weight,set_stoch s1 t
 
-     (* Unit testing application. Since the arguments to utest are discarded,
-        it is only stochastic if the utest itself is stochastic. *)
-     | TmUtest(a,None),v1          -> weight,TmUtest(a,Some v1)
-     | TmUtest({stoch;pos;_},Some v1),v2 ->
-       if !utest then begin
-         if tm_compare v1 v2 = 0 then
-           (printf "."; utest_ok := !utest_ok + 1)
-         else (
-           unittest_failed pos v1 v2;
-           utest_fail := !utest_fail + 1;
-           utest_fail_local := !utest_fail_local + 1)
-       end;
-       if stoch then weight,make_stoch nop
-       else          weight,nop
-
-     (* Weighting application. Stochastic if the weight itself is
-        stochastic *)
-     | TmWeight({stoch;_}),TmConst(_,CFloat w) ->
-       let w = w +. weight in
-       if stoch then w, make_stoch nop
-       else          w, nop
-     | TmWeight({stoch;_}),TmConst(_,CInt w) ->
-       let w = (float_of_int w) +. weight in
-       if stoch then w, make_stoch nop
-       else          w, nop
-
-     (* Resampling application, in CPS form natively. Stochastic if the
-        resample is itself stochastic. Note the usage of stoch_ctrl here. *)
-     | TmResamp(a,None,None),(TmClos _ as cont) ->
-       weight,TmResamp(a,Some cont,None)
-     | TmResamp({stoch;_} as a,Some cont,None),TmConst(_,CUnit) ->
-       let tm = TmResamp(a,Some cont,Some stoch_ctrl) in
-       if stoch then weight,make_stoch tm
-       else          weight,tm
-
-     | _ -> failwith (sprintf "Incorrect application:\
-                               LHS: %s\n\
-                               RHS: %s\n"
-                        (string_of_tm v1) (string_of_tm v2)))
-
-  (* If-expression. Evaluate the chosen branch with stoch_ctrl set if the
+  (* If-application. Evaluate the chosen branch with stoch_ctrl set if the
      condition is stochastic. Furthermore, the result itself is stochastic if
      the condition (or the if expression itself) is stochastic. *)
-  | TmIf({stoch;_},t,t1,t2) ->
-    let weight,v = eval stoch_ctrl env weight t in
-    (match v with
-     | TmConst({stoch=stoch_cond;_},CBool(b)) ->
-       let stoch_ctrl = stoch_cond || stoch_ctrl in
-       let weight,tm = (match b with
-        | true -> eval stoch_ctrl env weight t1
-        | false -> eval stoch_ctrl env weight t2) in
-       if stoch || stoch_cond then weight,make_stoch tm
-       else                        weight,tm
-     | _ -> failwith "Incorrect condition in if-expression.")
+  | VClosIf(t1,t2,env),VBool(b) ->
+    let stoch_ctrl = stoch_ctrl || s2 in
+    let weight,t = match b with
+      | true -> eval stoch_ctrl env weight t1
+      | false -> eval stoch_ctrl env weight t2 in
+    weight,set_stoch (s1 || s2) t
 
-  (* Match expression. Evaluate the chosen term with stoch_ctrl set if the
+  (* Match-application. Evaluate the chosen term with stoch_ctrl set if the
      condition is stochastic. Furthermore, the result itself is stochastic if
      the condition (or the if expression itself) is stochastic. *)
-  | TmMatch({stoch;_},t,cases) ->
-    let weight,v = eval stoch_ctrl env weight t in
-    let {stoch=stoch_cond;_} = tm_attr v in
-    let stoch_ctrl = stoch_cond || stoch_ctrl in
-    let rec match_cases cases = match cases with
-      | (p,t) :: cases ->
-        (match match_case env p v with
+  | VClosMatch(cls,env),v2 ->
+    let stoch_ctrl = stoch_ctrl || s2 in
+    let rec match_cases cls = match cls with
+      | (p,t) :: cls ->
+        (match match_case env p v2 with
          | Some env -> eval stoch_ctrl env weight t
-         | None -> match_cases cases)
+         | None -> match_cases cls)
       | [] -> failwith "Pattern matching failed" in
-    let weight,tm = match_cases cases in
-    if stoch || stoch_cond then weight,make_stoch tm
-    else                        weight,tm
+    let weight,t = match_cases cls in
+    weight,set_stoch (s1 || s2) t
 
-  (* Tuples. If the tuple itself or any of its components are stochastic, the
-     result is stochastic. *)
-  | TmTup({stoch;_} as a,tarr) ->
-    let f = (fun weight e -> eval stoch_ctrl env weight e) in
-    let weight,tarr = arr_map_accum f weight tarr in
-    let stoch_tarr = Array.exists is_stoch tarr in
-    let tm = TmTup(a,tarr) in
-    if stoch || stoch_tarr then weight,make_stoch tm
-    else                        weight,tm
+  (* Fixpoint application *)
+  | VFix,VClos(_,t21,env2) ->
+    let weight,t =
+      eval stoch_ctrl ((TApp(na,t1,t2))::env2) weight t21 in
+    weight,set_stoch s1 t
 
-  (* Tuple projection. Stochastic if itself or its subterm is stochastic. *)
-  | TmTupProj({stoch;_},t1,i) ->
-    let weight,v = eval stoch_ctrl env weight t1 in
-    let {stoch=stoch_inner;_} = tm_attr v in
-    let tm =
-      (match v with
-       | TmTup(_,varr) -> varr.(i)
-       | _ -> failwith "Tuple projection on non-tuple") in
-    if stoch || stoch_inner then weight,make_stoch tm
-    else                         weight,tm
+  (* Result of sample is always stochastic. *)
+  | VSample,dist-> weight,set_stoch true (TVal(a1,Dist.sample dist))
 
-  (* Records. If the record itself or any of its components are stochastic, the
-     result is stochastic. *)
-  | TmRec({stoch;_} as a,tls) ->
-    let f = (fun weight (k,tm) ->
-        let weight,tm = eval stoch_ctrl env weight tm in weight,(k,tm)) in
-    let weight,tls = map_accum f weight tls in
-    let stoch_tls = List.exists (fun (_,tm) -> is_stoch tm) tls in
-    let tm = TmRec(a,tls) in
-    if stoch || stoch_tls then weight,make_stoch tm
-    else                       weight,tm
+  (* Concatenation application.  *)
+  | VConcat(None), VList _
+  | VConcat(None), VString _ -> weight,TVal(da,VConcat (Some v2))
+  | VConcat(Some VString str1), VString str2 ->
+    weight,TVal(da,VString (str1 ^ str2))
+  | VConcat(Some VList ls1),    VList ls2 ->
+    weight,TVal(da,VList(ls1 @ ls2))
 
-  (* Record projection. Stochastic if itself or its subterm is stochastic *)
-  | TmRecProj({stoch;_},t1,x) ->
-    let weight,v = eval stoch_ctrl env weight t1 in
-    let {stoch=stoch_inner;_} = tm_attr v in
-    let tm =
-      (match v with
-       | TmRec(_,vls) ->
-         (match List.assoc_opt x vls with
-          | Some v1 -> v1
-          | _ -> failwith "Key not found in record")
-       | t -> failwith (sprintf "Record projection on non-record %s"
-                          (string_of_tm t))) in
-    if stoch || stoch_inner then weight,make_stoch tm
-    else                         weight,tm
+  (* Unit testing application. *)
+  | VUtest(None),v2 -> weight,TVal(a1,VUtest(Some v2))
+  | VUtest(Some v1),v2 ->
+    let {pos;_} = a1 in
+    if !utest then
+      if compare v1 v2 = 0 then begin
+        printf "."; utest_ok := !utest_ok + 1;
+      end
+      else begin
+        unittest_failed pos v1 v2;
+        utest_fail := !utest_fail + 1;
+        utest_fail_local := !utest_fail_local + 1;
+      end;
+    weight,TVal(a1,VUnit)
 
-  (* List eval. Stochastic if itself or any of its elements are stochastic. *)
-  | TmList({stoch;_} as a,tls) ->
-    let f = (fun weight e -> eval stoch_ctrl env weight e) in
-    let weight,tls = map_accum f weight tls in
-    let stoch_tls = List.exists is_stoch tls in
-    let tm = TmList(a,tls) in
-    if stoch || stoch_tls then weight,make_stoch tm
-    else                       weight,tm
+  (* Weighting application. *)
+  | VWeight,VFloat w ->
+    let weight = w +. weight in
+    weight,TVal(a1,VUnit)
+  | VWeight,VInt w ->
+    let weight = (float_of_int w) +. weight in
+    weight,TVal(a1,VUnit)
+
+  (* Resampling application, in CPS form natively. Note the usage of stoch_ctrl
+     here.
+     TODO Stochastic if the resample is itself stochastic.  *)
+  | VResamp(None,None),(VClos _ as cont) ->
+    weight,TVal(a1,VResamp(Some cont,None))
+  | VResamp(Some cont,None),VUnit ->
+    weight,TVal(a1,VResamp(Some cont,Some stoch_ctrl))
+
+  (* Tuple projection. TODO Values also need attributes *)
+  | VTupProj(i),VTup(0,varr) -> weight,TVal(da,varr.(i))
+
+  (* Record projection. Stochastic if itself or its subterm is stochastic
+     TODO Values also need attributes *)
+  | VRecProj(x),VRec([],vls) ->
+    let v = match List.assoc_opt x vls with
+      | Some v -> v
+      | _ -> failwith "Key not found in record" in
+    weight,TVal(da,v)
+
+  | VNot,VBool(v) -> weight,TVal(da,VBool(not v))
+
+  | VAnd(None),    VBool(v)  -> weight,TVal(da,VAnd(Some(v)))
+  | VAnd(Some(v1)),VBool(v2) -> weight,TVal(da,VBool(v1 && v2))
+
+  | VOr(None),    VBool(v)  -> weight,TVal(da,VOr(Some(v)))
+  | VOr(Some(v1)),VBool(v2) -> weight,TVal(da,VBool(v1 || v2))
+
+  (* Character operations *)
+
+  (* String operations *)
+
+  (* Integer operations *)
+  | VMod(None),    VInt(v)  -> weight,TVal(da, VMod(Some(v)))
+  | VMod(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 mod v2))
+
+  | VSll(None),    VInt(v)  -> weight,TVal(da, VSll(Some(v)))
+  | VSll(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 lsl v2))
+
+  | VSrl(None),    VInt(v)  -> weight,TVal(da, VSrl(Some(v)))
+  | VSrl(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 lsr v2))
+
+  | VSra(None),    VInt(v)  -> weight,TVal(da, VSra(Some(v)))
+  | VSra(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 asr v2))
+
+  (* Floating-point number operations *)
+  | VLog,VFloat(v) -> weight,TVal(da, VFloat(log v))
+
+  (* Polymorphic integer/floating-point functions *)
+  | VAdd(None),VInt _   -> weight, TVal(da,VAdd(Some v2))
+  | VAdd(None),VFloat _ -> weight, TVal(da,VAdd(Some v2))
+
+  | VAdd(Some VInt v1), VInt v2 ->
+    weight,TVal(da,VInt(v1 + v2))
+  | VAdd(Some VFloat v1),VFloat v2 ->
+    weight,TVal(da,VFloat(v1 +. v2))
+  | VAdd(Some VFloat v1),VInt v2 ->
+    weight, TVal(da,VFloat(v1 +. (float_of_int v2)))
+  | VAdd(Some VInt v1),VFloat v2 ->
+    weight, TVal(da,VFloat((float_of_int v1) +. v2))
+
+  | VSub(None),VInt _          -> weight,TVal(da,VSub(Some v2))
+  | VSub(None),VFloat _        -> weight,TVal(da,VSub(Some v2))
+  | VSub(Some(VInt(v1))),VInt(v2) ->
+    weight,TVal(da,VInt(v1 - v2))
+  | VSub(Some(VFloat(v1))),VFloat(v2) ->
+    weight,TVal(da,VFloat(v1 -. v2))
+  | VSub(Some(VFloat(v1))),VInt(v2) ->
+    weight,TVal(da,VFloat(v1 -. (float_of_int v2)))
+  | VSub(Some(VInt(v1))),VFloat(v2) ->
+    weight,TVal(da,VFloat((float_of_int v1) -. v2))
+
+  | VMul(None),VInt _   -> weight,TVal(da,VMul(Some v2))
+  | VMul(None),VFloat _ -> weight,TVal(da,VMul(Some v2))
+  | VMul(Some(VInt(v1))),VInt(v2)
+    -> weight,TVal(da,VInt(v1 * v2))
+  | VMul(Some(VFloat(v1))),VFloat(v2)
+    -> weight,TVal(da,VFloat(v1 *. v2))
+  | VMul(Some(VFloat(v1))),VInt(v2)
+    -> weight,TVal(da,VFloat(v1 *. (float_of_int v2)))
+  | VMul(Some(VInt(v1))),VFloat(v2)
+    -> weight,TVal(da,VFloat((float_of_int v1) *. v2))
+
+  | VDiv(None),VInt _                -> weight,TVal(da,VDiv(Some v2))
+  | VDiv(None),VFloat _              -> weight,TVal(da,VDiv(Some v2))
+  | VDiv(Some(VInt(v1))),VInt(v2)
+    -> weight,TVal(da,VInt(v1 / v2))
+  | VDiv(Some(VFloat(v1))),VFloat(v2)
+    -> weight,TVal(da,VFloat(v1 /. v2))
+  | VDiv(Some(VFloat(v1))),VInt(v2)
+    -> weight,TVal(da,VFloat(v1 /. (float_of_int v2)))
+  | VDiv(Some(VInt(v1))),VFloat(v2)
+    -> weight,TVal(da,VFloat((float_of_int v1) /. v2))
+
+  | VNeg,VFloat(v) -> weight,TVal(da,VFloat((-1.0)*.v))
+  | VNeg,VInt(v)   -> weight,TVal(da,VInt((-1)*v))
+
+  | VLt(None),VInt _                -> weight,TVal(da,VLt(Some v2))
+  | VLt(None),VFloat _              -> weight,TVal(da,VLt(Some v2))
+  | VLt(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 < v2))
+  | VLt(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 < v2))
+  | VLt(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 < (float_of_int v2)))
+  | VLt(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) < v2))
+
+  | VLeq(None),VInt _                -> weight,TVal(da,VLeq(Some v2))
+  | VLeq(None),VFloat _              -> weight,TVal(da,VLeq(Some v2))
+  | VLeq(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 <= v2))
+  | VLeq(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 <= v2))
+  | VLeq(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 <= (float_of_int v2)))
+  | VLeq(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) <= v2))
+
+  | VGt(None),VInt _                -> weight,TVal(da,VGt(Some v2))
+  | VGt(None),VFloat _              -> weight,TVal(da,VGt(Some v2))
+  | VGt(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 > v2))
+  | VGt(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 > v2))
+  | VGt(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 > (float_of_int v2)))
+  | VGt(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) > v2))
+
+  | VGeq(None),VInt _                -> weight,TVal(da,VGeq(Some v2))
+  | VGeq(None),VFloat _              -> weight,TVal(da,VGeq(Some v2))
+  | VGeq(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 >= v2))
+  | VGeq(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 >= v2))
+  | VGeq(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 >= (float_of_int v2)))
+  | VGeq(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) >= v2))
+
+  (* Polymorphic functions *)
+  | VEq(None),v      -> weight,TVal(da,VEq(Some(v)))
+  | VEq(Some v1), v2 -> weight,TVal(da,VBool(v1 = v2))
+
+  | VNeq(None),v      -> weight,TVal(da,VNeq(Some(v)))
+  | VNeq(Some(v1)),v2 -> weight,TVal(da,VBool(v1 <> v2))
+
+  (* Probability distributions *)
+  | VNormal(None,None),VFloat(f) -> weight,TVal(da,VNormal(Some f,None))
+  | VNormal(None,None),VInt(i)   -> weight,TVal(da,VNormal(Some (float_of_int i),None))
+  | VNormal(Some f1,None),VFloat(f2)
+    -> weight,TVal(da,VNormal(Some f1,Some f2))
+  | VNormal(Some f1,None),VInt(i2)
+    -> weight,TVal(da,VNormal(Some f1,Some (float_of_int i2)))
+
+  | VUniform(None,None),VFloat(f) -> weight,TVal(da,VUniform(Some f,None))
+  | VUniform(None,None),VInt(i)   -> weight,TVal(da,VUniform(Some (float_of_int i),None))
+  | VUniform(Some f1,None),VFloat(f2)
+    -> weight,TVal(da,VUniform(Some f1, Some f2))
+  | VUniform(Some f1,None),VInt(i2)
+    -> weight,TVal(da,VUniform(Some f1,Some(float_of_int i2)))
+
+  | VGamma(None,None),VFloat(f) -> weight,TVal(da,VGamma(Some f,None))
+  | VGamma(None,None),VInt(i)   -> weight,TVal(da,VGamma(Some (float_of_int i),None))
+  | VGamma(Some f1,None),VFloat(f2)
+    -> weight,TVal(da,VGamma(Some f1, Some f2))
+  | VGamma(Some f1,None),VInt(i2)
+    -> weight,TVal(da,VGamma(Some f1, Some (float_of_int i2)))
+
+  | VExp(None),VFloat(f) -> weight,TVal(da,VExp(Some(f)))
+  | VExp(None),VInt(i)   -> weight,TVal(da,VExp(Some (float_of_int i)))
+
+  | VBern(None),VFloat(f) -> weight,TVal(da,VBern(Some(f)))
+  | VBern(None),VInt(i)   -> weight,TVal(da,VBern(Some (float_of_int i)))
+
+  | VLogPdf(None),v1      -> weight,TVal(da,VLogPdf(Some v1))
+  | VLogPdf(Some v1),v2   -> weight,TVal(da,Dist.logpdf v1 v2)
+
+  | v1,v2 -> fail_app v1 v2
+
+
 

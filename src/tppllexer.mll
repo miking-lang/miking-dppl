@@ -13,8 +13,8 @@ let _ =
       "if",            IF;
       "then",          THEN;
       "else",          ELSE;
-      "utest",         UTEST;
       "observe",       OBSERVE;
+      "utest",         UTEST;
       "match",         MATCH;
       "with",          WITH;
 
@@ -31,6 +31,7 @@ let _ =
       "[",             LSQUARE;
       "]",             RSQUARE;
       ":",             COLON;
+      "::",            DCOLON;
       ",",             COMMA;
       ".",             DOT;
       "|",             VBAR;

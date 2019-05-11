@@ -2,10 +2,9 @@ function flip() {
   sample(bernoulli(0.5))
 }
 
-weight(-3)
 if flip() then {
-  weight(-2)
-  weight(-3)
+  weight(-10)
+  weight(9)
   false
 } else {
   weight(-1)

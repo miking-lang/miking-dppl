@@ -3,6 +3,7 @@
 
 open Ast
 open Printf
+open Sprint
 open Utils
 open Debug
 open Infer
