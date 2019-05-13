@@ -106,13 +106,13 @@ seq:
        { TApp(na,TLam(na,$2,$7), addrec $2 (mkfun $3 $5)) }
 
   | LET IDENT TILDE seq IN seq %prec LET
-       { TApp(na,TLam(na,$2,$6),TApp(na,TVal(na,VSample),$4)) }
+       { TApp(na,TLam(na,$2,$6),TApp(na,TVal(VSample na),$4)) }
 
   | OBSERVE seq TILDE seq %prec OBSERVE
-      { let logpdf = TVal(na,VLogPdf(None)) in
+      { let logpdf = TVal(VLogPdf(na,None)) in
         let v = $2 in
         let inner = TApp(na,TApp(na,logpdf,v),$4) in
-        let weight = TVal(na,VWeight) in
+        let weight = TVal(VWeight na) in
         TApp(na,weight,inner) }
 
   | MATCH seq WITH cases { TApp(na,TMatch(na,$4),$2) }
@@ -133,26 +133,26 @@ texpr:
 expr:
   | app { $1 }
 
-  | expr ADD expr        { TApp(na,TApp(na,TVal(na,VAdd(None)),$1),$3) }
-  | expr MUL expr        { TApp(na,TApp(na,TVal(na,VMul(None)),$1),$3) }
-  | expr DIV expr        { TApp(na,TApp(na,TVal(na,VDiv(None)),$1),$3) }
-  | expr MOD expr        { TApp(na,TApp(na,TVal(na,VMod(None)),$1),$3) }
-  | expr LESS expr       { TApp(na,TApp(na,TVal(na,VLt(None)),$1),$3) }
-  | expr LESSEQUAL expr  { TApp(na,TApp(na,TVal(na,VLeq(None)),$1),$3) }
-  | expr GREAT expr      { TApp(na,TApp(na,TVal(na,VGt(None)),$1),$3)}
-  | expr GREATEQUAL expr { TApp(na,TApp(na,TVal(na,VGeq(None)),$1),$3) }
-  | expr EQUAL expr      { TApp(na,TApp(na,TVal(na,VEq(None)),$1),$3) }
-  | expr NOTEQUAL expr   { TApp(na,TApp(na,TVal(na,VNeq(None)),$1),$3) }
-  | expr SHIFTLL expr    { TApp(na,TApp(na,TVal(na,VSll(None)),$1),$3) }
-  | expr SHIFTRL expr    { TApp(na,TApp(na,TVal(na,VSrl(None)),$1),$3) }
-  | expr SHIFTRA expr    { TApp(na,TApp(na,TVal(na,VSra(None)),$1),$3) }
-  | expr AND expr        { TApp(na,TApp(na,TVal(na,VAnd(None)),$1),$3) }
-  | expr OR expr         { TApp(na,TApp(na,TVal(na,VOr(None)),$1),$3) }
-  | expr CONCAT expr     { TApp(na,TApp(na,TVal(na,VConcat(None)),$1),$3) }
-  | expr SUB expr        { TApp(na,TApp(na,TVal(na,VSub(None)),$1),$3) }
+  | expr ADD expr        { TApp(na,TApp(na,TVal(VAdd(na,None)),$1),$3) }
+  | expr MUL expr        { TApp(na,TApp(na,TVal(VMul(na,None)),$1),$3) }
+  | expr DIV expr        { TApp(na,TApp(na,TVal(VDiv(na,None)),$1),$3) }
+  | expr MOD expr        { TApp(na,TApp(na,TVal(VMod(na,None)),$1),$3) }
+  | expr LESS expr       { TApp(na,TApp(na,TVal(VLt(na,None)),$1),$3) }
+  | expr LESSEQUAL expr  { TApp(na,TApp(na,TVal(VLeq(na,None)),$1),$3) }
+  | expr GREAT expr      { TApp(na,TApp(na,TVal(VGt(na,None)),$1),$3)}
+  | expr GREATEQUAL expr { TApp(na,TApp(na,TVal(VGeq(na,None)),$1),$3) }
+  | expr EQUAL expr      { TApp(na,TApp(na,TVal(VEq(na,None)),$1),$3) }
+  | expr NOTEQUAL expr   { TApp(na,TApp(na,TVal(VNeq(na,None)),$1),$3) }
+  | expr SHIFTLL expr    { TApp(na,TApp(na,TVal(VSll(na,None)),$1),$3) }
+  | expr SHIFTRL expr    { TApp(na,TApp(na,TVal(VSrl(na,None)),$1),$3) }
+  | expr SHIFTRA expr    { TApp(na,TApp(na,TVal(VSra(na,None)),$1),$3) }
+  | expr AND expr        { TApp(na,TApp(na,TVal(VAnd(na,None)),$1),$3) }
+  | expr OR expr         { TApp(na,TApp(na,TVal(VOr(na,None)),$1),$3) }
+  | expr CONCAT expr     { TApp(na,TApp(na,TVal(VConcat(na,None)),$1),$3) }
+  | expr SUB expr        { TApp(na,TApp(na,TVal(VSub(na,None)),$1),$3) }
   | expr COLON expr      { TApp(na,$3,$1) (* TODO *) }
 
-  | SUB expr { TApp(na,TVal(na,VNeg),$2) }
+  | SUB expr { TApp(na,TVal(VNeg na),$2) }
 
 app:
   | app atom { TApp(na,$1,$2) }
@@ -162,7 +162,7 @@ atom:
   | IDENT { TVar(na,$1,noidx) }
 
   | UTEST { let a = { na with pos = Parsing.symbol_start_pos () } in
-            TVal(a,VUtest(None)) }
+            TVal(VUtest(a,None)) }
 
   | LPAREN seq RPAREN { $2 }
   | LPAREN RPAREN { nop }
@@ -172,17 +172,17 @@ atom:
   | LSQUARE exprs_comma RSQUARE { nop (* TODO *) }
   | LSQUARE RSQUARE { nop (* TODO *) }
 
-  | CHAR       { TVal(na,VChar($1)) }
-  | STRING     { TVal(na,VString($1)) }
-  | INT        { TVal(na,VInt($1)) }
-  | FLOAT      { TVal(na,VFloat($1)) }
-  | TRUE       { TVal(na,VBool(true)) }
-  | FALSE      { TVal(na,VBool(false)) }
+  | CHAR       { TVal(VChar(na,$1)) }
+  | STRING     { TVal(VString(na,$1)) }
+  | INT        { TVal(VInt(na,$1)) }
+  | FLOAT      { TVal(VFloat(na,$1)) }
+  | TRUE       { TVal(VBool(na,true)) }
+  | FALSE      { TVal(VBool(na,false)) }
 
-  | NOT atom   { TApp(na,TVal(na,VNot),$2) }
+  | NOT atom   { TApp(na,TVal(VNot na),$2) }
 
-  | atom DOT IDENT             { TApp(na,TVal(na,VRecProj($3)),$1) }
-  | atom DOT LPAREN INT RPAREN { TApp(na,TVal(na,VTupProj($4-1)),$1) }
+  | atom DOT IDENT             { TApp(na,TVal(VRecProj(na,$3)),$1) }
+  | atom DOT LPAREN INT RPAREN { TApp(na,TVal(VTupProj(na,$4-1)),$1) }
 
 exprs_comma:
   | expr { [$1] }

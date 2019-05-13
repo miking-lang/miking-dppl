@@ -21,13 +21,14 @@ let cps_fun t arity =
        TLam(na, k, TLam(na, v, TApp(na, k', acc))))
     vars inner
 
+(** Default CPS transformation of values, based on their arities. *)
 let cps_val t = match t with
-  | TVal(_,v) -> cps_fun t (arity v)
+  | TVal(v) -> cps_fun t (arity v)
   | _ -> failwith "cps_val of non-constant"
 
-(** CPS transformation of atomic terms (terms containing no computation).
+(** CPS transformation of atomic terms (terms without computation).
     Transforming atomic terms means that we can perform the CPS transformation
-    without supplying a continuation.  *)
+    without supplying a continuation. *)
 let rec cps_atomic t = match t with
 
   (* Variables do not require any action *)
@@ -56,7 +57,7 @@ let rec cps_atomic t = match t with
     TLam(na,k,TMatch(a,pls))
 
   (* Values *)
-  | TVal(_,v) -> match v with
+  | TVal(v) -> match v with
 
     (* Should not exist before eval *)
     | VClos _      -> failwith "Closure in cps_atomic"
@@ -67,37 +68,36 @@ let rec cps_atomic t = match t with
        need to apply the id function to the argument before applying fix, since
        the argument expects a continuation as first argument.
        TODO Correct? Seems to work fine *)
-    | VFix ->
+    | VFix _ ->
       let v, v' = genvar noidx in
       let k, k' = genvar noidx in
       let inner = TApp(na, t, TApp(na, v', idfun)) in
       TLam(na, k, TLam(na, v, TApp(na, k', inner)))
 
-    (* Records should not exist before eval *)
-    | VRec([],_) -> failwith "Should not exist before eval"
-
-    (* Tuples should not exist before eval *)
-    | VTup(0,_) -> failwith "Should not exist before eval"
-
-    (* Non-empty lists should not exist before eval *)
-    | VList(_::_) -> failwith "Should not exist before eval"
-
     (* Resampling is natively in CPS by design (also the reason why we are
        performing the CPS transformation in the first place) *)
     | VResamp _ -> t
 
-    (* Automatically wrap other values in CPS forms *)
-    | _ -> cps_val t
-
+    (* Other values *)
+    | VRec _    | VRecProj _ | VTup _    | VTupProj _
+    | VList _   | VUtest _   | VNormal _ | VUniform _
+    | VGamma _  | VExp _     | VBern _   | VSample _
+    | VLogPdf _ | VWeight _  | VUnit _   | VConcat _
+    | VBool _   | VNot _     | VAnd _    | VOr _
+    | VChar _   | VString _  | VInt _    | VMod _
+    | VSll _    | VSrl _     | VSra _    | VFloat _
+    | VLog _    | VAdd _     | VSub _    | VMul _
+    | VDiv _    | VNeg _     | VLt _     | VLeq _
+    | VGt _     | VGeq _     | VEq _     | VNeq _ -> cps_val t
 
 (** Complex cps transformation. Complex means that the term contains
-    computations (i.e., not atomic). A continuation must also be supplied as
+    computations. A continuation must also be supplied as
     argument to the transformation, indicating where control is transferred to
     when the computation has finished. *)
 and cps_complex cont t =
   match t with
 
-  (* Function application is the only complex expression (computation).
+  (* Function application is the only complex expression.
      Optimize the case when either the function or argument is atomic. *)
   | TApp(a,t1,t2) ->
     let wrapopt (a, a') = Some a,a' in
@@ -117,9 +117,7 @@ and cps_complex cont t =
     outer
 
   (* Everything else is atomic. *)
-  | TVar _
-  | TLam _ | TIf _ | TMatch _
-  | TVal _ -> TApp(na, cont, cps_atomic t)
+  | TVar _ | TLam _ | TIf _ | TMatch _ | TVal _ -> TApp(na, cont, cps_atomic t)
 
 (** CPS transforms a term, with the identity function as continuation if it is
     complex*)

@@ -12,42 +12,42 @@ open Label
 (** Mapping between predefined variable names and builtin constants *)
 let builtin = [
 
-  "not",          VNot;
-  "and",          VAnd(None);
-  "or",           VOr(None);
+  "not",          VNot(na);
+  "and",          VAnd(na,None);
+  "or",           VOr(na,None);
 
-  "mod",          VMod(None);
-  "sll",          VSll(None);
-  "srl",          VSrl(None);
-  "sra",          VSra(None);
+  "mod",          VMod(na,None);
+  "sll",          VSll(na,None);
+  "srl",          VSrl(na,None);
+  "sra",          VSra(na,None);
 
-  "inf",          VFloat(infinity);
-  "log",          VLog;
+  "inf",          VFloat(na,infinity);
+  "log",          VLog na;
 
-  "add",          VAdd(None);
-  "sub",          VSub(None);
-  "mul",          VMul(None);
-  "div",          VDiv(None);
-  "neg",          VNeg;
-  "lt",           VLt(None);
-  "leq",          VLeq(None);
-  "gt",           VGt(None);
-  "geq",          VGeq(None);
+  "add",          VAdd(na,None);
+  "sub",          VSub(na,None);
+  "mul",          VMul(na,None);
+  "div",          VDiv(na,None);
+  "neg",          VNeg na;
+  "lt",           VLt(na,None);
+  "leq",          VLeq(na,None);
+  "gt",           VGt(na,None);
+  "geq",          VGeq(na,None);
 
-  "eq",           VEq(None);
-  "neq",          VNeq(None);
+  "eq",           VEq(na,None);
+  "neq",          VNeq(na,None);
 
-  "normal",       VNormal(None, None);
-  "uniform",      VUniform(None, None);
-  "gamma",        VGamma(None, None);
-  "exponential",  VExp(None);
-  "bernoulli",    VBern(None);
+  "normal",       VNormal(na,None, None);
+  "uniform",      VUniform(na,None, None);
+  "gamma",        VGamma(na,None, None);
+  "exponential",  VExp(na,None);
+  "bernoulli",    VBern(na,None);
 
-  "logpdf",       VLogPdf(None);
-  "sample",       VSample;
+  "logpdf",       VLogPdf(na,None);
+  "sample",       VSample na;
 
-  "weight",       VWeight;
-  "fix",          VFix;
+  "weight",       VWeight na;
+  "fix",          VFix na;
 
 ] |> List.map (fun (x, y) -> x, tm_of_val y)
 
@@ -143,22 +143,23 @@ let infer_smc env n program =
 
     (* Evaluate a program until encountering a resample *)
     let rec sim (weight,tm) =
-      let weight,tm = eval false [] weight tm in
-      match tm with
+      let weight,v = eval false [] weight tm in
+      match v with
 
       (* Resample *)
-      | TVal(_,VResamp(Some(cont),Some b)) ->
+      | VResamp(_,Some(cont),Some b) ->
 
         (* If dynamic alignment is enabled and we are in stochastic control,
            skip this resampling point. Otherwise, resample here. *)
         if b && !align = Dynamic then
           sim (weight,TApp(na,tm_of_val cont,nop))
         else
-          false,weight,TApp(na,tm_of_val cont,nop)
+          false,weight,cont
 
       (* Final result *)
-      | _ -> true,weight,tm in
+      | _ -> true,weight,v in
 
+    let s = List.map (fun (w,v) -> w,TApp(na,tm_of_val v,nop)) s in
     let res = List.map sim s in
     let b = List.for_all (fun (b,_,_) -> b) res in
     let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample n in
@@ -186,10 +187,10 @@ let add_resample builtin t =
 
     | TMatch(a,cls) -> TMatch(a,List.map (fun (p,t) -> p,recurse t) cls)
 
-    | TVal(_,VWeight) ->
+    | TVal(VWeight _) ->
       let var, var'  = makevar "w" noidx in
       let weight_app = TApp(na,t,var') in
-      let resamp     = TApp(na,TVal(na,VResamp(None,None)),nop) in
+      let resamp     = TApp(na,TVal(VResamp(na,None,None)),nop) in
       TLam(na,var,seq weight_app resamp)
 
     | TVal _ -> t
@@ -199,11 +200,13 @@ let add_resample builtin t =
 
 (* Function for producing a nicely formatted string representation of the
    empirical distributions returned by infer below. Aggregates samples with the
-   same value to produce a more compact output. TODO Cleanup *)
+   same value to produce a more compact output.
+   TODO Cleanup
+   TODO Comparison of vals should ignore attributes *)
 let string_of_empirical ls =
 
   (* Start by sorting the list *)
-  let sorted = List.sort (fun (_,t1) (_,t2) -> compare t1 t2) ls in
+  let sorted = List.sort (fun (_,v1) (_,v2) -> compare v1 v2) ls in
 
   (* Compute the logarithm of the average of the weights *)
   let logavg = logavg !samples (List.map fst sorted) in
@@ -214,8 +217,8 @@ let string_of_empirical ls =
       sorted in
 
   let rec aggregate acc ls = match acc,ls with
-    | (w1,t1)::acc,(w2,t2)::ls when t1 = t2 -> aggregate ((w1+.w2,t1)::acc) ls
-    | acc, (w,t)::ls                        -> aggregate  ((w,t)::acc) ls
+    | (w1,v1)::acc,(w2,v2)::ls when v1 = v2 -> aggregate ((w1+.w2,v1)::acc) ls
+    | acc, (w,v)::ls                        -> aggregate ((w,v)::acc) ls
     | acc, [] -> acc in
 
   let aggr = aggregate [] normalized in
@@ -223,7 +226,7 @@ let string_of_empirical ls =
   (* Sort based on weight to show the most important sample at the top *)
   let last = List.sort (fun (w1,_) (w2,_) -> - compare w1 w2) aggr in
 
-  let line (w,t) = sprintf "  %-15s%-15f" (string_of_tm t) w in
+  let line (w,v) = sprintf "  %-15s%-15f" (string_of_val v) w in
 
   sprintf "%-15s%-15s\n" "SAMPLE" "WEIGHT"
   ^ (String.concat "\n" (List.map line last))

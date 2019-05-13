@@ -50,7 +50,11 @@ let parse par filename =
 (** Function for running inference on a program. *)
 let exec filename =
 
-  if !utest then printf "%s: " filename;
+  if !utest then begin
+    printf "%s: " filename;
+    inference := SMC;
+    samples   := 1;
+  end;
   utest_fail_local := 0;
 
   let tm = match Filename.extension filename with

@@ -45,7 +45,7 @@ let rec label_terms tm =
     | TLam(_,x,t1)  -> TLam(a,x,label_terms t1)
     | TIf(_,t1,t2)  -> TIf(a,label_terms t1,label_terms t2)
     | TMatch(_,cls) -> TMatch(a,List.map (fun (p,t) -> p,label_terms t) cls)
-    | TVal(_,c)     -> TVal(a,c)
+    | TVal(c)       -> TVal(val_update_attr a c)
 
 (** Function for labeling both variables and terms in a term. Returns the
     resulting tm, a convenient map from builtin variable names to variable

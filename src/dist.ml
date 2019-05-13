@@ -17,26 +17,26 @@ let seed =
 let logpdf value dist = match value,dist with
 
   (* Normal distribution *)
-  | VFloat(v),
-    VNormal(Some mu,Some sigma) ->
-    VFloat(log (Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
+  | VFloat(_,v),
+    VNormal(_,Some mu,Some sigma) ->
+    VFloat(na,log (Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
 
   (* Exponential distribution *)
-  | VFloat(v),
-    VExp Some lambda ->
+  | VFloat(_,v),
+    VExp(_,Some lambda) ->
     let mu = 1.0 /. lambda in
-    VFloat(log (Gsl.Randist.exponential_pdf v ~mu:mu))
+    VFloat(na,log (Gsl.Randist.exponential_pdf v ~mu:mu))
 
   (* Bernoulli distribution *)
-  | VBool(v),
-    VBern Some p ->
+  | VBool(_,v),
+    VBern(_,Some p) ->
     let i = if v then 1 else 0 in
-    VFloat(log (Gsl.Randist.bernoulli_pdf i ~p:p))
+    VFloat(na,log (Gsl.Randist.bernoulli_pdf i ~p:p))
 
   (* Gamma distribution *)
-  | VFloat(v),
-    VGamma(Some b, Some a) ->
-    VFloat(log (Gsl.Randist.gamma_pdf v ~a:a ~b:b))
+  | VFloat(_,v),
+    VGamma(_,Some b, Some a) ->
+    VFloat(na,log (Gsl.Randist.gamma_pdf v ~a:a ~b:b))
 
   | _ -> failwith "Incorrect distribution\
                    or value applied as argument to logpdf"
@@ -45,23 +45,23 @@ let logpdf value dist = match value,dist with
 let sample dist = match dist with
 
   (* Normal distribution *)
-  | VNormal(Some mu,Some sigma) ->
-    let sample = VFloat(mu +. Gsl.Randist.gaussian seed ~sigma:sigma) in
+  | VNormal(_,Some mu,Some sigma) ->
+    let sample = VFloat(na,mu +. Gsl.Randist.gaussian seed ~sigma:sigma) in
     sample
 
   (* Exponential distribution *)
-  | VExp Some lambda ->
+  | VExp(_,Some lambda) ->
     let mu = 1.0 /. lambda in
-    VFloat(Gsl.Randist.exponential seed ~mu:mu)
+    VFloat(na,Gsl.Randist.exponential seed ~mu:mu)
 
   (* Bernoulli distribution *)
-  | VBern Some p ->
+  | VBern(_,Some p) ->
     let b = Gsl.Randist.bernoulli seed ~p:p == 1 in
-    VBool(b)
+    VBool(na,b)
 
   (* Gamma distribution *)
-  | VGamma(Some a,Some b) ->
-    VFloat(Gsl.Randist.gamma seed ~a:a ~b:b)
+  | VGamma(_,Some a,Some b) ->
+    VFloat(na,Gsl.Randist.gamma seed ~a:a ~b:b)
 
   | _ -> failwith "Incorrect distribution applied as argument to sample."
 

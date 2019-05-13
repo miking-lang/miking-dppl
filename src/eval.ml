@@ -11,16 +11,16 @@ open Debug
 let unittest_failed pos v1 v2 =
   print_string ("\n ** Unit test FAILED at " ^
                 string_of_position pos ^
-                " **\n    LHS: " ^ (string_of_tm (tm_of_val v1)) ^
-                "\n    RHS: " ^ (string_of_tm (tm_of_val v2)))
+                " **\n    LHS: " ^ (string_of_val v1) ^
+                "\n    RHS: " ^ (string_of_val v2))
 
 (** Error message for incorrect constant applications *)
 let fail_app left right =
   (Printf.printf "\n  Incorrect application:\n\
                   \    LHS: %s\n\
                   \    RHS: %s\n"
-     (string_of_tm (tm_of_val left))
-     (string_of_tm (tm_of_val right)));
+     (string_of_val left)
+     (string_of_val right));
   failwith "fail_app"
 
 (** Extends an environment used in debruijn conversion with the identifiers
@@ -64,7 +64,7 @@ let rec debruijn env t = match t with
 let rec match_case env pattern value = match pattern,value with
   | PVar _,v -> Some(tm_of_val v :: env)
 
-  | PRec((k,p)::ps),(VRec([],es) as v) ->
+  | PRec((k,p)::ps),(VRec(_,[],es) as v) ->
     (match List.assoc_opt k es with
      | Some v1 ->
        (match match_case env p v1 with
@@ -74,14 +74,14 @@ let rec match_case env pattern value = match pattern,value with
   | PRec([]),VRec _ -> Some env
   | PRec _,_        -> None
 
-  | PList(p::ps),VList(v::vs) ->
+  | PList(p::ps),VList(a,v::vs) ->
     (match match_case env p v with
-     | Some env -> match_case env (PList(ps)) (VList(vs))
+     | Some env -> match_case env (PList(ps)) (VList(a,vs))
      | None     -> None)
-  | PList([]),VList [] -> Some env
+  | PList([]),VList(_,[]) -> Some env
   | PList _,_              -> None
 
-  | PTup(ps),VTup(0,varr) ->
+  | PTup(ps),VTup(_,0,varr) ->
     let rec fold env ps i = match ps with
       | p::ps when i < Array.length varr ->
         (match match_case env p varr.(i) with
@@ -92,22 +92,22 @@ let rec match_case env pattern value = match pattern,value with
     in fold env ps 0
   | PTup _,_ -> None
 
-  | PCons(p1,p2),VList(v::vs) ->
+  | PCons(p1,p2),VList(a,v::vs) ->
     (match match_case env p1 v with
-     | Some env -> match_case env p2 (VList(vs))
+     | Some env -> match_case env p2 (VList(a,vs))
      | None     -> None)
   | PCons _,_ -> None
 
-  | PUnit,        VUnit                    -> Some env
-  | PUnit,        _                        -> None
-  | PChar(c1),    VChar(c2)   when c1 = c2 -> Some env
-  | PChar _,      _                        -> None
-  | PString(s1),  VString(s2) when s1 = s2 -> Some env
-  | PString _,    _                        -> None
-  | PInt(i1),     VInt(i2)    when i1 = i2 -> Some env
-  | PInt _,       _                        -> None
-  | PFloat(f1),   VFloat(f2)  when f1 = f2 -> Some env
-  | PFloat _,     _                        -> None
+  | PUnit,        VUnit _                    -> Some env
+  | PUnit,        _                          -> None
+  | PChar(c1),    VChar(_,c2)   when c1 = c2 -> Some env
+  | PChar _,      _                          -> None
+  | PString(s1),  VString(_,s2) when s1 = s2 -> Some env
+  | PString _,    _                          -> None
+  | PInt(i1),     VInt(_,i2)    when i1 = i2 -> Some env
+  | PInt _,       _                          -> None
+  | PFloat(f1),   VFloat(_,f2)  when f1 = f2 -> Some env
+  | PFloat _,     _                          -> None
 
 (** Big-step evaluation of terms
     TODO Optimize for degenerate weights *)
@@ -122,12 +122,12 @@ let rec eval stoch_ctrl env weight t =
   | TVar(_,_,n) -> eval stoch_ctrl env weight (List.nth env n)
 
   (* Lambdas, ifs, and matches *)
-  | TLam(a,x,t1)  -> weight,TVal(a,VClos(x,t1,env))
-  | TIf(a,t1,t2)  -> weight,TVal(a,VClosIf(t1,t2,env))
-  | TMatch(a,cls) -> weight,TVal(a,VClosMatch(cls,env))
+  | TLam(a,x,t1)  -> weight,VClos(a,x,t1,env)
+  | TIf(a,t1,t2)  -> weight,VClosIf(a,t1,t2,env)
+  | TMatch(a,cls) -> weight,VClosMatch(a,cls,env)
 
   (* Values *)
-  | TVal _ -> weight,t
+  | TVal v -> weight,v
 
   (* Applications *)
   | TApp(_,t1,t2) ->
@@ -135,17 +135,13 @@ let rec eval stoch_ctrl env weight t =
     let weight,v2 = eval stoch_ctrl env weight t2 in
     eval_app stoch_ctrl weight v1 v2
 
-(* Evaluate constant applications
-   TODO Cleanup*)
-and eval_app stoch_ctrl weight t1 t2 =
-
-  (* Extract values *)
-  let v1,v2 = match t1,t2 with
-    | TVal(_,v1),TVal(_,v2) -> v1,v2
-    | _ -> failwith "Non-value in eval_app" in
+(* Evaluate applications
+   TODO Cleanup
+   TODO Check stochasticness *)
+and eval_app stoch_ctrl weight v1 v2 =
 
   (* Extract stochasticness *)
-  let ({stoch=s1;_} as a1),({stoch=s2;_} as _a2) = tm_attr t1,tm_attr t2 in
+  let ({stoch=s1;_} as a1),({stoch=s2;_} as _a2) = val_attr v1,val_attr v2 in
 
   (* Default attribute *)
   let da = {a1 with stoch = s1 || s2} in
@@ -153,24 +149,25 @@ and eval_app stoch_ctrl weight t1 t2 =
   match v1,v2 with
 
   (* Closure application. If LHS is stochastic, the result is stochastic *)
-  | VClos(_,t11,env),_ ->
-    let weight,t = eval stoch_ctrl (t2::env) weight t11 in
+  | VClos(_,_,t11,env),_ ->
+    let weight,t = eval stoch_ctrl (tm_of_val v2::env) weight t11 in
     weight,set_stoch s1 t
 
   (* If-application. Evaluate the chosen branch with stoch_ctrl set if the
      condition is stochastic. Furthermore, the result itself is stochastic if
      the condition (or the if expression itself) is stochastic. *)
-  | VClosIf(t1,t2,env),VBool(b) ->
+  | VClosIf(_,t1,t2,env),VBool(_,b) ->
     let stoch_ctrl = stoch_ctrl || s2 in
     let weight,t = match b with
       | true -> eval stoch_ctrl env weight t1
       | false -> eval stoch_ctrl env weight t2 in
     weight,set_stoch (s1 || s2) t
+  | VClosIf _,_ -> fail_app v1 v2
 
   (* Match-application. Evaluate the chosen term with stoch_ctrl set if the
      condition is stochastic. Furthermore, the result itself is stochastic if
      the condition (or the if expression itself) is stochastic. *)
-  | VClosMatch(cls,env),v2 ->
+  | VClosMatch(_,cls,env),v2 ->
     let stoch_ctrl = stoch_ctrl || s2 in
     let rec match_cases cls = match cls with
       | (p,t) :: cls ->
@@ -182,25 +179,34 @@ and eval_app stoch_ctrl weight t1 t2 =
     weight,set_stoch (s1 || s2) t
 
   (* Fixpoint application *)
-  | VFix,VClos(_,t21,env2) ->
+  | VFix _,VClos(_,_,t21,env2) ->
     let weight,t =
-      eval stoch_ctrl ((TApp(na,t1,t2))::env2) weight t21 in
+      eval stoch_ctrl
+        ((TApp(na,tm_of_val v1,tm_of_val v2))::env2) weight t21 in
     weight,set_stoch s1 t
+  | VFix _,_ -> fail_app v1 v2
 
-  (* Result of sample is always stochastic. *)
-  | VSample,dist-> weight,set_stoch true (TVal(a1,Dist.sample dist))
+  | VRec _, _ -> fail_app v1 v2 (* TODO *)
 
-  (* Concatenation application.  *)
-  | VConcat(None), VList _
-  | VConcat(None), VString _ -> weight,TVal(da,VConcat (Some v2))
-  | VConcat(Some VString str1), VString str2 ->
-    weight,TVal(da,VString (str1 ^ str2))
-  | VConcat(Some VList ls1),    VList ls2 ->
-    weight,TVal(da,VList(ls1 @ ls2))
+  (* Record projection. Stochastic if itself or its subterm is stochastic *)
+  | VRecProj(_,x),VRec(_,[],vls) ->
+    let v = match List.assoc_opt x vls with
+      | Some v -> v
+      | _ -> failwith "Key not found in record" in
+    weight,v
+  | VRecProj _,_ -> fail_app v1 v2
+
+  | VTup _,_ -> fail_app v1 v2 (* TODO *)
+
+  (* Tuple projection. *)
+  | VTupProj(_,i),VTup(_,0,varr) -> weight,varr.(i)
+  | VTupProj _,_ -> fail_app v1 v2
+
+  | VList _,_ -> fail_app v1 v2 (* TODO *)
 
   (* Unit testing application. *)
-  | VUtest(None),v2 -> weight,TVal(a1,VUtest(Some v2))
-  | VUtest(Some v1),v2 ->
+  | VUtest(_,None),v2 -> weight,VUtest(a1,Some v2)
+  | VUtest(_,Some v1),v2 ->
     let {pos;_} = a1 in
     if !utest then
       if compare v1 v2 = 0 then begin
@@ -211,179 +217,188 @@ and eval_app stoch_ctrl weight t1 t2 =
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1;
       end;
-    weight,TVal(a1,VUnit)
-
-  (* Weighting application. *)
-  | VWeight,VFloat w ->
-    let weight = w +. weight in
-    weight,TVal(a1,VUnit)
-  | VWeight,VInt w ->
-    let weight = (float_of_int w) +. weight in
-    weight,TVal(a1,VUnit)
-
-  (* Resampling application, in CPS form natively. Note the usage of stoch_ctrl
-     here.
-     TODO Stochastic if the resample is itself stochastic.  *)
-  | VResamp(None,None),(VClos _ as cont) ->
-    weight,TVal(a1,VResamp(Some cont,None))
-  | VResamp(Some cont,None),VUnit ->
-    weight,TVal(a1,VResamp(Some cont,Some stoch_ctrl))
-
-  (* Tuple projection. TODO Values also need attributes *)
-  | VTupProj(i),VTup(0,varr) -> weight,TVal(da,varr.(i))
-
-  (* Record projection. Stochastic if itself or its subterm is stochastic
-     TODO Values also need attributes *)
-  | VRecProj(x),VRec([],vls) ->
-    let v = match List.assoc_opt x vls with
-      | Some v -> v
-      | _ -> failwith "Key not found in record" in
-    weight,TVal(da,v)
-
-  | VNot,VBool(v) -> weight,TVal(da,VBool(not v))
-
-  | VAnd(None),    VBool(v)  -> weight,TVal(da,VAnd(Some(v)))
-  | VAnd(Some(v1)),VBool(v2) -> weight,TVal(da,VBool(v1 && v2))
-
-  | VOr(None),    VBool(v)  -> weight,TVal(da,VOr(Some(v)))
-  | VOr(Some(v1)),VBool(v2) -> weight,TVal(da,VBool(v1 || v2))
-
-  (* Character operations *)
-
-  (* String operations *)
-
-  (* Integer operations *)
-  | VMod(None),    VInt(v)  -> weight,TVal(da, VMod(Some(v)))
-  | VMod(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 mod v2))
-
-  | VSll(None),    VInt(v)  -> weight,TVal(da, VSll(Some(v)))
-  | VSll(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 lsl v2))
-
-  | VSrl(None),    VInt(v)  -> weight,TVal(da, VSrl(Some(v)))
-  | VSrl(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 lsr v2))
-
-  | VSra(None),    VInt(v)  -> weight,TVal(da, VSra(Some(v)))
-  | VSra(Some(v1)),VInt(v2) -> weight,TVal(da, VInt(v1 asr v2))
-
-  (* Floating-point number operations *)
-  | VLog,VFloat(v) -> weight,TVal(da, VFloat(log v))
-
-  (* Polymorphic integer/floating-point functions *)
-  | VAdd(None),VInt _   -> weight, TVal(da,VAdd(Some v2))
-  | VAdd(None),VFloat _ -> weight, TVal(da,VAdd(Some v2))
-
-  | VAdd(Some VInt v1), VInt v2 ->
-    weight,TVal(da,VInt(v1 + v2))
-  | VAdd(Some VFloat v1),VFloat v2 ->
-    weight,TVal(da,VFloat(v1 +. v2))
-  | VAdd(Some VFloat v1),VInt v2 ->
-    weight, TVal(da,VFloat(v1 +. (float_of_int v2)))
-  | VAdd(Some VInt v1),VFloat v2 ->
-    weight, TVal(da,VFloat((float_of_int v1) +. v2))
-
-  | VSub(None),VInt _          -> weight,TVal(da,VSub(Some v2))
-  | VSub(None),VFloat _        -> weight,TVal(da,VSub(Some v2))
-  | VSub(Some(VInt(v1))),VInt(v2) ->
-    weight,TVal(da,VInt(v1 - v2))
-  | VSub(Some(VFloat(v1))),VFloat(v2) ->
-    weight,TVal(da,VFloat(v1 -. v2))
-  | VSub(Some(VFloat(v1))),VInt(v2) ->
-    weight,TVal(da,VFloat(v1 -. (float_of_int v2)))
-  | VSub(Some(VInt(v1))),VFloat(v2) ->
-    weight,TVal(da,VFloat((float_of_int v1) -. v2))
-
-  | VMul(None),VInt _   -> weight,TVal(da,VMul(Some v2))
-  | VMul(None),VFloat _ -> weight,TVal(da,VMul(Some v2))
-  | VMul(Some(VInt(v1))),VInt(v2)
-    -> weight,TVal(da,VInt(v1 * v2))
-  | VMul(Some(VFloat(v1))),VFloat(v2)
-    -> weight,TVal(da,VFloat(v1 *. v2))
-  | VMul(Some(VFloat(v1))),VInt(v2)
-    -> weight,TVal(da,VFloat(v1 *. (float_of_int v2)))
-  | VMul(Some(VInt(v1))),VFloat(v2)
-    -> weight,TVal(da,VFloat((float_of_int v1) *. v2))
-
-  | VDiv(None),VInt _                -> weight,TVal(da,VDiv(Some v2))
-  | VDiv(None),VFloat _              -> weight,TVal(da,VDiv(Some v2))
-  | VDiv(Some(VInt(v1))),VInt(v2)
-    -> weight,TVal(da,VInt(v1 / v2))
-  | VDiv(Some(VFloat(v1))),VFloat(v2)
-    -> weight,TVal(da,VFloat(v1 /. v2))
-  | VDiv(Some(VFloat(v1))),VInt(v2)
-    -> weight,TVal(da,VFloat(v1 /. (float_of_int v2)))
-  | VDiv(Some(VInt(v1))),VFloat(v2)
-    -> weight,TVal(da,VFloat((float_of_int v1) /. v2))
-
-  | VNeg,VFloat(v) -> weight,TVal(da,VFloat((-1.0)*.v))
-  | VNeg,VInt(v)   -> weight,TVal(da,VInt((-1)*v))
-
-  | VLt(None),VInt _                -> weight,TVal(da,VLt(Some v2))
-  | VLt(None),VFloat _              -> weight,TVal(da,VLt(Some v2))
-  | VLt(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 < v2))
-  | VLt(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 < v2))
-  | VLt(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 < (float_of_int v2)))
-  | VLt(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) < v2))
-
-  | VLeq(None),VInt _                -> weight,TVal(da,VLeq(Some v2))
-  | VLeq(None),VFloat _              -> weight,TVal(da,VLeq(Some v2))
-  | VLeq(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 <= v2))
-  | VLeq(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 <= v2))
-  | VLeq(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 <= (float_of_int v2)))
-  | VLeq(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) <= v2))
-
-  | VGt(None),VInt _                -> weight,TVal(da,VGt(Some v2))
-  | VGt(None),VFloat _              -> weight,TVal(da,VGt(Some v2))
-  | VGt(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 > v2))
-  | VGt(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 > v2))
-  | VGt(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 > (float_of_int v2)))
-  | VGt(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) > v2))
-
-  | VGeq(None),VInt _                -> weight,TVal(da,VGeq(Some v2))
-  | VGeq(None),VFloat _              -> weight,TVal(da,VGeq(Some v2))
-  | VGeq(Some(VInt(v1))),VInt(v2)     -> weight,TVal(da,VBool(v1 >= v2))
-  | VGeq(Some(VFloat(v1))),VFloat(v2) -> weight,TVal(da,VBool(v1 >= v2))
-  | VGeq(Some(VFloat(v1))),VInt(v2)   -> weight,TVal(da,VBool(v1 >= (float_of_int v2)))
-  | VGeq(Some(VInt(v1))),VFloat(v2)   -> weight,TVal(da,VBool((float_of_int v1) >= v2))
-
-  (* Polymorphic functions *)
-  | VEq(None),v      -> weight,TVal(da,VEq(Some(v)))
-  | VEq(Some v1), v2 -> weight,TVal(da,VBool(v1 = v2))
-
-  | VNeq(None),v      -> weight,TVal(da,VNeq(Some(v)))
-  | VNeq(Some(v1)),v2 -> weight,TVal(da,VBool(v1 <> v2))
+    weight,VUnit a1
 
   (* Probability distributions *)
-  | VNormal(None,None),VFloat(f) -> weight,TVal(da,VNormal(Some f,None))
-  | VNormal(None,None),VInt(i)   -> weight,TVal(da,VNormal(Some (float_of_int i),None))
-  | VNormal(Some f1,None),VFloat(f2)
-    -> weight,TVal(da,VNormal(Some f1,Some f2))
-  | VNormal(Some f1,None),VInt(i2)
-    -> weight,TVal(da,VNormal(Some f1,Some (float_of_int i2)))
+  | VNormal(_,None,None),VFloat(_,f) -> weight,VNormal(da,Some f,None)
+  | VNormal(_,None,None),VInt(_,i)   -> weight,VNormal(da,Some (float_of_int i),None)
+  | VNormal(_,Some f1,None),VFloat(_,f2) -> weight,VNormal(da,Some f1,Some f2)
+  | VNormal(_,Some f1,None),VInt(_,i2) -> weight,VNormal(da,Some f1,Some (float_of_int i2))
+  | VNormal _,_ -> fail_app v1 v2
 
-  | VUniform(None,None),VFloat(f) -> weight,TVal(da,VUniform(Some f,None))
-  | VUniform(None,None),VInt(i)   -> weight,TVal(da,VUniform(Some (float_of_int i),None))
-  | VUniform(Some f1,None),VFloat(f2)
-    -> weight,TVal(da,VUniform(Some f1, Some f2))
-  | VUniform(Some f1,None),VInt(i2)
-    -> weight,TVal(da,VUniform(Some f1,Some(float_of_int i2)))
+  | VUniform(_,None,None),VFloat(_,f) -> weight,VUniform(da,Some f,None)
+  | VUniform(_,None,None),VInt(_,i)   -> weight,VUniform(da,Some (float_of_int i),None)
+  | VUniform(_,Some f1,None),VFloat(_,f2) -> weight,VUniform(da,Some f1, Some f2)
+  | VUniform(_,Some f1,None),VInt(_,i2) -> weight,VUniform(da,Some f1,Some(float_of_int i2))
+  | VUniform _,_ -> fail_app v1 v2
 
-  | VGamma(None,None),VFloat(f) -> weight,TVal(da,VGamma(Some f,None))
-  | VGamma(None,None),VInt(i)   -> weight,TVal(da,VGamma(Some (float_of_int i),None))
-  | VGamma(Some f1,None),VFloat(f2)
-    -> weight,TVal(da,VGamma(Some f1, Some f2))
-  | VGamma(Some f1,None),VInt(i2)
-    -> weight,TVal(da,VGamma(Some f1, Some (float_of_int i2)))
+  | VGamma(_,None,None),VFloat(_,f) -> weight,VGamma(da,Some f,None)
+  | VGamma(_,None,None),VInt(_,i)   -> weight,VGamma(da,Some (float_of_int i),None)
+  | VGamma(_,Some f1,None),VFloat(_,f2) -> weight,VGamma(da,Some f1, Some f2)
+  | VGamma(_,Some f1,None),VInt(_,i2) -> weight,VGamma(da,Some f1, Some (float_of_int i2))
+  | VGamma _,_ -> fail_app v1 v2
 
-  | VExp(None),VFloat(f) -> weight,TVal(da,VExp(Some(f)))
-  | VExp(None),VInt(i)   -> weight,TVal(da,VExp(Some (float_of_int i)))
+  | VExp(_,None),VFloat(_,f) -> weight,VExp(da,Some(f))
+  | VExp(_,None),VInt(_,i)   -> weight,VExp(da,Some (float_of_int i))
+  | VExp _,_ -> fail_app v1 v2
 
-  | VBern(None),VFloat(f) -> weight,TVal(da,VBern(Some(f)))
-  | VBern(None),VInt(i)   -> weight,TVal(da,VBern(Some (float_of_int i)))
+  | VBern(_,None),VFloat(_,f) -> weight,VBern(da,Some(f))
+  | VBern(_,None),VInt(_,i)   -> weight,VBern(da,Some (float_of_int i))
+  | VBern _,_ -> fail_app v1 v2
 
-  | VLogPdf(None),v1      -> weight,TVal(da,VLogPdf(Some v1))
-  | VLogPdf(Some v1),v2   -> weight,TVal(da,Dist.logpdf v1 v2)
+  (* Result of sample is always stochastic. *)
+  | VSample _,dist -> weight,set_stoch true (Dist.sample dist)
 
-  | v1,v2 -> fail_app v1 v2
+  | VLogPdf(a,None),v1      -> weight,VLogPdf(a,Some v1)
+  | VLogPdf(_,Some v1),v2   -> weight,Dist.logpdf v1 v2
+
+  (* Weighting application. *)
+  | VWeight _,VFloat(_,w) ->
+    let weight = w +. weight in
+    weight,VUnit a1
+  | VWeight _,VInt(_,w) ->
+    let weight = (float_of_int w) +. weight in
+    weight,VUnit a1
+  | VWeight _,_ -> fail_app v1 v2
+
+  (* Resampling application, in CPS form natively. Note the usage of stoch_ctrl
+     here. *)
+  | VResamp(_,None,None),(VClos _ as cont) -> weight,VResamp(a1,Some cont,None)
+  | VResamp(_,Some cont,None),VUnit _ -> weight,VResamp(a1,Some cont,Some stoch_ctrl)
+  | VResamp _,_ -> fail_app v1 v2
+
+  (* Unit constant *)
+  | VUnit _,_ -> fail_app v1 v2
+
+  (* Boolean constant and operations *)
+  | VBool _ ,_ -> fail_app v1 v2
+
+  | VNot _,VBool(_,v) -> weight,VBool(da,not v)
+  | VNot _,_ -> fail_app v1 v2
+
+  | VAnd(_,None),    VBool(_,v)  -> weight,VAnd(da,Some(v))
+  | VAnd(_,Some(v1)),VBool(_,v2) -> weight,VBool(da,v1 && v2)
+  | VAnd _,_ -> fail_app v1 v2
+
+  | VOr(_,None),    VBool(_,v)  -> weight,VOr(da,Some(v))
+  | VOr(_,Some(v1)),VBool(_,v2) -> weight,VBool(da,v1 || v2)
+  | VOr _,_ -> fail_app v1 v2
+
+  (* Character constants and operations *)
+  | VChar _,_ -> fail_app v1 v2
+
+  (* String constants and operations *)
+  | VString _,_ -> fail_app v1 v2
+
+  (* Integer constants and operations *)
+  | VInt _,_ -> fail_app v1 v2
+
+  | VMod(_,None),    VInt(_,v)  -> weight, VMod(da,Some(v))
+  | VMod(_,Some(v1)),VInt(_,v2) -> weight, VInt(da,v1 mod v2)
+  | VMod _,_ -> fail_app v1 v2
+
+  | VSll(_,None),    VInt(_,v)  -> weight, VSll(da,Some(v))
+  | VSll(_,Some(v1)),VInt(_,v2) -> weight, VInt(da,v1 lsl v2)
+  | VSll _,_ -> fail_app v1 v2
+
+  | VSrl(_,None),    VInt(_,v)  -> weight, VSrl(da,Some(v))
+  | VSrl(_,Some(v1)),VInt(_,v2) -> weight, VInt(da,v1 lsr v2)
+  | VSrl _,_ -> fail_app v1 v2
+
+  | VSra(_,None),    VInt(_,v)  -> weight, VSra(da,Some(v))
+  | VSra(_,Some(v1)),VInt(_,v2) -> weight, VInt(da,v1 asr v2)
+  | VSra _,_ -> fail_app v1 v2
+
+  (* Floating-point constants and number operations *)
+  | VFloat _,_ -> fail_app v1 v2
+
+  | VLog _,VFloat(_,v) -> weight, VFloat(da,log v)
+  | VLog _,_ -> fail_app v1 v2
+
+  (* Polymorphic integer/floating-point functions *)
+  | VAdd(_,None),VInt _   -> weight, VAdd(da,Some v2)
+  | VAdd(_,None),VFloat _ -> weight, VAdd(da,Some v2)
+  | VAdd(_,Some VInt(_,v1)), VInt(_,v2) -> weight,VInt(da,v1 + v2)
+  | VAdd(_,Some VFloat(_,v1)),VFloat(_,v2)-> weight,VFloat(da,v1 +. v2)
+  | VAdd(_,Some VFloat(_,v1)),VInt(_,v2) -> weight, VFloat(da,v1 +. (float_of_int v2))
+  | VAdd(_,Some VInt(_,v1)),VFloat(_,v2) -> weight, VFloat(da,(float_of_int v1) +. v2)
+  | VAdd _,_ -> fail_app v1 v2
+
+  | VSub(_,None),VInt _          -> weight,VSub(da,Some v2)
+  | VSub(_,None),VFloat _        -> weight,VSub(da,Some v2)
+  | VSub(_,Some(VInt(_,v1))),VInt(_,v2) -> weight,VInt(da,v1 - v2)
+  | VSub(_,Some(VFloat(_,v1))),VFloat(_,v2) -> weight,VFloat(da,v1 -. v2)
+  | VSub(_,Some(VFloat(_,v1))),VInt(_,v2) -> weight,VFloat(da,v1 -. (float_of_int v2))
+  | VSub(_,Some(VInt(_,v1))),VFloat(_,v2) -> weight,VFloat(da,(float_of_int v1) -. v2)
+  | VSub _,_ -> fail_app v1 v2
+
+  | VMul(_,None),VInt _   -> weight,VMul(da,Some v2)
+  | VMul(_,None),VFloat _ -> weight,VMul(da,Some v2)
+  | VMul(_,Some(VInt(_,v1))),VInt(_,v2) -> weight,VInt(da,v1 * v2)
+  | VMul(_,Some(VFloat(_,v1))),VFloat(_,v2) -> weight,VFloat(da,v1 *. v2)
+  | VMul(_,Some(VFloat(_,v1))),VInt(_,v2) -> weight,VFloat(da,v1 *. (float_of_int v2))
+  | VMul(_,Some(VInt(_,v1))),VFloat(_,v2) -> weight,VFloat(da,(float_of_int v1) *. v2)
+  | VMul _,_ -> fail_app v1 v2
+
+  | VDiv(_,None),VInt _                -> weight,VDiv(da,Some v2)
+  | VDiv(_,None),VFloat _              -> weight,VDiv(da,Some v2)
+  | VDiv(_,Some(VInt(_,v1))),VInt(_,v2) -> weight,VInt(da,v1 / v2)
+  | VDiv(_,Some(VFloat(_,v1))),VFloat(_,v2) -> weight,VFloat(da,v1 /. v2)
+  | VDiv(_,Some(VFloat(_,v1))),VInt(_,v2) -> weight,VFloat(da,v1 /. (float_of_int v2))
+  | VDiv(_,Some(VInt(_,v1))),VFloat(_,v2) -> weight,VFloat(da,(float_of_int v1) /. v2)
+  | VDiv _,_ -> fail_app v1 v2
+
+  | VNeg _,VFloat(_,v) -> weight,VFloat(da,(-1.0)*.v)
+  | VNeg _,VInt(_,v)   -> weight,VInt(da,(-1)*v)
+  | VNeg _, _ -> fail_app v1 v2
+
+  | VLt(_,None),VInt _                -> weight,VLt(da,Some v2)
+  | VLt(_,None),VFloat _              -> weight,VLt(da,Some v2)
+  | VLt(_,Some(VInt(_,v1))),VInt(_,v2)     -> weight,VBool(da,v1 < v2)
+  | VLt(_,Some(VFloat(_,v1))),VFloat(_,v2) -> weight,VBool(da,v1 < v2)
+  | VLt(_,Some(VFloat(_,v1))),VInt(_,v2)   -> weight,VBool(da,v1 < (float_of_int v2))
+  | VLt(_,Some(VInt(_,v1))),VFloat(_,v2)   -> weight,VBool(da,(float_of_int v1) < v2)
+  | VLt _,_ -> fail_app v1 v2
+
+  | VLeq(_,None),VInt _                -> weight,VLeq(da,Some v2)
+  | VLeq(_,None),VFloat _              -> weight,VLeq(da,Some v2)
+  | VLeq(_,Some(VInt(_,v1))),VInt(_,v2)     -> weight,VBool(da,v1 <= v2)
+  | VLeq(_,Some(VFloat(_,v1))),VFloat(_,v2) -> weight,VBool(da,v1 <= v2)
+  | VLeq(_,Some(VFloat(_,v1))),VInt(_,v2)   -> weight,VBool(da,v1 <= (float_of_int v2))
+  | VLeq(_,Some(VInt(_,v1))),VFloat(_,v2)   -> weight,VBool(da,(float_of_int v1) <= v2)
+  | VLeq _,_ -> fail_app v1 v2
+
+  | VGt(_,None),VInt _                -> weight,VGt(da,Some v2)
+  | VGt(_,None),VFloat _              -> weight,VGt(da,Some v2)
+  | VGt(_,Some(VInt(_,v1))),VInt(_,v2)     -> weight,VBool(da,v1 > v2)
+  | VGt(_,Some(VFloat(_,v1))),VFloat(_,v2) -> weight,VBool(da,v1 > v2)
+  | VGt(_,Some(VFloat(_,v1))),VInt(_,v2)   -> weight,VBool(da,v1 > (float_of_int v2))
+  | VGt(_,Some(VInt(_,v1))),VFloat(_,v2)   -> weight,VBool(da,(float_of_int v1) > v2)
+  | VGt _,_ -> fail_app v1 v2
+
+  | VGeq(_,None),VInt _                -> weight,VGeq(da,Some v2)
+  | VGeq(_,None),VFloat _              -> weight,VGeq(da,Some v2)
+  | VGeq(_,Some(VInt(_,v1))),VInt(_,v2)     -> weight,VBool(da,v1 >= v2)
+  | VGeq(_,Some(VFloat(_,v1))),VFloat(_,v2) -> weight,VBool(da,v1 >= v2)
+  | VGeq(_,Some(VFloat(_,v1))),VInt(_,v2)   -> weight,VBool(da,v1 >= (float_of_int v2))
+  | VGeq(_,Some(VInt(_,v1))),VFloat(_,v2)   -> weight,VBool(da,(float_of_int v1) >= v2)
+  | VGeq _,_ -> fail_app v1 v2
+
+  (* Polymorphic functions *)
+  | VEq(_,None),v      -> weight,VEq(da,Some(v))
+  | VEq(_,Some v1), v2 -> weight,VBool(da,v1 = v2)
+
+  | VNeq(_,None),v      -> weight,VNeq(da,Some(v))
+  | VNeq(_,Some(v1)),v2 -> weight,VBool(da,v1 <> v2)
+
+  (* Concatenation application.  *)
+  | VConcat(_,None), VList _
+  | VConcat(_,None), VString _ -> weight,VConcat(da,Some v2)
+  | VConcat(_,Some VString(_,str1)), VString(_,str2) -> weight,VString(da,str1 ^ str2)
+  | VConcat(_,Some VList(_,ls1)),    VList(_,ls2) -> weight,VList(da,ls1 @ ls2)
+  | VConcat _,_ -> fail_app v1 v2
+
+
 
 
 
