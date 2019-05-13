@@ -3,7 +3,7 @@
 
 open Pattern
 
-(** Attributes of terms TODO Values also need to have attributes.
+(** Attributes of terms and values.
     Can easily be extended with more data fields as needed. *)
 type attr =
   {
@@ -35,7 +35,7 @@ type term =
   (* Applications *)
   | TApp     of attr * term * term
 
-  (* Lambdas (All can be encoded as TmMatch really) *)
+  (* Lambdas (All can be encoded as TmMatch) *)
   | TLam     of attr * string * term
   | TIf      of attr * term * term
   | TMatch   of attr * (pat * term) list
@@ -55,16 +55,19 @@ and value =
   | VFix       of attr
 
   (* Record construction and record projection. Use linear search for
-     projection.  Should we use hashtable for larger records? *)
+     projection. Should we use hashtable for larger records?
+     TODO Split into value and constructor*)
   | VRec       of attr * string list * (string * value) list
   | VRecProj   of attr * string
 
-  (* Tuples and tuple projection. Uses O(1) array lookup for projection *)
+  (* Tuples and tuple projection. Uses O(1) array lookup for projection
+     TODO Split into value and constructor *)
   | VTup       of attr * int * value array
   | VTupProj   of attr * int
 
-  (* Lists. Works both as a cons function and a list value *)
+  (* Lists and list concatenation *)
   | VList      of attr * value list
+  | VCons      of attr * value option
 
   (* Construct for performing unit tests *)
   | VUtest     of attr * value option
@@ -134,7 +137,7 @@ and value =
     operator. *)
 and env = term list
 
-(** Returns the number of expected arguments for constants *)
+(** Returns the number of expected arguments for values *)
 let arity c = match c with
 
   | VClos _ | VClosIf _ | VClosMatch _ -> 1
@@ -147,7 +150,9 @@ let arity c = match c with
   | VTup(_,i,_)    -> i
   | VTupProj _   -> 1
 
-  | VList _      -> 1
+  | VList _      -> 0
+
+  | VCons(_,None) -> 2 | VCons(_,Some _) -> 1
 
   | VUtest(_,None) -> 2 | VUtest(_,Some _) -> 1
 
@@ -211,8 +216,31 @@ let arity c = match c with
 
   | VConcat(_,None) -> 2 | VConcat(_,Some _) -> 1
 
+(** Comparison function for values. First strip attributes, and then
+    use built in comparison function. *)
+let compare v1 v2 =
+  let rec strip_attrs = function
+    | VRec(_,[],els)    ->
+      VRec(na,[],List.map (fun (s,v) -> s,strip_attrs v) els)
+    | VTup(_,0,arr)     -> VTup(na,0,Array.map strip_attrs arr)
+    | VList(_,ls)       -> VList(na,List.map strip_attrs ls)
+    | VNormal(_,f1,f2)  -> VNormal(na,f1,f2)
+    | VUniform(_,f1,f2) -> VUniform(na,f1,f2)
+    | VGamma(_,f1,f2)   -> VGamma(na,f1,f2)
+    | VExp(_,f)         -> VExp(na,f)
+    | VBern(_,f)        -> VBern(na,f)
+    | VUnit(_)          -> VUnit(na)
+    | VBool(_,b)        -> VBool(na,b)
+    | VChar(_,c)        -> VChar(na,c)
+    | VString(_,s)      -> VString(na,s)
+    | VInt(_,i)         -> VInt(na,i)
+    | VFloat(_,f)       -> VFloat(na,f)
+    | v                 -> v
+  in compare (strip_attrs v1) (strip_attrs v2)
+
 (** Returns the attribute of a value *)
 let val_attr = function
+  | VCons(a,_)
   | VClos(a,_,_,_) | VClosIf(a,_,_,_) | VClosMatch(a,_,_)
   | VFix(a)        | VRec(a,_,_)      | VRecProj(a,_)
   | VTup(a,_,_)    | VTupProj(a,_)    | VList(a,_)
@@ -239,7 +267,7 @@ let tm_attr = function
 let tm_label tm = match tm_attr tm with {label;_} -> label
 
 (** Change the attribute of a given value *)
-let val_update_attr attr = function
+let update_attr_val attr = function
   | VClos      (_,s,t,env)   -> VClos      (attr,s,t,env)
   | VClosIf    (_,t1,t2,env) -> VClosIf    (attr,t1,t2,env)
   | VClosMatch (_,cls,env)   -> VClosMatch (attr,cls,env)
@@ -249,6 +277,7 @@ let val_update_attr attr = function
   | VTup       (_,i,arr)     -> VTup       (attr,i,arr)
   | VTupProj   (_,i)         -> VTupProj   (attr,i)
   | VList      (_,ls)        -> VList      (attr,ls)
+  | VCons      (_,v)         -> VCons      (attr,v)
   | VUtest     (_,v)         -> VUtest     (attr,v)
   | VNormal    (_,f1,f2)     -> VNormal    (attr,f1,f2)
   | VUniform   (_,f1,f2)     -> VUniform   (attr,f1,f2)
@@ -287,19 +316,16 @@ let val_update_attr attr = function
   | VConcat    (_,v)         -> VConcat    (attr,v)
 
 (** Change the attribute of a given term *)
-let tm_update_attr attr = function
+let update_attr_tm attr = function
   | TVar   (_,x,i)   -> TVar   (attr,x,i)
   | TLam   (_,x,t1)  -> TLam   (attr,x,t1)
   | TApp   (_,t1,t2) -> TApp   (attr,t1,t2)
-  | TVal   (v)       -> TVal   (val_update_attr attr v)
+  | TVal   (v)       -> TVal   (update_attr_val attr v)
   | TIf    (_,t1,t2) -> TIf    (attr,t1,t2)
   | TMatch (_,cases) -> TMatch (attr,cases)
 
 (** Make a value stochastic *)
-let set_stoch stoch v = val_update_attr {(val_attr v) with stoch=stoch} v
-
-(** Check if a term is stochastic *)
-let is_stoch tm = let {stoch;_} = tm_attr tm in stoch
+let set_stoch stoch v = update_attr_val {(val_attr v) with stoch=stoch} v
 
 (** Reference used for genvar *)
 let nextvar = ref 0
@@ -321,9 +347,7 @@ let nop = TVal(VUnit na)
 let fix = TVal(VFix na)
 
 (** The identity function (with proper debruijn index) as a tm. *)
-let idfun =
-  let var,var' = genvar 0 in
-  TLam(na,var,var')
+let idfun = let var,var' = genvar 0 in TLam(na,var,var')
 
 (** Convenience function for creating a sequence of two tms *)
 let seq t1 t2 = TApp(na,TLam(na,"_",t2),t1)

@@ -115,7 +115,7 @@ seq:
       { TApp(na,TLam(na,$1,$4),TApp(na,TVal(VSample na),$3)) }
 
 texpr:
-  | usubexpr COMMA usubexprs_comma { nop (* TODO *) }
+  | usubexpr COMMA usubexprs_comma { mktup ($1::$3) }
   | usubexpr { $1 }
 
 usubexpr:
@@ -139,7 +139,7 @@ expr:
   | expr SHIFTRA expr   { TApp(na,TApp(na,TVal(VSra(na,None)),$1),$3) }
   | expr AND expr       { TApp(na,TApp(na,TVal(VAnd(na,None)),$1),$3) }
   | expr OR expr        { TApp(na,TApp(na,TVal(VOr(na,None)),$1),$3) }
-  | expr DCOLON expr     { nop (* TODO *) }
+  | expr DCOLON expr    { TApp(na,TApp(na,TVal(VCons(na,None)),$1),$3) }
   | expr DOT IDENT             { TApp(na,TVal(VRecProj(na,$3)),$1) }
   | expr DOT LPAREN INT RPAREN { TApp(na,TVal(VTupProj(na,$4-1)),$1) }
   | expr CONCAT expr           { TApp(na,TApp(na,TVal(VConcat(na,None)),$1),$3) }
@@ -169,10 +169,10 @@ expr:
   | LPAREN seq RPAREN  { $2 }
   | LPAREN RPAREN { nop }
 
-  | LCURLY record RCURLY { nop (* TODO *) }
+  | LCURLY record RCURLY { mkrecord $2 }
 
-  | LSQUARE usubexprs_comma RSQUARE { nop (* TODO *) }
-  | LSQUARE RSQUARE { nop (* TODO *) }
+  | LSQUARE usubexprs_comma RSQUARE { mklist $2 }
+  | LSQUARE RSQUARE { TVal(VList(na,[])) }
 
   | LCURLY seq RCURLY  { $2 }
 

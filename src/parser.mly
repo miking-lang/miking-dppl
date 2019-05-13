@@ -127,7 +127,7 @@ seq:
   | texpr { $1 }
 
 texpr:
-  | expr COMMA exprs_comma { nop (* TODO *) }
+  | expr COMMA exprs_comma { mktup ($1::$3) }
   | expr { $1 }
 
 expr:
@@ -150,7 +150,7 @@ expr:
   | expr OR expr         { TApp(na,TApp(na,TVal(VOr(na,None)),$1),$3) }
   | expr CONCAT expr     { TApp(na,TApp(na,TVal(VConcat(na,None)),$1),$3) }
   | expr SUB expr        { TApp(na,TApp(na,TVal(VSub(na,None)),$1),$3) }
-  | expr COLON expr      { TApp(na,$3,$1) (* TODO *) }
+  | expr COLON expr      { TApp(na,TApp(na,TVal(VCons(na,None)),$1),$3) }
 
   | SUB expr { TApp(na,TVal(VNeg na),$2) }
 
@@ -167,10 +167,10 @@ atom:
   | LPAREN seq RPAREN { $2 }
   | LPAREN RPAREN { nop }
 
-  | LCURLY record RCURLY { nop (* TODO *) }
+  | LCURLY record RCURLY { mkrecord $2 }
 
-  | LSQUARE exprs_comma RSQUARE { nop (* TODO *) }
-  | LSQUARE RSQUARE { nop (* TODO *) }
+  | LSQUARE exprs_comma RSQUARE { mklist $2 }
+  | LSQUARE RSQUARE { TVal(VList(na,[])) }
 
   | CHAR       { TVal(VChar(na,$1)) }
   | STRING     { TVal(VString(na,$1)) }

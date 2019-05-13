@@ -1,4 +1,5 @@
 (** The entrypoint for the pplcore executable. Handles command line argument
+    open Utest
     parsing, unit testing, and lexing/parsing. *)
 
 open Ast
@@ -7,6 +8,7 @@ open Sprint
 open Utils
 open Debug
 open Infer
+open Utest
 
 (** Add a slash at the end of a path if not already available *)
 let add_slash s =
@@ -37,7 +39,7 @@ let parse par filename =
       close_in file; tm
     with | Parsing.Parse_error ->
       if !utest then (
-        printf "\n ** Parse error at %s"
+        printf "\n** Parse error at %s **"
           (string_of_position (lexbuf.lex_curr_p));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1;
@@ -75,7 +77,7 @@ let exec filename =
   debug debug_norm "Log Normalizing constant"
   (fun () -> sprintf "%f" normconst);
 
-  if !utest && !utest_fail_local = 0 then printf " OK\n"
+  utest_local_print()
 
 (** Main function. Parses command line arguments *)
 let main =
@@ -119,5 +121,5 @@ let main =
 
   List.iter exec (files_of_folders !lst);
 
-  Debug.utest_print ();
+  utest_print ();
 

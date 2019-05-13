@@ -19,9 +19,9 @@ utest match {a:1, b:2, c:3} with
 // List patterns
 utest match [1,2,[3]] with
         | [] -> false
-        | head : tail -> (head,tail)           (1, [2,[3]])
+        | head :: tail -> (head,tail)           (1, [2,[3]])
 utest match [1,2,3] with
-        | e1 : e2 : e3 : [] -> (e1,e2,e3)    (1,2,3)
+        | e1 :: e2 :: e3 :: [] -> (e1,e2,e3)    (1,2,3)
 
 // Tuple patterns
 utest match (1,2,(3,4)) with

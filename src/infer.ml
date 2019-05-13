@@ -103,7 +103,7 @@ let infer_is env n program =
 (* Systematic resampling of n samples *)
 let resample n s =
 
-  printf "Resampling!\n%!";
+  (*printf "Resampling!\n%!";*)
   (*List.iter (fun (w,_) -> printf "%f " w) s;*)
   (*print_newline();*)
   (* Compute part of the normalizing constant *)
@@ -138,6 +138,9 @@ let infer_smc env n program =
   (* Run until first resample, attaching the initial environment *)
   let s = List.map (eval false env 0.0) s in
 
+  (* Convert values to terms *)
+  let s = List.map (fun (w,v) -> w,tm_of_val v) s in
+
   (* Run SMC *)
   let rec recurse s normconst =
 
@@ -159,7 +162,6 @@ let infer_smc env n program =
       (* Final result *)
       | _ -> true,weight,v in
 
-    let s = List.map (fun (w,v) -> w,TApp(na,tm_of_val v,nop)) s in
     let res = List.map sim s in
     let b = List.for_all (fun (b,_,_) -> b) res in
     let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample n in
@@ -167,8 +169,8 @@ let infer_smc env n program =
     if b then begin
       normconst,res
     end else
-      recurse res normconst
-
+      let s = List.map (fun (w,v) -> w,TApp(na,tm_of_val v,nop)) res in
+      recurse s normconst
   in recurse s 0.0
 
 
@@ -224,7 +226,8 @@ let string_of_empirical ls =
   let aggr = aggregate [] normalized in
 
   (* Sort based on weight to show the most important sample at the top *)
-  let last = List.sort (fun (w1,_) (w2,_) -> - compare w1 w2) aggr in
+  let last = List.sort
+      (fun (w1,_) (w2,_) -> - Pervasives.compare w1 w2) aggr in
 
   let line (w,v) = sprintf "  %-15s%-15f" (string_of_val v) w in
 
@@ -269,21 +272,21 @@ let infer tm =
       let builtin =
         builtin
 
-        (* Transform builtins to VPS. Required since we need to wrap constant
-           functions in VPS forms *)
+        (* Transform builtins to CPS. Required since we need to wrap constant
+           functions in CPS forms *)
         |> List.map (fun (x, y) -> (x, (cps_atomic y)))
 
         (* Debruijn transform builtins (since they have now been
-           VPS transformed) *)
+           CPS transformed) *)
         |> List.map (fun (x, y) -> (x, debruijn [] y)) in
 
-      debug debug_cps "Post VPS builtin"
+      debug debug_cps "Post CPS builtin"
         (fun () -> string_of_builtin builtin);
 
-      (* Perform VPS transformation of main program *)
+      (* Perform CPS transformation of main program *)
       let tm = cps tm in
 
-      debug debug_cps "Post VPS"
+      debug debug_cps "Post CPS"
         (fun () -> string_of_tm ~pretty:false tm);
 
       tm,builtin
