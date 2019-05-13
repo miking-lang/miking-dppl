@@ -3,6 +3,7 @@
 open Ast
 open Utils
 open StrMap
+open Pattern
 
 (** Reference used when generating new labels *)
 let label = ref 0
@@ -11,6 +12,21 @@ let label = ref 0
 let next () =
   let res = !label
   in label := !label + 1; res
+
+(** Assigns labels to all variables found in a pattern. Returns a map from the
+    variable names to their labels. *)
+let rec patmap map pat = match pat with
+  | PVar(s)         -> add s (next()) map
+  | PRec((_,p)::ps) -> patmap (patmap map p) (PRec(ps))
+  | PRec([])        -> map
+  | PList(p::ps)    -> patmap (patmap map p) (PList(ps))
+  | PList([])       -> map
+  | PTup(p::ps)     -> patmap (patmap map p) (PTup(ps))
+  | PTup([])        -> map
+  | PCons(p1,p2)    -> patmap (patmap map p1) p2
+
+  | PUnit     | PChar _
+  | PString _ | PInt _  | PFloat _ -> map
 
 (** Label all variables in a term. Takes a map from strings to labels as
     argument, providing the initial environment (builtins) *)
@@ -29,8 +45,9 @@ let rec label_vars map tm = match tm with
 
   | TIf(a,t1,t2) -> TIf(a,label_vars map t1,label_vars map t2)
 
-  (* TODO Also label variables bound by TmMatch *)
-  | TMatch(a,cls) -> TMatch(a,List.map (fun (p,t) -> p,label_vars map t) cls)
+  (* TODO Also record the label variables bound by TmMatch (unify Lam,If,Match)*)
+  | TMatch(a,cls) ->
+    TMatch(a,List.map (fun (p,t) -> p,label_vars (patmap map p) t) cls)
 
   | TVal _ -> tm
 
@@ -45,7 +62,7 @@ let rec label_terms tm =
     | TLam(_,x,t1)  -> TLam(a,x,label_terms t1)
     | TIf(_,t1,t2)  -> TIf(a,label_terms t1,label_terms t2)
     | TMatch(_,cls) -> TMatch(a,List.map (fun (p,t) -> p,label_terms t) cls)
-    | TVal(c)       -> TVal(val_update_attr a c)
+    | TVal(c)       -> TVal(update_attr_val a c)
 
 (** Function for labeling both variables and terms in a term. Returns the
     resulting tm, a convenient map from builtin variable names to variable

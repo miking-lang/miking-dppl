@@ -1,4 +1,5 @@
-(** Convert terms and patterns to pretty printed strings *)
+(** Convert terms and patterns to pretty printed strings
+    TODO Cleanup*)
 
 open Ast
 open Pattern
@@ -75,7 +76,7 @@ let string_of_tm
     ?(debruijn    = false)
     ?(labels      = false)
     ?(closure_env = false)
-    ?(pretty      = true)
+    ?(pretty      = false)
     ?(indent      = 2)
     ?(max_indent  = 68)
     ?(margin      = 80)
@@ -87,7 +88,7 @@ let string_of_tm
 
   let rec recurse fmt (prec, t) =
 
-    (* Print an environment *)
+    (* Print an environment TODO We want to be able to do this standalone as well *)
     let print_env fmt env =
       if closure_env then
         let inner = List.mapi (fun i t ->
@@ -270,7 +271,7 @@ let string_of_tm
           let inner = inner
                       @ List.map
                         (fun k -> (fun fmt -> fprintf fmt "%s:." k)) strs in
-          fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,inner)
+          fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,List.rev inner)
 
         | VList(_,ls) ->
           let inner = List.map (fun v ->
@@ -278,6 +279,10 @@ let string_of_tm
                  fprintf fmt "%a" recurse (MATCH, tm_of_val v))) ls in
           fprintf fmt "[@[<hov 0>%a@]]"
             concat (COMMA,inner)
+
+        | VCons(_,None)   -> fprintf fmt "cons"
+        | VCons(_,Some v) -> fprintf fmt "cons(%a)"
+                               recurse (MATCH, tm_of_val v)
 
         | VRecProj(_,x) -> fprintf fmt "(.).%s" x
         | VTupProj(_,i) -> fprintf fmt "(.).%d" i
@@ -411,5 +416,7 @@ let string_of_tm
   in recurse str_formatter (MATCH, t); flush_str_formatter ()
 
 (* Shorthand for converting values to strings. *)
-let string_of_val v = string_of_tm (tm_of_val v)
+let string_of_val
+    ?(closure_env = false)
+    v = string_of_tm ~closure_env:closure_env (tm_of_val v)
 

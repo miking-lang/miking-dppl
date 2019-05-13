@@ -1,6 +1,3 @@
-weight(sample(normal(0,1)))
-if sample(bernoulli(0.5)) then
-  sample(normal(0,1))
-else
-  sample(normal(0,100))
+utest {a:1, b:{c:2, d:4}, e:5}.b            {c:2, d:4};
+utest {a:1, b:{c:2, d:4}, e:5}.b.d          4
 
