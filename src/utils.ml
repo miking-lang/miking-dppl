@@ -13,10 +13,18 @@ module StrMap = Map.Make(struct type t = string let compare = compare end)
 
 (** Generates a list with i values v as elements *)
 let replicate i v =
-  let rec recurse i v acc = match i with
+  let rec recurse i acc = match i with
     | 0 -> acc
-    | _ -> recurse (i-1) v (v :: acc)
-  in recurse i v []
+    | _ -> recurse (i-1) (v :: acc)
+  in recurse i []
+
+(** Tail recursive map *)
+let map f l =
+  let rec recurse acc = function
+    | [] -> List.rev acc
+    | x::xs -> recurse (f x::acc) xs
+  in
+  recurse [] l
 
 (** Map accumulate for lists. Maps f over the array while also carrying an
     accumulator between applications of f. *)

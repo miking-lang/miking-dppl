@@ -411,7 +411,7 @@ let setup_print
     ?(debruijn       = false)
     ?(labels         = false)
     ?(closure_env    = false)
-    ?(pretty         = false)
+    ?(pretty         = true)
     ?(indent         = 2)
     ?(max_indent     = 68)
     ?(margin         = 80)

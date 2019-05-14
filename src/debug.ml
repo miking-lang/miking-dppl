@@ -4,7 +4,7 @@ open Printf
 open Utest
 
 (** Debug the input term *)
-let debug_input = false
+let debug_input = true
 
 (** Debug the labelling *)
 let debug_label = false
@@ -18,14 +18,17 @@ let debug_resample_transform = false
 (** Debug the CPS transformation *)
 let debug_cps = false
 
+(** Debug the resample transformation *)
+let debug_smc = true
+
 (** Debug the evaluation *)
-let debug_eval = true
+let debug_eval = false
 
 (** Debug applications when evaluating *)
-let debug_eval_app = true
+let debug_eval_app = false
 
 (** Debug the evaluation environment *)
-let debug_eval_env = true
+let debug_eval_env = false
 
 (** Debug the inference procedure
     TODO This is a result, not a debug printout *)

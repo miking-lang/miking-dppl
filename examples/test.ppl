@@ -1,2 +1,5 @@
-utest (5 + 1 = 6)            true;
+let flip _ = sample(bernoulli(0.5)) in
+
+if flip () then false else true
+
 

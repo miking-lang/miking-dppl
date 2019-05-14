@@ -10,6 +10,14 @@ open Debug
 open Infer
 open Utest
 
+type output =
+  | None
+  | Debug
+  | Dist
+  | Norm
+
+let output = ref Debug
+
 (** Add a slash at the end of a path if not already available *)
 let add_slash s =
   if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> "/"
@@ -52,13 +60,17 @@ let parse par filename =
 (** Function for running inference on a program. *)
 let exec filename =
 
+  (* If running unit testing, set the inference to SMC so that the CPS
+     transformation is also tested *)
   if !utest then begin
     printf "%s: " filename;
-    inference := SMC;
+    inference := SMCDirect; (* TODO *)
     samples   := 1;
+    output    := None;
   end;
   utest_fail_local := 0;
 
+  (* Parse the program *)
   let tm = match Filename.extension filename with
     | ".ppl"  -> parse (Parser.main Lexer.main) filename
     | ".tppl" -> parse (Tpplparser.main Tppllexer.main) filename
@@ -66,17 +78,26 @@ let exec filename =
 
   debug debug_input "Input term" (fun () -> string_of_tm tm);
 
+  (* Run inference *)
   let normconst,res = infer tm in
 
-  (* TODO Cleanup, this should not be a debug printout. Also, aggregate equal
-     samples if possible ("print_emp_dist").
-     TODO Make a plot using some library? *)
-  debug debug_infer "Inference result"
-    (fun () -> string_of_empirical res);
+  (* TODO Add a plot function using some nice library *)
+  (* Print output of inference *)
+  begin match !output with
+    | None -> ()
+    | Debug ->
+      debug true "Inference result"
+        (fun () -> string_of_empirical res);
 
-  debug debug_norm "Log Normalizing constant"
-  (fun () -> sprintf "%f" normconst);
+      debug true "Log Normalizing constant"
+        (fun () -> sprintf "%f" normconst)
+    | Dist ->
+      print_endline (string_of_empirical res)
+    | Norm ->
+      printf "%f" normconst
+  end;
 
+  (* Print unit testing information for this file *)
   utest_local_print()
 
 (** Main function. Parses command line arguments *)
@@ -87,22 +108,28 @@ let main =
     Arg.Unit(fun _ -> utest := true),
     " Enable unit tests.";
 
-    "--align",
-    Arg.String(fun s -> match s with
-        | "static"   -> align := Static
-        | "dynamic"  -> align := Dynamic
-        | "disable"  -> align := Disable
-        | _          -> failwith "Incorrect alignment type"),
-    " Enable static or dynamic program alignment.";
-
     "--inference",
     Arg.String(fun s -> match s with
-        | "is"   -> inference := Importance
-        | "smc"  -> inference := SMC
-        | "eval" -> inference := Eval
-        | _      -> failwith "Incorrect inference algorithm"
+        | "is"          -> inference := Importance
+        | "smc-direct"  -> inference := SMCDirect
+        | "smc-manual"  -> inference := SMCManual
+        | "smc-dynamic" -> inference := SMCDynamic
+        | "smc-static"  -> inference := SMCStatic
+        | "eval"        -> inference := Eval
+        | _             -> failwith "Incorrect inference algorithm"
       ),
-    " Specifies inference method. Options are: is, smc, eval.";
+    " Specifies inference method. Options are: eval, is,\
+     smc-direct, smc-manual, smc-dynamic, and smc-static.";
+
+    "--output",
+    Arg.String(fun s -> match s with
+        | "none"  -> output := None
+        | "debug" -> output := Debug
+        | "dist"  -> output := Dist
+        | "norm"  -> output := Norm
+        | _       -> failwith "Incorrect output format"
+      ),
+    " Specifies output format. Options are: none, debug, dist, norm.";
 
     "--samples",
     Arg.Int(fun i -> match i with

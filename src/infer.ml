@@ -61,7 +61,10 @@ let string_of_builtin ?(labels = false) builtin =
 type inference =
   | Eval
   | Importance
-  | SMC
+  | SMCDirect
+  | SMCManual
+  | SMCDynamic
+  | SMCStatic
 
 (** Default inference is simply weighted evaluation *)
 let inference = ref Eval
@@ -69,22 +72,12 @@ let inference = ref Eval
 (** Number of samples for inference algorithms *)
 let samples = ref 10
 
-(** SMC Alignment types *)
-type align =
-  | Static
-  | Dynamic
-  | Disable
-
-(** Whether or not to align SMC. Disabled by default. *)
-let align = ref Disable
-
 (** Compute the logarithm of the average of a list of n weights using
     logsumexp-trick *)
 let logavg n weights =
   let max = List.fold_left max (-. infinity) weights in
   log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
   +. max -. log (float n)
-
 
 (** Importance sampling
     (or more specifically, likelihood weighting) inference *)
@@ -94,18 +87,20 @@ let infer_is env n program =
   let s = replicate n program in
 
   (* Evaluate everything to the end, producing a set of weighted samples *)
-  let res = List.map (eval false env 0.0) s in
+  let res = Utils.map (eval false env 0.0) s in
 
   (* Calculate normalizing constant and return *)
-  logavg n (List.map fst res),res
+  logavg n (Utils.map fst res),res
 
 
 (* Systematic resampling of n samples *)
 let resample n s =
 
-  (*printf "Resampling!\n%!";*)
-  (*List.iter (fun (w,_) -> printf "%f " w) s;*)
-  (*print_newline();*)
+  debug debug_smc "Resample"
+    (fun () ->
+       String.concat "\n"
+         (Utils.map (fun (w,_) -> sprintf "weight(%f)" w) s));
+
   (* Compute part of the normalizing constant *)
   let logavg = logavg n (List.map fst s) in
 
@@ -129,50 +124,38 @@ let resample n s =
   logavg, rec1 0.0 offset snorm []
 
 
-(** SMC inference TODO Cleanup *)
+(** SMC inference *)
 let infer_smc env n program =
 
   (* Replicate program for #samples times with an initial log weight of 0.0 *)
   let s = replicate n program in
 
   (* Run until first resample, attaching the initial environment *)
-  let s = List.map (eval false env 0.0) s in
+  let s = Utils.map (eval false env 0.0) s in
 
-  (* Convert values to terms *)
-  let s = List.map (fun (w,v) -> w,tm_of_val v) s in
+  (* Continue running a particle until the next resampling point *)
+  let rec continue v =
+    match v with
+    | VResamp(_,Some(cont),Some stoch_ctrl) ->
+        eval stoch_ctrl [] 0.0 (TApp(na,tm_of_val cont,nop))
+    | VResamp _ -> failwith "Erroneous VResamp in infer_smc"
+    | _ -> 0.0, v
+  in
 
   (* Run SMC *)
   let rec recurse s normconst =
-
-    (* Evaluate a program until encountering a resample *)
-    let rec sim (weight,tm) =
-      let weight,v = eval false [] weight tm in
-      match v with
-
-      (* Resample *)
-      | VResamp(_,Some(cont),Some b) ->
-
-        (* If dynamic alignment is enabled and we are in stochastic control,
-           skip this resampling point. Otherwise, resample here. *)
-        if b && !align = Dynamic then
-          sim (weight,TApp(na,tm_of_val cont,nop))
-        else
-          false,weight,cont
-
-      (* Final result *)
-      | _ -> true,weight,v in
-
-    let res = List.map sim s in
-    let b = List.for_all (fun (b,_,_) -> b) res in
-    let logavg, res = res |> List.map (fun (_,w,t) -> (w,t)) |> resample n in
-    let normconst = normconst +. logavg in
-    if b then begin
-      normconst,res
-    end else
-      let s = List.map (fun (w,v) -> w,TApp(na,tm_of_val v,nop)) res in
+    if List.exists
+        (fun (_,v) ->
+           match v with VResamp(_,Some _,Some _) -> true | _ -> false) s
+    then begin
+      let logavg, s = resample n s in
+      let normconst = normconst +. logavg in
+      let s = List.map (fun (_,v) -> continue v) s in
       recurse s normconst
-  in recurse s 0.0
+    end else
+      normconst,s
 
+  in recurse s 0.0
 
 (** Convert all weighting to
     weighting followed by a call to resample *)
@@ -180,21 +163,15 @@ let add_resample builtin t =
 
   let rec recurse t = match t with
     | TVar _ -> t
-
     | TApp(a,t1,t2) -> TApp(a,recurse t1,recurse t2)
-
     | TLam(a,x,t1) -> TLam(a,x,recurse t1)
-
     | TIf(a,t1,t2) -> TIf(a,recurse t1,recurse t2)
-
     | TMatch(a,cls) -> TMatch(a,List.map (fun (p,t) -> p,recurse t) cls)
-
     | TVal(VWeight _) ->
       let var, var'  = makevar "w" noidx in
       let weight_app = TApp(na,t,var') in
       let resamp     = TApp(na,TVal(VResamp(na,None,None)),nop) in
       TLam(na,var,seq weight_app resamp)
-
     | TVal _ -> t
 
   in
@@ -203,8 +180,7 @@ let add_resample builtin t =
 (* Function for producing a nicely formatted string representation of the
    empirical distributions returned by infer below. Aggregates samples with the
    same value to produce a more compact output.
-   TODO Cleanup
-   TODO Comparison of vals should ignore attributes *)
+   TODO Cleanup *)
 let string_of_empirical ls =
 
   (* Start by sorting the list *)
@@ -244,7 +220,7 @@ let infer tm =
     | Eval | Importance -> tm,builtin
 
     (* Perform SMC specific transformations *)
-    | SMC ->
+    | SMCDirect ->
 
       (* Label program and builtins *)
       let tm,builtin,_nl = label builtin tm in
@@ -258,10 +234,10 @@ let infer tm =
       (* If alignment is turned on, perform the corresponding static analysis.
          Otherwise, simply add resamples after each call to weight.
          TODO Note that dynamic is enabled by default if not static. *)
-      let tm,builtin = if !align = Static
-        then tm,builtin (*TODO Analysis.align_weight builtin_map tm nl*)
-        else add_resample builtin tm
-      in
+      (*let tm,builtin = if !align = Static*)
+        (*then tm,builtin (*TODO Analysis.align_weight builtin_map tm nl*)*)
+      (*in*)
+      let tm,builtin = add_resample builtin tm in
 
       debug debug_resample_transform "After attaching resamples to builtins"
         (fun () -> string_of_builtin builtin);
@@ -291,6 +267,8 @@ let infer tm =
 
       tm,builtin
 
+    | _ -> failwith "TODO Infer"
+
   in
 
   (* Calculate debruijn indices *)
@@ -302,5 +280,6 @@ let infer tm =
   match !inference,!samples with
   | Eval,_ -> infer_is env 1 tm
   | Importance,n -> infer_is env n tm
-  | SMC,n -> infer_smc env n tm
+  | SMCDirect,n -> infer_smc env n tm
+  | _ -> failwith "TODO Infer"
 
