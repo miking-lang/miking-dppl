@@ -55,13 +55,11 @@ and value =
   | VFix       of attr
 
   (* Record construction and record projection. Use linear search for
-     projection. Should we use hashtable for larger records?
-     TODO Split into value and constructor*)
+     projection. Should we use hashtable for larger records? *)
   | VRec       of attr * string list * (string * value) list
   | VRecProj   of attr * string
 
-  (* Tuples and tuple projection. Uses O(1) array lookup for projection
-     TODO Split into value and constructor *)
+  (* Tuples and tuple projection. Uses O(1) array lookup for projection *)
   | VTup       of attr * int * value array
   | VTupProj   of attr * int
 
@@ -324,8 +322,11 @@ let update_attr_tm attr = function
   | TIf    (_,t1,t2) -> TIf    (attr,t1,t2)
   | TMatch (_,cases) -> TMatch (attr,cases)
 
-(** Make a value stochastic *)
-let set_stoch stoch v = update_attr_val {(val_attr v) with stoch=stoch} v
+(** Make a value stochastic if cond is true. If the value is already
+    stochastic, do nothing *)
+let set_stoch cond v =
+  let {stoch;_} = val_attr v in
+  update_attr_val {(val_attr v) with stoch=stoch || cond} v
 
 (** Reference used for genvar *)
 let nextvar = ref 0

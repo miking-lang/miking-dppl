@@ -107,67 +107,76 @@ let rec eval stoch_ctrl env weight t =
 
   debug debug_eval "Eval"
     (fun () ->
-       string_of_tm
-         ~pretty:false
-         ~closure_env:debug_eval_env t);
+       let str = (string_of_tm ~closure_env:debug_eval_env t) in
+       if debug_eval_env then
+         sprintf "%s\n%s" (string_of_env ~prefix:"env: " env) str
+       else
+         str);
 
-  match t with
+  let weight,v = match t with
 
-  (* Variables using debruijn indices.
-     Need to evaluate because fix point might exist in env. *)
-  | TVar(_,_,n) -> eval stoch_ctrl env weight (List.nth env n)
+    (* Variables using debruijn indices.
+       Need to evaluate because fix point might exist in env. *)
+    | TVar(_,_,n) -> eval stoch_ctrl env weight (List.nth env n)
 
-  (* Lambdas, ifs, and matches *)
-  | TLam(a,x,t1)  -> weight,VClos(a,x,t1,env)
-  | TIf(a,t1,t2)  -> weight,VClosIf(a,t1,t2,env)
-  | TMatch(a,cls) -> weight,VClosMatch(a,cls,env)
+    (* Lambdas, ifs, and matches *)
+    | TLam(a,x,t1)  -> weight,VClos(a,x,t1,env)
+    | TIf(a,t1,t2)  -> weight,VClosIf(a,t1,t2,env)
+    | TMatch(a,cls) -> weight,VClosMatch(a,cls,env)
 
-  (* Values *)
-  | TVal v -> weight,v
+    (* Values *)
+    | TVal v -> weight,v
 
-  (* Applications.
-     When weight is degenerate, cut off evaluation already here. *)
-  | TApp(_,t1,t2) ->
-    let weight,v1 = eval stoch_ctrl env weight t1 in
-    if weight = neg_infinity then weight,VUnit na
-    else let weight,v2 = eval stoch_ctrl env weight t2 in
+    (* Applications.
+       When weight is degenerate, cut off evaluation already here. *)
+    | TApp(_,t1,t2) ->
+      let weight,v1 = eval stoch_ctrl env weight t1 in
       if weight = neg_infinity then weight,VUnit na
-      else eval_app stoch_ctrl weight v1 v2
+      else let weight,v2 = eval stoch_ctrl env weight t2 in
+        if weight = neg_infinity then weight,VUnit na
+        else eval_app stoch_ctrl weight v1 v2
 
-(* Evaluate applications
-   TODO Fix stochasticness *)
+  in
+
+  debug debug_eval "Eval complete"
+    (fun () ->
+       string_of_val
+         ~closure_env:debug_eval_env v);
+
+  weight,v
+
+(* Evaluate applications *)
 and eval_app stoch_ctrl weight v1 v2 =
 
   debug debug_eval_app "Eval application"
     (fun () ->
-       (Printf.sprintf "Applying:\
-                       \nLHS: %s\
-                       \nRHS: %s"
-          (string_of_val ~closure_env:debug_eval_env v1)
-          (string_of_val ~closure_env:debug_eval_env v2)));
+       (Printf.sprintf "%s\n%s"
+          (string_of_val ~prefix:"LHS: " ~closure_env:debug_eval_env v1)
+          (string_of_val ~prefix:"RHS: " ~closure_env:debug_eval_env v2)));
 
   (* Extract stochasticness *)
   let ({stoch=s1;_} as a1),({stoch=s2;_} as _a2) = val_attr v1,val_attr v2 in
 
-  (* Default attribute *)
+  (* Default attribute with stochasticness set if either the LHS or the RHS is
+     stochastic. *)
   let da = {a1 with stoch = s1 || s2} in
 
   match v1,v2 with
 
   (* Closure application. If LHS is stochastic, the result is stochastic *)
   | VClos(_,_,t11,env),_ ->
-    let weight,t = eval stoch_ctrl (tm_of_val v2::env) weight t11 in
-    weight,set_stoch s1 t
+    let weight,v = eval stoch_ctrl (tm_of_val v2::env) weight t11 in
+    weight,set_stoch s1 v
 
   (* If-application. Evaluate the chosen branch with stoch_ctrl set if the
      condition is stochastic. Furthermore, the result itself is stochastic if
      the condition (or the if expression itself) is stochastic. *)
   | VClosIf(_,t1,t2,env),VBool(_,b) ->
     let stoch_ctrl = stoch_ctrl || s2 in
-    let weight,t = match b with
+    let weight,v = match b with
       | true -> eval stoch_ctrl env weight t1
       | false -> eval stoch_ctrl env weight t2 in
-    weight,set_stoch (s1 || s2) t
+    weight,set_stoch (s1 || s2) v
   | VClosIf _,_ -> fail_app v1 v2
 
   (* Match-application. Evaluate the chosen term with stoch_ctrl set if the
@@ -181,34 +190,34 @@ and eval_app stoch_ctrl weight v1 v2 =
          | Some env -> eval stoch_ctrl env weight t
          | None -> match_cases cls)
       | [] -> failwith "Pattern matching failed" in
-    let weight,t = match_cases cls in
-    weight,set_stoch (s1 || s2) t
+    let weight,v = match_cases cls in
+    weight,set_stoch (s1 || s2) v
 
   (* Fixpoint application *)
   | VFix _,VClos(_,_,t21,env2) ->
-    let weight,t =
+    let weight,v =
       eval stoch_ctrl
         ((TApp(na,tm_of_val v1,tm_of_val v2))::env2) weight t21 in
-    weight,set_stoch s1 t
+    weight,set_stoch (s1 || s2) v
   | VFix _,_ -> fail_app v1 v2
 
   (* Record construction *)
   | VRec(_,arg::args,ls),v2 -> weight,VRec(da,args,(arg,v2)::ls)
   | VRec _,_ -> fail_app v1 v2
 
-  (* Record projection. Stochastic if itself or its subterm is stochastic *)
+  (* Record projection. *)
   | VRecProj(_,x),VRec(_,[],vls) ->
     let v = match List.assoc_opt x vls with
       | Some v -> v
       | _ -> failwith "Key not found in record" in
-    weight,v
+    weight,set_stoch (s1 || s2) v
   | VRecProj _,_ -> fail_app v1 v2
 
   | VTup(_,0,_),v2   -> fail_app v1 v2
   | VTup(_,i,arr),v2 -> weight,VTup(da,i-1,Array.append [|v2|] arr)
 
   (* Tuple projection. *)
-  | VTupProj(_,i),VTup(_,0,varr) -> weight,varr.(i)
+  | VTupProj(_,i),VTup(_,0,varr) -> weight,set_stoch (s1 || s2) varr.(i)
   | VTupProj _,_                 -> fail_app v1 v2
 
   (* Lists *)
@@ -219,7 +228,7 @@ and eval_app stoch_ctrl weight v1 v2 =
   | VCons(_,Some v), VList(_,vls) -> weight,VList(da,v::vls)
   | VCons _,_                     -> fail_app v1 v2
 
-  (* Unit testing application. *)
+  (* Unit testing application. Only stochastic if LHS is stochastic *)
   | VUtest(_,None),v2    -> weight,VUtest(a1,Some v2)
   | VUtest(_,Some v1),v2 ->
     let {pos;_} = a1 in

@@ -19,13 +19,13 @@ let debug_resample_transform = false
 let debug_cps = false
 
 (** Debug the evaluation *)
-let debug_eval = false
+let debug_eval = true
 
 (** Debug applications when evaluating *)
-let debug_eval_app = false
+let debug_eval_app = true
 
 (** Debug the evaluation environment *)
-let debug_eval_env = false
+let debug_eval_env = true
 
 (** Debug the inference procedure
     TODO This is a result, not a debug printout *)
