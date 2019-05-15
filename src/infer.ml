@@ -134,7 +134,7 @@ let infer_smc env n program =
   let s = Utils.map (eval false env 0.0) s in
 
   (* Continue running a particle until the next resampling point *)
-  let rec continue v =
+  let continue v =
     match v with
     | VResamp(_,Some(cont),Some stoch_ctrl) ->
         eval stoch_ctrl [] 0.0 (TApp(na,tm_of_val cont,nop))

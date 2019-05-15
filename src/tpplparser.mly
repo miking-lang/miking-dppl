@@ -10,7 +10,6 @@ open Parserutils
 /* Misc */
 %token EOF
 %token <string> IDENT
-%token <string> FUNIDENT
 
 /* Keywords */
 %token FUNC
@@ -82,6 +81,8 @@ open Parserutils
 %left MUL DIV MOD
 %left NOT
 
+%left LPAREN   /* Applications bind tightly => we should always shift LPAREN */
+
 %nonassoc DOT VBAR
 
 %type <Ast.term> main
@@ -102,11 +103,11 @@ seq:
         | TVal(VUnit _) -> $1
         | _ -> TApp(na,TLam(na,"_",$2),$1) }
 
-  | FUNC FUNIDENT params RPAREN texpr seq
-      { TApp(na,TLam(na,$2,$6), addrec $2 (mkfun $3 $5)) }
+  | FUNC IDENT LPAREN params RPAREN texpr seq
+      { TApp(na,TLam(na,$2,$7), addrec $2 (mkfun $4 $6)) }
 
-  | FUNC FUNIDENT RPAREN texpr seq
-      { TApp(na,TLam(na,$2,$5), addrec $2 (mkfun ["_"] $4)) }
+  | FUNC IDENT LPAREN RPAREN texpr seq
+      { TApp(na,TLam(na,$2,$6), addrec $2 (mkfun ["_"] $5)) }
 
   | IDENT EQ texpr seq
       { TApp(na,TLam(na,$1,$4),$3) }
@@ -155,14 +156,14 @@ expr:
         let weight = TVal(VWeight na) in
         TApp(na,weight,inner) }
 
-  | IF seq THEN seq ELSE expr %prec LOW
+  | IF seq THEN seq ELSE usubexpr
        { TApp(na,TIf(na,$4,$6),$2) }
 
-  | LAM params RPAREN expr %prec LOW { (mkfun $2 $4) }
-  | LAM RPAREN expr %prec LOW        { (mkfun ["_"] $3) }
+  | LAM LPAREN params RPAREN usubexpr { (mkfun $3 $5) }
+  | LAM LPAREN RPAREN usubexpr        { (mkfun ["_"] $4) }
 
-  | FUNIDENT usubexprs_comma RPAREN { mkapps (List.rev $2) $1 }
-  | FUNIDENT RPAREN             { mkapps [nop] $1 }
+  | IDENT LPAREN usubexprs_comma RPAREN { mkapps (List.rev $3) $1 }
+  | IDENT LPAREN RPAREN                 { mkapps [nop] $1 }
 
   | MATCH seq WITH cases { TApp(na,TMatch(na,$4),$2) }
 
@@ -176,14 +177,14 @@ expr:
 
   | LCURLY seq RCURLY  { $2 }
 
-  | NOT expr   { TApp(na,TVal(VNot na),$2) }
-  | IDENT      { TVar(na,$1,noidx) }
-  | CHAR       { TVal(VChar(na,$1)) }
-  | STRING     { TVal(VString(na,$1)) }
-  | INT        { TVal(VInt(na,$1)) }
-  | FLOAT      { TVal(VFloat(na,$1)) }
-  | TRUE       { TVal(VBool(na,true)) }
-  | FALSE      { TVal(VBool(na,false)) }
+  | NOT expr            { TApp(na,TVal(VNot na),$2) }
+  | IDENT %prec LOW     { TVar(na,$1,noidx) }
+  | CHAR                { TVal(VChar(na,$1)) }
+  | STRING              { TVal(VString(na,$1)) }
+  | INT                 { TVal(VInt(na,$1)) }
+  | FLOAT               { TVal(VFloat(na,$1)) }
+  | TRUE                { TVal(VBool(na,true)) }
+  | FALSE               { TVal(VBool(na,false)) }
 
 usubexprs_comma:
   | usubexpr { [$1] }

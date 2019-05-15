@@ -17,6 +17,7 @@ let _ =
       "utest",         UTEST;
       "match",         MATCH;
       "with",          WITH;
+      "lam",           LAM;
 
       (* Literals *)
       "true",          TRUE;
@@ -88,10 +89,6 @@ rule main = parse
   | "/*" { block_comment (Lexing.lexeme_start_p lexbuf) lexbuf; main lexbuf}
   | integer as str { INT(int_of_string str) }
   | floating_point as str { FLOAT(float_of_string str) }
-  | (ident as s) '('
-      { match s with
-        | "lam" -> LAM
-        | _ -> FUNIDENT(s) }
   | ident | symtok as s
       { try Hashtbl.find keyword_table s with Not_found -> IDENT(s) }
   | '\'' (_ as c) '\'' { CHAR(c) }
