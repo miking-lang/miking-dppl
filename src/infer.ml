@@ -81,7 +81,7 @@ let logavg n weights =
    empirical distributions returned by infer below. Aggregates samples with the
    same value to produce a more compact output.
    TODO The sorting function fails with stack overflow for large number of
-   samples. Use constant space sorting function? *)
+   samples. *)
 let string_of_empirical
     ?(aggregate = true)
     ?(normalize = true)
@@ -143,6 +143,8 @@ let string_of_empirical
       sprintf "  %-*f%s" cw w v
   in
 
+  (* The weight header changes depending on if the weights are logarithmic or
+     not. *)
   let weight_header = if log_weights then "LOG WEIGHT" else "WEIGHT" in
 
   (* Header *)
@@ -198,14 +200,13 @@ let resample s =
 (** SMC inference *)
 let infer_smc env program =
 
-  (* Replicate program for #samples times with an initial log weight of 0.0 *)
+  (* Replicate program for #samples times. *)
   let s = replicate !samples program in
 
-  (* Prepare a continuation for further evaluation. Set the attribute of the
-     argument () to at. *)
+  (* Function for wrapping a continuation for further evaluation. Set the
+     attribute of the unit argument to at. *)
   let app_cont cont at =
     (TApp{at=ta; t1=tm_of_val cont; t2=TVal{at=ta;v=VUnit{at=at}}}) in
-
 
   (* Run a particle until the next resampling point *)
   let rec eval stoch_ctrl env w t = match Eval.eval stoch_ctrl env w t with
@@ -237,29 +238,34 @@ let infer_smc env program =
   (* Run SMC *)
   let rec recurse s normconst =
 
+    (* Check if we need to resample *)
     if List.exists
         (fun (_,v) -> match v with VResamp _ -> true | _ -> false) s
     then begin
       debug debug_smc "Resample"
         (fun () -> string_of_empirical
             ~log_weights:true ~normalize:false s);
+
+      (* Do the resampling and accumulate normalization constant *)
       let logavg, s = resample s in
       let normconst = normconst +. logavg in
+
+      (* Run particles until next resampling point *)
       let continue v = match v with
         | VResamp{at;cont=Some(VClos{stoch_ctrl;_} as cont);_} ->
           eval stoch_ctrl [] 0.0 (app_cont cont at)
         | _ -> 0.0,v in
-      let s = List.map (fun (_,v) -> continue v) s in
+      let s = Utils.map (fun (_,v) -> continue v) s in
+
       recurse s normconst
     end else
       normconst,s
 
   in recurse s 0.0
 
-(** Convert all weighting to
-    weighting followed by a call to resample *)
+(** Convert all weightings in the program to
+    weightings followed by calls to resample *)
 let add_resample ~dyn builtin t =
-
   let rec recurse t = match t with
     | TVar _ -> t
     | TApp{at;t1;t2} -> TApp{at;t1=recurse t1;t2=recurse t2}
@@ -274,21 +280,13 @@ let add_resample ~dyn builtin t =
                             t2=nop} in
       TLam{at=at;vat=xa;cont=false;x=var;t1=seq weight_app resamp}
     | TVal _ -> t
-
   in recurse t, List.map (fun (x,t) -> x,recurse t) builtin
 
 (** Transform term and builtins to CPS *)
 let cps tm builtin =
-  let builtin =
-    builtin
-
-    (* Transform builtins to CPS. Required since we need to wrap constant
-       functions in CPS forms *)
-    |> List.map (fun (x, y) -> (x, (Cps.cps_atomic y)))
-
-    (* Debruijn transform builtins (since they have now been
-       CPS transformed) *)
-    |> List.map (fun (x, y) -> (x, debruijn [] y)) in
+  (* Transform builtins to CPS. Required since we need to wrap constant
+     functions in CPS forms *)
+  let builtin = List.map (fun (x, y) -> (x, (Cps.cps_atomic y))) builtin in
 
   debug debug_cps "Post CPS builtin"
     (fun () -> string_of_builtin builtin);
@@ -345,10 +343,10 @@ let infer tm =
 
   (* Calculate debruijn indices *)
   let tm = debruijn (builtin |> List.split |> fst) tm in
+  let builtin = List.map (fun (x, y) -> (x, debruijn [] y)) builtin in
 
   (* Variable names no longer required due to debruijn indices *)
   let env = (builtin |> List.split |> snd) in
-
 
   match !inference with
   | Eval       -> let logavg,v = eval false env 0.0 tm in logavg,[logavg,v]

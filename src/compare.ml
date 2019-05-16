@@ -1,4 +1,4 @@
-(** Comparison function *)
+(** Comparison function for values *)
 
 open Ast
 

@@ -348,7 +348,7 @@ let rec print_tm fmt (prec, t) =
        list. *)
     | None -> match lmatch with
 
-        (* Lists *)
+      (* Lists *)
       | Some args ->
         let inner = List.map (fun t1 ->
             (fun fmt -> fprintf fmt "%a" print_tm (APP, t1))) args in

@@ -6,7 +6,6 @@ open Pattern
 (** Dummy value for labels *)
 let no_label = -1
 
-
 (** Attributes of terms.
     Can easily be extended with more data fields as needed. *)
 type tm_attr = {
@@ -18,7 +17,6 @@ let ta = {
   label = no_label;
 }
 
-
 (** Attributes of values. *)
 type val_attr = {
   stoch:bool;          (* If this value is the result of some
@@ -29,7 +27,6 @@ type val_attr = {
 let va = {
   stoch = false;
 }
-
 
 (** Attributes of variable-related terms (lambdas and vars) *)
 type var_attr = {
@@ -50,7 +47,7 @@ type term =
   (* Applications *)
   | TApp     of { at:tm_attr; t1:term; t2:term }
 
-  (* Lambdas *)
+  (* Lambdas TODO Add separate term for continuations *)
   | TLam     of { at:tm_attr; vat:var_attr; cont:bool; x:string; t1:term }
   | TIf      of { at:tm_attr; t1:term; t2:term }
   | TMatch   of { at:tm_attr; cls:(pat * term) list } (* TODO match var_attr *)

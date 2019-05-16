@@ -64,7 +64,7 @@ let exec filename =
      transformation is also tested *)
   if !utest then begin
     printf "%s: " filename;
-    inference := SMCDirect; (* TODO *)
+    inference := SMCManual;
     samples   := 1;
     output    := None;
   end;

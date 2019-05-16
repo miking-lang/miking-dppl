@@ -20,7 +20,7 @@ let cps_fun t arity =
        let k, k' = genvar noidx in
        TLam{at=ta; vat=xa; cont=false; x=k;
             t1=TLam{at=ta; vat=xa; cont=false; x=v;
-                   t1=TApp{at=ta; t1=k'; t2=acc}}})
+                    t1=TApp{at=ta; t1=k'; t2=acc}}})
     vars inner
 
 (** Default CPS transformation of values, based on their arities. *)
@@ -79,7 +79,7 @@ let rec cps_atomic t = match t with
       let inner = TApp{at=ta; t1=t; t2=TApp{at=ta; t1=v'; t2=idfun}} in
       TLam{at=ta;vat=xa;cont=false;x=k;
            t1=TLam{at=ta;vat=xa;cont=false;x=v;
-                t1=TApp{at=ta; t1=k'; t2=inner}}}
+                   t1=TApp{at=ta; t1=k'; t2=inner}}}
 
     (* Resampling is natively in CPS by design (also the reason why we are
        performing the CPS transformation in the first place) *)
