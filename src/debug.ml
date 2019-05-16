@@ -13,13 +13,16 @@ let debug_label = false
 let debug_sanalysis = false
 
 (** Debug the resample transformation *)
-let debug_resample_transform = false
+let debug_resample_transform = true
 
 (** Debug the CPS transformation *)
-let debug_cps = false
+let debug_cps = true
 
-(** Debug the resample transformation *)
+(** Debug SMC inference *)
 let debug_smc = true
+
+(** Debug The weights in SMC *)
+let debug_smc_weights = true
 
 (** Debug the evaluation *)
 let debug_eval = false
@@ -29,14 +32,6 @@ let debug_eval_app = false
 
 (** Debug the evaluation environment *)
 let debug_eval_env = false
-
-(** Debug the inference procedure
-    TODO This is a result, not a debug printout *)
-let debug_infer = true
-
-(** Printout the normalization constant
-    TODO This is a result, not a debug printout *)
-let debug_norm = true
 
 (** Debug printout *)
 let debug cond heading info =

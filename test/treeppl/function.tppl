@@ -1,6 +1,6 @@
 // Test different ways of specifying funcions
 
-//Test a recursive function
+// Test a recursive function
 function fact (n) {
     if (n <= 1) then 1 else n * fact(n-1)
 }

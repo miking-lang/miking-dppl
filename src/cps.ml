@@ -6,6 +6,7 @@
       a TApp). Instead, it applies its continuation to its "return value". *)
 
 open Ast
+open Attribute
 open Utils
 
 (** Wrap direct-style functions in CPS *)
@@ -13,17 +14,19 @@ let cps_fun t arity =
   let vars = List.map genvar (replicate arity noidx) in
   let inner = List.fold_left
       (fun acc (_, v') ->
-         TApp(na, acc, v'))
+         TApp{at=ta; t1=acc; t2=v'})
       t vars in
   List.fold_right
     (fun (v, _) acc ->
        let k, k' = genvar noidx in
-       TLam(na, k, TLam(na, v, TApp(na, k', acc))))
+       TLam{at=ta; vat=xa; cont=false; x=k;
+            t1=TLam{at=ta; vat=xa; cont=false; x=v;
+                   t1=TApp{at=ta; t1=k'; t2=acc}}})
     vars inner
 
 (** Default CPS transformation of values, based on their arities. *)
 let cps_val t = match t with
-  | TVal(v) -> cps_fun t (arity v)
+  | TVal{v;_} -> cps_fun t (arity v)
   | _ -> failwith "cps_val of non-constant"
 
 (** CPS transformation of atomic terms (terms without computation).
@@ -39,25 +42,29 @@ let rec cps_atomic t = match t with
 
   (* Lambdas.
      Wrap in continuation and transform inner using the continuation. *)
-  | TLam(a,x,t1) ->
+  | TLam({t1;_} as t) ->
     let k, k' = genvar noidx in
-    TLam(a,k,TLam(na,x,cps_complex k' t1))
+    TLam{at=ta;vat=xa;cont=false;x=k;
+         t1=TLam{t with t1=cps_complex k' t1}}
 
   (* If expressions
      Wrap in continuation and transform inner using the continuation. *)
-  | TIf(a,t1,t2) ->
+  | TIf({t1;t2;_} as t) ->
     let k, k' = genvar noidx in
-    TLam(a,k,TIf(a,cps_complex k' t1,cps_complex k' t2))
+    TLam{at=ta;vat=xa;cont=false;x=k;
+         t1=TIf{t with t1=cps_complex k' t1;
+                       t2=cps_complex k' t2}}
 
   (* Pattern matching
      Wrap in continuation and transform inner using the continuation. *)
-  | TMatch(a,pls) ->
+  | TMatch({cls;_} as t) ->
     let k, k' = genvar noidx in
-    let pls = List.map (fun (p,te) -> p,cps_complex k' te) pls in
-    TLam(na,k,TMatch(a,pls))
+    let cls = List.map (fun (p,te) -> p,cps_complex k' te) cls in
+    TLam{at=ta;vat=xa;cont=false;x=k;
+         t1=TMatch{t with cls=cls}}
 
   (* Values *)
-  | TVal(v) -> match v with
+  | TVal{v;_} -> match v with
 
     (* Should not exist before eval *)
     | VClos _      -> failwith "Closure in cps_atomic"
@@ -71,8 +78,10 @@ let rec cps_atomic t = match t with
     | VFix _ ->
       let v, v' = genvar noidx in
       let k, k' = genvar noidx in
-      let inner = TApp(na, t, TApp(na, v', idfun)) in
-      TLam(na, k, TLam(na, v, TApp(na, k', inner)))
+      let inner = TApp{at=ta; t1=t; t2=TApp{at=ta; t1=v'; t2=idfun}} in
+      TLam{at=ta;vat=xa;cont=false;x=k;
+           t1=TLam{at=ta;vat=xa;cont=false;x=v;
+                t1=TApp{at=ta; t1=k'; t2=inner}}}
 
     (* Resampling is natively in CPS by design (also the reason why we are
        performing the CPS transformation in the first place) *)
@@ -100,7 +109,7 @@ and cps_complex cont t =
 
   (* Function application is the only complex expression.
      Optimize the case when either the function or argument is atomic. *)
-  | TApp(a,t1,t2) ->
+  | TApp{at;t1;t2} ->
     let wrapopt (a, a') = Some a,a' in
     let f, f' = match t1 with
       | TApp _ -> wrapopt (genvar noidx)
@@ -108,17 +117,21 @@ and cps_complex cont t =
     let e, e' = match t2 with
       | TApp _ -> wrapopt (genvar noidx)
       | _      -> None,cps_atomic t2 in
-    let app = TApp(a,TApp(a,f',cont),e') in
+    let app = TApp{at=at;
+                   t1=TApp{at=at;t1=f';t2=cont};t2=e'} in
     let inner = match e with
       | None -> app
-      | Some(e) -> cps_complex (TLam(na,e,app)) t2 in
+      | Some(e) ->
+        cps_complex (TLam{at=ta;vat=xa;cont=true;x=e;t1=app}) t2 in
     let outer = match f with
       | None -> inner
-      | Some(f) -> cps_complex (TLam(na,f,inner)) t1 in
+      | Some(f) ->
+        cps_complex (TLam{at=ta;vat=xa;cont=true;x=f;t1=inner}) t1 in
     outer
 
   (* Everything else is atomic. *)
-  | TVar _ | TLam _ | TIf _ | TMatch _ | TVal _ -> TApp(na, cont, cps_atomic t)
+  | TVar _ | TLam _ | TIf _ | TMatch _ | TVal _ ->
+    TApp{at=ta;t1=cont;t2=cps_atomic t}
 
 (** CPS transforms a term, with the identity function as continuation if it is
     complex*)

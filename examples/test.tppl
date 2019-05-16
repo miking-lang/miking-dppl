@@ -1,3 +1,10 @@
-utest {a:1, b:{c:2, d:4}, e:5}.b            {c:2, d:4};
-utest {a:1, b:{c:2, d:4}, e:5}.b.d          4
+function flip() {
+  sample(bernoulli(0.5))
+}
 
+if flip() then {
+  2 + 3
+} else {
+  3 + 4
+}
+weight(1)

@@ -4,6 +4,7 @@
 
 open Ast
 open Parserutils
+open Attribute
 
 %}
 
@@ -21,6 +22,7 @@ open Parserutils
 %token OBSERVE
 %token MATCH
 %token WITH
+%token WEIGHT
 
 /* Literals */
 %token TRUE
@@ -100,72 +102,84 @@ seq:
 
   | texpr seq
       { match $2 with
-        | TVal(VUnit _) -> $1
-        | _ -> TApp(na,TLam(na,"_",$2),$1) }
+        | TVal{v=VUnit _;_} -> $1
+        | _ -> TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x="_";t1=$2};t2=$1} }
 
   | FUNC IDENT LPAREN params RPAREN texpr seq
-      { TApp(na,TLam(na,$2,$7), addrec $2 (mkfun $4 $6)) }
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$2;t1=$7};
+             t2=addrec $2 (mkfun $4 $6)} }
 
   | FUNC IDENT LPAREN RPAREN texpr seq
-      { TApp(na,TLam(na,$2,$6), addrec $2 (mkfun ["_"] $5)) }
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$2;t1=$6};
+             t2=addrec $2 (mkfun ["_"] $5)} }
 
   | IDENT EQ texpr seq
-      { TApp(na,TLam(na,$1,$4),$3) }
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$1;t1=$4};t2=$3} }
 
   | IDENT TILDE texpr seq
-      { TApp(na,TLam(na,$1,$4),TApp(na,TVal(VSample na),$3)) }
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$1;t1=$4};
+             t2=TApp{at=ta;t1=TVal{at=ta;v=VSample{at=va}};t2=$3}} }
 
 texpr:
   | usubexpr COMMA usubexprs_comma { mktup ($1::$3) }
   | usubexpr { $1 }
 
 usubexpr:
-  | SUB expr             { TApp(na,TVal(VNeg na),$2) }
+  | SUB expr             { mkvalapps (VNeg{at=va}) [$2] }
   | expr %prec LOW       { $1 }
 
 expr:
-  | expr ADD expr        { TApp(na,TApp(na,TVal(VAdd(na,None)),$1),$3) }
-  | expr SUB expr        { TApp(na,TApp(na,TVal(VSub(na,None)),$1),$3) }
-  | expr MUL expr        { TApp(na,TApp(na,TVal(VMul(na,None)),$1),$3) }
-  | expr DIV expr        { TApp(na,TApp(na,TVal(VDiv(na,None)),$1),$3) }
-  | expr MOD expr        { TApp(na,TApp(na,TVal(VMod(na,None)),$1),$3) }
-  | expr LESS expr       { TApp(na,TApp(na,TVal(VLt(na,None)),$1),$3) }
-  | expr LESSEQUAL expr  { TApp(na,TApp(na,TVal(VLeq(na,None)),$1),$3) }
-  | expr GREAT expr      { TApp(na,TApp(na,TVal(VGt(na,None)),$1),$3)}
-  | expr GREATEQUAL expr { TApp(na,TApp(na,TVal(VGeq(na,None)),$1),$3) }
-  | expr EQUAL expr     { TApp(na,TApp(na,TVal(VEq(na,None)),$1),$3) }
-  | expr NOTEQUAL expr  { TApp(na,TApp(na,TVal(VNeq(na,None)),$1),$3) }
-  | expr SHIFTLL expr   { TApp(na,TApp(na,TVal(VSll(na,None)),$1),$3) }
-  | expr SHIFTRL expr   { TApp(na,TApp(na,TVal(VSrl(na,None)),$1),$3) }
-  | expr SHIFTRA expr   { TApp(na,TApp(na,TVal(VSra(na,None)),$1),$3) }
-  | expr AND expr       { TApp(na,TApp(na,TVal(VAnd(na,None)),$1),$3) }
-  | expr OR expr        { TApp(na,TApp(na,TVal(VOr(na,None)),$1),$3) }
-  | expr DCOLON expr    { TApp(na,TApp(na,TVal(VCons(na,None)),$1),$3) }
-  | expr DOT IDENT             { TApp(na,TVal(VRecProj(na,$3)),$1) }
-  | expr DOT LPAREN INT RPAREN { TApp(na,TVal(VTupProj(na,$4-1)),$1) }
-  | expr CONCAT expr           { TApp(na,TApp(na,TVal(VConcat(na,None)),$1),$3) }
+
+  | expr ADD expr        { mkvalapps (VAdd{at=va;v1=None})    [$1;$3] }
+  | expr SUB expr        { mkvalapps (VSub{at=va;v1=None})    [$1;$3] }
+  | expr MUL expr        { mkvalapps (VMul{at=va;v1=None})    [$1;$3] }
+  | expr DIV expr        { mkvalapps (VDiv{at=va;v1=None})    [$1;$3] }
+  | expr MOD expr        { mkvalapps (VMod{at=va;i1=None})    [$1;$3] }
+  | expr LESS expr       { mkvalapps (VLt{at=va;v1=None})     [$1;$3] }
+  | expr LESSEQUAL expr  { mkvalapps (VLeq{at=va;v1=None})    [$1;$3] }
+  | expr GREAT expr      { mkvalapps (VGt{at=va;v1=None})     [$1;$3] }
+  | expr GREATEQUAL expr { mkvalapps (VGeq{at=va;v1=None})    [$1;$3] }
+  | expr EQUAL expr      { mkvalapps (VEq{at=va;v1=None})     [$1;$3] }
+  | expr NOTEQUAL expr   { mkvalapps (VNeq{at=va;v1=None})    [$1;$3] }
+  | expr SHIFTLL expr    { mkvalapps (VSll{at=va;i1=None})    [$1;$3] }
+  | expr SHIFTRL expr    { mkvalapps (VSrl{at=va;i1=None})    [$1;$3] }
+  | expr SHIFTRA expr    { mkvalapps (VSra{at=va;i1=None})    [$1;$3] }
+  | expr AND expr        { mkvalapps (VAnd{at=va;b1=None})    [$1;$3] }
+  | expr OR expr         { mkvalapps (VOr{at=va;b1=None})     [$1;$3] }
+  | expr CONCAT expr     { mkvalapps (VConcat{at=va;v1=None}) [$1;$3] }
+  | expr DCOLON expr     { mkvalapps (VCons{at=va;v1=None})   [$1;$3] }
+
+  | expr DOT IDENT
+      { TApp{at=ta;t1=TVal{at=ta;v=VRecProj{at=va;k=$3}};t2=$1} }
+  | expr DOT LPAREN INT RPAREN
+      { TApp{at=ta;t1=TVal{at=ta;v=VTupProj{at=va;i=$4-1}};t2=$1} }
 
   | UTEST expr expr %prec LOW
-      { let a = { na with pos = Parsing.symbol_start_pos () } in
-        TApp(na,TApp(na,TVal(VUtest(a,None)),$2),$3) }
+      { let pos = Parsing.symbol_start_pos () in
+        mkvalapps (VUtest{at=va;pos=pos;v1=None}) [$2;$3] }
 
   | OBSERVE texpr TILDE expr %prec LOW
-      { let logpdf = TVal(VLogPdf(na,None)) in
+      { let logpdf = TVal{at=ta;v=VLogPdf{at=va;v1=None}} in
         let v = $2 in
-        let inner = TApp(na,TApp(na,logpdf,v),$4) in
-        let weight = TVal(VWeight na) in
-        TApp(na,weight,inner) }
+        let inner = TApp{at=ta;t1=TApp{at=ta;t1=logpdf;t2=v};t2=$4} in
+        let weight = TVal{at=ta;v=VWeight{at=va}} in
+        TApp{at=ta;t1=weight;t2=inner} }
 
   | IF seq THEN seq ELSE usubexpr
-       { TApp(na,TIf(na,$4,$6),$2) }
+       { TApp{at=ta;t1=TIf{at=ta;t1=$4;t2=$6};t2=$2} }
 
   | LAM LPAREN params RPAREN usubexpr { (mkfun $3 $5) }
   | LAM LPAREN RPAREN usubexpr        { (mkfun ["_"] $4) }
 
-  | IDENT LPAREN usubexprs_comma RPAREN { mkapps (List.rev $3) $1 }
-  | IDENT LPAREN RPAREN                 { mkapps [nop] $1 }
+  | IDENT LPAREN usubexprs_comma RPAREN
+      { mkapps (TVar{at=ta;vat=xa;x=$1;i=noidx}) $3 }
+  | IDENT LPAREN RPAREN
+      { mkapps (TVar{at=ta;vat=xa;x=$1;i=noidx}) [nop] }
 
-  | MATCH seq WITH cases { TApp(na,TMatch(na,$4),$2) }
+  | WEIGHT LPAREN usubexpr RPAREN
+      { mkapps (TVal{at=ta;v=VWeight{at=va}}) [$3] }
+
+  | MATCH seq WITH cases { TApp{at=ta;t1=TMatch{at=ta;cls=$4};t2=$2} }
 
   | LPAREN seq RPAREN  { $2 }
   | LPAREN RPAREN { nop }
@@ -173,18 +187,18 @@ expr:
   | LCURLY record RCURLY { mkrecord $2 }
 
   | LSQUARE usubexprs_comma RSQUARE { mklist $2 }
-  | LSQUARE RSQUARE { TVal(VList(na,[])) }
+  | LSQUARE RSQUARE { TVal{at=ta;v=VList{at=va;vls=[]}} }
 
   | LCURLY seq RCURLY  { $2 }
 
-  | NOT expr            { TApp(na,TVal(VNot na),$2) }
-  | IDENT %prec LOW     { TVar(na,$1,noidx) }
-  | CHAR                { TVal(VChar(na,$1)) }
-  | STRING              { TVal(VString(na,$1)) }
-  | INT                 { TVal(VInt(na,$1)) }
-  | FLOAT               { TVal(VFloat(na,$1)) }
-  | TRUE                { TVal(VBool(na,true)) }
-  | FALSE               { TVal(VBool(na,false)) }
+  | NOT expr            { TApp{at=ta;t1=TVal{at=ta;v=VNot{at=va}};t2=$2} }
+  | IDENT %prec LOW     { TVar{at=ta;vat=xa;x=$1;i=noidx} }
+  | CHAR                { TVal{at=ta;v=VChar{at=va;c=$1}} }
+  | STRING              { TVal{at=ta;v=VString{at=va;s=$1}} }
+  | INT                 { TVal{at=ta;v=VInt{at=va;i=$1}} }
+  | FLOAT               { TVal{at=ta;v=VFloat{at=va;f=$1}} }
+  | TRUE                { TVal{at=ta;v=VBool{at=va;b=true}} }
+  | FALSE               { TVal{at=ta;v=VBool{at=va;b=false}} }
 
 usubexprs_comma:
   | usubexpr { [$1] }

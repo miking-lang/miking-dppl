@@ -5,49 +5,48 @@ open Sprint
 open Debug
 open Utils
 open Eval
-open Cps
 open Printf
-open Label
+open Attribute
 
 (** Mapping between predefined variable names and builtin constants *)
 let builtin = [
 
-  "not",          VNot(na);
-  "and",          VAnd(na,None);
-  "or",           VOr(na,None);
+  "not",          VNot{at=va};
+  "and",          VAnd{at=va;b1=None};
+  "or",           VOr{at=va;b1=None};
 
-  "mod",          VMod(na,None);
-  "sll",          VSll(na,None);
-  "srl",          VSrl(na,None);
-  "sra",          VSra(na,None);
+  "mod",          VMod{at=va;i1=None};
+  "sll",          VSll{at=va;i1=None};
+  "srl",          VSrl{at=va;i1=None};
+  "sra",          VSra{at=va;i1=None};
 
-  "inf",          VFloat(na,infinity);
-  "log",          VLog na;
+  "inf",          VFloat{at=va;f=infinity};
+  "log",          VLog{at=va};
 
-  "add",          VAdd(na,None);
-  "sub",          VSub(na,None);
-  "mul",          VMul(na,None);
-  "div",          VDiv(na,None);
-  "neg",          VNeg na;
-  "lt",           VLt(na,None);
-  "leq",          VLeq(na,None);
-  "gt",           VGt(na,None);
-  "geq",          VGeq(na,None);
+  "add",          VAdd{at=va;v1=None};
+  "sub",          VSub{at=va;v1=None};
+  "mul",          VMul{at=va;v1=None};
+  "div",          VDiv{at=va;v1=None};
+  "neg",          VNeg{at=va};
+  "lt",           VLt{at=va;v1=None};
+  "leq",          VLeq{at=va;v1=None};
+  "gt",           VGt{at=va;v1=None};
+  "geq",          VGeq{at=va;v1=None};
 
-  "eq",           VEq(na,None);
-  "neq",          VNeq(na,None);
+  "eq",           VEq{at=va;v1=None};
+  "neq",          VNeq{at=va;v1=None};
 
-  "normal",       VNormal(na,None, None);
-  "uniform",      VUniform(na,None, None);
-  "gamma",        VGamma(na,None, None);
-  "exponential",  VExp(na,None);
-  "bernoulli",    VBern(na,None);
+  "normal",       VNormal{at=va;mu=None;sigma=None};
+  "uniform",      VUniform{at=va;a=None;b=None};
+  "gamma",        VGamma{at=va;a=None;b=None};
+  "exponential",  VExp{at=va;lam=None};
+  "bernoulli",    VBern{at=va;p=None};
 
-  "logpdf",       VLogPdf(na,None);
-  "sample",       VSample na;
+  "logpdf",       VLogPdf{at=va;v1=None};
+  "sample",       VSample{at=va};
+  "resample",     VResamp{at=va;dyn=false;cont=None};
 
-  "weight",       VWeight na;
-  "fix",          VFix na;
+  "fix",          VFix{at=va};
 
 ] |> List.map (fun (x, y) -> x, tm_of_val y)
 
@@ -81,20 +80,20 @@ let logavg n weights =
 
 (** Importance sampling
     (or more specifically, likelihood weighting) inference *)
-let infer_is env n program =
+let infer_is env program =
 
   (* Replicate program for #samples times *)
-  let s = replicate n program in
+  let s = replicate !samples program in
 
   (* Evaluate everything to the end, producing a set of weighted samples *)
   let res = Utils.map (eval false env 0.0) s in
 
   (* Calculate normalizing constant and return *)
-  logavg n (Utils.map fst res),res
+  logavg !samples (Utils.map fst res),res
 
 
 (* Systematic resampling of n samples *)
-let resample n s =
+let resample s =
 
   debug debug_smc "Resample"
     (fun () ->
@@ -102,7 +101,7 @@ let resample n s =
          (Utils.map (fun (w,_) -> sprintf "weight(%f)" w) s));
 
   (* Compute part of the normalizing constant *)
-  let logavg = logavg n (List.map fst s) in
+  let logavg = logavg !samples (List.map fst s) in
 
   (* Compute normalized weights from log-weights *)
   let snorm = List.map (fun (w,t) -> exp (w -. logavg),t) s in
@@ -123,33 +122,56 @@ let resample n s =
   (* Also return the log average for computing the normalization constant *)
   logavg, rec1 0.0 offset snorm []
 
-
 (** SMC inference *)
-let infer_smc env n program =
+let infer_smc env program =
 
   (* Replicate program for #samples times with an initial log weight of 0.0 *)
-  let s = replicate n program in
+  let s = replicate !samples program in
+
+  (* Run a particle until the next resampling point *)
+  let rec eval stoch_ctrl env w t = match Eval.eval stoch_ctrl env w t with
+
+    (* If the resample is dynamic and control is stochastic, just continue
+       evaluation. *)
+    | w,VResamp{at;dyn=true;
+                cont=Some(VClos{cont=true;stoch_ctrl;_} as cont);_} as res ->
+      if stoch_ctrl then
+        begin
+        printf "Continuing at resample %f\n" w;
+        eval stoch_ctrl [] w (TApp{at=ta;
+                                   t1=tm_of_val cont;
+                                   t2=TVal{at=ta;v=VUnit{at=at}}})
+      end
+      else               res
+
+    (* Static resample. Always perform resampling *)
+    | _,VResamp{dyn=false; cont=Some(VClos{cont=true;_});_} as res -> res
+
+    (* Incorrect resample *)
+    | _,VResamp _ -> failwith "Erroneous VResamp in infer_smc"
+
+    (* Result value and weight *)
+    | res -> res
+
+  in
 
   (* Run until first resample, attaching the initial environment *)
   let s = Utils.map (eval false env 0.0) s in
 
-  (* Continue running a particle until the next resampling point *)
-  let continue v =
-    match v with
-    | VResamp(_,Some(cont),Some stoch_ctrl) ->
-        eval stoch_ctrl [] 0.0 (TApp(na,tm_of_val cont,nop))
-    | VResamp _ -> failwith "Erroneous VResamp in infer_smc"
-    | _ -> 0.0, v
-  in
-
   (* Run SMC *)
   let rec recurse s normconst =
     if List.exists
-        (fun (_,v) ->
-           match v with VResamp(_,Some _,Some _) -> true | _ -> false) s
+        (fun (_,v) -> match v with VResamp _ -> true | _ -> false) s
     then begin
-      let logavg, s = resample n s in
+      let logavg, s = resample s in
       let normconst = normconst +. logavg in
+      let continue v = match v with
+        | VResamp{at;cont=Some(VClos{stoch_ctrl;_} as cont);_} ->
+          (* TODO Code dup. *)
+          eval stoch_ctrl [] 0.0 (TApp{at=ta;
+                                       t1=tm_of_val cont;
+                                       t2=TVal{at=ta;v=VUnit{at=at}}})
+        | _ -> 0.0,v in
       let s = List.map (fun (_,v) -> continue v) s in
       recurse s normconst
     end else
@@ -159,28 +181,28 @@ let infer_smc env n program =
 
 (** Convert all weighting to
     weighting followed by a call to resample *)
-let add_resample builtin t =
+let add_resample ~dyn builtin t =
 
   let rec recurse t = match t with
     | TVar _ -> t
-    | TApp(a,t1,t2) -> TApp(a,recurse t1,recurse t2)
-    | TLam(a,x,t1) -> TLam(a,x,recurse t1)
-    | TIf(a,t1,t2) -> TIf(a,recurse t1,recurse t2)
-    | TMatch(a,cls) -> TMatch(a,List.map (fun (p,t) -> p,recurse t) cls)
-    | TVal(VWeight _) ->
+    | TApp{at;t1;t2} -> TApp{at;t1=recurse t1;t2=recurse t2}
+    | TLam({t1;_} as t) -> TLam{t with t1=recurse t1}
+    | TIf{at;t1;t2} -> TIf{at;t1=recurse t1;t2=recurse t2}
+    | TMatch{at;cls} -> TMatch{at;cls=List.map (fun (p,t) -> p,recurse t) cls}
+    | TVal{at;v=VWeight _} ->
       let var, var'  = makevar "w" noidx in
-      let weight_app = TApp(na,t,var') in
-      let resamp     = TApp(na,TVal(VResamp(na,None,None)),nop) in
-      TLam(na,var,seq weight_app resamp)
+      let weight_app = TApp{at=ta;t1=t;t2=var'} in
+      let resamp     = TApp{at=ta;
+                            t1=TVal{at=ta;v=VResamp{at=va;dyn=dyn;cont=None}};
+                            t2=nop} in
+      TLam{at=at;vat=xa;cont=false;x=var;t1=seq weight_app resamp}
     | TVal _ -> t
 
-  in
-  recurse t, List.map (fun (x,t) -> x,recurse t) builtin
+  in recurse t, List.map (fun (x,t) -> x,recurse t) builtin
 
 (* Function for producing a nicely formatted string representation of the
    empirical distributions returned by infer below. Aggregates samples with the
-   same value to produce a more compact output.
-   TODO Cleanup *)
+   same value to produce a more compact output.  *)
 let string_of_empirical ls =
 
   (* Start by sorting the list *)
@@ -189,87 +211,102 @@ let string_of_empirical ls =
   (* Compute the logarithm of the average of the weights *)
   let logavg = logavg !samples (List.map fst sorted) in
 
-  (* Compute normalized samples from log-weights *)
-  let normalized = List.map
+  (* Compute normalized sample weights from log-weights *)
+  let normalized = Utils.map
       (fun (w,t) -> exp (w -. logavg -. (log (float_of_int !samples))),t)
       sorted in
 
+  (* Aggregate equal samples *)
   let rec aggregate acc ls = match acc,ls with
-    | (w1,v1)::acc,(w2,v2)::ls when v1 = v2 -> aggregate ((w1+.w2,v1)::acc) ls
-    | acc, (w,v)::ls                        -> aggregate ((w,v)::acc) ls
+    | (w1,v1,n)::acc,(w2,v2)::ls when v1 = v2 ->
+      aggregate ((w1+.w2,v1,n+1)::acc) ls
+    | acc, (w,v)::ls ->
+      aggregate ((w,v,1)::acc) ls
     | acc, [] -> acc in
-
   let aggr = aggregate [] normalized in
 
-  (* Sort based on weight to show the most important sample at the top *)
-  let last = List.sort
-      (fun (w1,_) (w2,_) -> - Pervasives.compare w1 w2) aggr in
+  (* Sort based on weight to show the sample with highest weight at the top *)
+  let res = List.sort
+      (fun (w1,_,_) (w2,_,_) -> - Pervasives.compare w1 w2) aggr in
 
-  let line (w,v) = sprintf "  %-15s%-15f" (string_of_val v) w in
+  (* Column width for printout *)
+  let sample_cw = 7 + List.fold_left
+      (fun acc (_,v,_) ->
+         let len = String.length (string_of_val v) in
+         max len acc) 0 res in
+  let cw = 15 in
 
-  sprintf "%-15s%-15s\n" "SAMPLE" "WEIGHT"
-  ^ (String.concat "\n" (List.map line last))
+  (* Function for printing one sample *)
+  let line (w,v,n) =
+    sprintf "  %-*s%-*f%d" sample_cw (string_of_val v) cw w n in
 
-(** Preprocess term and redirect to inference algorithm provided by user.
-    TODO Cleanup *)
+  (* Print headers and all samples *)
+  sprintf "%-*s%-*s%s\n" sample_cw "SAMPLE" cw "WEIGHT" "#SAMPLES"
+  ^ (String.concat "\n" (Utils.map line res))
+
+(** Transform term and builtins to CPS *)
+let cps tm builtin =
+  let builtin =
+    builtin
+
+    (* Transform builtins to CPS. Required since we need to wrap constant
+       functions in CPS forms *)
+    |> List.map (fun (x, y) -> (x, (Cps.cps_atomic y)))
+
+    (* Debruijn transform builtins (since they have now been
+       CPS transformed) *)
+    |> List.map (fun (x, y) -> (x, debruijn [] y)) in
+
+  debug debug_cps "Post CPS builtin"
+    (fun () -> string_of_builtin builtin);
+
+  (* Perform CPS transformation of main program *)
+  let tm = Cps.cps tm in
+
+  debug debug_cps "Post CPS"
+    (fun () -> string_of_tm ~pretty:false tm);
+
+  tm,builtin
+
+(** Preprocess a program in preparation for running inference. *)
+let preprocess tm builtin = match !inference with
+
+  (* No preprocessing required if not running SMC *)
+  | Eval | Importance -> tm,builtin
+
+  (* For direct SMC, add resamples after each weight and then do the CPS
+     transformation *)
+  | SMCDirect ->
+    let tm,builtin = add_resample ~dyn:false builtin tm in
+
+    debug debug_resample_transform "After attaching resamples"
+      (fun () -> string_of_tm tm);
+
+    cps tm builtin
+
+  (* For manual SMC, just do the CPS transformation. It is the users
+     responsibility to add resample points in the program *)
+  | SMCManual -> cps tm builtin
+
+  (* For dynamic SMC, add dynamic resamples after each weight and then do the
+     CPS transformation *)
+  | SMCDynamic ->
+    let tm,builtin = add_resample ~dyn:true builtin tm in
+
+    debug debug_resample_transform "After attaching dynamic resamples"
+      (fun () -> string_of_tm tm);
+
+    cps tm builtin
+
+  (* TODO *)
+  | SMCStatic -> failwith "Static SMC not yet implemented"
+
+(** Preprocess term and redirect to inference algorithm provided on command
+    line. *)
 let infer tm =
 
-  let tm,builtin = match !inference with
-
-    (* Nothing more required if not running SMC *)
-    | Eval | Importance -> tm,builtin
-
-    (* Perform SMC specific transformations *)
-    | SMCDirect ->
-
-      (* Label program and builtins *)
-      let tm,builtin,_nl = label builtin tm in
-
-      debug debug_label "After labeling builtins"
-        (fun () -> string_of_builtin ~labels:true builtin);
-
-      debug debug_label "After labeling program"
-        (fun () -> string_of_tm ~labels:true tm);
-
-      (* If alignment is turned on, perform the corresponding static analysis.
-         Otherwise, simply add resamples after each call to weight.
-         TODO Note that dynamic is enabled by default if not static. *)
-      (*let tm,builtin = if !align = Static*)
-        (*then tm,builtin (*TODO Analysis.align_weight builtin_map tm nl*)*)
-      (*in*)
-      let tm,builtin = add_resample builtin tm in
-
-      debug debug_resample_transform "After attaching resamples to builtins"
-        (fun () -> string_of_builtin builtin);
-
-      debug debug_resample_transform "After attaching resamples"
-        (fun () -> string_of_tm tm);
-
-      let builtin =
-        builtin
-
-        (* Transform builtins to CPS. Required since we need to wrap constant
-           functions in CPS forms *)
-        |> List.map (fun (x, y) -> (x, (cps_atomic y)))
-
-        (* Debruijn transform builtins (since they have now been
-           CPS transformed) *)
-        |> List.map (fun (x, y) -> (x, debruijn [] y)) in
-
-      debug debug_cps "Post CPS builtin"
-        (fun () -> string_of_builtin builtin);
-
-      (* Perform CPS transformation of main program *)
-      let tm = cps tm in
-
-      debug debug_cps "Post CPS"
-        (fun () -> string_of_tm ~pretty:false tm);
-
-      tm,builtin
-
-    | _ -> failwith "TODO Infer"
-
-  in
+  (* Perform inference-specific preprocessing *)
+  let tm,builtin = preprocess tm builtin in
 
   (* Calculate debruijn indices *)
   let tm = debruijn (builtin |> List.split |> fst) tm in
@@ -277,9 +314,9 @@ let infer tm =
   (* Variable names no longer required due to debruijn indices *)
   let env = (builtin |> List.split |> snd) in
 
-  match !inference,!samples with
-  | Eval,_ -> infer_is env 1 tm
-  | Importance,n -> infer_is env n tm
-  | SMCDirect,n -> infer_smc env n tm
-  | _ -> failwith "TODO Infer"
+  match !inference with
+  | Eval       -> let logavg,v = eval false env 0.0 tm in logavg,[logavg,v]
+  | Importance -> infer_is env tm
+  | SMCDirect  | SMCManual
+  | SMCDynamic | SMCStatic -> infer_smc env tm
 

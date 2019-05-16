@@ -1,6 +1,7 @@
 (** Functions related to probability distributions *)
 
 open Ast
+open Attribute
 
 (** Whether to use a random seed or not for probability distributions *)
 let random_seed = false
@@ -17,26 +18,26 @@ let seed =
 let logpdf value dist = match value,dist with
 
   (* Normal distribution *)
-  | VFloat(_,v),
-    VNormal(_,Some mu,Some sigma) ->
-    VFloat(na,log (Gsl.Randist.gaussian_pdf (v -. mu) ~sigma:sigma))
+  | VFloat{f;_},
+    VNormal{mu=Some mu;sigma=Some sigma;_} ->
+    VFloat{at=va;f=log (Gsl.Randist.gaussian_pdf (f -. mu) ~sigma:sigma)}
 
   (* Exponential distribution *)
-  | VFloat(_,v),
-    VExp(_,Some lambda) ->
-    let mu = 1.0 /. lambda in
-    VFloat(na,log (Gsl.Randist.exponential_pdf v ~mu:mu))
+  | VFloat{f;_},
+    VExp{lam=Some lam;_} ->
+    let mu = 1.0 /. lam in
+    VFloat{at=va;f=log (Gsl.Randist.exponential_pdf f ~mu:mu)}
 
   (* Bernoulli distribution *)
-  | VBool(_,v),
-    VBern(_,Some p) ->
-    let i = if v then 1 else 0 in
-    VFloat(na,log (Gsl.Randist.bernoulli_pdf i ~p:p))
+  | VBool{b;_},
+    VBern{p=Some p;_} ->
+    let i = if b then 1 else 0 in
+    VFloat{at=va;f=log (Gsl.Randist.bernoulli_pdf i ~p:p)}
 
   (* Gamma distribution *)
-  | VFloat(_,v),
-    VGamma(_,Some b, Some a) ->
-    VFloat(na,log (Gsl.Randist.gamma_pdf v ~a:a ~b:b))
+  | VFloat{f;_},
+    VGamma{a=Some a;b=Some b;_} ->
+    VFloat{at=va;f=log (Gsl.Randist.gamma_pdf f ~a:a ~b:b)}
 
   | _ -> failwith "Incorrect distribution\
                    or value applied as argument to logpdf"
@@ -45,23 +46,22 @@ let logpdf value dist = match value,dist with
 let sample dist = match dist with
 
   (* Normal distribution *)
-  | VNormal(_,Some mu,Some sigma) ->
-    let sample = VFloat(na,mu +. Gsl.Randist.gaussian seed ~sigma:sigma) in
-    sample
+  | VNormal{mu=Some mu;sigma=Some sigma;_} ->
+    VFloat{at=va; f=mu +. Gsl.Randist.gaussian seed ~sigma:sigma}
 
   (* Exponential distribution *)
-  | VExp(_,Some lambda) ->
-    let mu = 1.0 /. lambda in
-    VFloat(na,Gsl.Randist.exponential seed ~mu:mu)
+  | VExp{lam=Some lam;_} ->
+    let mu = 1.0 /. lam in
+    VFloat{at=va;f=Gsl.Randist.exponential seed ~mu:mu}
 
   (* Bernoulli distribution *)
-  | VBern(_,Some p) ->
+  | VBern{p=Some p;_} ->
     let b = Gsl.Randist.bernoulli seed ~p:p == 1 in
-    VBool(na,b)
+    VBool{at=va;b=b}
 
   (* Gamma distribution *)
-  | VGamma(_,Some a,Some b) ->
-    VFloat(na,Gsl.Randist.gamma seed ~a:a ~b:b)
+  | VGamma{a=Some a;b=Some b;_} ->
+    VFloat{at=va;f=Gsl.Randist.gamma seed ~a:a ~b:b}
 
   | _ -> failwith "Incorrect distribution applied as argument to sample."
 

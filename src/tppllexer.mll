@@ -18,6 +18,7 @@ let _ =
       "match",         MATCH;
       "with",          WITH;
       "lam",           LAM;
+      "weight",        WEIGHT;
 
       (* Literals *)
       "true",          TRUE;
@@ -77,7 +78,7 @@ let string_escape =
   "\\\\" | "\\\"" | "\\'" | "\\n" | "\\t" | "\\b" | "\\r" | "\\ "
 
 let symtok =
-  "~" | "(" | ")" | "{" | "}" | "[" | "]" | ":" | ";" | "::" |"," | "." | "|" |
+  "~" | "(" | ")" | "{" | "}" | "[" | "]" | ":" | "::" |"," | "." | "|" |
   "->" | "=" | "+" | "-" | "*" | "/" | "%" | "<" | "<=" | ">" | ">=" | "<<" |
   ">>" | ">>>" | "==" | "!=" | "!" | "||" | "&&" | "++"
 
@@ -94,7 +95,7 @@ rule main = parse
   | '\'' (_ as c) '\'' { CHAR(c) }
   | '"' { read_string (Buffer.create 16) lexbuf }
   | eof { EOF }
-  | _ { failwith "Unexpected char. TODO" }
+  | _ { failwith "Unexpected char TODO" }
 
 and block_comment start_pos = parse
   | "*/" { }
