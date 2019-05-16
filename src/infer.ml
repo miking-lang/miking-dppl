@@ -6,7 +6,6 @@ open Debug
 open Utils
 open Eval
 open Printf
-open Attribute
 
 (** Mapping between predefined variable names and builtin constants *)
 let builtin = [
@@ -78,6 +77,85 @@ let logavg n weights =
   log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
   +. max -. log (float n)
 
+(* Function for producing a nicely formatted string representation of the
+   empirical distributions returned by infer below. Aggregates samples with the
+   same value to produce a more compact output.
+   TODO The sorting function fails with stack overflow for large number of
+   samples. Use constant space sorting function? *)
+let string_of_empirical
+    ?(aggregate = true)
+    ?(normalize = true)
+    ?(log_weights = false) ls =
+
+  (* Normalize if arg is given *)
+  let res = if normalize then
+      (* Compute the logarithm of the average of the weights *)
+      let logavg = logavg !samples (List.map fst ls) in
+
+      (* Compute normalized weights *)
+      Utils.map (fun (w,t) -> w-.logavg-.(log (float_of_int !samples)),t) ls
+    else
+      ls
+  in
+
+  (* Convert from log weights to ordinary weights, depending on arg *)
+  let res = if log_weights then
+      res
+    else
+      Utils.map (fun (w,t) -> exp w,t) res
+  in
+
+  (* Aggregate equal samples depending on argument (only available if using
+     ordinary weights) *)
+  let res =
+    if aggregate && not log_weights then
+      let res =
+        List.sort (fun (_,v1) (_,v2) -> Compare.compare v1 v2) res in
+      let rec aggregate acc ls = match acc,ls with
+        | (w1,v1,n)::acc,(w2,v2)::ls when v1 = v2 ->
+          aggregate ((w1+.w2,v1,n+1)::acc) ls
+        | acc, (w,v)::ls ->
+          aggregate ((w,v,1)::acc) ls
+        | acc, [] -> acc
+      in aggregate [] res
+    else
+      Utils.map (fun (w,v) -> (w,v,1)) res
+  in
+
+  (* Sort based on weight to show the sample with highest weight at the top *)
+  let res = List.sort
+      (fun (w1,_,_) (w2,_,_) -> - Pervasives.compare w1 w2) res in
+
+  (* Convert values to strings *)
+  let res = List.map
+      (fun (w,v,n) -> w,string_of_val ~max_boxes:5 ~margin:max_int v,n) res in
+
+  (* Check if the #SAMPLES column should be printed *)
+  let is_aggr = List.exists (fun (_,_,n) -> n > 1) res in
+
+  (* Column width for printout *)
+  let cw = 15 in
+
+  (* Function for printing one sample *)
+  let line (w,v,n) = if is_aggr then
+      sprintf "  %-*f%-*d%s" cw w cw n v
+    else
+      sprintf "  %-*f%s" cw w v
+  in
+
+  let weight_header = if log_weights then "LOG WEIGHT" else "WEIGHT" in
+
+  (* Header *)
+  let header = if is_aggr then
+      sprintf "%-*s%-*s%s\n" cw weight_header cw "#SAMPLES" "SAMPLE"
+    else
+      sprintf "%-*s%s\n" cw weight_header "SAMPLE"
+  in
+
+  (* Print headers and all samples *)
+  header ^ (String.concat "\n" (Utils.map line res))
+
+
 (** Importance sampling
     (or more specifically, likelihood weighting) inference *)
 let infer_is env program =
@@ -94,11 +172,6 @@ let infer_is env program =
 
 (* Systematic resampling of n samples *)
 let resample s =
-
-  debug debug_smc "Resample"
-    (fun () ->
-       String.concat "\n"
-         (Utils.map (fun (w,_) -> sprintf "weight(%f)" w) s));
 
   (* Compute part of the normalizing constant *)
   let logavg = logavg !samples (List.map fst s) in
@@ -128,6 +201,12 @@ let infer_smc env program =
   (* Replicate program for #samples times with an initial log weight of 0.0 *)
   let s = replicate !samples program in
 
+  (* Prepare a continuation for further evaluation. Set the attribute of the
+     argument () to at. *)
+  let app_cont cont at =
+    (TApp{at=ta; t1=tm_of_val cont; t2=TVal{at=ta;v=VUnit{at=at}}}) in
+
+
   (* Run a particle until the next resampling point *)
   let rec eval stoch_ctrl env w t = match Eval.eval stoch_ctrl env w t with
 
@@ -135,14 +214,11 @@ let infer_smc env program =
        evaluation. *)
     | w,VResamp{at;dyn=true;
                 cont=Some(VClos{cont=true;stoch_ctrl;_} as cont);_} as res ->
-      if stoch_ctrl then
-        begin
-        printf "Continuing at resample %f\n" w;
-        eval stoch_ctrl [] w (TApp{at=ta;
-                                   t1=tm_of_val cont;
-                                   t2=TVal{at=ta;v=VUnit{at=at}}})
-      end
-      else               res
+      if stoch_ctrl then begin
+        debug debug_smc_dyn "Skipping resampling"
+          (fun () -> sprintf "Weight %f" w);
+        eval stoch_ctrl [] w (app_cont cont at)
+      end else res
 
     (* Static resample. Always perform resampling *)
     | _,VResamp{dyn=false; cont=Some(VClos{cont=true;_});_} as res -> res
@@ -151,7 +227,7 @@ let infer_smc env program =
     | _,VResamp _ -> failwith "Erroneous VResamp in infer_smc"
 
     (* Result value and weight *)
-    | res -> res
+    | w,v -> w,v
 
   in
 
@@ -160,17 +236,18 @@ let infer_smc env program =
 
   (* Run SMC *)
   let rec recurse s normconst =
+
     if List.exists
         (fun (_,v) -> match v with VResamp _ -> true | _ -> false) s
     then begin
+      debug debug_smc "Resample"
+        (fun () -> string_of_empirical
+            ~log_weights:true ~normalize:false s);
       let logavg, s = resample s in
       let normconst = normconst +. logavg in
       let continue v = match v with
         | VResamp{at;cont=Some(VClos{stoch_ctrl;_} as cont);_} ->
-          (* TODO Code dup. *)
-          eval stoch_ctrl [] 0.0 (TApp{at=ta;
-                                       t1=tm_of_val cont;
-                                       t2=TVal{at=ta;v=VUnit{at=at}}})
+          eval stoch_ctrl [] 0.0 (app_cont cont at)
         | _ -> 0.0,v in
       let s = List.map (fun (_,v) -> continue v) s in
       recurse s normconst
@@ -200,50 +277,6 @@ let add_resample ~dyn builtin t =
 
   in recurse t, List.map (fun (x,t) -> x,recurse t) builtin
 
-(* Function for producing a nicely formatted string representation of the
-   empirical distributions returned by infer below. Aggregates samples with the
-   same value to produce a more compact output.  *)
-let string_of_empirical ls =
-
-  (* Start by sorting the list *)
-  let sorted = List.sort (fun (_,v1) (_,v2) -> compare v1 v2) ls in
-
-  (* Compute the logarithm of the average of the weights *)
-  let logavg = logavg !samples (List.map fst sorted) in
-
-  (* Compute normalized sample weights from log-weights *)
-  let normalized = Utils.map
-      (fun (w,t) -> exp (w -. logavg -. (log (float_of_int !samples))),t)
-      sorted in
-
-  (* Aggregate equal samples *)
-  let rec aggregate acc ls = match acc,ls with
-    | (w1,v1,n)::acc,(w2,v2)::ls when v1 = v2 ->
-      aggregate ((w1+.w2,v1,n+1)::acc) ls
-    | acc, (w,v)::ls ->
-      aggregate ((w,v,1)::acc) ls
-    | acc, [] -> acc in
-  let aggr = aggregate [] normalized in
-
-  (* Sort based on weight to show the sample with highest weight at the top *)
-  let res = List.sort
-      (fun (w1,_,_) (w2,_,_) -> - Pervasives.compare w1 w2) aggr in
-
-  (* Column width for printout *)
-  let sample_cw = 7 + List.fold_left
-      (fun acc (_,v,_) ->
-         let len = String.length (string_of_val v) in
-         max len acc) 0 res in
-  let cw = 15 in
-
-  (* Function for printing one sample *)
-  let line (w,v,n) =
-    sprintf "  %-*s%-*f%d" sample_cw (string_of_val v) cw w n in
-
-  (* Print headers and all samples *)
-  sprintf "%-*s%-*s%s\n" sample_cw "SAMPLE" cw "WEIGHT" "#SAMPLES"
-  ^ (String.concat "\n" (Utils.map line res))
-
 (** Transform term and builtins to CPS *)
 let cps tm builtin =
   let builtin =
@@ -260,6 +293,7 @@ let cps tm builtin =
   debug debug_cps "Post CPS builtin"
     (fun () -> string_of_builtin builtin);
 
+
   (* Perform CPS transformation of main program *)
   let tm = Cps.cps tm in
 
@@ -269,7 +303,8 @@ let cps tm builtin =
   tm,builtin
 
 (** Preprocess a program in preparation for running inference. *)
-let preprocess tm builtin = match !inference with
+let preprocess tm builtin =
+  match !inference with
 
   (* No preprocessing required if not running SMC *)
   | Eval | Importance -> tm,builtin
@@ -313,6 +348,7 @@ let infer tm =
 
   (* Variable names no longer required due to debruijn indices *)
   let env = (builtin |> List.split |> snd) in
+
 
   match !inference with
   | Eval       -> let logavg,v = eval false env 0.0 tm in logavg,[logavg,v]

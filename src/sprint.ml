@@ -49,12 +49,32 @@ let ref_closure_env = ref false
 let ref_pretty      = ref false
 let ref_indent      = ref 2
 
+(** Sets up the formatter. *)
+let setup_print
+    ?(debruijn       = false)
+    ?(labels         = false)
+    ?(closure_env    = false)
+    ?(pretty         = true)
+    ?(indent         = 2)
+    ?(max_indent     = 68)
+    ?(margin         = 80)
+    ?(max_boxes      = max_int)
+    () =
+  ref_debruijn    := debruijn;
+  ref_labels      := labels;
+  ref_closure_env := closure_env;
+  ref_pretty      := pretty;
+  ref_indent      := indent;
+  pp_set_margin str_formatter margin;
+  pp_set_max_indent str_formatter max_indent;
+  pp_set_max_boxes str_formatter max_boxes
+
 (** Simple enum used in the concat function in string_of_tm *)
 type sep =
   | SPACE
   | COMMA
 
-(* Function for concatenating a list of fprintf calls using a given
+(** Function for concatenating a list of fprintf calls using a given
      separator. *)
 let rec concat fmt (sep, ls) = match ls with
   | [] -> ()
@@ -63,21 +83,30 @@ let rec concat fmt (sep, ls) = match ls with
     | SPACE -> fprintf fmt "%t@ %a" f concat (sep, ls)
     | COMMA -> fprintf fmt "%t,@,%a" f concat (sep, ls)
 
-(* If the argument is a complete construction of a record, tuple, or list,
-   return the constructor itself alongside a list of all the arguments.
-   Otherwise, return nothing. Used for pretty printing records, tuples, and
-   lists. *)
-let compl_constr tm =
-  let rec recurse acc tm = match tm with
-    | TApp{t1=t1;t2=t2;_} -> recurse (t2::acc) t1
-    | TVal{v=VRec{pls;rls=[];_} as v;_}
-      when List.length pls = List.length acc -> Some (v,acc)
-    | TVal{v=VTup{np;_} as v;_}
-      when np = List.length acc -> Some (v,acc)
-    | TVal{v=VList{vls=[];_} as v;_} -> Some (v,acc)
+(** If the argument is a complete construction of a record or tuple,
+    return the constructor and the argument terms. *)
+let compl_tr tm =
+  let rec recurse acc tm = match acc,tm with
+    | acc,TApp{t1;t2;_} -> recurse (t2::acc) t1
+    | [],_ -> None (* Ensures there is at least one argument *)
+    | acc,TVal{v=VRec{pls;rls=[];_} as v;_}
+      when List.length pls = List.length acc -> Some (v,List.rev acc)
+    | acc,TVal{v=VTup{np;_} as v;_}
+      when np = List.length acc -> Some (v,List.rev acc)
     | _ -> None
   in recurse [] tm
 
+(** If the argument is a complete construction of a list, return the
+    constituent terms. *)
+let compl_l tm =
+  let rec recurse acc t = match t with
+    | TApp{t1=TApp{t1=TVal{v=VCons _;_};t2;_};t2=next;_} ->
+      recurse (t2::acc) next
+    | TVal{v=VList{vls=[];_};_} -> Some (List.rev acc)
+    | _ -> None
+  in recurse [] tm
+
+(** Print a term on the given formatter and within the given precedence. *)
 let rec print_tm fmt (prec, t) =
 
   (* Function for bare printing (no syntactic sugar) *)
@@ -243,25 +272,24 @@ let rec print_tm fmt (prec, t) =
         let inner = Array.map (fun v ->
             (fun fmt -> fprintf fmt "%a" print_tm (APP, tm_of_val v)))
             varr in
-        let inner = Array.to_list inner
-                    @ replicate
-                      (np - Array.length inner)
-                      (fun fmt -> fprintf fmt ".") in
+        let inner =
+          replicate np (fun fmt -> fprintf fmt "") @ Array.to_list inner in
         fprintf fmt "@[<hov 0>%a@]" concat (COMMA,inner)
 
       | VRec{pls;rls;_} ->
         let inner = List.map (fun (k, v) ->
             (fun fmt ->
-               fprintf fmt "%s:%a" k print_tm (MATCH, tm_of_val v))) rls in
-        let inner = inner
-                    @ List.map
-                      (fun k -> (fun fmt -> fprintf fmt "%s:." k)) pls in
-        fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,List.rev inner)
+               fprintf fmt "%s:%a" k print_tm (APP, tm_of_val v))) rls in
+
+        let inner =
+          List.map (fun k -> (fun fmt -> fprintf fmt "%s:" k)) (List.rev pls)
+          @ inner in
+        fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,inner)
 
       | VList{vls;_} ->
         let inner = List.map (fun v ->
             (fun fmt ->
-               fprintf fmt "%a" print_tm (MATCH, tm_of_val v))) vls in
+               fprintf fmt "%a" print_tm (APP, tm_of_val v))) vls in
         fprintf fmt "[@[<hov 0>%a@]]"
           concat (COMMA,inner)
 
@@ -290,97 +318,113 @@ let rec print_tm fmt (prec, t) =
 
   in
 
+  (* If pretty printing, try to find common dynamic-sized constructs
+     (tuples and records) *)
+  let trmatch = if !ref_pretty then compl_tr t else None in
+  let lmatch = if !ref_pretty then compl_l t else None in
+
   (* Syntactic sugar printing *)
-  let sugar fmt t = match t with
+  let sugar fmt t = match trmatch with
 
-    (* Record projection application *)
-    | TApp{t1=TVal{v=VRecProj{k;_};_};t2;_} ->
-      fprintf fmt "%a.%s" print_tm (APP, t2) k
+    (* Records *)
+    | Some (VRec{pls;_},args) ->
+      let inner = List.map (fun (k, t1) ->
+          (fun fmt -> fprintf fmt "%s:%a" k print_tm (MATCH, t1)))
+          (List.combine (List.rev pls) args) in
+      fprintf fmt "{@[<hov 0>%a@]}"
+        concat (COMMA,inner)
 
-    (* Tuple projection applications *)
-    | TApp{t1=TVal{v=VTupProj{i;_};_};t2;_} ->
-      fprintf fmt "%a.%d" print_tm (APP, t2) i
+    (* Tuples *)
+    | Some (VTup _,args) ->
+      let inner = List.map (fun t1 ->
+          (fun fmt -> fprintf fmt "%a" print_tm (APP, t1))) args in
+      fprintf fmt "@[<hov 0>%a@]"
+        concat (COMMA,inner)
 
-    (* If applications *)
-    | TApp{t1=TIf{t1;t2;_};t2=t;_} ->
-      fprintf fmt "@[<hv 0>\
-                   @[<hov %d>if %a then@ %a@]\
-                   @ \
-                   @[<hov %d>else@ %a@]\
-                   @]"
-        !ref_indent print_tm (MATCH, t) print_tm (MATCH, t1)
-        !ref_indent print_tm (MATCH, t2)
 
-    (* Match applications *)
-    | TApp{t1=TMatch{cls;_};t2=t;_} ->
-      let inner = List.map (fun (p,t1) ->
-          (fun fmt -> fprintf fmt "@[<hov %d>| %s ->@ %a@]" !ref_indent
-              (string_of_pat p) print_tm (LAM, t1)))
-          cls in
-      fprintf fmt "@[<hov %d>match@ %a@ with@ @[<hv 0>%a@]@]"
-        !ref_indent
-        print_tm (MATCH, t)
-        concat (SPACE,inner)
+    | Some _ -> failwith "Not possible"
 
-    (* Sequencing (right associative) *)
-    | TApp{t1=TLam{x="_";t1;_};
-           t2=TApp{t1=TLam{x="_";_};_} as t2;_} ->
-      fprintf fmt "@[<hv 0>%a;@ %a@]"
-        print_tm (IF, t2) print_tm (MATCH, t1)
-    | TApp{t1=TLam{x="_";t1;_};t2;_} ->
-      fprintf fmt "@[<hv 0>%a;@ %a@]"
-        print_tm (SEMICOLON, t2) print_tm (MATCH, t1)
+    (* Not a complete tuple or record construction. Check if it is a complete
+       list. *)
+    | None -> match lmatch with
 
-    (* Let expressions *)
-    | TApp{t1=TLam{x;t1;_};t2;_} ->
-      fprintf fmt "@[<hv 0>\
-                   @[<hov %d>let %s =@ %a in@]\
-                   @ %a@]"
-        !ref_indent x print_tm (MATCH, t2) print_tm (MATCH, t1)
-
-    | _ -> match compl_constr t with
-
-      (* Records *)
-      | Some (VRec{pls;_},args) ->
-        let inner = List.map (fun (k, t1) ->
-            (fun fmt -> fprintf fmt "%s:%a" k print_tm (MATCH, t1)))
-            (List.combine pls args) in
-        fprintf fmt "{@[<hov 0>%a@]}"
-          concat (COMMA,inner)
-
-      (* Tuples *)
-      | Some (VTup _,args) ->
+        (* Lists *)
+      | Some args ->
         let inner = List.map (fun t1 ->
             (fun fmt -> fprintf fmt "%a" print_tm (APP, t1))) args in
-        fprintf fmt "@[<hov 0>%a@]"
-          concat (COMMA,inner)
-
-      (* Lists *)
-      | Some (VList _,args) ->
-        let inner = List.map (fun t1 ->
-            (fun fmt -> fprintf fmt "%a" print_tm (MATCH, t1))) args in
         fprintf fmt "[@[<hov 0>%a@]]"
           concat (COMMA,inner)
 
-      | Some _ -> failwith "Not possible"
+      (* Finally, check for static patterns *)
+      | None -> match t with
 
-      (* Otherwise, fall back to bare printing *)
-      | None -> bare fmt t
+        (* Record projection application *)
+        | TApp{t1=TVal{v=VRecProj{k;_};_};t2;_} ->
+          fprintf fmt "%a.%s" print_tm (APP, t2) k
+
+        (* Tuple projection applications *)
+        | TApp{t1=TVal{v=VTupProj{i;_};_};t2;_} ->
+          fprintf fmt "%a.%d" print_tm (APP, t2) i
+
+        (* If applications *)
+        | TApp{t1=TIf{t1;t2;_};t2=t;_} ->
+          fprintf fmt "@[<hv 0>\
+                       @[<hov %d>if %a then@ %a@]\
+                       @ \
+                       @[<hov %d>else@ %a@]\
+                       @]"
+            !ref_indent print_tm (MATCH, t) print_tm (MATCH, t1)
+            !ref_indent print_tm (MATCH, t2)
+
+        (* Match applications *)
+        | TApp{t1=TMatch{cls;_};t2=t;_} ->
+          let inner = List.map (fun (p,t1) ->
+              (fun fmt -> fprintf fmt "@[<hov %d>| %s ->@ %a@]" !ref_indent
+                  (string_of_pat p) print_tm (LAM, t1)))
+              cls in
+          fprintf fmt "@[<hov %d>match@ %a@ with@ @[<hv 0>%a@]@]"
+            !ref_indent
+            print_tm (MATCH, t)
+            concat (SPACE,inner)
+
+        (* Sequencing (right associative) *)
+        | TApp{t1=TLam{x="_";t1;_};
+               t2=TApp{t1=TLam{x="_";_};_} as t2;_} ->
+          fprintf fmt "@[<hv 0>%a;@ %a@]"
+            print_tm (IF, t2) print_tm (MATCH, t1)
+        | TApp{t1=TLam{x="_";t1;_};t2;_} ->
+          fprintf fmt "@[<hv 0>%a;@ %a@]"
+            print_tm (SEMICOLON, t2) print_tm (MATCH, t1)
+
+        (* Let expressions *)
+        | TApp{t1=TLam{x;t1;_};t2;_} ->
+          fprintf fmt "@[<hv 0>\
+                       @[<hov %d>let %s =@ %a in@]\
+                       @ %a@]"
+            !ref_indent x print_tm (MATCH, t2) print_tm (MATCH, t1)
+
+        (* Otherwise, fall back to bare printing *)
+        | _ -> bare fmt t
+
   in
 
   (* Check if this term should be parenthesized *)
-  let paren = match t with
+  let paren = match trmatch with
+    | Some (VRec _,_) -> prec > ATOM
+    | Some (VTup _,_) -> prec > TUP
+    | Some _ -> failwith "Not possible"
+    | _ -> match lmatch with
+      | Some _ -> prec > ATOM
+      | _ -> match t with
+        | TApp{t1=TLam{x="_";_};_} when !ref_pretty -> prec > SEMICOLON
+        | TApp{t1=TLam _;_}        when !ref_pretty -> prec > LAM
 
-    | TApp{t1=TLam{x="_";_};_} when !ref_pretty -> prec > SEMICOLON
-    | TApp{t1=TLam _;_}        when !ref_pretty -> prec > LAM
-
-    | TMatch _         -> prec > MATCH
-    | TLam _           -> prec > LAM
-    | TIf _            -> prec > IF
-    | TVal{v=VTup _;_} -> prec > TUP
-    | TApp _           -> prec > APP
-    | TVar _ | TVal _  -> prec > ATOM
-
+        | TMatch _         -> prec > MATCH
+        | TLam _           -> prec > LAM
+        | TIf _            -> prec > IF
+        | TVal{v=VTup _;_} -> prec > TUP
+        | TApp _           -> prec > APP
+        | TVar _ | TVal _  -> prec > ATOM
   in
 
   let p = if !ref_pretty then sugar else bare in
@@ -396,8 +440,7 @@ let rec print_tm fmt (prec, t) =
   else
     fprintf fmt "%a" p t
 
-(* Print an environment. The function f handles printing of the constituent
-   elements. *)
+(** Print an environment on the given formatter. *)
 and print_env fmt env =
   if !ref_closure_env then
     let inner = List.mapi (fun i t ->
@@ -407,42 +450,24 @@ and print_env fmt env =
   else
     fprintf fmt ""
 
-(* Setup printer *)
-let setup_print
-    ?(debruijn       = false)
-    ?(labels         = false)
-    ?(closure_env    = false)
-    ?(pretty         = true)
-    ?(indent         = 2)
-    ?(max_indent     = 68)
-    ?(margin         = 80)
-    () =
-  ref_debruijn    := debruijn;
-  ref_labels      := labels;
-  ref_closure_env := closure_env;
-  ref_pretty      := pretty;
-  ref_indent      := indent;
-  pp_set_margin str_formatter margin;
-  pp_set_max_indent str_formatter max_indent
-
-(** Convert terms to strings. *)
+(** Convert terms to strings.
+    TODO Messy with optional arguments passing. Alternatives? *)
 let string_of_tm
-    ?debruijn ?labels ?closure_env
-    ?pretty ?indent ?max_indent ?margin
-    ?(prefix = "")
+    ?debruijn ?labels ?closure_env ?pretty ?indent ?max_indent ?margin
+    ?max_boxes ?(prefix = "")
     t =
 
-  setup_print ?debruijn ?labels ?closure_env ?pretty
-    ?indent ?max_indent ?margin ();
+  setup_print ?debruijn ?labels ?closure_env ?pretty ?indent ?max_indent
+    ?margin ?max_boxes ();
 
   fprintf str_formatter "%s" prefix;
   print_tm str_formatter (MATCH, t); flush_str_formatter ()
 
-(* Shorthand for converting values to strings. *)
-let string_of_val ?closure_env ?prefix v =
-  string_of_tm ?closure_env ?prefix (tm_of_val v)
+(** Shorthand for converting values to strings. *)
+let string_of_val ?closure_env ?prefix ?margin ?max_boxes v =
+  string_of_tm ?closure_env ?prefix ?margin ?max_boxes (tm_of_val v)
 
-(* Convert environments to string *)
+(** Convert environments to string *)
 let string_of_env ?(prefix = "") env =
   setup_print ~closure_env:true ();
   fprintf str_formatter "%s" prefix;

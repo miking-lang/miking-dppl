@@ -15,7 +15,8 @@ module StrMap = Map.Make(struct type t = string let compare = compare end)
 let replicate i v =
   let rec recurse i acc = match i with
     | 0 -> acc
-    | _ -> recurse (i-1) (v :: acc)
+    | i when i > 0 -> recurse (i-1) (v :: acc)
+    | _ -> failwith "Negative number in replicate"
   in recurse i []
 
 (** Tail recursive map *)

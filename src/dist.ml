@@ -1,7 +1,6 @@
 (** Functions related to probability distributions *)
 
 open Ast
-open Attribute
 
 (** Whether to use a random seed or not for probability distributions *)
 let random_seed = false

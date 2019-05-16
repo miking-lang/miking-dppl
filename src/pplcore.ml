@@ -88,7 +88,6 @@ let exec filename =
     | Debug ->
       debug true "Inference result"
         (fun () -> string_of_empirical res);
-
       debug true "Log Normalizing constant"
         (fun () -> sprintf "%f" normconst)
     | Dist ->

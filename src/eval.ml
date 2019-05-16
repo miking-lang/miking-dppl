@@ -3,10 +3,9 @@
 open Printf
 open Ast
 open Pattern
-open Sprint
 open Debug
 open Utest
-open Attribute
+open Sprint
 
 (** Error message for incorrect constant applications *)
 let fail_app left right =
@@ -163,7 +162,7 @@ and eval_app stoch_ctrl weight v1 v2 =
      stochastic. *)
   let va = {stoch = s1 || s2} in
 
-  match v1,v2 with
+  let weight,v = match v1,v2 with
 
   (* Closure application. If LHS is stochastic, the result is stochastic.
      NOTE: If we are applying a continuation, use the value of stoch_ctrl bound
@@ -242,7 +241,7 @@ and eval_app stoch_ctrl weight v1 v2 =
   | VUtest{pos;v1=None;_},v1    -> weight,VUtest{at=a1;v1=Some v1;pos}
   | VUtest{pos;v1=Some v1;_},v2 ->
     if !utest then
-      if Ast.compare v1 v2 = 0 then begin
+      if Compare.compare v1 v2 = 0 then begin
         printf "."; utest_ok := !utest_ok + 1;
       end
       else begin
@@ -481,10 +480,10 @@ and eval_app stoch_ctrl weight v1 v2 =
 
   (* Polymorphic functions *)
   | VEq{v1=None;_},v      -> weight,VEq{at=va;v1=Some(v)}
-  | VEq{v1=Some v1;_}, v2 -> weight,VBool{at=va;b=Ast.compare v1 v2 = 0}
+  | VEq{v1=Some v1;_}, v2 -> weight,VBool{at=va;b=Compare.compare v1 v2 = 0}
 
   | VNeq{v1=None;_},v      -> weight,VNeq{at=va;v1=Some(v)}
-  | VNeq{v1=Some(v1);_},v2 -> weight,VBool{at=va;b=Ast.compare v1 v2 <> 0}
+  | VNeq{v1=Some(v1);_},v2 -> weight,VBool{at=va;b=Compare.compare v1 v2 <> 0}
 
   (* Concatenation application.  *)
   | VConcat{v1=None;_}, VList _
@@ -496,3 +495,11 @@ and eval_app stoch_ctrl weight v1 v2 =
     weight,VList{at=va;vls=vls1 @ vls2}
   | VConcat _,_ -> fail_app v1 v2
 
+  in
+
+  debug debug_eval_app "Eval application result"
+    (fun () ->
+       (Printf.sprintf "%s"
+          (string_of_val ~prefix:"RESULT: " ~closure_env:debug_eval_env v)));
+
+  weight,v

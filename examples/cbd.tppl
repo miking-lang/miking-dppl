@@ -1,5 +1,36 @@
 // TimeTree, pitheciidae monkeys (source: http://timetree.org/)
-tree = {age:17.99321625,left:{age:11.33054769,left:{age:5.4853,left:{age:.0},right:{age:2.9571,left:{age:.0},right:{age:.0}}},right:{age:7.31,left:{age:3.19694,left:{age:.0},right:{age:1.1078,left:{age:.02283,left:{age:.0},right:{age:.0}},right:{age:.0}}},right:{age:7.11,left:{age:.0},right:{age:5.9,left:{age:3.2838,left:{age:2.9942,left:{age:.0},right:{age:.0}},right:{age:.0}},right:{age:.0}}}}},right:{age:11.01619834,left:{age:10.23796667,left:{age:6.1354,left:{age:3.04517,left:{age:2.2398,left:{age:1.72,left:{age:.0},right:{age:.0}},right:{age:.0}},right:{age:.0}},right:{age:5.69232,left:{age:4.3404,left:{age:2.81,left:{age:1.33,left:{age:.0},right:{age:.0}},right:{age:.0}},right:{age:.0}},right:{age:.0}}},right:{age:8.34,left:{age:.0},right:{age:4.88882,left:{age:2.0967,left:{age:.0},right:{age:.0}},right:{age:.0}}}},right:{age:4.4329,left:{age:.0},right:{age:2.6,left:{age:.0},right:{age:.0}}}}}
+tree =
+  {right:{right:{right:{right:{age:0.000000},left:{age:0.000000},age:2.600000},
+                 left:{age:0.000000},age:4.432900},
+          left:{right:{right:{right:{age:0.000000},
+                              left:{right:{age:0.000000},left:{age:0.000000},
+                                    age:2.096700},age:4.888820},
+                       left:{age:0.000000},age:8.340000},
+                left:{right:{right:{age:0.000000},
+                             left:{right:{age:0.000000},
+                                   left:{right:{age:0.000000},
+                                         left:{right:{age:0.000000},
+                                               left:{age:0.000000},age:1.330000},
+                                         age:2.810000},age:4.340400},
+                             age:5.692320},
+                      left:{right:{age:0.000000},
+                            left:{right:{age:0.000000},
+                                  left:{right:{age:0.000000},
+                                        left:{age:0.000000},age:1.720000},
+                                  age:2.239800},age:3.045170},age:6.135400},
+                age:10.237967},age:11.016198},
+   left:{right:{right:{right:{right:{age:0.000000},
+                              left:{right:{age:0.000000},
+                                    left:{right:{age:0.000000},
+                                          left:{age:0.000000},age:2.994200},
+                                    age:3.283800},age:5.900000},
+                       left:{age:0.000000},age:7.110000},
+                left:{right:{right:{age:0.000000},
+                             left:{right:{age:0.000000},left:{age:0.000000},
+                                   age:0.022830},age:1.107800},
+                      left:{age:0.000000},age:3.196940},age:7.310000},
+         left:{right:{right:{age:0.000000},left:{age:0.000000},age:2.957100},
+               left:{age:0.000000},age:5.485300},age:11.330548},age:17.993216}
 
 // Bisse tree
 // tree = {age:13.016,left:{age:10.626,left:{age:8.352,left:{age:7.679,left:{age:5.187,left:{age:0},right:{age:0}},right:{age:5.196,left:{age:0},right:{age:4.871,left:{age:2.601,left:{age:0},right:{age:0}},right:{age:0}}}},right:{age:7.361,left:{age:3.818,left:{age:1.143,left:{age:.0829,left:{age:0},right:{age:0}},right:{age:0}},right:{age:1.813,left:{age:.0452,left:{age:.0203,left:{age:0},right:{age:0}},right:{age:0}},right:{age:0}}},right:{age:1.868,left:{age:.0866,left:{age:0},right:{age:.0001,left:{age:0},right:{age:0}}},right:{age:1.06,left:{age:0},right:{age:0}}}}},right:{age:10.536,left:{age:8.291,left:{age:1.396,left:{age:.0215,left:{age:0},right:{age:0}},right:{age:0}},right:{age:0}},right:{age:8.192,left:{age:.056,left:{age:0},right:{age:0}},right:{age:0}}}},right:{age:8.958,left:{age:3.748,left:{age:0},right:{age:.0033,left:{age:0},right:{age:0}}},right:{age:7.775,left:{age:.0584,left:{age:0},right:{age:0}},right:{age:1.589,left:{age:0},right:{age:0}}}}}

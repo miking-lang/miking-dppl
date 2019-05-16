@@ -6,9 +6,9 @@ weight(1)
 if flip() then {
   weight(1)
   weight(1)
-  false
+  true
 } else {
   weight(1)
-  true
+  false
 }
 weight(1)

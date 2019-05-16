@@ -13,16 +13,16 @@ let debug_label = false
 let debug_sanalysis = false
 
 (** Debug the resample transformation *)
-let debug_resample_transform = true
+let debug_resample_transform = false
 
 (** Debug the CPS transformation *)
-let debug_cps = true
+let debug_cps = false
 
 (** Debug SMC inference *)
-let debug_smc = true
+let debug_smc = false
 
-(** Debug The weights in SMC *)
-let debug_smc_weights = true
+(** Debug dynamic SMC inference *)
+let debug_smc_dyn = false
 
 (** Debug the evaluation *)
 let debug_eval = false
@@ -37,6 +37,5 @@ let debug_eval_env = false
 let debug cond heading info =
   if cond && not !utest then begin
     printf "--- %s ---\n" (String.uppercase_ascii heading);
-    printf "%s\n\n" (info ());
+    printf "%s\n\n%!" (info ());
   end
-

@@ -1,10 +1,2 @@
-function flip() {
-  sample(bernoulli(0.5))
-}
+{a:1,b:2,c:3},(1,2,3),[1,2,3]
 
-if flip() then {
-  2 + 3
-} else {
-  3 + 4
-}
-weight(1)

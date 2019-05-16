@@ -6,7 +6,6 @@
       a TApp). Instead, it applies its continuation to its "return value". *)
 
 open Ast
-open Attribute
 open Utils
 
 (** Wrap direct-style functions in CPS *)
@@ -60,8 +59,7 @@ let rec cps_atomic t = match t with
   | TMatch({cls;_} as t) ->
     let k, k' = genvar noidx in
     let cls = List.map (fun (p,te) -> p,cps_complex k' te) cls in
-    TLam{at=ta;vat=xa;cont=false;x=k;
-         t1=TMatch{t with cls=cls}}
+    TLam{at=ta;vat=xa;cont=false;x=k;t1=TMatch{t with cls=cls}}
 
   (* Values *)
   | TVal{v;_} -> match v with

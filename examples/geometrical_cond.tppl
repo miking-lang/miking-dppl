@@ -3,4 +3,11 @@ function f() {
   if b then 1 else f() + 1
 }
 
-f ()
+r = f()
+
+if r > 2 then
+  ()
+else
+  weight(-inf)
+
+r

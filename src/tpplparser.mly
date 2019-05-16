@@ -4,7 +4,6 @@
 
 open Ast
 open Parserutils
-open Attribute
 
 %}
 

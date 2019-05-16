@@ -1,7 +1,6 @@
 (** Parser utilities *)
 
 open Ast
-open Attribute
 
 (** Function for adding fix-point if a function is recursive*)
 let addrec x t =
