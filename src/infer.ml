@@ -43,7 +43,7 @@ let builtin = [
 
   "logpdf",       VLogPdf{at=va;v1=None};
   "sample",       VSample{at=va};
-  "resample",     VResamp{at=va;dyn=false;cont=None};
+  "resample",     VResamp{at=va;dyn=false;cont=None;stoch_ctrl=None };
 
   "fix",          VFix{at=va};
 
@@ -206,7 +206,7 @@ let infer_smc env program =
   (* Function for wrapping a continuation for further evaluation. Set the
      attribute of the unit argument to at. *)
   let app_cont cont at =
-    (TApp{at=ta; t1=tm_of_val cont; t2=TVal{at=ta;v=VUnit{at=at}}}) in
+    (TApp{at=ta; t1=tm_of_val cont; t2=TVal{at=ta;v=VUnit{at}}}) in
 
   (* Run a particle until the next resampling point *)
   let rec eval stoch_ctrl env w t = match Eval.eval stoch_ctrl env w t with
@@ -214,15 +214,16 @@ let infer_smc env program =
     (* If the resample is dynamic and control is stochastic, just continue
        evaluation. *)
     | w,VResamp{at;dyn=true;
-                cont=Some(VClos{cont=true;stoch_ctrl;_} as cont);_} as res ->
+                cont=Some(VCont{stoch_ctrl=cont_stoch_ctrl;_} as cont);
+                stoch_ctrl=Some stoch_ctrl;_} as res ->
       if stoch_ctrl then begin
         debug debug_smc_dyn "Skipping resampling"
           (fun () -> sprintf "Weight %f" w);
-        eval stoch_ctrl [] w (app_cont cont at)
+        eval cont_stoch_ctrl [] w (app_cont cont at)
       end else res
 
     (* Static resample. Always perform resampling *)
-    | _,VResamp{dyn=false; cont=Some(VClos{cont=true;_});_} as res -> res
+    | _,VResamp{dyn=false; cont=Some(VCont _);_} as res -> res
 
     (* Incorrect resample *)
     | _,VResamp _ -> failwith "Erroneous VResamp in infer_smc"
@@ -234,6 +235,8 @@ let infer_smc env program =
 
   (* Run until first resample, attaching the initial environment *)
   let s = Utils.map (eval false env 0.0) s in
+
+  let num_resample = ref 0 in
 
   (* Run SMC *)
   let rec recurse s normconst =
@@ -247,12 +250,13 @@ let infer_smc env program =
             ~log_weights:true ~normalize:false s);
 
       (* Do the resampling and accumulate normalization constant *)
+      num_resample := !num_resample + 1;
       let logavg, s = resample s in
       let normconst = normconst +. logavg in
 
       (* Run particles until next resampling point *)
       let continue v = match v with
-        | VResamp{at;cont=Some(VClos{stoch_ctrl;_} as cont);_} ->
+        | VResamp{at; cont=Some(VCont{stoch_ctrl;_} as cont);_} ->
           eval stoch_ctrl [] 0.0 (app_cont cont at)
         | _ -> 0.0,v in
       let s = Utils.map (fun (_,v) -> continue v) s in
@@ -261,7 +265,13 @@ let infer_smc env program =
     end else
       normconst,s
 
-  in recurse s 0.0
+  in
+  let res = recurse s 0.0 in
+
+  debug debug_smc "Total number of resamples"
+    (fun () -> string_of_int !num_resample);
+
+  res
 
 (** Convert all weightings in the program to
     weightings followed by calls to resample *)
@@ -270,15 +280,18 @@ let add_resample ~dyn builtin t =
     | TVar _ -> t
     | TApp{at;t1;t2} -> TApp{at;t1=recurse t1;t2=recurse t2}
     | TLam({t1;_} as t) -> TLam{t with t1=recurse t1}
+    | TCont _ -> failwith "Continuation in add_resample"
     | TIf{at;t1;t2} -> TIf{at;t1=recurse t1;t2=recurse t2}
     | TMatch{at;cls} -> TMatch{at;cls=List.map (fun (p,t) -> p,recurse t) cls}
     | TVal{at;v=VWeight _} ->
       let var, var'  = makevar "w" noidx in
       let weight_app = TApp{at=ta;t1=t;t2=var'} in
       let resamp     = TApp{at=ta;
-                            t1=TVal{at=ta;v=VResamp{at=va;dyn=dyn;cont=None}};
+                            t1=TVal{at=ta;
+                                    v=VResamp{at=va;dyn=dyn;
+                                              cont=None;stoch_ctrl=None}};
                             t2=nop} in
-      TLam{at=at;vat=xa;cont=false;x=var;t1=seq weight_app resamp}
+      TLam{at;vat=xa;x=var;t1=seq weight_app resamp}
     | TVal _ -> t
   in recurse t, List.map (fun (x,t) -> x,recurse t) builtin
 

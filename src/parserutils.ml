@@ -11,16 +11,17 @@ let addrec x t =
     | TLam{x=y;t1;_} -> if x = y then false else hasx t1
     | TIf{t1;t2;_} -> hasx t1 || hasx t2
     | TMatch{cls;_} -> List.exists (fun (_,te) -> hasx te) cls
+    | TCont _ -> failwith "Continuation in hasx"
 
     | TVal _ -> false in
 
   if hasx t then
-    TApp{at=ta;t1=fix;t2=TLam{at=ta;vat=xa;cont=false;x=x;t1=t}}
+    TApp{at=ta;t1=fix;t2=TLam{at=ta;vat=xa;x=x;t1=t}}
   else t
 
 (** Make a sequence of lambdas for a multi-parameter function *)
 let rec mkfun params body = match params with
-  | x::xs -> TLam{at=ta;vat=xa;cont=false;x=x;t1=mkfun xs body}
+  | x::xs -> TLam{at=ta;vat=xa;x=x;t1=mkfun xs body}
   | [] -> body
 
 (** Make a sequence of applications for a multi-parameter function *)

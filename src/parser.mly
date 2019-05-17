@@ -103,13 +103,13 @@ main:
 
 seq:
   | LET IDENT EQUAL seq IN seq %prec LET
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$2;t1=$6};t2=$4} }
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$6};t2=$4} }
   | LET IDENT params EQUAL seq IN seq %prec LET
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$2;t1=$7};
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$7};
              t2=addrec $2 (mkfun $3 $5)} }
 
   | LET IDENT TILDE seq IN seq %prec LET
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$2;t1=$6};
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$6};
                    t2=TApp{at=ta;t1=TVal{at=ta;v=VSample{at=va}};t2=$4}} }
 
   | OBSERVE seq TILDE seq %prec OBSERVE
@@ -128,7 +128,7 @@ seq:
 
   | seq SEMICOLON { $1 }
   | seq SEMICOLON seq
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x="_";t1=$3};t2=$1} }
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x="_";t1=$3};t2=$1} }
 
   | texpr { $1 }
 

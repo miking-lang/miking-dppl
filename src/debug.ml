@@ -16,7 +16,7 @@ let debug_sanalysis = false
 let debug_resample_transform = false
 
 (** Debug the CPS transformation *)
-let debug_cps = true
+let debug_cps = false
 
 (** Debug SMC inference *)
 let debug_smc = true

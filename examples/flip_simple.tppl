@@ -1,0 +1,6 @@
+if sample(bernoulli(0.5)) then {
+  true
+} else {
+  false
+}
+3.14

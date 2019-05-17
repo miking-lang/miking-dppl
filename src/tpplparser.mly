@@ -102,21 +102,21 @@ seq:
   | texpr seq
       { match $2 with
         | TVal{v=VUnit _;_} -> $1
-        | _ -> TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x="_";t1=$2};t2=$1} }
+        | _ -> TApp{at=ta;t1=TLam{at=ta;vat=xa;x="_";t1=$2};t2=$1} }
 
   | FUNC IDENT LPAREN params RPAREN texpr seq
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$2;t1=$7};
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$7};
              t2=addrec $2 (mkfun $4 $6)} }
 
   | FUNC IDENT LPAREN RPAREN texpr seq
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$2;t1=$6};
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$6};
              t2=addrec $2 (mkfun ["_"] $5)} }
 
   | IDENT EQ texpr seq
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$1;t1=$4};t2=$3} }
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$1;t1=$4};t2=$3} }
 
   | IDENT TILDE texpr seq
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;cont=false;x=$1;t1=$4};
+      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$1;t1=$4};
              t2=TApp{at=ta;t1=TVal{at=ta;v=VSample{at=va}};t2=$3}} }
 
 texpr:

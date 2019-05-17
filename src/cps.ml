@@ -18,8 +18,8 @@ let cps_fun t arity =
   List.fold_right
     (fun (v, _) acc ->
        let k, k' = genvar noidx in
-       TLam{at=ta; vat=xa; cont=false; x=k;
-            t1=TLam{at=ta; vat=xa; cont=false; x=v;
+       TLam{at=ta; vat=xa; x=k;
+            t1=TLam{at=ta; vat=xa; x=v;
                     t1=TApp{at=ta; t1=k'; t2=acc}}})
     vars inner
 
@@ -43,14 +43,14 @@ let rec cps_atomic t = match t with
      Wrap in continuation and transform inner using the continuation. *)
   | TLam({t1;_} as t) ->
     let k, k' = genvar noidx in
-    TLam{at=ta;vat=xa;cont=false;x=k;
+    TLam{at=ta;vat=xa;x=k;
          t1=TLam{t with t1=cps_complex k' t1}}
 
   (* If expressions
      Wrap in continuation and transform inner using the continuation. *)
   | TIf({t1;t2;_} as t) ->
     let k, k' = genvar noidx in
-    TLam{at=ta;vat=xa;cont=false;x=k;
+    TLam{at=ta;vat=xa;x=k;
          t1=TIf{t with t1=cps_complex k' t1;
                        t2=cps_complex k' t2}}
 
@@ -59,15 +59,19 @@ let rec cps_atomic t = match t with
   | TMatch({cls;_} as t) ->
     let k, k' = genvar noidx in
     let cls = List.map (fun (p,te) -> p,cps_complex k' te) cls in
-    TLam{at=ta;vat=xa;cont=false;x=k;t1=TMatch{t with cls=cls}}
+    TLam{at=ta;vat=xa;x=k;t1=TMatch{t with cls=cls}}
+
+  (* Continuations should never occur here *)
+  | TCont _ -> failwith "Continuation in cps_atomic"
 
   (* Values *)
   | TVal{v;_} -> match v with
 
     (* Should not exist before eval *)
-    | VClos _      -> failwith "Closure in cps_atomic"
-    | VClosIf _    -> failwith "Closure in cps_atomic"
-    | VClosMatch _ -> failwith "Closure in cps_atomic"
+    | VLam  _  -> failwith "Closure in cps_atomic"
+    | VIf _    -> failwith "Closure in cps_atomic"
+    | VMatch _ -> failwith "Closure in cps_atomic"
+    | VCont  _ -> failwith "Closure in cps_atomic"
 
     (* Fixpoint. Treat similar as constant function with a single argument. We
        need to apply the id function to the argument before applying fix, since
@@ -77,8 +81,8 @@ let rec cps_atomic t = match t with
       let v, v' = genvar noidx in
       let k, k' = genvar noidx in
       let inner = TApp{at=ta; t1=t; t2=TApp{at=ta; t1=v'; t2=idfun}} in
-      TLam{at=ta;vat=xa;cont=false;x=k;
-           t1=TLam{at=ta;vat=xa;cont=false;x=v;
+      TLam{at=ta;vat=xa;x=k;
+           t1=TLam{at=ta;vat=xa;x=v;
                    t1=TApp{at=ta; t1=k'; t2=inner}}}
 
     (* Resampling is natively in CPS by design (also the reason why we are
@@ -120,12 +124,15 @@ and cps_complex cont t =
     let inner = match e with
       | None -> app
       | Some(e) ->
-        cps_complex (TLam{at=ta;vat=xa;cont=true;x=e;t1=app}) t2 in
+        cps_complex (TCont{at=ta;x=e;t1=app}) t2 in
     let outer = match f with
       | None -> inner
       | Some(f) ->
-        cps_complex (TLam{at=ta;vat=xa;cont=true;x=f;t1=inner}) t1 in
+        cps_complex (TCont{at=ta;x=f;t1=inner}) t1 in
     outer
+
+  (* Continuations should never occur here *)
+  | TCont _ -> failwith "Continuation in cps_complex"
 
   (* Everything else is atomic. *)
   | TVar _ | TLam _ | TIf _ | TMatch _ | TVal _ ->

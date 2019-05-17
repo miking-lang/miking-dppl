@@ -47,10 +47,13 @@ type term =
   (* Applications *)
   | TApp     of { at:tm_attr; t1:term; t2:term }
 
-  (* Lambdas TODO Add separate term for continuations *)
-  | TLam     of { at:tm_attr; vat:var_attr; cont:bool; x:string; t1:term }
+  (* Lambdas *)
+  | TLam     of { at:tm_attr; vat:var_attr; x:string; t1:term }
   | TIf      of { at:tm_attr; t1:term; t2:term }
-  | TMatch   of { at:tm_attr; cls:(pat * term) list } (* TODO match var_attr *)
+  | TMatch   of { at:tm_attr; cls:(pat * term) list } (* TODO add var_attr *)
+
+  (* Continuations *)
+  | TCont    of { at:tm_attr; x:string; t1:term }
 
   (* Value terms.  *)
   | TVal     of { at:tm_attr; v:value }
@@ -58,11 +61,15 @@ type term =
 (** Value terms *)
 and value =
 
-  (* Closures *)
-  | VClos      of { at:val_attr; vat:var_attr; cont:bool;
-                    x:string; t1:term; env:env; stoch_ctrl:bool }
-  | VClosIf    of { at:val_attr; t1:term; t2:term; env:env }
-  | VClosMatch of { at:val_attr; cls:(pat * term) list; env:env }
+  (* Closures. For continuations, we need to store the state of stoch_ctrl in
+     context where the continuation was passed as an argument. *)
+  | VLam       of { at:val_attr; x:string; t1:term; env:env; }
+  | VIf        of { at:val_attr; t1:term; t2:term; env:env }
+  | VMatch     of { at:val_attr; cls:(pat * term) list; env:env }
+
+  (* Continuation closures *)
+  | VCont      of { at:val_attr; x:string; t1:term;
+                    stoch_ctrl:bool; env:env }
 
   (* Fixed-point combinator (not really needed since untyped) *)
   | VFix       of { at:val_attr }
@@ -98,7 +105,8 @@ and value =
   | VWeight    of { at:val_attr }
 
   (* Resample checkpoint for SMC inference (natively in CPS form) *)
-  | VResamp    of { at:val_attr; dyn:bool; cont:value option; }
+  | VResamp    of { at:val_attr; dyn:bool;
+                    cont:value option; stoch_ctrl:bool option; }
 
   (* Unit constant *)
   | VUnit      of { at:val_attr }
@@ -151,7 +159,9 @@ and env = term list
 (** Returns the number of expected arguments for values *)
 let arity c = match c with
 
-  | VClos _ | VClosIf _ | VClosMatch _ -> 1
+  | VLam  _ | VIf     _ | VMatch     _ -> 1
+
+  | VCont     _ -> 1
 
   | VFix _       -> 1
 
@@ -229,8 +239,8 @@ let arity c = match c with
 
 (** Returns the attribute of a value *)
 let val_attr = function
-  | VCons{at;_}
-  | VClos{at;_}   | VClosIf{at;_}  | VClosMatch{at;_}
+  | VCons{at;_}   | VCont    {at;_}
+  | VLam {at;_}   | VIf    {at;_}  | VMatch    {at;_}
   | VFix{at;_}    | VRec{at;_}     | VRecProj{at;_}
   | VTup{at;_}    | VTupProj{at;_} | VList{at;_}
   | VUtest{at;_}  | VNormal{at;_}  | VUniform{at;_}
@@ -250,6 +260,7 @@ let val_attr = function
 let tm_attr = function
   | TVar{at;_} | TApp{at;_}
   | TLam{at;_} | TIf{at;_} | TMatch{at;_}
+  | TCont{at;_}
   | TVal{at;_} -> at
 
 (** Returns the label of a term *)
@@ -257,9 +268,10 @@ let tm_label tm = match tm_attr tm with {label;_} -> label
 
 (** Change the value attribute of a given value *)
 let update_val_attr attr = function
-  | VClos      v -> VClos      {v with at=attr}
-  | VClosIf    v -> VClosIf    {v with at=attr}
-  | VClosMatch v -> VClosMatch {v with at=attr}
+  | VLam       v -> VLam       {v with at=attr}
+  | VIf        v -> VIf        {v with at=attr}
+  | VMatch     v -> VMatch     {v with at=attr}
+  | VCont      v -> VCont      {v with at=attr}
   | VFix       _ -> VFix       {at=attr}
   | VRec       v -> VRec       {v with at=attr}
   | VRecProj   v -> VRecProj   {v with at=attr}
@@ -312,6 +324,7 @@ let update_tm_attr attr = function
   | TVal   t -> TVal   {t with at=attr}
   | TIf    t -> TIf    {t with at=attr}
   | TMatch t -> TMatch {t with at=attr}
+  | TCont  t -> TCont  {t with at=attr}
 
 (** Make a value stochastic if cond is true. If the value is already
     stochastic, do nothing *)
@@ -340,11 +353,11 @@ let fix = TVal{at=ta;v=VFix{at=va}}
 
 (** The identity function (with proper debruijn index) as a continuation. *)
 let idfun = let var,var' = genvar 0 in
-  TLam{at=ta;vat=xa;cont=true;x=var;t1=var'}
+  TCont{at=ta;x=var;t1=var'}
 
 (** Convenience function for creating a sequence of two tms *)
 let seq t1 t2 = TApp{at=ta;
-                     t1=TLam{at=ta;vat=xa;cont=false;x="_";t1=t2};
+                     t1=TLam{at=ta;vat=xa;x="_";t1=t2};
                      t2=t1}
 
 (** Function for wrapping a value in a tm *)

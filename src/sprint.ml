@@ -112,6 +112,9 @@ let rec print_tm fmt (prec, t) =
   (* Function for bare printing (no syntactic sugar) *)
   let bare fmt t = match t with
 
+    | TCont{x;t1;_} ->
+      fprintf fmt "@[<hov %d>cont %s.@ %a@]" !ref_indent x print_tm (LAM, t1)
+
     | TLam{x;t1;_} ->
       fprintf fmt "@[<hov %d>lam %s.@ %a@]" !ref_indent x print_tm (LAM, t1)
 
@@ -148,11 +151,15 @@ let rec print_tm fmt (prec, t) =
 
     | TVal{v;_} -> match v with
 
-      | VClos{x;t1;env;_} ->
-        fprintf fmt "@[<hov %d>clos%a %s.@ %a@]"
+      | VCont{x;t1;env;_} ->
+        fprintf fmt "@[<hov %d>cont%a %s.@ %a@]"
           !ref_indent print_env env x print_tm (LAM, t1)
 
-      | VClosIf{t1;t2;env;_} ->
+      | VLam{x;t1;env;_} ->
+        fprintf fmt "@[<hov %d>lam%a %s.@ %a@]"
+          !ref_indent print_env env x print_tm (LAM, t1)
+
+      | VIf{t1;t2;env;_} ->
         fprintf fmt "@[<hv 0>\
                      @[<hov %d>if%a . then@ %a@]\
                      @ \
@@ -162,7 +169,7 @@ let rec print_tm fmt (prec, t) =
           print_tm (MATCH, t1)
           !ref_indent print_tm (IF, t2)
 
-      | VClosMatch{cls;env;_} ->
+      | VMatch{cls;env;_} ->
         let inner = List.map (fun (p,t1) ->
             (fun fmt -> fprintf fmt "@[<hov %d>| %s ->@ %a@]" !ref_indent
                 (string_of_pat p) print_tm (LAM, t1)))
@@ -417,10 +424,10 @@ let rec print_tm fmt (prec, t) =
       | Some _ -> prec > ATOM
       | _ -> match t with
         | TApp{t1=TLam{x="_";_};_} when !ref_pretty -> prec > SEMICOLON
-        | TApp{t1=TLam _;_}        when !ref_pretty -> prec > LAM
+        | TApp{t1=TLam _;_}        when !ref_pretty -> prec > MATCH
 
         | TMatch _         -> prec > MATCH
-        | TLam _           -> prec > LAM
+        | TLam _ | TCont _ -> prec > LAM
         | TIf _            -> prec > IF
         | TVal{v=VTup _;_} -> prec > TUP
         | TApp _           -> prec > APP
@@ -464,8 +471,8 @@ let string_of_tm
   print_tm str_formatter (MATCH, t); flush_str_formatter ()
 
 (** Shorthand for converting values to strings. *)
-let string_of_val ?closure_env ?prefix ?margin ?max_boxes v =
-  string_of_tm ?closure_env ?prefix ?margin ?max_boxes (tm_of_val v)
+let string_of_val ?closure_env ?prefix ?margin ?max_boxes ?pretty v =
+  string_of_tm ?closure_env ?prefix ?margin ?max_boxes ?pretty (tm_of_val v)
 
 (** Convert environments to string *)
 let string_of_env ?(prefix = "") env =
