@@ -113,7 +113,7 @@ let rec print_tm fmt (prec, t) =
   let bare fmt t = match t with
 
     | TLam{x;t1;_} ->
-      fprintf fmt "@[<hov %d>lam %s.@ %a@]" !ref_indent x print_tm (MATCH, t1)
+      fprintf fmt "@[<hov %d>lam %s.@ %a@]" !ref_indent x print_tm (LAM, t1)
 
     | TIf{t1;t2;_} ->
       fprintf fmt "@[<hv 0>\
@@ -122,7 +122,7 @@ let rec print_tm fmt (prec, t) =
                    @[<hov %d>else@ %a@]\
                    @]"
         !ref_indent print_tm (MATCH, t1)
-        !ref_indent print_tm (MATCH, t2)
+        !ref_indent print_tm (IF, t2)
 
     | TMatch{cls;_} ->
       let inner = List.map (fun (p,t1) ->
@@ -150,7 +150,7 @@ let rec print_tm fmt (prec, t) =
 
       | VClos{x;t1;env;_} ->
         fprintf fmt "@[<hov %d>clos%a %s.@ %a@]"
-          !ref_indent print_env env x print_tm (MATCH, t1)
+          !ref_indent print_env env x print_tm (LAM, t1)
 
       | VClosIf{t1;t2;env;_} ->
         fprintf fmt "@[<hv 0>\
@@ -160,7 +160,7 @@ let rec print_tm fmt (prec, t) =
                      @]"
           !ref_indent print_env env
           print_tm (MATCH, t1)
-          !ref_indent print_tm (MATCH, t2)
+          !ref_indent print_tm (IF, t2)
 
       | VClosMatch{cls;env;_} ->
         let inner = List.map (fun (p,t1) ->
@@ -319,7 +319,7 @@ let rec print_tm fmt (prec, t) =
   in
 
   (* If pretty printing, try to find common dynamic-sized constructs
-     (tuples and records) *)
+     (tuples, records, and lists) *)
   let trmatch = if !ref_pretty then compl_tr t else None in
   let lmatch = if !ref_pretty then compl_l t else None in
 
@@ -329,7 +329,7 @@ let rec print_tm fmt (prec, t) =
     (* Records *)
     | Some (VRec{pls;_},args) ->
       let inner = List.map (fun (k, t1) ->
-          (fun fmt -> fprintf fmt "%s:%a" k print_tm (MATCH, t1)))
+          (fun fmt -> fprintf fmt "%s:%a" k print_tm (APP, t1)))
           (List.combine (List.rev pls) args) in
       fprintf fmt "{@[<hov 0>%a@]}"
         concat (COMMA,inner)
@@ -360,11 +360,11 @@ let rec print_tm fmt (prec, t) =
 
         (* Record projection application *)
         | TApp{t1=TVal{v=VRecProj{k;_};_};t2;_} ->
-          fprintf fmt "%a.%s" print_tm (APP, t2) k
+          fprintf fmt "%a.%s" print_tm (ATOM, t2) k
 
         (* Tuple projection applications *)
         | TApp{t1=TVal{v=VTupProj{i;_};_};t2;_} ->
-          fprintf fmt "%a.%d" print_tm (APP, t2) i
+          fprintf fmt "%a.%d" print_tm (ATOM, t2) i
 
         (* If applications *)
         | TApp{t1=TIf{t1;t2;_};t2=t;_} ->
@@ -374,7 +374,7 @@ let rec print_tm fmt (prec, t) =
                        @[<hov %d>else@ %a@]\
                        @]"
             !ref_indent print_tm (MATCH, t) print_tm (MATCH, t1)
-            !ref_indent print_tm (MATCH, t2)
+            !ref_indent print_tm (IF, t2)
 
         (* Match applications *)
         | TApp{t1=TMatch{cls;_};t2=t;_} ->

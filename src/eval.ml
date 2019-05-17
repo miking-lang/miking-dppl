@@ -359,6 +359,7 @@ and eval_app stoch_ctrl weight v1 v2 =
   | VFloat _,_ -> fail_app v1 v2
 
   | VLog _,VFloat{f;_} -> weight, VFloat{at=va;f=log f}
+  | VLog _,VInt{i;_}   -> weight, VFloat{at=va;f=log (float_of_int i)}
   | VLog _,_           -> fail_app v1 v2
 
   (* Polymorphic integer/floating-point functions *)
