@@ -1,12 +1,11 @@
-// Run with 100 samples for both is, smc-direct, and smc-dynamic
-// Direct smc fails completely in this case
+// Run with 100 samples for both is, smc-direct, and smc-dynamic // Direct smc fails completely in this case
 
-function flip() {
-  sample(bernoulli(0.5))
+function flip(p) {
+  sample(bernoulli(p))
 }
 
 weight(log(2))
-r = if flip() then {
+r = if flip(0.5) then {
   weight(log(0.5))
   weight(log(2000))
   true

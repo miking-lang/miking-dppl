@@ -2,10 +2,10 @@ function flip(p) {
   sample(bernoulli(p))
 }
 
-if flip(0.99) then {
-  weight(log(0.001))
+if flip(0.5) then {
+  weight(log(0.5))
   true
 } else {
-  weight(log(1))
+  weight(log(1000))
   sample(normal(0,1))
 }
