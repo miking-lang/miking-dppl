@@ -5,13 +5,12 @@ function flip(p) {
 }
 
 weight(log(2))
-r = if flip(0.5) then {
-  weight(log(0.5))
-  weight(log(2000))
+if flip(0.5) then {
+  weight(log(1))
+  weight(log(100))
   true
 } else {
-  weight(log(1000))
+  weight(log(100))
   false
 }
-weight(log(3))
-r
+weight(log(4))

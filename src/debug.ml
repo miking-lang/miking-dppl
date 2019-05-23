@@ -19,7 +19,7 @@ let debug_resample_transform = false
 let debug_cps = false
 
 (** Debug SMC inference *)
-let debug_smc = false
+let debug_smc = true
 
 (** Debug dynamic SMC inference *)
 let debug_smc_dyn = false

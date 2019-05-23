@@ -48,7 +48,7 @@ let rec debruijn env t = match t with
   | TIf{at;t1;t2} -> TIf{at;t1=debruijn env t1;t2=debruijn env t2}
 
   | TMatch{at;cls} ->
-    TMatch{at;cls=List.map (fun (p,t) -> p,debruijn (patenv env p) t) cls}
+    TMatch{at;cls=Utils.map (fun (p,t) -> p,debruijn (patenv env p) t) cls}
 
   | TVal _ -> t
 
@@ -105,7 +105,7 @@ let rec match_case env pattern value = match pattern,value with
   | PFloat _,     _                            -> None
 
 (** Big-step evaluation of terms *)
-let rec eval stoch_ctrl env weight t =
+let rec eval stoch stoch_ctrl env weight t =
 
   debug debug_eval "Eval"
     (fun () ->
@@ -115,44 +115,35 @@ let rec eval stoch_ctrl env weight t =
        else
          str);
 
-  let weight,v = match t with
+  match t with
 
     (* Variables using debruijn indices.
        Need to evaluate because fix point might exist in env. *)
-    | TVar{i;_} -> eval stoch_ctrl env weight (List.nth env i)
+    | TVar{i;_} -> eval stoch stoch_ctrl env weight (List.nth env i)
 
     (* Lambdas, ifs, and matches *)
-    | TLam{x;t1;_}  -> weight,VLam{at=va;x;t1;env}
-    | TIf{t1;t2;_}  -> weight,VIf{at=va;t1;t2;env}
-    | TMatch{cls;_} -> weight,VMatch{at=va;cls;env}
+    | TLam{x;t1;_}  -> weight,set_stoch stoch (VLam{at=va;x;t1;env})
+    | TIf{t1;t2;_}  -> weight,set_stoch stoch (VIf{at=va;t1;t2;env})
+    | TMatch{cls;_} -> weight,set_stoch stoch (VMatch{at=va;cls;env})
 
     (* Continuations. For later use, save the state of stoch_ctrl at the
        syntactic origin in the continuation. TODO Correct? *)
-    | TCont{x;t1;_} -> weight,VCont{at=va;x;t1;stoch_ctrl;env}
+    | TCont{x;t1;_} -> weight,set_stoch stoch (VCont{at=va;x;t1;stoch_ctrl;env})
 
     (* Values *)
-    | TVal{v;_} -> weight,v
+    | TVal{v;_} -> weight,set_stoch stoch v
 
     (* Applications.
        When weight is degenerate, cut off evaluation already here. *)
     | TApp{t1;t2;_} ->
-      let weight,v1 = eval stoch_ctrl env weight t1 in
+      let weight,v1 = eval false stoch_ctrl env weight t1 in
       if weight = neg_infinity then weight,VUnit{at=va}
-      else let weight,v2 = eval stoch_ctrl env weight t2 in
+      else let weight,v2 = eval false stoch_ctrl env weight t2 in
         if weight = neg_infinity then weight,VUnit{at=va}
-        else eval_app stoch_ctrl weight v1 v2
+        else eval_app stoch stoch_ctrl weight v1 v2
 
-  in
-
-  debug debug_eval "Eval complete"
-    (fun () ->
-       string_of_val
-         ~closure_env:debug_eval_env v);
-
-  weight,v
-
-(* Evaluate applications *)
-and eval_app stoch_ctrl weight v1 v2 =
+(* Evaluate applications TODO Make tail recursive? *)
+and eval_app stoch stoch_ctrl weight v1 v2 =
 
   debug debug_eval_app "Eval application"
     (fun () ->
@@ -167,33 +158,31 @@ and eval_app stoch_ctrl weight v1 v2 =
   let ({stoch=s1;_} as a1),({stoch=s2;_} as _a2) = val_attr v1,val_attr v2 in
 
   (* Default attribute with stochasticness set if either the LHS or the RHS is
-     stochastic. *)
-  let va = {stoch = s1 || s2} in
+     stochastic, or if the result should be stochastic *)
+  let stoch = stoch || s1 || s2 in
+  let va = {stoch = stoch} in
 
-  let weight,v = match v1,v2 with
+  match v1,v2 with
 
     (* Closure application. If LHS is stochastic, the result is stochastic. *)
     | VLam{t1=t11;env;_},_ ->
-      let weight,v = eval stoch_ctrl (tm_of_val v2::env) weight t11 in
-      weight,set_stoch s1 v
+      eval (stoch || s1) stoch_ctrl (tm_of_val v2::env) weight t11
 
     (* Continuation application.
        NOTE: If we are applying a continuation, use the value of stoch_ctrl
        bound in that continuation, and not stoch_ctrl in the current evaluation
        context! *)
     | VCont{t1=t11;env;stoch_ctrl;_},_ ->
-      let weight,v = eval stoch_ctrl (tm_of_val v2::env) weight t11 in
-      weight,set_stoch s1 v
+      eval (stoch || s1) stoch_ctrl (tm_of_val v2::env) weight t11
 
     (* If-application. Evaluate the chosen branch with stoch_ctrl set if the
        condition is stochastic. Furthermore, the result is stochastic if
        the condition (or the if expression itself) is stochastic. *)
     | VIf{t1;t2;env;_},VBool{b;_} ->
       let stoch_ctrl = stoch_ctrl || s2 in
-      let weight,v = match b with
-        | true -> eval stoch_ctrl env weight t1
-        | false -> eval stoch_ctrl env weight t2 in
-      weight,set_stoch (s1 || s2) v
+      (match b with
+        | true -> eval stoch stoch_ctrl env weight t1
+        | false -> eval stoch stoch_ctrl env weight t2)
     | VIf _,_ -> fail_app v1 v2
 
     (* Match-application. Evaluate the chosen term with stoch_ctrl set if the
@@ -204,18 +193,15 @@ and eval_app stoch_ctrl weight v1 v2 =
       let rec match_cases cls = match cls with
         | (p,t) :: cls ->
           (match match_case env p v2 with
-           | Some env -> eval stoch_ctrl env weight t
+           | Some env -> eval stoch stoch_ctrl env weight t
            | None -> match_cases cls)
         | [] -> failwith "Pattern matching failed" in
-      let weight,v = match_cases cls in
-      weight,set_stoch (s1 || s2) v
+      match_cases cls
 
     (* Fixpoint application *)
     | VFix _,VLam{t1=t21;env;_} ->
-      let weight,v =
-        eval stoch_ctrl
-          ((TApp{at=ta;t1=tm_of_val v1;t2=tm_of_val v2})::env) weight t21 in
-      weight,set_stoch (s1 || s2) v
+        eval stoch stoch_ctrl
+          ((TApp{at=ta;t1=tm_of_val v1;t2=tm_of_val v2})::env) weight t21
     | VFix _,_ -> fail_app v1 v2
 
     (* Record construction *)
@@ -505,12 +491,3 @@ and eval_app stoch_ctrl weight v1 v2 =
     | VConcat{v1=Some VList{vls=vls1;_};_}, VList{vls=vls2;_} ->
       weight,VList{at=va;vls=vls1 @ vls2}
     | VConcat _,_ -> fail_app v1 v2
-
-  in
-
-  debug debug_eval_app "Eval application result"
-    (fun () ->
-       (Printf.sprintf "%s"
-          (string_of_val ~prefix:"RESULT: " ~closure_env:debug_eval_env v)));
-
-  weight,v

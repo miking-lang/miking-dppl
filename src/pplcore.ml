@@ -117,7 +117,7 @@ let main =
         | "eval"        -> inference := Eval
         | _             -> failwith "Incorrect inference algorithm"
       ),
-    " Specifies inference method. Options are: eval, is,\
+    " Specifies inference method. Options are: eval, is, \
      smc-direct, smc-manual, smc-dynamic, and smc-static.";
 
     "--output",

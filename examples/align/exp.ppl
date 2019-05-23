@@ -1,0 +1,5 @@
+let x ~ sample (normal 0 100) in
+weight(x);
+weight(-x);
+x
+

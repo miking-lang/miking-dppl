@@ -1,10 +1,13 @@
+// This example performs better with smc-direct. Also, it shows that
+// ESS is not a good measure of the quality of the set of final samples
+
 function flip(p) {
   sample(bernoulli(p))
 }
 
-if flip(0.5) then {
+if flip(0.9) then {
   weight(log(0.5))
-  true
+  20.0
 } else {
   weight(log(1000))
   sample(normal(0,1))

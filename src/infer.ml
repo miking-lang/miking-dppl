@@ -84,60 +84,61 @@ let logavg n weights =
    samples. *)
 let string_of_empirical
     ?(aggregate = true)
-    ?(normalize = true)
+    ?(normalize = false)
+    ?(diag_ess = true)
     ?(log_weights = false) ls =
 
-  (* Normalize if arg is given *)
-  let res = if normalize then
-      (* Compute the logarithm of the average of the weights *)
-      let logavg = logavg !samples (List.map fst ls) in
+  (* Aggregate and log_weights do not go together *)
+  let aggregate = aggregate && not log_weights in
 
-      (* Compute normalized weights *)
-      Utils.map (fun (w,t) -> w-.logavg-.(log (float_of_int !samples)),t) ls
-    else
-      ls
-  in
+  (* Compute the logarithm of the average of the weights *)
+  let logavg = logavg !samples (List.map fst ls) in
+
+  (* Compute normalized weights *)
+  let norm_ls =
+    Utils.map (fun (w,t) -> w-.logavg-.(log (float_of_int !samples)),t) ls in
+
+  (* Compute ESS Diagnostic *)
+  let ess = 1.0 /.
+            List.fold_left
+              (fun acc (w,_) -> acc +. exp w *. exp w) 0.0 norm_ls in
+
+  (* Choose normalized or unnormalized weights *)
+  let res = if normalize then norm_ls else ls in
 
   (* Convert from log weights to ordinary weights, depending on arg *)
-  let res = if log_weights then
-      res
-    else
-      Utils.map (fun (w,t) -> exp w,t) res
+  let res = if log_weights then res
+    else Utils.map (fun (w,t) -> exp w,t) res
   in
 
-  (* Aggregate equal samples depending on argument (only available if using
+  (* Sort and aggregate samples depending on argument (only available if using
      ordinary weights) *)
   let res =
-    if aggregate && not log_weights then
-      let res =
-        List.sort (fun (_,v1) (_,v2) -> Compare.compare v1 v2) res in
+    if aggregate then
       let rec aggregate acc ls = match acc,ls with
         | (w1,v1,n)::acc,(w2,v2)::ls when v1 = v2 ->
           aggregate ((w1+.w2,v1,n+1)::acc) ls
         | acc, (w,v)::ls ->
           aggregate ((w,v,1)::acc) ls
         | acc, [] -> acc
-      in aggregate [] res
+      in
+      res
+      |> List.sort (fun (_,v1) (_,v2) -> Compare.compare v1 v2)
+      |> aggregate []
+      |> List.sort (fun (w1,_,_) (w2,_,_) -> - Pervasives.compare w1 w2)
     else
       Utils.map (fun (w,v) -> (w,v,1)) res
   in
-
-  (* Sort based on weight to show the sample with highest weight at the top *)
-  let res = List.sort
-      (fun (w1,_,_) (w2,_,_) -> - Pervasives.compare w1 w2) res in
 
   (* Convert values to strings *)
   let res = List.map
       (fun (w,v,n) -> w,string_of_val ~max_boxes:5 ~margin:max_int v,n) res in
 
-  (* Check if the #SAMPLES column should be printed *)
-  let is_aggr = List.exists (fun (_,_,n) -> n > 1) res in
-
   (* Column width for printout *)
   let cw = 15 in
 
   (* Function for printing one sample *)
-  let line (w,v,n) = if is_aggr then
+  let line (w,v,n) = if aggregate then
       sprintf "  %-*f%-*d%s" cw w cw n v
     else
       sprintf "  %-*f%s" cw w v
@@ -148,15 +149,16 @@ let string_of_empirical
   let weight_header = if log_weights then "LOG WEIGHT" else "WEIGHT" in
 
   (* Header *)
-  let header = if is_aggr then
+  let header = if aggregate then
       sprintf "%-*s%-*s%s\n" cw weight_header cw "#SAMPLES" "SAMPLE"
     else
       sprintf "%-*s%s\n" cw weight_header "SAMPLE"
   in
 
   (* Print headers and all samples *)
-  header ^ (String.concat "\n" (Utils.map line res))
-
+  header
+  ^ (String.concat "\n" (Utils.map line res))
+  ^ if diag_ess then sprintf "\n\n  ESS=%f" ess else ""
 
 (** Importance sampling
     (or more specifically, likelihood weighting) inference *)
@@ -166,7 +168,7 @@ let infer_is env program =
   let s = replicate !samples program in
 
   (* Evaluate everything to the end, producing a set of weighted samples *)
-  let res = Utils.map (eval false env 0.0) s in
+  let res = Utils.map (eval false false env 0.0) s in
 
   (* Calculate normalizing constant and return *)
   logavg !samples (Utils.map fst res),res
@@ -175,11 +177,14 @@ let infer_is env program =
 (* Systematic resampling of n samples *)
 let resample s =
 
+  debug debug_smc "Resample"
+    (fun () -> string_of_empirical ~aggregate:false ~normalize:false s);
+
   (* Compute part of the normalizing constant *)
-  let logavg = logavg !samples (List.map fst s) in
+  let logavg = logavg !samples (Utils.map fst s) in
 
   (* Compute normalized weights from log-weights *)
-  let snorm = List.map (fun (w,t) -> exp (w -. logavg),t) s in
+  let snorm = Utils.map (fun (w,t) -> exp (w -. logavg),t) s in
 
   (* Draw offset for resampling *)
   let offset = Random.float 1.0 in
@@ -209,7 +214,8 @@ let infer_smc env program =
     (TApp{at=ta; t1=tm_of_val cont; t2=TVal{at=ta;v=VUnit{at}}}) in
 
   (* Run a particle until the next resampling point *)
-  let rec eval stoch_ctrl env w t = match Eval.eval stoch_ctrl env w t with
+  let rec eval stoch_ctrl env w t =
+    match Eval.eval false stoch_ctrl env w t with
 
     (* If the resample is dynamic and control is stochastic, just continue
        evaluation. *)
@@ -240,15 +246,10 @@ let infer_smc env program =
 
   (* Run SMC *)
   let rec recurse s normconst =
-
     (* Check if we need to resample *)
     if List.exists
         (fun (_,v) -> match v with VResamp _ -> true | _ -> false) s
     then begin
-      debug debug_smc "Resample"
-        (fun () -> string_of_empirical
-            ~log_weights:true ~normalize:false s);
-
       (* Do the resampling and accumulate normalization constant *)
       num_resample := !num_resample + 1;
       let logavg, s = resample s in
@@ -362,7 +363,7 @@ let infer tm =
   let env = (builtin |> List.split |> snd) in
 
   match !inference with
-  | Eval       -> let logavg,v = eval false env 0.0 tm in logavg,[logavg,v]
+  | Eval -> let logavg,v = eval false false env 0.0 tm in logavg,[logavg,v]
   | Importance -> infer_is env tm
   | SMCDirect  | SMCManual
   | SMCDynamic | SMCStatic -> infer_smc env tm
