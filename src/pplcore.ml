@@ -13,7 +13,7 @@ open Utest
 type output =
   | None
   | Debug
-  | Dist
+  | Samples
   | Norm
 
 let output = ref Debug
@@ -90,8 +90,7 @@ let exec filename =
         (fun () -> string_of_empirical res);
       debug true "Log Normalizing constant"
         (fun () -> sprintf "%f" normconst)
-    | Dist ->
-      print_endline (string_of_empirical res)
+    | Samples -> print_endline (samples_of_empirical res)
     | Norm ->
       printf "%f" normconst
   end;
@@ -124,11 +123,11 @@ let main =
     Arg.String(fun s -> match s with
         | "none"  -> output := None
         | "debug" -> output := Debug
-        | "dist"  -> output := Dist
+        | "samples"  -> output := Samples
         | "norm"  -> output := Norm
         | _       -> failwith "Incorrect output format"
       ),
-    " Specifies output format. Options are: none, debug, dist, norm.";
+    " Specifies output format. Options are: none, debug, samples, norm.";
 
     "--samples",
     Arg.Int(fun i -> match i with

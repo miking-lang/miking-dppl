@@ -70,18 +70,30 @@ let inference = ref Eval
 (** Number of samples for inference algorithms *)
 let samples = ref 10
 
-(** Compute the logarithm of the average of a list of n weights using
+(** Compute the logarithm of the average of a list of weights using
     logsumexp-trick *)
-let logavg n weights =
+let logavg weights =
   let max = List.fold_left max (-. infinity) weights in
   log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
-  +. max -. log (float n)
+  +. max -. log (float !samples)
 
-(* Function for producing a nicely formatted string representation of the
-   empirical distributions returned by infer below. Aggregates samples with the
-   same value to produce a more compact output.
-   TODO The sorting function fails with stack overflow for large number of
-   samples. *)
+(** Normalize an empirical distribution with log weights *)
+let normalize_empirical ls =
+  (* Compute the logarithm of the average of the weights *)
+  let logavg = logavg (List.map fst ls) in
+
+  (* Compute normalized weights *)
+  Utils.map (fun (w,t) -> w-.logavg-.(log (float_of_int !samples)),t) ls
+
+(** Convert log weights of an empirical distribution to regular weights *)
+let delog_empirical ls =
+  Utils.map (fun (w,t) -> exp w,t) ls
+
+(** Function for producing a nicely formatted string representation of the
+    empirical distributions returned by infer below. Aggregates samples with the
+    same value to produce a more compact output.
+    TODO The sorting function fails with stack overflow for large number of
+    samples. *)
 let string_of_empirical
     ?(aggregate = true)
     ?(normalize = false)
@@ -91,12 +103,8 @@ let string_of_empirical
   (* Aggregate and log_weights do not go together *)
   let aggregate = aggregate && not log_weights in
 
-  (* Compute the logarithm of the average of the weights *)
-  let logavg = logavg !samples (List.map fst ls) in
-
-  (* Compute normalized weights *)
-  let norm_ls =
-    Utils.map (fun (w,t) -> w-.logavg-.(log (float_of_int !samples)),t) ls in
+  (* Compute normalized distribution *)
+  let norm_ls = normalize_empirical ls in
 
   (* Compute ESS Diagnostic *)
   let ess = 1.0 /.
@@ -107,9 +115,7 @@ let string_of_empirical
   let res = if normalize then norm_ls else ls in
 
   (* Convert from log weights to ordinary weights, depending on arg *)
-  let res = if log_weights then res
-    else Utils.map (fun (w,t) -> exp w,t) res
-  in
+  let res = if log_weights then res else delog_empirical res in
 
   (* Sort and aggregate samples depending on argument (only available if using
      ordinary weights) *)
@@ -171,8 +177,7 @@ let infer_is env program =
   let res = Utils.map (eval false false env 0.0) s in
 
   (* Calculate normalizing constant and return *)
-  logavg !samples (Utils.map fst res),res
-
+  logavg (Utils.map fst res),res
 
 (* Systematic resampling of n samples *)
 let resample s =
@@ -181,7 +186,7 @@ let resample s =
     (fun () -> string_of_empirical ~aggregate:false ~normalize:false s);
 
   (* Compute part of the normalizing constant *)
-  let logavg = logavg !samples (Utils.map fst s) in
+  let logavg = logavg (Utils.map fst s) in
 
   (* Compute normalized weights from log-weights *)
   let snorm = Utils.map (fun (w,t) -> exp (w -. logavg),t) s in
@@ -201,6 +206,16 @@ let resample s =
 
   (* Also return the log average for computing the normalization constant *)
   logavg, rec1 0.0 offset snorm []
+
+(** Create a string of unweighted samples from an empirical distribution,
+    separated by line breaks *)
+let samples_of_empirical ls =
+  let _,ls = resample ls in
+  let x = ls |> List.map snd
+          |> List.map (string_of_val ~max_boxes:5 ~margin:max_int)
+          |> String.concat "\n" in
+  sprintf "%s" x
+
 
 (** SMC inference *)
 let infer_smc env program =
@@ -264,6 +279,8 @@ let infer_smc env program =
 
       recurse s normconst
     end else
+      (* Accumulate final logavg and return *)
+      let normconst = normconst +. logavg (Utils.map fst s) in
       normconst,s
 
   in
@@ -304,7 +321,6 @@ let cps tm builtin =
 
   debug debug_cps "Post CPS builtin"
     (fun () -> string_of_builtin builtin);
-
 
   (* Perform CPS transformation of main program *)
   let tm = Cps.cps tm in
@@ -363,7 +379,8 @@ let infer tm =
   let env = (builtin |> List.split |> snd) in
 
   match !inference with
-  | Eval -> let logavg,v = eval false false env 0.0 tm in logavg,[logavg,v]
+  | Eval -> samples := 1;
+    let logavg,v = eval false false env 0.0 tm in logavg,[logavg,v]
   | Importance -> infer_is env tm
   | SMCDirect  | SMCManual
   | SMCDynamic | SMCStatic -> infer_smc env tm

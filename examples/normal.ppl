@@ -1,0 +1,4 @@
+let x = sample(normal 0 1) in
+weight(3+x*3);
+x
+

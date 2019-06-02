@@ -4,7 +4,7 @@ open Printf
 open Utest
 
 (** Debug the input term *)
-let debug_input = true
+let debug_input = false
 
 (** Debug the labelling *)
 let debug_label = false
@@ -19,7 +19,7 @@ let debug_resample_transform = false
 let debug_cps = false
 
 (** Debug SMC inference *)
-let debug_smc = true
+let debug_smc = false
 
 (** Debug dynamic SMC inference *)
 let debug_smc_dyn = false

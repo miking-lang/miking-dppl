@@ -3,7 +3,7 @@
 open Ast
 
 (** Whether to use a random seed or not for probability distributions *)
-let random_seed = false
+let random_seed = true
 
 (** Gsl default seed **)
 let seed =

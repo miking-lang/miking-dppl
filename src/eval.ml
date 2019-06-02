@@ -142,7 +142,7 @@ let rec eval stoch stoch_ctrl env weight t =
         if weight = neg_infinity then weight,VUnit{at=va}
         else eval_app stoch stoch_ctrl weight v1 v2
 
-(* Evaluate applications TODO Make tail recursive? *)
+(* Evaluate applications *)
 and eval_app stoch stoch_ctrl weight v1 v2 =
 
   debug debug_eval_app "Eval application"
