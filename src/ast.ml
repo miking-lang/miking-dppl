@@ -96,6 +96,7 @@ and value =
   | VGamma     of { at:val_attr; a:float option; b:float option }
   | VExp       of { at:val_attr; lam:float option }
   | VBern      of { at:val_attr; p:float option }
+  | VBeta      of { at:val_attr; a:float option; b:float option }
 
   (* Functions operating on probability distributions *)
   | VSample    of { at:val_attr }
@@ -193,6 +194,10 @@ let arity c = match c with
   | VExp _                            -> 1
   | VBern{p=None;_}                   -> 1
   | VBern _                           -> 1
+  | VBeta{a=None;  b=None;_}          -> 2
+  | VBeta{a=Some _;b=None;_}          -> 1
+  | VBeta{a=Some _;b=Some _;_}        -> 0
+  | VBeta _                           -> failwith "Should not happen"
 
   | VSample _ -> 1
 
@@ -239,8 +244,8 @@ let arity c = match c with
 
 (** Returns the attribute of a value *)
 let val_attr = function
-  | VCons{at;_}   | VCont    {at;_}
-  | VLam {at;_}   | VIf    {at;_}  | VMatch    {at;_}
+  | VBeta{at;_}   | VCons{at;_}    | VCont {at;_}
+  | VLam {at;_}   | VIf    {at;_}  | VMatch {at;_}
   | VFix{at;_}    | VRec{at;_}     | VRecProj{at;_}
   | VTup{at;_}    | VTupProj{at;_} | VList{at;_}
   | VUtest{at;_}  | VNormal{at;_}  | VUniform{at;_}
@@ -285,6 +290,7 @@ let update_val_attr attr = function
   | VGamma     v -> VGamma     {v with at=attr}
   | VExp       v -> VExp       {v with at=attr}
   | VBern      v -> VBern      {v with at=attr}
+  | VBeta      v -> VBeta      {v with at=attr}
   | VSample    _ -> VSample    {at=attr}
   | VLogPdf    v -> VLogPdf    {v with at=attr}
   | VWeight    _ -> VWeight    {at=attr}

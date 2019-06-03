@@ -1,0 +1,5 @@
+let p ~ beta 2 2 in
+(observe true ~ bernoulli p);
+(observe true ~ bernoulli p);
+(observe true ~ bernoulli p);
+p

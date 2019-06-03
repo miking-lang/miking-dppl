@@ -249,8 +249,7 @@ let rec print_tm fmt (prec, t) =
 
       | VNormal{mu=None;   sigma=None;_}    -> fprintf fmt "normal"
       | VNormal{mu=Some f1;sigma=None;_}    -> fprintf fmt "normal(%f)" f1
-      | VNormal{mu=Some f1;sigma=Some f2;_} -> fprintf fmt "normal(%f,%f)"
-                                                 f1 f2
+      | VNormal{mu=Some f1;sigma=Some f2;_} -> fprintf fmt "normal(%f,%f)" f1 f2
       | VNormal _                           -> failwith "Not supported"
 
       | VUniform{a=None;   b=None;_}    -> fprintf fmt "uniform"
@@ -268,6 +267,11 @@ let rec print_tm fmt (prec, t) =
 
       | VBern{p=None;_}   -> fprintf fmt "bern"
       | VBern{p=Some f;_} -> fprintf fmt "bern(%f)" f
+
+      | VBeta{a=None;   b=None;_}    -> fprintf fmt "beta"
+      | VBeta{a=Some f1;b=None;_}    -> fprintf fmt "beta(%f)" f1
+      | VBeta{a=Some f1;b=Some f2;_} -> fprintf fmt "beta(%f,%f)" f1 f2
+      | VBeta _                      -> failwith "Not supported"
 
       | VLogPdf{v1=None;_}   -> fprintf fmt "logpdf"
       | VLogPdf{v1=Some v;_} -> fprintf fmt "logpdf(%a)"

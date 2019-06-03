@@ -36,6 +36,6 @@ let debug_eval_env = false
 (** Debug printout *)
 let debug cond heading info =
   if cond && not !utest then begin
-    printf "--- %s ---\n" (String.uppercase_ascii heading);
-    printf "%s\n\n%!" (info ());
+    eprintf "--- %s ---\n" (String.uppercase_ascii heading);
+    eprintf "%s\n\n%!" (info ());
   end

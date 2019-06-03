@@ -1,0 +1,17 @@
+let foldl f acc l = match l with
+  | [] -> acc
+  | a:l -> foldl f (f acc a) l
+in
+
+let sim xprev data =
+  let x ~ normal (xprev + 2) 1 in
+  (observe data ~ normal x 1);
+  x
+in
+
+let data = [24.39,25.47,29.62,31.84,32.59,34.48,37.49,38.38,39.97,42.96] in
+
+let x0 ~ normal 0 100 in
+
+foldl sim x0 data
+

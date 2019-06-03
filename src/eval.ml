@@ -7,11 +7,11 @@ open Debug
 open Utest
 open Sprint
 
-(** Error message for incorrect constant applications *)
+(** Error message for incorrect applications *)
 let fail_app left right =
   (Printf.printf "\n**  Incorrect application: **\n\
-                  \    LHS: %s\n\
-                  \    RHS: %s\n"
+                 \    LHS: %s\n\
+                 \    RHS: %s\n"
      (string_of_val left)
      (string_of_val right));
   failwith "fail_app"
@@ -286,6 +286,17 @@ and eval_app stoch stoch_ctrl weight v1 v2 =
     | VBern{p=None;_},VFloat{f;_} -> weight,VBern{at=va;p=Some(f)}
     | VBern{p=None;_},VInt{i;_}   -> weight,VBern{at=va;p=Some(float_of_int i)}
     | VBern _,_                   -> fail_app v1 v2
+
+    | VBeta{a=None;b=None;_},
+      VFloat{f;_}  -> weight,VBeta{at=va;a=Some f;b=None}
+    | VBeta{a=None;b=None;_},
+      VInt{i;_}    -> weight,VBeta{at=va;a=Some (float_of_int i);b=None}
+    | VBeta{a=Some f1;b=None;_},
+      VFloat{f=f2;_} -> weight,VBeta{at=va;a=Some f1;b=Some f2 }
+    | VBeta{a=Some f1;b=None;_},
+      VInt{i=i2;_}   ->
+      weight,VBeta{at=va;a=Some f1;b=Some (float_of_int i2)}
+    | VBeta _,_  -> fail_app v1 v2
 
     (* Result of sample is always stochastic. *)
     | VSample _,dist -> weight,set_stoch true (Dist.sample dist)

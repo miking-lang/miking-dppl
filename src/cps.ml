@@ -90,7 +90,7 @@ let rec cps_atomic t = match t with
     | VResamp _ -> t
 
     (* Other values *)
-    | VCons _
+    | VBeta _| VCons _
     | VRec _    | VRecProj _ | VTup _    | VTupProj _
     | VList _   | VUtest _   | VNormal _ | VUniform _
     | VGamma _  | VExp _     | VBern _   | VSample _

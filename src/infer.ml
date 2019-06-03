@@ -40,6 +40,7 @@ let builtin = [
   "gamma",        VGamma{at=va;a=None;b=None};
   "exponential",  VExp{at=va;lam=None};
   "bernoulli",    VBern{at=va;p=None};
+  "beta",         VBeta{at=va;a=None;b=None};
 
   "logpdf",       VLogPdf{at=va;v1=None};
   "sample",       VSample{at=va};

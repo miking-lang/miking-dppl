@@ -1,6 +1,12 @@
 (** Functions related to probability distributions *)
 
 open Ast
+open Sprint
+
+(** Error message for incorrect distributions *)
+let fail_dist dist =
+  (Printf.printf "\n**  Incorrect distribution: %s\n" (string_of_val dist));
+  failwith "fail_dist"
 
 (** Whether to use a random seed or not for probability distributions *)
 let random_seed = true
@@ -17,13 +23,19 @@ let seed =
 let logpdf value dist = match value,dist with
 
   (* Normal distribution *)
-  | VFloat{f;_},
-    VNormal{mu=Some mu;sigma=Some sigma;_} ->
+  | value, VNormal{mu=Some mu;sigma=Some sigma;_} ->
+    let f = match value with
+      | VFloat{f;_} -> f
+      | VInt{i;_} -> float_of_int i
+      | _ -> failwith "TODO" in
     VFloat{at=va;f=log (Gsl.Randist.gaussian_pdf (f -. mu) ~sigma:sigma)}
 
   (* Exponential distribution *)
-  | VFloat{f;_},
-    VExp{lam=Some lam;_} ->
+  | value, VExp{lam=Some lam;_} ->
+    let f = match value with
+      | VFloat{f;_} -> f
+      | VInt{i;_} -> float_of_int i
+      | _ -> failwith "TODO" in
     let mu = 1.0 /. lam in
     VFloat{at=va;f=log (Gsl.Randist.exponential_pdf f ~mu:mu)}
 
@@ -33,13 +45,23 @@ let logpdf value dist = match value,dist with
     let i = if b then 1 else 0 in
     VFloat{at=va;f=log (Gsl.Randist.bernoulli_pdf i ~p:p)}
 
+  (* Beta distribution *)
+  | value,VBeta{a=Some a;b=Some b;_} ->
+    let f = match value with
+      | VFloat{f;_} -> f
+      | VInt{i;_} -> float_of_int i
+      | _ -> failwith "TODO" in
+    VFloat{at=va;f=log (Gsl.Randist.beta_pdf f ~a:a ~b:b)}
+
   (* Gamma distribution *)
-  | VFloat{f;_},
-    VGamma{a=Some a;b=Some b;_} ->
+  | value,VGamma{a=Some a;b=Some b;_} ->
+    let f = match value with
+      | VFloat{f;_} -> f
+      | VInt{i;_} -> float_of_int i
+      | _ -> failwith "TODO" in
     VFloat{at=va;f=log (Gsl.Randist.gamma_pdf f ~a:a ~b:b)}
 
-  | _ -> failwith "Incorrect distribution\
-                   or value applied as argument to logpdf"
+  | _ -> fail_dist dist (* TODO Make this static instead *)
 
 (** Sample functions for built in distributions. **)
 let sample dist = match dist with
@@ -58,9 +80,13 @@ let sample dist = match dist with
     let b = Gsl.Randist.bernoulli seed ~p:p == 1 in
     VBool{at=va;b=b}
 
+  (* Beta distribution *)
+  | VBeta{a=Some a;b=Some b;_} ->
+    VFloat{at=va; f=Gsl.Randist.beta seed ~a:a ~b:b}
+
   (* Gamma distribution *)
   | VGamma{a=Some a;b=Some b;_} ->
     VFloat{at=va;f=Gsl.Randist.gamma seed ~a:a ~b:b}
 
-  | _ -> failwith "Incorrect distribution applied as argument to sample."
+  | _ -> fail_dist dist (* TODO Make this static instead *)
 
