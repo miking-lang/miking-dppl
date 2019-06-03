@@ -1,0 +1,10 @@
+let flip p = sample (bernoulli p) in
+
+if flip(0.5) then (
+  weight(log(1));
+  weight(log(1000));
+  true
+) else (
+  weight(log(1000));
+  false
+)

@@ -1,0 +1,4 @@
+let x ~ normal 0 100 in
+weight x;
+weight (-x);
+x
