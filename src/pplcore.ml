@@ -91,8 +91,7 @@ let exec filename =
       debug true "Log Normalizing constant"
         (fun () -> sprintf "%f" normconst)
     | Samples -> print_endline (samples_of_empirical res)
-    | Norm ->
-      printf "%f" normconst
+    | Norm -> printf "%f" normconst
   end;
 
   (* Print unit testing information for this file *)
@@ -121,11 +120,11 @@ let main =
 
     "--output",
     Arg.String(fun s -> match s with
-        | "none"  -> output := None
-        | "debug" -> output := Debug
+        | "none"     -> output := None
+        | "debug"    -> output := Debug
         | "samples"  -> output := Samples
-        | "norm"  -> output := Norm
-        | _       -> failwith "Incorrect output format"
+        | "norm"     -> output := Norm
+        | _          -> failwith "Incorrect output format"
       ),
     " Specifies output format. Options are: none, debug, samples, norm.";
 

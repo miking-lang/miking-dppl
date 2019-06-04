@@ -90,7 +90,7 @@ let rec cps_atomic t = match t with
     | VResamp _ -> t
 
     (* Other values *)
-    | VBeta _| VCons _
+    | VBeta _   | VCons _
     | VRec _    | VRecProj _ | VTup _    | VTupProj _
     | VList _   | VUtest _   | VNormal _ | VUniform _
     | VGamma _  | VExp _     | VBern _   | VSample _
@@ -112,7 +112,7 @@ and cps_complex cont t =
   (* Function application is the only complex expression.
      Optimize the case when either the function or argument is atomic. *)
   | TApp{at;t1;t2} ->
-    let wrapopt (a, a') = Some a,a' in
+    let wrapopt (a,a') = Some a,a' in
     let f, f' = match t1 with
       | TApp _ -> wrapopt (genvar noidx)
       | _      -> None,cps_atomic t1 in

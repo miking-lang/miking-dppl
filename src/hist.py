@@ -3,9 +3,6 @@
 import matplotlib.pyplot as plt
 import sys
 
-def readline():
-    return sys.stdin.readline().rstrip()
-
 x = []
 
 for line in sys.stdin:

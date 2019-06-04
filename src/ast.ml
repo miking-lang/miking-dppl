@@ -160,7 +160,7 @@ and env = term list
 (** Returns the number of expected arguments for values *)
 let arity c = match c with
 
-  | VLam  _ | VIf     _ | VMatch     _ -> 1
+  | VLam  _ | VIf _ | VMatch _ -> 1
 
   | VCont     _ -> 1
 

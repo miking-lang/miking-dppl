@@ -1,4 +1,5 @@
-(** Inference algorithms *)
+(** Inference algorithms TODO Separate into different files/modules for
+    different inference algorithms. TODO Cleanup *)
 
 open Ast
 open Sprint
