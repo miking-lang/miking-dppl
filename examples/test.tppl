@@ -1,2 +1,14 @@
-((((((1 + 2) + 3) + 4) + 5) + 6) + 7)
+function flip(p) {
+  sample(bernoulli(p))
+}
+
+if flip(0.5) then {
+  weight(log(4))
+  weight(log(2))
+  true
+} else {
+  weight(log(2))
+  weight(log(5))
+  false
+}
 

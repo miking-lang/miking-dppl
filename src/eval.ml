@@ -1,11 +1,12 @@
-(** The semantics of pplcore *)
+(** Interpreter for pplcore *)
 
 open Printf
 open Ast
-open Pattern
 open Debug
 open Utest
 open Sprint
+open Match
+open Dist
 
 (** Error message for incorrect applications *)
 let fail_app left right =
@@ -16,93 +17,11 @@ let fail_app left right =
      (string_of_val right));
   failwith "fail_app"
 
-(** Extends an environment used in debruijn conversion with the identifiers
-    found in the given pattern *)
-let rec patenv env pat = match pat with
-  | PVar(s)         -> s :: env
-  | PRec((_,p)::ps) -> patenv (patenv env p) (PRec(ps))
-  | PRec([])        -> env
-  | PList(p::ps)    -> patenv (patenv env p) (PList(ps))
-  | PList([])       -> env
-  | PTup(p::ps)     -> patenv (patenv env p) (PTup(ps))
-  | PTup([])        -> env
-  | PCons(p1,p2)    -> patenv (patenv env p1) p2
-
-  | PUnit     | PChar _
-  | PString _ | PInt _  | PFloat _ -> env
-
-(** Add debruijn indices to a term *)
-let rec debruijn env t = match t with
-  | TVar({x;_} as t) ->
-    let rec find env n = match env with
-      | y::ee -> if y = x then n else find ee (n+1)
-      | [] -> failwith ("Unknown variable in debruijn conversion: " ^ x)
-    in TVar{t with i=find env 0}
-
-  | TApp{at;t1;t2;_} -> TApp{at;t1=debruijn env t1; t2=debruijn env t2}
-
-  | TLam({x;t1;_} as t) -> TLam{t with t1=debruijn (x::env) t1}
-
-  | TCont({x;t1;_} as t) -> TCont{t with t1=debruijn (x::env) t1}
-
-  | TIf{at;t1;t2} -> TIf{at;t1=debruijn env t1;t2=debruijn env t2}
-
-  | TMatch{at;cls} ->
-    TMatch{at;cls=Utils.map (fun (p,t) -> p,debruijn (patenv env p) t) cls}
-
-  | TVal _ -> t
-
-(** If the pattern matches the given value, return the extended environment
-    where the variables in the pattern are bound to the corresponding terms in
-    the value. IMPORTANT: Follows the same traversal order of the pattern as in
-    the patenv function to get the correct debruijn indices. *)
-let rec match_case env pattern value = match pattern,value with
-  | PVar _,v -> Some(tm_of_val v :: env)
-
-  | PRec((k,p)::ps),(VRec{pls=[];rls;_} as v) ->
-    (match List.assoc_opt k rls with
-     | Some v1 ->
-       (match match_case env p v1 with
-        | Some env -> match_case env (PRec(ps)) v
-        | None     -> None)
-     | None -> None)
-  | PRec([]),VRec _ -> Some env
-  | PRec _,_        -> None
-
-  | PList(p::ps),VList{at;vls=v::vs;_} ->
-    (match match_case env p v with
-     | Some env -> match_case env (PList(ps)) (VList{at;vls=vs})
-     | None     -> None)
-  | PList([]),VList{vls=[];_} -> Some env
-  | PList _,_              -> None
-
-  | PTup(ps),VTup{np=0;varr;_} ->
-    let rec fold env ps i = match ps with
-      | p::ps when i < Array.length varr ->
-        (match match_case env p varr.(i) with
-         | Some env -> fold env ps (i + 1)
-         | None     -> None)
-      | [] when i = Array.length varr -> Some env
-      | _                             -> None
-    in fold env ps 0
-  | PTup _,_ -> None
-
-  | PCons(p1,p2),VList{at;vls=v::vs;_} ->
-    (match match_case env p1 v with
-     | Some env -> match_case env p2 (VList{at;vls=vs})
-     | None     -> None)
-  | PCons _,_ -> None
-
-  | PUnit,        VUnit _                      -> Some env
-  | PUnit,        _                            -> None
-  | PChar(c1),    VChar{c=c2;_}   when c1 = c2 -> Some env
-  | PChar _,      _                            -> None
-  | PString(s1),  VString{s=s2;_} when s1 = s2 -> Some env
-  | PString _,    _                            -> None
-  | PInt(i1),     VInt{i=i2;_}    when i1 = i2 -> Some env
-  | PInt _,       _                            -> None
-  | PFloat(f1),   VFloat{f=f2;_}  when f1 = f2 -> Some env
-  | PFloat _,     _                            -> None
+(** Make a value stochastic if cond is true. If the value is already
+    stochastic, do nothing *)
+let set_stoch cond v =
+  let {stoch;_} = val_attr v in
+  update_val_attr {stoch=stoch || cond} v
 
 (** Big-step evaluation of terms *)
 let rec eval stoch stoch_ctrl env weight t =
@@ -127,14 +46,14 @@ let rec eval stoch stoch_ctrl env weight t =
     | TMatch{cls;_} -> weight,set_stoch stoch (VMatch{at=va;cls;env})
 
     (* Continuations. For later use, save the state of stoch_ctrl at the
-       syntactic origin in the continuation. TODO Correct? *)
+       syntactic origin in the continuation. *)
     | TCont{x;t1;_} -> weight,set_stoch stoch (VCont{at=va;x;t1;stoch_ctrl;env})
 
     (* Values *)
     | TVal{v;_} -> weight,set_stoch stoch v
 
     (* Applications.
-       When weight is degenerate, cut off evaluation already here. *)
+       When weight is degenerate, cut off evaluation. *)
     | TApp{t1;t2;_} ->
       let weight,v1 = eval false stoch_ctrl env weight t1 in
       if weight = neg_infinity then weight,VUnit{at=va}
@@ -298,11 +217,102 @@ and eval_app stoch stoch_ctrl weight v1 v2 =
       weight,VBeta{at=va;a=Some f1;b=Some (float_of_int i2)}
     | VBeta _,_  -> fail_app v1 v2
 
-    (* Result of sample is always stochastic. *)
-    | VSample _,dist -> weight,set_stoch true (Dist.sample dist)
+    (* Sample normal distribution *)
+    | VSample _,v -> begin
+        match v with
+        | VNormal{mu=Some mu;sigma=Some sigma;_} ->
+          weight,set_stoch true (VFloat{at=va;f=normal_sample mu sigma})
+        | VNormal _ -> fail_app v1 v2
 
-    | VLogPdf{v1=None;_},v1    -> weight,VLogPdf{at=va;v1=Some v1}
-    | VLogPdf{v1=Some v1;_},v2 -> weight,set_stoch (s1 || s2) (Dist.logpdf v1 v2)
+        (* Sample uniform distribution *)
+        | VUniform{a=Some a;b=Some b;_} ->
+          weight,set_stoch true (VFloat{at=va;f=uniform_sample a b})
+        | VUniform _ -> fail_app v1 v2
+
+        (* Sample exponential distribution *)
+        | VExp{lam=Some lam;_} ->
+          weight,set_stoch true (VFloat{at=va;f=exp_sample lam})
+        | VExp _ -> fail_app v1 v2
+
+        (* Sample bernoulli distribution *)
+        | VBern{p=Some p;_} ->
+          weight,set_stoch true (VBool{at=va;b=bern_sample p})
+        | VBern _ -> fail_app v1 v2
+
+        (* Sample beta distribution *)
+        | VBeta{a=Some a;b=Some b;_} ->
+          weight,set_stoch true (VFloat{at=va;f=uniform_sample a b})
+        | VBeta _ -> fail_app v1 v2
+
+        (* Sample gamma distribution *)
+        | VGamma{a=Some a;b=Some b;_} ->
+          weight,set_stoch true (VFloat{at=va;f=gamma_sample a b})
+        | VGamma _ -> fail_app v1 v2
+
+        (* TODO Fix catch all? *)
+        | _ -> fail_app v1 v2
+      end
+
+    (* Add first arg to logpdf *)
+    | VLogPdf{v1=None;_},v1 -> weight,VLogPdf{at=va;v1=Some v1}
+
+    (* Compute log pdf *)
+    | VLogPdf{v1=Some v1;_},v2 -> begin
+        match v1,v2 with
+
+        (* Logpdf of normal distribution *)
+        | VFloat{f;_},VNormal{mu=Some mu;sigma=Some sigma;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=normal_logpdf f mu sigma})
+        | VInt{i;_},VNormal{mu=Some mu;sigma=Some sigma;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=normal_logpdf (float_of_int i) mu sigma})
+        | _,VNormal _ -> fail_app v1 v2
+
+        (* Logpdf of uniform distribution *)
+        | VFloat{f;_},VUniform{a=Some a;b=Some b;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=uniform_logpdf f a b})
+        | VInt{i;_},VUniform{a=Some a;b=Some b;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=uniform_logpdf (float_of_int i) a b})
+        | _,VUniform _ -> fail_app v1 v2
+
+        (* Logpdf of exponential distribution *)
+        | VFloat{f;_},VExp{lam=Some lam;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=exp_logpdf f lam})
+        | VInt{i;_},VExp{lam=Some lam;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=exp_logpdf (float_of_int i) lam})
+        | _,VExp _ -> fail_app v1 v2
+
+        (* Logpdf of bernoulli distribution *)
+        | VBool{b;_},VBern{p=Some p;_} ->
+          weight,set_stoch (s1 || s2) (VFloat{at=va;f=bern_logpdf b p})
+        | _,VBern _ -> fail_app v1 v2
+
+        (* Logpdf of beta distribution *)
+        | VFloat{f;_},VBeta{a=Some a;b=Some b;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=beta_logpdf f a b})
+        | VInt{i;_},VBeta{a=Some a;b=Some b;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=beta_logpdf (float_of_int i) a b})
+        | _,VBeta _ -> fail_app v1 v2
+
+        (* Logpdf of gamma distribution *)
+        | VFloat{f;_},VGamma{a=Some a;b=Some b;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=gamma_logpdf f a b})
+        | VInt{i;_},VGamma{a=Some a;b=Some b;_} ->
+          weight,set_stoch (s1 || s2)
+            (VFloat{at=va;f=gamma_logpdf (float_of_int i) a b})
+        | _,VGamma _ -> fail_app v1 v2
+
+        (* TODO Fix catch all? *)
+        | _, _ -> fail_app v1 v2
+      end
 
     (* Weighting application. *)
     | VWeight _,VFloat{f=w;_} ->

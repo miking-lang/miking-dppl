@@ -3,10 +3,18 @@
 open Printf
 open Lexing
 
+(** LEXING **)
+
 (** Convert lexing positions to strings *)
 let string_of_position pos =
   sprintf "%s:%d:%d" pos.pos_fname
     pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
+
+
+(** STATS **)
+
+
+(** GENERAL **)
 
 (** String map *)
 module StrMap = Map.Make(struct type t = string let compare = compare end)

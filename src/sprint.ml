@@ -1,35 +1,9 @@
-(** Convert terms and patterns to pretty printed strings *)
+(** Functions for converting ast data to strings *)
 
 open Ast
 open Pattern
 open Format
 open Utils
-
-(** Convert patterns to strings *)
-let rec string_of_pat = function
-  | PVar(x)    -> x
-  | PUnit      -> "()"
-  | PChar(c)   -> String.make 1 c
-  | PString(s) -> Printf.sprintf "\"%s\"" s
-  | PInt(i)    -> string_of_int i
-  | PFloat(f)  -> string_of_float f
-
-  | PRec(pls) ->
-    Printf.sprintf "{%s}"
-      (String.concat "," (List.map (fun (s,p) ->
-           let p = string_of_pat p in
-           if s = p then
-             s
-           else
-             Printf.sprintf "%s:%s" s p)
-           pls))
-
-  | PList(pls)   -> Printf.sprintf "[%s]"
-                      (String.concat "," (List.map string_of_pat pls))
-  | PTup(pls)    -> Printf.sprintf "(%s)"
-                      (String.concat "," (List.map string_of_pat pls))
-  | PCons(p1,p2) -> Printf.sprintf "%s:%s"
-                      (string_of_pat p1) (string_of_pat p2)
 
 (** Precedence constants for printing *)
 type prec =
@@ -83,7 +57,7 @@ let rec concat fmt (sep, ls) = match ls with
     | SPACE -> fprintf fmt "%t@ %a" f concat (sep, ls)
     | COMMA -> fprintf fmt "%t,@,%a" f concat (sep, ls)
 
-(** If the argument is a complete construction of a record or tuple,
+(** If the argument is a complete construction of a tuple or record,
     return the constructor and the argument terms. *)
 let compl_tr tm =
   let rec recurse acc tm = match acc,tm with
@@ -250,17 +224,17 @@ let rec print_tm fmt (prec, t) =
       | VNormal{mu=None;   sigma=None;_}    -> fprintf fmt "normal"
       | VNormal{mu=Some f1;sigma=None;_}    -> fprintf fmt "normal(%f)" f1
       | VNormal{mu=Some f1;sigma=Some f2;_} -> fprintf fmt "normal(%f,%f)" f1 f2
-      | VNormal _                           -> failwith "Not supported"
+      | VNormal _                         -> failwith "Not supported"
 
       | VUniform{a=None;   b=None;_}    -> fprintf fmt "uniform"
       | VUniform{a=Some f1;b=None;_}    -> fprintf fmt "uniform(%f)" f1
       | VUniform{a=Some f1;b=Some f2;_} -> fprintf fmt "uniform(%f,%f)" f1 f2
-      | VUniform _                      -> failwith "Not supported"
+      | VUniform _                    -> failwith "Not supported"
 
       | VGamma{a=None;   b=None;_}    -> fprintf fmt "gamma"
       | VGamma{a=Some f1;b=None;_}    -> fprintf fmt "gamma(%f)" f1
       | VGamma{a=Some f1;b=Some f2;_} -> fprintf fmt "gamma(%f,%f)" f1 f2
-      | VGamma _                      -> failwith "Not supported"
+      | VGamma _                    -> failwith "Not supported"
 
       | VExp{lam=None;_}   -> fprintf fmt "exp"
       | VExp{lam=Some f;_} -> fprintf fmt "exp(%f)" f
@@ -271,7 +245,7 @@ let rec print_tm fmt (prec, t) =
       | VBeta{a=None;   b=None;_}    -> fprintf fmt "beta"
       | VBeta{a=Some f1;b=None;_}    -> fprintf fmt "beta(%f)" f1
       | VBeta{a=Some f1;b=Some f2;_} -> fprintf fmt "beta(%f,%f)" f1 f2
-      | VBeta _                      -> failwith "Not supported"
+      | VBeta _                    -> failwith "Not supported"
 
       | VLogPdf{v1=None;_}   -> fprintf fmt "logpdf"
       | VLogPdf{v1=Some v;_} -> fprintf fmt "logpdf(%a)"
@@ -483,3 +457,4 @@ let string_of_env ?(prefix = "") env =
   setup_print ~closure_env:true ();
   fprintf str_formatter "%s" prefix;
   print_env str_formatter env; flush_str_formatter()
+

@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+# Simple script for plotting a histogram given a line-separated list of values
+# on standard input.
+
 import matplotlib.pyplot as plt
 import sys
 

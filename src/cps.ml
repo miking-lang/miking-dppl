@@ -8,6 +8,21 @@
 open Ast
 open Utils
 
+(** Reference used for genvar *)
+let nextvar = ref 0
+
+(** Generate fresh variable names. Avoids
+    clashes by using $ as first char (not allowed in lexer for vars).  Takes a
+    debruijn index as argument (for idfun). *)
+let genvar i =
+  let res = !nextvar in
+  let str = "$" ^ string_of_int res in
+  nextvar := res + 1;
+  (str,TVar{at=ta; vat=xa; x=str; i=i})
+
+(** The identity function (with proper debruijn index) as a continuation. *)
+let idfun = let var,var' = genvar 0 in TCont{at=ta;x=var;t1=var'}
+
 (** Wrap direct-style functions in CPS *)
 let cps_fun t arity =
   let vars = List.map genvar (replicate arity noidx) in
@@ -90,11 +105,13 @@ let rec cps_atomic t = match t with
     | VResamp _ -> t
 
     (* Other values *)
-    | VBeta _   | VCons _
+
+    | VNormal _ | VUniform _
+    | VGamma _  | VExp _     | VBern _   | VBeta _
+    | VCons _
     | VRec _    | VRecProj _ | VTup _    | VTupProj _
-    | VList _   | VUtest _   | VNormal _ | VUniform _
-    | VGamma _  | VExp _     | VBern _   | VSample _
-    | VLogPdf _ | VWeight _  | VUnit _   | VConcat _
+    | VList _   | VUtest _   | VSample _ | VLogPdf _
+    | VWeight _ | VUnit _    | VConcat _
     | VBool _   | VNot _     | VAnd _    | VOr _
     | VChar _   | VString _  | VInt _    | VMod _
     | VSll _    | VSrl _     | VSra _    | VFloat _

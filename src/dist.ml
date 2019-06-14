@@ -1,13 +1,5 @@
 (** Functions related to probability distributions *)
 
-open Ast
-open Sprint
-
-(** Error message for incorrect distributions *)
-let fail_dist dist =
-  (Printf.printf "\n**  Incorrect distribution: %s\n" (string_of_val dist));
-  failwith "fail_dist"
-
 (** Whether to use a random seed or not for probability distributions *)
 let random_seed = true
 
@@ -19,69 +11,54 @@ let seed =
      Gsl.Rng.set rng (Random.nativeint Nativeint.max_int));
   rng
 
-(** Helper function for produing a float from a float/int value *)
-let float_of_val v = match v with
-  | VFloat{f;_} -> f
-  | VInt{i;_} -> float_of_int i
-  | _ -> failwith "Failure creating float from value."
+(** Normal distribution log pdf *)
+let normal_logpdf f mu sigma =
+  log (Gsl.Randist.gaussian_pdf (f -. mu) ~sigma:sigma)
 
-(** Probability density/mass functions for built in distributions. *)
-let logpdf value dist = match dist with
+(* Uniform distribution log pdf *)
+let uniform_logpdf f a b =
+  if f >= a && f <= b then -. (log (b -. a)) else neg_infinity
 
-  (* Normal distribution *)
-  | VNormal{mu=Some mu;sigma=Some sigma;_} ->
-    let f = float_of_val value in
-    VFloat{at=va;f=log (Gsl.Randist.gaussian_pdf (f -. mu) ~sigma:sigma)}
+(* Exponential distribution log pdf *)
+let exp_logpdf f lam =
+  let mu = 1.0 /. lam in
+  log (Gsl.Randist.exponential_pdf f ~mu:mu)
 
-  (* Exponential distribution *)
-  | VExp{lam=Some lam;_} ->
-    let f = float_of_val value in
-    let mu = 1.0 /. lam in
-    VFloat{at=va;f=log (Gsl.Randist.exponential_pdf f ~mu:mu)}
+(* Bernoulli distribution log pdf *)
+let bern_logpdf b p =
+  let i = if b then 1 else 0 in
+  log (Gsl.Randist.bernoulli_pdf i ~p:p)
 
-  (* Bernoulli distribution *)
-  | VBern{p=Some p;_} ->
-    let b = match value with VBool{b;_} -> b | _ -> failwith "TODO" in
-    let i = if b then 1 else 0 in
-    VFloat{at=va;f=log (Gsl.Randist.bernoulli_pdf i ~p:p)}
+(* Beta distribution log pdf *)
+let beta_logpdf f a b =
+  log (Gsl.Randist.beta_pdf f ~a:a ~b:b)
 
-  (* Beta distribution *)
-  | VBeta{a=Some a;b=Some b;_} ->
-    let f = float_of_val value in
-    VFloat{at=va;f=log (Gsl.Randist.beta_pdf f ~a:a ~b:b)}
+(* Gamma distribution log pdf *)
+let gamma_logpdf f a b =
+  log (Gsl.Randist.gamma_pdf f ~a:a ~b:b)
 
-  (* Gamma distribution *)
-  | VGamma{a=Some a;b=Some b;_} ->
-    let f = float_of_val value in
-    VFloat{at=va;f=log (Gsl.Randist.gamma_pdf f ~a:a ~b:b)}
+(* Normal distribution sample *)
+let normal_sample mu sigma =
+  mu +. Gsl.Randist.gaussian seed ~sigma:sigma
 
-  | _ -> fail_dist dist (* TODO Make this static instead. Maybe have a separate
-                           data type for distributions? *)
+(* Uniform distribution sample *)
+let uniform_sample a b =
+  Gsl.Randist.flat seed ~a:a ~b:b
 
-(** Sample functions for built in distributions. **)
-let sample dist = match dist with
+(* Exponential distribution sample *)
+let exp_sample lam =
+  let mu = 1.0 /. lam in
+  Gsl.Randist.exponential seed ~mu:mu
 
-  (* Normal distribution *)
-  | VNormal{mu=Some mu;sigma=Some sigma;_} ->
-    VFloat{at=va; f=mu +. Gsl.Randist.gaussian seed ~sigma:sigma}
+(* Bernoulli distribution sample *)
+let bern_sample p =
+  Gsl.Randist.bernoulli seed ~p:p == 1
 
-  (* Exponential distribution *)
-  | VExp{lam=Some lam;_} ->
-    let mu = 1.0 /. lam in
-    VFloat{at=va;f=Gsl.Randist.exponential seed ~mu:mu}
+(* Beta distribution sample *)
+let beta_sample a b =
+  Gsl.Randist.beta seed ~a:a ~b:b
 
-  (* Bernoulli distribution *)
-  | VBern{p=Some p;_} ->
-    let b = Gsl.Randist.bernoulli seed ~p:p == 1 in
-    VBool{at=va;b=b}
-
-  (* Beta distribution *)
-  | VBeta{a=Some a;b=Some b;_} ->
-    VFloat{at=va; f=Gsl.Randist.beta seed ~a:a ~b:b}
-
-  (* Gamma distribution *)
-  | VGamma{a=Some a;b=Some b;_} ->
-    VFloat{at=va;f=Gsl.Randist.gamma seed ~a:a ~b:b}
-
-  | _ -> fail_dist dist (* TODO Make this static instead *)
+(* Gamma distribution sample *)
+let gamma_sample a b =
+  Gsl.Randist.gamma seed ~a:a ~b:b
 

@@ -7,55 +7,8 @@ open Debug
 open Utils
 open Eval
 open Printf
-
-(** Mapping between predefined variable names and builtin constants *)
-let builtin = [
-
-  "not",          VNot{at=va};
-  "and",          VAnd{at=va;b1=None};
-  "or",           VOr{at=va;b1=None};
-
-  "mod",          VMod{at=va;i1=None};
-  "sll",          VSll{at=va;i1=None};
-  "srl",          VSrl{at=va;i1=None};
-  "sra",          VSra{at=va;i1=None};
-
-  "inf",          VFloat{at=va;f=infinity};
-  "log",          VLog{at=va};
-
-  "add",          VAdd{at=va;v1=None};
-  "sub",          VSub{at=va;v1=None};
-  "mul",          VMul{at=va;v1=None};
-  "div",          VDiv{at=va;v1=None};
-  "neg",          VNeg{at=va};
-  "lt",           VLt{at=va;v1=None};
-  "leq",          VLeq{at=va;v1=None};
-  "gt",           VGt{at=va;v1=None};
-  "geq",          VGeq{at=va;v1=None};
-
-  "eq",           VEq{at=va;v1=None};
-  "neq",          VNeq{at=va;v1=None};
-
-  "normal",       VNormal{at=va;mu=None;sigma=None};
-  "uniform",      VUniform{at=va;a=None;b=None};
-  "gamma",        VGamma{at=va;a=None;b=None};
-  "exponential",  VExp{at=va;lam=None};
-  "bernoulli",    VBern{at=va;p=None};
-  "beta",         VBeta{at=va;a=None;b=None};
-
-  "logpdf",       VLogPdf{at=va;v1=None};
-  "sample",       VSample{at=va};
-  "resample",     VResamp{at=va;dyn=false;cont=None;stoch_ctrl=None };
-
-  "fix",          VFix{at=va};
-
-] |> List.map (fun (x, y) -> x, tm_of_val y)
-
-(** Create a string representation of builtins *)
-let string_of_builtin ?(labels = false) builtin =
-  String.concat "\n"
-    (List.map (fun (x, y) -> sprintf "%s = %s" x
-                  (string_of_tm ~labels:labels ~pretty:false y)) builtin)
+open Builtin
+open Debruijn
 
 (** Inference types *)
 type inference =
@@ -73,7 +26,9 @@ let inference = ref Eval
 let samples = ref 10
 
 (** Compute the logarithm of the average of a list of weights using
-    logsumexp-trick *)
+    logsumexp-trick.
+    NOTE: The input weights are also logarithmic, but the
+    average is computed with respect to the non-logarithmic weights. *)
 let logavg weights =
   let max = List.fold_left max (-. infinity) weights in
   log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 weights)
@@ -296,6 +251,13 @@ let infer_smc env program =
 (** Convert all weightings in the program to
     weightings followed by calls to resample *)
 let add_resample ~dyn builtin t =
+
+  (* Convenience function for creating a sequence of two tms *)
+  let seq t1 t2 = TApp{at=ta;
+                       t1=TLam{at=ta;vat=xa;x="_";t1=t2};
+                       t2=t1}
+  in
+
   let rec recurse t = match t with
     | TVar _ -> t
     | TApp{at;t1;t2} -> TApp{at;t1=recurse t1;t2=recurse t2}
@@ -304,6 +266,7 @@ let add_resample ~dyn builtin t =
     | TIf{at;t1;t2} -> TIf{at;t1=recurse t1;t2=recurse t2}
     | TMatch{at;cls} -> TMatch{at;cls=List.map (fun (p,t) -> p,recurse t) cls}
     | TVal{at;v=VWeight _} ->
+      let makevar str i = (str,TVar{at=ta; vat=xa; x=str; i=i}) in
       let var, var'  = makevar "w" noidx in
       let weight_app = TApp{at=ta;t1=t;t2=var'} in
       let resamp     = TApp{at=ta;
@@ -317,6 +280,7 @@ let add_resample ~dyn builtin t =
 
 (** Transform term and builtins to CPS *)
 let cps tm builtin =
+
   (* Transform builtins to CPS. Required since we need to wrap constant
      functions in CPS forms *)
   let builtin = List.map (fun (x, y) -> (x, (Cps.cps_atomic y))) builtin in

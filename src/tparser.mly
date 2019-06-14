@@ -3,7 +3,7 @@
 %{
 
 open Ast
-open Parserutils
+open ParserUtils
 
 %}
 
@@ -21,7 +21,6 @@ open Parserutils
 %token OBSERVE
 %token MATCH
 %token WITH
-%token WEIGHT
 
 /* Literals */
 %token TRUE
@@ -174,9 +173,6 @@ expr:
       { mkapps (TVar{at=ta;vat=xa;x=$1;i=noidx}) $3 }
   | IDENT LPAREN RPAREN
       { mkapps (TVar{at=ta;vat=xa;x=$1;i=noidx}) [nop] }
-
-  | WEIGHT LPAREN usubexpr RPAREN
-      { mkapps (TVal{at=ta;v=VWeight{at=va}}) [$3] }
 
   | MATCH seq WITH cases { TApp{at=ta;t1=TMatch{at=ta;cls=$4};t2=$2} }
 

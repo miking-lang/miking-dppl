@@ -19,7 +19,6 @@ let _ =
       "with",          WITH;
       "let",           LET;
       "in",            IN;
-      "weight",        WEIGHT;
 
       (* Literals *)
       "true",          TRUE;

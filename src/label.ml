@@ -1,4 +1,5 @@
-(** Module for annotating terms and variables with unique labels. *)
+(** Module for annotating terms and variables with unique labels.
+    TODO Broken (and incorrect), needs updating *)
 
 open Ast
 open Utils

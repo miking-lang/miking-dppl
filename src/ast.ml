@@ -3,18 +3,10 @@
 
 open Pattern
 
-(** Dummy value for labels *)
-let no_label = -1
-
 (** Attributes of terms.
     Can easily be extended with more data fields as needed. *)
 type tm_attr = {
   label:int;           (* Term labels *)
-}
-
-(** Default term attribute *)
-let ta = {
-  label = no_label;
 }
 
 (** Attributes of values. *)
@@ -23,14 +15,22 @@ type val_attr = {
                           stochastic computation *)
 }
 
-(** Default value attribute *)
-let va = {
-  stoch = false;
-}
-
 (** Attributes of variable-related terms (lambdas and vars) *)
 type var_attr = {
   var_label:int;       (* Variable labels *)
+}
+
+(** Dummy value for labels *)
+let no_label = -1
+
+(** Default term attribute *)
+let ta = {
+  label = no_label;
+}
+
+(** Default value attribute *)
+let va = {
+  stoch = false;
 }
 
 (** Default var attribute *)
@@ -61,15 +61,13 @@ type term =
 (** Value terms *)
 and value =
 
-  (* Closures. For continuations, we need to store the state of stoch_ctrl in
-     context where the continuation was passed as an argument. *)
+  (* Closures *)
   | VLam       of { at:val_attr; x:string; t1:term; env:env; }
   | VIf        of { at:val_attr; t1:term; t2:term; env:env }
   | VMatch     of { at:val_attr; cls:(pat * term) list; env:env }
 
   (* Continuation closures *)
-  | VCont      of { at:val_attr; x:string; t1:term;
-                    stoch_ctrl:bool; env:env }
+  | VCont      of { at:val_attr; x:string; t1:term; stoch_ctrl:bool; env:env }
 
   (* Fixed-point combinator (not really needed since untyped) *)
   | VFix       of { at:val_attr }
@@ -158,7 +156,7 @@ and value =
 and env = term list
 
 (** Returns the number of expected arguments for values *)
-let arity c = match c with
+let arity v = match v with
 
   | VLam  _ | VIf _ | VMatch _ -> 1
 
@@ -205,7 +203,7 @@ let arity c = match c with
 
   | VWeight _ -> 1
 
-  | VResamp _ -> failwith "Resample arity should not be checked"
+  | VResamp _ -> failwith "Resample arity should never be checked"
 
   | VUnit _ -> 0
 
@@ -244,12 +242,13 @@ let arity c = match c with
 
 (** Returns the attribute of a value *)
 let val_attr = function
-  | VBeta{at;_}   | VCons{at;_}    | VCont {at;_}
+
+  | VNormal{at;_} | VUniform{at;_} | VGamma{at;_}
+  | VExp{at;_}    | VBern{at;_}    | VBeta{at;_}
+  | VUtest{at;_}  | VCons{at;_}    | VCont {at;_}
   | VLam {at;_}   | VIf    {at;_}  | VMatch {at;_}
   | VFix{at;_}    | VRec{at;_}     | VRecProj{at;_}
   | VTup{at;_}    | VTupProj{at;_} | VList{at;_}
-  | VUtest{at;_}  | VNormal{at;_}  | VUniform{at;_}
-  | VGamma{at;_}  | VExp{at;_}     | VBern{at;_}
   | VSample{at;_} | VLogPdf{at;_}  | VWeight{at;_}
   | VResamp{at;_} | VUnit{at;_}    | VBool{at;_}
   | VNot{at;_}    | VAnd{at;_}     | VOr{at;_}
@@ -332,39 +331,9 @@ let update_tm_attr attr = function
   | TMatch t -> TMatch {t with at=attr}
   | TCont  t -> TCont  {t with at=attr}
 
-(** Make a value stochastic if cond is true. If the value is already
-    stochastic, do nothing *)
-let set_stoch cond v =
-  let {stoch;_} = val_attr v in
-  update_val_attr {stoch=stoch || cond} v
-
-(** Reference used for genvar *)
-let nextvar = ref 0
-
-(** Generate fresh variable names (used for CPS transformation).  Avoids
-    clashes by using $ as first char (not allowed in lexer for vars).  Takes a
-    debruijn index as argument (for idfun). *)
-let genvar i =
-  let res = !nextvar in
-  let str = "$" ^ string_of_int res in
-  nextvar := res + 1;
-  (str,TVar{at=ta; vat=xa; x=str; i=i})
-
-(** Similar to genvar, but specify your own variable name *)
-let makevar str i = (str,TVar{at=ta; vat=xa; x=str; i=i})
-
 (** Shorthands *)
 let nop = TVal{at=ta;v=VUnit{at=va}}
 let fix = TVal{at=ta;v=VFix{at=va}}
-
-(** The identity function (with proper debruijn index) as a continuation. *)
-let idfun = let var,var' = genvar 0 in
-  TCont{at=ta;x=var;t1=var'}
-
-(** Convenience function for creating a sequence of two tms *)
-let seq t1 t2 = TApp{at=ta;
-                     t1=TLam{at=ta;vat=xa;x="_";t1=t2};
-                     t2=t1}
 
 (** Function for wrapping a value in a tm *)
 let tm_of_val c = TVal{at=ta;v=c}

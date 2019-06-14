@@ -12,4 +12,3 @@ if flip(0.5) then {
   weight(log(100))
   false
 }
-weight(log(2))

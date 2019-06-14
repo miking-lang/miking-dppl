@@ -5,6 +5,6 @@
 (ocamlyacc parser)
 (ocamllex lexer)
 
-(ocamlyacc tpplparser)
-(ocamllex tppllexer)
+(ocamlyacc tparser)
+(ocamllex tlexer)
 

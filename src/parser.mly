@@ -3,7 +3,7 @@
 %{
 
 open Ast
-open Parserutils
+open ParserUtils
 
 %}
 
@@ -22,7 +22,6 @@ open Parserutils
 %token WITH
 %token LET
 %token IN
-%token WEIGHT
 
 /* Literals */
 %token TRUE
@@ -168,8 +167,6 @@ atom:
 
   | UTEST { let pos = Parsing.symbol_start_pos () in
             TVal{at=ta;v=VUtest{at=va;pos=pos;v1=None}} }
-
-  | WEIGHT { TVal{at=ta;v=VWeight{at=va}} }
 
   | LPAREN seq RPAREN { $2 }
   | LPAREN RPAREN { nop }

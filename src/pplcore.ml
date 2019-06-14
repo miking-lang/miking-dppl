@@ -1,6 +1,5 @@
 (** The entrypoint for the pplcore executable. Handles command line argument
-    open Utest
-    parsing, unit testing, and lexing/parsing. *)
+    open Utest parsing, unit testing, and lexing/parsing. *)
 
 open Ast
 open Printf
@@ -73,7 +72,7 @@ let exec filename =
   (* Parse the program *)
   let tm = match Filename.extension filename with
     | ".ppl"  -> parse (Parser.main Lexer.main) filename
-    | ".tppl" -> parse (Tpplparser.main Tppllexer.main) filename
+    | ".tppl" -> parse (Tparser.main Tlexer.main) filename
     | s       -> failwith ("Unsupported file type: " ^ s) in
 
   debug debug_input "Input term" (fun () -> string_of_tm tm);
@@ -81,15 +80,14 @@ let exec filename =
   (* Run inference *)
   let normconst,res = infer tm in
 
-  (* TODO Add a plot function using some nice library *)
   (* Print output of inference *)
   begin match !output with
     | None -> ()
     | Debug ->
       debug true "Inference result"
         (fun () -> string_of_empirical ~normalize:true res);
-      debug true "Log Normalizing constant"
-        (fun () -> sprintf "%f" normconst)
+      debug true "Normalizing constant"
+        (fun () -> sprintf "Log: %f\nRegular: %f" normconst (exp normconst))
     | Samples -> print_endline (samples_of_empirical res)
     | Norm -> printf "%f" normconst
   end;

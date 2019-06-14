@@ -1,7 +1,7 @@
 (** Lexer for TreePPL *)
 
 {
-open Tpplparser
+open Tparser
 
 let keyword_table = Hashtbl.create 64
 let _ =
@@ -18,7 +18,6 @@ let _ =
       "match",         MATCH;
       "with",          WITH;
       "lam",           LAM;
-      "weight",        WEIGHT;
 
       (* Literals *)
       "true",          TRUE;
