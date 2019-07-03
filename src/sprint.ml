@@ -59,32 +59,72 @@ let rec concat fmt (sep, ls) = match ls with
 
 (** If the argument is a complete construction of a tuple or record,
     return the constructor and the argument terms. *)
-let compl_tr tm =
-  let rec recurse acc tm = match acc,tm with
+let compl_tr t =
+  let rec recurse acc (T{t;_}) = match acc,t with
     | acc,TApp{t1;t2;_} -> recurse (t2::acc) t1
     | [],_ -> None (* Ensures there is at least one argument *)
-    | acc,TVal{v=VRec{pls;rls=[];_} as v;_}
+    | acc,TVal{v=V{v=VRec{pls;rls=[];_} as v;_}}
       when List.length pls = List.length acc -> Some (v,List.rev acc)
-    | acc,TVal{v=VTup{np;_} as v;_}
+    | acc,TVal{v=V{v=VTup{np;_} as v;_}}
       when np = List.length acc -> Some (v,List.rev acc)
     | _ -> None
-  in recurse [] tm
+  in recurse [] t
 
 (** If the argument is a complete construction of a list, return the
     constituent terms. *)
-let compl_l tm =
-  let rec recurse acc t = match t with
-    | TApp{t1=TApp{t1=TVal{v=VCons _;_};t2;_};t2=next;_} ->
+let compl_l t =
+  let rec recurse acc (T{t;_}) = match t with
+    | TApp{t1=T{t=TApp{t1=T{t=TVal{v=V{v=VCons _;_}};_};
+                       t2};_};
+           t2=next} ->
       recurse (t2::acc) next
-    | TVal{v=VList{vls=[];_};_} -> Some (List.rev acc)
+    | TVal{v=V{v=VList{vls=[]};_}} -> Some (List.rev acc)
     | _ -> None
-  in recurse [] tm
+  in recurse [] t
 
 (** Print a term on the given formatter and within the given precedence. *)
-let rec print_tm fmt (prec, t) =
+let rec print_tm fmt (prec, (T{t=t';_} as t)) =
 
-  (* Function for bare printing (no syntactic sugar) *)
-  let bare fmt t = match t with
+  let bare_paren t' = match t' with
+    | TMatch _                -> prec > MATCH
+    | TLam _ | TCont _        -> prec > LAM
+    | TIf _                   -> prec > IF
+    | TVal{v=V{v=VTup _;_};_} -> prec > TUP
+    | TApp _                  -> prec > APP
+    | TVar _ | TVal _         -> prec > ATOM
+  in
+
+  let pretty_paren t' =
+    match compl_tr t with
+    | Some (VRec _,_) -> prec > ATOM
+    | Some (VTup _,_) -> prec > TUP
+    | Some _ -> failwith "Not possible"
+    | _ -> match compl_l t with
+      | Some _ -> prec > ATOM
+      | _ -> match t' with
+        | TApp{t1=T{t=TLam{x="_";_};_};_} -> prec > SEMICOLON
+        | TApp{t1=T{t=TLam _;_};_}        -> prec > MATCH
+        | _ -> bare_paren t'
+  in
+
+  let print,paren =
+    if !ref_pretty then
+      pretty_print,pretty_paren t' else
+      bare_print,bare_paren t' in
+
+  if !ref_labels then
+    (* TODO This approach to printing labels omits some labels when using
+       pretty printing *)
+    match t' with
+    | TVar _ | TVal _ -> fprintf fmt "%a:%d"   print t (tm_label t)
+    | _               -> fprintf fmt "(%a):%d" print t (tm_label t)
+  else if paren then
+    fprintf fmt "(%a)" print t
+  else
+    fprintf fmt "%a" print t
+
+(* Function for bare printing (no syntactic sugar) *)
+and bare_print fmt (T{t;_}) = match t with
 
     | TCont{x;t1;_} ->
       fprintf fmt "@[<hov %d>cont %s.@ %a@]" !ref_indent x print_tm (LAM, t1)
@@ -110,206 +150,204 @@ let rec print_tm fmt (prec, t) =
         !ref_indent
         concat (SPACE,inner)
 
-    | TApp{t1;t2=TApp _ as t2;_} ->
+    | TApp{t1;t2=T{t=TApp _;_} as t2} ->
       fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (APP, t1) print_tm (ATOM, t2)
 
     | TApp{t1;t2;_} ->
       fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (APP, t1) print_tm (APP, t2)
 
-    | TVar{vat={var_label;_};x;i;_} ->
+    | TVar{xat={var_label;_};x;i;_} ->
       let vl = if !ref_debruijn then Printf.sprintf "#%d" i else "" in
       let d = if !ref_labels then Printf.sprintf "|%d" var_label else "" in
       if !ref_labels || !ref_debruijn then
         fprintf fmt "<%s%s%s>" x vl d
       else fprintf fmt "%s" x
 
-    | TVal{v;_} -> match v with
+    | TVal{v=V{v;_};_} ->
+      begin match v with
 
-      | VCont{x;t1;env;_} ->
-        fprintf fmt "@[<hov %d>cont%a %s.@ %a@]"
-          !ref_indent print_env env x print_tm (LAM, t1)
+        | VCont{x;t1;env;_} ->
+          fprintf fmt "@[<hov %d>cont%a %s.@ %a@]"
+            !ref_indent print_env env x print_tm (LAM, t1)
 
-      | VLam{x;t1;env;_} ->
-        fprintf fmt "@[<hov %d>lam%a %s.@ %a@]"
-          !ref_indent print_env env x print_tm (LAM, t1)
+        | VLam{x;t1;env;_} ->
+          fprintf fmt "@[<hov %d>lam%a %s.@ %a@]"
+            !ref_indent print_env env x print_tm (LAM, t1)
 
-      | VIf{t1;t2;env;_} ->
-        fprintf fmt "@[<hv 0>\
-                     @[<hov %d>if%a . then@ %a@]\
-                     @ \
-                     @[<hov %d>else@ %a@]\
-                     @]"
-          !ref_indent print_env env
-          print_tm (MATCH, t1)
-          !ref_indent print_tm (IF, t2)
+        | VIf{t1;t2;env;_} ->
+          fprintf fmt "@[<hv 0>\
+                       @[<hov %d>if%a . then@ %a@]\
+                       @ \
+                       @[<hov %d>else@ %a@]\
+                       @]"
+            !ref_indent print_env env
+            print_tm (MATCH, t1)
+            !ref_indent print_tm (IF, t2)
 
-      | VMatch{cls;env;_} ->
-        let inner = List.map (fun (p,t1) ->
-            (fun fmt -> fprintf fmt "@[<hov %d>| %s ->@ %a@]" !ref_indent
-                (string_of_pat p) print_tm (LAM, t1)))
-            cls in
-        fprintf fmt "@[<hov %d>match%a@ .@ with@ @[<hv 0>%a@]@]"
-          !ref_indent print_env env
-          concat (SPACE,inner)
+        | VMatch{cls;env;_} ->
+          let inner = List.map (fun (p,t1) ->
+              (fun fmt -> fprintf fmt "@[<hov %d>| %s ->@ %a@]" !ref_indent
+                  (string_of_pat p) print_tm (LAM, t1)))
+              cls in
+          fprintf fmt "@[<hov %d>match%a@ .@ with@ @[<hv 0>%a@]@]"
+            !ref_indent print_env env
+            concat (SPACE,inner)
 
-      | VFix _ -> fprintf fmt "fix"
+        | VFix   -> fprintf fmt "fix"
 
-      | VUnit _ -> fprintf fmt "()"
+        | VUnit   -> fprintf fmt "()"
 
-      | VBool{b;_}      -> fprintf fmt "%B" b
-      | VNot _          -> fprintf fmt "not"
-      | VAnd{b1=None;_}    -> fprintf fmt "and"
-      | VAnd{b1=Some(v);_} -> fprintf fmt "and(%B)" v
-      | VOr{b1=None;_}     -> fprintf fmt "or"
-      | VOr{b1=Some(v);_}  -> fprintf fmt "or(%B)" v
+        | VBool{b;_}      -> fprintf fmt "%B" b
+        | VNot            -> fprintf fmt "not"
+        | VAnd{b1=None;_}    -> fprintf fmt "and"
+        | VAnd{b1=Some(v);_} -> fprintf fmt "and(%B)" v
+        | VOr{b1=None;_}     -> fprintf fmt "or"
+        | VOr{b1=Some(v);_}  -> fprintf fmt "or(%B)" v
 
-      | VChar{c;_}      -> fprintf fmt "%C" c
+        | VChar{c;_}      -> fprintf fmt "%C" c
 
-      | VString{s;_}    -> fprintf fmt "%S" s
+        | VString{s;_}    -> fprintf fmt "%S" s
 
-      | VInt{i;_}       -> fprintf fmt "%d" i
-      | VMod{i1=None;_}    -> fprintf fmt "mod"
-      | VMod{i1=Some(v);_} -> fprintf fmt "mod(%d)" v
-      | VSll{i1=None;_}    -> fprintf fmt "sll"
-      | VSll{i1=Some(v);_} -> fprintf fmt "sll(%d)" v
-      | VSrl{i1=None;_}    -> fprintf fmt "srl"
-      | VSrl{i1=Some(v);_} -> fprintf fmt "srl(%d)" v
-      | VSra{i1=None;_}    -> fprintf fmt "sra"
-      | VSra{i1=Some(v);_} -> fprintf fmt "sra(%d)" v
+        | VInt{i;_}       -> fprintf fmt "%d" i
+        | VMod{i1=None;_}    -> fprintf fmt "mod"
+        | VMod{i1=Some(v);_} -> fprintf fmt "mod(%d)" v
+        | VSll{i1=None;_}    -> fprintf fmt "sll"
+        | VSll{i1=Some(v);_} -> fprintf fmt "sll(%d)" v
+        | VSrl{i1=None;_}    -> fprintf fmt "srl"
+        | VSrl{i1=Some(v);_} -> fprintf fmt "srl(%d)" v
+        | VSra{i1=None;_}    -> fprintf fmt "sra"
+        | VSra{i1=Some(v);_} -> fprintf fmt "sra(%d)" v
 
-      | VFloat{f;_} -> fprintf fmt "%f" f
-      | VLog _      -> fprintf fmt "log"
+        | VFloat{f;_} -> fprintf fmt "%f" f
+        | VLog        -> fprintf fmt "log"
 
-      | VAdd{v1=Some v;_} -> fprintf fmt "add(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VAdd{v1=None;_}   -> fprintf fmt "add"
-
-      | VSub{v1=Some v;_} -> fprintf fmt "sub(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VSub{v1=None;_}   -> fprintf fmt "sub"
-
-      | VMul{v1=Some v;_} -> fprintf fmt "mul(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VMul{v1=None;_}   -> fprintf fmt "mul"
-
-      | VDiv{v1=Some v;_} -> fprintf fmt "div(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VDiv{v1=None;_}   -> fprintf fmt "div"
-
-      | VNeg _            -> fprintf fmt "neg"
-
-      | VLt{v1=Some v;_}  -> fprintf fmt "lt(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VLt{v1=None;_}    -> fprintf fmt "lt"
-
-      | VLeq{v1=Some v;_} -> fprintf fmt "leq(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VLeq{v1=None;_}   -> fprintf fmt "leq"
-
-      | VGt{v1=Some v;_}  -> fprintf fmt "gt(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VGt{v1=None;_}    -> fprintf fmt "gt"
-
-      | VGeq{v1=Some v;_} -> fprintf fmt "geq(%a)"
-                               print_tm (MATCH, tm_of_val v)
-      | VGeq{v1=None;_}   -> fprintf fmt "geq"
-
-      | VEq{v1=None;_}   -> fprintf fmt "eq"
-      | VEq{v1=Some v;_} -> fprintf fmt "eq(%a)" print_tm (MATCH, tm_of_val v)
-
-      | VNeq{v1=None;_}   -> fprintf fmt "neq"
-      | VNeq{v1=Some v;_} -> fprintf fmt "neq(%a)"
-                               print_tm (MATCH, tm_of_val v)
-
-      | VNormal{mu=None;   sigma=None;_}    -> fprintf fmt "normal"
-      | VNormal{mu=Some f1;sigma=None;_}    -> fprintf fmt "normal(%f)" f1
-      | VNormal{mu=Some f1;sigma=Some f2;_} -> fprintf fmt "normal(%f,%f)" f1 f2
-      | VNormal _                         -> failwith "Not supported"
-
-      | VUniform{a=None;   b=None;_}    -> fprintf fmt "uniform"
-      | VUniform{a=Some f1;b=None;_}    -> fprintf fmt "uniform(%f)" f1
-      | VUniform{a=Some f1;b=Some f2;_} -> fprintf fmt "uniform(%f,%f)" f1 f2
-      | VUniform _                    -> failwith "Not supported"
-
-      | VGamma{a=None;   b=None;_}    -> fprintf fmt "gamma"
-      | VGamma{a=Some f1;b=None;_}    -> fprintf fmt "gamma(%f)" f1
-      | VGamma{a=Some f1;b=Some f2;_} -> fprintf fmt "gamma(%f,%f)" f1 f2
-      | VGamma _                    -> failwith "Not supported"
-
-      | VExp{lam=None;_}   -> fprintf fmt "exp"
-      | VExp{lam=Some f;_} -> fprintf fmt "exp(%f)" f
-
-      | VBern{p=None;_}   -> fprintf fmt "bern"
-      | VBern{p=Some f;_} -> fprintf fmt "bern(%f)" f
-
-      | VBeta{a=None;   b=None;_}    -> fprintf fmt "beta"
-      | VBeta{a=Some f1;b=None;_}    -> fprintf fmt "beta(%f)" f1
-      | VBeta{a=Some f1;b=Some f2;_} -> fprintf fmt "beta(%f,%f)" f1 f2
-      | VBeta _                    -> failwith "Not supported"
-
-      | VLogPdf{v1=None;_}   -> fprintf fmt "logpdf"
-      | VLogPdf{v1=Some v;_} -> fprintf fmt "logpdf(%a)"
-                                  print_tm (MATCH,tm_of_val v)
-
-      | VSample _ -> fprintf fmt "sample"
-
-      | VTup{np;varr;_} ->
-        let inner = Array.map (fun v ->
-            (fun fmt -> fprintf fmt "%a" print_tm (APP, tm_of_val v)))
-            varr in
-        let inner =
-          replicate np (fun fmt -> fprintf fmt "") @ Array.to_list inner in
-        fprintf fmt "@[<hov 0>%a@]" concat (COMMA,inner)
-
-      | VRec{pls;rls;_} ->
-        let inner = List.map (fun (k, v) ->
-            (fun fmt ->
-               fprintf fmt "%s:%a" k print_tm (APP, tm_of_val v))) rls in
-
-        let inner =
-          List.map (fun k -> (fun fmt -> fprintf fmt "%s:" k)) (List.rev pls)
-          @ inner in
-        fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,inner)
-
-      | VList{vls;_} ->
-        let inner = List.map (fun v ->
-            (fun fmt ->
-               fprintf fmt "%a" print_tm (APP, tm_of_val v))) vls in
-        fprintf fmt "[@[<hov 0>%a@]]"
-          concat (COMMA,inner)
-
-      | VCons{v1=None;_}   -> fprintf fmt "cons"
-      | VCons{v1=Some v;_} -> fprintf fmt "cons(%a)"
-                                print_tm (MATCH, tm_of_val v)
-
-      | VRecProj{k;_} -> fprintf fmt "(.).%s" k
-      | VTupProj{i;_} -> fprintf fmt "(.).%d" i
-
-      | VUtest{v1=Some v;_} -> fprintf fmt "utest(%a)"
+        | VAdd{v1=Some v;_} -> fprintf fmt "add(%a)"
                                  print_tm (MATCH, tm_of_val v)
-      | VUtest _            -> fprintf fmt "utest"
+        | VAdd{v1=None;_}   -> fprintf fmt "add"
 
-      | VConcat{v1=None;_}   -> fprintf fmt "concat"
-      | VConcat{v1=Some v;_} -> fprintf fmt "concat(%a)"
+        | VSub{v1=Some v;_} -> fprintf fmt "sub(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+        | VSub{v1=None;_}   -> fprintf fmt "sub"
+
+        | VMul{v1=Some v;_} -> fprintf fmt "mul(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+        | VMul{v1=None;_}   -> fprintf fmt "mul"
+
+        | VDiv{v1=Some v;_} -> fprintf fmt "div(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+        | VDiv{v1=None;_}   -> fprintf fmt "div"
+
+        | VNeg              -> fprintf fmt "neg"
+
+        | VLt{v1=Some v;_}  -> fprintf fmt "lt(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+        | VLt{v1=None;_}    -> fprintf fmt "lt"
+
+        | VLeq{v1=Some v;_} -> fprintf fmt "leq(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+        | VLeq{v1=None;_}   -> fprintf fmt "leq"
+
+        | VGt{v1=Some v;_}  -> fprintf fmt "gt(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+        | VGt{v1=None;_}    -> fprintf fmt "gt"
+
+        | VGeq{v1=Some v;_} -> fprintf fmt "geq(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+        | VGeq{v1=None;_}   -> fprintf fmt "geq"
+
+        | VEq{v1=None;_}   -> fprintf fmt "eq"
+        | VEq{v1=Some v;_} -> fprintf fmt "eq(%a)" print_tm (MATCH, tm_of_val v)
+
+        | VNeq{v1=None;_}   -> fprintf fmt "neq"
+        | VNeq{v1=Some v;_} -> fprintf fmt "neq(%a)"
+                                 print_tm (MATCH, tm_of_val v)
+
+        | VDist{d} ->
+          begin match d with
+            | DNormal{mu=None;   sigma=None;_}    -> fprintf fmt "normal"
+            | DNormal{mu=Some f1;sigma=None;_}    -> fprintf fmt "normal(%f)" f1
+            | DNormal{mu=Some f1;sigma=Some f2;_} -> fprintf fmt "normal(%f,%f)" f1 f2
+            | DNormal _                         -> failwith "Not supported"
+
+            | DUniform{a=None;   b=None;_}    -> fprintf fmt "uniform"
+            | DUniform{a=Some f1;b=None;_}    -> fprintf fmt "uniform(%f)" f1
+            | DUniform{a=Some f1;b=Some f2;_} -> fprintf fmt "uniform(%f,%f)" f1 f2
+            | DUniform _                    -> failwith "Not supported"
+
+            | DGamma{a=None;   b=None;_}    -> fprintf fmt "gamma"
+            | DGamma{a=Some f1;b=None;_}    -> fprintf fmt "gamma(%f)" f1
+            | DGamma{a=Some f1;b=Some f2;_} -> fprintf fmt "gamma(%f,%f)" f1 f2
+            | DGamma _                    -> failwith "Not supported"
+
+            | DExp{lam=None;_}   -> fprintf fmt "exp"
+            | DExp{lam=Some f;_} -> fprintf fmt "exp(%f)" f
+
+            | DBern{p=None;_}   -> fprintf fmt "bern"
+            | DBern{p=Some f;_} -> fprintf fmt "bern(%f)" f
+
+            | DBeta{a=None;   b=None;_}    -> fprintf fmt "beta"
+            | DBeta{a=Some f1;b=None;_}    -> fprintf fmt "beta(%f)" f1
+            | DBeta{a=Some f1;b=Some f2;_} -> fprintf fmt "beta(%f,%f)" f1 f2
+            | DBeta _                    -> failwith "Not supported"
+          end
+
+        | VLogPdf{v1=None;_}   -> fprintf fmt "logpdf"
+        | VLogPdf{v1=Some v;_} -> fprintf fmt "logpdf(%a)"
+                                    print_tm (MATCH,tm_of_val v)
+
+        | VSample _ -> fprintf fmt "sample"
+
+        | VTup{np;varr;_} ->
+          let inner = Array.map (fun v ->
+              (fun fmt -> fprintf fmt "%a" print_tm (APP, tm_of_val v)))
+              varr in
+          let inner =
+            replicate np (fun fmt -> fprintf fmt "") @ Array.to_list inner in
+          fprintf fmt "@[<hov 0>%a@]" concat (COMMA,inner)
+
+        | VRec{pls;rls;_} ->
+          let inner = List.map (fun (k, v) ->
+              (fun fmt ->
+                 fprintf fmt "%s:%a" k print_tm (APP, tm_of_val v))) rls in
+
+          let inner =
+            List.map (fun k -> (fun fmt -> fprintf fmt "%s:" k)) (List.rev pls)
+            @ inner in
+          fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,inner)
+
+        | VList{vls;_} ->
+          let inner = List.map (fun v ->
+              (fun fmt ->
+                 fprintf fmt "%a" print_tm (APP, tm_of_val v))) vls in
+          fprintf fmt "[@[<hov 0>%a@]]"
+            concat (COMMA,inner)
+
+        | VCons{v1=None;_}   -> fprintf fmt "cons"
+        | VCons{v1=Some v;_} -> fprintf fmt "cons(%a)"
                                   print_tm (MATCH, tm_of_val v)
 
-      | VWeight _ -> fprintf fmt "weight"
+        | VRecProj{k;_} -> fprintf fmt "(.).%s" k
+        | VTupProj{i;_} -> fprintf fmt "(.).%d" i
 
-      | VResamp{dyn;cont=None;_} ->
-        fprintf fmt "%sresample" (if dyn then "dyn" else "")
-      | VResamp{dyn;cont=Some v;_} ->
-        fprintf fmt "%sresample(%a)" (if dyn then "dyn" else "")
-          print_tm (MATCH, tm_of_val v)
+        | VUtest{v1=Some v;_} -> fprintf fmt "utest(%a)"
+                                   print_tm (MATCH, tm_of_val v)
+        | VUtest _            -> fprintf fmt "utest"
 
-  in
+        | VConcat{v1=None;_}   -> fprintf fmt "concat"
+        | VConcat{v1=Some v;_} -> fprintf fmt "concat(%a)"
+                                    print_tm (MATCH, tm_of_val v)
 
-  (* If pretty printing, try to find common dynamic-sized constructs
-     (tuples, records, and lists) *)
-  let trmatch = if !ref_pretty then compl_tr t else None in
-  let lmatch = if !ref_pretty then compl_l t else None in
+        | VWeight _ -> fprintf fmt "weight"
 
-  (* Syntactic sugar printing *)
-  let sugar fmt t = match trmatch with
+        | VResamp{dyn;cont=None;_} ->
+          fprintf fmt "%sresample" (if dyn then "dyn" else "")
+        | VResamp{dyn;cont=Some v;_} ->
+          fprintf fmt "%sresample(%a)" (if dyn then "dyn" else "")
+            print_tm (MATCH, tm_of_val v)
+      end
+
+(* Syntactic sugar printing *)
+and pretty_print fmt (T{t=t';_} as t) = match compl_tr t with
 
     (* Records *)
     | Some (VRec{pls;_},args) ->
@@ -326,12 +364,11 @@ let rec print_tm fmt (prec, t) =
       fprintf fmt "@[<hov 0>%a@]"
         concat (COMMA,inner)
 
-
     | Some _ -> failwith "Not possible"
 
     (* Not a complete tuple or record construction. Check if it is a complete
        list. *)
-    | None -> match lmatch with
+    | None -> match compl_l t with
 
       (* Lists *)
       | Some args ->
@@ -341,18 +378,21 @@ let rec print_tm fmt (prec, t) =
           concat (COMMA,inner)
 
       (* Finally, check for static patterns *)
-      | None -> match t with
+      | None -> match t' with
 
         (* Record projection application *)
-        | TApp{t1=TVal{v=VRecProj{k;_};_};t2;_} ->
+        | TApp{t1=T{t=TVal{v=V{v=VRecProj{k;_};_}};_};
+               t2} ->
           fprintf fmt "%a.%s" print_tm (ATOM, t2) k
 
         (* Tuple projection applications *)
-        | TApp{t1=TVal{v=VTupProj{i;_};_};t2;_} ->
+        | TApp{t1=T{t=TVal{v=V{v=VTupProj{i;_};_}};_};
+               t2} ->
           fprintf fmt "%a.%d" print_tm (ATOM, t2) i
 
         (* If applications *)
-        | TApp{t1=TIf{t1;t2;_};t2=t;_} ->
+        | TApp{t1=T{t=TIf{t1;t2};_};
+               t2=t} ->
           fprintf fmt "@[<hv 0>\
                        @[<hov %d>if %a then@ %a@]\
                        @ \
@@ -362,7 +402,7 @@ let rec print_tm fmt (prec, t) =
             !ref_indent print_tm (IF, t2)
 
         (* Match applications *)
-        | TApp{t1=TMatch{cls;_};t2=t;_} ->
+        | TApp{t1=T{t=TMatch{cls};_};t2=t;_} ->
           let inner = List.map (fun (p,t1) ->
               (fun fmt -> fprintf fmt "@[<hov %d>| %s ->@ %a@]" !ref_indent
                   (string_of_pat p) print_tm (LAM, t1)))
@@ -373,57 +413,23 @@ let rec print_tm fmt (prec, t) =
             concat (SPACE,inner)
 
         (* Sequencing (right associative) *)
-        | TApp{t1=TLam{x="_";t1;_};
-               t2=TApp{t1=TLam{x="_";_};_} as t2;_} ->
+        | TApp{t1=T{t=TLam{x="_";t1;_};_};
+               t2=T{t=TApp{t1=T{t=TLam{x="_";_};_};_};_} as t2} ->
           fprintf fmt "@[<hv 0>%a;@ %a@]"
             print_tm (IF, t2) print_tm (MATCH, t1)
-        | TApp{t1=TLam{x="_";t1;_};t2;_} ->
+        | TApp{t1=T{t=TLam{x="_";t1;_};_};t2} ->
           fprintf fmt "@[<hv 0>%a;@ %a@]"
             print_tm (SEMICOLON, t2) print_tm (MATCH, t1)
 
         (* Let expressions *)
-        | TApp{t1=TLam{x;t1;_};t2;_} ->
+        | TApp{t1=T{t=TLam{x;t1;_};_};t2} ->
           fprintf fmt "@[<hv 0>\
                        @[<hov %d>let %s =@ %a in@]\
                        @ %a@]"
             !ref_indent x print_tm (MATCH, t2) print_tm (MATCH, t1)
 
         (* Otherwise, fall back to bare printing *)
-        | _ -> bare fmt t
-
-  in
-
-  (* Check if this term should be parenthesized *)
-  let paren = match trmatch with
-    | Some (VRec _,_) -> prec > ATOM
-    | Some (VTup _,_) -> prec > TUP
-    | Some _ -> failwith "Not possible"
-    | _ -> match lmatch with
-      | Some _ -> prec > ATOM
-      | _ -> match t with
-        | TApp{t1=TLam{x="_";_};_} when !ref_pretty -> prec > SEMICOLON
-        | TApp{t1=TLam _;_}        when !ref_pretty -> prec > MATCH
-
-        | TMatch _         -> prec > MATCH
-        | TLam _ | TCont _ -> prec > LAM
-        | TIf _            -> prec > IF
-        | TVal{v=VTup _;_} -> prec > TUP
-        | TApp _           -> prec > APP
-        | TVar _ | TVal _  -> prec > ATOM
-  in
-
-  let p = if !ref_pretty then sugar else bare in
-
-  if !ref_labels then
-    (* TODO This approach to printing labels omits some labels when using
-       pretty printing *)
-    match t with
-    | TVar _ | TVal _ -> fprintf fmt "%a:%d"   p t (tm_label t)
-    | _               -> fprintf fmt "(%a):%d" p t (tm_label t)
-  else if paren then
-    fprintf fmt "(%a)" p t
-  else
-    fprintf fmt "%a" p t
+        | _ -> bare_print fmt t
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

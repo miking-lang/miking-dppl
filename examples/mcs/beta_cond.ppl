@@ -1,5 +1,7 @@
-let p ~ beta 2 2 in
-(observe true ~ bernoulli p);
-(observe true ~ bernoulli p);
-(observe true ~ bernoulli p);
+let observe = lam v. lam dist. weight (logpdf v dist) in
+
+let p = sample (beta 2 2) in
+observe true (bernoulli p);
+observe true (bernoulli p);
+observe true (bernoulli p);
 p

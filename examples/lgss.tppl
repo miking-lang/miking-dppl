@@ -1,6 +1,6 @@
 y1 = 2.1   y2 = 6.3   y3 = 10.7
 
-init_var = 100.0
+init_var = 4.0
 sim_var = 1.0
 obs_var = 1.0
 velocity = 4.0

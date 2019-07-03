@@ -13,7 +13,6 @@ let _ =
       "if",            IF;
       "then",          THEN;
       "else",          ELSE;
-      "observe",       OBSERVE;
       "utest",         UTEST;
       "match",         MATCH;
       "with",          WITH;
@@ -25,7 +24,6 @@ let _ =
       "false",         FALSE;
 
       (* Symbolic Tokens *)
-      "~",             TILDE;
       "(",             LPAREN;
       ")",             RPAREN;
       "{",             LCURLY;

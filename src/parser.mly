@@ -17,7 +17,6 @@ open ParserUtils
 %token THEN
 %token ELSE
 %token UTEST
-%token OBSERVE
 %token MATCH
 %token WITH
 %token LET
@@ -32,7 +31,6 @@ open ParserUtils
 %token <char> CHAR
 
 /* Symbolic tokens */
-%token TILDE         /* "~"  */
 %token LPAREN        /* "("  */
 %token RPAREN        /* ")"  */
 %token LCURLY        /* "{"  */
@@ -71,7 +69,7 @@ open ParserUtils
 
 /* Associativity */
 
-%nonassoc OBSERVE LET LAM MATCH
+%nonassoc LET LAM MATCH
 %nonassoc VBAR
 
 %right SEMICOLON
@@ -101,33 +99,21 @@ main:
 /* ************************** PPLCORE ********************************* */
 
 seq:
+
   | LET IDENT EQUAL seq IN seq %prec LET
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$6};t2=$4} }
+      { mkapp ~t1:(mklam ~x:$2 ~t1:$6) ~t2:$4 }
+
   | LET IDENT params EQUAL seq IN seq %prec LET
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$7};
-             t2=addrec $2 (mkfun $3 $5)} }
+      { mkapp ~t1:(mklam ~x:$2 ~t1:$7) ~t2:(addrec $2 (mkfun $3 $5)) }
 
-  | LET IDENT TILDE seq IN seq %prec LET
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x=$2;t1=$6};
-                   t2=TApp{at=ta;t1=TVal{at=ta;v=VSample{at=va}};t2=$4}} }
+  | MATCH seq WITH cases { mkapp ~t1:(mkmatch ~cls:$4) ~t2:$2 }
 
-  | OBSERVE seq TILDE seq %prec OBSERVE
-      { let logpdf = TVal{at=ta;v=VLogPdf{at=va;v1=None}} in
-        let v = $2 in
-        let inner = TApp{at=ta;t1=TApp{at=ta;t1=logpdf;t2=v};t2=$4} in
-        let weight = TVal{at=ta;v=VWeight{at=va}} in
-        TApp{at=ta;t1=weight;t2=inner} }
-
-  | MATCH seq WITH cases { TApp{at=ta;t1=TMatch{at=ta;cls=$4};t2=$2} }
-
-  | IF seq THEN seq ELSE seq %prec IF
-    { TApp{at=ta;t1=TIf{at=ta;t1=$4;t2=$6};t2=$2} }
+  | IF seq THEN seq ELSE seq %prec IF { mkapp ~t1:(mkif ~t1:$4 ~t2:$6) ~t2:$2 }
 
   | LAM params DOT seq %prec LAM { mkfun $2 $4 }
 
   | seq SEMICOLON { $1 }
-  | seq SEMICOLON seq
-      { TApp{at=ta;t1=TLam{at=ta;vat=xa;x="_";t1=$3};t2=$1} }
+  | seq SEMICOLON seq { mkapp ~t1:(mklam ~x:"_" ~t1:$3) ~t2:$1 }
 
   | texpr { $1 }
 
@@ -138,35 +124,36 @@ texpr:
 expr:
   | app { $1 }
 
-  | expr ADD expr        { mkvalapps (VAdd{at=va;v1=None})    [$1;$3] }
-  | expr SUB expr        { mkvalapps (VSub{at=va;v1=None})    [$1;$3] }
-  | expr MUL expr        { mkvalapps (VMul{at=va;v1=None})    [$1;$3] }
-  | expr DIV expr        { mkvalapps (VDiv{at=va;v1=None})    [$1;$3] }
-  | expr MOD expr        { mkvalapps (VMod{at=va;i1=None})    [$1;$3] }
-  | expr LESS expr       { mkvalapps (VLt{at=va;v1=None})     [$1;$3] }
-  | expr LESSEQUAL expr  { mkvalapps (VLeq{at=va;v1=None})    [$1;$3] }
-  | expr GREAT expr      { mkvalapps (VGt{at=va;v1=None})     [$1;$3] }
-  | expr GREATEQUAL expr { mkvalapps (VGeq{at=va;v1=None})    [$1;$3] }
-  | expr EQUAL expr      { mkvalapps (VEq{at=va;v1=None})     [$1;$3] }
-  | expr NOTEQUAL expr   { mkvalapps (VNeq{at=va;v1=None})    [$1;$3] }
-  | expr SHIFTLL expr    { mkvalapps (VSll{at=va;i1=None})    [$1;$3] }
-  | expr SHIFTRL expr    { mkvalapps (VSrl{at=va;i1=None})    [$1;$3] }
-  | expr SHIFTRA expr    { mkvalapps (VSra{at=va;i1=None})    [$1;$3] }
-  | expr AND expr        { mkvalapps (VAnd{at=va;b1=None})    [$1;$3] }
-  | expr OR expr         { mkvalapps (VOr{at=va;b1=None})     [$1;$3] }
-  | expr CONCAT expr     { mkvalapps (VConcat{at=va;v1=None}) [$1;$3] }
-  | expr COLON expr      { mkvalapps (VCons{at=va;v1=None})   [$1;$3] }
-  | SUB expr             { mkvalapps (VNeg{at=va})            [$2]    }
+  | expr ADD expr        { mkvalapps (VAdd{v1=None})    [$1;$3] }
+  | expr SUB expr        { mkvalapps (VSub{v1=None})    [$1;$3] }
+  | expr MUL expr        { mkvalapps (VMul{v1=None})    [$1;$3] }
+  | expr DIV expr        { mkvalapps (VDiv{v1=None})    [$1;$3] }
+  | expr MOD expr        { mkvalapps (VMod{i1=None})    [$1;$3] }
+  | expr LESS expr       { mkvalapps (VLt{v1=None})     [$1;$3] }
+  | expr LESSEQUAL expr  { mkvalapps (VLeq{v1=None})    [$1;$3] }
+  | expr GREAT expr      { mkvalapps (VGt{v1=None})     [$1;$3] }
+  | expr GREATEQUAL expr { mkvalapps (VGeq{v1=None})    [$1;$3] }
+  | expr EQUAL expr      { mkvalapps (VEq{v1=None})     [$1;$3] }
+  | expr NOTEQUAL expr   { mkvalapps (VNeq{v1=None})    [$1;$3] }
+  | expr SHIFTLL expr    { mkvalapps (VSll{i1=None})    [$1;$3] }
+  | expr SHIFTRL expr    { mkvalapps (VSrl{i1=None})    [$1;$3] }
+  | expr SHIFTRA expr    { mkvalapps (VSra{i1=None})    [$1;$3] }
+  | expr AND expr        { mkvalapps (VAnd{b1=None})    [$1;$3] }
+  | expr OR expr         { mkvalapps (VOr{b1=None})     [$1;$3] }
+  | expr CONCAT expr     { mkvalapps (VConcat{v1=None}) [$1;$3] }
+  | expr COLON expr      { mkvalapps (VCons{v1=None})   [$1;$3] }
+  | SUB expr             { mkvalapps VNeg               [$2]    }
 
 app:
-  | app atom { TApp{at=ta;t1=$1;t2=$2} }
+  | app atom { mkapp ~t1:$1 ~t2:$2 }
   | atom { $1 }
 
 atom:
-  | IDENT { TVar{at=ta;vat=xa;x=$1;i=noidx} }
+  | IDENT { mkvar ~x:$1 ~i:noidx }
 
-  | UTEST { let pos = Parsing.symbol_start_pos () in
-            TVal{at=ta;v=VUtest{at=va;pos=pos;v1=None}} }
+  | UTEST
+    { let pos = Parsing.symbol_start_pos () in
+      tm_of_val' (VUtest{pos;v1=None}) }
 
   | LPAREN seq RPAREN { $2 }
   | LPAREN RPAREN { nop }
@@ -174,21 +161,21 @@ atom:
   | LCURLY record RCURLY { mkrecord $2 }
 
   | LSQUARE exprs_comma RSQUARE { mklist $2 }
-  | LSQUARE RSQUARE { TVal{at=ta;v=VList{at=va;vls=[]}} }
+  | LSQUARE RSQUARE { tm_of_val' (VList{vls=[]}) }
 
-  | CHAR       { TVal{at=ta;v=VChar{at=va;c=$1}} }
-  | STRING     { TVal{at=ta;v=VString{at=va;s=$1}} }
-  | INT        { TVal{at=ta;v=VInt{at=va;i=$1}} }
-  | FLOAT      { TVal{at=ta;v=VFloat{at=va;f=$1}} }
-  | TRUE       { TVal{at=ta;v=VBool{at=va;b=true}} }
-  | FALSE      { TVal{at=ta;v=VBool{at=va;b=false}} }
+  | CHAR       { tm_of_val' (VChar{c=$1}) }
+  | STRING     { tm_of_val' (VString{s=$1}) }
+  | INT        { tm_of_val' (VInt{i=$1}) }
+  | FLOAT      { tm_of_val' (VFloat{f=$1}) }
+  | TRUE       { tm_of_val' (VBool{b=true}) }
+  | FALSE      { tm_of_val' (VBool{b=false}) }
 
-  | NOT atom   { TApp{at=ta;t1=TVal{at=ta;v=VNot{at=va}};t2=$2} }
+  | NOT atom   { mkapp ~t1:(tm_of_val' VNot) ~t2:$2 }
 
   | atom DOT IDENT
-      { TApp{at=ta;t1=TVal{at=ta;v=VRecProj{at=va;k=$3}};t2=$1} }
+      { mkapp ~t1:(tm_of_val' (VRecProj{k=$3})) ~t2:$1 }
   | atom DOT LPAREN INT RPAREN
-      { TApp{at=ta;t1=TVal{at=ta;v=VTupProj{at=va;i=$4-1}};t2=$1} }
+      { mkapp ~t1:(tm_of_val' (VTupProj{i=$4-1})) ~t2:$1 }
 
 exprs_comma:
   | expr { [$1] }
@@ -232,5 +219,3 @@ pattern_rec:
 patterns_comma:
   | pattern { [$1] }
   | pattern COMMA patterns_comma  { $1 :: $3 }
-
-

@@ -19,23 +19,26 @@ let rec patenv env pat = match pat with
   | PString _ | PInt _  | PFloat _ -> env
 
 (** Add debruijn indices to a term *)
-let rec debruijn env t = match t with
-  | TVar({x;_} as t) ->
-    let rec find env n = match env with
-      | y::ee -> if y = x then n else find ee (n+1)
-      | [] -> failwith ("Unknown variable in debruijn conversion: " ^ x)
-    in TVar{t with i=find env 0}
+let rec debruijn env (T{t;_}) =
+  let t = match t with
+    | TVar({x;_} as t) ->
+      let rec find env n = match env with
+        | y::ee -> if y = x then n else find ee (n+1)
+        | [] -> failwith ("Unknown variable in debruijn conversion: " ^ x)
+      in TVar{t with i=find env 0}
 
-  | TApp{at;t1;t2;_} -> TApp{at;t1=debruijn env t1; t2=debruijn env t2}
+    | TApp{t1;t2;_} -> TApp{t1=debruijn env t1; t2=debruijn env t2}
 
-  | TLam({x;t1;_} as t) -> TLam{t with t1=debruijn (x::env) t1}
+    | TLam({x;t1;_} as t) -> TLam{t with t1=debruijn (x::env) t1}
 
-  | TCont({x;t1;_} as t) -> TCont{t with t1=debruijn (x::env) t1}
+    | TCont({x;t1;_} as t) -> TCont{t with t1=debruijn (x::env) t1}
 
-  | TIf{at;t1;t2} -> TIf{at;t1=debruijn env t1;t2=debruijn env t2}
+    | TIf{t1;t2} -> TIf{t1=debruijn env t1;t2=debruijn env t2}
 
-  | TMatch{at;cls} ->
-    TMatch{at;cls=Utils.map (fun (p,t) -> p,debruijn (patenv env p) t) cls}
+    | TMatch{cls} ->
+      TMatch{cls=Utils.map (fun (p,t) -> p,debruijn (patenv env p) t) cls}
 
-  | TVal _ -> t
+    | TVal _ -> t
+  in
+  T{at=ta;t}
 

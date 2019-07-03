@@ -1,64 +1,81 @@
 (** Functions related to probability distributions *)
 
-(** Whether to use a random seed or not for probability distributions *)
-let random_seed = true
+open Ast
+open Rand
 
-(** Gsl default seed **)
-let seed =
-  let rng = Gsl.Rng.make (Gsl.Rng.default ()) in
-  if random_seed then
-    (Random.self_init();
-     Gsl.Rng.set rng (Random.nativeint Nativeint.max_int));
-  rng
+(** Compute log-pdfs of probability distributions *)
+let logpdf x dist = match x,dist with
 
-(** Normal distribution log pdf *)
-let normal_logpdf f mu sigma =
-  log (Gsl.Randist.gaussian_pdf (f -. mu) ~sigma:sigma)
+  (* Logpdf of normal distribution *)
+  | VFloat{f;_},DNormal{mu=Some mu;sigma=Some sigma;_} ->
+    VFloat{f=normal_logpdf f mu sigma}
+  | VInt{i;_},DNormal{mu=Some mu;sigma=Some sigma;_} ->
+    VFloat{f=normal_logpdf (float_of_int i) mu sigma}
+  | _,DNormal _ -> failwith "TODO"
 
-(* Uniform distribution log pdf *)
-let uniform_logpdf f a b =
-  if f >= a && f <= b then -. (log (b -. a)) else neg_infinity
+  (* Logpdf of uniform distribution *)
+  | VFloat{f;_},DUniform{a=Some a;b=Some b;_} ->
+    VFloat{f=uniform_logpdf f a b}
+  | VInt{i;_},DUniform{a=Some a;b=Some b;_} ->
+    VFloat{f=uniform_logpdf (float_of_int i) a b}
+  | _,DUniform _ -> failwith "TODO"
 
-(* Exponential distribution log pdf *)
-let exp_logpdf f lam =
-  let mu = 1.0 /. lam in
-  log (Gsl.Randist.exponential_pdf f ~mu:mu)
+  (* Logpdf of exponential distribution *)
+  | VFloat{f;_},DExp{lam=Some lam;_} ->
+    VFloat{f=exp_logpdf f lam}
+  | VInt{i;_},DExp{lam=Some lam;_} ->
+    VFloat{f=exp_logpdf (float_of_int i) lam}
+  | _,DExp _ -> failwith "TODO"
 
-(* Bernoulli distribution log pdf *)
-let bern_logpdf b p =
-  let i = if b then 1 else 0 in
-  log (Gsl.Randist.bernoulli_pdf i ~p:p)
+  (* Logpdf of bernoulli distribution *)
+  | VBool{b;_},DBern{p=Some p;_} ->
+    VFloat{f=bern_logpdf b p}
+  | _,DBern _ -> failwith "TODO"
 
-(* Beta distribution log pdf *)
-let beta_logpdf f a b =
-  log (Gsl.Randist.beta_pdf f ~a:a ~b:b)
+  (* Logpdf of beta distribution *)
+  | VFloat{f;_},DBeta{a=Some a;b=Some b;_} ->
+    VFloat{f=beta_logpdf f a b}
+  | VInt{i;_},DBeta{a=Some a;b=Some b;_} ->
+    VFloat{f=beta_logpdf (float_of_int i) a b}
+  | _,DBeta _ -> failwith "TODO"
 
-(* Gamma distribution log pdf *)
-let gamma_logpdf f a b =
-  log (Gsl.Randist.gamma_pdf f ~a:a ~b:b)
+  (* Logpdf of gamma distribution *)
+  | VFloat{f;_},DGamma{a=Some a;b=Some b;_} ->
+    VFloat{f=gamma_logpdf f a b}
+  | VInt{i;_},DGamma{a=Some a;b=Some b;_} ->
+    VFloat{f=gamma_logpdf (float_of_int i) a b}
+  | _,DGamma _ -> failwith "TODO"
 
-(* Normal distribution sample *)
-let normal_sample mu sigma =
-  mu +. Gsl.Randist.gaussian seed ~sigma:sigma
+(** Sample from probability distribution *)
+let sample dist = match dist with
 
-(* Uniform distribution sample *)
-let uniform_sample a b =
-  Gsl.Randist.flat seed ~a:a ~b:b
+  (* Sample normal distribution *)
+  | DNormal{mu=Some mu;sigma=Some sigma;_} ->
+    VFloat{f=normal_sample mu sigma}
+  | DNormal _ -> failwith "TODO"
 
-(* Exponential distribution sample *)
-let exp_sample lam =
-  let mu = 1.0 /. lam in
-  Gsl.Randist.exponential seed ~mu:mu
+  (* Sample uniform distribution *)
+  | DUniform{a=Some a;b=Some b;_} ->
+    VFloat{f=uniform_sample a b}
+  | DUniform _ -> failwith "TODO"
 
-(* Bernoulli distribution sample *)
-let bern_sample p =
-  Gsl.Randist.bernoulli seed ~p:p == 1
+  (* Sample exponential distribution *)
+  | DExp{lam=Some lam;_} ->
+    VFloat{f=exp_sample lam}
+  | DExp _ -> failwith "TODO"
 
-(* Beta distribution sample *)
-let beta_sample a b =
-  Gsl.Randist.beta seed ~a:a ~b:b
+  (* Sample bernoulli distribution *)
+  | DBern{p=Some p;_} ->
+    VBool{b=bern_sample p}
+  | DBern _ -> failwith "TODO"
 
-(* Gamma distribution sample *)
-let gamma_sample a b =
-  Gsl.Randist.gamma seed ~a:a ~b:b
+  (* Sample beta distribution *)
+  | DBeta{a=Some a;b=Some b;_} ->
+    VFloat{f=beta_sample a b}
+  | DBeta _ -> failwith "TODO"
+
+  (* Sample gamma distribution *)
+  | DGamma{a=Some a;b=Some b;_} ->
+    VFloat{f=gamma_sample a b}
+  | DGamma _ -> failwith "TODO"
 

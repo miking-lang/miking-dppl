@@ -1,2 +1,2 @@
-let p ~ beta 2 2 in
+let p = sample (beta 2 2) in
 p

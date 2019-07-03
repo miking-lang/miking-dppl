@@ -10,5 +10,6 @@ if flip(0.5) then {
   true
 } else {
   weight(log(100))
+  weight(log(1))
   false
 }

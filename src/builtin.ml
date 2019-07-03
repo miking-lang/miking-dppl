@@ -4,50 +4,51 @@ open Ast
 open Printf
 open Sprint
 
-(** Mapping between predefined variable names and builtin constants *)
+(** Mapping between predefined variable names and builtin values *)
 let builtin = [
 
-  "not",          VNot{at=va};
-  "and",          VAnd{at=va;b1=None};
-  "or",           VOr{at=va;b1=None};
+  "not",          VNot;
+  "and",          VAnd{b1=None};
+  "or",           VOr{b1=None};
 
-  "mod",          VMod{at=va;i1=None};
-  "sll",          VSll{at=va;i1=None};
-  "srl",          VSrl{at=va;i1=None};
-  "sra",          VSra{at=va;i1=None};
+  "mod",          VMod{i1=None};
+  "sll",          VSll{i1=None};
+  "srl",          VSrl{i1=None};
+  "sra",          VSra{i1=None};
 
-  "inf",          VFloat{at=va;f=infinity};
-  "log",          VLog{at=va};
+  "inf",          VFloat{f=infinity};
+  "log",          VLog;
 
-  "add",          VAdd{at=va;v1=None};
-  "sub",          VSub{at=va;v1=None};
-  "mul",          VMul{at=va;v1=None};
-  "div",          VDiv{at=va;v1=None};
-  "neg",          VNeg{at=va};
-  "lt",           VLt{at=va;v1=None};
-  "leq",          VLeq{at=va;v1=None};
-  "gt",           VGt{at=va;v1=None};
-  "geq",          VGeq{at=va;v1=None};
+  "add",          VAdd{v1=None};
+  "sub",          VSub{v1=None};
+  "mul",          VMul{v1=None};
+  "div",          VDiv{v1=None};
+  "neg",          VNeg;
+  "lt",           VLt{v1=None};
+  "leq",          VLeq{v1=None};
+  "gt",           VGt{v1=None};
+  "geq",          VGeq{v1=None};
 
-  "eq",           VEq{at=va;v1=None};
-  "neq",          VNeq{at=va;v1=None};
+  "eq",           VEq{v1=None};
+  "neq",          VNeq{v1=None};
 
-  "normal",       VNormal{at=va;mu=None;sigma=None};
-  "uniform",      VUniform{at=va;a=None;b=None};
-  "gamma",        VGamma{at=va;a=None;b=None};
-  "exponential",  VExp{at=va;lam=None};
-  "bernoulli",    VBern{at=va;p=None};
-  "beta",         VBeta{at=va;a=None;b=None};
+  "normal",       VDist{d=DNormal{mu=None;sigma=None}};
+  "uniform",      VDist{d=DUniform{a=None;b=None}};
+  "gamma",        VDist{d=DGamma{a=None;b=None}};
+  "exponential",  VDist{d=DExp{lam=None}};
+  "bernoulli",    VDist{d=DBern{p=None}};
+  "beta",         VDist{d=DBeta{a=None;b=None}};
 
-  "logpdf",       VLogPdf{at=va;v1=None};
-  "sample",       VSample{at=va};
-  "resample",     VResamp{at=va;dyn=false;cont=None;stoch_ctrl=None };
+  "logpdf",       VLogPdf{v1=None};
+  "sample",       VSample{cont=None;d=None};
 
-  "weight",       VWeight{at=va};
+  "weight",       VWeight{cont=None;w=None};
 
-  "fix",          VFix{at=va};
+  "resample",     VResamp{dyn=false;cont=None;stoch_ctrl=None };
 
-] |> List.map (fun (x, y) -> x, tm_of_val y)
+  "fix",          VFix;
+
+] |> List.map (fun (x, y) -> x, tm_of_val' y)
 
 (** Create a string representation of builtins *)
 let string_of_builtin ?(labels = false) builtin =
