@@ -96,6 +96,7 @@ let explore { p; emp={samples;_} as emp; _ } =
                          emp={emp with
                               samples=List.rev_append prev (v :: xs)}})
         outcomes
+    | (_, V{v=VSample _;_}) :: _ -> failwith "Invalid sample"
     | x::xs -> recurse (x::prev) xs
     | [] -> [{p; emp}]
   in
@@ -145,16 +146,11 @@ let explore { p; emp={samples;_} as emp; _ } =
       in
 
       (* Create an outcome for each possible resampling *)
-      List.mapi
-        (fun i rs ->
+      List.map
+        (fun rs ->
            let prob = p +. prob weights rs in
            let samples' = samples' samples rs in
-           let outcome = {p=prob;emp={emp with samples=samples'}} in
-           debug debug_var (Printf.sprintf "Outcome %d" i)
-             (fun () ->
-                String.concat ", " (List.map string_of_int rs)
-                ^ "\n" ^ string_of_outcome outcome);
-           outcome)
+           {p=prob;emp={emp with samples=samples'}})
         (gen_resamplings n)
 
     else
@@ -176,7 +172,11 @@ let var n env program =
           norm_const = 0.0 } } in
 
   (* Enumerate all possible outcomes *)
-  let rec enumerate queue res = match queue with
+  let rec enumerate queue res =
+  debug debug_var "Queue"
+    (fun () -> String.concat "\n\n" (List.map string_of_outcome queue));
+
+    match queue with
     | [] -> res
     | x :: xs -> match explore x with
       | [] -> failwith "Cannot happen"

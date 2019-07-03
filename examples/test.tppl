@@ -7,18 +7,10 @@ function flip(p) {
 if flip(0.5) then {
   weight(log(1))
   resample()
-  if flip(0.5) then {
-    weight(log(1))
-  } else {
-    weight(log(10))
-  }
+  weight(log(2))
 } else {
-  weight(log(10))
   resample()
-  if flip(0.5) then {
-    weight(log(1))
-  } else {
-    weight(log(10))
-  }
+  weight(log(4))
+  resample()
+  weight(log(2))
 }
-
