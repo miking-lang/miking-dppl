@@ -11,12 +11,14 @@ open Utest
 open Lexing
 open Rand
 
+(** Output formats *)
 type output =
   | None
   | Debug
   | Samples
   | Norm
 
+(** Default is debug output format *)
 let output = ref Debug
 
 (** Add a slash at the end of a path if not already available *)
@@ -62,12 +64,10 @@ let parse par filename =
 (** Function for running inference on a program. *)
 let exec filename =
 
-  (* If running unit testing, set the inference to SMC so that the CPS
-     transformation is also tested *)
+  (* If running unit testing, enforce usage of the Eval inference method *)
   if !utest then begin
     printf "%s: " filename;
-    inference := SMCManual;
-    samples   := 1;
+    inference := Eval;
     output    := None;
   end;
   utest_fail_local := 0;
@@ -81,24 +81,31 @@ let exec filename =
   debug debug_input "Input term" (fun () -> string_of_tm tm);
 
   (* Run inference *)
-  let { norm_const;_ } as emp = infer tm in
+  begin match infer tm with
+    | Empirical({ norm_const; _ } as emp) ->
 
-  (* Print output of inference *)
-  let string_of_val' = string_of_val ~max_boxes:5 ~margin:max_int in
+      (* Configure string conversion function for output
+         (one line, limited printing depth) *)
+      let string_of_val' = string_of_val ~max_boxes:5 ~margin:max_int in
 
-  begin match !output with
+      (* Print output of inference *)
+      begin match !output with
 
-    | None -> ()
+        | None -> ()
 
-    | Debug ->
-      debug true "Inference result"
-        (fun () -> string_of_empirical
-            ~normalize:true ~compare:Compare.compare
-             string_of_val' emp);
+        | Debug ->
+          debug true "Inference result"
+            (fun () -> string_of_empirical
+                ~normalize:true ~compare:Compare.compare
+                string_of_val' emp);
 
-    | Samples -> print_endline (samples_of_empirical string_of_val' emp)
+        | Samples -> print_endline (samples_of_empirical string_of_val' emp)
 
-    | Norm -> printf "%f" norm_const
+        | Norm -> printf "%f" norm_const
+
+      end
+
+    | Variance var -> printf "Variance: %f\n" var
 
   end;
 
@@ -115,12 +122,14 @@ let main =
 
     "--inference",
     Arg.String(fun s -> match s with
-        | "is"          -> inference := Importance
+        | "is"          -> inference := IS
         | "smc-direct"  -> inference := SMCDirect
         | "smc-manual"  -> inference := SMCManual
         | "smc-dynamic" -> inference := SMCDynamic
         | "smc-static"  -> inference := SMCStatic
         | "eval"        -> inference := Eval
+        | "var-smc"     -> inference := VarSMC
+        | "var-is"      -> inference := VarIS
         | _             -> failwith "Incorrect inference algorithm"
       ),
     " Specifies inference method. Options are: eval, is, \

@@ -268,9 +268,11 @@ let mkcont ~x ~t1  = T{at=ta;t=TCont{x=x;t1}}
 let mkcont' ~x ~t1 = T{at=ta;t=TCont{x=x;t1=T{at=ta;t=t1}}}
 let mkvar ~x ~i    = T{at=ta;t=TVar{xat=xa;x=x;i=i}}
 
-(** Conversion functions *)
+(** Convenient conversion functions *)
+let tm_of_tm' t = T{at=ta;t}
 let tm_of_val v = T{at=ta;t=TVal{v=v}}
 let tm_of_val' v = T{at=ta;t=TVal{v=V{at=va;v}}}
+let tm_of_dist d = tm_of_val' (VDist{d})
 let val_of_val' v = V{at=va;v=v}
 
 (** Used for indicating uninitialized debruijn indices *)

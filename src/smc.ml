@@ -13,11 +13,6 @@ let infer n env program =
   (* Create an initial set of weighted samples for this inference run *)
   let samples = replicate n (0.0,program) in
 
-  (* Function for wrapping a continuation for further evaluation. Set the
-     attribute of the unit argument to at. *)
-  (*let app_cont cont at =*)
-    (*(TApp{at=ta; t1=tm_of_val cont; t2=TVal{at=ta;v=VUnit{at}}}) in*)
-
   (* Run a particle until the next resampling point *)
   let rec eval env (w,t) =
     match Eval.eval false false env t with
@@ -46,8 +41,14 @@ let infer n env program =
 
     (* Update weights *)
     | V{at;v=VWeight{cont=Some cont;w=Some w'};_} ->
-      eval [] (w +. w', mkapp ~t1:(tm_of_val cont)
-                 ~t2:(tm_of_val (V{at;v=VUnit})))
+
+      let w = w +. w' in
+
+      (* If weight is degenerate, don't bother to continue with execution *)
+      if w = neg_infinity then
+        w,V{at=va;v=VUnit}
+      else
+        eval [] (w, mkapp ~t1:(tm_of_val cont) ~t2:(tm_of_val (V{at;v=VUnit})))
 
     (* Sample probability distributions. *)
     | V{at;v=VSample{cont=Some cont; d=Some d};_} ->
@@ -141,6 +142,7 @@ let add_resamples ~dyn builtin t =
     | TVal _ -> t
 in recurse t, List.map (fun (x,t) -> x,recurse t) builtin
 
+(** Preprocessing function calling add_resamples *)
 let preprocess ~dyn builtin tm =
   let tm,builtin = add_resamples ~dyn builtin tm in
 

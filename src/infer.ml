@@ -1,18 +1,27 @@
 (** Handles inference *)
 
+open Ast
 open Sprint
 open Debug
 open Builtin
 open Debruijn
+open Rand
 
 (** Inference types *)
 type inference =
   | Eval
-  | Importance
+  | IS
   | SMCDirect
   | SMCManual
   | SMCDynamic
   | SMCStatic
+  | VarSMC
+  | VarIS
+
+(** Inference result types *)
+type result =
+  | Empirical of value empirical
+  | Variance  of float
 
 (** Default inference is simply weighted evaluation *)
 let inference = ref Eval
@@ -37,11 +46,11 @@ let cps tm builtin =
 
   tm,builtin
 
-(** Preprocess a program in preparation for running inference. *)
+(** Preprocess a program in preparation of running inference. *)
 let preprocess tm builtin = match !inference with
 
     (* No preprocessing required if running evaluation or IS inference *)
-    | Eval | Importance -> tm,builtin
+    | Eval | IS -> tm,builtin
 
     (* For direct SMC, add resamples after each weight *)
     | SMCDirect -> Smc.preprocess ~dyn:false builtin tm
@@ -55,6 +64,10 @@ let preprocess tm builtin = match !inference with
 
     (* TODO *)
     | SMCStatic -> failwith "Statically aligned SMC not yet implemented"
+
+    (* For variance computations, we don't do any preprocessing *)
+    | VarSMC
+    | VarIS -> tm,builtin
 
 (** Preprocess term and redirect to inference algorithm provided on command
     line. *)
@@ -74,8 +87,10 @@ let infer tm =
   let env = (builtin |> List.split |> snd) in
 
   match !inference with
-  | Eval -> Is.infer 1 env tm
-  | Importance -> Is.infer !samples env tm
+  | Eval                   -> Empirical(Is.infer 1 env tm)
+  | IS                     -> Empirical(Is.infer !samples env tm)
   | SMCDirect  | SMCManual
-  | SMCDynamic | SMCStatic -> Smc.infer !samples env tm
+  | SMCDynamic | SMCStatic -> Empirical(Smc.infer !samples env tm)
+  | VarSMC                 -> Variance(VarZSmc.var !samples env tm)
+  | VarIS                  -> Variance(VarZIs.var !samples env tm)
 

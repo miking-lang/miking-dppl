@@ -1,4 +1,4 @@
-(** Functions for converting ast data to strings *)
+(** Functions for converting data types from Ast to strings *)
 
 open Ast
 open Pattern
@@ -295,7 +295,13 @@ and bare_print fmt (T{t;_}) = match t with
         | VLogPdf{v1=Some v;_} -> fprintf fmt "logpdf(%a)"
                                     print_tm (MATCH,tm_of_val v)
 
-        | VSample _ -> fprintf fmt "sample"
+        | VSample{cont=None;d=None} -> fprintf fmt "sample"
+        | VSample{cont=Some v;d=None} -> fprintf fmt "sample(%a)"
+                                           print_tm (MATCH, tm_of_val v)
+        | VSample{cont=Some v;d=Some d} -> fprintf fmt "sample(%a,%a)"
+                                             print_tm (MATCH, tm_of_val v)
+                                             print_tm (MATCH, tm_of_dist d)
+        | VSample _ -> failwith "Invalid sample in print"
 
         | VTup{np;varr;_} ->
           let inner = Array.map (fun v ->
@@ -337,7 +343,13 @@ and bare_print fmt (T{t;_}) = match t with
         | VConcat{v1=Some v;_} -> fprintf fmt "concat(%a)"
                                     print_tm (MATCH, tm_of_val v)
 
-        | VWeight _ -> fprintf fmt "weight"
+        | VWeight{cont=None;w=None} -> fprintf fmt "weight"
+        | VWeight{cont=Some v;w=None} -> fprintf fmt "weight(%a)"
+                                           print_tm (MATCH, tm_of_val v)
+        | VWeight{cont=Some v;w=Some w} -> fprintf fmt "weight(%a,%f)"
+                                             print_tm (MATCH, tm_of_val v)
+                                             w
+        | VWeight _ -> failwith "Invalid weight in print"
 
         | VResamp{dyn;cont=None;_} ->
           fprintf fmt "%sresample" (if dyn then "dyn" else "")

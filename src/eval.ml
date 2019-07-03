@@ -163,7 +163,7 @@ and eval_app stoch stoch_ctrl
         end;
       V{at=a1;v=VUnit}
 
-    (* Probability distributions *)
+    (* Construct probability distributions *)
     | VDist{d},_ ->
       let d = match d,v2' with
         | DNormal{mu=None;sigma=None;_},
@@ -430,3 +430,4 @@ and eval_app stoch stoch_ctrl
     | VConcat{v1=Some V{v=VList{vls=vls1;_};_}}, VList{vls=vls2} ->
       V{at=va;v=VList{vls=vls1 @ vls2}}
     | VConcat _,_ -> fail_app v1 v2
+

@@ -1,5 +1,3 @@
-// The variance for this program is better for SMC than for IS
-
 function flip(p) {
   sample(bernoulli(p))
 }

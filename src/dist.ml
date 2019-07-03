@@ -79,3 +79,19 @@ let sample dist = match dist with
     VFloat{f=gamma_sample a b}
   | DGamma _ -> failwith "TODO"
 
+(** Type alias for the support of a distribution *)
+type support = (float * value') list
+
+(** Returns the support of a given distribution *)
+let support dist = match dist with
+
+  | DNormal _ | DUniform _
+  | DExp _    | DBeta _    | DGamma _ ->
+    failwith "Support for continuous distribution requested"
+
+  (* Support for Bernoulli distribution *)
+  | DBern{p=Some p;_} ->
+    [ log p,VBool{b=true};
+      log (1.0 -. p),VBool{b=false} ]
+  | DBern _ -> failwith "TODO"
+

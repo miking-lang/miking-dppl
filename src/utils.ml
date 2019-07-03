@@ -27,6 +27,12 @@ let map f l =
   in
   recurse [] l
 
+(** Append n elements of x to the list ls *)
+let rec append n x ls =
+  if n < 1 then
+    ls
+  else append (n-1) x (x :: ls)
+
 (** Map accumulate for lists. Maps f over the array while also carrying an
     accumulator between applications of f. *)
 let map_accum f acc ls =

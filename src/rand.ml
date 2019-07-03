@@ -67,7 +67,7 @@ let gamma_sample a b =
 (** Type constructor for empirical distribution *)
 type 'a empirical = {
 
-  (* The weighted samples *)
+  (* The set of weighted samples *)
   samples:(float * 'a) list;
 
   (* The number of samples, for convenience *)
@@ -85,8 +85,7 @@ let logsumexp ls =
   max +. log (List.fold_left (fun s w -> s +. exp (w -. max)) 0.0 ls)
 
 (** Normalize an empirical distribution so that the weights sum to n, updating
-    the normalizing constant.
-    TODO Debug *)
+    the normalizing constant. *)
 let normalize ({ samples; norm_const; n } as emp) =
 
   (* Compute the logarithm of the sum of the weights of the samples *)
@@ -135,6 +134,7 @@ let string_of_empirical
     ?(log_weights = false)
     ?(normalize = false)
     ?(compare = compare)
+    ?(show_norm_const = true)
     string_of_sample {samples;norm_const;_} =
 
   (* Aggregate and log_weights do not go together TODO Why not? *)
@@ -204,8 +204,12 @@ let string_of_empirical
   header
   ^ (String.concat "\n" (Utils.map line samples))
   ^ (if diag_ess then sprintf "\n\n  ESS=%f" ess else "")
-  ^ sprintf "\n\n  Log normalizing constant: %f\
+  ^
+  if show_norm_const then
+    sprintf "\n\n  Log normalizing constant: %f\
              \n  Normalizing constant: %f" norm_const (exp norm_const)
+  else ""
+
 
 (** Create a string of unweighted samples from an empirical distribution,
     separated by line breaks *)

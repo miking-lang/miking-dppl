@@ -4,7 +4,7 @@ open Printf
 open Utest
 
 (** Debug the input term *)
-let debug_input = false
+let debug_input = true
 
 (** Debug the labelling *)
 let debug_label = false
@@ -32,6 +32,9 @@ let debug_eval_app = false
 
 (** Debug the evaluation environment *)
 let debug_eval_env = false
+
+(** Debug the variance computations *)
+let debug_var = false
 
 (** Debug printout *)
 let debug cond heading info =
