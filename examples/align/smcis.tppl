@@ -21,4 +21,3 @@ if flip(0.5) then {
     weight(log(10))
   }
 }
-

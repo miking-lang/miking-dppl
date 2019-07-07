@@ -1,17 +1,17 @@
 function flip(p) {
   sample(bernoulli(p))
 }
-a1 = 3.12
-a2 = 6.0
-// a1 = log(1)
-// a2 = log(1)
+// 3.16 gives optimal variance for SMC for this model. Why is the
+// optimal ratio between a1 and a2 not 3.0/6.0 ?
+a1 = 3.16227766 // sqrt((2^2+4^2)/2)
+a2 = 6.00
 
 w1 = 1.0
 w2 = 2.0
 w3 = 4.0
-w4 = 1.0
-w5 = 5.0
-w6 = 7.0
+
+w4 = 2.0
+w5 = 6.0
 
 if flip(0.5) then {
   weight(log(w1*a1))
@@ -24,9 +24,5 @@ if flip(0.5) then {
 } else {
   weight(log(w4*a2))
   resample()
-  if flip(0.5) then {
-    weight(log(w5/a2))
-  } else {
-    weight(log(w6/a2))
-  }
+  weight(log(w5/a2))
 }

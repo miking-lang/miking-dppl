@@ -105,7 +105,8 @@ let exec filename =
 
       end
 
-    | Variance var -> printf "Variance: %f\n" var
+    | Variance var -> debug true "Inference result"
+                        (fun () -> sprintf "Variance: %f" var)
 
   end;
 

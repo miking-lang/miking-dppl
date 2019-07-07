@@ -65,7 +65,8 @@ let gen_resamplings n =
     else
       let this = gen_list n in
       let rest x = recurse (n - x) (m - 1) in
-      this |> List.map (fun x -> List.map (List.cons x) (rest x)) |> List.concat
+      this |> Utils.map (fun x -> Utils.map (List.cons x) (rest x))
+      |> List.concat
   in
   recurse n n
 
@@ -86,23 +87,22 @@ let explore { p; emp={samples;_} as emp; _ } =
     | (w, V{v=VSample{cont=Some cont; d=Some d};_}) :: xs ->
       let sup = support d in
       let outcomes =
-        List.map
+        Utils.map
           (fun (p',sample) ->
              p',
              eval [] (w, mkapp ~t1:(tm_of_val cont) ~t2:(tm_of_val' sample)))
           sup in
-      List.map
+      Utils.map
         (fun (p',v) -> { p = p +. p';
                          emp={emp with
                               samples=List.rev_append prev (v :: xs)}})
         outcomes
     | (_, V{v=VSample _;_}) :: _ -> failwith "Invalid sample"
     | x::xs -> recurse (x::prev) xs
-    | [] -> [{p; emp}]
-  in
+    | [] -> [] in
 
   match recurse [] samples with
-  | [{p;emp={samples;_}}] as outcomes ->
+  | [] ->
     if List.exists
         (fun (_,v) -> match v with V{v=VResamp _;_} -> true | _ -> false)
         samples
@@ -117,11 +117,11 @@ let explore { p; emp={samples;_} as emp; _ } =
       (* Extract the resampling (log) weights, normalize them to probabilities
          (sum to 1 as proper weights) *)
       let weights =
-        List.map (fun (w,_) -> w -. (log (float_of_int n))) samples in
+        Utils.map (fun (w,_) -> w -. (log (float_of_int n))) samples in
 
       (* Evaluate everything one step (with weights reset to 0) *)
       let samples =
-        List.map
+        Utils.map
           (fun (_,v) -> match v with
              | V{v=VResamp{cont=Some cont;_};_} ->
                eval [] (0.0, mkapp ~t1:(tm_of_val cont) ~t2:nop)
@@ -146,7 +146,7 @@ let explore { p; emp={samples;_} as emp; _ } =
       in
 
       (* Create an outcome for each possible resampling *)
-      List.map
+      Utils.map
         (fun rs ->
            let prob = p +. prob weights rs in
            let samples' = samples' samples rs in
@@ -155,7 +155,7 @@ let explore { p; emp={samples;_} as emp; _ } =
 
     else
       (* Nothing left to explore *)
-      outcomes
+      []
 
   | outcomes -> outcomes
 
@@ -173,30 +173,31 @@ let var n env program =
 
   (* Enumerate all possible outcomes *)
   let rec enumerate queue res =
-  debug debug_var "Queue"
-    (fun () -> String.concat "\n\n" (List.map string_of_outcome queue));
+  debug debug_var_queue "Queue"
+    (fun () -> String.concat "\n\n" (Utils.map string_of_outcome queue));
 
     match queue with
     | [] -> res
     | x :: xs -> match explore x with
-      | [] -> failwith "Cannot happen"
-      | [x] -> enumerate xs (x :: res)
+      | [] -> enumerate xs (x :: res)
       | queue' -> enumerate (queue' @ xs) res in
 
   (* Do the enumeration *)
   let outcomes = enumerate [init] [] in
 
   (* Compute normalizing constant estimate for each outcome *)
-  let outcomes = List.map normalize outcomes in
+  let outcomes = Utils.map normalize outcomes in
 
   debug debug_var "Final set of outcomes"
-    (fun () -> String.concat "\n\n" (List.map string_of_outcome outcomes));
+    (fun () -> String.concat "\n\n" (Utils.map string_of_outcome outcomes));
 
   (* Calculate expected value *)
   let exp_val =
     List.fold_left
       (fun a { p; emp = { norm_const; _ } } -> a +. exp (norm_const +. p) )
       0.0 outcomes in
+
+  Printf.printf "EXPECTED VALUE=%f\n" exp_val;
 
   (* Finally calculate and return variance *)
   List.fold_left

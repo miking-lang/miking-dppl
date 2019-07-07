@@ -1,0 +1,22 @@
+function flip(p) {
+  sample(bernoulli(p))
+}
+a1 = 2.0
+a2 = 4.0
+// a1 = log(1)
+// a2 = log(1)
+
+w1 = 1.0
+w2 = 2.0
+w3 = 3.0
+w4 = 4.0
+
+if flip(0.5) then {
+  weight(log(w1*a1))
+  resample()
+  weight(log(w2/a1))
+} else {
+  weight(log(w3*a2))
+  resample()
+  weight(log(w4/a2))
+}

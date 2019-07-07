@@ -59,7 +59,6 @@ let rec eval env (w,t) =
 let explore { p; emp={samples;_} as emp; _ } =
   let rec recurse prev samples =
     match samples with
-    | [] -> [{p; emp={ emp with samples=List.rev prev}}]
     | (w, V{v=VSample{cont=Some cont; d=Some d};_}) :: xs ->
       let sup = support d in
       let outcomes =
@@ -73,7 +72,8 @@ let explore { p; emp={samples;_} as emp; _ } =
                          emp={emp with
                               samples=List.rev_append prev (v :: xs)}})
         outcomes
-    | x::xs -> recurse (x::prev) xs in
+    | x::xs -> recurse (x::prev) xs
+    | [] -> [] in
   recurse [] samples
 
 (** Compute variance in the estimate of the normalizing
@@ -92,8 +92,7 @@ let var n env program =
   let rec enumerate queue res = match queue with
     | [] -> res
     | x :: xs -> match explore x with
-      | [] -> failwith "Cannot happen"
-      | [x] -> enumerate xs (x :: res)
+      | [] -> enumerate xs (x :: res)
       | queue' -> enumerate (queue' @ xs) res in
 
   (* Do the enumeration *)

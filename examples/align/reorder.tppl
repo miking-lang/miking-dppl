@@ -9,9 +9,21 @@ w3 = log(4)
 w4 = log(5)
 
 // Ordering 1
-w2 = if flip() then w21 else w22
+// w2 = if flip() then w21 else w22
+// if flip() then {
+//   weight(w1)
+//   resample()
+//   weight(w2)
+// } else {
+//   weight(w3)
+//   resample()
+//   weight(w4)
+// }
+
+// Ordering 2
 if flip() then {
   weight(w1)
+  w2 = if flip() then w21 else w22
   resample()
   weight(w2)
 } else {
@@ -19,15 +31,3 @@ if flip() then {
   resample()
   weight(w4)
 }
-
-// Ordering 2
-// if flip() then {
-//   weight(w1)
-//   resample()
-//   w2 = if flip() then w21 else w22
-//   weight(w2)
-// } else {
-//   weight(w3)
-//   resample()
-//   weight(w4)
-// }

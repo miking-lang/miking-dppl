@@ -35,6 +35,7 @@ let debug_eval_env = false
 
 (** Debug the variance computations *)
 let debug_var = false
+let debug_var_queue = false
 
 (** Debug printout *)
 let debug cond heading info =
