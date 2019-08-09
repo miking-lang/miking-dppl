@@ -1,1 +1,1 @@
-# SMC-General
+# PPL-SMC
