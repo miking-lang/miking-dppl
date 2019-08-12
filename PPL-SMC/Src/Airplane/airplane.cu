@@ -7,9 +7,10 @@
 #include "../Smc/smcImpl.cuh"
 #include "airplane.cuh"
 #include "airplaneUtils.cuh"
+#include "../Utils/misc.cuh"
 #include "../cudaErrorUtils.cu"
 
-// nvcc -arch=sm_75 -rdc=true Src/Airplane/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPU
+// nvcc -arch=sm_61 -rdc=true Src/Airplane/*.cu Src/Utils/*.cpp Src/Utils/*.cu -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPU
 
 using namespace std;
 
@@ -78,19 +79,22 @@ __device__
 void particleInit(particles_t<stateType>* particles, int i, int t) {
     #ifdef GPU
     particles->progStates[i].x = curand_uniform(&particles->randStates[i]) * MAP_SIZE;
+    int random = flipDev(&particles->randStates[i]);
     #else
     particles->progStates[i].x = uniDist(generator);
+    int random = flip();
     #endif
 
     updateWeight(particles, i, t);
 
-    particles->pcs[i] = 1;
+    particles->pcs[i] = random + 1;
 }
 
 #ifdef GPU
 __device__
 #endif
 void propagateAndWeight(particles_t<stateType>* particles, int i, int t) {
+
     // Propagate
     #ifdef GPU
     particles->progStates[i].x += VELOCITY + (curand_normal(&particles->randStates[i]) * TRANSITION_STD);
@@ -104,38 +108,65 @@ void propagateAndWeight(particles_t<stateType>* particles, int i, int t) {
 
     // p->progState.t += 1;
     if(t >= TIME_STEPS - 1)
-        particles->pcs[i] = 2;
+        particles->pcs[i] = 3;
+
 }
 
 #ifdef GPU
-__device__ pplFunc_t<stateType> initFuncPointer = particleInit;
-__device__ pplFunc_t<stateType> propWeightPointer = propagateAndWeight;
+__device__
+#endif
+void chill(particles_t<stateType>* particles, int i, int t) {
+    #ifdef GPU
+    int flipRes = flipDev(&particles->randStates[i]);
+    #else
+    int flipRes = flip();
+    #endif
+
+    if(flipRes)
+        particles->pcs[i] = 1;
+
+
+    if(t >= TIME_STEPS - 1)
+        particles->pcs[i] = 3;
+}
+
+#ifdef GPU
+__device__ pplFunc_t<stateType> initDev = particleInit;
+__device__ pplFunc_t<stateType> propWeightDev = propagateAndWeight;
+__device__ pplFunc_t<stateType> chillDev = chill;
 #endif
 
 int main(int argc, char** argv) {
 
     initAirplane();
-    pplFunc_t<stateType> initFunc;
-    pplFunc_t<stateType> propWeightFunc;
+
+    // Host pointers, (to device if GPU)
+    pplFunc_t<stateType> initHost;
+    pplFunc_t<stateType> propWeightHost;
+    pplFunc_t<stateType> chillHost;
 
     #ifdef GPU
     // Cannot directly handle device func pointers from host code, this solves this problem
-    cudaSafeCall(cudaMemcpyFromSymbol(&initFunc, initFuncPointer, sizeof(pplFunc_t<stateType>)));
-    cudaSafeCall(cudaMemcpyFromSymbol(&propWeightFunc, propWeightPointer, sizeof(pplFunc_t<stateType>)));
+    // Allow host code to handle pointer to device address
+    cudaSafeCall(cudaMemcpyFromSymbol(&initHost, initDev, sizeof(pplFunc_t<stateType>)));
+    cudaSafeCall(cudaMemcpyFromSymbol(&propWeightHost, propWeightDev, sizeof(pplFunc_t<stateType>)));
+    cudaSafeCall(cudaMemcpyFromSymbol(&chillHost, chillDev, sizeof(pplFunc_t<stateType>)));
 
     #else
-    initFunc = particleInit;
-    propWeightFunc = propagateAndWeight;
+    initHost = particleInit;
+    propWeightHost = propagateAndWeight;
+    chillHost = chill;
     #endif
 
     pplFunc_t<stateType>* funcArr;
-    allocateMemory<pplFunc_t<stateType>>(&funcArr, 3);
-    // funcArr = {initFunc, propWeightFunc, NULL}; // func pointer array
-    funcArr[0] = initFunc;
-    funcArr[1] = propWeightFunc;
-    funcArr[2] = NULL;
+    allocateMemory<pplFunc_t<stateType>>(&funcArr, 4);
+    
+    funcArr[0] = initHost;
+    funcArr[1] = propWeightHost;
+    funcArr[2] = chillHost;
+    funcArr[3] = NULL;
 
-    bool resample[] = {false, true, NULL};
+    bool resample[] = {false, true, true, NULL};
 
     runSMC<stateType>(funcArr, resample, printStatusFunc);
 

@@ -10,7 +10,7 @@
 
 using namespace std;
 
-const int NUM_PARTICLES = 1 << 17;
+const int NUM_PARTICLES = 1 << 4;
 
 const int NUM_THREADS_PER_BLOCK = 128;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;

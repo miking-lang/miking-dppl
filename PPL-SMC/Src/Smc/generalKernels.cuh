@@ -5,11 +5,11 @@
 #include <curand_kernel.h>
 #include "smc.cuh"
 
-__global__ void initRandStatesKernel(curandState* states) {
+__global__ void initRandStatesKernel(curandState* states, int timeSeed) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= NUM_PARTICLES || idx < 0) return;
 
-    curand_init(1234, idx, 0, &states[idx]);
+    curand_init(1234 + timeSeed, idx, 0, &states[idx]);
 }
 
 // Better to sort particles after the func to exec, and do separate kernels for each func?

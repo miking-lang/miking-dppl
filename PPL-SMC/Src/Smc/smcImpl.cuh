@@ -36,7 +36,7 @@ void freeMemory(T* pointer) {
 
 #ifdef GPU
 void initRandStates(curandState* randStates) {
-    initRandStatesKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates); // Apparently slow!
+    initRandStatesKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, time(NULL)); // Apparently slow!
     cudaDeviceSynchronize();
     cudaCheckError();
 }
@@ -61,10 +61,10 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
     int t = 0;
     
     while(true) {
-        bool terminate = true;
 
         resample = resampleArr[particles->pcs[0]]; // Assumption: All resample at the same time
 
+        cout << "execing funcs.." << endl;
         #ifdef GPU
         execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, t, funcs);
         cudaDeviceSynchronize();
@@ -76,14 +76,12 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
                 funcs[pc](particles, i, t);
         }
         #endif
-
-        if(funcs[particles->pcs[0]] != NULL) // Assumption: All terminate at the same time
-            terminate = false;
+        cout << "execced funcs!" << endl;
 
         if(DEBUG)
             statusFunc(particles, t);
 
-        if(terminate)
+        if(funcs[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
 
         if(resample)
