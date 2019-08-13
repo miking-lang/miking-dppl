@@ -36,7 +36,7 @@ void freeMemory(T* pointer) {
 
 #ifdef GPU
 void initRandStates(curandState* randStates) {
-    initRandStatesKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, time(NULL)); // Apparently slow!
+    initRandStatesKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, time(NULL));
     cudaDeviceSynchronize();
     cudaCheckError();
 }
@@ -45,7 +45,7 @@ void initRandStates(curandState* randStates) {
 template <typename T>
 void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) {
 
-    
+    // Init
     particles_t<T>* particles;
     allocateMemory<particles_t<T>>(&particles, 1); 
 
@@ -57,14 +57,14 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
 
     initResampler<T>();
 
-    bool resample = true;
+    bool resample;
     int t = 0;
     
+    // Run program/inference
     while(true) {
 
         resample = resampleArr[particles->pcs[0]]; // Assumption: All resample at the same time
 
-        cout << "execing funcs.." << endl;
         #ifdef GPU
         execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, t, funcs);
         cudaDeviceSynchronize();
@@ -76,7 +76,6 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
                 funcs[pc](particles, i, t);
         }
         #endif
-        cout << "execced funcs!" << endl;
 
         if(DEBUG)
             statusFunc(particles, t);
@@ -85,7 +84,7 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
             break;
 
         if(resample)
-            resampleSystematic<T>(particles);
+            resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
 
         t++;
     }
@@ -93,8 +92,15 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
     if(!DEBUG)
         statusFunc(particles, t);
 
+        
+    // Clean up
     destResampler<T>();
+    
+    #ifdef GPU
     freeMemory(particles);
+    #else
+    delete particles;
+    #endif
 
     double duration = getTimeElapsed();
     cout << "Duration: " << duration << " seconds" << endl;
@@ -102,3 +108,16 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
 
 
 #endif
+
+
+
+/*
+
+* Resample after final weigh? WebPPL verkar alltid resampla efter en "factor"? Vill jag försöka skapa det?
+
+* Verkar bli mycket kod, med mycket #ifdef GPU
+
+* Sträva efter att göra ett snyggare interface? Kanske går att minska mängden problemspecifik kod
+
+
+*/

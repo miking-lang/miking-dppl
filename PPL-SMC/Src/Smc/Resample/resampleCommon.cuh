@@ -53,7 +53,7 @@ void destResampler() {
     delete[] cumulativeOffspring;
     delete[] prefixSum;
     particles_t<T>* tempArrP = static_cast<particles_t<T>*>(tempArr);
-    delete[] tempArrP;
+    delete tempArrP;
     #endif
 }
 
@@ -62,15 +62,12 @@ template <typename T>
 __device__
 #endif
 void copyParticle(particles_t<T>* particlesSrc, particles_t<T>* particlesDst, int srcIdx, int dstIdx) {
-    printf("Starting copy p...\n");
     particlesDst->progStates[dstIdx] = particlesSrc->progStates[srcIdx];
-    printf("Copies progStates!\n");
     #ifdef GPU
     particlesDst->randStates[dstIdx] = particlesSrc->randStates[srcIdx];
     #endif
     particlesDst->pcs[dstIdx] = particlesSrc->pcs[srcIdx];
     particlesDst->weights[dstIdx] = particlesSrc->weights[srcIdx];
-    printf("Finished copy p!\n");
 }
 
 #endif
