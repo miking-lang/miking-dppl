@@ -57,13 +57,10 @@ void runSMC(pplFunc_t<T>* funcs, statusFunc_t<T> statusFunc) {
 
     initResampler<T>();
 
-    bool resample;
     int t = 0;
     
     // Run program/inference
     while(true) {
-
-        //resample = resampleArr[particles->pcs[0]]; 
 
         #ifdef GPU
         execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, t, funcs);
@@ -77,23 +74,17 @@ void runSMC(pplFunc_t<T>* funcs, statusFunc_t<T> statusFunc) {
         }
         #endif
 
-        resample = particles->resample[0]; // Assumption: All resample at the same time
-
-        if(DEBUG)
-            statusFunc(particles, t);
-
+        
+        statusFunc(particles, t);
+        
         if(funcs[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
-
-        if(resample)
+        
+        if(particles->resample[0]) // Assumption: All resample at the same time
             resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
 
         t++;
     }
-
-    if(!DEBUG)
-        statusFunc(particles, t);
-
         
     // Clean up
     destResampler<T>();
