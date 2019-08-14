@@ -77,7 +77,7 @@ runSMC<progState_t>(bblocksArr, statusFunc); \
 freeMemory<pplFunc_t<progState_t>>(bblocksArr); \
 return 0;
 
-#define WEIGHT(w) particles->weights[i] = w;
+#define WEIGHT(w) particles->weights[i] = w; // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
 #define PC particles->pcs[i]
 #define RESAMPLE particles->resample[i]
 #define PSTATE particles->progStates[i]
