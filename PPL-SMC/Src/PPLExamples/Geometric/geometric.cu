@@ -11,22 +11,16 @@ using namespace std;
 
 // nvcc -arch=sm_61 -rdc=true Src/PPLExamples/Geometric/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPU
 
-#ifdef GPU
-__device__
-#endif
-void particleInit(particles_t<progState_t>* particles, int i, int t) {
-    
+
+BBLOCK(particleInit, {
+
     particles->progStates[i].res = 0;
 
     particles->pcs[i] = 1;
-}
+    particles->resample[i] = false;
+})
 
-
-#ifdef GPU
-__device__
-#endif
-void geometric(particles_t<progState_t>* particles, int i, int t) {
-
+BBLOCK(geometric, {
     int numFlips = 0;
     int currFlip = 1;
     
@@ -41,14 +35,14 @@ void geometric(particles_t<progState_t>* particles, int i, int t) {
     particles->progStates[i].res = numFlips;
 
     particles->pcs[i]++;
-}
+    particles->resample[i] = true;
+})
 
-#ifdef GPU
-__device__
-#endif
-void nop(particles_t<progState_t>* particles, int i, int t) {
+BBLOCK(nop, {
     particles->pcs[i]++;
-}
+    particles->resample[i] = false;
+})
+
 
 void statusFuncGeometric(particles_t<progState_t>* particles, int t) {
     int tally[100] = {0};
@@ -63,9 +57,9 @@ void statusFuncGeometric(particles_t<progState_t>* particles, int t) {
 
 // These pointers and "__device__" in front of funcs are the only things stopping from being independent from GPU vs CPU
 #ifdef GPU
-__device__ pplFunc_t<progState_t> initDev = particleInit;
-__device__ pplFunc_t<progState_t> geometricDev = geometric;
-__device__ pplFunc_t<progState_t> nopDev = nop;
+__device__ pplFunc_t<progState_t> initDev = bblock_particleInit;
+__device__ pplFunc_t<progState_t> geometricDev = bblock_geometric;
+__device__ pplFunc_t<progState_t> nopDev = bblock_nop;
 #endif
 
 int main() {
@@ -82,9 +76,9 @@ int main() {
     cudaSafeCall(cudaMemcpyFromSymbol(&geometricHost, geometricDev, sizeof(pplFunc_t<progState_t>)));
     cudaSafeCall(cudaMemcpyFromSymbol(&nopHost, nopDev, sizeof(pplFunc_t<progState_t>)));
     #else
-    initHost = particleInit;
-    geometricHost = geometric;
-    nopHost = nop;
+    initHost = bblock_particleInit;
+    geometricHost = bblock_geometric;
+    nopHost = bblock_nop;
     #endif
 
     pplFunc_t<progState_t>* funcArr;
@@ -95,9 +89,7 @@ int main() {
     funcArr[2] = nopHost;
     funcArr[3] = NULL;
 
-    bool resample[] = {false, true, false, NULL};
-
-    runSMC<progState_t>(funcArr, resample, statusFuncGeometric);
+    runSMC<progState_t>(funcArr, statusFuncGeometric);
 
     freeMemory<pplFunc_t<progState_t>>(funcArr);
 

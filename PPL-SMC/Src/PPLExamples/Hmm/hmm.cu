@@ -19,6 +19,7 @@ __device__
 void particleInit(particles_t<progState_t>* particles, int i, int t) {
 
     particles->pcs[i] = 1;
+    particles->resample[i] = false;
 }
 
 #ifdef GPU
@@ -60,6 +61,7 @@ void hmm(particles_t<progState_t>* particles, int i, int t) {
     particles->weights[i] = hmmState.observations == TRUE_OBSERVATIONS ? 1 : 0;
 
     particles->pcs[i]++;
+    particles->resample[i] = true;
 }
 
 #ifdef GPU
@@ -67,6 +69,7 @@ __device__
 #endif
 void nop(particles_t<progState_t>* particles, int i, int t) {
     particles->pcs[i]++;
+    particles->resample[i] = false;
 }
 
 
@@ -133,9 +136,7 @@ int main() {
     funcArr[2] = nopHost;
     funcArr[3] = NULL;
 
-    bool resample[] = {false, true, false, NULL};
-
-    runSMC<progState_t>(funcArr, resample, statusFuncHmm);
+    runSMC<progState_t>(funcArr, statusFuncHmm);
 
     freeMemory<pplFunc_t<progState_t>>(funcArr);
 

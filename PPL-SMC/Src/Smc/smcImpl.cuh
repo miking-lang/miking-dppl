@@ -43,7 +43,7 @@ void initRandStates(curandState* randStates) {
 #endif
 
 template <typename T>
-void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) {
+void runSMC(pplFunc_t<T>* funcs, statusFunc_t<T> statusFunc) {
 
     // Init
     particles_t<T>* particles;
@@ -63,7 +63,7 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
     // Run program/inference
     while(true) {
 
-        resample = resampleArr[particles->pcs[0]]; // Assumption: All resample at the same time
+        //resample = resampleArr[particles->pcs[0]]; 
 
         #ifdef GPU
         execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, t, funcs);
@@ -73,9 +73,11 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
         for(int i = 0; i < NUM_PARTICLES; i++) {
             int pc = particles->pcs[i];
             if(funcs[pc] != NULL)
-                funcs[pc](particles, i, t);
+                funcs[pc](particles, i, t); 
         }
         #endif
+
+        resample = particles->resample[0]; // Assumption: All resample at the same time
 
         if(DEBUG)
             statusFunc(particles, t);
@@ -113,7 +115,7 @@ void runSMC(pplFunc_t<T>* funcs, bool* resampleArr, statusFunc_t<T> statusFunc) 
 
 /*
 
-* Resample after final weigh? WebPPL verkar alltid resampla efter en "factor"? Vill jag försöka skapa det?
+* Resample after final weigh? WebPPL verkar alltid resampla efter en "factor"? Vill jag försöka skapa det? Eller bara modellera det med funktioner?
 
 * Verkar bli mycket kod, med mycket #ifdef GPU
 

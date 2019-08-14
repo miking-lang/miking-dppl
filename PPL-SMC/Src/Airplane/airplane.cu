@@ -86,6 +86,7 @@ void particleInit(particles_t<stateType>* particles, int i, int t) {
     updateWeight(particles, i, t);
 
     particles->pcs[i] = 1;
+    particles->resample[i] = false;
 }
 
 #ifdef GPU
@@ -108,24 +109,7 @@ void propagateAndWeight(particles_t<stateType>* particles, int i, int t) {
     if(t >= TIME_STEPS - 1)
         particles->pcs[i] = 2;
 
-}
-
-#ifdef GPU
-__device__
-#endif
-void chill(particles_t<stateType>* particles, int i, int t) {
-    #ifdef GPU
-    int flipRes = flipDev(&particles->randStates[i]);
-    #else
-    int flipRes = flip();
-    #endif
-
-    if(flipRes)
-        particles->pcs[i] = 1;
-
-
-    if(t >= TIME_STEPS - 1)
-        particles->pcs[i] = 3;
+    particles->resample[i] = true;
 }
 
 #ifdef GPU
@@ -159,9 +143,7 @@ int main(int argc, char** argv) {
     funcArr[1] = propWeightHost;
     funcArr[2] = NULL;
 
-    bool resample[] = {false, true, NULL};
-
-    runSMC<stateType>(funcArr, resample, printStatusFunc);
+    runSMC<stateType>(funcArr, printStatusFunc);
 
     freeMemory<pplFunc_t<stateType>>(funcArr);
 
