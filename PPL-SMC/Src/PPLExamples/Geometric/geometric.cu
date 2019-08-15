@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <time.h>
 
 #include "../../Smc/smc.cuh"
 #include "../../Smc/smcImpl.cuh"

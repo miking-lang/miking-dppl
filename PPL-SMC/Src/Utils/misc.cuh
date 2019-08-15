@@ -5,6 +5,7 @@
 #include <random>
 #include <vector>
 #include <cstring>
+#include <time.h>
 
 #ifdef GPU
 #include <curand_kernel.h>

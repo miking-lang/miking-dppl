@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <random>
+#include <time.h>
 #include "../smc.cuh"
 
 
