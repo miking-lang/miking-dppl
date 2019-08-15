@@ -67,7 +67,8 @@ void copyParticle(particles_t<T>* particlesSrc, particles_t<T>* particlesDst, in
     particlesDst->randStates[dstIdx] = particlesSrc->randStates[srcIdx];
     #endif
     particlesDst->pcs[dstIdx] = particlesSrc->pcs[srcIdx];
-    particlesDst->weights[dstIdx] = particlesSrc->weights[srcIdx];
+    // particlesDst->weights[dstIdx] = particlesSrc->weights[srcIdx];
+    particlesDst->weights[dstIdx] = 0;
 }
 
 #endif

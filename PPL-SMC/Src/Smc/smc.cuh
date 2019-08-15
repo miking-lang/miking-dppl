@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #ifdef GPU
+#include "../cudaErrorUtils.cu"
 #include <curand_kernel.h>
 #endif
 
@@ -26,7 +27,7 @@ struct particles_t {
     curandState randStates[NUM_PARTICLES];
     #endif
     int pcs[NUM_PARTICLES];
-    floating_t weights[NUM_PARTICLES];
+    floating_t weights[NUM_PARTICLES] = {0};
     bool resample[NUM_PARTICLES];
 };
 
@@ -77,7 +78,7 @@ runSMC<progState_t>(bblocksArr, statusFunc); \
 freeMemory<pplFunc_t<progState_t>>(bblocksArr); \
 return 0;
 
-#define WEIGHT(w) particles->weights[i] = w; // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
+#define WEIGHT(w) particles->weights[i] += w; // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
 #define PC particles->pcs[i]
 #define RESAMPLE particles->resample[i]
 #define PSTATE particles->progStates[i]

@@ -2,10 +2,10 @@
 #define SMC_IMPL_INCLUDED
 
 #include <iostream>
-#include "../cudaErrorUtils.cu"
 #include "../Utils/timer.h"
 
 #ifdef GPU
+#include "../cudaErrorUtils.cu"
 #include "Resample/resampleImplGPU.cuh"
 #include "generalKernels.cuh"
 #else

@@ -4,6 +4,13 @@
 #include <curand_kernel.h>
 #include "../smc.cuh"
 
+__global__ void expWeightsKernel(floating_t* w) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= NUM_PARTICLES || idx < 0) return;
+
+    w[idx] = pow(2, w[idx]);
+}
+
 __global__ void systematicCumulativeOffspringKernel(floating_t* prefixSum, int* cumulativeOffspring, floating_t u) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= NUM_PARTICLES || idx < 0) return;

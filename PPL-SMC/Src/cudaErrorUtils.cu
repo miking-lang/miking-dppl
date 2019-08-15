@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <curand.h>
 
+
 // Define this to turn on error checking
 #define CUDA_ERROR_CHECK
 

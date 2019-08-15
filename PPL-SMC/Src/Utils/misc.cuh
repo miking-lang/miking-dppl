@@ -3,9 +3,12 @@
 
 #include <iostream>
 #include <random>
-#include <curand_kernel.h>
 #include <vector>
 #include <cstring>
+
+#ifdef GPU
+#include <curand_kernel.h>
+#endif
 
 #include "../Smc/smc.cuh"
 

@@ -5,14 +5,14 @@
 #include "../../Smc/smcImpl.cuh"
 #include "geometric.cuh"
 #include "../../Utils/misc.cuh"
-#include "../../cudaErrorUtils.cu"
 
 using namespace std;
 
-// Compile: nvcc -arch=sm_75 -rdc=true Src/PPLExamples/Geometric/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPU
+// Compile: nvcc -arch=sm_61 -rdc=true Src/PPLExamples/Geometric/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPU
 
 // Preprocess this file only: nvcc -arch=sm_75 -rdc=true Src/PPLExamples/Geometric/geometric.cu -E -o geo.i -lcudadev -std=c++11 -D GPUn
 
+// Compile CPU: g++ -x c++ Src/PPLExamples/Geometric/*.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O4
 
 
 BBLOCK(particleInit, {
@@ -33,7 +33,7 @@ BBLOCK(geometric, {
         currFlip = flipK<progState_t>(particles, i);
     }
 
-    WEIGHT(numFlips > 2 ? 1 : 0);
+    WEIGHT(numFlips > 2 ? 0 : -INFINITY);
 
     PSTATE.res = numFlips;
 
