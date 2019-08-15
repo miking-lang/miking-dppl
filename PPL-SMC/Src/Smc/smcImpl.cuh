@@ -44,16 +44,17 @@ void initRandStates(curandState* randStates) {
 
 template <typename T>
 void runSMC(pplFunc_t<T>* funcs, statusFunc_t<T> statusFunc) {
+    startTimer();
 
     // Init
     particles_t<T>* particles;
     allocateMemory<particles_t<T>>(&particles, 1); 
-
+    
     #ifdef GPU
     initRandStates(particles->randStates);
+    cudaDeviceSynchronize();
     #endif
-
-    startTimer();
+    
 
     initResampler<T>();
 

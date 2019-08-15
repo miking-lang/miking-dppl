@@ -5,7 +5,7 @@
 #include "../../Smc/smc.cuh"
 #include "../../Smc/smcImpl.cuh"
 #include "geometric.cuh"
-#include "../../Utils/misc.cuh"
+#include "../../Utils/distributions.cuh"
 
 using namespace std;
 
@@ -53,7 +53,7 @@ STATUSFUNC({
         int tally[100] = {0};
 
         for(int i = 0; i < NUM_PARTICLES; i++)
-            tally[particles->progStates[i].res]++;
+            tally[PSTATE.res]++;
 
         for(int i = 1; i < 10; i++)
             printf("%d: %f\n", i, tally[i] / (double)NUM_PARTICLES);

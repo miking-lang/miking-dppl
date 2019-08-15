@@ -1,8 +1,6 @@
 #ifndef SMC_INCLUDED
 #define SMC_INCLUDED
 
-//#define GPU
-
 #include <cstddef>
 #ifdef GPU
 #include "../cudaErrorUtils.cu"
@@ -11,7 +9,9 @@
 
 using namespace std;
 
-const int NUM_PARTICLES = 1 << 10;
+// N = 50.000 => CPU: 0.2sec, GPU: 0.05sec
+
+const int NUM_PARTICLES = 50000;// 1 << 17;
 
 const int NUM_THREADS_PER_BLOCK = 128;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
@@ -39,25 +39,42 @@ using statusFunc_t = void (*)(particles_t<T>*, int);
 
 
 
-// MACROS
+/* MACROS */
 
 #ifdef GPU
 
+#define HOST __host__
 #define DEV __device__
 #define DEV_POINTER(funcName) __device__ pplFunc_t<progState_t> funcName ## Dev = funcName;
 #define FUN_REF(funcName) cudaSafeCall(cudaMemcpyFromSymbol(&funcName ## Host, funcName ## Dev, sizeof(pplFunc_t<progState_t>))); 
+#define BBLOCK_DATA(pointerName, type, n) type pointerName[n];\
+__device__ type pointerName ## Dev[n];
+#define COPY_DATA_GPU(pointerName, type, n) cudaSafeCall(cudaMemcpyToSymbol(pointerName ## Dev, pointerName, n * sizeof(type)));
+#define DATA_POINTER(pointerName) pointerName ## Dev
 
 #else
 
+#define HOST
 #define DEV
 #define DEV_POINTER(funcName)
 #define FUN_REF(funcName) funcName ## Host = funcName;
+#define BBLOCK_DATA(pointerName, type, n) type pointerName[n];
+#define COPY_DATA_GPU(pointerName, type, n) // Would be nice to solve this cleaner
+#define DATA_POINTER(pointerName) pointerName
 
 #endif
+
 
 #define BBLOCK(funcName, body) DEV void funcName(particles_t<progState_t>* particles, int i, int t) \
 body \
 DEV_POINTER(funcName)
+
+
+#define BBLOCK_HELPER(funcName, body, returnType, ...) DEV returnType funcName(particles_t<progState_t>* particles, int i, __VA_ARGS__) \
+body
+
+#define BBLOCK_HELPER_HOSTDEV(funcName, body, returnType, ...) HOST DEV returnType funcName(__VA_ARGS__) \
+body
 
 #define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles, int t) body
 

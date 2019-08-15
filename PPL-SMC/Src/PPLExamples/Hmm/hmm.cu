@@ -5,27 +5,24 @@
 #include "../../Smc/smcImpl.cuh"
 #include "hmm.cuh"
 #include "../../Utils/misc.cuh"
-#include "../../cudaErrorUtils.cu"
+#include "../../Utils/distributions.cuh"
 
 using namespace std;
 
 // nvcc -arch=sm_61 -rdc=true Src/PPLExamples/Hmm/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPUn
 
+// Preprocess this file only: nvcc -arch=sm_61 -rdc=true Src/PPLExamples/Hmm/hmm.cu -E -o geo.i -lcudadev -std=c++11 -D GPUn
+
 const vector<bool> TRUE_OBSERVATIONS = {true, false, false, false};
 
-#ifdef GPU
-__device__
-#endif
-void particleInit(particles_t<progState_t>* particles, int i, int t) {
+BBLOCK(particleInit, {
 
-    particles->pcs[i] = 1;
-    particles->resample[i] = false;
-}
+    PC = 1;
+    RESAMPLE = false;
+})
 
-#ifdef GPU
-__device__
-#endif
-hmmState_t hmmRec(particles_t<progState_t>* particles, int i, int n) {
+
+BBLOCK_HELPER(hmmRec, {
 
     hmmState_t prev;
 
@@ -48,97 +45,68 @@ hmmState_t hmmRec(particles_t<progState_t>* particles, int i, int n) {
     ret.observations.push_back(newObs);
 
     return ret;
-}
 
-#ifdef GPU
-__device__
-#endif
-void hmm(particles_t<progState_t>* particles, int i, int t) {
+}, hmmState_t, int n)
+
+
+BBLOCK(hmm, {
 
     hmmState_t hmmState = hmmRec(particles, i, 4);
-    particles->progStates[i].states = hmmState.states;
+    
+    PSTATE.states = hmmState.states;
 
-    particles->weights[i] = hmmState.observations == TRUE_OBSERVATIONS ? 1 : 0;
+    WEIGHT(hmmState.observations == TRUE_OBSERVATIONS ? 0 : -INFINITY);
 
-    particles->pcs[i]++;
-    particles->resample[i] = true;
-}
+    PC++;
+    RESAMPLE = true;
+})
 
-#ifdef GPU
-__device__
-#endif
-void nop(particles_t<progState_t>* particles, int i, int t) {
-    particles->pcs[i]++;
-    particles->resample[i] = false;
-}
+BBLOCK(nop, {
+    PC++;
+    RESAMPLE = false;
+})
 
 
 // Calc and print frequency of different states
-void statusFuncHmm(particles_t<progState_t>* particles, int t) {
+STATUSFUNC({
+    if(t == 2) {
 
-    printList(TRUE_OBSERVATIONS, "True Observations: ");
+        printList(TRUE_OBSERVATIONS, "True Observations: ");
 
-    vector<vector<bool>> results;
+        vector<vector<bool>> results;
 
-    for(int i = 0; i < NUM_PARTICLES; i++) {
-        vector<bool> sts = particles->progStates[i].states;
-        bool contains = false;
-        for(int j = 0; j < results.size(); j++) {
-            if(results[j] == sts)
-                contains = true;
-        }
-        if(! contains)
-            results.push_back(sts);
-    }
-
-    for(vector<bool> vec : results) {
-        int freq = 0;
         for(int i = 0; i < NUM_PARTICLES; i++) {
-            if(particles->progStates[i].states == vec)
-                freq++;
+            vector<bool> sts = PSTATE.states;
+            bool contains = false;
+            for(int j = 0; j < results.size(); j++) {
+                if(results[j] == sts)
+                    contains = true;
+            }
+            if(! contains)
+                results.push_back(sts);
         }
-        printList(vec, to_string(freq / (double)NUM_PARTICLES));
+
+        for(vector<bool> vec : results) {
+            int freq = 0;
+            for(int i = 0; i < NUM_PARTICLES; i++) {
+                if(PSTATE.states == vec)
+                    freq++;
+            }
+            printList(vec, to_string(freq / (double)NUM_PARTICLES));
+        }
     }
-}
-
-// These pointers and "__device__" in front of funcs are the only things stopping from being independent from GPU vs CPU
-#ifdef GPU
-__device__ pplFunc_t<progState_t> initDev = particleInit;
-__device__ pplFunc_t<progState_t> nopDev = nop;
-__device__ pplFunc_t<progState_t> hmmDev = hmm;
-#endif
-
+})
 
 int main() {
 
     srand(time(NULL)); 
     initGen();
 
-    pplFunc_t<progState_t> initHost;
-    pplFunc_t<progState_t> nopHost;
-    pplFunc_t<progState_t> hmmHost;
+    MAINSTART()
 
-    #ifdef GPU
-    cudaSafeCall(cudaMemcpyFromSymbol(&initHost, initDev, sizeof(pplFunc_t<progState_t>)));
-    cudaSafeCall(cudaMemcpyFromSymbol(&nopHost, nopDev, sizeof(pplFunc_t<progState_t>)));
-    cudaSafeCall(cudaMemcpyFromSymbol(&hmmHost, hmmDev, sizeof(pplFunc_t<progState_t>)));
-    #else
-    initHost = particleInit;
-    nopHost = nop;
-    hmmHost = hmm;
-    #endif
+    INITBBLOCK(particleInit)
+    INITBBLOCK(hmm)
+    INITBBLOCK(nop)
 
-    pplFunc_t<progState_t>* funcArr;
-    allocateMemory<pplFunc_t<progState_t>>(&funcArr, 4);
-    
-    funcArr[0] = initHost;
-    funcArr[1] = hmmHost;
-    funcArr[2] = nopHost;
-    funcArr[3] = NULL;
-
-    runSMC<progState_t>(funcArr, statusFuncHmm);
-
-    freeMemory<pplFunc_t<progState_t>>(funcArr);
-
-    return 0;
+    MAINEND()
 }
