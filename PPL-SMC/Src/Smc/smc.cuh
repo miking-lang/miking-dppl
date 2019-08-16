@@ -11,7 +11,7 @@ using namespace std;
 
 // N = 50.000 => CPU: 0.2sec, GPU: 0.05sec
 
-const int NUM_PARTICLES = 500000;// 1 << 17;
+const int NUM_PARTICLES = 1000000;// 1 << 17;
 
 const int NUM_THREADS_PER_BLOCK = 64;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
