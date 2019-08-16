@@ -43,18 +43,24 @@ void initRandStates(curandState* randStates) {
 #endif
 
 template <typename T>
-void runSMC(pplFunc_t<T>* funcs, statusFunc_t<T> statusFunc) {
-    startTimer();
-
+double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks) {
+    
+    pplFunc_t<T> bblocksLocal[numBblocks];
+    for(int i = 0; i < numBblocks; i++) {
+        bblocksLocal[i] = bblocks[i];
+    }
+    
     // Init
     particles_t<T>* particles;
     allocateMemory<particles_t<T>>(&particles, 1); 
     
     #ifdef GPU
+    //cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     initRandStates(particles->randStates);
     cudaDeviceSynchronize();
     #endif
     
+    startTimer();
 
     initResampler<T>();
 
@@ -64,21 +70,21 @@ void runSMC(pplFunc_t<T>* funcs, statusFunc_t<T> statusFunc) {
     while(true) {
 
         #ifdef GPU
-        execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, t, funcs);
+        execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, t, bblocks);
         cudaDeviceSynchronize();
         cudaCheckError();
         #else
         for(int i = 0; i < NUM_PARTICLES; i++) {
             int pc = particles->pcs[i];
-            if(funcs[pc] != NULL)
-                funcs[pc](particles, i, t); 
+            if(bblocks[pc] != NULL)
+                bblocks[pc](particles, i, t); 
         }
         #endif
 
         
-        statusFunc(particles, t);
+        //statusFunc(particles, t);
         
-        if(funcs[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
+        if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
         
         if(particles->resample[0]) // Assumption: All resample at the same time
@@ -97,7 +103,8 @@ void runSMC(pplFunc_t<T>* funcs, statusFunc_t<T> statusFunc) {
     #endif
 
     double duration = getTimeElapsed();
-    cout << "Duration: " << duration << " seconds" << endl;
+    // cout << "Duration: " << duration << " seconds" << endl;
+    return duration;
 }
 
 

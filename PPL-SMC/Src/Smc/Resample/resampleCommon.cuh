@@ -64,9 +64,9 @@ __device__
 #endif
 void copyParticle(particles_t<T>* particlesSrc, particles_t<T>* particlesDst, int srcIdx, int dstIdx) {
     particlesDst->progStates[dstIdx] = particlesSrc->progStates[srcIdx];
-    #ifdef GPU
+    /*#ifdef GPU
     particlesDst->randStates[dstIdx] = particlesSrc->randStates[srcIdx];
-    #endif
+    #endif*/
     particlesDst->pcs[dstIdx] = particlesSrc->pcs[srcIdx];
     // particlesDst->weights[dstIdx] = particlesSrc->weights[srcIdx];
     particlesDst->weights[dstIdx] = 0;

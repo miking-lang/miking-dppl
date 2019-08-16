@@ -11,9 +11,9 @@ using namespace std;
 
 // N = 50.000 => CPU: 0.2sec, GPU: 0.05sec
 
-const int NUM_PARTICLES = 50000;// 1 << 17;
+const int NUM_PARTICLES = 500000;// 1 << 17;
 
-const int NUM_THREADS_PER_BLOCK = 128;
+const int NUM_THREADS_PER_BLOCK = 64;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
 
 
@@ -91,7 +91,13 @@ bblocks.push_back(NULL); \
 pplFunc_t<progState_t>* bblocksArr; \
 allocateMemory<pplFunc_t<progState_t>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
-runSMC<progState_t>(bblocksArr, statusFunc); \
+double sum = 0, min = 99999999;\
+int numTrials = 2;\
+for(int i = 0; i < numTrials; i++) {\
+double dur = runSMC<progState_t>(bblocksArr, statusFunc, bblocks.size()); \
+if(dur < min) min = dur; sum += dur;\
+}\
+printf("Avg time(sec): %f, Min time: %f\n", sum/numTrials, min);\
 freeMemory<pplFunc_t<progState_t>>(bblocksArr); \
 return 0;
 

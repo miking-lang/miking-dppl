@@ -9,7 +9,7 @@
 #include "airplaneUtils.cuh"
 #include "../Utils/distributions.cuh"
 
-// nvcc -arch=sm_61 -rdc=true Src/Airplane/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPU
+// nvcc -arch=sm_61 -rdc=true Src/Airplane/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 using namespace std;
 
