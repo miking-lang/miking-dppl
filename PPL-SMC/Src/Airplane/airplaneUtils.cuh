@@ -65,7 +65,7 @@ floating_t normalPDFObs(floating_t x, floating_t mean) {
 
 HOST DEV
 floating_t logNormalPDFObs(floating_t x, floating_t mean) {
-    return log2(exp(-pow(x - mean, 2) / (TWO_OBS_STD_SQUARED)) / (SQRT_TWO_PI_OBS_STD));
+    return log(exp(-pow(x - mean, 2) / (TWO_OBS_STD_SQUARED)) / (SQRT_TWO_PI_OBS_STD));
 }
 
 #endif

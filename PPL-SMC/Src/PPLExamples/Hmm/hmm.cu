@@ -1,5 +1,5 @@
 #include <iostream>
-#include <vector>
+//#include <vector>
 
 #include "../../Smc/smc.cuh"
 #include "../../Smc/smcImpl.cuh"
@@ -11,9 +11,11 @@ using namespace std;
 
 // nvcc -arch=sm_61 -rdc=true Src/PPLExamples/Hmm/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O4 -D GPUn
 
-// Preprocess this file only: nvcc -arch=sm_61 -rdc=true Src/PPLExamples/Hmm/hmm.cu -E -o geo.i -lcudadev -std=c++11 -D GPUn
+// Preprocess this file only: nvcc -arch=sm_61 -rdc=true Src/PPLExamples/Hmm/hmm.cu -E -o pp.i -lcudadev -std=c++11 -D GPUn
 
-const vector<bool> TRUE_OBSERVATIONS = {true, false, false, false};
+// Currently not supported for GPU!
+
+BBLOCK_DATA(TRUE_OBSERVATIONS, bool, 4)
 
 BBLOCK(particleInit, {
 
@@ -55,7 +57,7 @@ BBLOCK(hmm, {
     
     PSTATE.states = hmmState.states;
 
-    WEIGHT(hmmState.observations == TRUE_OBSERVATIONS ? 0 : -INFINITY);
+    WEIGHT(hmmState.observations == DATA_POINTER(TRUE_OBSERVATIONS) ? 0 : -INFINITY);
 
     PC++;
     RESAMPLE = true;
@@ -71,12 +73,13 @@ BBLOCK(nop, {
 STATUSFUNC({
     if(t == 2) {
 
-        printList(TRUE_OBSERVATIONS, "True Observations: ");
+        printArray<bool>(DATA_POINTER(TRUE_OBSERVATIONS), 4, "True Observations: ");
 
-        vector<vector<bool>> results;
+        list_t<list_t<bool>> results;
+        results.initList(20);
 
         for(int i = 0; i < NUM_PARTICLES; i++) {
-            vector<bool> sts = PSTATE.states;
+            list_t<bool> sts = PSTATE.states;
             bool contains = false;
             for(int j = 0; j < results.size(); j++) {
                 if(results[j] == sts)
@@ -86,14 +89,15 @@ STATUSFUNC({
                 results.push_back(sts);
         }
 
-        for(vector<bool> vec : results) {
+        for(int li = 0; li < results.size(); li++) {
             int freq = 0;
             for(int i = 0; i < NUM_PARTICLES; i++) {
-                if(PSTATE.states == vec)
+                if(PSTATE.states == results[li])
                     freq++;
             }
-            printList(vec, to_string(freq / (double)NUM_PARTICLES));
+            printList(results[li], to_string(freq / (double)NUM_PARTICLES));
         }
+
     }
 })
 
@@ -101,6 +105,22 @@ int main() {
 
     srand(time(NULL)); 
     initGen();
+
+    /*
+    (*TRUE_OBSERVATIONS).initList(10);
+    (*TRUE_OBSERVATIONS).push_back(true);
+    (*TRUE_OBSERVATIONS).push_back(false);
+    (*TRUE_OBSERVATIONS).push_back(false);
+    (*TRUE_OBSERVATIONS).push_back(false);
+    */
+
+    //*TRUE_OBSERVATIONS = {true, false, false, false};
+    TRUE_OBSERVATIONS[0] = true;
+    TRUE_OBSERVATIONS[1] = false;
+    TRUE_OBSERVATIONS[2] = false;
+    TRUE_OBSERVATIONS[3] = false;
+
+    COPY_DATA_GPU(TRUE_OBSERVATIONS, bool, 4)
 
     MAINSTART()
 

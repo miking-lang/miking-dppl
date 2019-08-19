@@ -73,8 +73,8 @@ DEV_POINTER(funcName)
 #define BBLOCK_HELPER(funcName, body, returnType, ...) DEV returnType funcName(particles_t<progState_t>* particles, int i, __VA_ARGS__) \
 body
 
-#define BBLOCK_HELPER_HOSTDEV(funcName, body, returnType, ...) HOST DEV returnType funcName(__VA_ARGS__) \
-body
+//#define BBLOCK_HELPER_HOSTDEV(funcName, body, returnType, ...) HOST DEV returnType funcName(__VA_ARGS__) \
+//body
 
 #define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles, int t) body
 
@@ -92,7 +92,7 @@ pplFunc_t<progState_t>* bblocksArr; \
 allocateMemory<pplFunc_t<progState_t>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
 double sum = 0, min = 99999999;\
-int numTrials = 2;\
+int numTrials = 1;\
 for(int i = 0; i < numTrials; i++) {\
 double dur = runSMC<progState_t>(bblocksArr, statusFunc, bblocks.size()); \
 if(dur < min) min = dur; sum += dur;\
@@ -101,7 +101,7 @@ printf("Avg time(sec): %f, Min time: %f\n", sum/numTrials, min);\
 freeMemory<pplFunc_t<progState_t>>(bblocksArr); \
 return 0;
 
-#define WEIGHT(w) particles->weights[i] += w; // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
+#define WEIGHT(w) particles->weights[i] += w // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
 #define PC particles->pcs[i]
 #define RESAMPLE particles->resample[i]
 #define PSTATE particles->progStates[i]

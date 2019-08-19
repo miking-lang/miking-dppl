@@ -16,11 +16,11 @@ const bool DEBUG = false;
 
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
-    size_t memSize = sizeof(T) * n;
     #ifdef GPU
-    cudaSafeCall(cudaMallocManaged(pointer, memSize));
+    cudaSafeCall(cudaMallocManaged(pointer, sizeof(T) * n));
     #else
-    *pointer = static_cast<T*>(malloc(memSize));
+    // *pointer = static_cast<T*>(malloc(memSize));
+    *pointer = new T[n];
     #endif
 }
 
@@ -82,7 +82,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         #endif
 
         
-        //statusFunc(particles, t);
+        statusFunc(particles, t);
         
         if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
@@ -99,7 +99,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     #ifdef GPU
     freeMemory(particles);
     #else
-    delete particles;
+    delete[] particles;
     #endif
 
     double duration = getTimeElapsed();
