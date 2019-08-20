@@ -11,7 +11,7 @@ using namespace std;
 
 // N = 50.000 => CPU: 0.2sec, GPU: 0.05sec
 
-const int NUM_PARTICLES = 1000000;// 1 << 17;
+const int NUM_PARTICLES = 100000;// 1 << 17;
 
 const int NUM_THREADS_PER_BLOCK = 64;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
@@ -73,6 +73,8 @@ DEV_POINTER(funcName)
 #define BBLOCK_HELPER(funcName, body, returnType, ...) DEV returnType funcName(particles_t<progState_t>* particles, int i, __VA_ARGS__) \
 body
 
+#define BBLOCK_CALL(funcName, ...) funcName(particles, i, __VA_ARGS__)
+
 //#define BBLOCK_HELPER_HOSTDEV(funcName, body, returnType, ...) HOST DEV returnType funcName(__VA_ARGS__) \
 //body
 
@@ -102,6 +104,7 @@ freeMemory<pplFunc_t<progState_t>>(bblocksArr); \
 return 0;
 
 #define WEIGHT(w) particles->weights[i] += w // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
+#define PWEIGHT particles->weights[i]
 #define PC particles->pcs[i]
 #define RESAMPLE particles->resample[i]
 #define PSTATE particles->progStates[i]

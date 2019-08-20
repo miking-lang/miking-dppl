@@ -13,6 +13,8 @@
 #endif
 
 const bool DEBUG = false;
+floating_t weightSum = 0;
+floating_t marginalLikelihood = 1;
 
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
@@ -84,17 +86,22 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         
         statusFunc(particles, t);
         
+        if(particles->resample[0]) { // Assumption: All resample at the same time
+            weightSum = resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
+            marginalLikelihood *= (weightSum / NUM_PARTICLES);
+        }
+        
         if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
         
-        if(particles->resample[0]) // Assumption: All resample at the same time
-            resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
 
         t++;
     }
         
     // Clean up
     destResampler<T>();
+
+    cout << "ln(Marginal Likelihood) = " << log(marginalLikelihood) << endl;
     
     #ifdef GPU
     freeMemory(particles);

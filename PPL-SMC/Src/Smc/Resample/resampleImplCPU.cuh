@@ -5,7 +5,8 @@
 
 void expWeights(floating_t* w) {
     for(int i = 0; i < NUM_PARTICLES; i++) {
-        w[i] = pow(2, w[i]);
+        // w[i] = pow(2, w[i]);
+        w[i] = exp(w[i]);
     }
 }
 
@@ -49,7 +50,7 @@ void copyStates(particles_t<T>* particles, int* ancestor) {
 }
 
 template <typename T>
-void resampleSystematic(particles_t<T>* particles) {
+floating_t resampleSystematic(particles_t<T>* particles) {
     expWeights(particles->weights);
     calcInclusivePrefixSum<T>(particles, prefixSum);
     if(prefixSum[NUM_PARTICLES-1] == 0)
@@ -57,6 +58,7 @@ void resampleSystematic(particles_t<T>* particles) {
     systematicCumulativeOffspring(prefixSum, cumulativeOffspring);
     cumulativeOffspringToAncestor(cumulativeOffspring, ancestor);
     copyStates<T>(particles, ancestor);
+    return prefixSum[NUM_PARTICLES-1];
 }
 
 

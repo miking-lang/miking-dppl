@@ -42,7 +42,7 @@ void copyStates(particles_t<T>* particles, int* ancestor) {
 }
 
 template <typename T>
-void resampleSystematic(particles_t<T>* particles) {
+floating_t resampleSystematic(particles_t<T>* particles) {
     expWeightsKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles->weights);
     calcInclusivePrefixSum<T>(particles, prefixSum);
     if(prefixSum[NUM_PARTICLES-1] == 0)
@@ -51,6 +51,7 @@ void resampleSystematic(particles_t<T>* particles) {
     cumulativeOffspringToAncestor(cumulativeOffspring, ancestor);
     copyStates<T>(particles, ancestor);
     cudaDeviceSynchronize();
+    return prefixSum[NUM_PARTICLES-1];
 }
 
 
