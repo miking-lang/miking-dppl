@@ -64,20 +64,16 @@ BBLOCK_HELPER(simBranch, {
     floating_t currentTime = startTime - t;
 
     if(currentTime <= stopTime)
-        return;
+        return 0.0;
     
-    // WEIGHT(log(2.0));
     
     if(BBLOCK_CALL(survival, currentTime)) {
-        WEIGHT(-INFINITY);
-        return;
+        return -INFINITY;
     }
-
-    WEIGHT(log(2.0)); // was previously done above survival call, no reason to do it before though (unless resample occurrs there)
     
-    BBLOCK_CALL(simBranch, currentTime, stopTime);
+    return BBLOCK_CALL(simBranch, currentTime, stopTime) + log(2.0);
 
-}, void, floating_t startTime, floating_t stopTime)
+}, floating_t, floating_t startTime, floating_t stopTime)
 
 
 BBLOCK(condBD2, {
@@ -87,12 +83,13 @@ BBLOCK(condBD2, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    BBLOCK_CALL(simBranch, treeP->ages[loc.parentIdx], treeP->ages[treeIdx]);
+    floating_t w = BBLOCK_CALL(simBranch, treeP->ages[loc.parentIdx], treeP->ages[treeIdx]);
 
     // match tree with...
     if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..
         // WEIGHT(log(2.0 * (*DATA_POINTER(lambda))));
-        WEIGHT(log(*DATA_POINTER(lambda)));
+        // WEIGHT(log(*DATA_POINTER(lambda)));
+        w += log(*DATA_POINTER(lambda));
 
         treeLoc_t locR;
         locR.treeIdx = treeP->idxRight[treeIdx];
@@ -109,6 +106,7 @@ BBLOCK(condBD2, {
 
     }
 
+    WEIGHT(w);
     PC--;
     RESAMPLE = true;
 

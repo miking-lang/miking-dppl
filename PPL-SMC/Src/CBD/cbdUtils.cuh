@@ -2,10 +2,10 @@
 #define CBDUTILS_INCLUDED
 
 
-int countLeaves(const floating_t* ages, int size) {
+int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
     int numLeaves = 0;
     for(int i = 0; i < size; i++) {
-        if(ages[i] == 0) // careful!
+        if(leftIdx[i] == -1 && rightIdx[i] == -1)
             numLeaves++;
     }
     return numLeaves;

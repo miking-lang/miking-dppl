@@ -5,6 +5,16 @@
 #include <curand_kernel.h>
 #include "smc.cuh"
 
+
+template <typename T>
+__global__ void initParticles(particles_t<T>* particles) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= NUM_PARTICLES || idx < 0) return;
+
+    particles->weights[idx] = 0;
+    particles->pcs[idx] = 0;
+}
+
 __global__ void initRandStatesKernel(curandState* states, int timeSeed) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= NUM_PARTICLES || idx < 0) return;

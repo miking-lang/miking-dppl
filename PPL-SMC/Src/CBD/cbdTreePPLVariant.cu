@@ -66,14 +66,12 @@ BBLOCK_HELPER(simBranch, {
     if(currentTime <= stopTime)
         return;
     
-    // WEIGHT(log(2.0));
+    WEIGHT(log(2.0));
     
     if(BBLOCK_CALL(survival, currentTime)) {
         WEIGHT(-INFINITY);
         return;
     }
-
-    WEIGHT(log(2.0)); // was previously done above survival call, no reason to do it before though (unless resample occurrs there)
     
     BBLOCK_CALL(simBranch, currentTime, stopTime);
 
@@ -91,8 +89,8 @@ BBLOCK(condBD2, {
 
     // match tree with...
     if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..
-        // WEIGHT(log(2.0 * (*DATA_POINTER(lambda))));
-        WEIGHT(log(*DATA_POINTER(lambda)));
+        WEIGHT(log(2.0 * (*DATA_POINTER(lambda))));
+        // WEIGHT(log(*DATA_POINTER(lambda)));
 
         treeLoc_t locR;
         locR.treeIdx = treeP->idxRight[treeIdx];
@@ -127,7 +125,7 @@ BBLOCK(condBD1, {
 
     // MÅSTE JAG VIKTA EFTER FÖRSTA BRANCHEN AV ROTEN ÄR KLAR?
     if(loc.treeIdx == 2)
-        WEIGHT(log(*(DATA_POINTER(lambda)))); 
+        WEIGHT(log(2.0)); 
     
 
     tree_t* treeP = DATA_POINTER(tree);
@@ -174,7 +172,7 @@ BBLOCK(cbd, {
 })
 
 BBLOCK(nop, {
-    WEIGHT(*(DATA_POINTER(corrFactor)));
+    //WEIGHT(*(DATA_POINTER(corrFactor)));
     //printf("corrf: %f\n", corrFactor);
     PC++;
     RESAMPLE = true;

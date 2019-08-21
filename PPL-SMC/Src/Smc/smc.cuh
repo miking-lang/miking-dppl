@@ -9,12 +9,16 @@
 
 using namespace std;
 
-// N = 50.000 => CPU: 0.2sec, GPU: 0.05sec
+
 
 const int NUM_PARTICLES = 100000;// 1 << 17;
 
-const int NUM_THREADS_PER_BLOCK = 64;
+// Odd since warp size is 32
+const int NUM_THREADS_PER_BLOCK = 32;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+
+const int NUM_THREADS_PER_BLOCK_FUNCS = 128;
+const int NUM_BLOCKS_FUNCS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_FUNCS - 1) / NUM_THREADS_PER_BLOCK_FUNCS;
 
 
 typedef double floating_t;
@@ -26,7 +30,7 @@ struct particles_t {
     #ifdef GPU
     curandState randStates[NUM_PARTICLES];
     #endif
-    int pcs[NUM_PARTICLES];
+    int pcs[NUM_PARTICLES] = {0};
     floating_t weights[NUM_PARTICLES] = {0};
     bool resample[NUM_PARTICLES];
 };
@@ -94,7 +98,7 @@ pplFunc_t<progState_t>* bblocksArr; \
 allocateMemory<pplFunc_t<progState_t>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
 double sum = 0, min = 99999999;\
-int numTrials = 1;\
+int numTrials = 10;\
 for(int i = 0; i < numTrials; i++) {\
 double dur = runSMC<progState_t>(bblocksArr, statusFunc, bblocks.size()); \
 if(dur < min) min = dur; sum += dur;\

@@ -14,7 +14,7 @@
 
 const bool DEBUG = false;
 floating_t weightSum = 0;
-floating_t marginalLikelihood = 1;
+floating_t marginalLikelihood;
 
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
@@ -46,7 +46,8 @@ void initRandStates(curandState* randStates) {
 
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks) {
-    
+
+    marginalLikelihood = 1;
     pplFunc_t<T> bblocksLocal[numBblocks];
     for(int i = 0; i < numBblocks; i++) {
         bblocksLocal[i] = bblocks[i];
@@ -57,6 +58,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     allocateMemory<particles_t<T>>(&particles, 1); 
     
     #ifdef GPU
+    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
     //cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     initRandStates(particles->randStates);
     cudaDeviceSynchronize();
@@ -72,7 +74,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     while(true) {
 
         #ifdef GPU
-        execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, t, bblocks);
+        execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
         cudaDeviceSynchronize();
         cudaCheckError();
         #else
@@ -89,6 +91,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         if(particles->resample[0]) { // Assumption: All resample at the same time
             weightSum = resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
             marginalLikelihood *= (weightSum / NUM_PARTICLES);
+            //printf("margLH=%f\n", marginalLikelihood);
         }
         
         if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
@@ -101,31 +104,20 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     // Clean up
     destResampler<T>();
 
+    double duration = getTimeElapsed();
+
     cout << "ln(Marginal Likelihood) = " << log(marginalLikelihood) << endl;
     
+
     #ifdef GPU
     freeMemory(particles);
     #else
     delete[] particles;
     #endif
 
-    double duration = getTimeElapsed();
     // cout << "Duration: " << duration << " seconds" << endl;
     return duration;
 }
 
 
 #endif
-
-
-
-/*
-
-* Resample after final weigh? WebPPL verkar alltid resampla efter en "factor"? Vill jag försöka skapa det? Eller bara modellera det med funktioner?
-
-* Verkar bli mycket kod, med mycket #ifdef GPU
-
-* Sträva efter att göra ett snyggare interface? Kanske går att minska mängden problemspecifik kod
-
-
-*/
