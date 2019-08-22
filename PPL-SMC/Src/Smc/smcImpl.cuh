@@ -38,7 +38,7 @@ void freeMemory(T* pointer) {
 
 #ifdef GPU
 void initRandStates(curandState* randStates) {
-    initRandStatesKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, time(NULL));
+    initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(randStates, time(NULL));
     cudaDeviceSynchronize();
     cudaCheckError();
 }
@@ -64,7 +64,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     cudaDeviceSynchronize();
     #endif
     
-    startTimer();
+    // startTimer();
 
     initResampler<T>();
 
@@ -104,9 +104,9 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     // Clean up
     destResampler<T>();
 
-    double duration = getTimeElapsed();
+    // double duration = getTimeElapsed();
 
-    cout << "ln(Marginal Likelihood) = " << log(marginalLikelihood) << endl;
+    // cout << "ln(Marginal Likelihood) = " << log(marginalLikelihood) << endl;
     
 
     #ifdef GPU
@@ -116,7 +116,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     #endif
 
     // cout << "Duration: " << duration << " seconds" << endl;
-    return duration;
+    return 0;
 }
 
 
