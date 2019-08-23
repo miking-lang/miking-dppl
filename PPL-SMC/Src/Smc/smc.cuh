@@ -40,7 +40,7 @@ N=1M   => 82.6% initRandStates, 6.4% execFuncs, 9% copyStates (resample)
 
 const int NUM_PARTICLES = 10000;// 1 << 17;
 
-// Odd since warp size is 32
+
 const int NUM_THREADS_PER_BLOCK = 32;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
 

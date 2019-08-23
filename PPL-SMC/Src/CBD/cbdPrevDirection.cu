@@ -6,8 +6,7 @@
 #include "cbd.cuh"
 #include "cbdUtils.cuh"
 
-
-// nvcc -arch=sm_75 -rdc=true Src/CBD/cbd.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_61 -rdc=true Src/CBD/cbdPrevDirection.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
@@ -82,32 +81,43 @@ BBLOCK_HELPER(simBranch, {
 
 BBLOCK(condBD2, {
 
-    treeLoc_t loc = PSTATE.stack.pop();
-    int treeIdx = loc.treeIdx;
+    int treeIdx = PSTATE.treeIdx;
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    BBLOCK_CALL(simBranch, treeP->ages[loc.parentIdx], treeP->ages[treeIdx]);
+    int indexParent = treeP->idxParent[treeIdx];
 
-    // match tree with...
+    BBLOCK_CALL(simBranch, treeP->ages[indexParent], treeP->ages[treeIdx]);
+
+    int nextIdx;
     if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..
-        // WEIGHT(log(2.0 * (*DATA_POINTER(lambda))));
+        
         WEIGHT(log(*DATA_POINTER(lambda)));
 
-        treeLoc_t locR;
-        locR.treeIdx = treeP->idxRight[treeIdx];
-        locR.parentIdx = treeIdx;
-        PSTATE.stack.push(locR);
+        nextIdx = treeP->idxLeft[treeIdx]; // Go left if possible
 
-        treeLoc_t locL;
-        locL.treeIdx = treeP->idxLeft[treeIdx];
-        locL.parentIdx = treeIdx;
-        PSTATE.stack.push(locL);
+    } else { // Find first possible right turn
 
-        //BBLOCK_CALL(condBD, treeP->idxLeft[treeIdx], treeIdx);
-        //BBLOCK_CALL(condBD, treeP->idxRight[treeIdx], treeIdx);
+        nextIdx = treeIdx;
 
+        while(true) {
+            // printf("While..., treeidx: %d, leftIdx: %d, rightIdx: %d, parentIdx: %d\n", treeIdx, treeP->idxLeft[treeIdx], treeP->idxRight[treeIdx], treeP->idxParent[treeIdx]);
+            int parentIdx = treeP->idxParent[nextIdx];
+            bool wasLeftChild = treeP->idxLeft[parentIdx] == nextIdx;
+
+            if(wasLeftChild) {
+                nextIdx = treeP->idxRight[parentIdx];
+                break;
+            } else {
+                nextIdx = parentIdx;
+                if(parentIdx == -1) // We are at root and done, let condCBD1 terminate
+                    break;
+            }
+        }
     }
+
+    PSTATE.treeIdx = nextIdx;
+
 
     PC--;
     RESAMPLE = true;
@@ -117,22 +127,31 @@ BBLOCK(condBD2, {
 
 BBLOCK(condBD1, {
 
-
+    tree_t* treeP = DATA_POINTER(tree);
+    /*
     if(PSTATE.stack.stackPointer == 0) {
         PC = 3;
         return;
     }
+    */
+    int treeIdx = PSTATE.treeIdx;
 
-    treeLoc_t loc = PSTATE.stack.peek();
+    // if(treeIdx == ROOT_IDX && (source == right || treeP->idxRight[treeIdx]) == -1) { // Done
+    if(treeIdx == -1) {
+        PC = 3;
+        RESAMPLE = false;
+        return;
+    }
+
 
     // MÅSTE JAG VIKTA EFTER FÖRSTA BRANCHEN AV ROTEN ÄR KLAR?
-    if(loc.treeIdx == 2)
+    if(treeIdx == 2)
         WEIGHT(log(*(DATA_POINTER(lambda)))); 
     
 
-    tree_t* treeP = DATA_POINTER(tree);
+    int indexParent = treeP->idxParent[treeIdx];
 
-    WEIGHT(- (*DATA_POINTER(mu)) * (treeP->ages[loc.parentIdx] - treeP->ages[loc.treeIdx]));
+    WEIGHT(- (*DATA_POINTER(mu)) * (treeP->ages[indexParent] - treeP->ages[treeIdx]));
 
 
     PC++;
@@ -145,15 +164,15 @@ BBLOCK(cbd, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    treeLoc_t locR;
-    locR.treeIdx = treeP->idxRight[ROOT_IDX];
-    locR.parentIdx = ROOT_IDX;
-    PSTATE.stack.push(locR);
+    PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
+
+    /*
+    if(treeP->idxRight[ROOT_IDX] != -1) {
+        PSTATE.stack.push(treeP->idxRight[ROOT_IDX]);
+    }
     
-    treeLoc_t locL;
-    locL.treeIdx = treeP->idxLeft[ROOT_IDX];
-    locL.parentIdx = ROOT_IDX;
-    PSTATE.stack.push(locL);
+    PSTATE.stack.push(treeP->idxLeft[ROOT_IDX]);
+    */
 
 
     //PSTATE.treeIdx = tree->idxLeft[ROOT_IDX];
@@ -169,33 +188,18 @@ BBLOCK(cbd, {
         BBLOCK_CALL(condBD, tree->idxRight[ROOT_IDX], ROOT_IDX);
         
     }*/
+
     PC++;
     RESAMPLE = false;
 })
 
 BBLOCK(nop, {
     WEIGHT(*(DATA_POINTER(corrFactor)));
-    //printf("corrf: %f\n", corrFactor);
     PC++;
     RESAMPLE = true;
 })
 
 STATUSFUNC({
-    // cout << "lol" << endl;
-
-    /*
-    double sum = 0;
-    int numNonInf = 0;
-    for(int i = 0; i < NUM_PARTICLES; i++) {
-        if(PWEIGHT != -INFINITY) {
-            sum += PWEIGHT;
-            numNonInf++;
-        }
-    }
-
-    if(numNonInf == 0)
-        cout << "Average weight: " << sum / numNonInf << ", #nonInf: " << numNonInf << endl;
-    */
     
 })
 

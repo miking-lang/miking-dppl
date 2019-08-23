@@ -6,8 +6,7 @@
 #include "cbd.cuh"
 #include "cbdUtils.cuh"
 
-
-// nvcc -arch=sm_75 -rdc=true Src/CBD/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_61 -rdc=true Src/CBD/cbdDoublyLinked.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
@@ -64,49 +63,43 @@ BBLOCK_HELPER(simBranch, {
     floating_t currentTime = startTime - t;
 
     if(currentTime <= stopTime)
-        return 0.0;
+        return;
     
+    // WEIGHT(log(2.0));
     
     if(BBLOCK_CALL(survival, currentTime)) {
-        return -INFINITY;
+        WEIGHT(-INFINITY);
+        return;
     }
-    
-    return BBLOCK_CALL(simBranch, currentTime, stopTime) + log(2.0);
 
-}, floating_t, floating_t startTime, floating_t stopTime)
+    WEIGHT(log(2.0)); // was previously done above survival call, no reason to do it before though (unless resample occurrs there)
+    
+    BBLOCK_CALL(simBranch, currentTime, stopTime);
+
+}, void, floating_t startTime, floating_t stopTime)
 
 
 BBLOCK(condBD2, {
 
-    treeLoc_t loc = PSTATE.stack.pop();
-    int treeIdx = loc.treeIdx;
+    int treeIdx = PSTATE.stack.pop();
+    // int treeIdx = loc.treeIdx;
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    floating_t w = BBLOCK_CALL(simBranch, treeP->ages[loc.parentIdx], treeP->ages[treeIdx]);
+    int indexParent = treeP->idxParent[treeIdx];
+
+    BBLOCK_CALL(simBranch, treeP->ages[indexParent], treeP->ages[treeIdx]);
 
     // match tree with...
     if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..
         // WEIGHT(log(2.0 * (*DATA_POINTER(lambda))));
-        // WEIGHT(log(*DATA_POINTER(lambda)));
-        w += log(*DATA_POINTER(lambda));
+        WEIGHT(log(*DATA_POINTER(lambda)));
 
-        treeLoc_t locR;
-        locR.treeIdx = treeP->idxRight[treeIdx];
-        locR.parentIdx = treeIdx;
-        PSTATE.stack.push(locR);
+        PSTATE.stack.push(treeP->idxRight[treeIdx]);
 
-        treeLoc_t locL;
-        locL.treeIdx = treeP->idxLeft[treeIdx];
-        locL.parentIdx = treeIdx;
-        PSTATE.stack.push(locL);
-
-        //BBLOCK_CALL(condBD, treeP->idxLeft[treeIdx], treeIdx);
-        //BBLOCK_CALL(condBD, treeP->idxRight[treeIdx], treeIdx);
-
+        PSTATE.stack.push(treeP->idxLeft[treeIdx]);
     }
 
-    WEIGHT(w);
     PC--;
     RESAMPLE = true;
 
@@ -121,16 +114,18 @@ BBLOCK(condBD1, {
         return;
     }
 
-    treeLoc_t loc = PSTATE.stack.peek();
+    int treeIdx = PSTATE.stack.peek();
 
     // MÅSTE JAG VIKTA EFTER FÖRSTA BRANCHEN AV ROTEN ÄR KLAR?
-    if(loc.treeIdx == 2)
+    if(treeIdx == 2)
         WEIGHT(log(*(DATA_POINTER(lambda)))); 
     
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    WEIGHT(- (*DATA_POINTER(mu)) * (treeP->ages[loc.parentIdx] - treeP->ages[loc.treeIdx]));
+    int indexParent = treeP->idxParent[treeIdx];
+
+    WEIGHT(- (*DATA_POINTER(mu)) * (treeP->ages[indexParent] - treeP->ages[treeIdx]));
 
 
     PC++;
@@ -143,15 +138,12 @@ BBLOCK(cbd, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    treeLoc_t locR;
-    locR.treeIdx = treeP->idxRight[ROOT_IDX];
-    locR.parentIdx = ROOT_IDX;
-    PSTATE.stack.push(locR);
+
+    if(treeP->idxRight[ROOT_IDX] != -1) {
+        PSTATE.stack.push(treeP->idxRight[ROOT_IDX]);
+    }
     
-    treeLoc_t locL;
-    locL.treeIdx = treeP->idxLeft[ROOT_IDX];
-    locL.parentIdx = ROOT_IDX;
-    PSTATE.stack.push(locL);
+    PSTATE.stack.push(treeP->idxLeft[ROOT_IDX]);
 
 
     //PSTATE.treeIdx = tree->idxLeft[ROOT_IDX];
@@ -173,27 +165,11 @@ BBLOCK(cbd, {
 
 BBLOCK(nop, {
     WEIGHT(*(DATA_POINTER(corrFactor)));
-    //printf("corrf: %f\n", corrFactor);
     PC++;
     RESAMPLE = true;
 })
 
 STATUSFUNC({
-    // cout << "lol" << endl;
-
-    /*
-    double sum = 0;
-    int numNonInf = 0;
-    for(int i = 0; i < NUM_PARTICLES; i++) {
-        if(PWEIGHT != -INFINITY) {
-            sum += PWEIGHT;
-            numNonInf++;
-        }
-    }
-
-    if(numNonInf == 0)
-        cout << "Average weight: " << sum / numNonInf << ", #nonInf: " << numNonInf << endl;
-    */
     
 })
 

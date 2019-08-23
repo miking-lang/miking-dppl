@@ -106,7 +106,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
 
     // double duration = getTimeElapsed();
 
-    // cout << "ln(Marginal Likelihood) = " << log(marginalLikelihood) << endl;
+    cout << "ln(Marginal Likelihood) = " << log(marginalLikelihood) << endl;
     
 
     #ifdef GPU
