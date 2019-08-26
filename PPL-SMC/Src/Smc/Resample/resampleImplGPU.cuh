@@ -45,8 +45,8 @@ template <typename T>
 floating_t resampleSystematic(particles_t<T>* particles) {
     expWeightsKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles->weights);
     calcInclusivePrefixSum<T>(particles, prefixSum);
-    //if(prefixSum[NUM_PARTICLES-1] == 0) // Bad performance since it is a transfer
-        //printf("Error: prefixSum = 0!\n");
+    if(prefixSum[NUM_PARTICLES-1] == 0) // Bad performance since it is a transfer
+        printf("Error: prefixSum = 0!\n");
     systematicCumulativeOffspring(prefixSum, cumulativeOffspring);
     cumulativeOffspringToAncestor(cumulativeOffspring, ancestor);
     copyStates<T>(particles, ancestor);

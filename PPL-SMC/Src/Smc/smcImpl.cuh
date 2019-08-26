@@ -14,7 +14,8 @@
 
 const bool DEBUG = false;
 floating_t weightSum = 0;
-floating_t marginalLikelihood;
+floating_t logCorrFactor = 0;
+floating_t logMarginalLikelihood;
 
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
@@ -44,10 +45,14 @@ void initRandStates(curandState* randStates) {
 }
 #endif
 
+void setLogCorrectionFactor(floating_t factor) {
+    logCorrFactor = factor;
+}
+
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks) {
 
-    marginalLikelihood = 1;
+    logMarginalLikelihood = 0;
     pplFunc_t<T> bblocksLocal[numBblocks];
     for(int i = 0; i < numBblocks; i++) {
         bblocksLocal[i] = bblocks[i];
@@ -90,8 +95,8 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         
         if(particles->resample[0]) { // Assumption: All resample at the same time
             weightSum = resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
-            marginalLikelihood *= (weightSum / NUM_PARTICLES);
-            //printf("margLH=%f\n", marginalLikelihood);
+            logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
+            //printf("margLH=%f\n", logMarginalLikelihood);
         }
         
         if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
@@ -105,8 +110,9 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     destResampler<T>();
 
     // double duration = getTimeElapsed();
+    logMarginalLikelihood += logCorrFactor;
 
-    cout << "ln(Marginal Likelihood) = " << log(marginalLikelihood) << endl;
+    cout << "log(MarginalLikelihood) = " << logMarginalLikelihood << endl;
     
 
     #ifdef GPU

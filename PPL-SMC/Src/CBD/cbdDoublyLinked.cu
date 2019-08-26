@@ -6,12 +6,11 @@
 #include "cbd.cuh"
 #include "cbdUtils.cuh"
 
-// nvcc -arch=sm_61 -rdc=true Src/CBD/cbdDoublyLinked.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/CBD/cbdDoublyLinked.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
-BBLOCK_DATA(corrFactor, floating_t, 1)
 
 
 void initCBD() {
@@ -23,12 +22,12 @@ void initCBD() {
     *mu = 0.1; // death rate
 
     int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, NUM_NODES);
-    *corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
+    floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
+    setLogCorrectionFactor(corrFactor);
 
     COPY_DATA_GPU(tree, tree_t, 1)
     COPY_DATA_GPU(lambda, floating_t, 1)
     COPY_DATA_GPU(mu, floating_t, 1)
-    COPY_DATA_GPU(corrFactor, floating_t, 1)
 
 }
 
@@ -163,11 +162,6 @@ BBLOCK(cbd, {
     RESAMPLE = false;
 })
 
-BBLOCK(nop, {
-    WEIGHT(*(DATA_POINTER(corrFactor)));
-    PC++;
-    RESAMPLE = true;
-})
 
 STATUSFUNC({
     
@@ -185,7 +179,6 @@ int main() {
     INITBBLOCK(cbd)
     INITBBLOCK(condBD1)
     INITBBLOCK(condBD2)
-    INITBBLOCK(nop)
 
     MAINEND()
 }
