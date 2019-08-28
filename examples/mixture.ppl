@@ -1,0 +1,13 @@
+let flip = lam p. sample (bernoulli p) in
+
+let observe = lam v. lam dist. weight (logpdf v dist) in
+
+if flip(0.5) then
+  let p = sample (beta 2 2) in
+  observe true (bernoulli p);
+  observe true (bernoulli p);
+  observe true (bernoulli p);
+  p
+else
+  sample (normal 0 1)
+
