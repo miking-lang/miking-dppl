@@ -1,3 +1,9 @@
+/*
+Just a bunch of functions to parse JSON trees into arrays, and give specs about tree.
+
+Note that this is JavaScript, can be executed online in the browser, ex: https://playcode.io/
+*/
+
 function Queue(){var a=[],b=0;this.getLength=function(){return a.length-b};this.isEmpty=function(){return 0==a.length};this.enqueue=function(b){a.push(b)};this.dequeue=function(){if(0!=a.length){var c=a[b];2*++b>=a.length&&(a=a.slice(b),b=0);return c}};this.peek=function(){return 0<a.length?a[b]:void 0}};
 
 var treeSimple = '{"right":{"right":{"age":0}, "left":{"age":0}, "age":4}, "left":{"right":{"age":0}, "left":{"age":0},"age":6}, "age":10}';
@@ -17,11 +23,13 @@ console.log(tree);
 var idxCounter = 0;
 // var fifo = [];
 var fifo = new Queue();
+var stack = [];
 
 var ages = [];
 var leftIdx = [];
 var rightIdx = [];
 var parentIdx = [];
+var nextIdx;
 
 function bfsIdx(tree) {
     if(tree.left != null) {
@@ -50,9 +58,9 @@ function bfsIdx(tree) {
 }
 
 function bfsArrs(tree) {
-    if(tree.left != null) {
+    if(tree.left != null) 
         fifo.enqueue(tree.left);
-    }
+
     if(tree.right != null)
         fifo.enqueue(tree.right);
 
@@ -68,10 +76,31 @@ function bfsArrs(tree) {
     }
 }
 
+function dfsNext(tree) {
+    if(tree.right != null)
+        stack.push(tree.right);
+
+    if(tree.left != null)
+        stack.push(tree.left);
+
+    if(stack.length == 0) {
+        nextIdx[tree.idx] = -1;
+        return;
+    }
+
+    var nextTree = stack.pop();
+    
+    nextIdx[tree.idx] = nextTree.idx;
+    dfsNext(nextTree);
+}
+
 function transformTree() {
     tree.parentIdx = -1;
     bfsIdx(tree);
     bfsArrs(tree);
+
+    nextIdx = new Array(ages.length);
+    dfsNext(tree);
 
     var str = JSON.stringify(tree, null, 32);
     console.log(str);
@@ -84,6 +113,8 @@ function transformTree() {
     console.log(rightIdx);    
     console.log("\nparentIdx:");
     console.log(parentIdx);    
+    console.log("\nnextIdx:");
+    console.log(nextIdx);    
 }
 
 function max(a, b) {

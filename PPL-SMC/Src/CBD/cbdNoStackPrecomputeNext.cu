@@ -6,7 +6,7 @@
 #include "cbd.cuh"
 #include "cbdUtils.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/CBD/cbdNoStack.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
@@ -81,37 +81,6 @@ BBLOCK_HELPER(simBranch, {
 }, void, floating_t startTime, floating_t stopTime)
 
 
-BBLOCK_HELPER(findNext, {
-
-    int nextIdx;
-    if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..
-
-        nextIdx = treeP->idxLeft[treeIdx]; // Go left if possible
-
-    } else { // Find first possible right turn
-
-        nextIdx = treeIdx;
-
-        while(true) {
-            // printf("While..., treeidx: %d, leftIdx: %d, rightIdx: %d, parentIdx: %d\n", treeIdx, treeP->idxLeft[treeIdx], treeP->idxRight[treeIdx], treeP->idxParent[treeIdx]);
-            int parentIdx = treeP->idxParent[nextIdx];
-            bool wasLeftChild = treeP->idxLeft[parentIdx] == nextIdx;
-
-            if(wasLeftChild) {
-                nextIdx = treeP->idxRight[parentIdx];
-                break;
-            } else {
-                nextIdx = parentIdx;
-                if(parentIdx == -1) // We are at root and done, let condCBD1 terminate
-                    break;
-            }
-        }
-    }
-
-    return nextIdx;
-
-}, int, int treeIdx, tree_t* treeP)
-
 BBLOCK(condBD2, {
 
     int treeIdx = PSTATE.treeIdx;
@@ -128,8 +97,8 @@ BBLOCK(condBD2, {
 
     }
 
-    PSTATE.treeIdx = BBLOCK_CALL(findNext, treeIdx, treeP);
-
+    //PSTATE.treeIdx = BBLOCK_CALL(findNext, treeIdx, treeP);
+    PSTATE.treeIdx = treeP->idxNext[treeIdx];
 
     PC--;
     RESAMPLE = true;

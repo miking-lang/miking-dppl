@@ -38,7 +38,7 @@ N=1M   => 82.6% initRandStates, 6.4% execFuncs, 9% copyStates (resample)
 
 */
 
-const int NUM_PARTICLES = 10000;// 1 << 17;
+const int NUM_PARTICLES = 100000;// 1 << 17;
 
 
 const int NUM_THREADS_PER_BLOCK = 32;
