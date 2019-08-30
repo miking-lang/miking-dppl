@@ -5,7 +5,7 @@ An SMC inference framework. SMC related code lies in Src/SMC, problem specific p
 <br>
 **How to compile**
 <br>
-All files containing a main function also contains a comment at the top of the file, with a command for compiling the program. These commands uses nvcc (Nvidias CUDA C compiler), make sure to change "-arch=sm_75" to your installed CUDA version. Furthermore, the program can be compiled using g++ instead, if one does not want to use a GPU, and settles for single core CPU. <br>
+All files containing a main function also contains a comment at the top of the file, with a command for compiling the program. These commands uses nvcc (Nvidias CUDA C compiler), make sure to change "-arch=sm_75" to be compatible with your GPU architecture (preferably the newest possible). Furthermore, the program can be compiled using g++ instead, if one does not want to use a GPU, and settles for single core CPU. <br>
 Note: To compile .cu files with g++, use "-x c++". 
 <br>
 <br>
