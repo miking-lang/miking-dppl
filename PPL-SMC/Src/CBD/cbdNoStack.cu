@@ -11,7 +11,6 @@
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
-// BBLOCK_DATA(corrFactor, floating_t, 1)
 
 
 void initCBD() {
@@ -23,14 +22,12 @@ void initCBD() {
     *mu = 0.1; // death rate
 
     int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, NUM_NODES);
-    // *corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     setLogCorrectionFactor(corrFactor);
 
     COPY_DATA_GPU(tree, tree_t, 1)
     COPY_DATA_GPU(lambda, floating_t, 1)
     COPY_DATA_GPU(mu, floating_t, 1)
-    // COPY_DATA_GPU(corrFactor, floating_t, 1)
 
 }
 
@@ -66,8 +63,6 @@ BBLOCK_HELPER(simBranch, {
 
     if(currentTime <= stopTime)
         return;
-    
-    // WEIGHT(log(2.0));
     
     if(BBLOCK_CALL(survival, currentTime)) {
         WEIGHT(-INFINITY);
@@ -208,15 +203,6 @@ BBLOCK(cbd, {
 
 STATUSFUNC({
 
-    /*
-    int numInf = 0;
-    for(int i = 0; i < NUM_PARTICLES; i++) {
-        if(PWEIGHT == -INFINITY)
-            numInf++;
-    }
-
-    printf("NumNonInf: %d\n", NUM_PARTICLES - numInf);
-    */
 })
 
 

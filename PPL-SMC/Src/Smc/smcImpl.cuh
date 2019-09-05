@@ -68,8 +68,6 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     initRandStates(particles->randStates);
     cudaDeviceSynchronize();
     #endif
-    
-    // startTimer();
 
     initResampler<T>();
 
@@ -96,7 +94,6 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         if(particles->resample[0]) { // Assumption: All resample at the same time
             weightSum = resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
-            //printf("margLH=%f\n", logMarginalLikelihood);
         }
         
         if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
@@ -109,7 +106,6 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     // Clean up
     destResampler<T>();
 
-    // double duration = getTimeElapsed();
     logMarginalLikelihood += logCorrFactor;
 
     cout << "log(MarginalLikelihood) = " << logMarginalLikelihood << endl;
@@ -121,7 +117,6 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     delete[] particles;
     #endif
 
-    // cout << "Duration: " << duration << " seconds" << endl;
     return 0;
 }
 

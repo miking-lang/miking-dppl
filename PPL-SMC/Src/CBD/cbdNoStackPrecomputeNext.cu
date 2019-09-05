@@ -11,7 +11,6 @@
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
-// BBLOCK_DATA(corrFactor, floating_t, 1)
 
 
 void initCBD() {
@@ -23,14 +22,12 @@ void initCBD() {
     *mu = 0.1; // death rate
 
     int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, NUM_NODES);
-    // *corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     setLogCorrectionFactor(corrFactor);
 
     COPY_DATA_GPU(tree, tree_t, 1)
     COPY_DATA_GPU(lambda, floating_t, 1)
     COPY_DATA_GPU(mu, floating_t, 1)
-    // COPY_DATA_GPU(corrFactor, floating_t, 1)
 
 }
 
@@ -58,7 +55,6 @@ BBLOCK_HELPER(survival, {
 BBLOCK_HELPER(simBranch, {
 
     floating_t lambdaLocal = *DATA_POINTER(lambda);
-    // floating_t muLocal = *DATA_POINTER(mu);
 
     floating_t t = BBLOCK_CALL(exponential, lambdaLocal);
 
@@ -66,8 +62,6 @@ BBLOCK_HELPER(simBranch, {
 
     if(currentTime <= stopTime)
         return;
-    
-    // WEIGHT(log(2.0));
     
     if(BBLOCK_CALL(survival, currentTime)) {
         WEIGHT(-INFINITY);
@@ -86,6 +80,8 @@ BBLOCK(condBD2, {
     int treeIdx = PSTATE.treeIdx;
 
     tree_t* treeP = DATA_POINTER(tree);
+    
+    PSTATE.treeIdx = treeP->idxNext[treeIdx];
 
     int indexParent = treeP->idxParent[treeIdx];
 
@@ -97,9 +93,6 @@ BBLOCK(condBD2, {
 
     }
 
-    //PSTATE.treeIdx = BBLOCK_CALL(findNext, treeIdx, treeP);
-    PSTATE.treeIdx = treeP->idxNext[treeIdx];
-
     PC--;
     RESAMPLE = true;
 
@@ -109,21 +102,13 @@ BBLOCK(condBD2, {
 BBLOCK(condBD1, {
 
     tree_t* treeP = DATA_POINTER(tree);
-    /*
-    if(PSTATE.stack.stackPointer == 0) {
-        PC = 3;
-        return;
-    }
-    */
     int treeIdx = PSTATE.treeIdx;
 
-    // if(treeIdx == ROOT_IDX && (source == right || treeP->idxRight[treeIdx]) == -1) { // Done
     if(treeIdx == -1) {
         PC = 3;
         RESAMPLE = false;
         return;
     }
-
 
     // MÅSTE JAG VIKTA EFTER FÖRSTA BRANCHEN AV ROTEN ÄR KLAR?
     if(treeIdx == 2)
@@ -134,9 +119,8 @@ BBLOCK(condBD1, {
 
     WEIGHT(- (*DATA_POINTER(mu)) * (treeP->ages[indexParent] - treeP->ages[treeIdx]));
 
-
     PC++;
-    RESAMPLE = true;
+    RESAMPLE = false;
 
 })
 
@@ -147,45 +131,13 @@ BBLOCK(cbd, {
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
 
-    /*
-    if(treeP->idxRight[ROOT_IDX] != -1) {
-        PSTATE.stack.push(treeP->idxRight[ROOT_IDX]);
-    }
-    
-    PSTATE.stack.push(treeP->idxLeft[ROOT_IDX]);
-    */
-
-
-    //PSTATE.treeIdx = tree->idxLeft[ROOT_IDX];
-    //PSTATE.parentIdx = ROOT_IDX;
-
-    // WEIGHT(log(2.0)); 
-    // WEIGHT(log(*(DATA_POINTER(lambda)))); 
-    // Now assuming that root has 2 children, and weighting before first condBD instead of after. Check if correct?
-
-    /*BBLOCK_CALL(condBD1);
-    if(tree->idxRight[ROOT_IDX] != -1) {
-        WEIGHT(log(2.0));
-        BBLOCK_CALL(condBD, tree->idxRight[ROOT_IDX], ROOT_IDX);
-        
-    }*/
-
     PC++;
     RESAMPLE = false;
 })
 
 
 STATUSFUNC({
-
-    /*
-    int numInf = 0;
-    for(int i = 0; i < NUM_PARTICLES; i++) {
-        if(PWEIGHT == -INFINITY)
-            numInf++;
-    }
-
-    printf("NumNonInf: %d\n", NUM_PARTICLES - numInf);
-    */
+    
 })
 
 
