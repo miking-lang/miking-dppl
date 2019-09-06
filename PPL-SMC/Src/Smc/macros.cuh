@@ -55,9 +55,8 @@ bblocks.push_back(NULL); \
 pplFunc_t<progState_t>* bblocksArr; \
 allocateMemory<pplFunc_t<progState_t>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
-double dur = runSMC<progState_t>(bblocksArr, statusFunc, bblocks.size()); \
-freeMemory<pplFunc_t<progState_t>>(bblocksArr); \
-return 0;
+double res = runSMC<progState_t>(bblocksArr, statusFunc, bblocks.size()); \
+freeMemory<pplFunc_t<progState_t>>(bblocksArr);
 
 #define WEIGHT(w) particles->weights[i] += w // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
 #define PWEIGHT particles->weights[i]

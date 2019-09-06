@@ -40,7 +40,7 @@ N=1M: ~30 speedup without init costs                 (~15 with costs)
 
 */
 
-const int NUM_PARTICLES = 1000000;
+const int NUM_PARTICLES = 10000;
 
 
 const int NUM_THREADS_PER_BLOCK = 32;

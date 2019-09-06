@@ -12,6 +12,7 @@ BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
 
+floating_t corrFactor;
 
 void initCBD() {
 
@@ -22,8 +23,7 @@ void initCBD() {
     *mu = 0.1; // death rate
 
     int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, NUM_NODES);
-    floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
-    setLogCorrectionFactor(corrFactor);
+    corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
 
     COPY_DATA_GPU(tree, tree_t, 1)
     COPY_DATA_GPU(lambda, floating_t, 1)
@@ -219,4 +219,10 @@ int main() {
     INITBBLOCK(condBD2)
 
     MAINEND()
+
+    res += corrFactor;
+
+    cout << "log(MarginalLikelihood) = " << res << endl;
+
+    return 0;
 }

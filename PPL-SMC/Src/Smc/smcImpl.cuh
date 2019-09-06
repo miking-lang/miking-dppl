@@ -13,7 +13,6 @@
 #endif
 
 const bool DEBUG = false;
-floating_t weightSum = 0;
 floating_t logCorrFactor = 0;
 floating_t logMarginalLikelihood;
 
@@ -44,10 +43,6 @@ void initRandStates(curandState* randStates) {
     cudaCheckError();
 }
 #endif
-
-void setLogCorrectionFactor(floating_t factor) {
-    logCorrFactor = factor;
-}
 
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks) {
@@ -92,7 +87,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         statusFunc(particles, t);
         
         if(particles->resample[0]) { // Assumption: All resample at the same time
-            weightSum = resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
+            floating_t weightSum = resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
         
@@ -106,18 +101,13 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     // Clean up
     destResampler<T>();
 
-    logMarginalLikelihood += logCorrFactor;
-
-    cout << "log(MarginalLikelihood) = " << logMarginalLikelihood << endl;
-    
-
     #ifdef GPU
     freeMemory(particles);
     #else
     delete[] particles;
     #endif
 
-    return 0;
+    return logMarginalLikelihood;
 }
 
 
