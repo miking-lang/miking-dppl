@@ -12,16 +12,12 @@
 #include "Resample/resampleImplCPU.cuh"
 #endif
 
-const bool DEBUG = false;
-floating_t logCorrFactor = 0;
-floating_t logMarginalLikelihood;
 
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
     #ifdef GPU
     cudaSafeCall(cudaMallocManaged(pointer, sizeof(T) * n));
     #else
-    // *pointer = static_cast<T*>(malloc(memSize));
     *pointer = new T[n];
     #endif
 }
@@ -47,11 +43,10 @@ void initRandStates(curandState* randStates) {
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks) {
 
-    logMarginalLikelihood = 0;
+    floating_t logMarginalLikelihood = 0;
     pplFunc_t<T> bblocksLocal[numBblocks];
-    for(int i = 0; i < numBblocks; i++) {
+    for(int i = 0; i < numBblocks; i++)
         bblocksLocal[i] = bblocks[i];
-    }
     
     // Init
     particles_t<T>* particles;
@@ -64,7 +59,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     cudaDeviceSynchronize();
     #endif
 
-    initResampler<T>();
+    resampler_t resampler = initResampler<T>();
 
     int t = 0;
     
@@ -84,10 +79,10 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         #endif
 
         
-        statusFunc(particles, t);
+        statusFunc(particles, t); // Is this really necessary? Expensive for GPU-version
         
         if(particles->resample[0]) { // Assumption: All resample at the same time
-            floating_t weightSum = resampleSystematic<T>(particles); // Only call "resample" and decide which resampling strategy inside?
+            floating_t weightSum = resampleSystematic<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
         
@@ -99,7 +94,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     }
         
     // Clean up
-    destResampler<T>();
+    destResampler<T>(resampler);
 
     #ifdef GPU
     freeMemory(particles);
@@ -109,6 +104,73 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
 
     return logMarginalLikelihood;
 }
+
+
+/* Do not use useGPU=true if GPU is not defined! */
+// Currently just returning percentage of "true"
+template <typename T>
+double runSMCNested(pplFunc_t<T>* bblocks, bool useGPU) {
+
+    floating_t logMarginalLikelihood = 0;
+    
+    // Init
+    particles_t<T>* particles = new particles_t<T>; // Should work for both host and dev. code
+    
+    #ifdef GPU
+    if(useGPU) {
+        initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
+        initRandStates(particles->randStates);
+        cudaDeviceSynchronize();
+    }
+    #endif
+
+    resampler_t resampler = initResampler<T>(); // Needs to be handled!
+
+    int t = 0;
+    
+    // Run program/inference
+    while(true) {
+
+        if(useGPU) {
+            #ifdef GPU
+            execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
+            cudaDeviceSynchronize();
+            cudaCheckError();
+            #endif
+        
+        } else {
+            for(int i = 0; i < NUM_PARTICLES; i++) {
+                int pc = particles->pcs[i];
+                if(bblocks[pc] != NULL)
+                    bblocks[pc](particles, i, t); 
+            }
+        }
+        
+        if(particles->resample[0]) { // Assumption: All resample at the same time
+            floating_t weightSum = resampleSystematic<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
+            logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
+        }
+        
+        if(bblocks[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
+            break;
+        
+        t++;
+    }
+
+    floating_t percentageTrue = 0;
+    for(int i = 0; i < NUM_PARTICLES; i++) {
+        //if(particles->progStates[i])
+        // Cannot access progStates here?
+    }
+        
+    // Clean up
+    destResampler<T>(resampler); // Needs to be handled!
+
+    delete particles;
+
+    return logMarginalLikelihood;
+}
+
 
 
 #endif

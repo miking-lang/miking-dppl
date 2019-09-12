@@ -6,7 +6,9 @@
 #include "cbd.cuh"
 #include "cbdUtils.cuh"
 
-// nvcc -arch=sm_61 -rdc=true Src/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// Uses precomputed next state, and no stack
+
+// nvcc -arch=sm_61 -rdc=true Src/CBD/cbdNestedInf.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
@@ -81,13 +83,13 @@ BBLOCK(condBD, {
     int treeIdx = PSTATE.treeIdx;
 
     if(treeIdx == -1) {
-        PC = 2;
+        PC = 3;
         RESAMPLE = false;
         return;
     }
 
     // MÅSTE JAG VIKTA EFTER FÖRSTA BRANCHEN AV ROTEN ÄR KLAR?
-    if(treeIdx == 2)
+    if(treeIdx == 2) // Denna är menad att vikta endast om det är ett stalked tree? Troligen en aning fel atm
         WEIGHT(log(*(DATA_POINTER(lambda)))); 
     
 
@@ -122,6 +124,12 @@ BBLOCK(cbd, {
 })
 
 
+BBLOCK(condSurvival, {
+
+    // BBLOCK_CALL(survival, currentTime);
+
+})
+
 STATUSFUNC({
     
 })
@@ -137,6 +145,7 @@ int main() {
 
     INITBBLOCK(cbd)
     INITBBLOCK(condBD)
+    INITBBLOCK(condSurvival)
 
     MAINEND()
 

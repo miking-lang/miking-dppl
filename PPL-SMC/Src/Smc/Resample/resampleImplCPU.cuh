@@ -18,9 +18,8 @@ void calcInclusivePrefixSum(particles_t<T>* particles, floating_t* prefixSum) {
     }
 }
 
-void systematicCumulativeOffspring(floating_t* prefixSum, int* cumulativeOffspring) {
+void systematicCumulativeOffspring(floating_t* prefixSum, int* cumulativeOffspring, floating_t u) {
 
-    floating_t u = uDistRes(generatorRes);
     floating_t totalSum = prefixSum[NUM_PARTICLES-1];
     for(int i = 0; i < NUM_PARTICLES; i++) {
         floating_t expectedCumulativeOffspring = NUM_PARTICLES * prefixSum[i] / totalSum;
@@ -38,7 +37,7 @@ void cumulativeOffspringToAncestor(int* cumulativeOffspring, int* ancestor) {
 }
 
 template <typename T>
-void copyStates(particles_t<T>* particles, int* ancestor) {
+void copyStates(particles_t<T>* particles, int* ancestor, void* tempArr) {
     particles_t<T>* tempArrP = static_cast<particles_t<T>*>(tempArr);
 
     for(int i = 0; i < NUM_PARTICLES; i++)
@@ -49,16 +48,24 @@ void copyStates(particles_t<T>* particles, int* ancestor) {
 
 }
 
+// i is index of executing CUDA-thread, in case of nested inference
 template <typename T>
-floating_t resampleSystematic(particles_t<T>* particles) {
+floating_t resampleSystematic(particles_t<T>* particles, resampler_t resampler, int i = -1) {
     expWeights(particles->weights);
-    calcInclusivePrefixSum<T>(particles, prefixSum);
-    if(prefixSum[NUM_PARTICLES-1] == 0)
+    calcInclusivePrefixSum<T>(particles, resampler.prefixSum);
+    if(resampler.prefixSum[NUM_PARTICLES-1] == 0)
         printf("Error: prefixSum = 0!\n");
-    systematicCumulativeOffspring(prefixSum, cumulativeOffspring);
-    cumulativeOffspringToAncestor(cumulativeOffspring, ancestor);
-    copyStates<T>(particles, ancestor);
-    return prefixSum[NUM_PARTICLES-1];
+    
+    floating_t u;
+    if(i == -1)
+        u = uDistRes(generatorRes);
+    else 
+        u = uniform(particles, i, 0.0f, 1.0f); // i is not used if CPU
+
+    systematicCumulativeOffspring(resampler.prefixSum, resampler.cumulativeOffspring, u);
+    cumulativeOffspringToAncestor(resampler.cumulativeOffspring, resampler.ancestor);
+    copyStates<T>(particles, resampler.ancestor, resampler.tempArr);
+    return resampler.prefixSum[NUM_PARTICLES-1];
 }
 
 
