@@ -62,7 +62,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     resampler_t resampler = initResampler<T>();
 
     int t = 0;
-    
+
     // Run program/inference
     while(true) {
 
@@ -77,7 +77,6 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
                 bblocks[pc](particles, i, t); 
         }
         #endif
-
         
         statusFunc(particles, t); // Is this really necessary? Expensive for GPU-version
         
@@ -107,9 +106,15 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
 
 
 /* Do not use useGPU=true if GPU is not defined! */
-// Currently just returning percentage of "true"
 template <typename T>
-double runSMCNested(pplFunc_t<T>* bblocks, bool useGPU) {
+double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret, bool parallel) {
+
+    if(parallel) {
+        #ifndef GPU
+        printf("Cannot run in parallel when not compiled for GPU");
+        return 0.0;
+        #endif
+    }
 
     floating_t logMarginalLikelihood = 0;
     
@@ -117,7 +122,7 @@ double runSMCNested(pplFunc_t<T>* bblocks, bool useGPU) {
     particles_t<T>* particles = new particles_t<T>; // Should work for both host and dev. code
     
     #ifdef GPU
-    if(useGPU) {
+    if(parallel) {
         initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
         initRandStates(particles->randStates);
         cudaDeviceSynchronize();
@@ -131,7 +136,7 @@ double runSMCNested(pplFunc_t<T>* bblocks, bool useGPU) {
     // Run program/inference
     while(true) {
 
-        if(useGPU) {
+        if(parallel) {
             #ifdef GPU
             execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
             cudaDeviceSynchronize();
@@ -147,7 +152,7 @@ double runSMCNested(pplFunc_t<T>* bblocks, bool useGPU) {
         }
         
         if(particles->resample[0]) { // Assumption: All resample at the same time
-            floating_t weightSum = resampleSystematic<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
+            floating_t weightSum = resampleSystematic<T>(particles, resampler, true); // Only call "resample" and decide which resampling strategy inside?
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
         
@@ -157,11 +162,7 @@ double runSMCNested(pplFunc_t<T>* bblocks, bool useGPU) {
         t++;
     }
 
-    floating_t percentageTrue = 0;
-    for(int i = 0; i < NUM_PARTICLES; i++) {
-        //if(particles->progStates[i])
-        // Cannot access progStates here?
-    }
+    callback(particles, t, ret);
         
     // Clean up
     destResampler<T>(resampler); // Needs to be handled!
@@ -170,7 +171,6 @@ double runSMCNested(pplFunc_t<T>* bblocks, bool useGPU) {
 
     return logMarginalLikelihood;
 }
-
 
 
 #endif

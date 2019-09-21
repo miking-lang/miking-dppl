@@ -50,17 +50,18 @@ void copyStates(particles_t<T>* particles, int* ancestor, void* tempArr) {
 
 // i is index of executing CUDA-thread, in case of nested inference
 template <typename T>
-floating_t resampleSystematic(particles_t<T>* particles, resampler_t resampler, int i = -1) {
+floating_t resampleSystematic(particles_t<T>* particles, resampler_t resampler, bool nested = false) {
     expWeights(particles->weights);
     calcInclusivePrefixSum<T>(particles, resampler.prefixSum);
     if(resampler.prefixSum[NUM_PARTICLES-1] == 0)
         printf("Error: prefixSum = 0!\n");
     
     floating_t u;
-    if(i == -1)
-        u = uDistRes(generatorRes);
+    if(nested)
+        u = uniform(particles, 0, 0.0f, 1.0f); // i is not used if CPU
     else 
-        u = uniform(particles, i, 0.0f, 1.0f); // i is not used if CPU
+        u = uDistRes(generatorRes);
+        
 
     systematicCumulativeOffspring(resampler.prefixSum, resampler.cumulativeOffspring, u);
     cumulativeOffspringToAncestor(resampler.cumulativeOffspring, resampler.ancestor);

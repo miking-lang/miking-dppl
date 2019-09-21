@@ -72,5 +72,8 @@ using pplFunc_t = void (*)(particles_t<T>*, int, int);
 template <typename T>
 using statusFunc_t = void (*)(particles_t<T>*, int);
 
+template <typename T>
+using callbackFunc_t = void (*)(particles_t<T>*, int, void*);
+
 
 #endif

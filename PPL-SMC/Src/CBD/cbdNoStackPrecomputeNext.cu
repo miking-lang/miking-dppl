@@ -3,16 +3,22 @@
 #include "../Smc/smc.cuh"
 #include "../Smc/smcImpl.cuh"
 #include "../Utils/distributions.cuh"
+#include "../Utils/array.cuh"
 #include "cbd.cuh"
 #include "cbdUtils.cuh"
 
-// nvcc -arch=sm_61 -rdc=true Src/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
 
 floating_t corrFactor;
+
+struct nestedProgState_t {
+    bool survived;
+};
+typedef double return_t;
 
 void initCBD() {
 
@@ -31,6 +37,7 @@ void initCBD() {
 
 }
 
+
 BBLOCK_HELPER(survival, {
 
     floating_t lambdaLocal = *DATA_POINTER(lambda);
@@ -44,12 +51,20 @@ BBLOCK_HELPER(survival, {
     else {
         bool speciation = BBLOCK_CALL(flipK, lambdaLocal / (lambdaLocal + muLocal));
         if (speciation)
-            return BBLOCK_CALL(survival, currentTime) || BBLOCK_CALL(survival, currentTime);
+            return BBLOCK_CALL(survival<T>, currentTime) || BBLOCK_CALL(survival<T>, currentTime);
         else
             return false;
     }
 
 }, bool, floating_t startTime)
+
+
+BBLOCK(survivalBblock, nestedProgState_t, {
+    tree_t* treeP = DATA_POINTER(tree);
+    PSTATE.survived = BBLOCK_CALL(survival<nestedProgState_t>, treeP->ages[ROOT_IDX]);;
+    PC++;
+    RESAMPLE = true;
+})
 
 
 BBLOCK_HELPER(simBranch, {
@@ -63,19 +78,20 @@ BBLOCK_HELPER(simBranch, {
     if(currentTime <= stopTime)
         return;
     
-    if(BBLOCK_CALL(survival, currentTime)) {
+    if(BBLOCK_CALL(survival<T>, currentTime)) {
         WEIGHT(-INFINITY);
         return;
     }
 
     WEIGHT(log(2.0)); // was previously done above survival call, no reason to do it before though (unless resample occurrs there)
     
-    BBLOCK_CALL(simBranch, currentTime, stopTime);
+    BBLOCK_CALL(simBranch<T>, currentTime, stopTime);
 
 }, void, floating_t startTime, floating_t stopTime)
 
 
-BBLOCK(condBD, {
+
+BBLOCK(condBD, progState_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
     int treeIdx = PSTATE.treeIdx;
@@ -86,18 +102,19 @@ BBLOCK(condBD, {
         return;
     }
 
-    // MÅSTE JAG VIKTA EFTER FÖRSTA BRANCHEN AV ROTEN ÄR KLAR?
-    if(treeIdx == 2)
-        WEIGHT(log(*(DATA_POINTER(lambda)))); 
-    
-
     int indexParent = treeP->idxParent[treeIdx];
+
+    // Weight here only on once, if root has right child
+    if(treeIdx == 2 && indexParent == ROOT_IDX)
+        WEIGHT(log(2.0));
+    //WEIGHT(log(*(DATA_POINTER(lambda)))); 
+    
 
     WEIGHT(- (*DATA_POINTER(mu)) * (treeP->ages[indexParent] - treeP->ages[treeIdx]));
     
     PSTATE.treeIdx = treeP->idxNext[treeIdx];
 
-    BBLOCK_CALL(simBranch, treeP->ages[indexParent], treeP->ages[treeIdx]);
+    BBLOCK_CALL(simBranch<progState_t>, treeP->ages[indexParent], treeP->ages[treeIdx]);
 
     if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..
         
@@ -110,12 +127,41 @@ BBLOCK(condBD, {
 
 })
 
+CALLBACK(calcResult, nestedProgState_t, {
+    int numSurvived = 0;
+    for(int i = 0; i < NUM_PARTICLES; i++)
+        numSurvived += PSTATE.survived;
 
-BBLOCK(cbd, {
+    return_t* retP = static_cast<return_t*>(ret);
+    *retP = numSurvived / (double)NUM_PARTICLES;
+    
+}, void* ret)
+
+template <typename T>
+DEV T runNestedInference() {
+    bool parallel = false;
+
+    T ret;
+
+    SMCSTART(nestedProgState_t)
+
+    INITBBLOCK(survivalBblock, nestedProgState_t)
+    
+    SMCEND_NESTED(nestedProgState_t, calcResult, ret, parallel)
+
+    return ret;
+}
+
+BBLOCK(cbd, progState_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
+
+    
+    double survivalRate = runNestedInference<double>();
+
+    WEIGHT(-survivalRate);
 
     PC++;
     RESAMPLE = false;
@@ -133,12 +179,12 @@ int main() {
     initCBD();
     
 
-    MAINSTART()
+    SMCSTART(progState_t)
 
-    INITBBLOCK(cbd)
-    INITBBLOCK(condBD)
+    INITBBLOCK(cbd, progState_t)
+    INITBBLOCK(condBD, progState_t)
 
-    MAINEND()
+    SMCEND(progState_t)
 
     res += corrFactor;
 
@@ -146,3 +192,4 @@ int main() {
 
     return 0;
 }
+
