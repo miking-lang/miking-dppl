@@ -19,6 +19,20 @@ struct resampler_t {
     void* tempArr;
 };
 
+template <typename T>
+HOST DEV resampler_t initResamplerNested() {
+
+    // generatorRes.seed(time(NULL) * 3); // avoid same seed as main?
+    resampler_t resampler;
+
+    resampler.ancestor = new int[NUM_PARTICLES];
+    resampler.cumulativeOffspring = new int[NUM_PARTICLES];
+    resampler.prefixSum = new floating_t[NUM_PARTICLES];
+    resampler.tempArr = new particles_t<T>;
+
+    return resampler;
+}
+
 
 template <typename T>
 resampler_t initResampler() {
@@ -46,6 +60,15 @@ resampler_t initResampler() {
     #endif
 
     return resampler;
+}
+
+template <typename T>
+HOST DEV void destResamplerNested(resampler_t resampler) {
+    delete[] resampler.ancestor;
+    delete[] resampler.cumulativeOffspring;
+    delete[] resampler.prefixSum;
+    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
+    delete tempArrP;
 }
 
 template <typename T>

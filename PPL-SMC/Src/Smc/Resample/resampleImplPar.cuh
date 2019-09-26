@@ -13,25 +13,25 @@
 
 
 template <typename T>
-void calcInclusivePrefixSum(particles_t<T>* particles, floating_t* prefixSum) {
+void calcInclusivePrefixSumPar(particles_t<T>* particles, floating_t* prefixSum) {
     floating_t* w = particles->weights;
     thrust::inclusive_scan(thrust::device, w, w + NUM_PARTICLES, prefixSum); // prefix sum
     cudaCheckError();
 }
 
-void systematicCumulativeOffspring(floating_t* prefixSum, int* cumulativeOffspring, floating_t u) {
+void systematicCumulativeOffspringPar(floating_t* prefixSum, int* cumulativeOffspring, floating_t u) {
     systematicCumulativeOffspringKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(prefixSum, cumulativeOffspring, u);
     cudaCheckError();
 }
 
-void cumulativeOffspringToAncestor(int* cumulativeOffspring, int* ancestor) {
+void cumulativeOffspringToAncestorPar(int* cumulativeOffspring, int* ancestor) {
 
     cumulativeOffspringToAncestorKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(cumulativeOffspring, ancestor);
     cudaCheckError();
 }
 
 template <typename T>
-void copyStates(particles_t<T>* particles, int* ancestor, void* tempArr) {
+void copyStatesPar(particles_t<T>* particles, int* ancestor, void* tempArr) {
     particles_t<T>* tempArrP = static_cast<particles_t<T>*>(tempArr);
 
     copyStatesToTemp<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, tempArrP);
@@ -41,9 +41,9 @@ void copyStates(particles_t<T>* particles, int* ancestor, void* tempArr) {
 }
 
 template <typename T>
-floating_t resampleSystematic(particles_t<T>* particles, resampler_t resampler, bool nested = false) {
+floating_t resampleSystematicPar(particles_t<T>* particles, resampler_t resampler, bool nested = false) {
     expWeightsKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles->weights);
-    calcInclusivePrefixSum<T>(particles, resampler.prefixSum);
+    calcInclusivePrefixSumPar<T>(particles, resampler.prefixSum);
     //if(prefixSum[NUM_PARTICLES-1] == 0) // Bad performance since it is a transfer
         //printf("Error: prefixSum = 0!\n");
 
@@ -53,9 +53,9 @@ floating_t resampleSystematic(particles_t<T>* particles, resampler_t resampler, 
     else 
         u = uDistRes(generatorRes);
 
-    systematicCumulativeOffspring(resampler.prefixSum, resampler.cumulativeOffspring, u);
-    cumulativeOffspringToAncestor(resampler.cumulativeOffspring, resampler.ancestor);
-    copyStates<T>(particles, resampler.ancestor, resampler.tempArr);
+    systematicCumulativeOffspringPar(resampler.prefixSum, resampler.cumulativeOffspring, u);
+    cumulativeOffspringToAncestorPar(resampler.cumulativeOffspring, resampler.ancestor);
+    copyStatesPar<T>(particles, resampler.ancestor, resampler.tempArr);
     cudaDeviceSynchronize();
     return resampler.prefixSum[NUM_PARTICLES-1];
 }

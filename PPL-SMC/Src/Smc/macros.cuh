@@ -28,6 +28,8 @@ __device__ type pointerName ## Dev[n];
 
 #endif
 
+// #define FUN_REF_NESTED(funcName, progStateType) funcName ## Host = funcName;
+
 /*
 #define BBLOCK(funcName, body) \
 template <typename T> \
@@ -54,12 +56,18 @@ body
 
 #define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles, int t) body
 // Just a general statusfunc
-#define CALLBACK(funcName, progStateType, body, arg) void funcName(particles_t<progStateType>* particles, int t, arg) body
+#define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, int t, arg) body
 
 #define INITBBLOCK(funcName, progStateType) \
 pplFunc_t<progStateType> funcName ## Host; \
 FUN_REF(funcName, progStateType) \
 bblocks.push_back(funcName ## Host);
+
+
+#define INITBBLOCK_NESTED(funcName, progStateType) \
+pplFunc_t<progStateType> funcName ## Host = funcName; \
+bblocks.push_back(funcName ## Host);
+
 
 /*
 #define INITBBLOCK_NESTED(funcName, bblockArr, index, progStateType) \
@@ -83,10 +91,14 @@ freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 #define SMCEND_NESTED(progStateType, callback, retStruct, useGPU) \
 bblocks.push_back(NULL); \
 pplFunc_t<progStateType>* bblocksArr; \
-allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
-copy(bblocks.begin(), bblocks.end(), bblocksArr); \
+/*allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size());*/ \
+bblocksArr = new pplFunc_t<progStateType>[bblocks.size()]; \
+/*copy(bblocks.begin(), bblocks.end(), bblocksArr);{}*/ \
+for(int i = 0; i < bblocks.size(); i++) \
+    bblocksArr[i] = bblocks[i]; \
 double res = runSMCNested<nestedProgState_t>(bblocksArr, callback, (void*)&retStruct, useGPU); \
-freeMemory<pplFunc_t<progStateType>>(bblocksArr);
+delete[] bblocksArr;
+/*freeMemory<pplFunc_t<progStateType>>(bblocksArr);*/
 
 #define WEIGHT(w) particles->weights[i] += w // SHOULD ADD? (AND BE ZEROED AFTER RESAMPLE)
 #define PWEIGHT particles->weights[i]

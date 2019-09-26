@@ -6,11 +6,12 @@
 
 #ifdef GPU
 #include "../cudaErrorUtils.cu"
-#include "Resample/resampleImplGPU.cuh"
+#include "Resample/resampleImplPar.cuh"
 #include "generalKernels.cuh"
-#else
-#include "Resample/resampleImplCPU.cuh"
+//#else
+//#include "Resample/resampleImplSeq.cuh"
 #endif
+#include "Resample/resampleImplSeq.cuh"
 
 
 template <typename T>
@@ -81,7 +82,11 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         statusFunc(particles, t); // Is this really necessary? Expensive for GPU-version
         
         if(particles->resample[0]) { // Assumption: All resample at the same time
-            floating_t weightSum = resampleSystematic<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
+            #ifdef GPU
+            floating_t weightSum = resampleSystematicPar<T>(particles, resampler);
+            #else
+            floating_t weightSum = resampleSystematicSeq<T>(particles, resampler);
+            #endif
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
         
@@ -107,7 +112,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
 
 /* Do not use useGPU=true if GPU is not defined! */
 template <typename T>
-double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret, bool parallel) {
+DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret, bool parallel) {
 
     if(parallel) {
         #ifndef GPU
@@ -118,41 +123,50 @@ double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret
 
     floating_t logMarginalLikelihood = 0;
     
+    printf("Nested inference beginning...\n");
     // Init
     particles_t<T>* particles = new particles_t<T>; // Should work for both host and dev. code
     
     #ifdef GPU
     if(parallel) {
         initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
-        initRandStates(particles->randStates);
+        initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(particles->randStates, 0); // NO TIME SEED NOW
+        // initRandStates(particles->randStates);
         cudaDeviceSynchronize();
     }
     #endif
 
-    resampler_t resampler = initResampler<T>(); // Needs to be handled!
+    resampler_t resampler = initResamplerNested<T>(); // Needs to be handled!
+    printf("Nested resampler initialized!\n");
 
     int t = 0;
     
     // Run program/inference
     while(true) {
 
+        printf("Gonna exec nested funcs!\n");
         if(parallel) {
             #ifdef GPU
             execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
             cudaDeviceSynchronize();
-            cudaCheckError();
+            // cudaCheckError();
             #endif
         
         } else {
             for(int i = 0; i < NUM_PARTICLES; i++) {
+                printf("Fetching PC!\n");
                 int pc = particles->pcs[i];
-                if(bblocks[pc] != NULL)
+                printf("Fetched PC!\n");
+                if(bblocks[pc] != NULL) {
+                    printf("Check bblocks[pc], now calling func...\n");
                     bblocks[pc](particles, i, t); 
+                }
             }
         }
-        
+        printf("Going to resample nested!\n");
         if(particles->resample[0]) { // Assumption: All resample at the same time
-            floating_t weightSum = resampleSystematic<T>(particles, resampler, true); // Only call "resample" and decide which resampling strategy inside?
+            // CURRENTLY ONLY SEQ NESTED RESAMPLING
+            floating_t weightSum = resampleSystematicSeq<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
         
@@ -165,7 +179,7 @@ double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret
     callback(particles, t, ret);
         
     // Clean up
-    destResampler<T>(resampler); // Needs to be handled!
+    destResamplerNested<T>(resampler); // Needs to be handled!
 
     delete particles;
 

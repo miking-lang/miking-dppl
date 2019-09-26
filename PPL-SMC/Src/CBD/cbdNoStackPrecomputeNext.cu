@@ -44,15 +44,18 @@ BBLOCK_HELPER(survival, {
     floating_t muLocal = *DATA_POINTER(mu);
 
     floating_t t = BBLOCK_CALL(exponential, lambdaLocal + muLocal);
-
+    
     floating_t currentTime = startTime - t;
     if(currentTime < 0)
         return true;
     else {
         bool speciation = BBLOCK_CALL(flipK, lambdaLocal / (lambdaLocal + muLocal));
-        if (speciation)
-            return BBLOCK_CALL(survival<T>, currentTime) || BBLOCK_CALL(survival<T>, currentTime);
-        else
+        if (speciation) {
+            printf("making recursive calls!\n");
+            bool tempRes = BBLOCK_CALL(survival<T>, currentTime) || BBLOCK_CALL(survival<T>, currentTime);
+            printf("Made recursive calls\n");
+            return tempRes;
+        } else
             return false;
     }
 
@@ -60,8 +63,15 @@ BBLOCK_HELPER(survival, {
 
 
 BBLOCK(survivalBblock, nestedProgState_t, {
+    printf("Inside survival Bblock nested!\n");
     tree_t* treeP = DATA_POINTER(tree);
-    PSTATE.survived = BBLOCK_CALL(survival<nestedProgState_t>, treeP->ages[ROOT_IDX]);;
+    printf("Dereffed tree!\n");
+    double age = treeP->ages[ROOT_IDX];
+    printf("Fetched age!\n");
+    bool tempRes = BBLOCK_CALL(survival<nestedProgState_t>, age);
+    printf("returned from bblock call!\n");
+    PSTATE.survived = tempRes;
+    printf("Wrote result!\n");
     PC++;
     RESAMPLE = true;
 })
@@ -139,13 +149,13 @@ CALLBACK(calcResult, nestedProgState_t, {
 
 template <typename T>
 DEV T runNestedInference() {
-    bool parallel = false;
+    bool parallel = true;
 
     T ret;
 
     SMCSTART(nestedProgState_t)
 
-    INITBBLOCK(survivalBblock, nestedProgState_t)
+    INITBBLOCK_NESTED(survivalBblock, nestedProgState_t)
     
     SMCEND_NESTED(nestedProgState_t, calcResult, ret, parallel)
 
@@ -163,7 +173,8 @@ BBLOCK(cbd, progState_t, {
 
     WEIGHT(-survivalRate);
 
-    PC++;
+    // PC++;
+    PC = 2;
     RESAMPLE = false;
 })
 
