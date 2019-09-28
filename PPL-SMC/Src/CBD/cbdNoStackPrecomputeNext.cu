@@ -51,9 +51,9 @@ BBLOCK_HELPER(survival, {
     else {
         bool speciation = BBLOCK_CALL(flipK, lambdaLocal / (lambdaLocal + muLocal));
         if (speciation) {
-            printf("making recursive calls!\n");
+            //printf("making recursive calls!\n");
             bool tempRes = BBLOCK_CALL(survival<T>, currentTime) || BBLOCK_CALL(survival<T>, currentTime);
-            printf("Made recursive calls\n");
+            //printf("Made recursive calls\n");
             return tempRes;
         } else
             return false;
@@ -175,7 +175,7 @@ BBLOCK(cbd, progState_t, {
 
     // PC++;
     PC = 2;
-    RESAMPLE = false;
+    //RESAMPLE = false;
 })
 
 

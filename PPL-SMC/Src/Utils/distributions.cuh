@@ -24,7 +24,6 @@ void initGen() {
 
 template <typename T>
 __device__ int flipK(particles_t<T>* particles, int i, floating_t p = 0.5) {
-    
     return curand_uniform(&particles->randStates[i]) < p ? 1 : 0;
 }
 

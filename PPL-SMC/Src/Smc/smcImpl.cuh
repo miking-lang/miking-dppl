@@ -39,6 +39,15 @@ void initRandStates(curandState* randStates) {
     cudaDeviceSynchronize();
     cudaCheckError();
 }
+
+// only used in nested, where all particles must have a initialized curandState in case of GPU
+template <typename T>
+DEV void initParticlesSeq(particles_t<T>* particles) {
+    for(int i = 0; i < NUM_PARTICLES; i++) {
+        particles->weights[i] = 0;
+        particles->pcs[i] = 0;
+    }
+}
 #endif
 
 template <typename T>
@@ -128,12 +137,17 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
     particles_t<T>* particles = new particles_t<T>; // Should work for both host and dev. code
     
     #ifdef GPU
-    if(parallel) {
-        initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
-        initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(particles->randStates, 0); // NO TIME SEED NOW
-        // initRandStates(particles->randStates);
+    //if(parallel) {
+    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
+    initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(particles->randStates, 0); // NO TIME SEED NOW
+    // initRandStates(particles->randStates);
+    cudaDeviceSynchronize();
+    cudaCheckErrorDev();
+    /*} else {
+        initParticlesSeq(particles);
         cudaDeviceSynchronize();
-    }
+        cudaCheckErrorDev();
+    }*/
     #endif
 
     resampler_t resampler = initResamplerNested<T>(); // Needs to be handled!
@@ -144,15 +158,16 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
     // Run program/inference
     while(true) {
 
-        printf("Gonna exec nested funcs!\n");
         if(parallel) {
             #ifdef GPU
+            printf("Gonna exec nested funcs Parallel!\n");
             execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
             cudaDeviceSynchronize();
-            // cudaCheckError();
+            cudaCheckErrorDev();
             #endif
         
         } else {
+            printf("Gonna exec nested funcs Non-Parallel!\n");
             for(int i = 0; i < NUM_PARTICLES; i++) {
                 printf("Fetching PC!\n");
                 int pc = particles->pcs[i];
@@ -162,6 +177,11 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
                     bblocks[pc](particles, i, t); 
                 }
             }
+            #ifdef GPU
+            cudaCheckErrorDev();
+            #else
+            cudaCheckError();
+            #endif
         }
         printf("Going to resample nested!\n");
         if(particles->resample[0]) { // Assumption: All resample at the same time
@@ -169,6 +189,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
             floating_t weightSum = resampleSystematicSeq<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
+        printf("Resampled nested!\n");
         
         if(bblocks[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
@@ -178,6 +199,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
 
     callback(particles, t, ret);
         
+    printf("Nested cleaning!\n");
     // Clean up
     destResamplerNested<T>(resampler); // Needs to be handled!
 
