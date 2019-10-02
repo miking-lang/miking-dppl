@@ -37,6 +37,31 @@ void initCBD() {
 
 }
 
+/*
+template <typename T>
+DEV bool survival(particles_t<T>* particles, int i, floating_t startTime) {
+
+    // floating_t lambdaLocal = (*DATA_POINTER(lambda));
+    // floating_t muLocal = (*DATA_POINTER(mu));
+
+    // floating_t t = BBLOCK_CALL(exponential, (*DATA_POINTER(lambda)) + (*DATA_POINTER(mu)));
+    
+    floating_t currentTime = startTime - BBLOCK_CALL(exponential, (*DATA_POINTER(lambda)) + (*DATA_POINTER(mu)));
+    if(currentTime < 0)
+        return true;
+    else {
+        bool speciation = BBLOCK_CALL(flipK, (*DATA_POINTER(lambda)) / ((*DATA_POINTER(lambda)) + (*DATA_POINTER(mu))));
+        if (speciation) {
+            //printf("making recursive calls!\n");
+            bool tempRes = BBLOCK_CALL(survival<T>, currentTime) || BBLOCK_CALL(survival<T>, currentTime);
+            //printf("Made recursive calls\n");
+            return tempRes;
+        } else
+            return false;
+    }
+
+}
+*/
 
 BBLOCK_HELPER(survival, {
 
@@ -62,16 +87,17 @@ BBLOCK_HELPER(survival, {
 }, bool, floating_t startTime)
 
 
+
 BBLOCK(survivalBblock, nestedProgState_t, {
-    printf("Inside survival Bblock nested!\n");
+    //printf("Inside survival Bblock nested!\n");
     tree_t* treeP = DATA_POINTER(tree);
-    printf("Dereffed tree!\n");
+    //printf("Dereffed tree!\n");
     double age = treeP->ages[ROOT_IDX];
-    printf("Fetched age!\n");
-    bool tempRes = BBLOCK_CALL(survival<nestedProgState_t>, age);
-    printf("returned from bblock call!\n");
-    PSTATE.survived = tempRes;
-    printf("Wrote result!\n");
+    //printf("Fetched age!\n");
+    //bool tempRes = BBLOCK_CALL(survival<nestedProgState_t>, age);
+    //printf("returned from bblock call!\n");
+    PSTATE.survived = BBLOCK_CALL(survival<nestedProgState_t>, age);
+    //printf("Wrote result!\n");
     PC++;
     RESAMPLE = true;
 })
@@ -149,7 +175,7 @@ CALLBACK(calcResult, nestedProgState_t, {
 
 template <typename T>
 DEV T runNestedInference() {
-    bool parallel = true;
+    bool parallel = false;
 
     T ret;
 
@@ -168,13 +194,12 @@ BBLOCK(cbd, progState_t, {
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
 
-    
     double survivalRate = runNestedInference<double>();
 
     WEIGHT(-survivalRate);
 
-    // PC++;
-    PC = 2;
+    PC++;
+    // PC = 2;
     //RESAMPLE = false;
 })
 
