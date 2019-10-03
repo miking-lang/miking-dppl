@@ -53,13 +53,17 @@ DEV void initParticlesSeq(particles_t<T>* particles) {
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks) {
 
+    #ifdef GPU
+    // Increase heap size on device for device allocation (required for nested inference with > ~100 particles )
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, 2000000000);
     size_t size;
     cudaDeviceGetLimit(&size, cudaLimitMallocHeapSize);
     
     printf("Size limit: %f MB\n", size / 1000000.0);
+    #endif
 
     printf("Particles size: %f MB\n", sizeof(particles_t<T>) / 1000000.0);
+    
 
     floating_t logMarginalLikelihood = 0;
     pplFunc_t<T> bblocksLocal[numBblocks];
@@ -140,26 +144,21 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
 
     floating_t logMarginalLikelihood = 0;
     
-    //printf("Nested inference beginning...\n");
     // Init
     particles_t<T>* particles = new particles_t<T>; // Should work for both host and dev. code
     
     #ifdef GPU
-    //if(parallel) {
     initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
     initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(particles->randStates, 0); // NO TIME SEED NOW
     // initRandStates(particles->randStates);
     cudaDeviceSynchronize();
     cudaCheckErrorDev();
-    /*} else {
-        initParticlesSeq(particles);
-        cudaDeviceSynchronize();
-        cudaCheckErrorDev();
-    }*/
+
+    // TODO: DOUBLE CHECK THAT I DO NOT NEED TO INIT PARICLES ON SEQUENTIAL VARIANT HERE
+
     #endif
 
     resampler_t resampler = initResamplerNested<T>(); // Needs to be handled!
-    //printf("Nested resampler initialized!\n");
 
     int t = 0;
     
@@ -168,35 +167,30 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
 
         if(parallel) {
             #ifdef GPU
-            //printf("Gonna exec nested funcs Parallel!\n");
             execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
             #endif
         
         } else {
-            //printf("Gonna exec nested funcs Non-Parallel!\n");
+            
             for(int i = 0; i < NUM_PARTICLES; i++) {
-                //printf("Fetching PC!\n");
+
                 int pc = particles->pcs[i];
-                //printf("Fetched PC!\n");
-                if(bblocks[pc] != NULL) {
-                    //printf("Check bblocks[pc], now calling func...\n");
+                if(bblocks[pc] != NULL) 
                     bblocks[pc](particles, i, t); 
-                }
             }
             #ifdef GPU
             if(parallel)
                 cudaCheckErrorDev();
             #endif
         }
-        //printf("Going to resample nested!\n");
+        
         if(particles->resample[0]) { // Assumption: All resample at the same time
             // CURRENTLY ONLY SEQ NESTED RESAMPLING
             floating_t weightSum = resampleSystematicSeq<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
-        //printf("Resampled nested!\n");
         
         if(bblocks[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
@@ -206,7 +200,6 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
 
     callback(particles, t, ret);
         
-    //printf("Nested cleaning!\n");
     // Clean up
     destResamplerNested<T>(resampler); // Needs to be handled!
 

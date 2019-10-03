@@ -13,7 +13,7 @@ using namespace std;
 
 // Preprocess this file only: nvcc -arch=sm_75 -rdc=true Src/PPLExamples/Geometric/geometric.cu -E -o geo.i -lcudadev -std=c++11 -D GPUn
 
-// Compile CPU: g++ -x c++ Src/PPLExamples/Geometric/*.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O4
+// Compile CPU: g++ -x c++ Src/PPLExamples/Geometric/*.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
 
 BBLOCK(particleInit, {
