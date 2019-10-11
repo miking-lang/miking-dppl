@@ -10,7 +10,12 @@
 
 using namespace std;
 
-/* Primate tree execution time: avg +- std over 3 runs, for N particles
+/* 
+~0.9 sec avg over 6 runs with only some separate num_particles in nested and not
+~0.915 sec avg over 6 runs with separate num_particles in nested and not
+
+
+Primate tree execution time: avg +- std over 3 runs, for N particles
 No stack precompute
 
 CPU:
@@ -40,8 +45,8 @@ N=1M: ~30 speedup without init costs                 (~15 with costs)
 
 */
 
-const int NUM_PARTICLES = 2000;
-
+const int NUM_PARTICLES = 1000; // 10M particles is fine for non-nested inference
+const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
@@ -52,8 +57,13 @@ const int NUM_BLOCKS_FUNCS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_FUNCS - 1) /
 const int NUM_THREADS_PER_BLOCK_INITRAND = 32;
 const int NUM_BLOCKS_INITRAND = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_INITRAND - 1) / NUM_THREADS_PER_BLOCK_INITRAND;
 
+const int NUM_THREADS_PER_BLOCK_NESTED = 32;
+const int NUM_BLOCKS_NESTED = (NUM_PARTICLES_NESTED + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
+
+
 typedef double floating_t;
 
+/*
 template <typename T>
 struct particles_t {
 
@@ -64,6 +74,19 @@ struct particles_t {
     int pcs[NUM_PARTICLES] = {0};
     floating_t weights[NUM_PARTICLES] = {0};
     bool resample[NUM_PARTICLES];
+};
+*/
+
+template <typename T>
+struct particles_t {
+
+    T* progStates;
+    #ifdef GPU
+    curandState* randStates;
+    #endif
+    int* pcs;
+    floating_t* weights;
+    bool* resample;
 };
 
 template <typename T>

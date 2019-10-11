@@ -8,6 +8,7 @@
 #include <random>
 #include <time.h>
 #include "../smc.cuh"
+#include "../particlesMemoryHandler.cuh"
 
 default_random_engine generatorRes;
 uniform_real_distribution<floating_t> uDistRes(0.0, 1.0);
@@ -25,10 +26,10 @@ HOST DEV resampler_t initResamplerNested() {
     // generatorRes.seed(time(NULL) * 3); // avoid same seed as main?
     resampler_t resampler;
 
-    resampler.ancestor = new int[NUM_PARTICLES];
-    resampler.cumulativeOffspring = new int[NUM_PARTICLES];
-    resampler.prefixSum = new floating_t[NUM_PARTICLES];
-    resampler.tempArr = new particles_t<T>;
+    resampler.ancestor = new int[NUM_PARTICLES_NESTED];
+    resampler.cumulativeOffspring = new int[NUM_PARTICLES_NESTED];
+    resampler.prefixSum = new floating_t[NUM_PARTICLES_NESTED];
+    resampler.tempArr = allocateParticlesNested<T>();
 
     return resampler;
 }
@@ -51,13 +52,13 @@ resampler_t initResampler() {
     cudaSafeCall(cudaMallocManaged(&resampler.ancestor, NUM_PARTICLES * sizeof(int)));
     cudaSafeCall(cudaMallocManaged(&resampler.cumulativeOffspring, NUM_PARTICLES * sizeof(int)));
     cudaSafeCall(cudaMallocManaged(&resampler.prefixSum, NUM_PARTICLES * sizeof(floating_t)));
-    cudaSafeCall(cudaMallocManaged(&resampler.tempArr, sizeof(particles_t<T>)));
+    //cudaSafeCall(cudaMallocManaged(&resampler.tempArr, sizeof(particles_t<T>)));
     #else
     resampler.ancestor = new int[NUM_PARTICLES];
     resampler.cumulativeOffspring = new int[NUM_PARTICLES];
     resampler.prefixSum = new floating_t[NUM_PARTICLES];
-    resampler.tempArr = new particles_t<T>;
     #endif
+    resampler.tempArr = allocateParticles<T>();
 
     return resampler;
 }
@@ -68,7 +69,8 @@ HOST DEV void destResamplerNested(resampler_t resampler) {
     delete[] resampler.cumulativeOffspring;
     delete[] resampler.prefixSum;
     particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
-    delete tempArrP;
+    // delete tempArrP;
+    freeParticlesNested<T>(tempArrP);
 }
 
 template <typename T>
@@ -78,14 +80,16 @@ void destResampler(resampler_t resampler) {
     cudaSafeCall(cudaFree(resampler.ancestor));
     cudaSafeCall(cudaFree(resampler.cumulativeOffspring));
     cudaSafeCall(cudaFree(resampler.prefixSum));
-    cudaSafeCall(cudaFree(resampler.tempArr));
+    // cudaSafeCall(cudaFree(resampler.tempArr));
     #else
     delete[] resampler.ancestor;
     delete[] resampler.cumulativeOffspring;
     delete[] resampler.prefixSum;
-    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
-    delete tempArrP;
+    // particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
+    // delete tempArrP;
     #endif
+    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
+    freeParticles<T>(tempArrP);
 }
 
 template <typename T>

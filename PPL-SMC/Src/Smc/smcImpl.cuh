@@ -2,6 +2,7 @@
 #define SMC_IMPL_INCLUDED
 
 #include <iostream>
+#include <limits>
 #include "../Utils/timer.h"
 
 #ifdef GPU
@@ -12,30 +13,13 @@
 //#include "Resample/resampleImplSeq.cuh"
 #endif
 #include "Resample/resampleImplSeq.cuh"
+#include "particlesMemoryHandler.cuh"
 
 
-template <typename T>
-void allocateMemory(T** pointer, size_t n) {
-    #ifdef GPU
-    cudaSafeCall(cudaMallocManaged(pointer, sizeof(T) * n));
-    #else
-    *pointer = new T[n];
-    #endif
-}
-
-template <typename T>
-void freeMemory(T* pointer) {
-    #ifdef GPU
-    cudaSafeCall(cudaFree(pointer));
-    #else
-    delete[] pointer;
-    #endif
-}
-
-
+/*
 #ifdef GPU
 void initRandStates(curandState* randStates) {
-    initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(randStates, time(NULL));
+    initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(randStates, time(NULL), NUM_PARTICLES);
     cudaDeviceSynchronize();
     cudaCheckError();
 }
@@ -49,35 +33,42 @@ DEV void initParticlesSeq(particles_t<T>* particles) {
     }
 }
 #endif
+*/
 
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks) {
 
     #ifdef GPU
     // Increase heap size on device for device allocation (required for nested inference with > ~100 particles )
-    cudaDeviceSetLimit(cudaLimitMallocHeapSize, 2000000000);
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, numeric_limits<uint32_t>::max());
     size_t size;
     cudaDeviceGetLimit(&size, cudaLimitMallocHeapSize);
+    //size_t stackSize;
+    //cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
     
-    printf("Size limit: %f MB\n", size / 1000000.0);
+    printf("Size limit malloc heap: %f MB\n", size / 1000000.0);
+    //printf("Size limit stack default: %f MB\n", stackSize / 1000000.0);
+    //cudaDeviceSetLimit(cudaLimitStackSize, numeric_limits<uint32_t>::max());
+    //printf("Size limit stack: %f MB\n", stackSize / 1000000.0);
     #endif
 
-    printf("Particles size: %f MB\n", sizeof(particles_t<T>) / 1000000.0);
+    floating_t particleSize = sizeof(particles_t<T>) / 1000000.0;
+    printf("Particles size: %f MB\n", particleSize);
     
 
     floating_t logMarginalLikelihood = 0;
-    pplFunc_t<T> bblocksLocal[numBblocks];
+    pplFunc_t<T> bblocksLocal[numBblocks]; // Local bblocks means slightly less transfers from GPU to CPU
     for(int i = 0; i < numBblocks; i++)
         bblocksLocal[i] = bblocks[i];
     
     // Init
-    particles_t<T>* particles;
-    allocateMemory<particles_t<T>>(&particles, 1); 
+    particles_t<T>* particles = allocateParticles<T>();
+    // allocateMemory<particles_t<T>>(&particles, 1); 
     
     #ifdef GPU
-    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
+    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, time(NULL), NUM_PARTICLES);
     //cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
-    initRandStates(particles->randStates);
+    // initRandStates(particles->randStates);
     cudaDeviceSynchronize();
     #endif
 
@@ -89,7 +80,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     while(true) {
 
         #ifdef GPU
-        execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
+        execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks, NUM_PARTICLES);
         cudaDeviceSynchronize();
         cudaCheckError();
         #else
@@ -100,13 +91,13 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
         }
         #endif
         
-        statusFunc(particles, t); // Is this really necessary? Expensive for GPU-version
+        // statusFunc(particles, t); // Is this really necessary? Expensive for GPU-version
         
         if(particles->resample[0]) { // Assumption: All resample at the same time
             #ifdef GPU
             floating_t weightSum = resampleSystematicPar<T>(particles, resampler);
             #else
-            floating_t weightSum = resampleSystematicSeq<T>(particles, resampler);
+            floating_t weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES);
             #endif
             logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
         }
@@ -121,11 +112,8 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
     // Clean up
     destResampler<T>(resampler);
 
-    #ifdef GPU
-    freeMemory(particles);
-    #else
-    delete[] particles;
-    #endif
+    // freeMemory(particles);
+    freeParticles<T>(particles);
 
     return logMarginalLikelihood;
 }
@@ -133,9 +121,9 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
 
 /* Do not use useGPU=true if GPU is not defined! */
 template <typename T>
-DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret, bool parallel) {
+DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret, bool parallelExec, bool parallelResampling, int seed) {
 
-    if(parallel) {
+    if(parallelExec || parallelResampling) {
         #ifndef GPU
         printf("Cannot run in parallel when not compiled for GPU");
         return 0.0;
@@ -145,11 +133,11 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
     floating_t logMarginalLikelihood = 0;
     
     // Init
-    particles_t<T>* particles = new particles_t<T>; // Should work for both host and dev. code
+    particles_t<T>* particles = allocateParticlesNested<T>(); // = new particles_t<T>; // Should work for both host and dev. code
     
     #ifdef GPU
-    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles);
-    initRandStatesKernel<<<NUM_BLOCKS_INITRAND, NUM_THREADS_PER_BLOCK_INITRAND>>>(particles->randStates, 0); // NO TIME SEED NOW
+    initParticles<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, seed, NUM_PARTICLES_NESTED);
+    // initRandStatesKernel<<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles->randStates, 0, NUM_PARTICLES_NESTED); // NO TIME SEED NOW
     // initRandStates(particles->randStates);
     cudaDeviceSynchronize();
     cudaCheckErrorDev();
@@ -165,31 +153,38 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
     // Run program/inference
     while(true) {
 
-        if(parallel) {
+        if(parallelExec) {
             #ifdef GPU
-            execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks);
+            execFuncs<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, t, bblocks, NUM_PARTICLES_NESTED);
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
             #endif
         
         } else {
             
-            for(int i = 0; i < NUM_PARTICLES; i++) {
+            for(int i = 0; i < NUM_PARTICLES_NESTED; i++) {
 
                 int pc = particles->pcs[i];
                 if(bblocks[pc] != NULL) 
                     bblocks[pc](particles, i, t); 
             }
             #ifdef GPU
-            if(parallel)
+            if(parallelExec)
                 cudaCheckErrorDev();
             #endif
         }
         
         if(particles->resample[0]) { // Assumption: All resample at the same time
             // CURRENTLY ONLY SEQ NESTED RESAMPLING
-            floating_t weightSum = resampleSystematicSeq<T>(particles, resampler); // Only call "resample" and decide which resampling strategy inside?
-            logMarginalLikelihood += log(weightSum / NUM_PARTICLES);
+            floating_t weightSum;
+            if(parallelResampling) {
+                #ifdef GPU
+                weightSum = resampleSystematicParNested<T>(particles, resampler);
+                #endif
+            } else {
+                weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES_NESTED); // Only call "resample" and decide which resampling strategy inside?
+            }
+            logMarginalLikelihood += log(weightSum / NUM_PARTICLES_NESTED);
         }
         
         if(bblocks[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
@@ -203,7 +198,8 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
     // Clean up
     destResamplerNested<T>(resampler); // Needs to be handled!
 
-    delete particles;
+    // delete particles;
+    freeParticlesNested<T>(particles);
 
     return logMarginalLikelihood;
 }

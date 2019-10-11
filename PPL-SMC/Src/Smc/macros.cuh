@@ -88,7 +88,7 @@ copy(bblocks.begin(), bblocks.end(), bblocksArr); \
 double res = runSMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 
-#define SMCEND_NESTED(progStateType, callback, retStruct, useGPU) \
+#define SMCEND_NESTED(progStateType, callback, retStruct, parallelExec, parallelResampling, parentIndex) \
 bblocks.push_back(NULL); \
 pplFunc_t<progStateType>* bblocksArr; \
 /*allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size());*/ \
@@ -96,7 +96,7 @@ bblocksArr = new pplFunc_t<progStateType>[bblocks.size()]; \
 /*copy(bblocks.begin(), bblocks.end(), bblocksArr);{}*/ \
 for(int i = 0; i < bblocks.size(); i++) \
     bblocksArr[i] = bblocks[i]; \
-double res = runSMCNested<nestedProgState_t>(bblocksArr, callback, (void*)&retStruct, useGPU); \
+double res = runSMCNested<nestedProgState_t>(bblocksArr, callback, (void*)&retStruct, parallelExec, parallelResampling, parentIndex); \
 delete[] bblocksArr;
 /*freeMemory<pplFunc_t<progStateType>>(bblocksArr);*/
 
