@@ -10,6 +10,7 @@ Note: To compile .cu files with g++, use "-x c++".
 <br>
 <br>
 **Some notes on the structure**
+<br>
 The problem specific folders contain source code that is entirely detached from any CUDA related code. This is done by using macros (currently defined in smc.cuh). Basic blocks (BBLOCKs), functions that are called from the SMC engine, are declared with the BBLOCK macro. They will get the index according to the order they initialized in main, using the macro INITBBLOCK. All particles in SMC will correspond to a program execution (where the instructions correspond to the BBLOCKS). Each BBLOCK alters the particles program counter (macro PC), weight (macro WEIGHT) and whether it should resample (macro RESAMPLE). 
 <br>
 <br>
