@@ -1,6 +1,7 @@
 #ifndef CBDUTILS_INCLUDED
 #define CBDUTILS_INCLUDED
 
+#include "trees.cuh"
 
 int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
     int numLeaves = 0;

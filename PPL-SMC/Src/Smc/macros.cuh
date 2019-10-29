@@ -46,10 +46,10 @@ DEV_POINTER(funcName, progStateType)
 
 #define BBLOCK_HELPER(funcName, body, returnType, ...) \
 template <typename T> \
-DEV returnType funcName(particles_t<T>* particles, int i, __VA_ARGS__) \
+DEV returnType funcName(particles_t<T>* particles, int i, ##__VA_ARGS__) \
 body
 
-#define BBLOCK_CALL(funcName, ...) funcName(particles, i, __VA_ARGS__)
+#define BBLOCK_CALL(funcName, ...) funcName(particles, i, ##__VA_ARGS__)
 
 //#define BBLOCK_HELPER_HOSTDEV(funcName, body, returnType, ...) HOST DEV returnType funcName(__VA_ARGS__) \
 //body

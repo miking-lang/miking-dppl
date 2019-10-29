@@ -1,6 +1,7 @@
 #ifndef CBD_INCLUDED
 #define CBD_INCLUDED
 
+/*
 #include "../Smc/smc.cuh"
 #include "trees.cuh"
 
@@ -41,5 +42,5 @@ struct progState_t {
 };
 
 #endif
-
+*/
 #endif

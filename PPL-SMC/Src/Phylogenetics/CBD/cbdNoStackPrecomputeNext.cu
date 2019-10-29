@@ -1,21 +1,26 @@
 #include <iostream>
 #include <cstring>
-#include "../Smc/smc.cuh"
-#include "../Smc/smcImpl.cuh"
-#include "../Utils/distributions.cuh"
-#include "../Utils/array.cuh"
-#include "cbd.cuh"
-#include "cbdUtils.cuh"
+#include "../../Smc/smc.cuh"
+#include "../../Smc/smcImpl.cuh"
+#include "../../Utils/distributions.cuh"
+#include "../../Utils/array.cuh"
+// #include "cbd.cuh"
+#include "../TreeUtils/treeUtils.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ Src/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
 
 floating_t corrFactor;
+
+typedef short treeIdx_t;
+struct progState_t {
+    treeIdx_t treeIdx;
+};
 
 struct nestedProgState_t {
     bool extinct;
@@ -170,7 +175,7 @@ BBLOCK(simCRBD, progState_t, {
 
     PC++;
     // PC = 2;
-    //RESAMPLE = false;
+    RESAMPLE = false;
 })
 
 

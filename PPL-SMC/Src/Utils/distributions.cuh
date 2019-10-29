@@ -14,6 +14,7 @@ default_random_engine generatorDists;
 
 uniform_real_distribution<floating_t> uniformDist(0.0, 1.0);
 normal_distribution<floating_t> normalDist(0, 1);
+gamma_distribution<floating_t> gammaDist(1.0, 1.0);
 // exponential_distribution<floating_t> exponentialDist(2);
 
 void initGen() {
@@ -43,6 +44,13 @@ __device__ floating_t exponential(particles_t<T>* particles, int i, floating_t l
     return -log(1 - curand_uniform(&particles->randStates[i])) / lambda;
 }
 
+template <typename T>
+__device__ floating_t gamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
+
+    floating_t x = curand_uniform(&particles->randStates[i]);
+    return x;
+}
+
 #else
 
 template <typename T> // [min, max)
@@ -66,6 +74,12 @@ floating_t exponential(particles_t<T>* particles, int i, floating_t lambda) {
     
     // return exponentialDist(generatorDists);
     return -log(1 - uniformDist(generatorDists)) / lambda;
+}
+
+template <typename T>
+floating_t gamma(particles_t<T>* particles, int i) {
+    
+    return gammaDist(generatorDists);
 }
 
 int flip(double p = 0.5) {

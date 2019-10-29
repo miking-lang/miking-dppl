@@ -45,7 +45,7 @@ N=1M: ~30 speedup without init costs                 (~15 with costs)
 
 */
 
-const int NUM_PARTICLES = 1000; // 10M particles is fine for non-nested inference
+const int NUM_PARTICLES = 100000;
 const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;

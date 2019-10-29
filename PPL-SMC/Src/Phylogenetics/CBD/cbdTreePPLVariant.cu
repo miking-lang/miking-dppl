@@ -1,8 +1,8 @@
 #include <iostream>
 #include <cstring>
-#include "../Smc/smc.cuh"
-#include "../Smc/smcImpl.cuh"
-#include "../Utils/distributions.cuh"
+#include "../../Smc/smc.cuh"
+#include "../../Smc/smcImpl.cuh"
+#include "../../Utils/distributions.cuh"
 #include "cbd.cuh"
 #include "cbdUtils.cuh"
 
