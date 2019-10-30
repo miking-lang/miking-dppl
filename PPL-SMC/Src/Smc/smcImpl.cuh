@@ -146,7 +146,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
 
     #endif
 
-    resampler_t resampler = initResamplerNested<T>(); // Needs to be handled!
+    resampler_t resampler = initResamplerNested<T>();
 
     int t = 0;
     
@@ -196,7 +196,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
     callback(particles, t, ret);
         
     // Clean up
-    destResamplerNested<T>(resampler); // Needs to be handled!
+    destResamplerNested<T>(resampler);
 
     // delete particles;
     freeParticlesNested<T>(particles);

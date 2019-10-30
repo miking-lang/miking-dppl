@@ -83,10 +83,11 @@ BBLOCK_HELPER(goesExtinct, {
         floating_t z2 = BBLOCK_CALL(normal, 0.0, 0.001);
         floating_t mu2 = BBLOCK_CALL(gamma);
         // lambdaFun_t lf2 = lambdaFun_t{lambda2, z2, t1};
-        lambdaFun_t lf2;
-        lf2.lambda = lambda2;
-        lf2.z = z2;
-        lf2.t1 = t1;
+        // lambdaFun_t lf2 = {lambda2, z2, t1};
+        lambdaFun_t lf2(lambda2, z2, t1);
+        //lf2.lambda = lambda2;
+        //lf2.z = z2;
+        //lf2.t1 = t1;
         return BBLOCK_CALL(goesExtinct<T>, currentTime, lf2, mu2, sigma);
     }
 
@@ -123,6 +124,7 @@ BBLOCK_HELPER(simBranch, {
         floating_t t1 = startTime - stopTime;
         floating_t meanLambda = (lambdaFun(lf, startTime) + lambdaFun(lf, stopTime)) / 2.0;
         
+        /*
         simBranchRet_t rt;
         rt.lf = lf;
         rt.r1 = z;
@@ -132,7 +134,9 @@ BBLOCK_HELPER(simBranch, {
         rt.r5 = mu*t1;
         rt.r6 = 0;
         rt.r7 = -mu * t1;
-        // return simBranchRet_t{lf, z, mu, meanLambda*t1, z*t1, mu*t1, 0, -mu*t1};
+        // return ;
+        */
+        simBranchRet_t rt(lf, z, mu, meanLambda*t1, z*t1, mu*t1, 0, -mu*t1);
         return rt;
     }
 
@@ -156,7 +160,7 @@ BBLOCK_HELPER(simBranch, {
         floating_t meanLambda = (lambdaFun(lf, startTime) + lambdaFun(lf, currentTime)) / 2.0;
         //simBranchRet_t toRet(ret.lf, ret.r1, ret.r2, ret.r3 + meanLambda*t, ret.r4 + z*t, ret.r5 + mu*t, ret.r6 + 1, ret.r7 - mu*t);
         //return toRet;
-        simBranchRet_t toRet;
+        /*simBranchRet_t toRet;
         toRet.lf = ret.lf;
         toRet.r1 = ret.r1;
         toRet.r2 = ret.r2;
@@ -166,13 +170,16 @@ BBLOCK_HELPER(simBranch, {
         toRet.r6 = ret.r6 + 1;
         toRet.r7 = ret.r7 - mu * t;
         return toRet;
-
+        */
+        simBranchRet_t rt(ret.lf, ret.r1, ret.r2, ret.r3 + meanLambda*t, ret.r4 + z*t, ret.r5 + mu*t, ret.r6 + 1, ret.r7 - mu*t);
+        return rt;
         //return simBranchRet_t{ret.lf, ret.r1, ret.r2, ret.r3 + meanLambda*t, ret.r4 + z*t, ret.r5 + mu*t, ret.r6 + 1, ret.r7 - mu*t};
     }
 
     // We have a speciation event; handle this case
     bool sideExtinction = BBLOCK_CALL(goesExtinct<T>, currentTime, lf, mu, sigma);
     if (sideExtinction == false) {
+        /*
         simBranchRet_t toRet;
         toRet.lf = lf;
         toRet.r1 = 0.0;
@@ -183,6 +190,9 @@ BBLOCK_HELPER(simBranch, {
         toRet.r6 = 0;
         toRet.r7 = -INFINITY;
         return toRet;
+        */
+        simBranchRet_t rt(lf, 0.0, 0.0, 0.0, 0.0, 0.0, 0, -INFINITY);
+        return rt;
         // return simBranchRet_t{lf, 0.0, 0.0, 0.0, 0.0, 0.0, 0, -INFINITY};
     }
 
@@ -193,6 +203,7 @@ BBLOCK_HELPER(simBranch, {
     // Factor 2 because we do not care whether extinction is on left or right side branch
     floating_t meanLambda = (lambdaFun(lf, startTime) + lambdaFun(lf, currentTime)) / 2.0;
 
+    /*
     simBranchRet_t toRet;
     toRet.lf = ret.lf;
     toRet.r1 = ret.r1;
@@ -203,6 +214,9 @@ BBLOCK_HELPER(simBranch, {
     toRet.r6 = ret.r6;
     toRet.r7 = ret.r7 + log(2.0) - mu * t;
     return toRet;
+    */
+    simBranchRet_t rt(ret.lf, ret.r1, ret.r2, ret.r3 + meanLambda*t, ret.r4 + z*t, ret.r5 + mu*t, ret.r6, ret.r7 + log(2.0) - mu*t);
+    return rt;
     // return simBranchRet_t{ret.lf, ret.r1, ret.r2, ret.r3 + meanLambda*t, ret.r4 + z*t, ret.r5 + mu*t, ret.r6, ret.r7 + log(2.0) - mu*t};
 
 }, simBranchRet_t, floating_t startTime, floating_t stopTime, lambdaFun_t lf, floating_t z, floating_t mu, floating_t sigma)
@@ -254,10 +268,12 @@ BBLOCK(simTree, progState_t, {
 
     RESAMPLE = true;
     if(interiorNode) {
-        bblockArgs_t args2;
+        bblockArgs_t args2(ret.lf, ret.r2, args.sigma);
+        /*
         args2.lf = ret.lf;
         args2.mu = ret.r2;
         args2.sigma = args.sigma;
+        */
         //PSTATE.stack.push(bblockArgs_t{ret.lf, ret.r2, args.sigma});
         //PSTATE.stack.push(bblockArgs_t{ret.lf, ret.r2, args.sigma});
         PSTATE.stack.push(args2);
@@ -294,14 +310,18 @@ BBLOCK(simBAMM, progState_t, {
     floating_t mu_0 = 0.1;
     floating_t sigma = 0.000001;
 
-    lambdaFun_t lf;
+    lambdaFun_t lf(lambda_0, z_0, age);
+    /*
     lf.lambda = lambda_0;
     lf.z = z_0;
     lf.t1 = age;
-    bblockArgs_t args;
+    */
+    bblockArgs_t args(lf, mu_0, sigma);
+    /*
     args.lf = lf;
     args.mu = mu_0;
     args.sigma = sigma;
+    */
 
     // one for each child, and one for nested inference after tree simulations
     /*

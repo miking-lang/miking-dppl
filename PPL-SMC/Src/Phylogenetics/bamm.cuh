@@ -4,12 +4,26 @@ struct lambdaFun_t {
     floating_t lambda;
     floating_t z;
     floating_t t1;
+
+    HOST DEV lambdaFun_t(){};
+    HOST DEV lambdaFun_t(floating_t lambda_, floating_t z_, floating_t t1_){
+        lambda = lambda_;
+        z = z_;
+        t1 = t1_;
+    };
 };
 
 struct bblockArgs_t {
     lambdaFun_t lf;
     floating_t mu;
     floating_t sigma;
+
+    HOST DEV bblockArgs_t(){};
+    HOST DEV bblockArgs_t(lambdaFun_t lf_, floating_t mu_, floating_t sigma_){
+        lf = lf_;
+        mu = mu_;
+        sigma = sigma_;
+    };
 };
 
 struct stack_t {
@@ -59,16 +73,16 @@ struct simBranchRet_t {
     int r6;
     floating_t r7;
 
-    simBranchRet_t(){};
+    HOST DEV simBranchRet_t(){};
 
-    simBranchRet_t(lambdaFun_t ilf, floating_t ir1, floating_t ir2, floating_t ir3, floating_t ir4, floating_t ir5, int ir6, floating_t ir7) {
-        lf = ilf;
-        r1 = ir1;
-        r2 = ir2;
-        r3 = ir3;
-        r4 = ir4;
-        r5 = ir5;
-        r6 = ir6;
-        r7 = ir7;
+    HOST DEV simBranchRet_t(lambdaFun_t lf_, floating_t r1_, floating_t r2_, floating_t r3_, floating_t r4_, floating_t r5_, int r6_, floating_t r7_) {
+        lf = lf_;
+        r1 = r1_;
+        r2 = r2_;
+        r3 = r3_;
+        r4 = r4_;
+        r5 = r5_;
+        r6 = r6_;
+        r7 = r7_;
     }
 };

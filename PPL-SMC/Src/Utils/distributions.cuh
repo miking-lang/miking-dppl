@@ -76,9 +76,15 @@ floating_t exponential(particles_t<T>* particles, int i, floating_t lambda) {
     return -log(1 - uniformDist(generatorDists)) / lambda;
 }
 
+// k = shape, theta = scale
 template <typename T>
-floating_t gamma(particles_t<T>* particles, int i) {
-    
+floating_t gamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
+    /*
+    floating_t U = uniformDist(generatorDists);
+    floating_t V = uniformDist(generatorDists);
+    floating_t W = uniformDist(generatorDists);
+    if(U <= M_E / (M_E + ))
+    */
     return gammaDist(generatorDists);
 }
 
