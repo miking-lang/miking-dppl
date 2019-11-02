@@ -41,14 +41,54 @@ __device__ floating_t normal(particles_t<T>* particles, int i, floating_t mean, 
 template <typename T>
 __device__ floating_t exponential(particles_t<T>* particles, int i, floating_t lambda) {
     
+    // particles->randStates[i];
+    //curandState localState = particles->randStates[i];
+    //curand_uniform(&localState);
+    //floating_t u = curand_uniform(&localState);
+    // particles->randStates[i] = localState;
     return -log(1 - curand_uniform(&particles->randStates[i])) / lambda;
 }
 
+// This gamma sampling is based on the implementation used by GSL
+// k = shape, theta = scale
 template <typename T>
 __device__ floating_t gamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
 
-    floating_t x = curand_uniform(&particles->randStates[i]);
-    return x;
+    /* assume a > 0 */
+    
+    if (k < 1) {
+        double u = curand_uniform(&particles->randStates[i]);
+        return gamma(particles, i, 1.0 + k, theta) * pow (u, 1.0 / k);
+    }
+    
+    {
+        curandState localState = particles->randStates[i];
+        double x, v, u;
+        double d = k - 1.0 / 3.0;
+        double c = (1.0 / 3.0) / sqrt(d);
+    
+        while (true) {
+            do {
+                x = curand_normal(&localState);
+                v = 1.0 + c * x;
+            } while (v <= 0);
+    
+            v = v * v * v;
+            u = curand_uniform(&localState);
+    
+            if (u < 1 - 0.0331 * x * x * x * x) 
+                break;
+    
+            if (log(u) < 0.5 * x * x + d * (1 - v + log(v)))
+                break;
+        }
+    
+        particles->randStates[i] = localState;
+        return theta * d * v;
+    }
+    
+
+    // return exponential(particles, i, 1.0); // exponential(1) is special case of gamma: gamma(1, 1)
 }
 
 #else
@@ -76,16 +116,44 @@ floating_t exponential(particles_t<T>* particles, int i, floating_t lambda) {
     return -log(1 - uniformDist(generatorDists)) / lambda;
 }
 
+// This gamma sampling is based on the implementation used by GSL
 // k = shape, theta = scale
 template <typename T>
 floating_t gamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
-    /*
-    floating_t U = uniformDist(generatorDists);
-    floating_t V = uniformDist(generatorDists);
-    floating_t W = uniformDist(generatorDists);
-    if(U <= M_E / (M_E + ))
-    */
-    return gammaDist(generatorDists);
+
+    /* assume a > 0 */
+    
+    if (k < 1) {
+        double u = uniformDist(generatorDists);
+        return gamma(particles, i, 1.0 + k, theta) * pow(u, 1.0 / k);
+    }
+    
+    {
+        double x, v, u;
+        double d = k - 1.0 / 3.0;
+        double c = (1.0 / 3.0) / sqrt(d);
+    
+        while (true) {
+            do {
+                x = normalDist(generatorDists);
+                v = 1.0 + c * x;
+            } while (v <= 0);
+    
+            v = v * v * v;
+            u = uniformDist(generatorDists);
+    
+            if (u < 1 - 0.0331 * x * x * x * x) 
+                break;
+    
+            if (log(u) < 0.5 * x * x + d * (1 - v + log(v)))
+                break;
+        }
+    
+        return theta * d * v;
+    }
+    
+
+    // return gammaDist(generatorDists);
 }
 
 int flip(double p = 0.5) {

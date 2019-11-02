@@ -28,9 +28,9 @@ particles_t<T>* allocateParticles() {
     cudaSafeCall(cudaMallocManaged(&particles->progStates, sizeof(T) * NUM_PARTICLES));
     cudaSafeCall(cudaMallocManaged(&particles->randStates, sizeof(curandState) * NUM_PARTICLES));
     cudaSafeCall(cudaMallocManaged(&particles->pcs, sizeof(int) * NUM_PARTICLES));
-    cudaSafeCall(cudaMemset(particles->pcs, 0, NUM_PARTICLES * sizeof(int)));
+    // cudaSafeCall(cudaMemset(particles->pcs, 0, NUM_PARTICLES * sizeof(int)));
     cudaSafeCall(cudaMallocManaged(&particles->weights, sizeof(floating_t) * NUM_PARTICLES));
-    cudaSafeCall(cudaMemset(particles->weights, 0, NUM_PARTICLES * sizeof(floating_t)));
+    // cudaSafeCall(cudaMemset(particles->weights, 0, NUM_PARTICLES * sizeof(floating_t)));
     cudaSafeCall(cudaMallocManaged(&particles->resample, sizeof(bool) * NUM_PARTICLES));
     #else
     particles->progStates = new T[NUM_PARTICLES];

@@ -40,7 +40,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks)
 
     #ifdef GPU
     // Increase heap size on device for device allocation (required for nested inference with > ~100 particles )
-    cudaDeviceSetLimit(cudaLimitMallocHeapSize, numeric_limits<uint32_t>::max());
+    // cudaDeviceSetLimit(cudaLimitMallocHeapSize, numeric_limits<uint32_t>::max());
     size_t size;
     cudaDeviceGetLimit(&size, cudaLimitMallocHeapSize);
     //size_t stackSize;

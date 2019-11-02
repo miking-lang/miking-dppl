@@ -1,6 +1,6 @@
 #include <iostream>
 #include <cstring>
-#include <math.h>
+// #include <math.h>
 #include "../Smc/smc.cuh"
 #include "../Smc/smcImpl.cuh"
 #include "../Utils/distributions.cuh"
@@ -12,6 +12,8 @@
 
 // Compile CPU: g++ -x c++ Src/Phylogenetics/bamm.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
+#define MIN(a, b) a <= b ? a : b
+#define MAX(a, b) a >= b ? a : b
 
 BBLOCK_DATA(tree, tree_t, 1);
 // BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
@@ -44,14 +46,18 @@ DEV HOST inline floating_t lambdaFun(lambdaFun_t lf, floating_t t) {
     return lf.lambda * exp(lf.z * (lf.t1 - t));
 }
 
+
 BBLOCK_HELPER(lambdaWait, {
 
+    //printf("Will write lambda vals...\n");
     floating_t startLambda = lambdaFun(lf, startTime);
     floating_t stopLambda = lambdaFun(lf, stopTime);
 
-    floating_t topLambda = fmax(startLambda, stopLambda);
+    floating_t topLambda = MAX(startLambda, stopLambda);
+    //printf("Wrote lambda vals!\n");
 
     floating_t t = startTime - BBLOCK_CALL(exponential, topLambda);
+    // printf("Made exponential call!\n");
 
     if(t < stopTime || BBLOCK_CALL(flipK, lambdaFun(lf, t) / topLambda))
         return startTime - t;
@@ -66,7 +72,7 @@ BBLOCK_HELPER(goesExtinct, {
     floating_t t1 = BBLOCK_CALL(exponential, mu + sigma);
     floating_t tLambda = BBLOCK_CALL(lambdaWait, lf, startTime, 0);
 
-    floating_t t = fmin(t1, tLambda);
+    floating_t t = MIN(t1, tLambda);
     // floating_t t = t1 < tLambda ? t1 : tLambda;
 
     floating_t currentTime = startTime - t;
@@ -79,9 +85,9 @@ BBLOCK_HELPER(goesExtinct, {
             return true;
 
         // No extinction, so rateshift
-        floating_t lambda2 = BBLOCK_CALL(gamma);
+        floating_t lambda2 = BBLOCK_CALL(gamma, 1.0, 1.0);
         floating_t z2 = BBLOCK_CALL(normal, 0.0, 0.001);
-        floating_t mu2 = BBLOCK_CALL(gamma);
+        floating_t mu2 = BBLOCK_CALL(gamma, 1.0, 1.0);
         // lambdaFun_t lf2 = lambdaFun_t{lambda2, z2, t1};
         // lambdaFun_t lf2 = {lambda2, z2, t1};
         lambdaFun_t lf2(lambda2, z2, t1);
@@ -113,7 +119,7 @@ BBLOCK_HELPER(simBranch, {
 
     // floating_t tSigma = BBLOCK_CALL(exponential, sigma)
     floating_t tSigma = tLambda + 1.0; // For testing
-    floating_t t = fmin(tLambda, tSigma);
+    floating_t t = MIN(tLambda, tSigma);
     //floating_t t = tLambda < tSigma ? tLambda : tSigma;
 
     floating_t currentTime = startTime - t;
@@ -142,16 +148,16 @@ BBLOCK_HELPER(simBranch, {
 
     // Check whether this is a rate shift, and handle this case
     if (tSigma < tLambda) {
-        floating_t lambda0_2 = BBLOCK_CALL(gamma);
+        floating_t lambda0_2 = BBLOCK_CALL(gamma, 1.0, 1.0);
         floating_t z2 = BBLOCK_CALL(normal, 0.0, 0.001);
-        floating_t mu2 = BBLOCK_CALL(gamma);
+        floating_t mu2 = BBLOCK_CALL(gamma, 1.0, 1.0);
         // lambdaFun_t lf2 = lambdaFun_t{lambda0_2, z2, mu2};
 
         // Recursive call
-        lambdaFun_t lf2;
-        lf2.lambda = lambda0_2;
+        lambdaFun_t lf2(lambda0_2, z2, currentTime);
+        /*lf2.lambda = lambda0_2;
         lf2.z = z2;
-        lf2.t1 = currentTime;
+        lf2.t1 = currentTime;*/
         simBranchRet_t ret = BBLOCK_CALL(simBranch<T>, currentTime, stopTime, lf2, z2, mu2, sigma);
 
         // Return accumulated values
