@@ -93,7 +93,7 @@ struct particles_t {
 };
 
 template <typename T>
-using pplFunc_t = void (*)(particles_t<T>*, int, int);
+using pplFunc_t = void (*)(particles_t<T>*, int, int, void*);
 
 template <typename T>
 using statusFunc_t = void (*)(particles_t<T>*, int);

@@ -3,19 +3,19 @@
 
 const int ROOT_IDX = 0;
 
-/* TREES without */
 
-/*
+
 // simple toy tree, nodes: 7, maxDepth: 3
 const int NUM_NODES = 7;
 const int MAX_DEPTH = 3;
-struct tree_t {
-                                    //   0, 1, 2, 3, 4, 5, 6  parent could possibly be found with formula?
-    const floating_t ages[NUM_NODES] =  {10, 6, 4,  0,  0,  0,  0};
+struct tree_t { // age 30: failed 7/10
+    const floating_t ages[NUM_NODES] =  {30, 6, 4,  0,  0,  0,  0};
     const int idxLeft[NUM_NODES] =      {1,  3, 5, -1, -1, -1, -1};
     const int idxRight[NUM_NODES] =     {2,  4, 6, -1, -1, -1, -1};
+    const int idxParent[NUM_NODES] =    {-1 , 0 , 0 , 1 , 1 , 2 , 2};
+    const int idxNext[NUM_NODES] =      {1 , 3 , 5 , 4 , 2 , 6 , -1};
 };
-*/
+
 
 
 /*
@@ -32,7 +32,7 @@ struct tree_t {
 */
 
 
-
+/*
 // Bisse tree, nodes: 63, maxDepth: 9
 const int NUM_NODES = 63;
 const int MAX_DEPTH = 9;
@@ -43,7 +43,7 @@ struct tree_t {
     const int idxParent[NUM_NODES] =    {-1 , 0 , 0 , 1 , 1 , 2 , 2 , 3 , 3 , 4 , 4 , 5 , 5 , 6 , 6 , 7 , 7 , 8 , 8 , 9 , 9 , 10 , 10 , 12 , 12 , 13 , 13 , 14 , 14 , 15 , 15 , 16 , 16 , 17 , 17 , 18 , 18 , 19 , 19 , 21 , 21 , 32 , 32 , 33 , 33 , 34 , 34 , 35 , 35 , 36 , 36 , 37 , 37 , 41 , 41 , 43 , 43 , 45 , 45 , 48 , 48 , 57 , 57};
     const int idxNext[NUM_NODES] =      {1 , 3 , 5 , 7 , 9 , 11 , 13 , 15 , 17 , 19 , 21 , 12 , 23 , 25 , 27 , 29 , 31 , 33 , 35 , 37 , 10 , 39 , 2 , 24 , 6 , 26 , 14 , 28 , -1 , 30 , 16 , 32 , 41 , 43 , 45 , 47 , 49 , 51 , 20 , 40 , 22 , 53 , 8 , 55 , 34 , 57 , 18 , 48 , 59 , 50 , 4 , 52 , 38 , 54 , 42 , 56 , 44 , 61 , 46 , 60 , 36 , 62 , 58};
 };
-
+*/
 
 /*
 // Cetacean tree, nodes: 174, maxDepth: 20

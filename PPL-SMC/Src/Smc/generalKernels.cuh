@@ -25,13 +25,13 @@ __global__ void initParticles(particles_t<T>* particles, int timeSeed, int numPa
 
 // Better to sort particles after the func to exec, and do separate kernels for each func?
 template <typename T>
-__global__ void execFuncs(particles_t<T>* particles, int t, pplFunc_t<T>* funcs, int numParticles) {
+__global__ void execFuncs(particles_t<T>* particles, int t, pplFunc_t<T>* funcs, int numParticles, void* arg) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
     int pc = particles->pcs[idx];
     if(funcs[pc] != NULL)
-        funcs[pc](particles, idx, t);
+        funcs[pc](particles, idx, t, arg);
 }
 
 #endif
