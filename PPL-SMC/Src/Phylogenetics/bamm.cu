@@ -1,6 +1,5 @@
 #include <iostream>
 #include <cstring>
-// #include <math.h>
 #include "../Smc/smc.cuh"
 #include "../Smc/smcImpl.cuh"
 #include "../Utils/distributions.cuh"
@@ -280,7 +279,7 @@ CALLBACK(calcResult, nestedProgState_t, {
 
 template <typename T>
 DEV T runNestedInference(int parentIndex, bblockArgs_t* arg) {
-    bool parallelExec = true, parallelResampling = false;
+    bool parallelExec = false, parallelResampling = false;
 
     T ret;
 

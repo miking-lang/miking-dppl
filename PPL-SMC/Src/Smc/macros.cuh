@@ -96,7 +96,7 @@ bblocksArr = new pplFunc_t<progStateType>[bblocks.size()]; \
 /*copy(bblocks.begin(), bblocks.end(), bblocksArr);{}*/ \
 for(int i = 0; i < bblocks.size(); i++) \
     bblocksArr[i] = bblocks[i]; \
-double res = runSMCNested<nestedProgState_t>(bblocksArr, callback, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
+double res = runSMCNested<progStateType>(bblocksArr, callback, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
 delete[] bblocksArr;
 /*freeMemory<pplFunc_t<progStateType>>(bblocksArr);*/
 
