@@ -41,7 +41,6 @@ void initBamm() {
     //COPY_DATA_GPU(nestedArgs, bblockArgs_t, NUM_PARTICLES)
 }
 
-//DEV HOST inline floating_t lambdaFun(floating_t lambda2, floating_t z2, floating_t t1, floating_t t) {
 DEV HOST inline floating_t lambdaFun(lambdaFun_t lf, floating_t t) {
     return lf.lambda * exp(lf.z * (lf.t1 - t));
 }
@@ -69,8 +68,8 @@ BBLOCK_HELPER(lambdaWait, {
 // Forward simulation from a starting time, returning extinction (true) or survival (false)
 BBLOCK_HELPER(goesExtinct, {
 
-    if(recursionCount > 20)
-        printf("RecursionCount: %d\n", recursionCount);
+    //if(recursionCount > 80)
+        //printf("RecursionCount: %d\n", recursionCount);
 
     floating_t t1 = BBLOCK_CALL(exponential, mu + sigma);
     floating_t tLambda = BBLOCK_CALL(lambdaWait, lf, startTime, 0);
@@ -102,16 +101,17 @@ BBLOCK_HELPER(goesExtinct, {
 
 }, bool, floating_t startTime, lambdaFun_t lf, floating_t mu, floating_t sigma, int recursionCount = 0)
 
-/*
-BBLOCK(goesExtinctBblock, nestedProgState_t, { // NEEDS LAMBAFUN
+
+BBLOCK(goesExtinctBblock, nestedProgState_t, {
     tree_t* treeP = DATA_POINTER(tree);
     double age = treeP->ages[ROOT_IDX];
+    bblockArgs_t params = *static_cast<bblockArgs_t*>(arg);
     
-    PSTATE.extinct = BBLOCK_CALL(goesExtinct<nestedProgState_t>, age);
+    PSTATE.extinct = BBLOCK_CALL(goesExtinct<nestedProgState_t>, age, params.lf, params.mu, params.sigma);
     PC++;
     RESAMPLE = true;
 })
-*/
+
 
 BBLOCK_HELPER(simBranch, {
 
@@ -170,7 +170,6 @@ BBLOCK_HELPER(simBranch, {
     return rt;
 
 }, simBranchRet_t, floating_t startTime, floating_t stopTime, lambdaFun_t lf, floating_t z, floating_t mu, floating_t sigma)
-
 
 
 // TODO: Should return tree info as string?
@@ -268,17 +267,6 @@ BBLOCK(simBAMM, progState_t, {
     RESAMPLE = false;
 })
 
-BBLOCK(survivalConditioning, progState_t, {
-    // double survivalRate = runNestedInference<double>(i);
-
-    // WEIGHT(-2.0 * log(survivalRate));
-
-    // printf("StackPointer: %d\n", PSTATE.stack.stackPointer);
-    PC++;
-    RESAMPLE = false;
-})
-
-
 CALLBACK(calcResult, nestedProgState_t, {
     int numExtinct = 0;
     for(int i = 0; i < NUM_PARTICLES_NESTED; i++)
@@ -290,21 +278,34 @@ CALLBACK(calcResult, nestedProgState_t, {
     
 }, void* ret)
 
-template <typename T, typename U>
-DEV T runNestedInference(int parentIndex) {
-    bool parallelExec = false, parallelResampling = false;
+template <typename T>
+DEV T runNestedInference(int parentIndex, bblockArgs_t* arg) {
+    bool parallelExec = true, parallelResampling = false;
 
     T ret;
-    U arg; // Allocate correctly!
 
     SMCSTART(nestedProgState_t)
 
     INITBBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
-    SMCEND_NESTED(nestedProgState_t, calcResult, ret, parallelExec, parallelResampling, parentIndex, arg)
+    SMCEND_NESTED(nestedProgState_t, calcResult, ret, arg, parallelExec, parallelResampling, parentIndex)
 
     return ret;
 }
+
+BBLOCK(survivalConditioning, progState_t, {
+    bblockArgs_t args = PSTATE.stack.pop();
+    bblockArgs_t* argsAlloc = new bblockArgs_t;
+    *argsAlloc = args;
+    double survivalRate = runNestedInference<double>(i, argsAlloc);
+    free(argsAlloc);
+
+    WEIGHT(-2.0 * log(survivalRate));
+    // printf("Survival Rate: %f\n", log(survivalRate));
+
+    PC++;
+    RESAMPLE = false;
+})
 
 STATUSFUNC({
     

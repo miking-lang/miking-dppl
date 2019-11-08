@@ -45,8 +45,8 @@ N=1M: ~30 speedup without init costs                 (~15 with costs)
 
 */
 
-const int NUM_PARTICLES = 100000;
-const int NUM_PARTICLES_NESTED = 50;
+const int NUM_PARTICLES = 10000;
+const int NUM_PARTICLES_NESTED = 100;
 
 const int NUM_THREADS_PER_BLOCK = 32;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
@@ -54,7 +54,7 @@ const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS
 // 8: 5/10 errors
 // 128: 5/10 errors
 // 256: 5/10 errors
-const int NUM_THREADS_PER_BLOCK_FUNCS = 32; // 128
+const int NUM_THREADS_PER_BLOCK_FUNCS = 128; // 128
 const int NUM_BLOCKS_FUNCS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_FUNCS - 1) / NUM_THREADS_PER_BLOCK_FUNCS;
 
 const int NUM_THREADS_PER_BLOCK_INITRAND = 32;

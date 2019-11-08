@@ -70,9 +70,9 @@ HOST DEV particles_t<T>* allocateParticlesNested() {
     particles->randStates = new curandState[NUM_PARTICLES_NESTED];
     #endif
     particles->pcs = new int[NUM_PARTICLES_NESTED];
-    memset(particles->pcs, 0, sizeof(int) * NUM_PARTICLES);
+    memset(particles->pcs, 0, sizeof(int) * NUM_PARTICLES_NESTED);
     particles->weights = new floating_t[NUM_PARTICLES_NESTED];
-    memset(particles->weights, 0, sizeof(floating_t) * NUM_PARTICLES);
+    memset(particles->weights, 0, sizeof(floating_t) * NUM_PARTICLES_NESTED);
     particles->resample = new bool[NUM_PARTICLES_NESTED];
     return particles;
 }
