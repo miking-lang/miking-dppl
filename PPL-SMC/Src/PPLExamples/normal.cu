@@ -24,7 +24,7 @@ CALLBACK(calcResult, progState_t, {
 
 template <typename T>
 DEV T runNestedInference(int parentIndex, pplFunc_t<progState_t> bblock) {
-    bool parallelExec = false, parallelResampling = false;
+    bool parallelExec = true, parallelResampling = false;
 
     T ret;
 
@@ -39,7 +39,9 @@ DEV T runNestedInference(int parentIndex, pplFunc_t<progState_t> bblock) {
 
 BBLOCK(normal8, progState_t, {
     
-    PSTATE.val = BBLOCK_CALL(normal, 8.0, 0.001);
+    floating_t val = BBLOCK_CALL(normal, 8.0, 1);
+    PSTATE.val = val;
+    printf("val: %f\n", val);
 
     PC++;
     RESAMPLE = false;
@@ -47,7 +49,7 @@ BBLOCK(normal8, progState_t, {
 
 BBLOCK(normal4, progState_t, {
     
-    PSTATE.val = BBLOCK_CALL(normal, 4.0, 0.001);
+    PSTATE.val = BBLOCK_CALL(normal, 4.0, 0.0001);
     PSTATE.val += runNestedInference<double>(i, normal8);
 
     PC++;

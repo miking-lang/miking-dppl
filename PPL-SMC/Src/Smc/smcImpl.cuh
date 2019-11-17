@@ -16,6 +16,8 @@
 #include "particlesMemoryHandler.cuh"
 
 
+unsigned long long timeSeed;
+
 /*
 #ifdef GPU
 void initRandStates(curandState* randStates) {
@@ -37,6 +39,8 @@ DEV void initParticlesSeq(particles_t<T>* particles) {
 
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks, void* arg = NULL) {
+
+    timeSeed = time(NULL);
 
     #ifdef GPU
     // Increase heap size on device for device allocation (required for nested inference with > ~100 particles )
@@ -69,7 +73,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks,
     // allocateMemory<particles_t<T>>(&particles, 1); 
     
     #ifdef GPU
-    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, time(NULL), NUM_PARTICLES);
+    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, timeSeed, NUM_PARTICLES);
     //cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     // initRandStates(particles->randStates);
     cudaDeviceSynchronize();
@@ -141,13 +145,13 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
     particles_t<T>* particles = allocateParticlesNested<T>(); // = new particles_t<T>; // Should work for both host and dev. code
     
     #ifdef GPU
-    initParticles<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, seed, NUM_PARTICLES_NESTED);
+    initParticles<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, timeSeed, NUM_PARTICLES_NESTED);
     // initRandStatesKernel<<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles->randStates, 0, NUM_PARTICLES_NESTED); // NO TIME SEED NOW
     // initRandStates(particles->randStates);
     cudaDeviceSynchronize();
     cudaCheckErrorDev();
 
-    // TODO: DOUBLE CHECK THAT I DO NOT NEED TO INIT PARICLES ON SEQUENTIAL VARIANT HERE
+    // TODO: DOUBLE CHECK THAT I DO NOT NEED TO INIT PARTICLES ON SEQUENTIAL VARIANT HERE
 
     #endif
 

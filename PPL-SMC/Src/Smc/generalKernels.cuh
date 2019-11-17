@@ -7,13 +7,15 @@
 
 
 template <typename T>
-__global__ void initParticles(particles_t<T>* particles, int timeSeed, int numParticles) {
+__global__ void initParticles(particles_t<T>* particles, int seed, int numParticles, int inferenceIdx=0, bool nested=false) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
     particles->weights[idx] = 0;
     particles->pcs[idx] = 0;
-    curand_init(1234 + timeSeed, idx, 0, &particles->randStates[idx]);
+
+    curand_init(1234 + seed, inferenceIdx * numParticles + idx, 0, &particles->randStates[idx]);
+    printf("seed: %d\n", seed);
 }
 
 /*__global__ void initRandStatesKernel(curandState* states, int timeSeed, int numParticles) {
