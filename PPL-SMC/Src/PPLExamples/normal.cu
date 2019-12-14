@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstring>
+#include <limits>
 #include "../Smc/smc.cuh"
 #include "../Smc/smcImpl.cuh"
 #include "../Utils/distributions.cuh"
@@ -23,7 +24,8 @@ CALLBACK(calcResult, progState_t, {
 }, void* ret)
 
 template <typename T>
-DEV T runNestedInference(int parentIndex, pplFunc_t<progState_t> bblock) {
+DEV T runNestedInference(particles_t<progState_t>* particles, int i, pplFunc_t<progState_t> bblock) {
+//BBLOCK_HELPER(runNestedInference, {
     bool parallelExec = true, parallelResampling = false;
 
     T ret;
@@ -31,11 +33,15 @@ DEV T runNestedInference(int parentIndex, pplFunc_t<progState_t> bblock) {
     SMCSTART(progState_t)
 
     INITBBLOCK_NESTED(bblock, progState_t)
+
+    unsigned long long seed = static_cast<unsigned long long>(BBLOCK_CALL(uniform, 0 ,1) * ULLONG_MAX);
+    // printf("Seed: %llu\n", seed);
     
-    SMCEND_NESTED(progState_t, calcResult, ret, NULL, parallelExec, parallelResampling, parentIndex)
+    SMCEND_NESTED(progState_t, calcResult, ret, NULL, parallelExec, parallelResampling, seed)
 
     return ret;
 }
+//, T, int seed, pplFunc_t<progState_t> bblock)
 
 BBLOCK(normal8, progState_t, {
     
@@ -50,7 +56,7 @@ BBLOCK(normal8, progState_t, {
 BBLOCK(normal4, progState_t, {
     
     PSTATE.val = BBLOCK_CALL(normal, 4.0, 0.0001);
-    PSTATE.val += runNestedInference<double>(i, normal8);
+    PSTATE.val += runNestedInference<double>(particles, i, normal8);
 
     PC++;
     RESAMPLE = false;
@@ -59,7 +65,7 @@ BBLOCK(normal4, progState_t, {
 BBLOCK(normal2, progState_t, {
     
     PSTATE.val = BBLOCK_CALL(normal, 2.0, 1);
-    PSTATE.val += runNestedInference<double>(i, normal4);
+    PSTATE.val += runNestedInference<double>(particles, i, normal4);
 
     PC++;
     RESAMPLE = false;
