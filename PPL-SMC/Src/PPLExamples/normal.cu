@@ -47,7 +47,7 @@ BBLOCK(normal8, progState_t, {
     
     floating_t val = BBLOCK_CALL(normal, 8.0, 1);
     PSTATE.val = val;
-    printf("val: %f\n", val);
+    // printf("val: %f\n", val);
 
     PC++;
     RESAMPLE = false;
@@ -55,7 +55,7 @@ BBLOCK(normal8, progState_t, {
 
 BBLOCK(normal4, progState_t, {
     
-    PSTATE.val = BBLOCK_CALL(normal, 4.0, 0.0001);
+    PSTATE.val = BBLOCK_CALL(normal, 4.0, 1);
     PSTATE.val += runNestedInference<double>(particles, i, normal8);
 
     PC++;

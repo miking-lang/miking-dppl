@@ -300,7 +300,6 @@ BBLOCK(survivalConditioning, progState_t, {
     free(argsAlloc);
 
     WEIGHT(-2.0 * log(survivalRate));
-    // printf("Survival Rate: %f\n", log(survivalRate));
 
     PC++;
     RESAMPLE = false;

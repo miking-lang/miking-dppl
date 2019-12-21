@@ -10,6 +10,56 @@
 
 using namespace std;
 
+
+const int NUM_PARTICLES = 1000;
+const int NUM_PARTICLES_NESTED = 50;
+
+const int NUM_THREADS_PER_BLOCK = 32;
+const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
+
+const int NUM_THREADS_PER_BLOCK_FUNCS = 128;
+const int NUM_BLOCKS_FUNCS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_FUNCS - 1) / NUM_THREADS_PER_BLOCK_FUNCS;
+
+const int NUM_THREADS_PER_BLOCK_INITRAND = 32;
+const int NUM_BLOCKS_INITRAND = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_INITRAND - 1) / NUM_THREADS_PER_BLOCK_INITRAND;
+
+const int NUM_THREADS_PER_BLOCK_NESTED = 32;
+const int NUM_BLOCKS_NESTED = (NUM_PARTICLES_NESTED + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
+
+
+typedef double floating_t; // To be able to switch between single and double precision easily
+
+// Particle structure, allocated at start of inference
+template <typename T>
+struct particles_t {
+
+    T* progStates;
+    #ifdef GPU
+    curandState* randStates;
+    #endif
+    int* pcs;
+    floating_t* weights;
+    bool* resample;
+};
+
+// BBLOCK function
+template <typename T>
+using pplFunc_t = void (*)(particles_t<T>*, int, int, void*);
+
+template <typename T>
+using statusFunc_t = void (*)(particles_t<T>*, int);
+
+template <typename T>
+using callbackFunc_t = void (*)(particles_t<T>*, int, void*);
+
+
+#endif
+
+
+
+
+
+
 /* 
 ~0.9 sec avg over 6 runs with only some separate num_particles in nested and not
 ~0.915 sec avg over 6 runs with separate num_particles in nested and not
@@ -44,59 +94,3 @@ N=100K: ~19 speedup CPU -> GPU, without init costs   (~13 with costs)
 N=1M: ~30 speedup without init costs                 (~15 with costs)
 
 */
-
-const int NUM_PARTICLES = 1;
-const int NUM_PARTICLES_NESTED = 3;
-
-const int NUM_THREADS_PER_BLOCK = 32;
-const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
-
-const int NUM_THREADS_PER_BLOCK_FUNCS = 128;
-const int NUM_BLOCKS_FUNCS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_FUNCS - 1) / NUM_THREADS_PER_BLOCK_FUNCS;
-
-const int NUM_THREADS_PER_BLOCK_INITRAND = 32;
-const int NUM_BLOCKS_INITRAND = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_INITRAND - 1) / NUM_THREADS_PER_BLOCK_INITRAND;
-
-const int NUM_THREADS_PER_BLOCK_NESTED = 32;
-const int NUM_BLOCKS_NESTED = (NUM_PARTICLES_NESTED + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
-
-
-typedef double floating_t;
-
-/*
-template <typename T>
-struct particles_t {
-
-    T progStates[NUM_PARTICLES];
-    #ifdef GPU
-    curandState randStates[NUM_PARTICLES];
-    #endif
-    int pcs[NUM_PARTICLES] = {0};
-    floating_t weights[NUM_PARTICLES] = {0};
-    bool resample[NUM_PARTICLES];
-};
-*/
-
-template <typename T>
-struct particles_t {
-
-    T* progStates;
-    #ifdef GPU
-    curandState* randStates;
-    #endif
-    int* pcs;
-    floating_t* weights;
-    bool* resample;
-};
-
-template <typename T>
-using pplFunc_t = void (*)(particles_t<T>*, int, int, void*);
-
-template <typename T>
-using statusFunc_t = void (*)(particles_t<T>*, int);
-
-template <typename T>
-using callbackFunc_t = void (*)(particles_t<T>*, int, void*);
-
-
-#endif
