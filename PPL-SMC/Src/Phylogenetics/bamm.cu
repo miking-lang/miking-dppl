@@ -18,7 +18,7 @@ BBLOCK_DATA(tree, tree_t, 1);
 // BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 // BBLOCK_DATA(mu, floating_t, 1)
 
-//BBLOCK_DATA(nestedArgs, bblockArgs_t, NUM_PARTICLES)
+// BBLOCK_DATA(nestedArgs, bblockArgs_t, NUM_PARTICLES)
 
 
 floating_t corrFactor;
@@ -322,7 +322,7 @@ int main() {
 
     SMCEND(progState_t)
 
-    res += corrFactor;
+    res += corrFactor;  
 
     cout << "log(MarginalLikelihood) = " << res << endl;
 

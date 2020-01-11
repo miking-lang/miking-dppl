@@ -1,8 +1,13 @@
 #ifndef DISTRIBUTIONS_INCLUDED
 #define DISTRIBUTIONS_INCLUDED
 
+// #define _USE_MATH_DEFINES
+
 #include <random>
 #include <time.h>
+// #include <cmath>
+// Optimize!
+constexpr double pi() { return std::atan(1)*4; }
 
 #ifdef GPU
 #include <curand_kernel.h>
@@ -34,7 +39,7 @@ __device__ floating_t uniform(particles_t<T>* particles, int i, floating_t min, 
 }
 
 template <typename T> 
-__device__ floating_t normal(particles_t<T>* particles, int i, floating_t mean, floating_t std) {
+__device__ floating_t sampleNormal(particles_t<T>* particles, int i, floating_t mean, floating_t std) {
     return (curand_normal(&particles->randStates[i]) * std) + mean;
 }
 
@@ -99,7 +104,7 @@ floating_t uniform(particles_t<T>* particles, int i, floating_t min, floating_t 
 }
 
 template <typename T>
-floating_t normal(particles_t<T>* particles, int i, floating_t mean, floating_t std) {
+floating_t sampleNormal(particles_t<T>* particles, int i, floating_t mean, floating_t std) {
     return (normalDist(generatorDists) * std) + mean;
 }
 
@@ -162,5 +167,12 @@ int flip(double p = 0.5) {
 
 
 #endif
+
+// Could be optimized
+// Log of normal pdf
+HOST DEV
+floating_t logPDFNormal(floating_t x, floating_t mean, floating_t std) {
+    return log(exp(-pow(x - mean, 2) / (std * std)) / (std * sqrt(2 * pi())));
+}
 
 #endif
