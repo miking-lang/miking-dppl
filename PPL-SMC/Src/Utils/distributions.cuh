@@ -7,7 +7,8 @@
 #include <time.h>
 // #include <cmath>
 // Optimize!
-constexpr double pi() { return std::atan(1)*4; }
+// constexpr double pi() { return std::atan(1)*4; }
+const double PI = 3.1415926535897932384626433832795028841971693993751;
 
 #ifdef GPU
 #include <curand_kernel.h>
@@ -172,7 +173,7 @@ int flip(double p = 0.5) {
 // Log of normal pdf
 HOST DEV
 floating_t logPDFNormal(floating_t x, floating_t mean, floating_t std) {
-    return log(exp(-pow(x - mean, 2) / (std * std)) / (std * sqrt(2 * pi())));
+    return log(exp(-pow(x - mean, 2) / (std * std)) / (std * sqrt(2 * PI)));
 }
 
 #endif

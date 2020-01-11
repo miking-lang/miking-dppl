@@ -7,6 +7,8 @@
 
 // g++ -x c++ Src/PPLExamples/lgss.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
+// nvcc -arch=sm_75 -rdc=true Src/PPLExamples/lgss.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+
 const int NUM_OBS = 3;
 
 // Förklara
@@ -57,6 +59,8 @@ void setup() {
 
 int main() {
     setup();
+
+    printf("%f\n", PI);
 
     COPY_DATA_GPU(data, floating_t, NUM_OBS);
 
