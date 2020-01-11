@@ -18,6 +18,9 @@ let debug_resample_transform = false
 (** Debug the CPS transformation *)
 let debug_cps = false
 
+(** Debug the CPS builtin transformation *)
+let debug_cps_builtin = false
+
 (** Debug SMC inference *)
 let debug_smc = false
 

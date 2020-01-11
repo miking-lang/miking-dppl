@@ -17,6 +17,7 @@ type output =
   | Debug
   | Samples
   | Norm
+  | Mean
 
 (** Default is debug output format *)
 let output = ref Debug
@@ -82,7 +83,7 @@ let exec filename =
 
   (* Run inference *)
   begin match infer tm with
-    | Empirical({ norm_const; _ } as emp) ->
+    | Empirical({ norm_const; samples; _} as emp) ->
 
       (* Configure string conversion function for output
          (one line, limited printing depth) *)
@@ -103,6 +104,20 @@ let exec filename =
 
         | Norm -> printf "%f" norm_const
 
+        | Mean ->
+          (* TODO Refactor *)
+          (* Normalize (TODO should use library function) *)
+          let logsum = logsumexp (Utils.map fst samples) in
+          let samples = Utils.map (fun (w,t) -> w -. logsum,t) samples in
+
+          (* Compute mean, crash if not all floats *)
+          let mean = List.fold_left (fun acc (w, V{v;_}) ->
+              match v with
+              | VUnit when w = neg_infinity -> acc
+              | VFloat{f} -> acc +. exp w *. f
+              | _ -> failwith "Can't take mean of non-float"
+            ) 0.0 samples in
+          printf "Mean = %f\n" mean
       end
 
     | Variance var -> debug true "Inference result"
@@ -142,9 +157,10 @@ let main =
         | "debug"    -> output := Debug
         | "samples"  -> output := Samples
         | "norm"     -> output := Norm
+        | "mean"     -> output := Mean
         | _          -> failwith "Incorrect output format"
       ),
-    " Specifies output format. Options are: none, debug, samples, norm.";
+    " Specifies output format. Options are: none, debug, samples, norm, mean.";
 
     "--samples",
     Arg.Int(fun i -> match i with

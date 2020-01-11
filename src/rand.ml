@@ -146,6 +146,7 @@ let string_of_empirical
     /. List.fold_left (fun acc (w,_) -> acc +. (exp w) ** 2.0) 0.0 samples in
 
   (* Normalize distribution so that the weights sum to 1, depending on arg *)
+  (* TODO Why are we not using the above normalize function here? *)
   let samples =
     if normalize then
       let logsum = logsumexp (Utils.map fst samples) in
@@ -170,7 +171,7 @@ let string_of_empirical
       samples
       |> List.sort (fun (_,v1) (_,v2) -> compare v1 v2)
       |> aggregate []
-      |> List.sort (fun (w1,_,_) (w2,_,_) -> - Pervasives.compare w1 w2)
+      |> List.sort (fun (w1,_,_) (w2,_,_) -> - Stdlib.compare w1 w2)
     else
       Utils.map (fun (w,v) -> (w,v,1)) samples
   in
