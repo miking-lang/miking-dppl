@@ -1,5 +1,5 @@
-(** The entrypoint for the pplcore executable. Handles command line argument
-    open Utest parsing, unit testing, and lexing/parsing. *)
+(** The entrypoint for the pplcore executable. Handles command line arguments,
+    lexing/parsing, and unit testing *)
 
 open Ast
 open Printf
@@ -83,6 +83,7 @@ let exec filename =
 
   (* Run inference *)
   begin match infer tm with
+
     | Empirical({ norm_const; samples; _} as emp) ->
 
       (* Configure string conversion function for output

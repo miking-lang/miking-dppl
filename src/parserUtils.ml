@@ -42,7 +42,7 @@ let mktup args =
   recurse 0 args
 
 (** Construct a sequence of applications creating a record (Record constructor
-    takes the elements of the tuple in reverser order) *)
+    takes the elements of the tuple in reverse order) *)
 let mkrecord args =
   let rec recurse keys args = match args with
     | (k,t)::args -> mkapp ~t1:(recurse (k::keys) args) ~t2:t
