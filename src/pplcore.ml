@@ -103,7 +103,7 @@ let exec filename =
 
         | Samples -> print_endline (samples_of_empirical string_of_val' emp)
 
-        | Norm -> printf "%f" norm_const
+        | Norm -> printf "%f\n" norm_const
 
         | Mean ->
           (* TODO Refactor *)
