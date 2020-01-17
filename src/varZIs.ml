@@ -101,7 +101,7 @@ let var n env program =
   (* Compute normalizing constant estimate for each outcome *)
   let outcomes = List.map normalize outcomes in
 
-  debug debug_var "Final set of outcomes"
+  debug !debug_var "Final set of outcomes"
     (fun () -> String.concat "\n\n" (List.map string_of_outcome outcomes));
 
   (* Calculate expected value *)

@@ -25,10 +25,10 @@ let set_stoch cond v =
 (** Big-step evaluation of terms *)
 let rec eval stoch stoch_ctrl env (T{t=t';_} as t) =
 
-  debug debug_eval "Eval"
+  debug !debug_eval "Eval"
     (fun () ->
-       let str = (string_of_tm ~closure_env:debug_eval_env t) in
-       if debug_eval_env then
+       let str = (string_of_tm ~closure_env:!debug_eval_env t) in
+       if !debug_eval_env then
          sprintf "%s\n%s" (string_of_env ~prefix:"env: " env) str
        else
          str);
@@ -63,13 +63,13 @@ and eval_app stoch stoch_ctrl
     (V{v=v1';at={stoch=s1} as a1} as v1)
     (V{v=v2';at={stoch=s2} as _a2} as v2) =
 
-  debug debug_eval_app "Eval application"
+  debug !debug_eval_app "Eval application"
     (fun () ->
        (Printf.sprintf "%s\n%s\nstoch_ctrl=%B"
           (string_of_val ~prefix:"LHS: "
-             ~pretty:false ~closure_env:debug_eval_env v1)
+             ~pretty:false ~closure_env:!debug_eval_env v1)
           (string_of_val ~prefix:"RHS: "
-             ~pretty:false ~closure_env:debug_eval_env v2)
+             ~pretty:false ~closure_env:!debug_eval_env v2)
           stoch_ctrl));
 
   (* Default attribute with stochasticness set if either the LHS or the RHS is

@@ -25,7 +25,7 @@ let infer n env program =
 
       if stoch_ctrl then begin
 
-        debug debug_smc_dyn "Skipping resampling"
+        debug !debug_smc_dyn "Skipping resampling"
           (fun () -> sprintf "Weight %f" w);
 
         eval [] (w, mkapp ~t1:(tm_of_val cont)
@@ -81,14 +81,14 @@ let infer n env program =
       (* Do the resampling *)
       num_resample := !num_resample + 1;
 
-      debug debug_smc "Before resampling"
+      debug !debug_smc "Before resampling"
         (fun () -> string_of_empirical
             ~aggregate:false ~normalize:false
             (string_of_val ~max_boxes:5 ~margin:max_int) emp);
 
       let {samples;_} as emp = resample emp in
 
-      debug debug_smc "After resampling"
+      debug !debug_smc "After resampling"
         (fun () -> string_of_empirical
             ~aggregate:false ~normalize:false
             (string_of_val ~max_boxes:5 ~margin:max_int) emp);
@@ -112,7 +112,7 @@ let infer n env program =
 
   let res = recurse emp in
 
-  debug debug_smc "Total number of resamples"
+  debug !debug_smc "Total number of resamples"
     (fun () -> string_of_int !num_resample);
 
   res
@@ -146,7 +146,7 @@ in recurse t, List.map (fun (x,t) -> x,recurse t) builtin
 let preprocess ~dyn builtin tm =
   let tm,builtin = add_resamples ~dyn builtin tm in
 
-  debug debug_resample_transform "After attaching resamples"
+  debug !debug_resample_transform "After attaching resamples"
     (fun () -> string_of_tm tm);
 
   tm,builtin

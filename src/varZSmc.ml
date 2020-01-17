@@ -173,7 +173,7 @@ let var n env program =
 
   (* Enumerate all possible outcomes *)
   let rec enumerate queue res =
-  debug debug_var_queue "Queue"
+  debug !debug_var_queue "Queue"
     (fun () -> String.concat "\n\n" (Utils.map string_of_outcome queue));
 
     match queue with
@@ -188,7 +188,7 @@ let var n env program =
   (* Compute normalizing constant estimate for each outcome *)
   let outcomes = Utils.map normalize outcomes in
 
-  debug debug_var "Final set of outcomes"
+  debug !debug_var "Final set of outcomes"
     (fun () -> String.concat "\n\n" (Utils.map string_of_outcome outcomes));
 
   (* Calculate expected value *)

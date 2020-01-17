@@ -79,7 +79,7 @@ let exec filename =
     | ".tppl" -> parse (Tparser.main Tlexer.main) filename
     | s       -> failwith ("Unsupported file type: " ^ s) in
 
-  debug debug_input "Input term" (fun () -> string_of_tm tm);
+  debug !debug_input "Input term" (fun () -> string_of_tm tm);
 
   (* Run inference *)
   begin match infer tm with
@@ -133,10 +133,6 @@ let exec filename =
 let main =
   let speclist = [
 
-    "--test",
-    Arg.Unit(fun _ -> utest := true),
-    " Enable unit tests.";
-
     "--inference",
     Arg.String(fun s -> match s with
         | "is"          -> inference := IS
@@ -169,16 +165,36 @@ let main =
         | i            -> samples := i),
     " Specifies the number of samples in affected inference algorithms.";
 
+    "--test", Arg.Set(utest), "";
+
+    "--debug-input",              Arg.Set(debug_input), " ";
+    "--debug-label",              Arg.Set(debug_label), " ";
+    "--debug-sanalysis",          Arg.Set(debug_sanalysis), " ";
+    "--debug-resample-transform", Arg.Set(debug_resample_transform), " ";
+    "--debug-cps",                Arg.Set(debug_cps), " ";
+    "--debug-cps-builtin",        Arg.Set(debug_cps_builtin), " ";
+    "--debug-smc",                Arg.Set(debug_smc), " ";
+    "--debug-smc-dyn",            Arg.Set(debug_smc_dyn), " ";
+    "--debug-eval",               Arg.Set(debug_eval), " ";
+    "--debug-eval-app",           Arg.Set(debug_eval_app), " ";
+    "--debug-eval-env",           Arg.Set(debug_eval_env), " ";
+    "--debug-var",                Arg.Set(debug_var), " ";
+    "--debug-var-queue",          Arg.Set(debug_var_queue), " ";
+
   ] in
 
   let speclist = Arg.align speclist in
   let lst = ref [] in
   let anon_fun arg = lst := arg :: !lst in
-  let usage_msg = "" in
+  let usage_msg =
+    "Usage: pplcore [<options>] <files|folders> \n\
+    Options:" in
 
   Arg.parse speclist anon_fun usage_msg;
-
-  List.iter exec (files_of_folders !lst);
-
-  utest_print ();
+  if List.length !lst = 0 then
+    Arg.usage speclist usage_msg
+  else begin
+    List.iter exec (files_of_folders !lst);
+    utest_print ();
+  end
 

@@ -35,13 +35,13 @@ let cps tm builtin =
   (* Transform builtins to CPS. *)
   let builtin = List.map (fun (x, y) -> (x, (Cps.cps y))) builtin in
 
-  debug debug_cps_builtin "Post CPS builtin"
+  debug !debug_cps_builtin "Post CPS builtin"
     (fun () -> string_of_builtin builtin);
 
   (* Perform CPS transformation of main program *)
   let tm = Cps.cps tm in
 
-  debug debug_cps "Post CPS"
+  debug !debug_cps "Post CPS"
     (fun () -> string_of_tm ~pretty:false tm);
 
   tm,builtin
