@@ -1,6 +1,8 @@
 #ifndef PARICLES_MEMORY_HANDLER_INCLUDED
 #define PARICLES_MEMORY_HANDLER_INCLUDED
 
+#include <cstring>
+
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
     #ifdef GPU

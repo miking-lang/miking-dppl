@@ -24,7 +24,7 @@ void configureMemSizeGPU() {
     printf("Size limit malloc heap: %f MB\n", size / 1000000.0);
     printf("Size limit stack default: %f KB\n", stackSize / 1000.0);
     // cudaDeviceSetLimit(cudaLimitStackSize, numeric_limits<uint32_t>::max());
-    cudaDeviceSetLimit(cudaLimitStackSize, stackSize*50); // Might be hardware sensitive as memory size varies
+    cudaDeviceSetLimit(cudaLimitStackSize, stackSize*100); // Might be hardware sensitive as memory size varies
     cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
     printf("Size limit stack: %f KB\n\n", stackSize / 1000.0);
     #endif

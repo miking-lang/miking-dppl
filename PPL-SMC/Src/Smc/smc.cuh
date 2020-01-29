@@ -11,7 +11,7 @@
 using namespace std;
 
 
-const int NUM_PARTICLES = 1000;
+const int NUM_PARTICLES = 1;
 const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;

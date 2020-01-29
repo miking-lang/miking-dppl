@@ -58,13 +58,13 @@ __device__ floating_t exponential(particles_t<T>* particles, int i, floating_t l
 // This gamma sampling is based on the implementation used by GSL
 // k = shape, theta = scale
 template <typename T>
-__device__ floating_t gamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
+__device__ floating_t sampleGamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
 
     /* assume a > 0 */
     
     if (k < 1) {
         double u = curand_uniform(&particles->randStates[i]);
-        return gamma(particles, i, 1.0 + k, theta) * pow (u, 1.0 / k);
+        return sampleGamma(particles, i, 1.0 + k, theta) * pow (u, 1.0 / k);
     }
     
     {
@@ -125,13 +125,13 @@ floating_t exponential(particles_t<T>* particles, int i, floating_t lambda) {
 // This gamma sampling is based on the implementation used by GSL
 // k = shape, theta = scale
 template <typename T>
-floating_t gamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
+floating_t sampleGamma(particles_t<T>* particles, int i, floating_t k, floating_t theta) {
 
     /* assume a > 0 */
     
     if (k < 1) {
         double u = uniformDist(generatorDists);
-        return gamma(particles, i, 1.0 + k, theta) * pow(u, 1.0 / k);
+        return sampleGamma(particles, i, 1.0 + k, theta) * pow(u, 1.0 / k);
     }
     
     {
@@ -174,6 +174,33 @@ int flip(double p = 0.5) {
 HOST DEV
 floating_t logPDFNormal(floating_t x, floating_t mean, floating_t std) {
     return log(exp(-pow(x - mean, 2) / (std * std)) / (std * sqrt(2 * PI)));
+}
+
+template <typename T>
+HOST DEV void sampleDirichlet(particles_t<T>* particles, int i, const floating_t* alpha, floating_t* ret, const int n) {
+    
+    floating_t sum = 0;
+    for (int k = 0; k < n; k++) {
+        ret[k] = sampleGamma(particles, i, alpha[k], 1);
+        sum += ret[k];
+    }
+
+    for (int k = 0; k < n; k++) 
+        ret[k] /= sum;
+}
+
+// Could prolly be optimized
+template <typename T>
+HOST DEV int sampleCategorical(particles_t<T>* particles, int i, const floating_t* dist, const int n) {
+    floating_t u = uniform(particles, i, 0, 1);
+    floating_t sum = 0;
+    int idx = 0;
+    for(idx = 0; idx < n; idx++) {
+        sum += dist[idx];
+        if(u <= sum)
+            break;
+    }
+    return idx;
 }
 
 #endif
