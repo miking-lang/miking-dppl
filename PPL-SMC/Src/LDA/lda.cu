@@ -75,26 +75,34 @@ BBLOCK(newWord, progState_t, {
     // weight w
     // check if end of document and change PC
 
-    int currWord = DATA_POINTER(corpus)[PSTATE.docIdx][PSTATE.wordIdx];
+    int currDocIdx = PSTATE.docIdx;
+    const int currWordIdx = PSTATE.wordIdx;
+    int currWord = DATA_POINTER(corpus)[currDocIdx][currWordIdx];
 
     if (currWord == -1) {
         PC--;
         RESAMPLE = false;
     } else {
-        RESAMPLE = PSTATE.wordIdx % WORDS_PER_RESAMPLE == 0;
+
+        int sampledTopic = BBLOCK_CALL(sampleCategorical, PSTATE.theta[currDocIdx], K);
+        WEIGHT(PSTATE.beta[sampledTopic][currWord]);
+
+        if(currWordIdx > 182)
+            printf("currwordidx: %d, currdocidx: %d\n", currWordIdx, currDocIdx);
+        RESAMPLE = currWordIdx % WORDS_PER_RESAMPLE == 0;
     }
 
-    PSTATE.wordIdx++;
+    PSTATE.wordIdx = currWordIdx + 1;
 })
 
 STATUSFUNC({
     
     for(int i = 0; i < NUM_PARTICLES; i++) {
-        /*
         printf("alpha: [");
         for(int k = 0; k < K; k++)
             printf("%f, ", PSTATE.alpha[k]);
         printf("]\n");
+        /*
         
         for(int k = 0; k < K; k++) {
             printf("beta[%d]: [", k);
@@ -110,6 +118,8 @@ STATUSFUNC({
             printf("]\n");
         }
         */
+
+        // printf("Weight[%d]: %f\n", i, PWEIGHT);
     }
     
 })
