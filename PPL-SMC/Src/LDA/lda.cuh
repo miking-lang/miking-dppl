@@ -14,9 +14,9 @@ using namespace std;
  */
 
 const int D = 679; // Number of documents
-const int VOCAB_SIZE = 3851; 
+const int VOCAB_SIZE = 856; 
 const int K = 10; // Number of topics
-const int WORDS_PER_RESAMPLE = 200;
+const int WORDS_PER_RESAMPLE = 10;
 // const floating_t ETA[VOCAB_SIZE] = {1};
 
 struct progState_t {
@@ -26,6 +26,7 @@ struct progState_t {
     // floating_t z[D][VOCAB_SIZE]; // should be N instead of VOCAB_SIZE?
     int docIdx;
     int wordIdx;
+    int orgParticleIdx;
 };
 
 
