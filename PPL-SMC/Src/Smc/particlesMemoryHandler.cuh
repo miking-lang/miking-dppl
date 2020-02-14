@@ -41,8 +41,20 @@ particles_t<T>* allocateParticles() {
     particles->weights = new floating_t[NUM_PARTICLES];
     memset(particles->weights, 0, sizeof(floating_t) * NUM_PARTICLES);
     particles->resample = new bool[NUM_PARTICLES];
-    
     #endif
+
+    bool printSize = true;
+    if (printSize) {
+        #ifdef GPU
+        floating_t totalMem = sizeof(T) * NUM_PARTICLES + sizeof(curandState) * NUM_PARTICLES + sizeof(int) * NUM_PARTICLES
+                + sizeof(floating_t) * NUM_PARTICLES + sizeof(bool) * NUM_PARTICLES;
+        #else
+        floating_t totalMem = sizeof(T) * NUM_PARTICLES + sizeof(int) * NUM_PARTICLES
+                + sizeof(floating_t) * NUM_PARTICLES + sizeof(bool) * NUM_PARTICLES;
+        #endif
+        printf("Particles memory size for N=%d: %fMB\n", NUM_PARTICLES, totalMem / 1000000.0);
+    }
+    
     return particles;
 }
 

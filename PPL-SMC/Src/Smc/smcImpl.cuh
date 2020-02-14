@@ -33,8 +33,8 @@ void configureMemSizeGPU() {
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks, void* arg = NULL) {
 
-    //floating_t particleSize = sizeof(particles_t<T>) / 1000000.0;
-    //printf("Particles size: %f MB\n", particleSize);
+    // floating_t particleSize = sizeof(particles_t<T>) / 1000000.0;
+    // printf("Particles size: %f MB\n", particleSize);
     
     floating_t logNormConstant = 0;
     pplFunc_t<T> bblocksLocal[numBblocks]; // Local bblocks means slightly less transfers from GPU to CPU

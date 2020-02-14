@@ -160,13 +160,20 @@ STATUSFUNC({
         if(freqList[i] > freqList[maxIdx])
             maxIdx = i;
     printf("MaxIdx: %d\n", maxIdx);
+    floating_t inverseK = 1.0 / K;
+    printf("inv K: %f\n", inverseK);
 
     int i = maxIdx;
     for(int k = 0; k < K; k++) {
         floating_t* currDist = PSTATE.beta[k];
         tuple_t tuples[VOCAB_SIZE];
         for(int j = 0; j < VOCAB_SIZE; j++) {
-            tuples[j].prob = currDist[j];
+            floating_t productOverTopics = 1;
+            for(int kInner = 0; kInner < K; kInner++) { // Switch iteration order for performance :)
+                productOverTopics *= PSTATE.beta[kInner][j];
+            }
+            tuples[j].prob = PSTATE.beta[k][j] * log(PSTATE.beta[k][j] / (pow(productOverTopics, (1.0 / K))));
+            // tuples[j].prob = currDist[j];
             tuples[j].idx = j;
         }
         int n = sizeof(tuples) / sizeof(tuples[0]); 
@@ -177,8 +184,6 @@ STATUSFUNC({
         printf("]\n");
     }
 
-    
-    
 })
 
 void setup() {
