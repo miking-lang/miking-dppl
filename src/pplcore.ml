@@ -181,6 +181,9 @@ let main =
     "--debug-var",                Arg.Set(debug_var), " ";
     "--debug-var-queue",          Arg.Set(debug_var_queue), " ";
 
+    "--pretty",                   Arg.Set(pretty),
+    " Enables pretty printing of terms";
+
   ] in
 
   let speclist = Arg.align speclist in

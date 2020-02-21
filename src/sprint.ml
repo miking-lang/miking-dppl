@@ -23,12 +23,15 @@ let ref_closure_env = ref false
 let ref_pretty      = ref false
 let ref_indent      = ref 2
 
+(** Configurable ref (by argument passing) for pretty printing. *)
+let pretty = ref false
+
 (** Sets up the formatter. *)
 let setup_print
     ?(debruijn       = false)
     ?(labels         = false)
     ?(closure_env    = false)
-    ?(pretty         = true)
+    ?(pretty         = !pretty)
     ?(indent         = 2)
     ?(max_indent     = 68)
     ?(margin         = 80)
