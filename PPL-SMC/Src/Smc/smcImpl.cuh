@@ -16,17 +16,18 @@
 void configureMemSizeGPU() {
     #ifdef GPU
     // Increase heap size on device for device allocation ( required for nested inference with > ~100 particles )
-    cudaDeviceSetLimit(cudaLimitMallocHeapSize, numeric_limits<uint32_t>::max() / 10.0);
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, numeric_limits<uint32_t>::max() / 100.0);
     size_t size, stackSize;
     cudaDeviceGetLimit(&size, cudaLimitMallocHeapSize);
     cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
     
-    printf("Size limit malloc heap: %f MB\n", size / 1000000.0);
+    printf("Allocateable per thread: cudaMalloc heap: %f MB\n", size / 1000000.0);
     printf("Size limit stack default: %f KB\n", stackSize / 1000.0);
     // cudaDeviceSetLimit(cudaLimitStackSize, numeric_limits<uint32_t>::max());
-    cudaDeviceSetLimit(cudaLimitStackSize, stackSize*100); // Might be hardware sensitive as memory size varies
+    cudaDeviceSetLimit(cudaLimitStackSize, stackSize * 10); // Might be hardware sensitive as memory size varies
     cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
-    printf("Size limit stack: %f KB\n\n", stackSize / 1000.0);
+    printf("Size limit stack: %f KB\n", stackSize / 1000.0);
+    printf("Allocated for particle stacks total top-level inference: %f MB\n\n", stackSize * NUM_PARTICLES / 1000000.0);
     #endif
 }
 
@@ -42,7 +43,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks,
         bblocksLocal[i] = bblocks[i];
     
     // Init
-    particles_t<T>* particles = allocateParticles<T>();
+    particles_t<T>* particles = allocateParticles<T>(true);
     
     #ifdef GPU
     initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, NUM_PARTICLES);

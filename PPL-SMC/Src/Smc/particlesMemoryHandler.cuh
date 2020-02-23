@@ -22,7 +22,7 @@ void freeMemory(T* pointer) {
 }
 
 template <typename T>
-particles_t<T>* allocateParticles() {
+particles_t<T>* allocateParticles(bool printMemSize=false) {
     particles_t<T>* particles;
     allocateMemory<particles_t<T>>(&particles, 1);
     
@@ -43,16 +43,12 @@ particles_t<T>* allocateParticles() {
     particles->resample = new bool[NUM_PARTICLES];
     #endif
 
-    bool printSize = true;
-    if (printSize) {
+    if (printMemSize) {
+        floating_t totalMem = sizeof(T) * NUM_PARTICLES + sizeof(int) * NUM_PARTICLES + sizeof(floating_t) * NUM_PARTICLES + sizeof(bool) * NUM_PARTICLES;
         #ifdef GPU
-        floating_t totalMem = sizeof(T) * NUM_PARTICLES + sizeof(curandState) * NUM_PARTICLES + sizeof(int) * NUM_PARTICLES
-                + sizeof(floating_t) * NUM_PARTICLES + sizeof(bool) * NUM_PARTICLES;
-        #else
-        floating_t totalMem = sizeof(T) * NUM_PARTICLES + sizeof(int) * NUM_PARTICLES
-                + sizeof(floating_t) * NUM_PARTICLES + sizeof(bool) * NUM_PARTICLES;
+        totalMem += sizeof(curandState) * NUM_PARTICLES;
         #endif
-        printf("Particles memory size for N=%d: %fMB\n", NUM_PARTICLES, totalMem / 1000000.0);
+        printf("Particles memory size for N=%d: %fMB\n", NUM_PARTICLES, totalMem * 2 / 1000000.0);
     }
     
     return particles;

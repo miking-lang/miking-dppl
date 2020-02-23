@@ -31,9 +31,24 @@ BBLOCK(init, progState_t, {
         alphaPrior[k] = 1;
 
     BBLOCK_CALL(sampleDirichlet, alphaPrior, PSTATE.alpha, K); // eta is originally prior of beta, not alpha
+
+    //for (int k = 0; k < K; k++)
+    //    PSTATE.alpha[k] = 1;
+
     for(int k = 0; k < K; k++)
         BBLOCK_CALL(sampleDirichlet, eta, PSTATE.beta[k], VOCAB_SIZE);
 
+    /*
+    PSTATE.beta[0][0] = 0.349;
+    PSTATE.beta[0][1] = 0.56;
+    PSTATE.beta[0][2] = 0.045;
+    PSTATE.beta[0][3] = 0.045;
+    
+    PSTATE.beta[1][0] = 0.045;
+    PSTATE.beta[1][1] = 0.045;
+    PSTATE.beta[1][2] = 0.419;
+    PSTATE.beta[1][3] = 0.49;
+    */
     PSTATE.docIdx = -1;
 
     /* 
@@ -83,6 +98,9 @@ BBLOCK(newWord, progState_t, {
     int currWord = DATA_POINTER(corpus)[currDocIdx][currWordIdx];
     int* docLengths = DATA_POINTER(docLength);
 
+    // printf("docLen: %d\n", docLengths[currDocIdx]);
+    // printf("currWordIdx: %d\n", currWordIdx);
+
     // Check if end of document
     if(currWordIdx == docLengths[currDocIdx]) {
         PC--;
@@ -105,7 +123,7 @@ BBLOCK(newWord, progState_t, {
 
     } else {
         int sampledTopic = BBLOCK_CALL(sampleCategorical, PSTATE.theta[currDocIdx], K); // z
-        WEIGHT(PSTATE.beta[sampledTopic][currWord]); // Weight with likelihood of w: p(w | z, a, b ...)
+        WEIGHT(log(PSTATE.beta[sampledTopic][currWord])); // Weight with likelihood of w: p(w | z, a, b ...)
 
         // if(currWordIdx > 182)
             // printf("currwordidx: %d, currdocidx: %d\n", currWordIdx, currDocIdx);
@@ -159,13 +177,24 @@ STATUSFUNC({
     for(int i = 1; i < NUM_PARTICLES; i++)
         if(freqList[i] > freqList[maxIdx])
             maxIdx = i;
-    printf("MaxIdx: %d\n", maxIdx);
-    floating_t inverseK = 1.0 / K;
-    printf("inv K: %f\n", inverseK);
+    //printf("MaxIdx: %d\n", maxIdx);
+    // floating_t inverseK = 1.0 / K;
+    //printf("inv K: %f\n", inverseK);
+    printf("\n");
 
     int i = maxIdx;
+
+    /*
     for(int k = 0; k < K; k++) {
-        floating_t* currDist = PSTATE.beta[k];
+        printf("beta[%d]: [", k);
+        for(int v = 0; v < VOCAB_SIZE; v++)
+            printf("%f, ", PSTATE.beta[k][v]);
+        printf("]\n");
+    }
+    */
+
+    for(int k = 0; k < K; k++) {
+        // floating_t* currDist = PSTATE.beta[k];
         tuple_t tuples[VOCAB_SIZE];
         for(int j = 0; j < VOCAB_SIZE; j++) {
             floating_t productOverTopics = 1;
@@ -173,15 +202,20 @@ STATUSFUNC({
                 productOverTopics *= PSTATE.beta[kInner][j];
             }
             tuples[j].prob = PSTATE.beta[k][j] * log(PSTATE.beta[k][j] / (pow(productOverTopics, (1.0 / K))));
-            // tuples[j].prob = currDist[j];
+            // tuples[j].prob = PSTATE.beta[k][j];
             tuples[j].idx = j;
         }
         int n = sizeof(tuples) / sizeof(tuples[0]); 
         std::sort(tuples, tuples + n, &compareTuple);
-        printf("Topic[%d]: [", k);
-        for (int j = VOCAB_SIZE-1; j >= VOCAB_SIZE-10; j--)
-            printf("%d, ", tuples[j].idx);
-        printf("]\n");
+        // printf("Topic[%d]: [", k);
+        printf("[");
+        for (int j = VOCAB_SIZE-1; j >= VOCAB_SIZE-2; j--) {
+            if (j == VOCAB_SIZE-2)
+                printf("%d", tuples[j].idx);
+            else 
+                printf("%d, ", tuples[j].idx);
+        }
+        printf("],\n");
     }
 
 })
@@ -189,6 +223,8 @@ STATUSFUNC({
 void setup() {
     initGen();
     readCorpus(corpus);
+    for (int d = 0; d < D; d++)
+        docLength[d] = DOC_LENGTH[d];
 
     /*
     for(int d = 0; d < D; d++) {

@@ -52,8 +52,8 @@ HOST DEV void preUniform(particles_t<T>* particles, resampler_t resampler, int n
     floating_t* w = particles->weights;
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
     // cudaCheckError();
-    //if(prefixSum[NUM_PARTICLES-1] == 0) // Bad performance since it is a transfer
-        //printf("Error: prefixSum = 0!\n");
+    // if(resampler.prefixSum[numParticles-1] == 0) // Bad performance since it is a transfer
+    //     printf("Error: prefixSum = 0!\n");
 }
 
 
