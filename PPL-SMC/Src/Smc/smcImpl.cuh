@@ -43,7 +43,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks,
         bblocksLocal[i] = bblocks[i];
     
     // Init
-    particles_t<T>* particles = allocateParticles<T>(true);
+    particles_t<T>* particles = allocateParticles<T>(false);
     
     #ifdef GPU
     initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, NUM_PARTICLES);

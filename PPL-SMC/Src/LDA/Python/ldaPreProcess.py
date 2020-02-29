@@ -15,7 +15,7 @@ documents = pd.read_csv('Python/papers2017.csv', error_bad_lines=False)
 
 def getDataSet():
     np.random.seed(13)
-    K = 2
+    K = 3
     D = 10
     N = 100
 
@@ -35,8 +35,8 @@ def getDataSet():
         ['444a', '444b', '444c', '444d', '444e']  # animals
     ]
 
-    topics = topics[0:2]
-    topics = [t[0:2] for t in topics]
+    topics = topics[0:K]
+    topics = [t[0:3] for t in topics]
 
     print(topics)
 
@@ -166,8 +166,8 @@ def preProcess():
     ]
 
     # for k, idxs in enumerate(idxsByTopic):
-        # wordsTopic = [dictionary[i] for i in idxs]
-        # print("Topic[", k, "]:", wordsTopic[0:5])
+    # wordsTopic = [dictionary[i] for i in idxs]
+    # print("Topic[", k, "]:", wordsTopic[0:5])
     # wordsTopic1 = [dictionary[i] for i in idxTopic1]
     # wordsTopic2 = [dictionary[i] for i in idxTopic2]
     # print("Topic 1:", wordsTopic1)
@@ -182,19 +182,67 @@ def printWords(idxsByTopic, dictionary):
         print("Topic[", k, "]:", wordsTopic[0:5])
 
 
-idxsByTopic = [
-    [758, 795],
-    [113, 169],
-    [583, 448],
-    [794, 562],
-    [178, 429],
-    [69, 80],
-    [190, 470],
-    [110, 30],
-    [151, 796],
-    [800, 521]
+def plotCorrRatio(numParams, ratios):
+    import matplotlib.pyplot as plt
+    # for i in range(len(numParams)):
+    #     plt.plot(numParams[i], ratios[i], label=labels[i])
+    plt.plot(numParams, ratios, color="green")
+
+    # plt.legend()
+    # plt.title("Metric on how many correctly grouped words by topic (sloppy measure of beta quality)")
+    plt.title("Metric on beta quality, 10.000 particles")
+    plt.xlabel("#Estimated Params")
+    plt.ylabel("Accuracy")
+    plt.show()
+
+
+voc = getDataSet()
+print(np.mean(
+    [
+        0.2222, 0.5556, 0.6667, 0.4444, 0.2222, 0.1111, 0.6667, 0.4444, 0.5556, 0.4444, 0.6667, 0.5556, 0.4444, 0.4444,
+        0.6667, 0.4444, 0.4444, 0.3333, 0.3333, 0.4444, 0.4444, 0.4444, 0.3333, 0.7778, 0.6667, 0.3333, 0.2222, 0.6667,
+        0.4444, 0.5556, 0.2222, 0.5556, 0.5556, 0.7778, 0.3333, 0.3333, 0.4444, 0.6667, 0.6667, 0.7778, 0.5556, 0.4444,
+        0.6667, 0.4444, 0.4444, 0.5556, 0.2222, 0.4444, 0.3333, 0.4444, 0.2222, 0.5556, 0.6667, 0.4444, 0.3333, 0.5556,
+        0.5556, 0.5556, 0.6667, 0.3333, 0.3333, 0.6667, 0.5556, 0.4444, 0.3333, 0.4444, 0.4444, 0.4444, 0.3333, 0.5556,
+        0.3333, 0.4444, 0.3333, 0.2222, 0.7778, 0.3333, 0.3333, 0.3333, 0.4444, 0.8889, 0.5556, 0.4444, 0.4444, 0.2222,
+        0.2222, 0.6667, 0.3333, 0.4444, 0.6667, 0.4444, 0.3333, 0.4444, 0.2222, 0.4444, 0.6667, 0.2222, 0.5556, 0.3333,
+        0.5556, 0.4444
+    ]
+))
+
+numParams = [20, 32, 63, 104, 155, 180, 230, 380, 630]  # , 34, 40, 80]
+numParamsInit = [10, 22, 48, 84, 130, 130, 130, 130, 130]  # , 14, 20, 40]
+ratios = [0.99, 0.613, 0.3595, 0.303, 0.2496, 0.2684, 0.2612, 0.248, 0.2592]  # , 0.8539, 0.4545, 0.3694]
+labels = [
+    "K=2, V=4, 10k particles",
+    "K=2, V=10, 10k particles",
+    "K=3, V=15, 10k particles",
+    "K=4, V=20, 10k particles",
+    "K=5, V=25, 10k particles",
+    "D=10 instead of 5",
+    "D=20",
+    "D=50",
+    "D=100",
+    "K=2, V=3*K",
+    "K=3, V=3*K",
+    "K=4, V=3*K",
+    "K=5, V=3*K"
 ]
 
-voc = preProcess()
-# voc = getDataSet()
-printWords(idxsByTopic, voc)
+sortedTuples = [(numParams[i], numParamsInit[i], ratios[i]) for i in range(len(numParams))]
+# print(sortedTuples)
+sortedTuples.sort(key=lambda x: x[1])
+# print(sortedTuples)
+sortedTuples = np.array(sortedTuples)
+# print(sortedTuples)
+
+plotCorrRatio(sortedTuples[:, 1], sortedTuples[:, 2])
+# plotCorrRatio(numParamsInit, ratios)
+
+# voc = preProcess()
+
+# printWords(idxsByTopic, voc)
+
+# 0.98 1 per resample
+# 0.98 10 per resample
+# 0.99 99 per resample

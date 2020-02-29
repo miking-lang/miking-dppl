@@ -6,6 +6,7 @@
 #include "../Smc/smcImpl.cuh"
 #include "../Utils/distributions.cuh"
 #include "../Utils/array.cuh"
+#include "../Utils/misc.cuh"
 #include "lda.cuh"
 
 // g++ -x c++ Src/LDA/lda.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
@@ -38,37 +39,8 @@ BBLOCK(init, progState_t, {
     for(int k = 0; k < K; k++)
         BBLOCK_CALL(sampleDirichlet, eta, PSTATE.beta[k], VOCAB_SIZE);
 
-    /*
-    PSTATE.beta[0][0] = 0.349;
-    PSTATE.beta[0][1] = 0.56;
-    PSTATE.beta[0][2] = 0.045;
-    PSTATE.beta[0][3] = 0.045;
-    
-    PSTATE.beta[1][0] = 0.045;
-    PSTATE.beta[1][1] = 0.045;
-    PSTATE.beta[1][2] = 0.419;
-    PSTATE.beta[1][3] = 0.49;
-    */
     PSTATE.docIdx = -1;
 
-    /* 
-    // Categorical test
-    floating_t dist[3];
-    dist[0] = 0.1;
-    dist[1] = 0.3;
-    dist[2] = 0.6;
-    int sampleFreq[3] = {0};
-
-    for(int j = 0; j < 10000; j++) {
-        int sample = BBLOCK_CALL(sampleCategorical, dist, 3);
-        sampleFreq[sample]++;
-    }
-
-    printf("freqList: [");
-    for(int j = 0; j < 3; j++)
-        printf("%d, ", sampleFreq[j]);
-    printf("]\n");
-    */
 
     PC++;
     RESAMPLE = false;
@@ -123,10 +95,29 @@ BBLOCK(newWord, progState_t, {
 
     } else {
         int sampledTopic = BBLOCK_CALL(sampleCategorical, PSTATE.theta[currDocIdx], K); // z
+        // floating_t scalar = PSTATE.theta[currDocIdx][sampledTopic]; // Scale mutation by how likely this topic is
+        // PSTATE.beta[sampledTopic][currWord] += BBLOCK_CALL(sampleUniform, 0, scalar / (D * MAX_DOC_LENGTH)); // mutate
+        // normalizeArray(PSTATE.beta[sampledTopic], VOCAB_SIZE);
+        
+        /* cannot seem to find performance increase by doing this...
+        // Sample params again if noone resampled to you
+        if (PSTATE.orgParticleIdx != i && currWordIdx % WORDS_PER_RESAMPLE == 0) {
+            PSTATE.orgParticleIdx = i;
+            floating_t eta[VOCAB_SIZE];
+            for(int v = 0; v < VOCAB_SIZE; v++) 
+                eta[v] = 1;
+
+            int sampledIdx = BBLOCK_CALL(sampleCategoricalStandard, K);
+            BBLOCK_CALL(sampleDirichlet, eta, PSTATE.beta[sampledIdx], VOCAB_SIZE);
+        }
+        */
+        
         WEIGHT(log(PSTATE.beta[sampledTopic][currWord])); // Weight with likelihood of w: p(w | z, a, b ...)
 
-        // if(currWordIdx > 182)
-            // printf("currwordidx: %d, currdocidx: %d\n", currWordIdx, currDocIdx);
+        //for (int k = 0; k < K; k++) {
+        //  PSTATE.beta[sampledTopic][currWord] += BBLOCK_CALL(sampleUniform, 0, 0.5 / (D * MAX_DOC_LENGTH)); // fit to data?
+        // }
+
         RESAMPLE = currWordIdx % WORDS_PER_RESAMPLE == 0;
     }
 
@@ -142,59 +133,71 @@ bool compareTuple(tuple_t const& t1, tuple_t const& t2) {
     return (t1.prob < t2.prob); 
 } 
 
+const int NUM_WORDS_PER_TOPIC = VOCAB_SIZE / K;
+floating_t correctRatio(int bestWordsTopics[K][NUM_WORDS_PER_TOPIC]) {
+
+    int numCorrectPerTopic[K] = {0};
+
+    for (int k = 0; k < K; k++) {
+        int currTopic = bestWordsTopics[k][0] / NUM_WORDS_PER_TOPIC;
+        numCorrectPerTopic[currTopic] = 0;
+        int minWordTopic = currTopic * NUM_WORDS_PER_TOPIC;
+        int maxWordTopic = (currTopic+1) * NUM_WORDS_PER_TOPIC;
+        // printf("currTopic: %d\n", currTopic);
+        // printf("First word: %d\n", bestWordsTopics[k][0]);
+        // printf("minWordTopic: %d\n", minWordTopic);
+        // printf("maxWordTopic: %d\n", maxWordTopic);
+        for (int j = 0; j < NUM_WORDS_PER_TOPIC; j++) {
+            if (bestWordsTopics[k][j] >= minWordTopic && bestWordsTopics[k][j] < maxWordTopic) {
+                numCorrectPerTopic[currTopic]++;
+            }
+        }
+        // printf("NumCorrect topic[%d]: %d\n", currTopic, numCorrectPerTopic[currTopic]);
+    }
+
+    floating_t numCorrectTotal = 0;
+    for (int k = 0; k < K; k++)
+        numCorrectTotal += numCorrectPerTopic[k];
+    // printf("NumCorrTot: %d\n", numCorrectTotal);
+    // printf("%.4f, ", numCorrectTotal / VOCAB_SIZE);
+    return numCorrectTotal / VOCAB_SIZE;
+}
+
+floating_t ratioSum = 0;
 STATUSFUNC({
     
     int freqList[NUM_PARTICLES] = {0};
-    for(int i = 0; i < NUM_PARTICLES; i++) {
-
+    for(int i = 0; i < NUM_PARTICLES; i++)
         freqList[PSTATE.orgParticleIdx]++;
-        
-        /*
-        printf("alpha: [");
-        for(int k = 0; k < K; k++)
-            printf("%f, ", PSTATE.alpha[k]);
-        printf("]\n");
-        
-        for(int k = 0; k < K; k++) {
-            printf("beta[%d]: [", k);
-            for(int v = 0; v < VOCAB_SIZE; v++)
-                printf("%f, ", PSTATE.beta[k][v]);
-            printf("]\n");
-        }
-        
-        for(int d = 0; d < D; d++) {
-            printf("theta[%d]: [", d);
-            for(int k = 0; k < K; k++)
-            printf("%f, ", PSTATE.theta[d][k]);
-            printf("]\n");
-        }
-        */
-
-        // printf("Weight[%d]: %f\n", i, PWEIGHT);
-    }
 
     int maxIdx = 0;
     for(int i = 1; i < NUM_PARTICLES; i++)
         if(freqList[i] > freqList[maxIdx])
             maxIdx = i;
-    //printf("MaxIdx: %d\n", maxIdx);
-    // floating_t inverseK = 1.0 / K;
-    //printf("inv K: %f\n", inverseK);
-    printf("\n");
 
+    
+    // scan and find one of the correct particles
+    // sample entire beta again on particles with some duplicate particles
     int i = maxIdx;
-
-    /*
-    for(int k = 0; k < K; k++) {
-        printf("beta[%d]: [", k);
-        for(int v = 0; v < VOCAB_SIZE; v++)
-            printf("%f, ", PSTATE.beta[k][v]);
-        printf("]\n");
+    // printf("MaxFreq: %d\n", freqList[maxIdx]);
+    if(PSTATE.orgParticleIdx != maxIdx) {
+        // printf("ERRRORRROR!\n");
+        for (i = 0; i < NUM_PARTICLES; i++) {
+            if(PSTATE.orgParticleIdx == maxIdx) {
+                maxIdx = i;
+                break;
+            }
+        }
     }
-    */
 
+    i = maxIdx;
+    // printf("MaxIdx: %d, OrgIdx: %d\n", maxIdx, PSTATE.orgParticleIdx);
+    
+    int bestWordsTopics[K][NUM_WORDS_PER_TOPIC];
     for(int k = 0; k < K; k++) {
-        // floating_t* currDist = PSTATE.beta[k];
+
+        // normalizeArray<floating_t>(PSTATE.beta[k], VOCAB_SIZE);
+
         tuple_t tuples[VOCAB_SIZE];
         for(int j = 0; j < VOCAB_SIZE; j++) {
             floating_t productOverTopics = 1;
@@ -208,37 +211,31 @@ STATUSFUNC({
         int n = sizeof(tuples) / sizeof(tuples[0]); 
         std::sort(tuples, tuples + n, &compareTuple);
         // printf("Topic[%d]: [", k);
-        printf("[");
-        for (int j = VOCAB_SIZE-1; j >= VOCAB_SIZE-2; j--) {
-            if (j == VOCAB_SIZE-2)
-                printf("%d", tuples[j].idx);
-            else 
-                printf("%d, ", tuples[j].idx);
+        // printf("[");
+        int x = 0;
+        for (int j = VOCAB_SIZE-1; j >= VOCAB_SIZE - NUM_WORDS_PER_TOPIC; j--) {
+            bestWordsTopics[k][x] = tuples[j].idx;
+            x++;
+            // printf("%d", tuples[j].idx);
         }
-        printf("],\n");
     }
 
+    ratioSum += correctRatio(bestWordsTopics);
+
 })
+
 
 void setup() {
     initGen();
     readCorpus(corpus);
     for (int d = 0; d < D; d++)
         docLength[d] = DOC_LENGTH[d];
-
-    /*
-    for(int d = 0; d < D; d++) {
-        printf("doc[%d]: [", d);
-        for(int w = 0; w < MAX_DOC_LENGTH; w++) {
-            printf("%d, ", corpus[d][w]);
-        }
-        printf("]\n");
-    }
-    */
 }
+
 
 int main() {
     setup();
+
 
     COPY_DATA_GPU(corpus, int, D * MAX_DOC_LENGTH);
     COPY_DATA_GPU(docLength, int, D);
@@ -250,4 +247,6 @@ int main() {
     INITBBLOCK(newWord, progState_t);
 
     SMCEND(progState_t);
+    floating_t meanRatio = ratioSum / 1000.0;
+    printf("MeanRatio: %.5f\n", meanRatio);
 }

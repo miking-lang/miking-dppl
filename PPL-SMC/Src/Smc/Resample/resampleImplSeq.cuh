@@ -57,7 +57,7 @@ HOST DEV floating_t resampleSystematicSeq(particles_t<T>* particles, resampler_t
     //if(resampler.prefixSum[numParticles-1] == 0)
         //printf("Error: prefixSum = 0!\n");
     
-    floating_t u = uniform(particles, 0, 0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
+    floating_t u = sampleUniform(particles, 0, 0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
 
     systematicCumulativeOffspringSeq(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
     cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor, numParticles);

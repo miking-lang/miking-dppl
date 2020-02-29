@@ -72,7 +72,9 @@ pplFunc_t<progStateType>* bblocksArr; \
 allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
 configureMemSizeGPU(); \
-double res = runSMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
+double res; \
+for(int i = 0; i < 1000; i++) \
+    res = runSMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 
 #define SMCEND_NESTED(progStateType, callback, retStruct, arg, parallelExec, parallelResampling, parentIndex) \

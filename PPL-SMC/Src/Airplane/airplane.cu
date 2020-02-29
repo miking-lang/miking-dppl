@@ -41,7 +41,7 @@ BBLOCK_HELPER(updateWeight, {
 
 BBLOCK(particleInit, {
 
-    PSTATE.x = uniform(particles, i, 0, MAP_SIZE);
+    PSTATE.x = sampleUniform(particles, i, 0, MAP_SIZE);
 
     //updateWeight(particles, i, t);
 
@@ -52,7 +52,7 @@ BBLOCK(particleInit, {
 BBLOCK(propagateAndWeight, {
 
     // Propagate
-    PSTATE.x += normal(particles, i, VELOCITY, TRANSITION_STD);
+    PSTATE.x += sampleNormal(particles, i, VELOCITY, TRANSITION_STD);
 
     // Weight
     updateWeight(particles, i, t);
@@ -82,10 +82,10 @@ int main(int argc, char** argv) {
 
     initAirplane();
 
-    MAINSTART()
+    SMCSTART()
 
     INITBBLOCK(particleInit)
     INITBBLOCK(propagateAndWeight)
 
-    MAINEND()
+    SMCEND()
 }

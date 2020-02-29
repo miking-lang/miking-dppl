@@ -35,7 +35,7 @@ __device__ int flipK(particles_t<T>* particles, int i, floating_t p = 0.5) {
 }
 
 template <typename T> // (min, max]
-__device__ floating_t uniform(particles_t<T>* particles, int i, floating_t min, floating_t max) {
+__device__ floating_t sampleUniform(particles_t<T>* particles, int i, floating_t min, floating_t max) {
     return (curand_uniform(&particles->randStates[i]) * (max - min)) + min;
 }
 
@@ -45,7 +45,7 @@ __device__ floating_t sampleNormal(particles_t<T>* particles, int i, floating_t 
 }
 
 template <typename T>
-__device__ floating_t exponential(particles_t<T>* particles, int i, floating_t lambda) {
+__device__ floating_t sampleExponential(particles_t<T>* particles, int i, floating_t lambda) {
     
     // particles->randStates[i];
     //curandState localState = particles->randStates[i];
@@ -100,7 +100,7 @@ __device__ floating_t sampleGamma(particles_t<T>* particles, int i, floating_t k
 #else
 
 template <typename T> // [min, max)
-floating_t uniform(particles_t<T>* particles, int i, floating_t min, floating_t max) {
+floating_t sampleUniform(particles_t<T>* particles, int i, floating_t min, floating_t max) {
     return (uniformDist(generatorDists) * (max - min)) + min;
 }
 
@@ -116,7 +116,7 @@ int flipK(particles_t<T>* particles, int i, floating_t p = 0.5) {
 }
 
 template <typename T>
-floating_t exponential(particles_t<T>* particles, int i, floating_t lambda) {
+floating_t sampleExponential(particles_t<T>* particles, int i, floating_t lambda) {
     
     // return exponentialDist(generatorDists);
     return -log(1 - uniformDist(generatorDists)) / lambda;
@@ -192,7 +192,7 @@ HOST DEV void sampleDirichlet(particles_t<T>* particles, int i, const floating_t
 // Could prolly be optimized
 template <typename T>
 HOST DEV int sampleCategorical(particles_t<T>* particles, int i, const floating_t* dist, const int n) {
-    floating_t u = uniform(particles, i, 0, 1);
+    floating_t u = sampleUniform(particles, i, 0, 1);
     floating_t sum = 0;
     int idx = 0;
     for(idx = 0; idx < n; idx++) {
@@ -201,6 +201,13 @@ HOST DEV int sampleCategorical(particles_t<T>* particles, int i, const floating_
             break;
     }
     return idx;
+}
+
+// returns integer [0, n)
+template <typename T>
+HOST DEV int sampleCategoricalStandard(particles_t<T>* particles, int i, const int n) {
+    floating_t u = sampleUniform(particles, i, 0, n) - 0.000000000000001;
+    return static_cast<int>(u);
 }
 
 #endif

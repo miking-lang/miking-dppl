@@ -10,6 +10,14 @@
 
 using namespace std;
 
+template <typename T>
+HOST DEV void normalizeArray(T* arr, int n) {
+    floating_t sum = 0;
+    for (int i = 0; i < n; i++)
+        sum += arr[i];
+    for (int i = 0; i < n; i++)
+        arr[i] /= sum;
+}
 
 void printList(list_t<bool> l, string title="") {
     if(title.length() > 0)
