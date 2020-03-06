@@ -16,6 +16,7 @@
 
 BBLOCK_DATA_2D(corpus, int, D, MAX_DOC_LENGTH); // DOCUMENTS
 BBLOCK_DATA(docLength, int, D); // length of each document
+BBLOCK_DATA(eta, floating_t, VOCAB_SIZE);
 
 const int NUM_BBLOCKS = 3;
 
@@ -31,10 +32,10 @@ BBLOCK(init, progState_t, {
     for(int k = 0; k < K; k++) 
         alphaPrior[k] = 1;
 
-    BBLOCK_CALL(sampleDirichlet, alphaPrior, PSTATE.alpha, K); // eta is originally prior of beta, not alpha
+    BBLOCK_CALL(sampleDirichlet, alphaPrior, PSTATE.alpha, K);
 
-    //for (int k = 0; k < K; k++)
-    //    PSTATE.alpha[k] = 1;
+    // for (int k = 0; k < K; k++)
+    //     PSTATE.alpha[k] = 1;
 
     for(int k = 0; k < K; k++)
         BBLOCK_CALL(sampleDirichlet, eta, PSTATE.beta[k], VOCAB_SIZE);
@@ -99,18 +100,18 @@ BBLOCK(newWord, progState_t, {
         // PSTATE.beta[sampledTopic][currWord] += BBLOCK_CALL(sampleUniform, 0, scalar / (D * MAX_DOC_LENGTH)); // mutate
         // normalizeArray(PSTATE.beta[sampledTopic], VOCAB_SIZE);
         
-        /* cannot seem to find performance increase by doing this...
+        // cannot seem to find performance increase by doing this...
         // Sample params again if noone resampled to you
-        if (PSTATE.orgParticleIdx != i && currWordIdx % WORDS_PER_RESAMPLE == 0) {
+        if ((currWordIdx+1) % WORDS_PER_RESAMPLE == 0 && currDocIdx < D / 2 && PSTATE.orgParticleIdx != i) {
             PSTATE.orgParticleIdx = i;
-            floating_t eta[VOCAB_SIZE];
-            for(int v = 0; v < VOCAB_SIZE; v++) 
-                eta[v] = 1;
+            floating_t* etaP = DATA_POINTER(eta);
 
-            int sampledIdx = BBLOCK_CALL(sampleCategoricalStandard, K);
-            BBLOCK_CALL(sampleDirichlet, eta, PSTATE.beta[sampledIdx], VOCAB_SIZE);
+            // int sampledIdx = BBLOCK_CALL(sampleCategoricalStandard, K);
+            //for (int k = 0; k < K; k++)
+            //    BBLOCK_CALL(sampleDirichlet, etaP, PSTATE.beta[k], VOCAB_SIZE);
+            PSTATE.beta[sampledTopic][currWord] += 1.0 / VOCAB_SIZE;
         }
-        */
+        
         
         WEIGHT(log(PSTATE.beta[sampledTopic][currWord])); // Weight with likelihood of w: p(w | z, a, b ...)
 
@@ -196,7 +197,7 @@ STATUSFUNC({
     int bestWordsTopics[K][NUM_WORDS_PER_TOPIC];
     for(int k = 0; k < K; k++) {
 
-        // normalizeArray<floating_t>(PSTATE.beta[k], VOCAB_SIZE);
+        normalizeArray<floating_t>(PSTATE.beta[k], VOCAB_SIZE);
 
         tuple_t tuples[VOCAB_SIZE];
         for(int j = 0; j < VOCAB_SIZE; j++) {
@@ -230,6 +231,9 @@ void setup() {
     readCorpus(corpus);
     for (int d = 0; d < D; d++)
         docLength[d] = DOC_LENGTH[d];
+
+    for(int v = 0; v < VOCAB_SIZE; v++)
+            eta[v] = 1;
 }
 
 
@@ -239,6 +243,7 @@ int main() {
 
     COPY_DATA_GPU(corpus, int, D * MAX_DOC_LENGTH);
     COPY_DATA_GPU(docLength, int, D);
+    COPY_DATA_GPU(eta, floating_t, VOCAB_SIZE);
 
     SMCSTART(progState_t); // allokera array
 
@@ -247,6 +252,6 @@ int main() {
     INITBBLOCK(newWord, progState_t);
 
     SMCEND(progState_t);
-    floating_t meanRatio = ratioSum / 1000.0;
+    floating_t meanRatio = ratioSum / 100.0;
     printf("MeanRatio: %.5f\n", meanRatio);
 }

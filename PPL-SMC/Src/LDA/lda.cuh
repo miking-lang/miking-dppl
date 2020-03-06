@@ -26,7 +26,7 @@ const int VOCAB_SIZE = 3 * K;
 
 
 // const floating_t ETA[VOCAB_SIZE] = {1};
-const int WORDS_PER_RESAMPLE = 10;
+const int WORDS_PER_RESAMPLE = 5;
 
 struct progState_t {
     floating_t alpha[K]; // Dirichlet parameter in theta: theta_d ~ Dir(alpha)
