@@ -10,7 +10,7 @@ from nltk.stem.porter import *
 stemmer = SnowballStemmer('english')
 nltk.download('wordnet')
 
-documents = pd.read_csv('Python/papers2017.csv', error_bad_lines=False)
+# documents = pd.read_csv('Python/papers2017.csv', error_bad_lines=False)
 
 
 def getDataSet():
@@ -107,7 +107,7 @@ def writeToFile(docs):
         f.write(strTowrite + "\n")
 
 
-def preProcess():
+def preProcess(documents):
     # Process all of the abstracts
     processed_docs = documents['abstract'].map(preprocess)
 
@@ -122,8 +122,8 @@ def preProcess():
     # print(len(processed_docs[0]))
     # print(len(processed_docs[1]))
     # print(processed_docs[0])
-    lengths = [len(doc) for doc in processed_docs]
-    print(lengths)
+    # lengths = [len(doc) for doc in processed_docs]
+    # print(lengths)
     idxDocs = [dictionary.doc2idx(doc) for doc in processed_docs]
     maxLength = np.max([len(doc) for doc in idxDocs])
     avgLen = np.mean([len(doc) for doc in idxDocs])
@@ -134,10 +134,10 @@ def preProcess():
             doc.append(-1)
 
     minLength = np.min([len(doc) for doc in idxDocs])
-    print("maxL:", maxLength)
-    print("minL:", minLength)
-    print("idxDocs", len(idxDocs[92]))
-    print(idxDocs)
+    # print("maxL:", maxLength)
+    # print("minL:", minLength)
+    # print("idxDocs", len(idxDocs[92]))
+    # print(idxDocs)
     '''
     idxsByTopic = [
         [698, 5, 106, 370, 397, 606, 375, 117, 738, 447],
@@ -173,7 +173,7 @@ def preProcess():
     # print("Topic 1:", wordsTopic1)
     # print("Topic 2:", wordsTopic2)
     # writeToFile(processed_docs)
-    return dictionary
+    return dictionary, idxDocs
 
 
 def printWords(idxsByTopic, dictionary):
@@ -196,53 +196,55 @@ def plotCorrRatio(numParams, ratios):
     plt.show()
 
 
-voc = getDataSet()
-print(np.mean(
-    [
-        0.2222, 0.5556, 0.6667, 0.4444, 0.2222, 0.1111, 0.6667, 0.4444, 0.5556, 0.4444, 0.6667, 0.5556, 0.4444, 0.4444,
-        0.6667, 0.4444, 0.4444, 0.3333, 0.3333, 0.4444, 0.4444, 0.4444, 0.3333, 0.7778, 0.6667, 0.3333, 0.2222, 0.6667,
-        0.4444, 0.5556, 0.2222, 0.5556, 0.5556, 0.7778, 0.3333, 0.3333, 0.4444, 0.6667, 0.6667, 0.7778, 0.5556, 0.4444,
-        0.6667, 0.4444, 0.4444, 0.5556, 0.2222, 0.4444, 0.3333, 0.4444, 0.2222, 0.5556, 0.6667, 0.4444, 0.3333, 0.5556,
-        0.5556, 0.5556, 0.6667, 0.3333, 0.3333, 0.6667, 0.5556, 0.4444, 0.3333, 0.4444, 0.4444, 0.4444, 0.3333, 0.5556,
-        0.3333, 0.4444, 0.3333, 0.2222, 0.7778, 0.3333, 0.3333, 0.3333, 0.4444, 0.8889, 0.5556, 0.4444, 0.4444, 0.2222,
-        0.2222, 0.6667, 0.3333, 0.4444, 0.6667, 0.4444, 0.3333, 0.4444, 0.2222, 0.4444, 0.6667, 0.2222, 0.5556, 0.3333,
-        0.5556, 0.4444
+if __name__ == '__main__':
+    voc = getDataSet()
+    print(np.mean(
+        [
+            0.2222, 0.5556, 0.6667, 0.4444, 0.2222, 0.1111, 0.6667, 0.4444, 0.5556, 0.4444, 0.6667, 0.5556, 0.4444, 0.4444,
+            0.6667, 0.4444, 0.4444, 0.3333, 0.3333, 0.4444, 0.4444, 0.4444, 0.3333, 0.7778, 0.6667, 0.3333, 0.2222, 0.6667,
+            0.4444, 0.5556, 0.2222, 0.5556, 0.5556, 0.7778, 0.3333, 0.3333, 0.4444, 0.6667, 0.6667, 0.7778, 0.5556, 0.4444,
+            0.6667, 0.4444, 0.4444, 0.5556, 0.2222, 0.4444, 0.3333, 0.4444, 0.2222, 0.5556, 0.6667, 0.4444, 0.3333, 0.5556,
+            0.5556, 0.5556, 0.6667, 0.3333, 0.3333, 0.6667, 0.5556, 0.4444, 0.3333, 0.4444, 0.4444, 0.4444, 0.3333, 0.5556,
+            0.3333, 0.4444, 0.3333, 0.2222, 0.7778, 0.3333, 0.3333, 0.3333, 0.4444, 0.8889, 0.5556, 0.4444, 0.4444, 0.2222,
+            0.2222, 0.6667, 0.3333, 0.4444, 0.6667, 0.4444, 0.3333, 0.4444, 0.2222, 0.4444, 0.6667, 0.2222, 0.5556, 0.3333,
+            0.5556, 0.4444
+        ]
+    ))
+
+    numParams = [20, 32, 63, 104, 155, 180, 230, 380, 630]  # , 34, 40, 80]
+    numParamsInit = [10, 22, 48, 84, 130, 130, 130, 130, 130]  # , 14, 20, 40]
+    ratios = [0.99, 0.613, 0.3595, 0.303, 0.2496, 0.2684, 0.2612, 0.248, 0.2592]  # , 0.8539, 0.4545, 0.3694]
+    labels = [
+        "K=2, V=4, 10k particles",
+        "K=2, V=10, 10k particles",
+        "K=3, V=15, 10k particles",
+        "K=4, V=20, 10k particles",
+        "K=5, V=25, 10k particles",
+        "D=10 instead of 5",
+        "D=20",
+        "D=50",
+        "D=100",
+        "K=2, V=3*K",
+        "K=3, V=3*K",
+        "K=4, V=3*K",
+        "K=5, V=3*K"
     ]
-))
 
-numParams = [20, 32, 63, 104, 155, 180, 230, 380, 630]  # , 34, 40, 80]
-numParamsInit = [10, 22, 48, 84, 130, 130, 130, 130, 130]  # , 14, 20, 40]
-ratios = [0.99, 0.613, 0.3595, 0.303, 0.2496, 0.2684, 0.2612, 0.248, 0.2592]  # , 0.8539, 0.4545, 0.3694]
-labels = [
-    "K=2, V=4, 10k particles",
-    "K=2, V=10, 10k particles",
-    "K=3, V=15, 10k particles",
-    "K=4, V=20, 10k particles",
-    "K=5, V=25, 10k particles",
-    "D=10 instead of 5",
-    "D=20",
-    "D=50",
-    "D=100",
-    "K=2, V=3*K",
-    "K=3, V=3*K",
-    "K=4, V=3*K",
-    "K=5, V=3*K"
-]
+    sortedTuples = [(numParams[i], numParamsInit[i], ratios[i]) for i in range(len(numParams))]
+    # print(sortedTuples)
+    sortedTuples.sort(key=lambda x: x[1])
+    # print(sortedTuples)
+    sortedTuples = np.array(sortedTuples)
+    # print(sortedTuples)
 
-sortedTuples = [(numParams[i], numParamsInit[i], ratios[i]) for i in range(len(numParams))]
-# print(sortedTuples)
-sortedTuples.sort(key=lambda x: x[1])
-# print(sortedTuples)
-sortedTuples = np.array(sortedTuples)
-# print(sortedTuples)
+    # plotCorrRatio(sortedTuples[:, 1], sortedTuples[:, 2])
+    # plotCorrRatio(numParamsInit, ratios)
 
-plotCorrRatio(sortedTuples[:, 1], sortedTuples[:, 2])
-# plotCorrRatio(numParamsInit, ratios)
+    documents = pd.read_csv('Python/papers2017.csv', error_bad_lines=False)
+    voc, corpus = preProcess(documents)
 
-# voc = preProcess()
+    # printWords(idxsByTopic, voc)
 
-# printWords(idxsByTopic, voc)
-
-# 0.98 1 per resample
-# 0.98 10 per resample
-# 0.99 99 per resample
+    # 0.98 1 per resample
+    # 0.98 10 per resample
+    # 0.99 99 per resample
