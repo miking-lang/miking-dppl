@@ -102,6 +102,7 @@ BBLOCK(newWord, progState_t, {
         
         // cannot seem to find performance increase by doing this...
         // Sample params again if noone resampled to you
+        /*
         if ((currWordIdx+1) % WORDS_PER_RESAMPLE == 0 && currDocIdx < D / 2 && PSTATE.orgParticleIdx != i) {
             PSTATE.orgParticleIdx = i;
             floating_t* etaP = DATA_POINTER(eta);
@@ -111,7 +112,7 @@ BBLOCK(newWord, progState_t, {
             //    BBLOCK_CALL(sampleDirichlet, etaP, PSTATE.beta[k], VOCAB_SIZE);
             PSTATE.beta[sampledTopic][currWord] += 1.0 / VOCAB_SIZE;
         }
-        
+        */
         
         WEIGHT(log(PSTATE.beta[sampledTopic][currWord])); // Weight with likelihood of w: p(w | z, a, b ...)
 
@@ -193,19 +194,23 @@ STATUSFUNC({
 
     i = maxIdx;
     // printf("MaxIdx: %d, OrgIdx: %d\n", maxIdx, PSTATE.orgParticleIdx);
+
+    for(int k = 0; k < K; k++)
+        normalizeArray<floating_t>(PSTATE.beta[k], VOCAB_SIZE);
+
+    floating_t topicProducts[VOCAB_SIZE];
+    for(int j = 0; j < VOCAB_SIZE; j++) {
+        topicProducts[j] = 1;
+        for(int k = 0; k < K; k++)
+            topicProducts[j] *= PSTATE.beta[k][j];
+    }
     
     int bestWordsTopics[K][NUM_WORDS_PER_TOPIC];
     for(int k = 0; k < K; k++) {
 
-        normalizeArray<floating_t>(PSTATE.beta[k], VOCAB_SIZE);
-
         tuple_t tuples[VOCAB_SIZE];
         for(int j = 0; j < VOCAB_SIZE; j++) {
-            floating_t productOverTopics = 1;
-            for(int kInner = 0; kInner < K; kInner++) { // Switch iteration order for performance :)
-                productOverTopics *= PSTATE.beta[kInner][j];
-            }
-            tuples[j].prob = PSTATE.beta[k][j] * log(PSTATE.beta[k][j] / (pow(productOverTopics, (1.0 / K))));
+            tuples[j].prob = PSTATE.beta[k][j] * log(PSTATE.beta[k][j] / (pow(topicProducts[j], (1.0 / K))));
             // tuples[j].prob = PSTATE.beta[k][j];
             tuples[j].idx = j;
         }
@@ -252,6 +257,6 @@ int main() {
     INITBBLOCK(newWord, progState_t);
 
     SMCEND(progState_t);
-    floating_t meanRatio = ratioSum / 100.0;
+    floating_t meanRatio = ratioSum / 1000.0;
     printf("MeanRatio: %.5f\n", meanRatio);
 }

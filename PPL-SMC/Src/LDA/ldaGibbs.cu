@@ -18,7 +18,7 @@ BBLOCK_DATA(alpha, floating_t, K);
 BBLOCK_DATA(eta, floating_t, VOCAB_SIZE);
 
 const int NUM_BBLOCKS = 1;
-const int GIBBS_ITERATIONS = 10;
+const int GIBBS_ITERATIONS = 100;
 
 
 //HOST DEV void estimateBeta(floating_t beta[][VOCAB_SIZE], int cTilde[][VOCAB_SIZE], floating_t* etaP) {
@@ -192,22 +192,16 @@ STATUSFUNC({
 
     floating_t topicProducts[VOCAB_SIZE];
     for(int j = 0; j < VOCAB_SIZE; j++) {
-        topicProducts[j] = 0;
-        for(int k = 0; k < K; k++) {
-            topicProducts[j] += log(PSTATE.beta[k][j]);
-            // printf("%f\n", log(PSTATE.beta[k][j]));
-            if(PSTATE.beta[k][j] < 0)
-                printf("BETA NEGATIVE: %f\n", PSTATE.beta[k][j]);
-        }
-        // printf("%.100f\n", topicProducts[j]);
+        topicProducts[j] = 1;
+        for(int k = 0; k < K; k++)
+            topicProducts[j] *= PSTATE.beta[k][j];
     }
 
     for(int k = 0; k < K; k++) {
         tuple_t tuples[VOCAB_SIZE];
         for(int j = 0; j < VOCAB_SIZE; j++) {
             
-            tuples[j].prob = PSTATE.beta[k][j] * log(PSTATE.beta[k][j] / (pow(exp(topicProducts[j]), (1.0 / K))));
-            // printf("prob: %f\n", tuples[j].prob);
+            tuples[j].prob = PSTATE.beta[k][j] * log(PSTATE.beta[k][j] / (pow(topicProducts[j], (1.0 / K))));
             // tuples[j].prob = PSTATE.beta[k][j];
             tuples[j].idx = j;
         }
@@ -220,7 +214,6 @@ STATUSFUNC({
             // bestWordsTopics[k][x] = tuples[j].idx;
             // x++;
             printf("%d", tuples[j].idx);
-            // printf("%f", tuples[j].prob);
             if(j > VOCAB_SIZE-5)
                 printf(", ");
         }
