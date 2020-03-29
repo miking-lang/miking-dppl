@@ -73,7 +73,7 @@ allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
 configureMemSizeGPU(); \
 double res; \
-for(int i = 0; i < 100; i++) \
+for(int i = 0; i < 1; i++) \
     res = runSMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 

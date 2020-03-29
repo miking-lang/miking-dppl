@@ -11,6 +11,30 @@
 using namespace std;
 
 template <typename T>
+HOST DEV T sumArray(T* arr, int n) {
+        T sum = 0;
+        for (int i = 0; i < n; i++)
+            sum += arr[i];
+        return sum;
+    }
+
+/*
+HOST DEV int sumArrayInt(int* arr, int n) {
+    int sum = 0;
+    for (int i = 0; i < n; i++)
+        sum += arr[i];
+    return sum;
+}
+
+HOST DEV int sumArrayFloat(floating_t* arr, int n) {
+    floating_t sum = 0;
+    for (int i = 0; i < n; i++)
+        sum += arr[i];
+    return sum;
+}
+*/
+
+template <typename T>
 HOST DEV void normalizeArray(T* arr, int n) {
     floating_t sum = 0;
     for (int i = 0; i < n; i++)

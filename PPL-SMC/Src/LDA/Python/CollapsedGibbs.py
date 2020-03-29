@@ -4,7 +4,7 @@ import pandas as pd
 from Python.ldaPreProcess import preProcess
 
 K = 10
-GIBBS_ITERATIONS = 25
+GIBBS_ITERATIONS = 50
 
 
 def normalizeMatrix(mat):
@@ -136,5 +136,5 @@ def doTest():
 
 
 if __name__ == '__main__':
-    np.random.seed(13)
+    # np.random.seed(13)
     doTest()

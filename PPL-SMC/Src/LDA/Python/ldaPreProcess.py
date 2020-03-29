@@ -8,7 +8,7 @@ from nltk.stem import WordNetLemmatizer, SnowballStemmer
 from nltk.stem.porter import *
 
 stemmer = SnowballStemmer('english')
-nltk.download('wordnet')
+# nltk.download('wordnet')
 
 # documents = pd.read_csv('Python/papers2017.csv', error_bad_lines=False)
 
@@ -98,7 +98,7 @@ def preprocess(text):
 
 
 def writeToFile(docs):
-    f = open("simpleDataIdx.txt", "w+")
+    f = open("processedDocumentsIdx.txt", "w+")
     for doc in docs:
         strTowrite = ""
         for word in doc:
@@ -126,60 +126,21 @@ def preProcess(documents):
     # print(lengths)
     idxDocs = [dictionary.doc2idx(doc) for doc in processed_docs]
     maxLength = np.max([len(doc) for doc in idxDocs])
-    avgLen = np.mean([len(doc) for doc in idxDocs])
+    # avgLen = np.mean([len(doc) for doc in idxDocs])
 
     for doc in idxDocs:
         numToFill = maxLength - len(doc)
         for i in range(numToFill):
             doc.append(-1)
 
-    minLength = np.min([len(doc) for doc in idxDocs])
-    # print("maxL:", maxLength)
-    # print("minL:", minLength)
-    # print("idxDocs", len(idxDocs[92]))
-    # print(idxDocs)
-    '''
-    idxsByTopic = [
-        [698, 5, 106, 370, 397, 606, 375, 117, 738, 447],
-        [854, 223, 403, 429, 204, 354, 183, 442, 217, 641],
-        [761, 840, 310, 334, 109, 521, 155, 433, 119, 532],
-        [259, 537, 513, 487, 467, 378, 405, 77, 246, 586],
-        [440, 679, 245, 395, 59, 230, 157, 471, 570, 543],
-        [198, 854, 715, 757, 75, 462, 351, 64, 273, 452],
-        [839, 479, 526, 596, 594, 533, 816, 412, 203, 532],
-        [355, 714, 554, 302, 408, 536, 732, 849, 376, 228],
-        [385, 732, 469, 759, 10, 810, 77, 800, 627, 447],
-        [174, 21, 785, 111, 318, 516, 461, 555, 171, 665]
-    ]
-    '''
-    idxsByTopic = [
-        [281, 128, 834, 10, 361, 637, 69, 2, 777, 214],
-        [847, 276, 389, 613, 654, 713, 329, 410, 374, 225],
-        [840, 512, 775, 397, 611, 823, 539, 541, 296, 609],
-        [748, 46, 567, 563, 183, 621, 273, 549, 177, 328],
-        [818, 801, 713, 500, 780, 229, 737, 822, 707, 290],
-        [529, 447, 638, 824, 27, 220, 480, 159, 479, 678],
-        [727, 611, 590, 528, 559, 594, 308, 491, 136, 800],
-        [255, 171, 196, 97, 87, 121, 271, 646, 671, 729],
-        [35, 56, 54, 300, 38, 201, 736, 74, 397, 353],
-        [501, 772, 303, 404, 714, 268, 521, 200, 473, 619]
-    ]
-
-    # for k, idxs in enumerate(idxsByTopic):
-    # wordsTopic = [dictionary[i] for i in idxs]
-    # print("Topic[", k, "]:", wordsTopic[0:5])
-    # wordsTopic1 = [dictionary[i] for i in idxTopic1]
-    # wordsTopic2 = [dictionary[i] for i in idxTopic2]
-    # print("Topic 1:", wordsTopic1)
-    # print("Topic 2:", wordsTopic2)
-    # writeToFile(processed_docs)
+    writeToFile(idxDocs)
     return dictionary, idxDocs
 
 
 def printWords(idxsByTopic, dictionary):
     for k, idxs in enumerate(idxsByTopic):
         wordsTopic = [dictionary[i] for i in idxs]
-        print("Topic[", k, "]:", wordsTopic[0:5])
+        print("Topic[", k, "]:", wordsTopic)
 
 
 def plotCorrRatio(numParams, ratios):
@@ -197,6 +158,7 @@ def plotCorrRatio(numParams, ratios):
 
 
 if __name__ == '__main__':
+    '''
     voc = getDataSet()
     print(np.mean(
         [
@@ -240,11 +202,23 @@ if __name__ == '__main__':
     # plotCorrRatio(sortedTuples[:, 1], sortedTuples[:, 2])
     # plotCorrRatio(numParamsInit, ratios)
 
+    '''
     documents = pd.read_csv('Python/papers2017.csv', error_bad_lines=False)
     voc, corpus = preProcess(documents)
+    print(len(voc))
+    print(len(corpus))
 
-    # printWords(idxsByTopic, voc)
+    idxs = [
+        [345, 170, 662, 164, 344],
+        [184, 65, 370, 177, 209],
+        [159, 83, 294, 117, 48],
+        [97, 293, 339, 425, 190],
+        [27, 28, 12, 120, 21],
+        [511, 48, 657, 94, 242],
+        [41, 299, 355, 40, 141],
+        [231, 141, 295, 48, 120],
+        [807, 329, 219, 159, 125],
+        [53, 128, 65, 159, 150]
+    ]
 
-    # 0.98 1 per resample
-    # 0.98 10 per resample
-    # 0.99 99 per resample
+    printWords(idxs, voc)

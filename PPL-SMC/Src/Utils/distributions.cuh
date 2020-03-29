@@ -195,7 +195,7 @@ HOST DEV int sampleCategorical(particles_t<T>* particles, int i, const floating_
     floating_t u = sampleUniform(particles, i, 0, 1);
     floating_t sum = 0;
     int idx = 0;
-    for(idx = 0; idx < n; idx++) {
+    for(idx = 0; idx < n-1; idx++) {
         sum += dist[idx];
         if(u <= sum)
             break;

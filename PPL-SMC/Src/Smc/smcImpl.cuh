@@ -49,6 +49,7 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks,
     initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, NUM_PARTICLES);
     // cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     cudaDeviceSynchronize();
+    cudaCheckError();
     #endif
 
     resampler_t resampler = initResampler<T>();
