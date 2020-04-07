@@ -8,6 +8,8 @@
 #include "airplane.cuh"
 #include "airplaneUtils.cuh"
 #include "../Utils/distributions.cuh"
+#include "../Utils/array.cuh"
+#include "../Utils/misc.cuh"
 
 // nvcc -arch=sm_61 -rdc=true Src/Airplane/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
@@ -39,7 +41,7 @@ BBLOCK_HELPER(updateWeight, {
 }, void, int t)
 
 
-BBLOCK(particleInit, {
+BBLOCK(particleInit, progState_t, {
 
     PSTATE.x = sampleUniform(particles, i, 0, MAP_SIZE);
 
@@ -49,7 +51,7 @@ BBLOCK(particleInit, {
     RESAMPLE = false;
 })
 
-BBLOCK(propagateAndWeight, {
+BBLOCK(propagateAndWeight, progState_t, {
 
     // Propagate
     PSTATE.x += sampleNormal(particles, i, VELOCITY, TRANSITION_STD);
@@ -64,6 +66,7 @@ BBLOCK(propagateAndWeight, {
 })
 
 STATUSFUNC({
+    // Just checks how many particles are close to actual airplane to check for correctness
     int numParticlesClose = 0;
     floating_t minX = 999999;
     floating_t maxX = -1;
@@ -75,17 +78,17 @@ STATUSFUNC({
         maxX = max(maxX, particleX);
     }
 
-    cout << "TimeStep " << t << ", NumClose: " << numParticlesClose << ", MinX: " << minX << ", MaxX: " << maxX << endl;
+    cout << "TimeStep " << t << ", Percentage close: " << static_cast<floating_t>(numParticlesClose) / NUM_PARTICLES << ", MinX: " << minX << ", MaxX: " << maxX << endl;
 })
 
 int main(int argc, char** argv) {
 
     initAirplane();
 
-    SMCSTART()
+    SMCSTART(progState_t)
 
-    INITBBLOCK(particleInit)
-    INITBBLOCK(propagateAndWeight)
+    INITBBLOCK(particleInit, progState_t)
+    INITBBLOCK(propagateAndWeight, progState_t)
 
-    SMCEND()
+    SMCEND(progState_t)
 }
