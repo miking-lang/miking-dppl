@@ -34,18 +34,9 @@ void initAirplane() {
 }
 
 
-BBLOCK_HELPER(updateWeight, {
-
-    WEIGHT(logNormalPDFObs(DATA_POINTER(planeObs)[t], mapLookupApprox(DATA_POINTER(mapApprox), PSTATE.x)));
-    
-}, void, int t)
-
-
 BBLOCK(particleInit, progState_t, {
 
     PSTATE.x = sampleUniform(particles, i, 0, MAP_SIZE);
-
-    //updateWeight(particles, i, t);
 
     PC = 1;
     RESAMPLE = false;
@@ -57,7 +48,7 @@ BBLOCK(propagateAndWeight, progState_t, {
     PSTATE.x += sampleNormal(particles, i, VELOCITY, TRANSITION_STD);
 
     // Weight
-    updateWeight(particles, i, t);
+    WEIGHT(logNormalPDFObs(DATA_POINTER(planeObs)[t], mapLookupApprox(DATA_POINTER(mapApprox), PSTATE.x)));
 
     if(t >= TIME_STEPS - 1)
         PC = 2;
@@ -66,7 +57,7 @@ BBLOCK(propagateAndWeight, progState_t, {
 })
 
 STATUSFUNC({
-    // Just checks how many particles are close to actual airplane to check for correctness
+    // Checks how many particles are close to actual airplane to check for correctness
     int numParticlesClose = 0;
     floating_t minX = 999999;
     floating_t maxX = -1;
@@ -78,7 +69,7 @@ STATUSFUNC({
         maxX = max(maxX, particleX);
     }
 
-    cout << "TimeStep " << t << ", Percentage close: " << static_cast<floating_t>(numParticlesClose) / NUM_PARTICLES << ", MinX: " << minX << ", MaxX: " << maxX << endl;
+    cout << "TimeStep " << t << ", Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / NUM_PARTICLES << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
 })
 
 int main(int argc, char** argv) {
