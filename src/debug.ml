@@ -43,6 +43,6 @@ let debug_var_queue = ref false
 (** Debug printout *)
 let debug cond heading info =
   if cond && not !utest then begin
-    eprintf "--- %s ---\n" (String.uppercase_ascii heading);
-    eprintf "%s\n\n%!" (info ());
+    printf "--- %s ---\n" (String.uppercase_ascii heading);
+    printf "%s\n\n%!" (info ());
   end
