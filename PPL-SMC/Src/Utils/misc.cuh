@@ -5,7 +5,7 @@
 #include <vector>
 #include <cstring>
 
-#include "../Smc/smc.cuh"
+#include "../Inference/Smc/smc.cuh"
 #include "list.cuh"
 
 using namespace std;

@@ -3,11 +3,11 @@
 
 
 #ifdef GPU
-#include "../cudaErrorUtils.cu"
+#include "cudaErrorUtils.cu"
 #endif
 
-#include "../Smc/smc.cuh"
-#include "../Smc/smcImpl.cuh"
+#include "../Inference/Smc/smc.cuh"
+#include "../Inference/Smc/smcImpl.cuh"
 
 // Not yet supported for GPU!
 
