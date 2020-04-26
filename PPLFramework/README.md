@@ -1,4 +1,4 @@
-# PPL-SMC
+# PPL Framework
 
 An SMC inference framework. SMC related code lies in Src/SMC, problem specific programs lies in the different problem specific folder. All these folders contain one or more .cu files which contain a main function. Multiple files with main, means they are different versions and only one should be compiled. 
 <br>
