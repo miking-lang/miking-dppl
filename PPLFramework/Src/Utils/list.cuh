@@ -1,13 +1,14 @@
 #ifndef LIST_INCLUDED
 #define LIST_INCLUDED
 
+#include "misc.cuh"
 
 #ifdef GPU
 #include "cudaErrorUtils.cu"
 #endif
 
-#include "../Inference/Smc/smc.cuh"
-#include "../Inference/Smc/smcImpl.cuh"
+// #include "../Inference/Smc/smc.cuh"
+// #include "../Inference/Smc/smcImpl.cuh"
 
 // Not yet supported for GPU!
 
@@ -36,15 +37,6 @@ struct list_t {
         return true;
     }
 
-    /*
-    __device__ list_t(){
-        
-    }
-    __device__ ~list_t(){
-        
-    }
-    */
-
     /*list_t(int capacity) : arr[capacity] {
         
     }*/
@@ -70,6 +62,20 @@ struct list_t {
         return arr[last];
     }
 };
+
+void printList(list_t<bool> l, string title="") {
+    if(title.length() > 0)
+        cout << title << ": ";
+    cout << "[ ";
+    for(int i = 0; i < l.size(); i++)
+        cout << l[i] << " ";
+    /*
+    for(bool b : l) {
+        cout << b << " ";
+    }
+    */
+    cout << "]\n" << endl;
+}
 
 
 #endif

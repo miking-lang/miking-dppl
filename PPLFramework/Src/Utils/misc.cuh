@@ -5,10 +5,28 @@
 #include <vector>
 #include <cstring>
 
-#include "../Inference/Smc/smc.cuh"
-#include "list.cuh"
+// #include "list.cuh"
 
 using namespace std;
+
+
+template <typename T>
+void allocateMemory(T** pointer, size_t n) {
+    #ifdef GPU
+    cudaSafeCall(cudaMallocManaged(pointer, sizeof(T) * n));
+    #else
+    *pointer = new T[n];
+    #endif
+}
+
+template <typename T>
+void freeMemory(T* pointer) {
+    #ifdef GPU
+    cudaSafeCall(cudaFree(pointer));
+    #else
+    delete[] pointer;
+    #endif
+}
 
 template <typename T>
 HOST DEV T sumArray(T* arr, int n) {
@@ -41,20 +59,6 @@ HOST DEV void normalizeArray(T* arr, int n) {
         sum += arr[i];
     for (int i = 0; i < n; i++)
         arr[i] /= sum;
-}
-
-void printList(list_t<bool> l, string title="") {
-    if(title.length() > 0)
-        cout << title << ": ";
-    cout << "[ ";
-    for(int i = 0; i < l.size(); i++)
-        cout << l[i] << " ";
-    /*
-    for(bool b : l) {
-        cout << b << " ";
-    }
-    */
-    cout << "]\n" << endl;
 }
 
 template <typename T>

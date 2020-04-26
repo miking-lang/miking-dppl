@@ -1,6 +1,9 @@
 #ifndef MACROS_INCLUDED
 #define MACROS_INCLUDED
 
+
+typedef double floating_t; // To be able to switch between single and double precision easily
+
 /*
 *** MACROS used by problem-specific code, acts as an interface to the SMC framework ***
 
@@ -121,5 +124,18 @@ delete[] bblocksArr;
 #define PC particles->pcs[i]
 #define RESAMPLE particles->resample[i]
 #define PSTATE particles->progStates[i]
+
+
+
+
+/* MCMC */
+#define MCMCSTART(progStateType) arr10_t<pplFunc_t<progStateType>> bblocks;
+#define MCMCEND(progStateType) \
+bblocks.push_back(NULL); \
+pplFunc_t<progStateType>* bblocksArr; \
+allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
+copy(bblocks.begin(), bblocks.end(), bblocksArr); \
+double res = runMCMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
+freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 
 #endif

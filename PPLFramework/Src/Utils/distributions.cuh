@@ -15,6 +15,7 @@ const double PI = 3.1415926535897932384626433832795028841971693993751;
 #endif
 
 #include "../Inference/Smc/smc.cuh"
+// #include "../macros.cuh"
 
 default_random_engine generatorDists;
 

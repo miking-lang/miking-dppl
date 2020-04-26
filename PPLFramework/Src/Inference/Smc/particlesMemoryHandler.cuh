@@ -2,24 +2,7 @@
 #define PARICLES_MEMORY_HANDLER_INCLUDED
 
 #include <cstring>
-
-template <typename T>
-void allocateMemory(T** pointer, size_t n) {
-    #ifdef GPU
-    cudaSafeCall(cudaMallocManaged(pointer, sizeof(T) * n));
-    #else
-    *pointer = new T[n];
-    #endif
-}
-
-template <typename T>
-void freeMemory(T* pointer) {
-    #ifdef GPU
-    cudaSafeCall(cudaFree(pointer));
-    #else
-    delete[] pointer;
-    #endif
-}
+#include "../../Utils/misc.cuh"
 
 template <typename T>
 particles_t<T>* allocateParticles(bool printMemSize=false) {

@@ -27,8 +27,6 @@ const int NUM_THREADS_PER_BLOCK_NESTED = 32;
 const int NUM_BLOCKS_NESTED = (NUM_PARTICLES_NESTED + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
 
 
-typedef double floating_t; // To be able to switch between single and double precision easily
-
 // Particle structure, allocated at start of inference
 template <typename T>
 struct particles_t {
