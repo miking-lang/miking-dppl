@@ -27,7 +27,10 @@ __device__ type pointerName ## Dev[n][m];
 #define COPY_DATA_GPU(pointerName, type, n) cudaSafeCall(cudaMemcpyToSymbol(pointerName ## Dev, pointerName, n * sizeof(type)));
 #define DATA_POINTER(pointerName) pointerName ## Dev
 
+// #define SAMPLE(distrName, ...) distrName(curandState* randState, ##__VA_ARGS__)
 #else
+// #define SAMPLE(distrName, ...) distrName(##__VA_ARGS__)
+
 
 #define HOST
 #define DEV
@@ -135,7 +138,7 @@ bblocks.push_back(NULL); \
 pplFunc_t<progStateType>* bblocksArr; \
 allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
-double res = runMCMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
+runMCMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 
 #endif

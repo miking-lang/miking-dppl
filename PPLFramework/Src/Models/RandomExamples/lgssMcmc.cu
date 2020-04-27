@@ -37,10 +37,12 @@ BBLOCK_DATA(data, floating_t, NUM_OBS);
 void lgss(samplesMcmc_t<progState_t>* samples, int pc, int it, void* arg = NULL) {
     // progState_t state = samples->traces[it][pc-1];
     floating_t prevX = samples->traces[it][pc-1].x;
-    samples->traces[it][pc-1].x = sampleNormal(prevX + 2.0, 1);
+    samples->traces[it][pc].x = sampleNormal(prevX + 2.0, 1);
     // state.t += 1;
     if(pc+1 < NUM_OBS) // Limit here?
         lgss(samples, pc+1, it, arg);
+    else 
+        samples->traceIdxs[it] = pc;
 }
 
 void init(samplesMcmc_t<progState_t>* samples, int pc, int it, void* arg = NULL) {

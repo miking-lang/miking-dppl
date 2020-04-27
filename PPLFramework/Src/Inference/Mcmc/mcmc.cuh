@@ -17,6 +17,7 @@ template <class T>
 struct samplesMcmc_t {
     // T progState;
     T** traces;
+    int* traceIdxs;
     // int pc;
     floating_t* weights;
     
