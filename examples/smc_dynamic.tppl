@@ -1,9 +1,0 @@
-function f() {
-  if sample(bernoulli(0.5)) then
-    1 + f()
-  else
-    weight(0.3)
-  1
-}
-
-f()

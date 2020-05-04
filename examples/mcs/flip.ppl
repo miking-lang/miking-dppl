@@ -1,6 +1,0 @@
-let flip _ = sample (bernoulli 0.5) in
-
-if flip () then
-  true
-else
-  false

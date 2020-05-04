@@ -1,9 +1,0 @@
-let flip p = sample (bernoulli p) in
-
-if flip(0.9) then (
-  weight(log 1);
-  20.0
-) else (
-  weight (log 1000);
-  sample (normal 0 1)
-)

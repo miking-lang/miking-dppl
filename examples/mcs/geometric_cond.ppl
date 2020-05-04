@@ -1,9 +1,0 @@
-let flip _ = sample (bernoulli 0.5) in
-
-let f _ =
-  if flip() then
-    weight (log 1.8); 1 + f ()
-  else
-    1
-in
-f ()
