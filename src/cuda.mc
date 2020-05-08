@@ -8,6 +8,7 @@ include "pplcore.mc"
 
 -- TODO Some things can probably be reused from mexpr/ast.mc here
 
+-- TODO The fragment should probably not be named CUDA
 lang CUDA
 
   syn Prog =
@@ -46,6 +47,7 @@ lang CUDA
     | EInt { val: Int }
 
     -- TODO Fill in needed stuff from framework, e.g. stack handling
+    -- TODO We might want to move EWeight to Stmt?
     | EWeight { arg: Expr }
 
   sem outputProg =

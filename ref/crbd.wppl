@@ -1,15 +1,15 @@
 // Simplified (and incorrect) CRBD reference implementation in WebPPL, used for
 // developing the CUDA compilation
 
-var leaf = function(v,i) {
-  return { type:'leaf', age:v, index:i }
+var leaf = function(v) {
+  return { type:'leaf', age:v }
 }
 
 var node = function(v,l,r) {
   return { type:'node', left:l, right:r, age:v}
 }
 
-var tree = node(1.0,leaf(0.0,1),leaf(0.0,2));
+var tree = node(1.0,leaf(0.0),leaf(0.0));
 
 var crbdGoesUndetected = function(startTime, lambda, mu) {
   var t = exponential({ a: lambda + mu });
