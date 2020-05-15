@@ -4,13 +4,17 @@
 #include "../../../Inference/Smc/smcImpl.cuh"
 #include "../../../Utils/distributions.cuh"
 #include "../TreeUtils/treeUtils.cuh"
+#include "cbd.cuh"
 
 // nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CBD/cbdDoublyLinked.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+
+// g++ -x c++ Src/Models/Phylogenetics/CBD/cbdDoublyLinked.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
 
+floating_t corrFactor;
 
 void initCBD() {
 
@@ -21,8 +25,9 @@ void initCBD() {
     *mu = 0.1; // death rate
 
     int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, NUM_NODES);
-    floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
-    setLogCorrectionFactor(corrFactor);
+    // floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
+    // setLogCorrectionFactor(corrFactor);
+    corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
 
     COPY_DATA_GPU(tree, tree_t, 1)
     COPY_DATA_GPU(lambda, floating_t, 1)
@@ -35,7 +40,7 @@ BBLOCK_HELPER(survival, {
     floating_t lambdaLocal = *DATA_POINTER(lambda);
     floating_t muLocal = *DATA_POINTER(mu);
 
-    floating_t t = BBLOCK_CALL(exponential, lambdaLocal + muLocal);
+    floating_t t = BBLOCK_CALL(sampleExponential, lambdaLocal + muLocal);
 
     floating_t currentTime = startTime - t;
     if(currentTime < 0)
@@ -56,7 +61,7 @@ BBLOCK_HELPER(simBranch, {
     floating_t lambdaLocal = *DATA_POINTER(lambda);
     // floating_t muLocal = *DATA_POINTER(mu);
 
-    floating_t t = BBLOCK_CALL(exponential, lambdaLocal);
+    floating_t t = BBLOCK_CALL(sampleExponential, lambdaLocal);
 
     floating_t currentTime = startTime - t;
 
@@ -99,7 +104,7 @@ BBLOCK(condBD2, progState_t, {
     }
 
     PC--;
-    RESAMPLE = true;
+    // RESAMPLE = true;
 
 })
 
@@ -127,7 +132,7 @@ BBLOCK(condBD1, progState_t, {
 
 
     PC++;
-    RESAMPLE = true;
+    // RESAMPLE = true;
 
 })
 
@@ -158,7 +163,8 @@ BBLOCK(cbd, progState_t, {
         
     }*/
     PC++;
-    RESAMPLE = false;
+    // RESAMPLE = false;
+    BBLOCK_CALL(condBD1);
 })
 
 
@@ -180,4 +186,10 @@ int main() {
     INITBBLOCK(condBD2, progState_t)
 
     SMCEND(progState_t)
+
+    res += corrFactor;
+
+    cout << "log(MarginalLikelihood) = " << res << endl;
+
+    return 0;
 }

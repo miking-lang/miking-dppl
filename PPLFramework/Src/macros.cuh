@@ -44,7 +44,7 @@ __device__ type pointerName ## Dev[n][m];
 #endif
 
 #define BBLOCK(funcName, progStateType, body) \
-DEV void funcName(particles_t<progStateType>* particles, int i, int t, void* arg = NULL) \
+DEV void funcName(particles_t<progStateType>* particles, int i, void* arg = NULL) \
 body \
 DEV_POINTER(funcName, progStateType)
 
@@ -56,9 +56,9 @@ body
 
 #define BBLOCK_CALL(funcName, ...) funcName(particles, i, ##__VA_ARGS__)
 
-#define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles, int t) body
+#define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles) body
 // Just a general statusfunc
-#define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, int t, arg) body
+#define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, arg) body
 
 #define INITBBLOCK(funcName, progStateType) \
 pplFunc_t<progStateType> funcName ## Host; \
@@ -125,7 +125,7 @@ delete[] bblocksArr;
 #define WEIGHT(w) particles->weights[i] += w
 #define PWEIGHT particles->weights[i]
 #define PC particles->pcs[i]
-#define RESAMPLE particles->resample[i]
+// #define RESAMPLE particles->resample[i]
 #define PSTATE particles->progStates[i]
 
 

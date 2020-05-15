@@ -5,7 +5,7 @@
 
 struct progState_t {
     floating_t x;
-    //int t;
+    int t;
 };
 
 typedef progState_t stateType;

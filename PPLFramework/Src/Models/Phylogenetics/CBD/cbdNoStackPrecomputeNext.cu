@@ -6,11 +6,17 @@
 // #include "cbd.cuh"
 #include "../TreeUtils/treeUtils.cuh"
 
+/**
+    This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
+*/
+
 // nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 // Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
+// (lambda, mu) in particles, 
 BBLOCK_DATA(tree, tree_t, 1)
+
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 BBLOCK_DATA(mu, floating_t, 1)
 
@@ -25,6 +31,7 @@ struct nestedProgState_t {
     bool extinct;
 };
 typedef double return_t;
+
 
 void initCBD() {
     // lambda ~ gamma( 1.0, 1.0 )
@@ -68,7 +75,7 @@ BBLOCK(goesExtinctBblock, nestedProgState_t, {
     
     PSTATE.extinct = BBLOCK_CALL(goesExtinct<nestedProgState_t>, age);
     PC++;
-    RESAMPLE = true;
+    // RESAMPLE = true;
 })
 
 
@@ -102,7 +109,7 @@ BBLOCK(simTree, progState_t, {
 
     if(treeIdx == -1) {
         PC = 2;
-        RESAMPLE = false;
+        // RESAMPLE = false;
         return;
     }
 
@@ -131,7 +138,7 @@ BBLOCK(simTree, progState_t, {
 
     WEIGHT(lnProb1 + lnProb2 + lnProb3);
     PSTATE.treeIdx = treeP->idxNext[treeIdx];
-    RESAMPLE = true;
+    // RESAMPLE = true;
 
 })
 
@@ -174,7 +181,8 @@ BBLOCK(simCRBD, progState_t, {
 
     PC++;
     // PC = 2;
-    RESAMPLE = false;
+    // RESAMPLE = false;
+    BBLOCK_CALL(simTree);
 })
 
 

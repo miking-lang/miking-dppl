@@ -54,42 +54,37 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks,
 
     resampler_t resampler = initResampler<T>();
 
-    int t = 0;
-
     // Run program/inference
     while(true) {
 
         #ifdef GPU
-        execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, t, bblocks, NUM_PARTICLES, arg);
+        execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, bblocks, NUM_PARTICLES, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
         #else
         for(int i = 0; i < NUM_PARTICLES; i++) {
             int pc = particles->pcs[i];
             if(bblocks[pc] != NULL)
-                bblocks[pc](particles, i, t, arg); 
+                bblocks[pc](particles, i, arg); 
         }
         #endif
-        
         // statusFunc(particles, t); // Is this really necessary? Expensive for GPU-version
         
-        if(particles->resample[0]) { // Assumption: All resample at the same time
-            #ifdef GPU
-            floating_t weightSum = resampleSystematicPar<T>(particles, resampler);
-            #else
-            floating_t weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES);
-            #endif
-            logNormConstant += log(weightSum / NUM_PARTICLES);
-        }
+        // if(particles->resample[0]) { // Assumption: All resample at the same time
+        #ifdef GPU
+        floating_t weightSum = resampleSystematicPar<T>(particles, resampler);
+        #else
+        floating_t weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES);
+        #endif
+        logNormConstant += log(weightSum / NUM_PARTICLES);
+        // }
         
         if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
         
-
-        t++;
     }
 
-    statusFunc(particles, t);
+    statusFunc(particles);
         
     // Clean up
     destResampler<T>(resampler);
@@ -123,13 +118,12 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
 
     resampler_t resampler = initResamplerNested<T>();
 
-    int t = 0;
     // Run program/inference
     while(true) {
 
         if(parallelExec) {
             #ifdef GPU
-            execFuncs<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, t, bblocks, NUM_PARTICLES_NESTED, arg);
+            execFuncs<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, bblocks, NUM_PARTICLES_NESTED, arg);
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
             #endif
@@ -139,7 +133,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
             for(int i = 0; i < NUM_PARTICLES_NESTED; i++) {
                 int pc = particles->pcs[i];
                 if(bblocks[pc] != NULL) 
-                    bblocks[pc](particles, i, t, arg); 
+                    bblocks[pc](particles, i, arg); 
             }
             #ifdef GPU
             if(parallelExec)
@@ -147,25 +141,24 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
             #endif
         }
         
-        if(particles->resample[0]) { // Assumption: All resample at the same time
-            floating_t weightSum;
-            if(parallelResampling) {
-                #ifdef GPU
-                weightSum = resampleSystematicParNested<T>(particles, resampler);
-                #endif
-            } else {
-                weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES_NESTED);
-            }
-            logNormConstant += log(weightSum / NUM_PARTICLES_NESTED);
+        // if(particles->resample[0]) { // Assumption: All resample at the same time
+        floating_t weightSum;
+        if(parallelResampling) {
+            #ifdef GPU
+            weightSum = resampleSystematicParNested<T>(particles, resampler);
+            #endif
+        } else {
+            weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES_NESTED);
         }
+        logNormConstant += log(weightSum / NUM_PARTICLES_NESTED);
+        // }
         
         if(bblocks[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
             break;
         
-        t++;
     }
 
-    callback(particles, t, ret);
+    callback(particles, ret);
         
     // Clean up
     destResamplerNested<T>(resampler);

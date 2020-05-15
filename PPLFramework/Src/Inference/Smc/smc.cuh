@@ -11,7 +11,7 @@
 using namespace std;
 
 
-const int NUM_PARTICLES = 1000;// 55000;
+const int NUM_PARTICLES = 10000;// 55000;
 const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;
@@ -37,18 +37,18 @@ struct particles_t {
     #endif
     int* pcs;
     floating_t* weights;
-    bool* resample;
+    // bool* resample;
 };
 
 // BBLOCK function
 template <typename T>
-using pplFunc_t = void (*)(particles_t<T>*, int, int, void*);
+using pplFunc_t = void (*)(particles_t<T>*, int, void*);
 
 template <typename T>
-using statusFunc_t = void (*)(particles_t<T>*, int);
+using statusFunc_t = void (*)(particles_t<T>*);
 
 template <typename T>
-using callbackFunc_t = void (*)(particles_t<T>*, int, void*);
+using callbackFunc_t = void (*)(particles_t<T>*, void*);
 
 
 #endif

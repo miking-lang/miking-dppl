@@ -1,15 +1,19 @@
 #ifndef CBD_INCLUDED
 #define CBD_INCLUDED
 
-/*
-#include "../Smc/smc.cuh"
-#include "trees.cuh"
+
+// #include "../Smc/smc.cuh"
+// #include "trees.cuh"
 
 typedef short treeIdx_t;
 
-// #define USE_STACK
+#define USE_STACK
 
 #ifdef USE_STACK
+
+/*
+Stack, array av void ptrs, som vi castar i runtime
+*/
 
 // Both structs and static array members are deeply copied
 struct stack_t {
@@ -42,5 +46,5 @@ struct progState_t {
 };
 
 #endif
-*/
+
 #endif
