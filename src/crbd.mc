@@ -37,6 +37,24 @@ let crbdGoesUndetected =
       ]))
 in
 
+let simBranch =
+  ureclet_ "simBranch"
+    (ulams_ ["startTime", "stopTime", "lambda", "mu"]
+      (bindall_ [
+        ulet_ "t" (sampleExp_ (var_ "lambda")),
+        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
+        if_ (ltf_ (var_ "currentTime") (float_ 0.0))
+          unit_
+          (bind_
+            (ulet_ "_" (weight_ (float_ 0.3))) -- weight(log(2))
+            (if_ (not_ (appf3_ (var_ "crbdGoesUndetected") (var_ "currentTime")
+                          (var_ "lambda") (var_ "mu")))
+              (weight_ (negf_ (float_ inf)))
+              (appf4_ (var_ "simBranch")
+                 (var_ "currentTime") (var_ "stopTime")
+                 (var_ "lambda") (var_ "mu"))))
+      ]))
+in
 
 let crbd =
   bindall_ [
@@ -44,7 +62,8 @@ let crbd =
     condef_ "Node" tydyn_,
     ulet_ "tree" (node_ 1.0 (leaf_ 0.0) (leaf_ 0.0)),
     crbdGoesUndetected,
-    -- TODO Add simBranch and simTree
+    simBranch,
+    -- TODO Add simTree
     ulet_ "lambda" (float_ 0.2),
     ulet_ "mu" (float_ 0.1),
     ulet_ "_" (weight_ (float_ 0.3)) -- weight(log(2))

@@ -34,13 +34,16 @@ var simBranch = function(startTime, stopTime, lambda, mu) {
 
   var currentTime = startTime - t;
 
-  if (currentTime <= stopTime)
-    return 0.0;
+  if (currentTime < stopTime)
+    return;
 
   factor(Math.log( 2.0 ));
-  condition(crbdGoesUndetected(currentTime,lambda,mu))
+  if (!crbdGoesUndetected(currentTime,lambda,mu)) {
+    factor(Math.log( 0 ))
+    return
+  }
 
-  return simBranch( currentTime, stopTime, lambda, mu )
+  simBranch( currentTime, stopTime, lambda, mu )
 
 }
 
@@ -68,7 +71,7 @@ var model = function() {
   simTree( tree.left,  tree, lambda, mu )
   simTree( tree.right, tree, lambda, mu )
 
-  return (lambda, mu)
+  return [lambda, mu]
 
 }
 
