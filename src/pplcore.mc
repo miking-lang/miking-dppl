@@ -6,16 +6,20 @@ lang PPLCoreAst = MExprAst + MExprPrettyPrint
 
   syn Expr =
   | TmWeight { arg: Expr }
-  | TmSample { arg: Expr }
+  | TmSampleExp { a: Expr }
+  | TmSampleBern { p: Expr }
   | TmResample {}
 
   sem pprintCode (indent : Int) =
   | TmWeight t ->
     let arg = pprintCode indent t.arg in
     strJoin "" ["weight(", arg, ")"]
-  | TmSample t ->
-    let arg = pprintCode indent t.arg in
-    strJoin "" ["sample(", arg, ")"]
+  | TmSampleExp t ->
+    let a = pprintCode indent t.a in
+    strJoin "" ["sampleExp(", a, ")"]
+  | TmSampleBern t ->
+    let p = pprintCode indent t.p in
+    strJoin "" ["sampleBern(", p, ")"]
   | TmResample _ -> "resample"
 
 end
@@ -23,8 +27,11 @@ end
 let weight_ = use PPLCoreAst in
   lam arg. TmWeight {arg = arg}
 
-let sample_ = use PPLCoreAst in
-  lam arg. TmSample {arg = arg}
+let sampleExp_ = use PPLCoreAst in
+  lam a. TmSampleExp {a = a}
+
+let sampleBern_ = use PPLCoreAst in
+  lam p. TmSampleBern {p = p}
 
 let resample_ = use PPLCoreAst in
   TmResample {}

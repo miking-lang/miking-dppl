@@ -13,20 +13,42 @@ let node_ = lam age. lam left. lam right.
                                {key = "r",   value = right}])
 in
 
-let crbdGoesUndetected = ulet_ "crbdGoesUndetected"
-                               (ulams_ ["startTime", "lambda", "mu"]
-                                 (str_ "TODO"))
+let crbdGoesUndetected =
+  ureclet_ "crbdGoesUndetected"
+    (ulams_ ["startTime", "lambda", "mu"]
+      (bindall_ [
+        ulet_ "t" (sampleExp_ (addi_ (var_ "lambda") (var_ "mu"))),
+        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
+        if_ (ltf_ (var_ "currentTime") (float_ 0.0))
+          false_
+          (bindall_ [
+            ulet_ "speciation"
+              (sampleBern_
+                (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu")))),
+            if_ (not_ (var_ "speciation"))
+              true_
+              (and_
+                 (appf3_ (var_ "crbdGoesUndetected")
+                    (var_ "currentTime") (var_ "lambda") (var_ "mu"))
+                 (appf3_ (var_ "crbdGoesUndetected")
+                    (var_ "currentTime") (var_ "lambda") (var_ "mu"))
+              )
+          ])
+      ]))
 in
+
 
 let crbd =
   bindall_ [
     condef_ "Leaf" tydyn_,
     condef_ "Node" tydyn_,
     ulet_ "tree" (node_ 1.0 (leaf_ 0.0) (leaf_ 0.0)),
+    crbdGoesUndetected,
+    -- TODO Add simBranch and simTree
     ulet_ "lambda" (float_ 0.2),
     ulet_ "mu" (float_ 0.1),
-    ulet_ "_" (weight_ (float_ 0.3)), -- weight(log(2))
-    crbdGoesUndetected
+    ulet_ "_" (weight_ (float_ 0.3)) -- weight(log(2))
+    -- TODO Add x2 calls to simTree and return lambda + mu
   ]
 in
 
