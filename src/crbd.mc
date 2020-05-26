@@ -1,5 +1,5 @@
 include "pplcore.mc"
-include "float.mc"
+include "math.mc"
 
 mexpr
 use PPLCoreAst in
