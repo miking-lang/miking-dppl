@@ -32,7 +32,8 @@ void configureMemSizeGPU() {
 }
 
 template <typename T>
-double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks, void* arg = NULL) {
+double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback = NULL, void* arg = NULL) {
+// double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks, void* arg = NULL) {
 
     // floating_t particleSize = sizeof(particles_t<T>) / 1000000.0;
     // printf("Particles size: %f MB\n", particleSize);
@@ -84,7 +85,8 @@ double runSMC(pplFunc_t<T>* bblocks, statusFunc_t<T> statusFunc, int numBblocks,
         
     }
 
-    statusFunc(particles);
+    if(callback != NULL)
+        callback(particles, NULL);
         
     // Clean up
     destResampler<T>(resampler);

@@ -5,6 +5,7 @@
 #include "../../../Utils/distributions.cuh"
 // #include "cbd.cuh"
 #include "../TreeUtils/treeUtils.cuh"
+// #include "simulations.cuh"
 
 /**
     This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
@@ -68,7 +69,6 @@ BBLOCK_HELPER(simBranch, {
     return BBLOCK_CALL(simBranch<T>, currentTime, stopTime) + log(2.0);
 
 }, floating_t, floating_t startTime, floating_t stopTime)
-
 
 
 BBLOCK(simTree, progState_t, {

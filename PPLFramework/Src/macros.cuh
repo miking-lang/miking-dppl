@@ -56,8 +56,9 @@ body
 
 #define BBLOCK_CALL(funcName, ...) funcName(particles, i, ##__VA_ARGS__)
 
-#define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles) body
+// #define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles) body
 // Just a general statusfunc
+#define CALLBACK_HOST(funcName, progStateType, body, arg) void funcName(particles_t<progStateType>* particles, arg) body
 #define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, arg) body
 
 #define INITBBLOCK(funcName, progStateType) \
@@ -102,13 +103,13 @@ struct arr10_t {
 
 #define SMCSTART(progStateType) arr10_t<pplFunc_t<progStateType>> bblocks;
 
-#define SMCEND(progStateType) \
+#define SMCEND(progStateType, callback) \
 bblocks.push_back(NULL); \
 pplFunc_t<progStateType>* bblocksArr; \
 allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
 copy(bblocks.begin(), bblocks.end(), bblocksArr); \
 configureMemSizeGPU(); \
-double res = runSMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
+double res = runSMC<progStateType>(bblocksArr, bblocks.size(), callback); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 
 #define SMCEND_NESTED(progStateType, callback, retStruct, arg, parallelExec, parallelResampling, parentIndex) \

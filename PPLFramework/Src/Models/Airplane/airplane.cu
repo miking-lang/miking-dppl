@@ -57,7 +57,7 @@ BBLOCK(particleInit, progState_t, {
     BBLOCK_CALL(propagateAndWeight);
 })
 
-STATUSFUNC({
+CALLBACK_HOST(callback, progState_t, {
     // Checks how many particles are close to actual airplane to check for correctness
     int numParticlesClose = 0;
     floating_t minX = 999999;
@@ -71,7 +71,7 @@ STATUSFUNC({
     }
 
     cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / NUM_PARTICLES << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
-})
+}, void* arg = NULL)
 
 int main(int argc, char** argv) {
 
@@ -82,5 +82,5 @@ int main(int argc, char** argv) {
     INITBBLOCK(particleInit, progState_t)
     INITBBLOCK(propagateAndWeight, progState_t)
 
-    SMCEND(progState_t)
+    SMCEND(progState_t, callback)
 }

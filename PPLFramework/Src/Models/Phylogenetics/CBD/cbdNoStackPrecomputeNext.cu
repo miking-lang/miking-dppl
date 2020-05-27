@@ -186,9 +186,9 @@ BBLOCK(simCRBD, progState_t, {
 })
 
 
-STATUSFUNC({
+/*STATUSFUNC({
     
-})
+})*/
 
 
 int main() {
@@ -201,7 +201,7 @@ int main() {
     INITBBLOCK(simCRBD, progState_t)
     INITBBLOCK(simTree, progState_t)
 
-    SMCEND(progState_t)
+    SMCEND(progState_t, NULL)
 
     res += corrFactor;
 
