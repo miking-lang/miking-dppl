@@ -2,10 +2,11 @@
 
 include "option.mc"
 
--- TODO Some things can probably be reused from mexpr/ast.mc here
--- TODO The fragment should probably not be named CUDA
+-- TODO Reuse things from MExpr
+-- TODO Factor out smaller fragments and add them directly to the Miking
+-- framework
 
-lang CUDA
+lang SMCCUDAAst
 
   syn Prog =
     | PProg { tops: [Top] }
@@ -33,19 +34,19 @@ lang CUDA
     | TyFloat {}
     | TyVoid  {}
     | TyPtr   { ty: Type }
-    -- TODO Add type for C structs?
+    -- TODO Structs? Arrays? Enums? Unions?
 
   syn Stmt =
-    | SIf      { cond: Val, thn: Stmt, els: Stmt }
-    | SWhile   { cond: Val, body: Stmt }
+    | SIf      { cond: Expr, thn: Stmt, els: Stmt }
+    | SWhile   { cond: Expr, body: Stmt }
     | SRet     { val: Option }
-    | SAssg    { var: String, val: Val }
-    | SAppAssg { var: String, fun: String, args: [Val] }
-    | SWeight  { arg: Val }
-    | SPush    { arg: Val }
-    | SPop     { arg: Val }
+    | SAssg    { var: String, val: Expr }
+    | SAppAssg { var: String, fun: String, args: [Expr] }
+    | SWeight  { arg: Expr }
+    | SPush    { arg: Expr }
+    | SPop     { arg: Expr }
 
-  syn Val =
+  syn Expr =
     | VVar   { var: String }
     | VInt   { val: Int }
     | VFloat { val: Float }
@@ -57,7 +58,7 @@ lang CUDA
 end
 
 mexpr
-use CUDA in
+use SMCCUDAAst in
 
 let prog = PProg{ tops = [] } in
 

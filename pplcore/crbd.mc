@@ -1,8 +1,15 @@
-include "pplcore.mc"
+-- Temporary implementation of CRBD example model, directly creating the AST.
+-- TODO Parse this as a regular program when support is added for this in
+-- Miking.
+
+include "ast.mc"
+include "pprint.mc"
+include "ast-builder.mc"
+include "mexpr/ast-builder.mc"
 include "math.mc"
 
 mexpr
-use PPLCoreAst in
+use PPLCorePrettyPrint in
 
 let leaf_ = lam age.
   app_ (var_ "Leaf") (record_ [{key = "age", value = float_ age}])
