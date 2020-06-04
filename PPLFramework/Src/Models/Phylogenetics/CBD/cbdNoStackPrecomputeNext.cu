@@ -14,14 +14,6 @@
 
 // Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
-// (lambda, mu) in particles, 
-BBLOCK_DATA(tree, tree_t, 1)
-
-BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
-BBLOCK_DATA(mu, floating_t, 1)
-
-floating_t corrFactor;
-
 typedef short treeIdx_t;
 struct progState_t {
     treeIdx_t treeIdx;
@@ -31,6 +23,20 @@ struct nestedProgState_t {
     bool extinct;
 };
 typedef double return_t;
+
+
+
+#define NUM_BBLOCKS 2
+INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+#define NUM_BBLOCKS_NESTED 1
+
+
+BBLOCK_DATA(tree, tree_t, 1)
+
+BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
+BBLOCK_DATA(mu, floating_t, 1)
+
+floating_t corrFactor;
 
 
 void initCBD() {
@@ -159,7 +165,7 @@ DEV T runNestedInference(int parentIndex) {
 
     T ret;
 
-    SMCSTART(nestedProgState_t)
+    SMCSTART_NESTED(nestedProgState_t, NUM_BBLOCKS_NESTED)
 
     INITBBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
@@ -186,17 +192,12 @@ BBLOCK(simCRBD, progState_t, {
 })
 
 
-/*STATUSFUNC({
-    
-})*/
-
-
 int main() {
 
     initGen();
     initCBD();
     
-    SMCSTART(progState_t)
+    SMCSTART(progState_t, NUM_BBLOCKS)
 
     INITBBLOCK(simCRBD, progState_t)
     INITBBLOCK(simTree, progState_t)

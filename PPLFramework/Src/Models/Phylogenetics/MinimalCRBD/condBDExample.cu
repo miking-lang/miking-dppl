@@ -18,6 +18,10 @@
 
 // Compile CPU: g++ -x c++ Src/Models/Phylogenetics/MinimalCRBD/condBDExample.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
+#define NUM_BBLOCKS 5
+INIT_GLOBAL(stack_t, NUM_BBLOCKS)
+
+
 BBLOCK_DATA(tree, tree_t, 1)
 
 struct progState_t {
@@ -30,26 +34,23 @@ struct progState_t {
 BBLOCK_HELPER(pushChild, {
 
     progState_t pState;
-    pState.parentIdx = nodeIdx;
+    pState.parentIdx = parent.treeIdx;
     pState.treeIdx = childIdx;
-    pState.lambda = 0.2;
-    pState.mu = 0.1;
+    pState.lambda = parent.lambda;
+    pState.mu = parent.mu;
     PSTATE.pushType(pState);
 
-}, void, int nodeIdx, int childIdx)
+}, void, progState_t parent, int childIdx)
 
 
 BBLOCK(condBD_1, stack_t, {
 
-    if(PSTATE.empty()) {
-        PC = 5;
-        return;
-    }
-
     tree_t* treeP = DATA_POINTER(tree);
 
-    progState_t pState = PSTATE.popType<progState_t>();
+    progState_t pState;
+    PSTATE.popType<progState_t>(&pState);
     PSTATE.pushType<progState_t>(pState);
+
 
     floating_t parentAge = treeP->ages[pState.parentIdx];
     floating_t treeAge = treeP->ages[pState.treeIdx];
@@ -60,15 +61,17 @@ BBLOCK(condBD_1, stack_t, {
 })
 
 BBLOCK(condBD_2, stack_t, {
+    
     tree_t* treeP = DATA_POINTER(tree);
 
-    progState_t pState = PSTATE.popType<progState_t>();
+    progState_t pState;
+    PSTATE.popType<progState_t>(&pState);
 
     floating_t parentAge = treeP->ages[pState.parentIdx];
     floating_t treeAge = treeP->ages[pState.treeIdx];
     floating_t w = BBLOCK_CALL(simBranch<stack_t>, parentAge, treeAge, pState.lambda, pState.mu);
     WEIGHT(w);
-    // Why not resample here?
+    
 
     if(treeP->idxLeft[pState.treeIdx] != -1) { // Interior node, keep DFSing
         WEIGHT(log(2.0 * pState.lambda));
@@ -76,11 +79,12 @@ BBLOCK(condBD_2, stack_t, {
         PSTATE.pushType<progState_t>(pState);
         // Resamples here
     } else {
-        // PC = 1; // cond_BD1 instead?
-        // condBD_4
-        PC = PSTATE.popType<int>();
-        // BBLOCK_CALL(condBD_1);
-        // Does not resample here
+        PC = PSTATE.pop();
+        // printf("PC popped=%d\n", PC);
+        if (PC < NUM_BBLOCKS)
+            DATA_POINTER(bblocksArr)[PC](particles, i, NULL);
+        // Should not resample here
+        // TODO: NOT RESAMPLE BUT INSTEAD DIRECTLY CALL FUNC[PC]
     }
 })
 
@@ -89,16 +93,14 @@ BBLOCK(condBD_3, stack_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    progState_t pState = PSTATE.popType<progState_t>();
-    
-    // int rightIdx = treeP->idxRight[ROOT_IDX];
-    // BBLOCK_CALL(pushChild, ROOT_IDX, rightIdx);
+    progState_t pState;
+    PSTATE.popType<progState_t>(&pState);
 
-    PSTATE.pushType<progState_t>(pState); // Need to use this state again when exploring right child
+    PSTATE.pushType<progState_t>(pState); // Need to use this state again when exploring right sibling
     PSTATE.pushType<int>(4); // PC = condBD_4
 
-    int leftIdx = treeP->idxLeft[ROOT_IDX];
-    BBLOCK_CALL(pushChild, ROOT_IDX, leftIdx);
+    int leftIdx = treeP->idxLeft[pState.treeIdx];
+    BBLOCK_CALL(pushChild, pState, leftIdx);
 
     PC = 1;
     BBLOCK_CALL(condBD_1);
@@ -109,12 +111,13 @@ BBLOCK(condBD_4, stack_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
-    progState_t pState = PSTATE.popType<progState_t>();
+    progState_t pState;
+    PSTATE.popType<progState_t>(&pState);
 
     // What should the return address be here? Do I really need one?
 
-    int rightIdx = treeP->idxRight[ROOT_IDX];
-    BBLOCK_CALL(pushChild, ROOT_IDX, rightIdx);
+    int rightIdx = treeP->idxRight[pState.treeIdx];
+    BBLOCK_CALL(pushChild, pState, rightIdx);
 
     PC = 1;
     BBLOCK_CALL(condBD_1);
@@ -122,16 +125,17 @@ BBLOCK(condBD_4, stack_t, {
 
 BBLOCK(condBD_init, stack_t, {
 
-    tree_t* treeP = DATA_POINTER(tree);
+    PSTATE.pushType<int>(NUM_BBLOCKS); // Go to PC=5 when top-level condBD_1 is done (terminate)
 
-    int rightIdx = treeP->idxRight[ROOT_IDX];
-    BBLOCK_CALL(pushChild, ROOT_IDX, rightIdx);
-
-    int leftIdx = treeP->idxLeft[ROOT_IDX];
-    BBLOCK_CALL(pushChild, ROOT_IDX, leftIdx);
+    progState_t pState;
+    pState.parentIdx = -1;
+    pState.treeIdx = ROOT_IDX;
+    pState.lambda = 0.2;
+    pState.mu = 0.1;
+    PSTATE.pushType<progState_t>(pState);
     
-    PC++;
-    BBLOCK_CALL(condBD_1);
+    PC = 3;
+    BBLOCK_CALL(condBD_3);
 })
 
 
@@ -139,7 +143,7 @@ int main() {
 
     initGen();
     
-    SMCSTART(stack_t)
+    SMCSTART(stack_t, NUM_BBLOCKS)
 
     INITBBLOCK(condBD_init, stack_t)
     INITBBLOCK(condBD_1, stack_t)

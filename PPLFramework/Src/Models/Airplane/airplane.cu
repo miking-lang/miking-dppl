@@ -14,6 +14,8 @@
 
 using namespace std;
 
+#define NUM_BBLOCKS 2
+INIT_GLOBAL(progState_t, NUM_BBLOCKS)
 
 floating_t planeX[TIME_STEPS];
 
@@ -77,7 +79,7 @@ int main(int argc, char** argv) {
 
     initAirplane();
 
-    SMCSTART(progState_t)
+    SMCSTART(progState_t, NUM_BBLOCKS)
 
     INITBBLOCK(particleInit, progState_t)
     INITBBLOCK(propagateAndWeight, progState_t)
