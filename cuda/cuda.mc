@@ -1,15 +1,12 @@
 -- Sketch of CUDA language fragment
 
 include "option.mc"
+include "c/ast.mc"
 
--- TODO Reuse things from MExpr
--- TODO Factor out smaller fragments and add them directly to the Miking
--- framework
-
-lang SMCCUDAAst
+lang SMCCUDAAst = CStmtAst
 
   syn Prog =
-    | PProg { tops: [Top] }
+    | Prog { tops: [Top] }
 
   syn Top =
 
@@ -29,31 +26,13 @@ lang SMCCUDAAst
              -- params : [{ ty: Type, var: String }],
                 body   : [Stmt] }
 
-  syn Type =
-    | TyInt   {}
-    | TyFloat {}
-    | TyVoid  {}
-    | TyPtr   { ty: Type }
-    -- TODO Structs? Arrays? Enums? Unions?
-
-  syn Stmt =
-    | SIf      { cond: Expr, thn: Stmt, els: Stmt }
-    | SWhile   { cond: Expr, body: Stmt }
-    | SRet     { val: Option }
-    | SAssg    { var: String, val: Expr }
-    | SAppAssg { var: String, fun: String, args: [Expr] }
-    | SWeight  { arg: Expr }
-    | SPush    { arg: Expr }
-    | SPop     { arg: Expr }
-
   syn Expr =
-    | VVar   { var: String }
-    | VInt   { val: Int }
-    | VFloat { val: Float }
-    | VPtr   { adr: Int }
+    | TmWeight  { arg: Expr }
+    | TmPush    { arg: Expr }
+    | TmPop     { arg: Expr }
 
   sem outputProg =
-    | PProg tops -> "Hello, World!"
+    | Prog tops -> "Hello, World!"
 
 end
 
