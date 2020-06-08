@@ -64,6 +64,20 @@ let simBranch =
       ]))
 in
 
+-- TODO We need pattern matching on Leaf{age:float} and
+-- Node{age:float,l:Tree,r:Tree} here. Specifically, we need it for tree.age
+-- and parent.age, and for checking tree.type == 'node' in WebPPL script.
+let simTree =
+  ureclet_ "simBranch"
+    (ulams_ ["tree", "parent", "lambda", "mu"]
+      (bindall_ [
+         ulet_ "_"
+           (weight_
+             (mulf_ (negf_ (var_ "mu"))
+                    (subf_ (var_ "TODO") (var_ "TODO"))))
+    ]))
+in
+
 let crbd =
   bindall_ [
     condef_ "Leaf" tydyn_,
@@ -71,11 +85,17 @@ let crbd =
     ulet_ "tree" (node_ 1.0 (leaf_ 0.0) (leaf_ 0.0)),
     crbdGoesUndetected,
     simBranch,
-    -- TODO Add simTree
+    simTree,
     ulet_ "lambda" (float_ 0.2),
     ulet_ "mu" (float_ 0.1),
-    ulet_ "_" (weight_ (float_ 0.3)) -- weight(log(2))
-    -- TODO Add x2 calls to simTree and return lambda + mu
+    ulet_ "_" (weight_ (float_ 0.3)), -- weight(log(2))
+    -- TODO Add pattern matching to deconstruct tree to tree.left and tree.right
+    ulet_ "_" (appf4_ (var_ "simTree") (var_ "TODO")
+                     (var_ "tree") (var_ "lambda") (var_ "mu")),
+    ulet_ "_" (appf4_ (var_ "simTree") (var_ "TODO")
+                      (var_ "tree") (var_ "lambda") (var_ "mu")),
+    (record_ [{key = "1", value = (var_ "lambda")},
+              {key = "2", value = (var_ "mu")}])
   ]
 in
 
