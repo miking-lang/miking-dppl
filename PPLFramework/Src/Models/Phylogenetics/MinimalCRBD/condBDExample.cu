@@ -80,11 +80,8 @@ BBLOCK(condBD_2, stack_t, {
         // Resamples here
     } else {
         PC = PSTATE.pop();
-        // printf("PC popped=%d\n", PC);
-        if (PC < NUM_BBLOCKS)
+        if (PC < NUM_BBLOCKS) // Does not resample here
             DATA_POINTER(bblocksArr)[PC](particles, i, NULL);
-        // Should not resample here
-        // TODO: NOT RESAMPLE BUT INSTEAD DIRECTLY CALL FUNC[PC]
     }
 })
 
