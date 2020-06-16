@@ -8,104 +8,59 @@ typedef double floating_t; // To be able to switch between single and double pre
 /*
 *** MACROS used by problem-specific code, acts as an interface to the SMC framework ***
 
+- INIT_GLOBAL (mandatory) will set up globally accessible bblocks
+- BBLOCK_DATA (optional) will set up globally accessible data
 - Call SMCSTART with programState and numBblocks type as argument
 - INITBBLOCK with BBLOCK function (defined with BBLOCK macro) and programState type as arguments for each BBLOCK
 - SMCEND with program state type and callback as arguments to start inference
 - Result (right now only normalizationConstant) available through local variable "res"
 */
 
+// These will be executed by the framework
 #define BBLOCK(funcName, progStateType, body) \
 DEV void funcName(particles_t<progStateType>* particles, int i, void* arg = NULL) \
 body \
 DEV_POINTER(funcName, progStateType)
 
-
+// Regular helper functions that takes the particles as argument (syntactic sugar)
 #define BBLOCK_HELPER(funcName, body, returnType, ...) \
 template <typename T> \
 DEV returnType funcName(particles_t<T>* particles, int i, ##__VA_ARGS__) \
 body
 
+// Call functions that takes the particles as argument (syntactic sugar)
 #define BBLOCK_CALL(funcName, ...) funcName(particles, i, ##__VA_ARGS__)
 
-// #define STATUSFUNC(body) void statusFunc(particles_t<progState_t>* particles) body
-// Just a general statusfunc
+// Functions that can be called from the framework, usually to use resulting particle distributions before clean up
 #define CALLBACK_HOST(funcName, progStateType, body, arg) void funcName(particles_t<progStateType>* particles, arg) body
 #define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, arg) body
 
+/* 
+Initialize the basic block (add it to the array of bblocks), the order of bblocks matters!
+The first bblock to be initialized will be the first to be executed, then the execution follows the
+index (PC) specified by the model (bblocks)
+*/
 #define INITBBLOCK(funcName, progStateType) \
 pplFunc_t<progStateType> funcName ## Host; \
 FUN_REF(funcName, progStateType) \
 bblocksArr[bbIdx] = funcName ## Host; \
 bbIdx++;
-//bblocks.push_back(funcName ## Host);
-// bblocksArrDev[bbIdx] = funcName ## Dev; \
-// cudaSafeCall(cudaMemcpy(funcName ## Ptr, funcName ## Dev, sizeof(pplFunc_t<progStateType>), cudaMemcpyDeviceToDevice)); \
-//pplFunc_t<progStateType>* funcName ## Ptr = bblocksArr; \
-//funcName ## Ptr += bbIdx; \
-// cudaSafeCall(cudaMemcpyToSymbol(bblocksArrDev, &funcName ## Dev, sizeof(pplFunc_t<progStateType>), bbIdx * sizeof(pplFunc_t<progStateType>), cudaMemcpyDeviceToDevice)); \
-// cudaSafeCall(cudaMemcpyToSymbol(bblocksArrDev[bbIdx], &funcName ## Dev, sizeof(pplFunc_t<progStateType>), 0, cudaMemcpyDeviceToDevice)); \
 
-
-// #define INITBBLOCK_NESTED(funcName, progStateType) bblocks.push_back(funcName);
+// Same as above, but for nested inference
 #define INITBBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
 
-//pplFunc_t<progStateType> funcName ## Host = funcName; \
-
-
-// *** Array needed to handle stuff =)
-template <typename T>
-struct arr100_t {
-    int currIndex = 0;
-    T arr[100];
-
-    HOST DEV T operator [] (int i) const {return arr[i];}
-    HOST DEV T& operator [] (int i) {return arr[i];}
-
-    HOST DEV void push_back(T obj) {
-        arr[currIndex] = obj;
-        currIndex++;
-    }
-
-    HOST DEV int size() {
-        return currIndex;
-    }
-
-    HOST DEV T* begin() {
-        return arr;
-    }
-
-    HOST DEV T* end() {
-        return &arr[currIndex];
-    }
-};
-// ***
-
-
-// #define INIT_BBLOCKS_ARRAY(progStateType, numBblocks) BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks+1)
-// #define INIT_GLOBAL(progStateType) pplFunc_t<progStateType>* bblocksArr;
+// Sets up globally accessible bblock array, that can be accessed from the bblocks
 #define INIT_GLOBAL(progStateType, numBblocks) \
-BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks+1)
-//pplFunc_t<progStateType>* bblocksArr; \
-//__device__ pplFunc_t<progStateType> bblocksArrDev[numBblocks];
-// BBLOCK_DATA_PTR(bblocksArr, pplFunc_t<progStateType>);
-// BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks+1)
-
-
-
-// #define SMCSTART(progStateType) arr100_t<pplFunc_t<progStateType>> bblocks;
-#define SMCSTART(progStateType, numBblocks) \
+BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
 int bbIdx = 0;
-// ALLOCATE_BBLOCKS(bblocksArr, progStateType, numBblocks)
-// bblocksArr = new pplFunc_t<progStateType>[numBblocks+1]; // {}
 
-// cudaMemcpy(bblocksArrDev, bblocksArr, numBblocks * sizeof(pplFunc_t<progStateType>), cudaMemcpyHostToDevice); \
-// DATA_POINTER(bblocksArr) = bblocksArr; \
-// COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateType>*, 1); \
-// COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateType>, numBblocks); \
 
-#define SMCEND(progStateType, callback) \
-bblocksArr[bbIdx] = NULL; \
-int numBblocks = bbIdx+1; \
+// #define SMCSTART(progStateType, numBblocks) \
+// int bbIdx = 0;
+
+// Run SMC with given program state type (mandatory) and callback function (optional, can be declared with CALLBACK macro)
+#define SMC(progStateType, callback) \
+int numBblocks = bbIdx; \
 configureMemSizeGPU(); \
 COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
 pplFunc_t<progStateType>* bblocksArrCudaManaged; \
@@ -115,46 +70,37 @@ for(int i = 0; i < numBblocks; i++) \
 double res = runSMC<progStateType>(bblocksArrCudaManaged, numBblocks, callback); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArrCudaManaged);
 
-
-/*
-#define SMCEND(progStateType, callback) \
-bblocks.push_back(NULL); \
-pplFunc_t<progStateType>* bblocksArr; \
-allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
-copy(bblocks.begin(), bblocks.end(), bblocksArr); \
-configureMemSizeGPU(); \
-double res = runSMC<progStateType>(bblocksArr, bblocks.size(), callback);
-freeMemory<pplFunc_t<progStateType>>(bblocksArr);
-*/
-// #define SMCSTART_NESTED(progStateType) arr100_t<pplFunc_t<progStateType>> bblocks;
-#define SMCSTART_NESTED(progStateType, numBblocks) \
+// Prepare bblock array for initialization of bblocks, for nested inference only
+#define SMC_PREPARE_NESTED(progStateType, numBblocks) \
 pplFunc_t<progStateType>* bblocks = new pplFunc_t<progStateType>[numBblocks]; /*{}*/ \
 int bbIdx = 0;
 
-#define SMCEND_NESTED(progStateType, callback, retStruct, arg, parallelExec, parallelResampling, parentIndex) \
-bblocks[bbIdx] = NULL; \
-double res = runSMCNested<progStateType>(bblocks, callback, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
+/* 
+Run the nested inference with arguments:
+- progStateType: The program state used by particles/bblocks in nested inference
+- callback: Callback function to use resulting particle distribution before clean up
+- retStruct: structure to fill with result in callback (passed to callback, handled by model, just passed by framework)
+- arg: argument to nested inference bblocks
+- parallelExec: boolean, whether new CUDA-kernels should be launched for nested inference, otherwise just run sequentially (on GPU threads if top-level inference runs on the GPU)
+- parallelResampling: boolean, whether new CUDA-kernels should be launched for nested resampling, otherwise run sequential variant (on GPU threads if top-level inference runs on the GPU)
+- parentIndex: 
+*/
+#define SMC_NESTED(progStateType, callback, retStruct, arg, parallelExec, parallelResampling, parentIndex) \
+int numBblocks = bbIdx; \
+double res = runSMCNested<progStateType>(bblocks, callback, numBblocks, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
 delete[] bblocks;
 
-
-//#define SMCEND_NESTED(progStateType, callback, retStruct, arg, parallelExec, parallelResampling, parentIndex) \
-//bblocks.push_back(NULL); \
-//pplFunc_t<progStateType>* bblocksArr; \
-///*{}*/ \
-//bblocksArr = new pplFunc_t<progStateType>[bblocks.size()]; \
-///*{}*/ \
-//for(int i = 0; i < bblocks.size(); i++) \
-//    bblocksArr[i] = bblocks[i]; \
-//double res = runSMCNested<progStateType>(bblocksArr, callback, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
-//delete[] bblocksArr;
-
-
+// Add log-weight to the particle
 #define WEIGHT(w) particles->weights[i] += w
-#define PWEIGHT particles->weights[i]
-#define PC particles->pcs[i]
-// #define RESAMPLE particles->resample[i]
-#define PSTATE particles->progStates[i]
 
+// Access particle weight
+#define PWEIGHT particles->weights[i]
+
+// Access particle program counter (bblock index)
+#define PC particles->pcs[i]
+
+// Access the particle's program/model specific state
+#define PSTATE particles->progStates[i]
 
 
 

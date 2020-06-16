@@ -10,9 +10,9 @@
     This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
 */
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CBD/cbdNoStackPrecomputeNext.cu -o smc.exe -std=c++11 -O3
 
 typedef short treeIdx_t;
 struct progState_t {
@@ -165,11 +165,11 @@ DEV T runNestedInference(int parentIndex) {
 
     T ret;
 
-    SMCSTART_NESTED(nestedProgState_t, NUM_BBLOCKS_NESTED)
+    SMC_PREPARE_NESTED(nestedProgState_t, NUM_BBLOCKS_NESTED)
 
     INITBBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
-    SMCEND_NESTED(nestedProgState_t, calcResult, ret, NULL, parallelExec, parallelResampling, parentIndex)
+    SMC_NESTED(nestedProgState_t, calcResult, ret, NULL, parallelExec, parallelResampling, parentIndex)
 
     return ret;
 }
@@ -197,12 +197,12 @@ int main() {
     initGen();
     initCBD();
     
-    SMCSTART(progState_t, NUM_BBLOCKS)
+    // SMCSTART(progState_t, NUM_BBLOCKS)
 
     INITBBLOCK(simCRBD, progState_t)
     INITBBLOCK(simTree, progState_t)
 
-    SMCEND(progState_t, NULL)
+    SMC(progState_t, NULL)
 
     res += corrFactor;
 

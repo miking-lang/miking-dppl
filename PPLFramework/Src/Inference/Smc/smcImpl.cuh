@@ -28,6 +28,7 @@ void configureMemSizeGPU() {
     cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
     printf("Size limit stack: %f KB\n", stackSize / 1000.0);
     printf("Allocated for particle stacks total top-level inference: %f MB\n\n", stackSize * NUM_PARTICLES / 1000000.0);
+    // cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     #endif
 }
 
@@ -39,16 +40,11 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
     // printf("Particles size: %f MB\n", particleSize);
     
     floating_t logNormConstant = 0;
-    pplFunc_t<T> bblocksLocal[numBblocks]; // Local bblocks means slightly less transfers from GPU to CPU
-    for(int i = 0; i < numBblocks; i++)
-        bblocksLocal[i] = bblocks[i];
-    
-    // Init
+
     particles_t<T>* particles = allocateParticles<T>(false);
     
     #ifdef GPU
     initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, NUM_PARTICLES);
-    // cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     cudaDeviceSynchronize();
     cudaCheckError();
     #endif
@@ -65,22 +61,19 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
         #else
         for(int i = 0; i < NUM_PARTICLES; i++) {
             int pc = particles->pcs[i];
-            if(bblocks[pc] != NULL)
+            if(pc < numBblocks)
                 bblocks[pc](particles, i, arg); 
         }
         #endif
-        // statusFunc(particles, t); // Is this really necessary? Expensive for GPU-version
         
-        // if(particles->resample[0]) { // Assumption: All resample at the same time
         #ifdef GPU
         floating_t weightSum = resampleSystematicPar<T>(particles, resampler);
         #else
         floating_t weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES);
         #endif
         logNormConstant += log(weightSum / NUM_PARTICLES);
-        // }
         
-        if(bblocksLocal[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
+        if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;
         
     }
@@ -98,7 +91,7 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
 
 /* Do not use parallel setting if GPU is not defined! */
 template <typename T>
-DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void* ret, void* arg, bool parallelExec, bool parallelResampling, int seed) {
+DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int numBblocks, void* ret, void* arg, bool parallelExec, bool parallelResampling, int seed) {
 
     if(parallelExec || parallelResampling) {
         #ifndef GPU
@@ -109,7 +102,6 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
 
     floating_t logNormConstant = 0;
     
-    // Init
     particles_t<T>* particles = allocateParticlesNested<T>();
     
     #ifdef GPU
@@ -134,7 +126,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
             
             for(int i = 0; i < NUM_PARTICLES_NESTED; i++) {
                 int pc = particles->pcs[i];
-                if(bblocks[pc] != NULL) 
+                if(pc < numBblocks)
                     bblocks[pc](particles, i, arg); 
             }
             #ifdef GPU
@@ -143,7 +135,6 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
             #endif
         }
         
-        // if(particles->resample[0]) { // Assumption: All resample at the same time
         floating_t weightSum;
         if(parallelResampling) {
             #ifdef GPU
@@ -153,9 +144,8 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, void*
             weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES_NESTED);
         }
         logNormConstant += log(weightSum / NUM_PARTICLES_NESTED);
-        // }
         
-        if(bblocks[particles->pcs[0]] == NULL) // Assumption: All terminate at the same time
+        if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;
         
     }

@@ -5,27 +5,42 @@
 
 #define HOST __host__
 #define DEV __device__
+
+// A device pointer to a bblock
 #define DEV_POINTER(funcName, progStateType) __device__ pplFunc_t<progStateType> funcName ## Dev = funcName;
+
+// Copies a reference to a device function to a host pointer, necessary to handle GPU function pointers on CPU
 #define FUN_REF(funcName, progStateType) cudaSafeCall(cudaMemcpyFromSymbol(&funcName ## Host, funcName ## Dev, sizeof(pplFunc_t<progStateType>))); 
+
+// Allocate data on host and device, should be followed by a COPY_DATA_GPU call before inference
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];\
 __device__ type pointerName ## Dev[n];
-#define BBLOCK_DATA_PTR(pointerName, type) type* pointerName;\
-__device__ type* pointerName ## Dev;
+
+// Same as BBLOCK_DATA, but 2D-array
 #define BBLOCK_DATA_2D(pointerName, type, n, m) type pointerName[n][m];\
 __device__ type pointerName ## Dev[n][m];
 
-#define COPY_DATA_GPU(pointerName, type, n) cudaSafeCall(cudaMemcpyToSymbol(pointerName ## Dev, pointerName, n * sizeof(type)));
-#define DATA_POINTER(pointerName) pointerName ## Dev
-#define ALLOCATE_BBLOCKS(bblocksArr, progStateType, numBblocks) \
-allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, numBblocks+1);
-// cudaSafeCall(cudaMalloc(&bblocksArrDev, sizeof(pplFunc_t<progStateType>) * (numBblocks+1)));
-// allocateMemory<pplFunc_t<progStateType>>(&bblocksArrDev, numBblocks+1);
+// Same as above, but 3D-array
+#define BBLOCK_DATA_3D(pointerName, type, n, m, z) type pointerName[n][m][z];\
+__device__ type pointerName ## Dev[n][m][z];
 
+// Declare pointers on host and device
+#define BBLOCK_DATA_PTR(pointerName, type) type* pointerName;\
+__device__ type* pointerName ## Dev;
+
+// Copy the data from the host pointer to the device pointer (to the GPU), pointers should be allocated with a BBLOCK_DATA macro
+#define COPY_DATA_GPU(pointerName, type, n) cudaSafeCall(cudaMemcpyToSymbol(pointerName ## Dev, pointerName, n * sizeof(type)));
+
+// Access the data allocated with a BBLOCK_DATA macro
+#define DATA_POINTER(pointerName) pointerName ## Dev
 
 // #define SAMPLE(distrName, ...) distrName(curandState* randState, ##__VA_ARGS__)
-#else
-// #define SAMPLE(distrName, ...) distrName(##__VA_ARGS__)
 
+#else
+
+// The macros below are equivalent to the GPU variants above, but for CPU
+
+// #define SAMPLE(distrName, ...) distrName(##__VA_ARGS__)
 
 #define HOST
 #define DEV
@@ -34,11 +49,8 @@ allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, numBblocks+1);
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];
 #define BBLOCK_DATA_PTR(pointerName, type) type* pointerName;
 #define BBLOCK_DATA_2D(pointerName, type, n, m) type pointerName[n][m];
-#define COPY_DATA_GPU(pointerName, type, n) // Would be nice to solve this cleaner
+#define COPY_DATA_GPU(pointerName, type, n) // Just a noop on CPU
 #define DATA_POINTER(pointerName) pointerName
-
-#define ALLOCATE_BBLOCKS(bblocksArr, progStateType, numBblocks) \
-allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, numBblocks+1);
 
 #endif
 

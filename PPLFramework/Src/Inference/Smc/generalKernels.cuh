@@ -14,7 +14,8 @@ __global__ void initParticles(particles_t<T>* particles, int numParticles, int s
     particles->weights[idx] = 0;
     particles->pcs[idx] = 0;
 
-    curand_init(1234 + clock64(), seed + idx, 0, &particles->randStates[idx]);
+    // Double check this seed, need only to be unique over one inference, as time will vary between inferences. 
+    curand_init(1234 + clock64(), seed * numParticles + idx, 0, &particles->randStates[idx]);
     // printf("seed: %d\n", seed);
 }
 

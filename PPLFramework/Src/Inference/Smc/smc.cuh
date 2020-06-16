@@ -37,7 +37,6 @@ struct particles_t {
     #endif
     int* pcs;
     floating_t* weights;
-    // bool* resample;
 };
 
 // BBLOCK function

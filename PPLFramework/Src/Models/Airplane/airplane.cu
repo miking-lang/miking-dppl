@@ -10,7 +10,7 @@
 #include "airplane.cuh"
 #include "airplaneUtils.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Airplane/*.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/Models/Airplane/*.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 using namespace std;
 
@@ -79,10 +79,10 @@ int main(int argc, char** argv) {
 
     initAirplane();
 
-    SMCSTART(progState_t, NUM_BBLOCKS)
+    // SMCSTART(progState_t, NUM_BBLOCKS)
 
     INITBBLOCK(particleInit, progState_t)
     INITBBLOCK(propagateAndWeight, progState_t)
 
-    SMCEND(progState_t, callback)
+    SMC(progState_t, callback)
 }

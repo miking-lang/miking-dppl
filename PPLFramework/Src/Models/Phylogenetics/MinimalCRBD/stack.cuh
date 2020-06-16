@@ -4,14 +4,12 @@
 
 const int MAX_STACK_DEPTH = 100;
 
+#define WORDS
 #ifdef WORDS
 
 struct stack_t {
     int stackPointer = 0;
     int arr[MAX_STACK_DEPTH];
-    // void* arr = arrInt;
-    int numProgStates = 0;
-    int numPC = 0;
 
     HOST DEV void push(int element) {
         arr[stackPointer] = element;
@@ -33,12 +31,10 @@ struct stack_t {
 
     template <typename T1>
     HOST DEV void pushType(T1 element) {
+        if(sizeof(T1) % 4 != 0)
+            printf("Pushing type of size non multiple of 4: %lu\n", sizeof(T1));
         int numWords = sizeof(T1) / 4; // Fix case with non multiple of 4
-        if(numWords == 1)
-            numPC++;
-        else
-            numProgStates++;
-        // printf("Pushed %d ints, SP=%d\n", numWords, stackPointer);
+        
         void* pStateVoid = static_cast<void*>(&element);
         int* pStateInt = static_cast<int*>(pStateVoid);
         for (int w = 0; w < numWords; w++) { 
@@ -48,23 +44,16 @@ struct stack_t {
 
     template <typename T1>
     HOST DEV void popType(T1* ret) {
+        if(sizeof(T1) % 4 != 0)
+            printf("Popping type of size non multiple of 4: %lu\n", sizeof(T1));
         int numWords = sizeof(T1) / 4; // Fix case with non multiple of 4
-        if(numWords == 1)
-            numPC--;
-        else
-            numProgStates--;
-        // printf("Popped %d ints, numPC=%d, numProgStates=%d\n", numWords, numPC, numProgStates);
-        // int pStateInt[numWords]; 
+
         void* voidRet = static_cast<void*>(ret);
         int* intRet = static_cast<int*>(voidRet);
 
         for (int w = numWords-1; w >= 0; w--) {
             intRet[w] = pop();
         }
-
-        // void* pStateVoid = static_cast<void*>(pStateInt);
-        // T1 pState = *static_cast<T1*>(pStateVoid);
-        // return pState;
     }
 };
 
