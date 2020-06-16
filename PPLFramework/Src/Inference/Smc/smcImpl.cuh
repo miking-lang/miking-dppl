@@ -4,6 +4,8 @@
 #include <iostream>
 #include <limits>
 #include "../../Utils/timer.h"
+#include "smc.cuh"
+#include "../../Utils/distributions.cuh"
 
 #ifdef GPU
 #include "../../Utils/cudaErrorUtils.cu"
@@ -58,23 +60,27 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
         execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles, bblocks, NUM_PARTICLES, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
+        floating_t weightSum = calcWeightSumPar<T>(particles, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
         #else
+
         for(int i = 0; i < NUM_PARTICLES; i++) {
             int pc = particles->pcs[i];
             if(pc < numBblocks)
                 bblocks[pc](particles, i, arg); 
         }
+        floating_t weightSum = calcWeightSumSeq<T>(particles, resampler, NUM_PARTICLES);
         #endif
-        
-        #ifdef GPU
-        floating_t weightSum = resampleSystematicPar<T>(particles, resampler);
-        #else
-        floating_t weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES);
-        #endif
+
         logNormConstant += log(weightSum / NUM_PARTICLES);
-        
         if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;
+        
+
+        #ifdef GPU
+        resampleSystematicPar<T>(particles, resampler);
+        #else
+        resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES);
+        #endif
         
     }
 
@@ -129,24 +135,30 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int n
                 if(pc < numBblocks)
                     bblocks[pc](particles, i, arg); 
             }
-            #ifdef GPU
-            if(parallelExec)
-                cudaCheckErrorDev();
-            #endif
         }
         
         floating_t weightSum;
         if(parallelResampling) {
             #ifdef GPU
-            weightSum = resampleSystematicParNested<T>(particles, resampler);
+            weightSum = calcWeightSumPar<T>(particles, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
             #endif
         } else {
-            weightSum = resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES_NESTED);
+            weightSum = calcWeightSumSeq<T>(particles, resampler, NUM_PARTICLES_NESTED);
         }
+
         logNormConstant += log(weightSum / NUM_PARTICLES_NESTED);
         
         if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;
+
+        if(parallelResampling) {
+            #ifdef GPU
+            resampleSystematicParNested<T>(particles, resampler);
+            #endif
+        } else {
+            resampleSystematicSeq<T>(particles, resampler, NUM_PARTICLES_NESTED);
+        }
+        
         
     }
 

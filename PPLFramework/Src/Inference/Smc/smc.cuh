@@ -10,8 +10,10 @@
 
 using namespace std;
 
-
-const int NUM_PARTICLES = 1000;// 55000;
+/*
+Settings for CUDA kernel launches
+*/
+const int NUM_PARTICLES = 200;// 55000;
 const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;
@@ -43,9 +45,10 @@ struct particles_t {
 template <typename T>
 using pplFunc_t = void (*)(particles_t<T>*, int, void*);
 
-template <typename T>
-using statusFunc_t = void (*)(particles_t<T>*);
+// template <typename T>
+// using statusFunc_t = void (*)(particles_t<T>*);
 
+// Callback function, like bblock function but without index. As all particles are usually used here
 template <typename T>
 using callbackFunc_t = void (*)(particles_t<T>*, void*);
 
@@ -58,6 +61,7 @@ using callbackFunc_t = void (*)(particles_t<T>*, void*);
 
 
 /* 
+Measured with linux tool perf: perf stat -r numTimes prog progArgs
 ~0.9 sec avg over 6 runs with only some separate num_particles in nested and not
 ~0.915 sec avg over 6 runs with separate num_particles in nested and not
 

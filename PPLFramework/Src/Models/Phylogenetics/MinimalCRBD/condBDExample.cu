@@ -1,12 +1,7 @@
-#include <iostream>
-#include <cstring>
-#include "../../../Inference/Smc/smc.cuh"
 #include "../../../Inference/Smc/smcImpl.cuh"
-#include "../../../Utils/distributions.cuh"
-// #include "cbd.cuh"
+
 #include "../TreeUtils/treeUtils.cuh"
 #include "simulations.cuh"
-
 #include "stack.cuh"
 
 /**
@@ -130,6 +125,8 @@ BBLOCK(condBD_init, stack_t, {
     pState.mu = 0.1;
     PSTATE.pushType<progState_t>(pState);
     
+    WEIGHT(log(2.0));
+
     PC = 3;
     BBLOCK_CALL(condBD_3);
 })

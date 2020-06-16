@@ -31,7 +31,7 @@ void initGen() {
 #ifdef GPU
 
 template <typename T>
-__device__ int flipK(particles_t<T>* particles, int i, floating_t p = 0.5) {
+__device__ int sampleBernoulli(particles_t<T>* particles, int i, floating_t p = 0.5) {
     return curand_uniform(&particles->randStates[i]) < p ? 1 : 0;
 }
 
@@ -163,12 +163,15 @@ floating_t sampleGamma(particles_t<T>* particles, int i, floating_t k, floating_
     // return gammaDist(generatorDists);
 }
 
-int flip(double p = 0.5) {
+template <typename T>
+int sampleBernoulli(particles_t<T>* particles, int i, double p = 0.5) {
     return uniformDist(generatorDists) < p ? 1 : 0;
 }
 
 
 #endif
+
+
 
 // Could be optimized
 // Log of normal pdf
@@ -191,8 +194,9 @@ HOST DEV void sampleDirichlet(particles_t<T>* particles, int i, const floating_t
 }
 
 // Could prolly be optimized
+// This is equivalent to the Discrete distribution in WebPPL
 template <typename T>
-HOST DEV int sampleCategorical(particles_t<T>* particles, int i, const floating_t* dist, const int n) {
+HOST DEV int sampleDiscrete(particles_t<T>* particles, int i, const floating_t* dist, const int n) {
     floating_t u = sampleUniform(particles, i, 0, 1);
     floating_t sum = 0;
     int idx = 0;
@@ -206,9 +210,17 @@ HOST DEV int sampleCategorical(particles_t<T>* particles, int i, const floating_
 
 // returns integer [0, n)
 template <typename T>
-HOST DEV int sampleCategoricalStandard(particles_t<T>* particles, int i, const int n) {
+HOST DEV int sampleRandomInteger(particles_t<T>* particles, int i, const int n) {
     floating_t u = sampleUniform(particles, i, 0, n) - 0.000000000000001;
     return static_cast<int>(u);
+}
+
+
+template <typename T>
+HOST DEV floating_t sampleBeta(particles_t<T>* particles, int i, floating_t a, floating_t b) {
+    floating_t x = sampleGamma(particles, i, a, 1);
+    floating_t y = sampleGamma(particles, i, b, 1);
+    return x / (x + y);
 }
 
 #endif

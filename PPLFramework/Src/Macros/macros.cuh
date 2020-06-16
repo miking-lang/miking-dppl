@@ -32,7 +32,7 @@ body
 #define BBLOCK_CALL(funcName, ...) funcName(particles, i, ##__VA_ARGS__)
 
 // Functions that can be called from the framework, usually to use resulting particle distributions before clean up
-#define CALLBACK_HOST(funcName, progStateType, body, arg) void funcName(particles_t<progStateType>* particles, arg) body
+#define CALLBACK_HOST(funcName, progStateType, body) void funcName(particles_t<progStateType>* particles, void* arg=NULL) body
 #define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, arg) body
 
 /* 

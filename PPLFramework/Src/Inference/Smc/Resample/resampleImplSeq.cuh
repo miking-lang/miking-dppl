@@ -18,6 +18,15 @@ HOST DEV void calcInclusivePrefixSumSeq(particles_t<T>* particles, floating_t* p
     }
 }
 
+template <typename T>
+HOST DEV floating_t calcWeightSumSeq(particles_t<T>* particles, resampler_t resampler, int numParticles) {
+    expWeightsSeq(particles->weights, numParticles);
+    calcInclusivePrefixSumSeq<T>(particles, resampler.prefixSum, numParticles);
+    //if(resampler.prefixSum[numParticles-1] == 0)
+        //printf("Error: prefixSum = 0!\n");
+    return resampler.prefixSum[numParticles - 1];
+}
+
 HOST DEV
 void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
 
@@ -51,18 +60,13 @@ HOST DEV void copyStatesSeq(particles_t<T>* particles, int* ancestor, void* temp
 
 // i is index of executing CUDA-thread, in case of nested inference
 template <typename T>
-HOST DEV floating_t resampleSystematicSeq(particles_t<T>* particles, resampler_t resampler, int numParticles) {
-    expWeightsSeq(particles->weights, numParticles);
-    calcInclusivePrefixSumSeq<T>(particles, resampler.prefixSum, numParticles);
-    //if(resampler.prefixSum[numParticles-1] == 0)
-        //printf("Error: prefixSum = 0!\n");
+HOST DEV void resampleSystematicSeq(particles_t<T>* particles, resampler_t resampler, int numParticles) {
     
     floating_t u = sampleUniform(particles, 0, 0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
 
     systematicCumulativeOffspringSeq(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
     cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor, numParticles);
     copyStatesSeq<T>(particles, resampler.ancestor, resampler.tempArr, numParticles);
-    return resampler.prefixSum[numParticles-1];
 }
 
 /*

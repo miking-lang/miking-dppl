@@ -65,7 +65,7 @@ BBLOCK_HELPER(goesExtinct, {
     if(currentTime < 0)
         return false;
     
-    bool speciation = BBLOCK_CALL(flipK, lambdaLocal / (lambdaLocal + muLocal));
+    bool speciation = BBLOCK_CALL(sampleBernoulli, lambdaLocal / (lambdaLocal + muLocal));
     if (! speciation)
         return true;
     else 

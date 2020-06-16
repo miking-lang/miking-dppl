@@ -1,6 +1,8 @@
 #ifndef RESAMPLE_GPU_INCLUDED
 #define RESAMPLE_GPU_INCLUDED
 
+#ifdef GPU
+
 #include "resampleCommon.cuh"
 #include "resampleKernels.cuh"
 #include "../../../Utils/cudaErrorUtils.cu"
@@ -43,17 +45,15 @@ HOST DEV void copyStatesPar(particles_t<T>* particles, int* ancestor, void* temp
 */
 
 template <typename T>
-HOST DEV void preUniform(particles_t<T>* particles, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
-
-    // Restore weights from log-space
+HOST DEV floating_t calcWeightSumPar(particles_t<T>* particles, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
     expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(particles->weights, numParticles);
-
     // Calculate inclusive prefic sum
     floating_t* w = particles->weights;
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
     // cudaCheckError();
     // if(resampler.prefixSum[numParticles-1] == 0) // Bad performance since it is a transfer
     //     printf("Error: prefixSum = 0!\n");
+    return resampler.prefixSum[numParticles - 1];
 }
 
 
@@ -79,28 +79,21 @@ HOST DEV void postUniform(particles_t<T>* particles, resampler_t resampler, floa
 // If nested and doing parallel (which only works on GPU top-level inference), 
 // let other functions know, so they can adjust kernel settings and num_particles
 template <typename T>
-DEV floating_t resampleSystematicParNested(particles_t<T>* particles, resampler_t resampler) {
-
-    preUniform(particles, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
+DEV void resampleSystematicParNested(particles_t<T>* particles, resampler_t resampler) {
     
     floating_t u = sampleUniform(particles, 0, 0.0f, 1.0f);
     
     postUniform(particles, resampler, u, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
-    
-    return resampler.prefixSum[NUM_PARTICLES_NESTED - 1];
 }
 
 template <typename T>
-floating_t resampleSystematicPar(particles_t<T>* particles, resampler_t resampler) {
-
-    preUniform(particles, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+void resampleSystematicPar(particles_t<T>* particles, resampler_t resampler) {
     
     floating_t u = uDistRes(generatorRes);
     
     postUniform(particles, resampler, u, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
-    
-    return resampler.prefixSum[NUM_PARTICLES - 1];
 }
 
+#endif
 
 #endif
