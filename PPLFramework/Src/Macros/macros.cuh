@@ -67,7 +67,7 @@ pplFunc_t<progStateType>* bblocksArrCudaManaged; \
 allocateMemory<pplFunc_t<progStateType>>(&bblocksArrCudaManaged, numBblocks); \
 for(int i = 0; i < numBblocks; i++) \
     bblocksArrCudaManaged[i] = bblocksArr[i]; \
-double res = runSMC<progStateType>(bblocksArrCudaManaged, numBblocks, callback); \
+res = runSMC<progStateType>(bblocksArrCudaManaged, numBblocks, callback); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArrCudaManaged);
 
 // Prepare bblock array for initialization of bblocks, for nested inference only
@@ -101,6 +101,16 @@ delete[] bblocks;
 
 // Access the particle's program/model specific state
 #define PSTATE particles->progStates[i]
+
+// Main function
+#define MAIN(body) \
+int main() { \
+    initGen(); \
+    double res = 0; \
+    body \
+    cout << "log(normalizationConstant) = " << res << endl; \
+    return 0; \
+}
 
 
 

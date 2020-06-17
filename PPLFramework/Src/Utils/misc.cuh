@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <cstring>
+#include <bits/stdc++.h> 
 
 // #include "list.cuh"
 
@@ -68,10 +69,55 @@ void printArray(T* arr, int n, string title="") {
     cout << "[ ";
     for(int i = 0; i < n; i++)
         cout << arr[i] << " ";
-    cout << "]\n" << endl;
+    cout << "]" << endl;
 }
 
+template <typename T>
+HOST DEV int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
 
+const int MAX_SIZE_MG = 3;
+HOST DEV void choleskyDecomposition(floating_t matrix[MAX_SIZE_MG][MAX_SIZE_MG], int n, floating_t lower[MAX_SIZE_MG][MAX_SIZE_MG]) { 
+    // floating_t lower[n][n]; 
+    memset(lower, 0, sizeof(floating_t) * n * n); 
+
+    // Decomposing a matrix into Lower Triangular 
+    for (int i = 0; i < n; i++) { 
+        for (int j = 0; j <= i; j++) { 
+            floating_t sum = 0; 
+            // printf("[%d][%d]: %f\n", i, j, matrix[i][j]);
+
+            if (j == i) { // summation for diagnols  
+                for (int k = 0; k < j; k++) 
+                    sum += pow(lower[j][k], 2); 
+                lower[j][j] = sqrt(matrix[j][j] - sum); 
+            } else { 
+
+                // Evaluating L(i, j) using L(j, j) 
+                for (int k = 0; k < j; k++) 
+                    sum += (lower[i][k] * lower[j][k]); 
+                lower[i][j] = (matrix[i][j] - sum) / lower[j][j]; 
+            } 
+        }
+    } 
+
+    // Displaying Lower Triangular and its Transpose 
+    // cout << setw(6) << " Lower Triangular" << setw(30) << "Transpose" << endl; 
+    for (int i = 0; i < n; i++) { 
+
+        // Lower Triangular 
+        for (int j = 0; j < n; j++) 
+            printf("%f ", lower[i][j]);
+            // cout << setw(6) << lower[i][j]; 
+        printf("\n"); 
+
+        // Transpose of Lower Triangular 
+        //for (int j = 0; j < n; j++) 
+        //    cout << setw(6) << lower[j][i] << "\t"; 
+        //cout << endl; 
+    } 
+} 
 
 
 // *** Array needed to handle stuff =)

@@ -131,7 +131,17 @@ BBLOCK(condBD_init, stack_t, {
     BBLOCK_CALL(condBD_3);
 })
 
+MAIN(
+    INITBBLOCK(condBD_init, stack_t)
+    INITBBLOCK(condBD_1, stack_t)
+    INITBBLOCK(condBD_2, stack_t)
+    INITBBLOCK(condBD_3, stack_t)
+    INITBBLOCK(condBD_4, stack_t)
 
+    SMC(stack_t, NULL)
+)
+
+/*
 int main() {
 
     initGen();
@@ -150,3 +160,4 @@ int main() {
 
     return 0;
 }
+*/
