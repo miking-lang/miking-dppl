@@ -13,7 +13,7 @@
 // Compile CPU: g++ -x c++ Src/Models/Phylogenetics/MinimalCRBD/condBDExample.cu -o smc.exe -std=c++11 -O3
 
 #define NUM_BBLOCKS 5
-INIT_GLOBAL(stack_t, NUM_BBLOCKS)
+INIT_GLOBAL(pStack_t, NUM_BBLOCKS)
 
 
 BBLOCK_DATA(tree, tree_t, 1)
@@ -37,7 +37,7 @@ BBLOCK_HELPER(pushChild, {
 }, void, progState_t parent, int childIdx)
 
 
-BBLOCK(condBD_1, stack_t, {
+BBLOCK(condBD_1, pStack_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -54,7 +54,7 @@ BBLOCK(condBD_1, stack_t, {
     // Resamples here
 })
 
-BBLOCK(condBD_2, stack_t, {
+BBLOCK(condBD_2, pStack_t, {
     
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -63,7 +63,7 @@ BBLOCK(condBD_2, stack_t, {
 
     floating_t parentAge = treeP->ages[pState.parentIdx];
     floating_t treeAge = treeP->ages[pState.treeIdx];
-    floating_t w = BBLOCK_CALL(simBranch<stack_t>, parentAge, treeAge, pState.lambda, pState.mu);
+    floating_t w = BBLOCK_CALL(simBranch<pStack_t>, parentAge, treeAge, pState.lambda, pState.mu);
     WEIGHT(w);
     
 
@@ -80,7 +80,7 @@ BBLOCK(condBD_2, stack_t, {
 })
 
 // Keep DFSing left
-BBLOCK(condBD_3, stack_t, {
+BBLOCK(condBD_3, pStack_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -98,7 +98,7 @@ BBLOCK(condBD_3, stack_t, {
 })
 
 // Keep DFSing right
-BBLOCK(condBD_4, stack_t, {
+BBLOCK(condBD_4, pStack_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -114,7 +114,7 @@ BBLOCK(condBD_4, stack_t, {
     BBLOCK_CALL(condBD_1);
 })
 
-BBLOCK(condBD_init, stack_t, {
+BBLOCK(condBD_init, pStack_t, {
 
     PSTATE.pushType<int>(NUM_BBLOCKS); // Go to PC=5 when top-level condBD_1 is done (terminate)
 
@@ -132,32 +132,11 @@ BBLOCK(condBD_init, stack_t, {
 })
 
 MAIN(
-    INITBBLOCK(condBD_init, stack_t)
-    INITBBLOCK(condBD_1, stack_t)
-    INITBBLOCK(condBD_2, stack_t)
-    INITBBLOCK(condBD_3, stack_t)
-    INITBBLOCK(condBD_4, stack_t)
+    INITBBLOCK(condBD_init, pStack_t)
+    INITBBLOCK(condBD_1, pStack_t)
+    INITBBLOCK(condBD_2, pStack_t)
+    INITBBLOCK(condBD_3, pStack_t)
+    INITBBLOCK(condBD_4, pStack_t)
 
-    SMC(stack_t, NULL)
+    SMC(pStack_t, NULL)
 )
-
-/*
-int main() {
-
-    initGen();
-    
-    // SMCSTART(stack_t, NUM_BBLOCKS)
-
-    INITBBLOCK(condBD_init, stack_t)
-    INITBBLOCK(condBD_1, stack_t)
-    INITBBLOCK(condBD_2, stack_t)
-    INITBBLOCK(condBD_3, stack_t)
-    INITBBLOCK(condBD_4, stack_t)
-
-    SMC(stack_t, NULL)
-
-    cout << "log(MarginalLikelihood) = " << res << endl;
-
-    return 0;
-}
-*/

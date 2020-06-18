@@ -5,7 +5,7 @@
 #include <limits>
 #include "../../Utils/timer.h"
 #include "smc.cuh"
-#include "../../Utils/distributions.cuh"
+#include "../../Utils/Distributions/distributions.cuh"
 
 #ifdef GPU
 #include "../../Utils/cudaErrorUtils.cu"
@@ -86,7 +86,7 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
 
     if(callback != NULL)
         callback(particles, NULL);
-        
+
     // Clean up
     destResampler<T>(resampler);
     freeParticles<T>(particles);

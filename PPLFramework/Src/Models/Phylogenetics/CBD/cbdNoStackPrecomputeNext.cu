@@ -1,8 +1,6 @@
 #include <iostream>
 #include <cstring>
-#include "../../../Inference/Smc/smc.cuh"
 #include "../../../Inference/Smc/smcImpl.cuh"
-#include "../../../Utils/distributions.cuh"
 // #include "cbd.cuh"
 #include "../TreeUtils/treeUtils.cuh"
 
@@ -59,13 +57,13 @@ BBLOCK_HELPER(goesExtinct, {
     floating_t lambdaLocal = *DATA_POINTER(lambda);
     floating_t muLocal = *DATA_POINTER(mu);
 
-    floating_t t = BBLOCK_CALL(sampleExponential, lambdaLocal + muLocal);
+    floating_t t = SAMPLE(exponential, lambdaLocal + muLocal);
     
     floating_t currentTime = startTime - t;
     if(currentTime < 0)
         return false;
     
-    bool speciation = BBLOCK_CALL(sampleBernoulli, lambdaLocal / (lambdaLocal + muLocal));
+    bool speciation = SAMPLE(bernoulli, lambdaLocal / (lambdaLocal + muLocal));
     if (! speciation)
         return true;
     else 
@@ -89,7 +87,7 @@ BBLOCK_HELPER(simBranch, {
 
     floating_t lambdaLocal = *DATA_POINTER(lambda);
 
-    floating_t t = BBLOCK_CALL(sampleExponential, lambdaLocal);
+    floating_t t = SAMPLE(exponential, lambdaLocal);
 
     floating_t currentTime = startTime - t;
 
@@ -192,6 +190,18 @@ BBLOCK(simCRBD, progState_t, {
 })
 
 
+MAIN(
+    initCBD();
+    
+    INITBBLOCK(simCRBD, progState_t)
+    INITBBLOCK(simTree, progState_t)
+
+    SMC(progState_t, NULL)
+
+    res += corrFactor;
+)
+
+/*
 int main() {
 
     initGen();
@@ -210,4 +220,5 @@ int main() {
 
     return 0;
 }
+*/
 

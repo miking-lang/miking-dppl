@@ -62,7 +62,8 @@ HOST DEV void copyStatesSeq(particles_t<T>* particles, int* ancestor, void* temp
 template <typename T>
 HOST DEV void resampleSystematicSeq(particles_t<T>* particles, resampler_t resampler, int numParticles) {
     
-    floating_t u = sampleUniform(particles, 0, 0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
+    int i = 0; // needed by SAMPLE
+    floating_t u = SAMPLE(uniform, 0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
 
     systematicCumulativeOffspringSeq(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
     cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor, numParticles);

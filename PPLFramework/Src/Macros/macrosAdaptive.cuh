@@ -34,13 +34,18 @@ __device__ type* pointerName ## Dev;
 // Access the data allocated with a BBLOCK_DATA macro
 #define DATA_POINTER(pointerName) pointerName ## Dev
 
-// #define SAMPLE(distrName, ...) distrName(curandState* randState, ##__VA_ARGS__)
+// Used in SAMPLE macro to provide the CUDA random generating state to the function call, assumes at least one more argument follows
+#define RAND_STATE &particles->randStates[i],
+
+// Used when declaring dists working on both CPU and GPU, assumes dist has at least one more parameter
+#define RAND_STATE_DECLARE curandState* randState,
+
+// Used when calling SAMPLE from dists working on both CPU and GPU since they rely on other dists only, assumes dist has at least one more parameter
+#define RAND_STATE_ACCESS randState,
 
 #else
 
 // The macros below are equivalent to the GPU variants above, but for CPU
-
-// #define SAMPLE(distrName, ...) distrName(##__VA_ARGS__)
 
 #define HOST
 #define DEV
@@ -49,8 +54,11 @@ __device__ type* pointerName ## Dev;
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];
 #define BBLOCK_DATA_PTR(pointerName, type) type* pointerName;
 #define BBLOCK_DATA_2D(pointerName, type, n, m) type pointerName[n][m];
-#define COPY_DATA_GPU(pointerName, type, n) // Just a noop on CPU
+#define COPY_DATA_GPU(pointerName, type, n)
 #define DATA_POINTER(pointerName) pointerName
+#define RAND_STATE
+#define RAND_STATE_DECLARE
+#define RAND_STATE_ACCESS
 
 #endif
 

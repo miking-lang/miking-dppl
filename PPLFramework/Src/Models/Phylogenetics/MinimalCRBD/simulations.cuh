@@ -4,13 +4,13 @@
 
 BBLOCK_HELPER(goesExtinct, {
 
-    floating_t t = BBLOCK_CALL(sampleExponential, lambda + mu);
+    floating_t t = SAMPLE(exponential, lambda + mu);
     
     floating_t currentTime = startTime - t;
     if(currentTime < 0)
         return false;
     
-    bool speciation = BBLOCK_CALL(sampleBernoulli, lambda / (lambda + mu));
+    bool speciation = SAMPLE(bernoulli, lambda / (lambda + mu));
     if (! speciation)
         return true;
     else 
@@ -21,7 +21,7 @@ BBLOCK_HELPER(goesExtinct, {
 
 BBLOCK_HELPER(simBranch, {
 
-    floating_t t = BBLOCK_CALL(sampleExponential, lambda);
+    floating_t t = SAMPLE(exponential, lambda);
 
     floating_t currentTime = startTime - t;
 

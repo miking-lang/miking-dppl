@@ -7,7 +7,7 @@ const int MAX_STACK_DEPTH = 100;
 #define WORDS
 #ifdef WORDS
 
-struct stack_t {
+struct pStack_t {
     int stackPointer = 0;
     int arr[MAX_STACK_DEPTH];
 
@@ -60,7 +60,7 @@ struct stack_t {
 #else
 
 template <typename T>
-struct stack_t {
+struct pStack_t {
     int stackPointer = 0;
     T arr[MAX_STACK_DEPTH];
 

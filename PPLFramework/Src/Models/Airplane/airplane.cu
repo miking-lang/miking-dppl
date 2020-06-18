@@ -3,10 +3,7 @@
 #include <random>
 #include <time.h>
 
-#include "../../Inference/Smc/smc.cuh"
 #include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
-#include "../../Utils/misc.cuh"
 #include "airplane.cuh"
 #include "airplaneUtils.cuh"
 
@@ -37,7 +34,7 @@ void initAirplane() {
 BBLOCK(propagateAndWeight, progState_t, {
 
     // Propagate
-    PSTATE.x += BBLOCK_CALL(sampleNormal, VELOCITY, TRANSITION_STD);
+    PSTATE.x += SAMPLE(normal, VELOCITY, TRANSITION_STD);
 
     // Weight
     WEIGHT(logNormalPDFObs(DATA_POINTER(planeObs)[PSTATE.t], mapLookupApprox(DATA_POINTER(mapApprox), PSTATE.x)));
@@ -51,7 +48,7 @@ BBLOCK(propagateAndWeight, progState_t, {
 
 BBLOCK(particleInit, progState_t, {
 
-    PSTATE.x = BBLOCK_CALL(sampleUniform, 0, MAP_SIZE);
+    PSTATE.x = SAMPLE(uniform, 0, MAP_SIZE);
     PSTATE.t = 0;
 
     PC = 1;
@@ -73,8 +70,19 @@ CALLBACK_HOST(callback, progState_t, {
     }
 
     cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / NUM_PARTICLES << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
-}, void* arg = NULL)
+})
 
+
+MAIN(
+    initAirplane();
+
+    INITBBLOCK(particleInit, progState_t)
+    INITBBLOCK(propagateAndWeight, progState_t)
+
+    SMC(progState_t, callback)
+)
+
+/*
 int main(int argc, char** argv) {
 
     initAirplane();
@@ -86,3 +94,4 @@ int main(int argc, char** argv) {
 
     SMC(progState_t, callback)
 }
+*/

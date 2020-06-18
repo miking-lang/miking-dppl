@@ -3,6 +3,8 @@
 
 #include "macrosAdaptive.cuh"
 
+#define COMMA ,
+#define CMA ,
 typedef double floating_t; // To be able to switch between single and double precision easily
 
 /*
@@ -54,6 +56,8 @@ bbIdx++;
 BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
 int bbIdx = 0;
 
+// Samples from distributions, which should all take the curandState as argument first if on GPU.
+#define SAMPLE(distName, ...) distName(RAND_STATE __VA_ARGS__ )
 
 // #define SMCSTART(progStateType, numBblocks) \
 // int bbIdx = 0;

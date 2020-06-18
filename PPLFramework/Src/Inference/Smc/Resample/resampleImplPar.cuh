@@ -50,7 +50,6 @@ HOST DEV floating_t calcWeightSumPar(particles_t<T>* particles, resampler_t resa
     // Calculate inclusive prefic sum
     floating_t* w = particles->weights;
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
-    // cudaCheckError();
     // if(resampler.prefixSum[numParticles-1] == 0) // Bad performance since it is a transfer
     //     printf("Error: prefixSum = 0!\n");
     return resampler.prefixSum[numParticles - 1];
@@ -81,7 +80,8 @@ HOST DEV void postUniform(particles_t<T>* particles, resampler_t resampler, floa
 template <typename T>
 DEV void resampleSystematicParNested(particles_t<T>* particles, resampler_t resampler) {
     
-    floating_t u = sampleUniform(particles, 0, 0.0f, 1.0f);
+    int i = 0; // Necessary for SAMPLE macro
+    floating_t u = SAMPLE(uniform, 0.0f, 1.0f);
     
     postUniform(particles, resampler, u, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
 }
