@@ -20,18 +20,35 @@ typedef double floating_t; // To be able to switch between single and double pre
 
 // These will be executed by the framework
 #define BBLOCK(funcName, progStateType, body) \
-DEV void funcName(particles_t<progStateType>* particles, int i, void* arg = NULL) \
+DEV void funcName(RAND_STATE_DECLARE particles_t<progStateType>* particles, int i, void* arg = NULL) \
 body \
 DEV_POINTER(funcName, progStateType)
+
+/*
+{ \
+RAND_STATE_LOCAL \
+body \
+RAND_STATE_RESTORE \
+} \
+*/
 
 // Regular helper functions that takes the particles as argument (syntactic sugar)
 #define BBLOCK_HELPER(funcName, body, returnType, ...) \
 template <typename T> \
-DEV returnType funcName(particles_t<T>* particles, int i, ##__VA_ARGS__) \
+DEV returnType funcName(RAND_STATE_DECLARE particles_t<T>* particles, int i, ##__VA_ARGS__) \
 body
+/*
+{ \
+RAND_STATE_LOCAL \
+body \
+RAND_STATE_RESTORE \
+}
+*/
 
 // Call functions that takes the particles as argument (syntactic sugar)
-#define BBLOCK_CALL(funcName, ...) funcName(particles, i, ##__VA_ARGS__)
+#define BBLOCK_CALL(funcName, ...) funcName(RAND_STATE_ACCESS particles, i, ##__VA_ARGS__)
+
+// #define BBLOCK_CALL_FNC_PTR(funcName, ...) funcName(RAND_STATE_ACCESS particles, i, ##__VA_ARGS__)
 
 // Functions that can be called from the framework, usually to use resulting particle distributions before clean up
 #define CALLBACK_HOST(funcName, progStateType, body) void funcName(particles_t<progStateType>* particles, void* arg=NULL) body
@@ -58,6 +75,7 @@ int bbIdx = 0;
 
 // Samples from distributions, which should all take the curandState as argument first if on GPU.
 #define SAMPLE(distName, ...) distName(RAND_STATE __VA_ARGS__ )
+// #define SAMPLE(distName, ...) distName(randState, __VA_ARGS__ )
 
 // #define SMCSTART(progStateType, numBblocks) \
 // int bbIdx = 0;

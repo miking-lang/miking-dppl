@@ -12,6 +12,7 @@ const double PI = 3.1415926535897932384626433832795028841971693993751;
 #include "../../Inference/Smc/smc.cuh"
 #include "../misc.cuh"
 
+
 default_random_engine generatorDists;
 
 uniform_real_distribution<floating_t> uniformDist(0.0, 1.0);
@@ -34,19 +35,28 @@ void initGen() {
 #endif
 
 
-
 // Could be optimized
 // Log of normal pdf
 HOST DEV floating_t logPDFNormal(floating_t x, floating_t mean, floating_t std) {
     return log(exp(-pow(x - mean, 2) / (std * std)) / (std * sqrt(2 * PI)));
 }
 
+DEV int bernoulli(RAND_STATE_DECLARE floating_t p) {
+    return uniform(RAND_STATE_ACCESS 0, 1) < p ? 1 : 0;
+}
+
+DEV floating_t exponential(RAND_STATE_DECLARE floating_t lambda) {
+    
+    return -log(1 - uniform(RAND_STATE_ACCESS 0, 1)) / lambda;
+}
+
+
 // This gamma sampling is based on the implementation used by GSL
 // k = shape, theta = scale
 DEV floating_t gamma(RAND_STATE_DECLARE floating_t k, floating_t theta) {
 
     if (k < 1) {
-        double u = uniform(RAND_STATE_ACCESS 0, 1);;
+        double u = uniform(RAND_STATE_ACCESS 0, 1);
         return gamma(RAND_STATE_ACCESS 1.0 + k, theta) * pow(u, 1.0 / k);
     }
     

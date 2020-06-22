@@ -75,7 +75,7 @@ BBLOCK(condBD_2, pStack_t, {
     } else {
         PC = PSTATE.pop();
         if (PC < NUM_BBLOCKS) // Does not resample here
-            DATA_POINTER(bblocksArr)[PC](particles, i, NULL);
+            BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC], NULL);
     }
 })
 

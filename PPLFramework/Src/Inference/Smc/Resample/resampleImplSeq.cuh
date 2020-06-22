@@ -47,27 +47,38 @@ HOST DEV void cumulativeOffspringToAncestorSeq(int* cumulativeOffspring, int* an
 }
 
 template <typename T>
-HOST DEV void copyStatesSeq(particles_t<T>* particles, int* ancestor, void* tempArr, int numParticles) {
-    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(tempArr);
+HOST DEV void copyStatesSeq(particles_t<T>** particlesPtrToPtr, resampler_t& resampler, int numParticles) {
+    particles_t<T>* particles = *particlesPtrToPtr;
+    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
 
     for(int i = 0; i < numParticles; i++)
         copyParticle(particles, tempArrP, i, i);
 
-    for(int i = 0; i < numParticles; i++)
-        copyParticle(tempArrP, particles, ancestor[i], i); // watch out for references in the struct!
+    //for(int i = 0; i < numParticles; i++)
+        //copyParticle(tempArrP, particles, resampler.ancestor[i], i); // watch out for references in the struct!
+    
+    resampler.tempArr = static_cast<void*>(particles);
+    *particlesPtrToPtr = tempArrP;
 
 }
 
 // i is index of executing CUDA-thread, in case of nested inference
 template <typename T>
-HOST DEV void resampleSystematicSeq(particles_t<T>* particles, resampler_t resampler, int numParticles) {
+DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t<T>** particlesPtrToPtr, resampler_t& resampler, int numParticles) {
     
-    int i = 0; // needed by SAMPLE
-    floating_t u = SAMPLE(uniform, 0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
+    #ifdef GPU
+    // int i = 0; // needed by SAMPLE, index of particle to use curandState from in case of nested inference
+    // curandState* randState = &particles->randStates[i];
+    // curandState* randState = randStates[i];
+    floating_t u = uniform(randState, 0.0f, 1.0f);
+    #else
+    floating_t u = uniform(0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
+    // floating_t u = uniform(&particles->randStates[i], 0.0f, 1.0f); // CPU: i is not used, GPU: use randState in first particle
+    #endif
 
     systematicCumulativeOffspringSeq(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
     cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor, numParticles);
-    copyStatesSeq<T>(particles, resampler.ancestor, resampler.tempArr, numParticles);
+    copyStatesSeq<T>(particlesPtrToPtr, resampler, numParticles);
 }
 
 /*

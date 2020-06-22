@@ -7,7 +7,7 @@
 
 
 template <typename T>
-__global__ void initParticles(particles_t<T>* particles, int numParticles, int seed=0) {
+__global__ void initParticles(curandState* randStates, particles_t<T>* particles, int numParticles, int seed=0) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
@@ -15,7 +15,8 @@ __global__ void initParticles(particles_t<T>* particles, int numParticles, int s
     particles->pcs[idx] = 0;
 
     // Double check this seed, need only to be unique over one inference, as time will vary between inferences. 
-    curand_init(1234 + clock64(), seed * numParticles + idx, 0, &particles->randStates[idx]);
+    // curand_init(1234 + clock64(), seed * numParticles + idx, 0, &particles->randStates[idx]);
+    curand_init(1234 + clock64(), seed * numParticles + idx, 0, &randStates[idx]);
     // printf("seed: %d\n", seed);
 }
 
@@ -28,13 +29,17 @@ __global__ void initParticles(particles_t<T>* particles, int numParticles, int s
 
 // Better to sort particles after the func to exec, and do separate kernels for each func?
 template <typename T>
-__global__ void execFuncs(particles_t<T>* particles, pplFunc_t<T>* funcs, int numParticles, void* arg) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx >= numParticles || idx < 0) return;
+__global__ void execFuncs(curandState* randStates, particles_t<T>* particles, pplFunc_t<T>* funcs, int numParticles, void* arg) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if(i >= numParticles || i < 0) return;
 
-    int pc = particles->pcs[idx];
+    RAND_STATE_LOCAL;
+
+    int pc = particles->pcs[i];
     if(funcs[pc] != NULL)
-        funcs[pc](particles, idx, arg);
+        funcs[pc](RAND_STATE particles, i, arg);
+
+    RAND_STATE_RESTORE;
 }
 
 #endif

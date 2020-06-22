@@ -34,16 +34,22 @@ template <typename T>
 struct particles_t {
 
     T* progStates;
-    #ifdef GPU
+    /*#ifdef GPU
     curandState* randStates;
-    #endif
+    #endif*/
     int* pcs;
     floating_t* weights;
 };
 
 // BBLOCK function
 template <typename T>
-using pplFunc_t = void (*)(particles_t<T>*, int, void*);
+using pplFunc_t = void (*)(
+    #ifdef GPU 
+    curandState*, 
+    #endif
+    particles_t<T>*, 
+    int, 
+    void*);
 
 // template <typename T>
 // using statusFunc_t = void (*)(particles_t<T>*);

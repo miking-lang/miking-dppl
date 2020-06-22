@@ -11,7 +11,7 @@ particles_t<T>* allocateParticles(bool printMemSize=false) {
     
     #ifdef GPU
     cudaSafeCall(cudaMallocManaged(&particles->progStates, sizeof(T) * NUM_PARTICLES));
-    cudaSafeCall(cudaMallocManaged(&particles->randStates, sizeof(curandState) * NUM_PARTICLES));
+    // cudaSafeCall(cudaMallocManaged(&particles->randStates, sizeof(curandState) * NUM_PARTICLES));
     cudaSafeCall(cudaMallocManaged(&particles->pcs, sizeof(int) * NUM_PARTICLES));
     // cudaSafeCall(cudaMemset(particles->pcs, 0, NUM_PARTICLES * sizeof(int)));
     cudaSafeCall(cudaMallocManaged(&particles->weights, sizeof(floating_t) * NUM_PARTICLES));
@@ -41,7 +41,7 @@ template <typename T>
 void freeParticles(particles_t<T>* particles) {
     #ifdef GPU
     cudaSafeCall(cudaFree(particles->progStates));
-    cudaSafeCall(cudaFree(particles->randStates));
+    // cudaSafeCall(cudaFree(particles->randStates));
     cudaSafeCall(cudaFree(particles->pcs));
     cudaSafeCall(cudaFree(particles->weights));
     // cudaSafeCall(cudaFree(particles->resample));
@@ -59,9 +59,9 @@ template <typename T>
 HOST DEV particles_t<T>* allocateParticlesNested() {
     particles_t<T>* particles = new particles_t<T>[1]; // {}
     particles->progStates = new T[NUM_PARTICLES_NESTED];
-    #ifdef GPU
-    particles->randStates = new curandState[NUM_PARTICLES_NESTED];
-    #endif
+    //#ifdef GPU
+    //particles->randStates = new curandState[NUM_PARTICLES_NESTED];
+    //#endif
     particles->pcs = new int[NUM_PARTICLES_NESTED];
     memset(particles->pcs, 0, sizeof(int) * NUM_PARTICLES_NESTED);
     particles->weights = new floating_t[NUM_PARTICLES_NESTED];
@@ -73,9 +73,9 @@ HOST DEV particles_t<T>* allocateParticlesNested() {
 template <typename T>
 HOST DEV void freeParticlesNested(particles_t<T>* particles) {
     delete[] particles->progStates;
-    #ifdef GPU
-    delete[] particles->randStates;
-    #endif
+    //#ifdef GPU
+    //delete[] particles->randStates;
+    //#endif
     delete[] particles->pcs;
     delete[] particles->weights;
     // delete[] particles->resample;

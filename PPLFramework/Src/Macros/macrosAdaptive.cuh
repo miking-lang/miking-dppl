@@ -3,6 +3,9 @@
 
 #ifdef GPU
 
+// Defines that BBLOCKS should create a local curandState by default, efficient with many samples within it
+#define USE_LOCAL_RAND_STATES
+
 #define HOST __host__
 #define DEV __device__
 
@@ -34,14 +37,41 @@ __device__ type* pointerName ## Dev;
 // Access the data allocated with a BBLOCK_DATA macro
 #define DATA_POINTER(pointerName) pointerName ## Dev
 
-// Used in SAMPLE macro to provide the CUDA random generating state to the function call, assumes at least one more argument follows
-#define RAND_STATE &particles->randStates[i],
 
 // Used when declaring dists working on both CPU and GPU, assumes dist has at least one more parameter
 #define RAND_STATE_DECLARE curandState* randState,
 
 // Used when calling SAMPLE from dists working on both CPU and GPU since they rely on other dists only, assumes dist has at least one more parameter
 #define RAND_STATE_ACCESS randState,
+
+
+/*** Optimization to use local CUDA random states in BBLOCKS ***/
+#ifdef USE_LOCAL_RAND_STATES
+
+// Used in SAMPLE macro to provide the CUDA random generating state to the function call, assumes at least one more argument follows
+#define RAND_STATE randState,
+
+// Efficient when many random calls are done in the same function, to not access global memory repeatedly
+
+#define RAND_STATE_LOCAL \
+curandState randStateLocal = randStates[i]; \
+curandState* randState = &randStateLocal;
+
+// curandState randStateLocal = particles->randStates[i];
+
+// #define RAND_STATE_RESTORE  particles->randStates[i] = randStateLocal;
+#define RAND_STATE_RESTORE  randStates[i] = randStateLocal;
+
+#else
+
+// #define RAND_STATE &particles->randStates[i],
+#define RAND_STATE randStates[i],
+#define RAND_STATE_LOCAL
+#define RAND_STATE_RESTORE
+
+/*** ***/
+
+#endif
 
 #else
 
@@ -59,6 +89,8 @@ __device__ type* pointerName ## Dev;
 #define RAND_STATE
 #define RAND_STATE_DECLARE
 #define RAND_STATE_ACCESS
+#define RAND_STATE_LOCAL
+#define RAND_STATE_RESTORE
 
 #endif
 

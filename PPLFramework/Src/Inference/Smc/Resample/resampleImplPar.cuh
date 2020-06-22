@@ -57,7 +57,8 @@ HOST DEV floating_t calcWeightSumPar(particles_t<T>* particles, resampler_t resa
 
 
 template <typename T>
-HOST DEV void postUniform(particles_t<T>* particles, resampler_t resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST DEV void postUniform(particles_t<T>** particlesPtrToPtr, resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
+    particles_t<T>* particles = *particlesPtrToPtr;
 
     systematicCumulativeOffspringKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
 
@@ -68,26 +69,33 @@ HOST DEV void postUniform(particles_t<T>* particles, resampler_t resampler, floa
     particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
 
     copyStatesToTemp<T><<<numBlocks, numThreadsPerBlock>>>(particles, tempArrP, numParticles);
+    // particles_t<T>* tempArrPSwap = tempArrP;
+    resampler.tempArr = static_cast<void*>(particles);
+    *particlesPtrToPtr = tempArrP;
+    
+    /*
+    copyStatesToTemp<T><<<numBlocks, numThreadsPerBlock>>>(particles, tempArrP, numParticles);
     // cudaCheckError();
     copyStatesFromTemp<T><<<numBlocks, numThreadsPerBlock>>>(tempArrP, particles, resampler.ancestor, numParticles);
     // cudaCheckError();
-
+    */
     cudaDeviceSynchronize();
 }
 
 // If nested and doing parallel (which only works on GPU top-level inference), 
 // let other functions know, so they can adjust kernel settings and num_particles
 template <typename T>
-DEV void resampleSystematicParNested(particles_t<T>* particles, resampler_t resampler) {
+DEV void resampleSystematicParNested(curandState* randState, particles_t<T>** particlesPtrToPtr, resampler_t& resampler) {
     
-    int i = 0; // Necessary for SAMPLE macro
-    floating_t u = SAMPLE(uniform, 0.0f, 1.0f);
+    // int i = 0; // Necessary for SAMPLE macro
+    // floating_t u = SAMPLE(uniform, 0.0f, 1.0f);
+    floating_t u = uniform(randState, 0.0f, 1.0f);
     
-    postUniform(particles, resampler, u, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
+    postUniform(particlesPtrToPtr, resampler, u, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
 }
 
 template <typename T>
-void resampleSystematicPar(particles_t<T>* particles, resampler_t resampler) {
+void resampleSystematicPar(particles_t<T>** particles, resampler_t& resampler) {
     
     floating_t u = uDistRes(generatorRes);
     

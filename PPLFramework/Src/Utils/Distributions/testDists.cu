@@ -9,7 +9,7 @@
 // Compile CPU: g++ -x c++ Src/Utils/Distributions/testDists.cu -o smc.exe -std=c++11 -O3
 // const int n = 3;
 struct progState_t {
-    int x;
+    floating_t x;
     // floating_t x[n];
 };
 
@@ -17,10 +17,27 @@ struct progState_t {
 INIT_GLOBAL(progState_t, NUM_BBLOCKS)
 
 BBLOCK(test, progState_t, {
+
+    floating_t xLcl = 0;
+
+    //int intSample = SAMPLE(randomInteger, 100);
+    // PSTATE.x = 0;
+    //for(int t = 0; t < intSample; t++) {
+    //    xLcl += SAMPLE(uniform, 0, 1);
+    //}
     
+    /*
     printf("uniform: %f\n", SAMPLE(uniform, 0, 1));
     printf("normal: %f\n", SAMPLE(normal, 0, 1));
     printf("exponential: %f\n", SAMPLE(exponential, 3));
+    */
+    for(int t = 0; t < 1; t++) {
+        // PSTATE.x += gamma(randState, 0.1, 2);
+        xLcl += SAMPLE(normal, 0.1, 2);
+        // xLcl += normal(randState, 0.1, 2);
+        // xLcl += uniformRef(randStateLcl, 0.3, 7.6);
+    }
+    /*
     printf("gamma: %f\n", SAMPLE(gamma, 1, 2));
     printf("bernoulli: %d\n", SAMPLE(bernoulli, 0.3));
     printf("poisson: %d\n", SAMPLE(poisson, 5.3));
@@ -70,8 +87,9 @@ BBLOCK(test, progState_t, {
     };
     SAMPLE(multivariateNormal<3>, mu, cov, resF);
     printArrayF(resF, 3);
+    */
 
-
+    PSTATE.x = xLcl;
     PC = 1;
 })
 

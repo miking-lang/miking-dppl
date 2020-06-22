@@ -1,12 +1,7 @@
 #ifndef DISTS_GPU
 #define DISTS_GPU
 
-// template <typename T>
-// __device__ int sampleBernoulli(particles_t<T>* particles, int i, floating_t p = 0.5) {
-__device__ int bernoulli(curandState* randState, floating_t p = 0.5) {
-    return curand_uniform(randState) < p ? 1 : 0;
-    //return curand_uniform(&particles->randStates[i]) < p ? 1 : 0;
-}
+
 
 // (min, max]
 __device__ floating_t uniform(curandState* randState, floating_t min, floating_t max) {
@@ -15,16 +10,6 @@ __device__ floating_t uniform(curandState* randState, floating_t min, floating_t
 
 __device__ floating_t normal(curandState* randState, floating_t mean, floating_t std) {
     return (curand_normal(randState) * std) + mean;
-}
-
-__device__ floating_t exponential(curandState* randState, floating_t lambda) {
-    
-    // particles->randStates[i];
-    //curandState localState = particles->randStates[i];
-    //curand_uniform(&localState);
-    //floating_t u = curand_uniform(&localState);
-    // particles->randStates[i] = localState;
-    return -log(1 - curand_uniform(randState)) / lambda;
 }
 
 // This gamma sampling is based on the implementation used by GSL
