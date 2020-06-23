@@ -109,7 +109,7 @@ Run the nested inference with arguments:
 */
 #define SMC_NESTED(progStateType, callback, retStruct, arg, parallelExec, parallelResampling, parentIndex) \
 int numBblocks = bbIdx; \
-double res = runSMCNested<progStateType>(bblocks, callback, numBblocks, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
+double res = runSMCNested<progStateType>(RAND_STATE_ACCESS bblocks, callback, numBblocks, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
 delete[] bblocks;
 
 // Add log-weight to the particle

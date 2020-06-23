@@ -96,7 +96,7 @@ template <typename T>
 #ifdef GPU
 __device__
 #endif
-void copyParticle(particles_t<T>* particlesSrc, particles_t<T>* particlesDst, int srcIdx, int dstIdx) {
+void copyParticle(particles_t<T>* particlesDst, particles_t<T>* particlesSrc, int dstIdx, int srcIdx) {
     particlesDst->progStates[dstIdx] = particlesSrc->progStates[srcIdx];
     particlesDst->pcs[dstIdx] = particlesSrc->pcs[srcIdx];
     particlesDst->weights[dstIdx] = 0;

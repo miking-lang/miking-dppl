@@ -9,6 +9,8 @@
 
 // nvcc -arch=sm_75 -rdc=true Src/Models/Airplane/*.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
+// Compile CPU: g++ -x c++ Src/Models/Airplane/*.cu -o smc.exe -std=c++11 -O3
+
 using namespace std;
 
 #define NUM_BBLOCKS 2
@@ -85,7 +87,7 @@ MAIN(
 /*
 int main(int argc, char** argv) {
 
-    initAirplane();
+    initAi-rplane();
 
     // SMCSTART(progState_t, NUM_BBLOCKS)
 

@@ -46,9 +46,9 @@ HOST DEV void copyStatesPar(particles_t<T>* particles, int* ancestor, void* temp
 
 template <typename T>
 HOST DEV floating_t calcWeightSumPar(particles_t<T>* particles, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
-    expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(particles->weights, numParticles);
-    // Calculate inclusive prefic sum
     floating_t* w = particles->weights;
+    expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles);
+    // Calculate inclusive prefic sum
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
     // if(resampler.prefixSum[numParticles-1] == 0) // Bad performance since it is a transfer
     //     printf("Error: prefixSum = 0!\n");
@@ -57,29 +57,12 @@ HOST DEV floating_t calcWeightSumPar(particles_t<T>* particles, resampler_t resa
 
 
 template <typename T>
-HOST DEV void postUniform(particles_t<T>** particlesPtrToPtr, resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
-    particles_t<T>* particles = *particlesPtrToPtr;
+HOST DEV void decideAncestors(resampler_t& resampler, floating_t u, const int numParticles, const int numBlocks, const int numThreadsPerBlock) {
 
     systematicCumulativeOffspringKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
 
     cumulativeOffspringToAncestorKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.cumulativeOffspring, resampler.ancestor, numParticles);
 
-
-    // Copy states
-    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
-
-    copyStatesToTemp<T><<<numBlocks, numThreadsPerBlock>>>(particles, tempArrP, numParticles);
-    // particles_t<T>* tempArrPSwap = tempArrP;
-    resampler.tempArr = static_cast<void*>(particles);
-    *particlesPtrToPtr = tempArrP;
-    
-    /*
-    copyStatesToTemp<T><<<numBlocks, numThreadsPerBlock>>>(particles, tempArrP, numParticles);
-    // cudaCheckError();
-    copyStatesFromTemp<T><<<numBlocks, numThreadsPerBlock>>>(tempArrP, particles, resampler.ancestor, numParticles);
-    // cudaCheckError();
-    */
-    cudaDeviceSynchronize();
 }
 
 // If nested and doing parallel (which only works on GPU top-level inference), 
@@ -87,19 +70,53 @@ HOST DEV void postUniform(particles_t<T>** particlesPtrToPtr, resampler_t& resam
 template <typename T>
 DEV void resampleSystematicParNested(curandState* randState, particles_t<T>** particlesPtrToPtr, resampler_t& resampler) {
     
+    particles_t<T>* particles = *particlesPtrToPtr;
     // int i = 0; // Necessary for SAMPLE macro
     // floating_t u = SAMPLE(uniform, 0.0f, 1.0f);
     floating_t u = uniform(randState, 0.0f, 1.0f);
     
-    postUniform(particlesPtrToPtr, resampler, u, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
+    decideAncestors<T>(resampler, u, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
+
+    // Copy states
+    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
+    //copyStatesToTemp<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, tempArrP, NUM_PARTICLES_NESTED);
+    copyStatesKernel<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(tempArrP, particles, resampler.ancestor, NUM_PARTICLES_NESTED);
+    cudaDeviceSynchronize();
+
+    // Swap pointers
+    resampler.tempArr = static_cast<void*>(particles);
+    *particlesPtrToPtr = tempArrP;
 }
 
 template <typename T>
-void resampleSystematicPar(particles_t<T>** particles, resampler_t& resampler) {
+void resampleSystematicPar(particles_t<T>** particlesPtrToPtr, resampler_t& resampler) {
+
+    particles_t<T>* particles = *particlesPtrToPtr;
     
     floating_t u = uDistRes(generatorRes);
     
-    postUniform(particles, resampler, u, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+    decideAncestors<T>(resampler, u, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+
+    // Copy states
+    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
+    
+    copyStatesKernel<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(tempArrP, particles, resampler.ancestor, NUM_PARTICLES);
+    cudaDeviceSynchronize();
+    cudaCheckError();
+    // Swap pointers
+    resampler.tempArr = static_cast<void*>(particles);
+    *particlesPtrToPtr = tempArrP;
+    
+    /*
+    copyStatesToTemp<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, tempArrP, NUM_PARTICLES);
+    // cudaCheckError();
+    copyStatesKernel<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, tempArrP, resampler.ancestor, NUM_PARTICLES);
+    // copyStatesFromTemp<T><<<numBlocks, numThreadsPerBlock>>>(tempArrP, particles, resampler.ancestor, numParticles);
+    // cudaCheckError();
+    cudaDeviceSynchronize();
+    cudaCheckError();
+    */
+    
 }
 
 #endif

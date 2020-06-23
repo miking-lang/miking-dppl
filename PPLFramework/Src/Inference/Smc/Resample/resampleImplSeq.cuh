@@ -4,10 +4,24 @@
 #include "resampleCommon.cuh"
 
 HOST DEV void expWeightsSeq(floating_t* w, int numParticles) {
+    // int numZeros = 0;
+    // int numRuined = 0;
     for(int i = 0; i < numParticles; i++) {
-        // w[i] = pow(2, w[i]);
+
+        //bool negInfBefore = w[i] == -INFINITY;
         w[i] = exp(w[i]);
+        /*
+        if(w[i] == 0) {
+            if(! negInfBefore)
+                numRuined++;
+            numZeros++;
+        }
+        */
     }
+    /*if(numRuined > 0) {
+        printf("Ratio zero after exp: %f\n", numZeros / (1.0 * numParticles));
+        printf("Ratio ruined after exp: %f\n", numRuined / (1.0 * numParticles));
+    }*/
 }
 
 template <typename T>
@@ -51,11 +65,11 @@ HOST DEV void copyStatesSeq(particles_t<T>** particlesPtrToPtr, resampler_t& res
     particles_t<T>* particles = *particlesPtrToPtr;
     particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
 
-    for(int i = 0; i < numParticles; i++)
-        copyParticle(particles, tempArrP, i, i);
-
     //for(int i = 0; i < numParticles; i++)
-        //copyParticle(tempArrP, particles, resampler.ancestor[i], i); // watch out for references in the struct!
+        //copyParticle(particles, tempArrP, i, i);
+        
+    for(int i = 0; i < numParticles; i++)
+        copyParticle(tempArrP, particles, i, resampler.ancestor[i]); // watch out for references in the struct!
     
     resampler.tempArr = static_cast<void*>(particles);
     *particlesPtrToPtr = tempArrP;

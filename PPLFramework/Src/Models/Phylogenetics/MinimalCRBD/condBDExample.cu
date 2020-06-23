@@ -45,7 +45,6 @@ BBLOCK(condBD_1, pStack_t, {
     PSTATE.popType<progState_t>(&pState);
     PSTATE.pushType<progState_t>(pState);
 
-
     floating_t parentAge = treeP->ages[pState.parentIdx];
     floating_t treeAge = treeP->ages[pState.treeIdx];
     WEIGHT(- pState.mu * (parentAge - treeAge));
@@ -74,8 +73,11 @@ BBLOCK(condBD_2, pStack_t, {
         // Resamples here
     } else {
         PC = PSTATE.pop();
-        if (PC < NUM_BBLOCKS) // Does not resample here
+        if (PC < NUM_BBLOCKS) { // Does not resample here
+            // pplFunc_t<pStack_t> funcToCall = DATA_POINTER(bblocksArr)[PC];
+            // BBLOCK_CALL(funcToCall, NULL);
             BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC], NULL);
+        }
     }
 })
 
@@ -88,7 +90,7 @@ BBLOCK(condBD_3, pStack_t, {
     PSTATE.popType<progState_t>(&pState);
 
     PSTATE.pushType<progState_t>(pState); // Need to use this state again when exploring right sibling
-    PSTATE.pushType<int>(4); // PC = condBD_4
+    PSTATE.push(4); // PC = condBD_4
 
     int leftIdx = treeP->idxLeft[pState.treeIdx];
     BBLOCK_CALL(pushChild, pState, leftIdx);
@@ -116,7 +118,12 @@ BBLOCK(condBD_4, pStack_t, {
 
 BBLOCK(condBD_init, pStack_t, {
 
-    PSTATE.pushType<int>(NUM_BBLOCKS); // Go to PC=5 when top-level condBD_1 is done (terminate)
+    //PSTATE.arr = DATA_POINTER(globalStack);
+    //PSTATE.stackPointer = i;
+    //printf("arr: %p, sp: %d\n", PSTATE.arr, PSTATE.stackPointer);
+
+    //printf("sp: %d\n", PSTATE.stackPointer);
+    PSTATE.push(NUM_BBLOCKS); // Go to PC=5 when top-level condBD_1 is done (terminate)
 
     progState_t pState;
     pState.parentIdx = -1;
@@ -132,6 +139,7 @@ BBLOCK(condBD_init, pStack_t, {
 })
 
 MAIN(
+
     INITBBLOCK(condBD_init, pStack_t)
     INITBBLOCK(condBD_1, pStack_t)
     INITBBLOCK(condBD_2, pStack_t)

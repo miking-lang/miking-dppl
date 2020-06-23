@@ -6,28 +6,36 @@ const int MAX_STACK_DEPTH = 100;
 
 #define WORDS
 #ifdef WORDS
+const bool LARGE_COPIES = true;
+
+// const int INCR_LEN = NUM_PARTICLES;
 
 struct pStack_t {
     int stackPointer = 0;
     int arr[MAX_STACK_DEPTH];
+    // int* arr;
 
     HOST DEV void push(int element) {
         arr[stackPointer] = element;
         stackPointer++;
+        //stackPointer += INCR_LEN;
+        //printf("SP: %d, max: %d\n", stackPointer, MAX_STACK_DEPTH * NUM_PARTICLES);
     }
 
     HOST DEV int pop() {
         stackPointer--;
+        // stackPointer -= INCR_LEN;
         return arr[stackPointer];
     }
 
-    HOST DEV int peek() {
-        return arr[stackPointer - 1];
-    }
+    /*HOST DEV int peek() {
+        // return arr[stackPointer - 1];
+        return arr[stackPointer - INCR_LEN];
+    }*/
 
-    HOST DEV bool empty() {
+    /*HOST DEV bool empty() {
         return stackPointer == 0;
-    }
+    }*/
 
     template <typename T1>
     HOST DEV void pushType(T1 element) {
@@ -35,10 +43,17 @@ struct pStack_t {
             printf("Pushing type of size non multiple of 4: %lu\n", sizeof(T1));
         int numWords = sizeof(T1) / 4; // Fix case with non multiple of 4
         
-        void* pStateVoid = static_cast<void*>(&element);
-        int* pStateInt = static_cast<int*>(pStateVoid);
-        for (int w = 0; w < numWords; w++) { 
-            push(pStateInt[w]);
+        if(LARGE_COPIES) {
+            memcpy(&arr[stackPointer], &element, sizeof(T1));
+            stackPointer += numWords;
+        } else {
+
+            void* pStateVoid = static_cast<void*>(&element);
+            int* pStateInt = static_cast<int*>(pStateVoid);
+            
+            for (int w = 0; w < numWords; w++) { 
+                push(pStateInt[w]);
+            }
         }
     }
 
@@ -48,11 +63,17 @@ struct pStack_t {
             printf("Popping type of size non multiple of 4: %lu\n", sizeof(T1));
         int numWords = sizeof(T1) / 4; // Fix case with non multiple of 4
 
-        void* voidRet = static_cast<void*>(ret);
-        int* intRet = static_cast<int*>(voidRet);
+        if(LARGE_COPIES) {
+            stackPointer -= numWords;
+            memcpy(ret, &arr[stackPointer], sizeof(T1));
+        } else {
 
-        for (int w = numWords-1; w >= 0; w--) {
-            intRet[w] = pop();
+            void* voidRet = static_cast<void*>(ret);
+            int* intRet = static_cast<int*>(voidRet);
+
+            for (int w = numWords-1; w >= 0; w--) {
+                intRet[w] = pop();
+            }
         }
     }
 };

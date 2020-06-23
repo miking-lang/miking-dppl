@@ -77,6 +77,10 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
         execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(randStates, particles, bblocks, NUM_PARTICLES, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
+        // floating_t* w = particles->weights;
+        // floating_t maxWeight = thrust::reduce(w, w + NUM_PARTICLES, floating_t(*w), thrust::maximum<floating_t>());
+        // printf("maxW: %f\n", maxWeight);
+        // floating_t* maxWeight = thrust::max_element(w, w + NUM_PARTICLES);
         floating_t weightSum = calcWeightSumPar<T>(particles, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
         #else
 
@@ -117,10 +121,14 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
 
 /* 
 Do not use parallel setting if GPU is not defined! 
-TODO: Should be optimized so that when no parallel exec or resampling is done, do not allocate more curandStates!
+New nested curandStates are only necessary with parallel execution (at least with systematic resampling)
 */
 template <typename T>
-DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int numBblocks, void* ret, void* arg, bool parallelExec, bool parallelResampling, int seed) {
+DEV double runSMCNested(
+    #ifdef GPU
+    curandState* randState, // Parent's randState
+    #endif
+    pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int numBblocks, void* ret, void* arg, bool parallelExec, bool parallelResampling, int parentIdx) {
 
     if(parallelExec || parallelResampling) {
         #ifndef GPU
@@ -135,9 +143,14 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int n
     
     #ifdef GPU
     curandState* randStates = new curandState[NUM_PARTICLES_NESTED];
-    initParticles<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, NUM_PARTICLES_NESTED, seed);
+    if(parallelExec)
+        initParticles<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, NUM_PARTICLES_NESTED, parentIdx);
+    else
+        initParticlesNoCurand<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, NUM_PARTICLES_NESTED);
     cudaDeviceSynchronize();
     cudaCheckErrorDev();
+    //if(parentIdx == 0 || parentIdx == NUM_PARTICLES_NESTED-1 || parentIdx % 100 == 0)
+        //printf("Particles initialized! %d\n", parentIdx);
     #endif
 
     resampler_t resampler = initResamplerNested<T>();
@@ -147,6 +160,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int n
 
         if(parallelExec) {
             #ifdef GPU
+            // Use nested randStates
             execFuncs<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, NUM_PARTICLES_NESTED, arg);
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
@@ -159,7 +173,7 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int n
                 if(pc < numBblocks) {
                     bblocks[pc](
                         #ifdef GPU
-                        &randStates[i],
+                        randState, // Use parent's randState
                         #endif
                         particles, i, arg); 
                 }
@@ -167,6 +181,12 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int n
         }
         
         floating_t weightSum;
+        //floating_t lol = 2;
+        //floating_t* maxWeight = &lol;
+        //floating_t* w = particles->weights;
+        //floating_t maxWeight = thrust::reduce(thrust::device, w, w + NUM_PARTICLES, floating_t(*w), thrust::maximum<floating_t>());
+        //printf("maxW: %f\n", maxWeight);
+        //floating_t* maxWeight = thrust::max_element(thrust::device, w, w + NUM_PARTICLES);
         if(parallelResampling) {
             #ifdef GPU
             weightSum = calcWeightSumPar<T>(particles, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
@@ -182,12 +202,12 @@ DEV double runSMCNested(pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int n
 
         if(parallelResampling) {
             #ifdef GPU
-            resampleSystematicParNested<T>(randStates, &particles, resampler);
+            resampleSystematicParNested<T>(randState, &particles, resampler); // Use parent's randState
             #endif
         } else {
             resampleSystematicSeq<T>(
                 #ifdef GPU
-                randStates,
+                randState, // Use parent's randState
                 #endif 
                 &particles, resampler, NUM_PARTICLES_NESTED);
         }

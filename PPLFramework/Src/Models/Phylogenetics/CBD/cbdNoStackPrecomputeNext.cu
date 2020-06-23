@@ -158,7 +158,7 @@ CALLBACK(calcResult, nestedProgState_t, {
 }, void* ret)
 
 template <typename T>
-DEV T runNestedInference(int parentIndex) {
+DEV T runNestedInference(RAND_STATE_DECLARE int parentIndex) {
     bool parallelExec = false, parallelResampling = false;
 
     T ret;
@@ -179,7 +179,7 @@ BBLOCK(simCRBD, progState_t, {
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
 
-    double survivalRate = runNestedInference<double>(i);
+    double survivalRate = runNestedInference<double>(RAND_STATE_ACCESS i);
 
     WEIGHT(-2.0 * log(survivalRate));
 
