@@ -13,8 +13,8 @@ using namespace std;
 /*
 Settings for CUDA kernel launches
 */
-const int NUM_PARTICLES = 10000;// 55000;
-const int NUM_PARTICLES_NESTED = 100;
+const int NUM_PARTICLES = 100000;// 1048576;// 55000;
+const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;
 const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;

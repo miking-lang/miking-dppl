@@ -19,10 +19,10 @@ INIT_GLOBAL(pStack_t, NUM_BBLOCKS)
 BBLOCK_DATA(tree, tree_t, 1)
 
 struct progState_t {
-    int treeIdx;
-    int parentIdx;
     floating_t lambda;
     floating_t mu;
+    int treeIdx;
+    int parentIdx;
 };
 
 BBLOCK_HELPER(pushChild, {

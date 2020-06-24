@@ -17,7 +17,7 @@ __global__ void expWeightsKernel(floating_t* w, int numParticles) {
     */
 }
 
-__global__ void systematicCumulativeOffspringKernel(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
+__global__ void systematicCumulativeOffspringKernel(const floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
@@ -25,7 +25,7 @@ __global__ void systematicCumulativeOffspringKernel(floating_t* prefixSum, int* 
     cumulativeOffspring[idx] = min(numParticles, static_cast<int>(floor(expectedCumulativeOffspring + u)));
 }
 
-__global__ void cumulativeOffspringToAncestorKernel(int* cumulativeOffspring, int* ancestor, int numParticles) {
+__global__ void cumulativeOffspringToAncestorKernel(const int* cumulativeOffspring, int* ancestor, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
@@ -46,7 +46,7 @@ __global__ void copyStatesToTemp(particles_t<T>* particlesSrc, particles_t<T>* p
 */
 
 template <typename T>
-__global__ void copyStatesKernel(particles_t<T>* particlesDst, particles_t<T>* particlesSrc, int* ancestor, int numParticles) {
+__global__ void copyStatesKernel(particles_t<T>* particlesDst, const particles_t<T>* particlesSrc, int* ancestor, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 

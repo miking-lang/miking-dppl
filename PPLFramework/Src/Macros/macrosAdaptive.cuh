@@ -18,6 +18,7 @@
 // Allocate data on host and device, should be followed by a COPY_DATA_GPU call before inference
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];\
 __device__ type pointerName ## Dev[n];
+// __device__ type pointerName ## Dev[n];
 
 // Same as BBLOCK_DATA, but 2D-array
 #define BBLOCK_DATA_2D(pointerName, type, n, m) type pointerName[n][m];\

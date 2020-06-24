@@ -91,6 +91,14 @@ HOST DEV int sgn(T val) {
     return (T(0) < val) - (val < T(0));
 }
 
+HOST DEV floating_t maxNaive(floating_t* arr, int n) {
+    floating_t maxVal = -INFINITY;
+    for(int i = 0; i < n; i++) {
+        maxVal = arr[i] >= maxVal ? arr[i] : maxVal;
+    }
+    return maxVal;
+}
+
 // matrix: input, n: size of matrix, lower: return matrix
 // const int MAX_SIZE_MG = 3;
 // HOST DEV void choleskyDecomposition(floating_t matrix[MAX_SIZE_MG][MAX_SIZE_MG], int n, floating_t lower[MAX_SIZE_MG][MAX_SIZE_MG]) { 

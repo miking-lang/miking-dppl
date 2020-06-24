@@ -15,6 +15,19 @@ struct pStack_t {
     int arr[MAX_STACK_DEPTH];
     // int* arr;
 
+    // Overloading of Assignment Operator
+    HOST DEV void operator=(const pStack_t &S ) { 
+        // printf("overload\n");
+        stackPointer = S.stackPointer;
+        for(int i = 0; i < stackPointer; i++)
+            arr[i] = S.arr[i];
+
+        // memcpy(arr, S.arr, stackPointer * sizeof(int));
+        // copy(S.arr, S.arr + stackPointer, arr);
+        // memcpy(this, &S, sizeof(int) + S.stackPointer * sizeof(int));
+        // arr = S.arr;
+    }
+
     HOST DEV void push(int element) {
         arr[stackPointer] = element;
         stackPointer++;
