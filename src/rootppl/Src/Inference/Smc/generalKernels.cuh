@@ -37,13 +37,11 @@ __global__ void execFuncs(curandState* randStates, particles_t<T>* particles, pp
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if(i >= numParticles || i < 0) return;
 
-    RAND_STATE_LOCAL;
+    curandState randStateLocal = randStates[i];
+    
+    funcs[particles->pcs[i]](&randStateLocal, particles, i, arg);
 
-    //int pc = particles->pcs[i];
-    //if(funcs[pc] != NULL)
-    funcs[particles->pcs[i]](RAND_STATE particles, i, arg);
-
-    RAND_STATE_RESTORE;
+    randStates[i] = randStateLocal;
 }
 
 #endif
