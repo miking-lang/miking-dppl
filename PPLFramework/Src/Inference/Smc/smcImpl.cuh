@@ -81,12 +81,18 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
         execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(randStates, particles, bblocks, NUM_PARTICLES, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
+        /*
         floating_t* w = particles->weights;
-        
-        floating_t maxWeight1 = *(thrust::max_element(w, w + NUM_PARTICLES));
-        //printf("maxW1: %f\n", maxWeight1);
-        // floating_t maxWeight2 = maxNaive(w, NUM_PARTICLES);
-        //printf("maxW2: %f\n", maxWeight2);
+        floating_t maxWeight;
+        for(int t = 0; t < 10000000; t++) {
+            maxWeight = *(thrust::max_element(w, w + NUM_PARTICLES));
+            // cudaDeviceSynchronize();
+            printf("maxW1: %f\n", maxWeight);
+            maxWeight = maxNaive(w, NUM_PARTICLES);
+            printf("maxW2: %f\n", maxWeight);
+        }
+        cudaDeviceSynchronize();
+        */
 
         // floating_t* output;
         // cudaSafeCall(cudaMallocManaged(&output, sizeof(floating_t) * NUM_PARTICLES));
@@ -106,7 +112,12 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
         printf("Sum3: %f\n", prefixSum[NUM_PARTICLES-1]);
         */
 
-        floating_t weightSum = calcWeightSumPar<T>(particles, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        // floating_t* w2;
+        // cudaSafeCall(cudaMallocManaged(&w2, sizeof(floating_t) * NUM_PARTICLES));
+        // cudaSafeCall(cudaMemcpy(w2, particles->weights, sizeof(floating_t) * NUM_PARTICLES, cudaMemcpyDefault));
+        cudaDeviceSynchronize();
+        // printf("w: %f, w2: %f\n", particles->weights[3], w2[3]);
+        floating_t weightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
         #else
 
         for(int i = 0; i < NUM_PARTICLES; i++) {
@@ -114,7 +125,7 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
             if(pc < numBblocks)
                 bblocks[pc](particles, i, arg);
         }
-        floating_t weightSum = calcWeightSumSeq<T>(particles, resampler, NUM_PARTICLES);
+        floating_t weightSum = calcWeightSumSeq(particles->weights, resampler, NUM_PARTICLES);
         #endif
 
         logNormConstant += log(weightSum / NUM_PARTICLES);
@@ -215,10 +226,10 @@ DEV double runSMCNested(
         //floating_t* maxWeight = thrust::max_element(thrust::device, w, w + NUM_PARTICLES);
         if(parallelResampling) {
             #ifdef GPU
-            weightSum = calcWeightSumPar<T>(particles, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
+            weightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
             #endif
         } else {
-            weightSum = calcWeightSumSeq<T>(particles, resampler, NUM_PARTICLES_NESTED);
+            weightSum = calcWeightSumSeq(particles->weights, resampler, NUM_PARTICLES_NESTED);
         }
 
         logNormConstant += log(weightSum / NUM_PARTICLES_NESTED);

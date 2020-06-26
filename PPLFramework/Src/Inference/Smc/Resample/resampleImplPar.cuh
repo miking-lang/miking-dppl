@@ -14,44 +14,42 @@
 #include <thrust/extrema.h>
 
 
-/*
-template <typename T>
-HOST DEV void calcInclusivePrefixSumPar(particles_t<T>* particles, floating_t* prefixSum) {
-    floating_t* w = particles->weights;
-    thrust::inclusive_scan(thrust::device, w, w + NUM_PARTICLES, prefixSum); // prefix sum
-    // cudaCheckError();
-}
+//#pragma hd_warning_disable
+// #pragma nv_exec_check_disable
+//constexpr floating_t getMax(const floating_t* w, const int numParticles) {
+    //floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
+    //return maxLogWeight;
+//}
 
-HOST DEV void systematicCumulativeOffspringPar(floating_t* prefixSum, int* cumulativeOffspring, floating_t u) {
-    systematicCumulativeOffspringKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(prefixSum, cumulativeOffspring, u);
-    // cudaCheckError();
-}
 
-HOST DEV void cumulativeOffspringToAncestorPar(int* cumulativeOffspring, int* ancestor) {
-
-    cumulativeOffspringToAncestorKernel<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(cumulativeOffspring, ancestor);
-    // cudaCheckError();
-}
-
-template <typename T>
-HOST DEV void copyStatesPar(particles_t<T>* particles, int* ancestor, void* tempArr) {
-    particles_t<T>* tempArrP = static_cast<particles_t<T>*>(tempArr);
+HOST floating_t calcWeightSumPar(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+    // floating_t* w = particles->weights;
+    // printf("logWeights: %f, %f, %f, %f\n", w[0], w[1], w[2], w[numParticles-1]);
+    // floating_t maxLogWeight = maxNaive(w, numParticles);
+    // printf("MaxW: %f\n", maxLogWeight2);
+    floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
+    // floating_t maxLogWeight = getMax(w, numParticles);
+    // maxLogWeight = 2;
+    // printf("MaxW: %f\n", maxLogWeight);
     
-    copyStatesToTemp<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(particles, tempArrP);
-    // cudaCheckError();
-    copyStatesFromTemp<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(tempArrP, particles, ancestor);
-    // cudaCheckError();
-}
-*/
-
-template <typename T>
-HOST DEV floating_t calcWeightSumPar(particles_t<T>* particles, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
-    floating_t* w = particles->weights;
-    expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles);
-    // Calculate inclusive prefic sum
+    
+    expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight);
+    // Calculate inclusive prefix sum
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
+    renormaliseSumsKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.prefixSum, numParticles, maxLogWeight);
+    
+
     // if(resampler.prefixSum[numParticles-1] == 0) // Bad performance since it is a transfer
     //     printf("Error: prefixSum = 0!\n");
+    // cudaDeviceSynchronize();
+    // floating_t* ps = resampler.prefixSum;
+    // printf("prefixSum ye-accurate: %f, %f, %f, %f\n", ps[0], ps[1], ps[2], ps[numParticles - 1]);
+    // expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, 0);
+    // thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum);
+    
+
+    cudaDeviceSynchronize();
+    // printf("prefixSum no-accurate: %f, %f, %f, %f\n\n", ps[0], ps[1], ps[2], ps[numParticles - 1]);
     return resampler.prefixSum[numParticles - 1];
 }
 

@@ -3,41 +3,33 @@
 
 #include "resampleCommon.cuh"
 
-HOST DEV void expWeightsSeq(floating_t* w, int numParticles) {
-    // int numZeros = 0;
-    // int numRuined = 0;
+HOST DEV void expWeightsSeq(floating_t* w, int numParticles, floating_t maxLogWeight) {
     for(int i = 0; i < numParticles; i++) {
-
-        //bool negInfBefore = w[i] == -INFINITY;
-        w[i] = exp(w[i]);
-        /*
-        if(w[i] == 0) {
-            if(! negInfBefore)
-                numRuined++;
-            numZeros++;
-        }
-        */
-    }
-    /*if(numRuined > 0) {
-        printf("Ratio zero after exp: %f\n", numZeros / (1.0 * numParticles));
-        printf("Ratio ruined after exp: %f\n", numRuined / (1.0 * numParticles));
-    }*/
-}
-
-template <typename T>
-HOST DEV void calcInclusivePrefixSumSeq(particles_t<T>* particles, floating_t* prefixSum, int numParticles) {
-    prefixSum[0] = particles->weights[0];
-    for(int i = 1; i < numParticles; i++) {
-        prefixSum[i] = prefixSum[i-1] + particles->weights[i];
+        w[i] = exp(w[i]- maxLogWeight);
     }
 }
 
-template <typename T>
-HOST DEV floating_t calcWeightSumSeq(particles_t<T>* particles, resampler_t resampler, int numParticles) {
-    expWeightsSeq(particles->weights, numParticles);
-    calcInclusivePrefixSumSeq<T>(particles, resampler.prefixSum, numParticles);
-    //if(resampler.prefixSum[numParticles-1] == 0)
-        //printf("Error: prefixSum = 0!\n");
+HOST DEV void calcInclusivePrefixSumSeq(floating_t* w, floating_t* prefixSum, int numParticles) {
+    prefixSum[0] = w[0];
+    for(int i = 1; i < numParticles; i++)
+        prefixSum[i] = prefixSum[i-1] + w[i];
+}
+
+HOST DEV floating_t calcWeightSumSeq(floating_t* w, resampler_t resampler, int numParticles) {
+    floating_t maxLogWeight = maxNaive(w, numParticles);
+
+    // Corresponds to ExpWeightsKernel used in the parallel implementation
+    for(int i = 0; i < numParticles; i++)
+        w[i] = exp(w[i]- maxLogWeight);
+
+    // expWeightsSeq(particles->weights, numParticles, maxLogWeight);
+
+    calcInclusivePrefixSumSeq(w, resampler.prefixSum, numParticles);
+
+    // Corresponds to the renormaliseSumsKernel used in the parallel implementation
+    for(int i = 0; i < numParticles; i++)
+        resampler.prefixSum[i] = exp(log(resampler.prefixSum[i]) + maxLogWeight);
+
     return resampler.prefixSum[numParticles - 1];
 }
 
@@ -80,6 +72,8 @@ HOST DEV void copyStatesSeq(particles_t<T>** particlesPtrToPtr, resampler_t& res
 template <typename T>
 DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t<T>** particlesPtrToPtr, resampler_t& resampler, int numParticles) {
     
+    // This should do it?
+    // floating_t u = uniform(RAND_STATE_ACCESS, 0.0f, 1.0f);
     #ifdef GPU
     // int i = 0; // needed by SAMPLE, index of particle to use curandState from in case of nested inference
     // curandState* randState = &particles->randStates[i];
@@ -94,22 +88,5 @@ DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t<T>** particlesPtrT
     cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor, numParticles);
     copyStatesSeq<T>(particlesPtrToPtr, resampler, numParticles);
 }
-
-/*
-template <typename T>
-HOST DEV floating_t resampleSystematicSeqNested(particles_t<T>* particles, resampler_t resampler, bool nested = false) {
-    expWeightsSeq(particles->weights);
-    calcInclusivePrefixSumSeq<T>(particles, resampler.prefixSum);
-    if(resampler.prefixSum[NUM_PARTICLES-1] == 0)
-        printf("Error: prefixSum = 0!\n");
-    
-    floating_t u = uniform(particles, 0, 0.0f, 1.0f); // i is not used if CPU
-        
-    systematicCumulativeOffspringSeq(resampler.prefixSum, resampler.cumulativeOffspring, u);
-    cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor);
-    copyStatesSeq<T>(particles, resampler.ancestor, resampler.tempArr);
-    return resampler.prefixSum[NUM_PARTICLES-1];
-}
-*/
 
 #endif

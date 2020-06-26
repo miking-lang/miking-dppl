@@ -91,7 +91,7 @@ HOST DEV int sgn(T val) {
     return (T(0) < val) - (val < T(0));
 }
 
-HOST DEV floating_t maxNaive(floating_t* arr, int n) {
+HOST DEV floating_t maxNaive(const floating_t* arr, const int n) {
     floating_t maxVal = -INFINITY;
     for(int i = 0; i < n; i++) {
         maxVal = arr[i] >= maxVal ? arr[i] : maxVal;

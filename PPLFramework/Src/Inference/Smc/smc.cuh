@@ -13,7 +13,7 @@ using namespace std;
 /*
 Settings for CUDA kernel launches
 */
-const int NUM_PARTICLES = 100000;// 1048576;// 55000;
+const int NUM_PARTICLES = 20000;// 1048576;// 55000;
 const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;

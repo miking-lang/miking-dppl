@@ -185,7 +185,6 @@ BBLOCK(simCRBD, progState_t, {
 
     PC++;
     // PC = 2;
-    // RESAMPLE = false;
     BBLOCK_CALL(simTree);
 })
 
@@ -200,25 +199,4 @@ MAIN(
 
     res += corrFactor;
 )
-
-/*
-int main() {
-
-    initGen();
-    initCBD();
-    
-    // SMCSTART(progState_t, NUM_BBLOCKS)
-
-    INITBBLOCK(simCRBD, progState_t)
-    INITBBLOCK(simTree, progState_t)
-
-    SMC(progState_t, NULL)
-
-    res += corrFactor;
-
-    cout << "log(MarginalLikelihood) = " << res << endl;
-
-    return 0;
-}
-*/
 

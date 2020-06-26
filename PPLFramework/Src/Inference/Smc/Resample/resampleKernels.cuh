@@ -4,12 +4,13 @@
 #include <curand_kernel.h>
 #include "../smc.cuh"
 
-__global__ void expWeightsKernel(floating_t* w, int numParticles) {
+__global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
     // bool negInfBefore = w[idx] == -INFINITY;
-    w[idx] = exp(w[idx]);
+    // w[idx] = exp(w[idx] - maxLogWeight);
+    w[idx] = exp(w[idx] - maxLogWeight);
     /*
     if(w[idx] == 0)
         if(! negInfBefore)
@@ -17,11 +18,19 @@ __global__ void expWeightsKernel(floating_t* w, int numParticles) {
     */
 }
 
+__global__ void renormaliseSumsKernel(floating_t* prefixSum, int numParticles, floating_t maxLogWeight=0) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= numParticles || idx < 0) return;
+
+    prefixSum[idx] = exp(log(prefixSum[idx]) + maxLogWeight);
+
+}
+
 __global__ void systematicCumulativeOffspringKernel(const floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    floating_t expectedCumulativeOffspring = numParticles * prefixSum[idx] / prefixSum[numParticles - 1]; // opimize by saving W[n-1] to constant?
+    floating_t expectedCumulativeOffspring = numParticles * prefixSum[idx] / prefixSum[numParticles - 1];
     cumulativeOffspring[idx] = min(numParticles, static_cast<int>(floor(expectedCumulativeOffspring + u)));
 }
 
