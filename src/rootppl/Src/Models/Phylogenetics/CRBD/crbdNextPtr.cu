@@ -11,9 +11,9 @@
     This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
 */
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/MinimalCRBD/crbdNextPtr.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CRBD/crbdNextPtr.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/MinimalCRBD/crbdNextPtr.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CRBD/crbdNextPtr.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
 
 BBLOCK_DATA(tree, tree_t, 1)

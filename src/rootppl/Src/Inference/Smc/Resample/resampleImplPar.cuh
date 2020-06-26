@@ -22,7 +22,7 @@
 //}
 
 
-HOST floating_t calcWeightSumPar(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST DEV floating_t calcWeightSumPar(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
     // floating_t* w = particles->weights;
     // printf("logWeights: %f, %f, %f, %f\n", w[0], w[1], w[2], w[numParticles-1]);
     // floating_t maxLogWeight = maxNaive(w, numParticles);

@@ -8,9 +8,9 @@
     This model traverses the tree with a DFS path that corresponds to the recursive calls. 
 */
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/MinimalCRBD/condBDExample.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CRBD/condBDExample.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/MinimalCRBD/condBDExample.cu -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CRBD/condBDExample.cu -o smc.exe -std=c++11 -O3
 
 #define NUM_BBLOCKS 5
 INIT_GLOBAL(pStack_t, NUM_BBLOCKS)
