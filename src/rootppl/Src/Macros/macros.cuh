@@ -18,35 +18,24 @@ typedef double floating_t; // To be able to switch between single and double pre
 - Result (right now only normalizationConstant) available through local variable "res"
 */
 
+// Used by BBLOCK, BBLOCK_HELPER and BBLOCK_CALL macros
+#define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>* particles, int i
+#define BBLOCK_ARGS RAND_STATE_ACCESS particles, i
+
 // These will be executed by the framework
 #define BBLOCK(funcName, progStateType, body) \
-DEV void funcName(RAND_STATE_DECLARE particles_t<progStateType>* particles, int i, void* arg = NULL) \
+DEV void funcName(BBLOCK_PARAMS(progStateType), void* arg = NULL) \
 body \
 DEV_POINTER(funcName, progStateType)
-
-/*
-{ \
-RAND_STATE_LOCAL \
-body \
-RAND_STATE_RESTORE \
-} \
-*/
 
 // Regular helper functions that takes the particles as argument (syntactic sugar)
 #define BBLOCK_HELPER(funcName, body, returnType, ...) \
 template <typename T> \
-DEV returnType funcName(RAND_STATE_DECLARE particles_t<T>* particles, int i, ##__VA_ARGS__) \
+DEV returnType funcName(BBLOCK_PARAMS(T), ##__VA_ARGS__) \
 body
-/*
-{ \
-RAND_STATE_LOCAL \
-body \
-RAND_STATE_RESTORE \
-}
-*/
 
 // Call functions that takes the particles as argument (syntactic sugar)
-#define BBLOCK_CALL(funcName, ...) funcName(RAND_STATE_ACCESS particles, i, ##__VA_ARGS__)
+#define BBLOCK_CALL(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)
 
 // #define BBLOCK_CALL_FNC_PTR(funcName, ...) funcName(RAND_STATE_ACCESS particles, i, ##__VA_ARGS__)
 
@@ -133,7 +122,6 @@ int main() { \
     cout << "log(normalizationConstant) = " << res << endl; \
     return 0; \
 }
-
 
 
 /* MCMC */
