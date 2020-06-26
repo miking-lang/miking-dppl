@@ -3,15 +3,12 @@
 
 #include <iostream>
 #include <limits>
-#include "../../Utils/timer.h"
 #include "smc.cuh"
 #include "../../Utils/Distributions/distributions.cuh"
 
 #ifdef GPU
 #include "cuda_profiler_api.h"
-// #include "cudaProfiler.h"
 #include "../../Utils/cudaErrorUtils.cu"
-// #include "../../Utils/reduceGPU.cuh"
 #include "Resample/resampleImplPar.cuh"
 #include "generalKernels.cuh"
 #endif
@@ -81,43 +78,8 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
         execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(randStates, particles, bblocks, NUM_PARTICLES, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
-        /*
-        floating_t* w = particles->weights;
-        floating_t maxWeight;
-        for(int t = 0; t < 10000000; t++) {
-            maxWeight = *(thrust::max_element(w, w + NUM_PARTICLES));
-            // cudaDeviceSynchronize();
-            printf("maxW1: %f\n", maxWeight);
-            maxWeight = maxNaive(w, NUM_PARTICLES);
-            printf("maxW2: %f\n", maxWeight);
-        }
-        cudaDeviceSynchronize();
-        */
-
-        // floating_t* output;
-        // cudaSafeCall(cudaMallocManaged(&output, sizeof(floating_t) * NUM_PARTICLES));
-        // reduceCUDA<NUM_THREADS_PER_BLOCK_FUNCS, floating_t><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(particles->weights, output, NUM_PARTICLES);
-        // floating_t sum1 = GPUReduction<NUM_THREADS_PER_BLOCK_FUNCS, floating_t>(particles->weights, NUM_PARTICLES);
-        // cudaCheckError();
-        /*
-        printf("Sum1: %f\n", sum1);
-        floating_t result = 0;
-        for (int t = 0; t < NUM_PARTICLES; t++) {
-            result += particles->weights[t];
-        }
-        printf("Sum2: %f\n", result);
-        floating_t* prefixSum;
-        cudaSafeCall(cudaMallocManaged(&prefixSum, sizeof(floating_t) * NUM_PARTICLES));
-        thrust::inclusive_scan(thrust::device, particles->weights, particles->weights + NUM_PARTICLES, prefixSum);
-        printf("Sum3: %f\n", prefixSum[NUM_PARTICLES-1]);
-        */
-
-        // floating_t* w2;
-        // cudaSafeCall(cudaMallocManaged(&w2, sizeof(floating_t) * NUM_PARTICLES));
-        // cudaSafeCall(cudaMemcpy(w2, particles->weights, sizeof(floating_t) * NUM_PARTICLES, cudaMemcpyDefault));
-        cudaDeviceSynchronize();
-        // printf("w: %f, w2: %f\n", particles->weights[3], w2[3]);
         floating_t weightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        
         #else
 
         for(int i = 0; i < NUM_PARTICLES; i++) {

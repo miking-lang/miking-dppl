@@ -6,9 +6,9 @@
 #include "TreeUtils/treeUtils.cuh"
 #include "bamm.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/bamm.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/BAMM/bamm.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/bamm.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/BAMM/bamm.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
 #define MIN(a, b) a <= b ? a : b
 #define MAX(a, b) a >= b ? a : b
