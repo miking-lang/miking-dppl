@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "random": "cpp",
+        "*.cuh": "cuda",
+        "*.i": "cpp"
+    }
+}
