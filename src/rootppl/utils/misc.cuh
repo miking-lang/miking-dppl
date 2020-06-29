@@ -31,27 +31,12 @@ void freeMemory(T* pointer) {
 
 template <typename T>
 HOST DEV T sumArray(T* arr, int n) {
-        T sum = 0;
-        for (int i = 0; i < n; i++)
-            sum += arr[i];
-        return sum;
-    }
-
-/*
-HOST DEV int sumArrayInt(int* arr, int n) {
-    int sum = 0;
+    T sum = 0;
     for (int i = 0; i < n; i++)
         sum += arr[i];
     return sum;
 }
 
-HOST DEV int sumArrayFloat(floating_t* arr, int n) {
-    floating_t sum = 0;
-    for (int i = 0; i < n; i++)
-        sum += arr[i];
-    return sum;
-}
-*/
 
 template <typename T>
 HOST DEV void normalizeArray(T* arr, int n) {
@@ -147,10 +132,7 @@ HOST DEV void choleskyDecomposition(floating_t (&matrix)[n][n], floating_t (&low
 
 template <size_t a, size_t b, size_t c>
 HOST DEV void matmul(floating_t A[a][b], floating_t B[b][c], floating_t C[a][c]) {
-// template <size_t a>
-// HOST DEV void matmul(floating_t A[a][a], floating_t B[a][a], floating_t C[a][a]) {
-    // const int b = a;
-    // const int c = a;
+
     for(int i = 0; i < a; i++)
         for(int j = 0; j < c; j++)
             C[i][j] = 0;
@@ -185,35 +167,5 @@ HOST DEV void transformColumn(floating_t A[a][b], floating_t col[b], floating_t 
         printf("%f ", C[j]);
     printf("]\n\n");*/
 }
-
-// *** Array needed to handle stuff =)
-/*
-template <typename T>
-struct arr100_t {
-    int currIndex = 0;
-    T arr[100];
-
-    HOST DEV T operator [] (int i) const {return arr[i];}
-    HOST DEV T& operator [] (int i) {return arr[i];}
-
-    HOST DEV void push_back(T obj) {
-        arr[currIndex] = obj;
-        currIndex++;
-    }
-
-    HOST DEV int size() {
-        return currIndex;
-    }
-
-    HOST DEV T* begin() {
-        return arr;
-    }
-
-    HOST DEV T* end() {
-        return &arr[currIndex];
-    }
-};
-*/
-// ***
 
 #endif
