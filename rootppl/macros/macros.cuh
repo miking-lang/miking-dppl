@@ -13,7 +13,7 @@ typedef double floating_t; // To be able to switch between single and double pre
 - INIT_GLOBAL (mandatory) will set up globally accessible bblocks
 - BBLOCK_DATA (optional) will set up globally accessible data
 - Call SMCSTART with programState and numBblocks type as argument
-- INITBBLOCK with BBLOCK function (defined with BBLOCK macro) and programState type as arguments for each BBLOCK
+- INIT_BBLOCK with BBLOCK function (defined with BBLOCK macro) and programState type as arguments for each BBLOCK
 - SMCEND with program state type and callback as arguments to start inference
 - Result (right now only normalizationConstant) available through local variable "res"
 */
@@ -48,14 +48,14 @@ Initialize the basic block (add it to the array of bblocks), the order of bblock
 The first bblock to be initialized will be the first to be executed, then the execution follows the
 index (PC) specified by the model (bblocks)
 */
-#define INITBBLOCK(funcName, progStateType) \
+#define INIT_BBLOCK(funcName, progStateType) \
 pplFunc_t<progStateType> funcName ## Host; \
 FUN_REF(funcName, progStateType) \
 bblocksArr[bbIdx] = funcName ## Host; \
 bbIdx++;
 
 // Same as above, but for nested inference
-#define INITBBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
+#define INIT_BBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
 
 // Sets up globally accessible bblock array, that can be accessed from the bblocks
 #define INIT_GLOBAL(progStateType, numBblocks) \

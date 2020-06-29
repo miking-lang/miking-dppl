@@ -244,7 +244,7 @@ int main() {
 
     SMCSTART(progState_t);
 
-    INITBBLOCK(gibbs, progState_t);
+    INIT_BBLOCK(gibbs, progState_t);
 
     SMCEND(progState_t);
 }

@@ -6,7 +6,9 @@
 
 
 // Define this to turn on error checking
+#ifndef RELEASE
 #define CUDA_ERROR_CHECK
+#endif
 
 #define cudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
 #define cudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )

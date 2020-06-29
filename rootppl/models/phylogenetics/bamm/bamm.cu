@@ -284,7 +284,7 @@ DEV T runNestedInference(int parentIndex, bblockArgs_t* arg) {
 
     SMCSTART(nestedProgState_t)
 
-    INITBBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
+    INIT_BBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
     SMCEND_NESTED(nestedProgState_t, calcResult, ret, arg, parallelExec, parallelResampling, parentIndex)
 
@@ -315,9 +315,9 @@ int main() {
     
     SMCSTART(progState_t)
 
-    INITBBLOCK(simBAMM, progState_t)
-    INITBBLOCK(simTree, progState_t)
-    INITBBLOCK(survivalConditioning, progState_t)
+    INIT_BBLOCK(simBAMM, progState_t)
+    INIT_BBLOCK(simTree, progState_t)
+    INIT_BBLOCK(survivalConditioning, progState_t)
 
     SMCEND(progState_t)
 

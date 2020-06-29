@@ -63,8 +63,8 @@ int main() {
 
     SMCSTART(progState_t);
 
-    INITBBLOCK(init, progState_t);
-    INITBBLOCK(lgss, progState_t);
+    INIT_BBLOCK(init, progState_t);
+    INIT_BBLOCK(lgss, progState_t);
 
     SMCEND(progState_t);
 }

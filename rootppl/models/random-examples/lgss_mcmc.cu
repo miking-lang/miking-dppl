@@ -105,8 +105,8 @@ int main() {
 
     MCMCSTART(progState_t);
 
-    INITBBLOCK(init, progState_t);
-    INITBBLOCK(lgss, progState_t);
+    INIT_BBLOCK(init, progState_t);
+    INIT_BBLOCK(lgss, progState_t);
 
     MCMCEND(progState_t);
 }

@@ -80,8 +80,8 @@ CALLBACK_HOST(callback, progState_t, {
 MAIN(
     initAirplane();
 
-    INITBBLOCK(particleInit, progState_t)
-    INITBBLOCK(propagateAndWeight, progState_t)
+    INIT_BBLOCK(particleInit, progState_t)
+    INIT_BBLOCK(propagateAndWeight, progState_t)
 
     SMC(progState_t, callback)
 )
@@ -93,8 +93,8 @@ int main(int argc, char** argv) {
 
     // SMCSTART(progState_t, NUM_BBLOCKS)
 
-    INITBBLOCK(particleInit, progState_t)
-    INITBBLOCK(propagateAndWeight, progState_t)
+    INIT_BBLOCK(particleInit, progState_t)
+    INIT_BBLOCK(propagateAndWeight, progState_t)
 
     SMC(progState_t, callback)
 }

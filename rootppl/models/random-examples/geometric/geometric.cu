@@ -68,9 +68,9 @@ int main() {
 
     SMCSTART(progState_t)
 
-    INITBBLOCK(particleInit, progState_t)
-    INITBBLOCK(geometric, progState_t)
-    INITBBLOCK(nop, progState_t)
+    INIT_BBLOCK(particleInit, progState_t)
+    INIT_BBLOCK(geometric, progState_t)
+    INIT_BBLOCK(nop, progState_t)
 
     SMCEND(progState_t)
 }

@@ -7,9 +7,9 @@
     This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
 */
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CRBD/crbd.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true models/phylogenetics/crbd/crbd.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CRBD/crbd.cu -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ models/phylogenetics/crbd/crbd.cu -o smc.exe -std=c++11 -O3
 
 typedef short treeIdx_t;
 struct progState_t {
@@ -22,11 +22,9 @@ struct nestedProgState_t {
 typedef double return_t;
 
 
-
 #define NUM_BBLOCKS 2
 INIT_GLOBAL(progState_t, NUM_BBLOCKS)
 #define NUM_BBLOCKS_NESTED 1
-
 
 BBLOCK_DATA(tree, tree_t, 1)
 
@@ -164,7 +162,7 @@ DEV T runNestedInference(RAND_STATE_DECLARE int parentIndex) {
 
     SMC_PREPARE_NESTED(nestedProgState_t, NUM_BBLOCKS_NESTED)
 
-    INITBBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
+    INIT_BBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
     SMC_NESTED(nestedProgState_t, calcResult, ret, NULL, parallelExec, parallelResampling, parentIndex)
 
@@ -178,9 +176,9 @@ BBLOCK(simCRBD, progState_t, {
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
 
-    double survivalRate = runNestedInference<double>(RAND_STATE_ACCESS i);
+    // double survivalRate = runNestedInference<double>(RAND_STATE_ACCESS i);
 
-    WEIGHT(-2.0 * log(survivalRate));
+    // WEIGHT(-2.0 * log(survivalRate));
 
     PC++;
     // PC = 2;
@@ -191,8 +189,8 @@ BBLOCK(simCRBD, progState_t, {
 MAIN(
     initCBD();
     
-    INITBBLOCK(simCRBD, progState_t)
-    INITBBLOCK(simTree, progState_t)
+    INIT_BBLOCK(simCRBD, progState_t)
+    INIT_BBLOCK(simTree, progState_t)
 
     SMC(progState_t, NULL)
 

@@ -251,9 +251,9 @@ int main() {
 
     SMCSTART(progState_t); // allokera array
 
-    INITBBLOCK(init, progState_t); // create func pointer and add to array
-    INITBBLOCK(newDocument, progState_t);
-    INITBBLOCK(newWord, progState_t);
+    INIT_BBLOCK(init, progState_t); // create func pointer and add to array
+    INIT_BBLOCK(newDocument, progState_t);
+    INIT_BBLOCK(newWord, progState_t);
 
     SMCEND(progState_t);
     floating_t meanRatio = ratioSum / 1000.0;

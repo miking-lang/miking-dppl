@@ -142,11 +142,11 @@ BBLOCK(condBD_init, pStack_t, {
 
 MAIN(
 
-    INITBBLOCK(condBD_init, pStack_t)
-    INITBBLOCK(condBD_1, pStack_t)
-    INITBBLOCK(condBD_2, pStack_t)
-    INITBBLOCK(condBD_3, pStack_t)
-    INITBBLOCK(condBD_4, pStack_t)
+    INIT_BBLOCK(condBD_init, pStack_t)
+    INIT_BBLOCK(condBD_1, pStack_t)
+    INIT_BBLOCK(condBD_2, pStack_t)
+    INIT_BBLOCK(condBD_3, pStack_t)
+    INIT_BBLOCK(condBD_4, pStack_t)
 
     SMC(pStack_t, NULL)
 )
