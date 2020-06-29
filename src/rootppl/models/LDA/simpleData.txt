@@ -1,0 +1,10 @@
+pineapple,apple,banana,processor,kiwi,tennis,car,boxing,banana,banana,processor,banana,banana,banana,car,pineapple,grape,car,banana,apple
+car,car,car,car,car,processor,processor,processor,car,processor,car,car,car,car,car,car,car,car,processor,processor
+banana,banana,kiwi,pineapple,banana,kiwi,pineapple,banana,kiwi,apple,pineapple,banana,pineapple,banana,banana,pineapple,kiwi,banana,banana,banana
+horse,pig,horse,car,processor,car,car,monkey,horse,boat,airplane,monkey,car,horse,car,pig,car,airplane,car,pig
+pineapple,banana,pineapple,kiwi,banana,pineapple,pineapple,banana,banana,apple,banana,banana,apple,banana,banana,banana,banana,banana,pineapple,grape
+banana,banana,apple,kiwi,pineapple,banana,banana,pineapple,banana,pineapple,pineapple,banana,pineapple,banana,apple,pineapple,banana,banana,banana,pineapple
+dog,pig,monkey,cat,swimming,swimming,horse,pig,horse,horse,monkey,tennis,football,swimming,tennis,dog,horse,swimming,monkey,pig
+cat,pig,horse,pig,monkey,horse,pig,processor,pig,monkey,dog,dog,monkey,horse,horse,horse,pig,pig,car,car
+boxing,tennis,boxing,car,swimming,boxing,car,boxing,tennis,boat,pig,tennis,car,boxing,tennis,tennis,tennis,swimming,car,horse
+monkey,monkey,monkey,monkey,monkey,horse,horse,pig,pig,monkey,horse,monkey,pig,cat,horse,dog,monkey,horse,pig,cat
