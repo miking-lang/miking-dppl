@@ -2,9 +2,9 @@
 #define SMC_INCLUDED
 
 #include <cstddef>
-#include "../../Macros/macros.cuh"
+#include "../../macros/macros.cuh"
 #ifdef GPU
-#include "../../Utils/cudaErrorUtils.cu"
+#include "../../utils/cuda_error_utils.cu"
 #include <curand_kernel.h>
 #endif
 
@@ -13,7 +13,7 @@ using namespace std;
 /*
 Settings for CUDA kernel launches
 */
-const int NUM_PARTICLES = 20000;// 1048576;// 55000;
+const int NUM_PARTICLES = 100000;// 1048576;// 55000;
 const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;
@@ -34,9 +34,6 @@ template <typename T>
 struct particles_t {
 
     T* progStates;
-    /*#ifdef GPU
-    curandState* randStates;
-    #endif*/
     int* pcs;
     floating_t* weights;
 };
@@ -51,8 +48,6 @@ using pplFunc_t = void (*)(
     int, 
     void*);
 
-// template <typename T>
-// using statusFunc_t = void (*)(particles_t<T>*);
 
 // Callback function, like bblock function but without index. As all particles are usually used here
 template <typename T>

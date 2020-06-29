@@ -2,10 +2,10 @@
 #include <vector>
 #include <time.h>
 
-#include "../../../Inference/Smc/smc.cuh"
-#include "../../../Inference/Smc/smcImpl.cuh"
+#include "../../../inference/smc/smc.cuh"
+#include "../../../inference/smc/smc_impl.cuh"
 #include "geometric.cuh"
-#include "../../../Utils/distributions.cuh"
+#include "../../../utils/distributions.cuh"
 
 using namespace std;
 

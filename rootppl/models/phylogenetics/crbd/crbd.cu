@@ -1,15 +1,15 @@
 #include <iostream>
 #include <cstring>
-#include "../../../Inference/Smc/smcImpl.cuh"
-#include "../TreeUtils/treeUtils.cuh"
+#include "../../../inference/smc/smc_impl.cuh"
+#include "../tree-utils/tree_utils.cuh"
 
 /**
     This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
 */
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CRBD/cbdNoStackPrecomputeNext.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CRBD/crbd.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CRBD/cbdNoStackPrecomputeNext.cu -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CRBD/crbd.cu -o smc.exe -std=c++11 -O3
 
 typedef short treeIdx_t;
 struct progState_t {

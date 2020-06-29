@@ -1,7 +1,7 @@
 #ifndef MACROS_INCLUDED
 #define MACROS_INCLUDED
 
-#include "macrosAdaptive.cuh"
+#include "macros_adaptive.cuh"
 
 #define COMMA ,
 #define CMA ,

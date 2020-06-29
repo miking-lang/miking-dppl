@@ -3,13 +3,15 @@
 #include <random>
 #include <time.h>
 
-#include "../../Inference/Smc/smcImpl.cuh"
+#include "../../inference/smc/smc_impl.cuh"
 #include "airplane.cuh"
-#include "airplaneUtils.cuh"
+#include "airplane_utils.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Airplane/*.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+// nvcc -arch=sm_75 -rdc=true models/airplane/*.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Airplane/*.cu -o smc.exe -std=c++11 -O3
+// nvcc -arch=sm_75 models/airplane/*.cu -o smc.exe -std=c++11 -O3 -D GPU
+
+// Compile CPU: g++ -x c++ models/airplane/*.cu -o smc.exe -std=c++11 -O3
 
 using namespace std;
 

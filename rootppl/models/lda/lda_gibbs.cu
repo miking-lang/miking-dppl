@@ -1,9 +1,8 @@
 #include <algorithm>
 
-#include "../../Inference/Smc/smc.cuh"
-#include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
-#include "../../Utils/misc.cuh"
+#include "../../inference/smc/smc_impl.cuh"
+#include "../../utils/distributions.cuh"
+#include "../../utils/misc.cuh"
 #include "lda.cuh"
 
 // g++ -x c++ Src/Models/LDA/ldaGibbs.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3

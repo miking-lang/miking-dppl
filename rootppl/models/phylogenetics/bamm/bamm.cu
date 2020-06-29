@@ -1,9 +1,9 @@
 #include <iostream>
 #include <cstring>
-#include "../../Inference/Smc/smc.cuh"
-#include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
-#include "TreeUtils/treeUtils.cuh"
+
+#include "../../inference/smc/smc_impl.cuh"
+#include "../../utils/distributions.cuh"
+#include "tree-utils/tree_utils.cuh"
 #include "bamm.cuh"
 
 // nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/BAMM/bamm.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU

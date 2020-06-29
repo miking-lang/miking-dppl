@@ -1,8 +1,7 @@
 #include <cstring>
 
-#include "../../Inference/Smc/smc.cuh"
-#include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
+#include "../../inference/smc/smc_impl.cuh"
+#include "../../utils/distributions.cuh"
 
 // g++ -x c++ Src/Models/RandomExamples/lgss.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 

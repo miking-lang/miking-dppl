@@ -2,10 +2,10 @@
 // #include <bits/stdc++.h> 
 #include <algorithm>
 
-#include "../../Inference/Smc/smc.cuh"
-#include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
-#include "../../Utils/misc.cuh"
+#include "../../inference/smc/smc.cuh"
+#include "../../inference/smc/smcImpl.cuh"
+#include "../../utils/distributions.cuh"
+#include "../../utils/misc.cuh"
 #include "lda.cuh"
 
 // g++ -x c++ Src/Models/LDA/lda.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3

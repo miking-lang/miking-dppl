@@ -9,7 +9,7 @@ const double PI = 3.1415926535897932384626433832795028841971693993751;
 #include <curand_kernel.h>
 #endif
 
-#include "../../Inference/Smc/smc.cuh"
+#include "../../inference/smc/smc.cuh"
 #include "../misc.cuh"
 
 
@@ -26,11 +26,11 @@ void initGen() {
 
 #ifdef GPU
 
-#include "distributionsGPU.cuh"
+#include "distributions_gpu.cuh"
 
 #else
 
-#include "distributionsCPU.cuh"
+#include "distributions_cpu.cuh"
 
 #endif
 

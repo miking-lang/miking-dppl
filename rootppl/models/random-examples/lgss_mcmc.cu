@@ -1,7 +1,7 @@
-#include "../../Inference/Mcmc/mcmc.cuh"
-#include "../../Inference/Mcmc/mcmcImpl.cuh"
+#include "../../inference/mcmc/mcmc.cuh"
+#include "../../inference/mcmc/mcmc_impl.cuh"
 // #include "../../Utils/distributions.cuh"
-#include "../../Utils/misc.cuh"
+#include "../../utils/misc.cuh"
 
 #include <random>
 #include <time.h>

@@ -4,7 +4,7 @@
 #include <cstddef>
 #include "../../macros.cuh"
 #ifdef GPU
-#include "../../Utils/cudaErrorUtils.cu"
+#include "../../utils/cuda_error_utils.cu"
 #include <curand_kernel.h>
 #endif
 

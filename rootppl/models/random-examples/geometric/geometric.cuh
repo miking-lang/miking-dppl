@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <iostream>
-#include "../../../Utils/misc.cuh"
+#include "../../../utils/misc.cuh"
 
 using namespace std;
 

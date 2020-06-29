@@ -1,5 +1,5 @@
 /*
-Just a bunch of functions to parse JSON trees into arrays, and give specs about tree.
+Just a bunch of functions to parse JSON trees into arrays, and give specs about trees.
 
 Note that this is JavaScript, can be executed online in the browser, ex: https://playcode.io/
 */
