@@ -126,15 +126,18 @@ BBLOCK(simTree, progState_t, {
         WEIGHT(log(2.0));
     */
     //WEIGHT(log(*(DATA_POINTER(lambda)))); 
+
+    floating_t parentAge = treeP->ages[indexParent];
+    floating_t age = treeP->ages[treeIdx];
     
 
-    floating_t lnProb1 = - (*DATA_POINTER(mu)) * (treeP->ages[indexParent] - treeP->ages[treeIdx]);
+    floating_t lnProb1 = - (*DATA_POINTER(mu)) * (parentAge - age);
 
     // Interior if at least one child
     bool interiorNode = treeP->idxLeft[treeIdx] != -1 || treeP->idxRight[treeIdx] != -1;
     floating_t lnProb2 = interiorNode ? log(*DATA_POINTER(lambda)) : 0.0;
 
-    floating_t lnProb3 = BBLOCK_CALL(simBranch<progState_t>, treeP->ages[indexParent], treeP->ages[treeIdx]);
+    floating_t lnProb3 = BBLOCK_CALL(simBranch<progState_t>, parentAge, age);
 
     /*
     if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..

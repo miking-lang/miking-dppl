@@ -78,6 +78,7 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
 
     // cudaProfilerStart();
     // Run program/inference
+    int count = 0;
     while(true) {
 
         #ifdef GPU
@@ -85,7 +86,9 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
         cudaDeviceSynchronize();
         cudaCheckError();
         floating_t weightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
-        
+        if(weightSum == 0.0)
+            printf("WS=0, count=%d\n", count);
+        count++;
         #else
 
         for(int i = 0; i < NUM_PARTICLES; i++) {
