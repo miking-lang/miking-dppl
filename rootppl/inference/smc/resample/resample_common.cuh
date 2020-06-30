@@ -7,8 +7,8 @@
 #include <math.h>
 #include <random>
 #include <time.h>
-#include "../smc.cuh"
-#include "../particles_memory_handler.cuh"
+#include "inference/smc/smc.cuh"
+#include "inference/smc/particles_memory_handler.cuh"
 
 default_random_engine generatorRes;
 uniform_real_distribution<floating_t> uDistRes(0.0, 1.0);

@@ -1,4 +1,4 @@
-#include "../../inference/smc/smc_impl.cuh"
+#include "inference/smc/smc_impl.cuh"
 
 /**
     This model traverses the tree with a DFS path that corresponds to the recursive calls. 

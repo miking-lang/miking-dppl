@@ -4,7 +4,7 @@
 
 #include <math.h>
 #include <iostream>
-#include "../../inference/smc/smc.cuh"
+#include "inference/smc/smc.cuh"
 #include "airplane.cuh"
 
 default_random_engine generator;

@@ -26,6 +26,8 @@ typedef double floating_t; // To be able to switch between single and double pre
 #define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>* particles, int i
 #define BBLOCK_ARGS RAND_STATE_ACCESS particles, i
 
+#define BBLOCK_DECLARE(funcName, progStateType) DEV void funcName(RAND_STATE_SIGNATURE particles_t<progStateType>*, int, void*);
+
 // These will be executed by the framework
 #define BBLOCK(funcName, progStateType, body) \
 DEV void funcName(BBLOCK_PARAMS(progStateType), void* arg = NULL) \

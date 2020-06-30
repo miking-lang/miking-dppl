@@ -5,7 +5,7 @@
 
 #include "resample_common.cuh"
 #include "resample_kernels.cuh"
-#include "../../../utils/cuda_error_utils.cu"
+#include "utils/cuda_error_utils.cu"
 
 #include <curand_kernel.h>
 #include <thrust/reduce.h>

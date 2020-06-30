@@ -1,17 +1,13 @@
 
-// #include <bits/stdc++.h> 
 #include <algorithm>
 
-#include "../../inference/smc/smc.cuh"
-#include "../../inference/smc/smcImpl.cuh"
-#include "../../utils/distributions.cuh"
-#include "../../utils/misc.cuh"
+#include "inference/smc/smcImpl.cuh"
+#include "utils/misc.cuh"
 #include "lda.cuh"
 
-// g++ -x c++ Src/Models/LDA/lda.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
-
-// nvcc -arch=sm_75 -rdc=true Src/Models/LDA/lda.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
-
+/*
+WORK IN PROGRESS, NOT CURRENTLY WORKING
+*/
 
 BBLOCK_DATA_2D(corpus, int, D, MAX_DOC_LENGTH); // DOCUMENTS
 BBLOCK_DATA(docLength, int, D); // length of each document

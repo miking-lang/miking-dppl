@@ -1,7 +1,7 @@
 #ifndef AIRPLANE_INCLUDED
 #define AIRPLANE_INCLUDED
 
-#include "../../inference/smc/smc.cuh"
+#include "inference/smc/smc.cuh"
 
 struct progState_t {
     floating_t x;

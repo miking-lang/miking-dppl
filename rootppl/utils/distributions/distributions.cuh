@@ -9,8 +9,8 @@ const double PI = 3.1415926535897932384626433832795028841971693993751;
 #include <curand_kernel.h>
 #endif
 
-#include "../../inference/smc/smc.cuh"
-#include "../misc.cuh"
+#include "inference/smc/smc.cuh"
+#include "utils/misc.cuh"
 
 
 default_random_engine generatorDists;

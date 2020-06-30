@@ -1,14 +1,19 @@
 #include <iostream>
 #include <cstring>
 
-#include "../../inference/smc/smc_impl.cuh"
-#include "../../utils/distributions.cuh"
+#include "inference/smc/smc_impl.cuh"
+#include "utils/distributions.cuh"
 #include "tree-utils/tree_utils.cuh"
 #include "bamm.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/BAMM/bamm.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/BAMM/bamm.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+/*
+Compile commands:
+
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
+g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
+*/
+
 
 #define MIN(a, b) a <= b ? a : b
 #define MAX(a, b) a >= b ? a : b

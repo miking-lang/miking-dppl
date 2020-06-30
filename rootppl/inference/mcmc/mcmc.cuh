@@ -2,9 +2,9 @@
 #define MCMC_INCLUDED
 
 #include <cstddef>
-#include "../../macros.cuh"
+#include "macros.cuh"
 #ifdef GPU
-#include "../../utils/cuda_error_utils.cu"
+#include "utils/cuda_error_utils.cu"
 #include <curand_kernel.h>
 #endif
 

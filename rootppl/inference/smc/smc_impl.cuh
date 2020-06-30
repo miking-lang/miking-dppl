@@ -4,11 +4,11 @@
 #include <iostream>
 #include <limits>
 #include "smc.cuh"
-#include "../../utils/distributions/distributions.cuh"
+#include "utils/distributions/distributions.cuh"
 
 #ifdef GPU
 #include "cuda_profiler_api.h"
-#include "../../utils/cuda_error_utils.cu"
+#include "utils/cuda_error_utils.cu"
 #include "resample/resample_impl_par.cuh"
 #include "general_kernels.cuh"
 #endif

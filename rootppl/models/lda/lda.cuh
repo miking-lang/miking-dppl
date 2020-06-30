@@ -1,7 +1,7 @@
 #ifndef LDA_INCLUDED
 #define LDA_INCLUDED
 
-#include "../../inference/smc/smc.cuh"
+#include "inference/smc/smc.cuh"
 #include <fstream>
 #include <sstream>
 #include <string>

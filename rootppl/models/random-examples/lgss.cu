@@ -1,11 +1,13 @@
 #include <cstring>
 
-#include "../../inference/smc/smc_impl.cuh"
-#include "../../utils/distributions.cuh"
+#include "inference/smc/smc_impl.cuh"
 
-// g++ -x c++ Src/Models/RandomExamples/lgss.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+/*
+Compile commands:
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/RandomExamples/lgss.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/random-examples/lgss.cu -o smc.exe -std=c++11 -O3
+g++ -x c++ -I . models/random-examples/lgss.cu -o smc.exe -std=c++11 -O3
+*/
 
 const int NUM_OBS = 3;
 
@@ -14,30 +16,35 @@ struct progState_t {
     int t;
 };
 
+#define NUM_BBLOCKS 2
+INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+
 BBLOCK_DATA(data, floating_t, NUM_OBS);
 
+BBLOCK_DECLARE(init, progState_t)
+BBLOCK_DECLARE(lgss, progState_t)
+
 BBLOCK(init, progState_t, {
-    PSTATE.x = BBLOCK_CALL(sampleNormal, 0.0, 100);
+    PSTATE.x = SAMPLE(normal, 0.0, 100);
     PSTATE.t = 0;
 
     PC++;
-    RESAMPLE = false;
+    BBLOCK_CALL(lgss, NULL);
 })
 
 BBLOCK(lgss, progState_t, {
 
     floating_t* dataP = DATA_POINTER(data);
     
-    PSTATE.x = BBLOCK_CALL(sampleNormal, PSTATE.x + 2.0, 1);
+    PSTATE.x = SAMPLE(normal, PSTATE.x + 2.0, 1);
     WEIGHT(logPDFNormal(dataP[PSTATE.t], PSTATE.x, 1.0));
 
     if(++PSTATE.t == NUM_OBS)
         PC++;
 
-    RESAMPLE = true;
 })
 
-STATUSFUNC({
+CALLBACK_HOST(callback, progState_t, {
     
     floating_t xSum = 0;
     for (int i = 0; i < NUM_PARTICLES; i++)
@@ -54,17 +61,13 @@ void setup() {
         data[i] = obs[i];
 }
 
-int main() {
+MAIN({
     setup();
 
-    printf("%f\n", PI);
-
     COPY_DATA_GPU(data, floating_t, NUM_OBS);
-
-    SMCSTART(progState_t);
 
     INIT_BBLOCK(init, progState_t);
     INIT_BBLOCK(lgss, progState_t);
 
-    SMCEND(progState_t);
-}
+    SMC(progState_t, callback);
+})

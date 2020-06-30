@@ -1,13 +1,14 @@
 #include <algorithm>
 
-#include "../../inference/smc/smc_impl.cuh"
-#include "../../utils/distributions.cuh"
-#include "../../utils/misc.cuh"
+#include "inference/smc/smc_impl.cuh"
+#include "utils/distributions.cuh"
+#include "utils/misc.cuh"
 #include "lda.cuh"
 
-// g++ -x c++ Src/Models/LDA/ldaGibbs.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/LDA/ldaGibbs.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+/*
+WORK IN PROGRESS, NOT CURRENTLY WORKING
+*/
 
 // THIS MODEL MIGHT HAVE AN ERROR, CHECK FOR SEGFAULT WITH LARGER NUMBER OF PARTICLES
 

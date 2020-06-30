@@ -35,6 +35,8 @@ __device__ type* pointerName ## Dev;
 // Access the data allocated with a BBLOCK_DATA macro
 #define DATA_POINTER(pointerName) pointerName ## Dev
 
+// Used when declaring function signature
+#define RAND_STATE_SIGNATURE curandState*,
 
 // Used when declaring dists working on both CPU and GPU, assumes dist has at least one more parameter
 #define RAND_STATE_DECLARE curandState* randState,
@@ -42,19 +44,9 @@ __device__ type* pointerName ## Dev;
 // Used when calling SAMPLE from dists working on both CPU and GPU since they rely on other dists only, assumes dist has at least one more parameter
 #define RAND_STATE_ACCESS randState,
 
-
 // Used in SAMPLE macro to provide the CUDA random generating state to the function call, assumes at least one more argument follows
 #define RAND_STATE randState,
 
-// Efficient when many random calls are done in the same function, to not access global memory repeatedly
-// #define RAND_STATE_LOCAL \
-// curandState randStateLocal = randStates[i]; \
-// curandState* randState = &randStateLocal;
-
-// curandState randStateLocal = particles->randStates[i];
-
-// #define RAND_STATE_RESTORE  particles->randStates[i] = randStateLocal;
-// #define RAND_STATE_RESTORE  randStates[i] = randStateLocal;
 
 #else
 
@@ -69,11 +61,10 @@ __device__ type* pointerName ## Dev;
 #define BBLOCK_DATA_2D(pointerName, type, n, m) type pointerName[n][m];
 #define COPY_DATA_GPU(pointerName, type, n)
 #define DATA_POINTER(pointerName) pointerName
-#define RAND_STATE
+#define RAND_STATE_SIGNATURE
 #define RAND_STATE_DECLARE
 #define RAND_STATE_ACCESS
-#define RAND_STATE_LOCAL
-#define RAND_STATE_RESTORE
+#define RAND_STATE
 
 #endif
 

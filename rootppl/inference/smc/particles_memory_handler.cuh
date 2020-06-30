@@ -2,7 +2,7 @@
 #define PARICLES_MEMORY_HANDLER_INCLUDED
 
 #include <cstring>
-#include "../../utils/misc.cuh"
+#include "utils/misc.cuh"
 
 template <typename T>
 particles_t<T>* allocateParticles(bool printMemSize=false) {

@@ -1,14 +1,14 @@
-#include "../../inference/mcmc/mcmc.cuh"
-#include "../../inference/mcmc/mcmc_impl.cuh"
-// #include "../../Utils/distributions.cuh"
-#include "../../utils/misc.cuh"
+#include "inference/mcmc/mcmc.cuh"
+#include "inference/mcmc/mcmc_impl.cuh"
+#include "utils/misc.cuh"
 
 #include <random>
 #include <time.h>
 
-// g++ -x c++ Src/Models/RandomExamples/lgssMcmc.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+/*
+WORK IN PROGRESS, NOT CURRENTLY WORKING
+*/
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/RandomExamples/lgssMcmc.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
 default_random_engine generatorDists;
 

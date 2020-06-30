@@ -2,9 +2,9 @@
 #define SMC_INCLUDED
 
 #include <cstddef>
-#include "../../macros/macros.cuh"
+#include "macros/macros.cuh"
 #ifdef GPU
-#include "../../utils/cuda_error_utils.cu"
+#include "utils/cuda_error_utils.cu"
 #include <curand_kernel.h>
 #endif
 

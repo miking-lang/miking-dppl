@@ -2,7 +2,7 @@
 #define RESAMPLE_KERNELS_INCLUDED
 
 #include <curand_kernel.h>
-#include "../smc.cuh"
+#include "inference/smc/smc.cuh"
 
 __global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
