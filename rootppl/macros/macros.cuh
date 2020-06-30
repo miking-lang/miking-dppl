@@ -1,6 +1,10 @@
 #ifndef MACROS_INCLUDED
 #define MACROS_INCLUDED
 
+#ifdef __NVCC__
+#define GPU
+#endif
+
 #include "macros_adaptive.cuh"
 
 #define COMMA ,
