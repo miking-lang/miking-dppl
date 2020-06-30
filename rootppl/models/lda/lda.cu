@@ -1,17 +1,13 @@
 
-// #include <bits/stdc++.h> 
 #include <algorithm>
 
-#include "../../Inference/Smc/smc.cuh"
-#include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
-#include "../../Utils/misc.cuh"
+#include "inference/smc/smcImpl.cuh"
+#include "utils/misc.cuh"
 #include "lda.cuh"
 
-// g++ -x c++ Src/Models/LDA/lda.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
-
-// nvcc -arch=sm_75 -rdc=true Src/Models/LDA/lda.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
-
+/*
+WORK IN PROGRESS, NOT CURRENTLY WORKING
+*/
 
 BBLOCK_DATA_2D(corpus, int, D, MAX_DOC_LENGTH); // DOCUMENTS
 BBLOCK_DATA(docLength, int, D); // length of each document
@@ -251,9 +247,9 @@ int main() {
 
     SMCSTART(progState_t); // allokera array
 
-    INITBBLOCK(init, progState_t); // create func pointer and add to array
-    INITBBLOCK(newDocument, progState_t);
-    INITBBLOCK(newWord, progState_t);
+    INIT_BBLOCK(init, progState_t); // create func pointer and add to array
+    INIT_BBLOCK(newDocument, progState_t);
+    INIT_BBLOCK(newWord, progState_t);
 
     SMCEND(progState_t);
     floating_t meanRatio = ratioSum / 1000.0;

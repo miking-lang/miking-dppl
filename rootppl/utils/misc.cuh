@@ -6,8 +6,6 @@
 #include <cstring>
 #include <bits/stdc++.h> 
 
-// #include "list.cuh"
-
 using namespace std;
 
 

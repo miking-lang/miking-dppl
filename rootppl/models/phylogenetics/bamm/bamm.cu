@@ -1,14 +1,19 @@
 #include <iostream>
 #include <cstring>
-#include "../../Inference/Smc/smc.cuh"
-#include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
-#include "TreeUtils/treeUtils.cuh"
+
+#include "inference/smc/smc_impl.cuh"
+#include "utils/distributions.cuh"
+#include "tree-utils/tree_utils.cuh"
 #include "bamm.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/BAMM/bamm.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/BAMM/bamm.cu Src/Utils/*.cpp -o smc.exe -std=c++11 -O3
+/*
+Compile commands:
+
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
+g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
+*/
+
 
 #define MIN(a, b) a <= b ? a : b
 #define MAX(a, b) a >= b ? a : b
@@ -284,7 +289,7 @@ DEV T runNestedInference(int parentIndex, bblockArgs_t* arg) {
 
     SMCSTART(nestedProgState_t)
 
-    INITBBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
+    INIT_BBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
     SMCEND_NESTED(nestedProgState_t, calcResult, ret, arg, parallelExec, parallelResampling, parentIndex)
 
@@ -315,9 +320,9 @@ int main() {
     
     SMCSTART(progState_t)
 
-    INITBBLOCK(simBAMM, progState_t)
-    INITBBLOCK(simTree, progState_t)
-    INITBBLOCK(survivalConditioning, progState_t)
+    INIT_BBLOCK(simBAMM, progState_t)
+    INIT_BBLOCK(simTree, progState_t)
+    INIT_BBLOCK(survivalConditioning, progState_t)
 
     SMCEND(progState_t)
 

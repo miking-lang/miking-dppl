@@ -1,15 +1,24 @@
 #include <iostream>
 #include <cstring>
 #include <limits>
-#include "../../Inference/Smc/smc.cuh"
-#include "../../Inference/Smc/smcImpl.cuh"
-#include "../../Utils/distributions.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/RandomExamples/normal.cu Src/Utils/*.cpp -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+#include "inference/smc/smc_impl.cuh"
+
+/*
+Compile commands:
+
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/random-examples/normal.cu -o smc.exe -std=c++11 -O3
+g++ -x c++ -I . models/random-examples/normal.cu -o smc.exe -std=c++11 -O3
+*/
 
 struct progState_t {
     double val;
 };
+
+#define NUM_BBLOCKS 1
+INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+#define NUM_BBLOCKS_NESTED 1
+
 
 CALLBACK(calcResult, progState_t, {
     double sum = 0.0;
@@ -25,18 +34,19 @@ CALLBACK(calcResult, progState_t, {
 template <typename T>
 DEV T runNestedInference(particles_t<progState_t>* particles, int i, pplFunc_t<progState_t> bblock) {
 //BBLOCK_HELPER(runNestedInference, {
-    bool parallelExec = true, parallelResampling = false;
+    bool parallelExec = false, parallelResampling = false;
 
     T ret;
 
-    SMCSTART(progState_t)
+    SMC_PREPARE_NESTED(progState_t, NUM_BBLOCKS_NESTED)
 
-    INITBBLOCK_NESTED(bblock, progState_t)
+    INIT_BBLOCK_NESTED(bblock, progState_t)
 
-    unsigned long long seed = static_cast<unsigned long long>(BBLOCK_CALL(sampleUniform, 0 ,1) * ULLONG_MAX);
+    unsigned long long seed = static_cast<unsigned long long>(SAMPLE(uniform, 0 ,1) * ULLONG_MAX);
+    // int seed = i;
     // printf("Seed: %llu\n", seed);
     
-    SMCEND_NESTED(progState_t, calcResult, ret, NULL, parallelExec, parallelResampling, seed)
+    SMC_NESTED(progState_t, calcResult, ret, NULL, parallelExec, parallelResampling, seed)
 
     return ret;
 }
@@ -44,34 +54,31 @@ DEV T runNestedInference(particles_t<progState_t>* particles, int i, pplFunc_t<p
 
 BBLOCK(normal8, progState_t, {
     
-    floating_t val = BBLOCK_CALL(sampleNormal, 8.0, 1);
+    floating_t val = SAMPLE(normal, 8.0, 1);
     PSTATE.val = val;
     // printf("val: %f\n", val);
 
     PC++;
-    RESAMPLE = false;
 })
 
 BBLOCK(normal4, progState_t, {
     
-    PSTATE.val = BBLOCK_CALL(sampleNormal, 4.0, 1);
+    PSTATE.val = SAMPLE(normal, 4.0, 1);
     PSTATE.val += runNestedInference<double>(particles, i, normal8);
 
     PC++;
-    RESAMPLE = false;
 })
 
 BBLOCK(normal2, progState_t, {
     
-    PSTATE.val = BBLOCK_CALL(sampleNormal, 2.0, 1);
+    PSTATE.val = SAMPLE(normal, 2.0, 1);
     PSTATE.val += runNestedInference<double>(particles, i, normal4);
 
     PC++;
-    RESAMPLE = false;
 })
 
 
-STATUSFUNC({
+CALLBACK_HOST(callback, progState_t, {
     double sum = 0.0;
     for(int i = 0; i < NUM_PARTICLES; i++)
         sum += PSTATE.val;
@@ -80,19 +87,14 @@ STATUSFUNC({
 })
 
 
-int main() {
+MAIN({
 
     initGen();
-    
-    SMCSTART(progState_t)
 
-    INITBBLOCK(normal2, progState_t)
-    // INITBBLOCK(normal4, progState_t)
-    // INITBBLOCK(normal8, progState_t)
+    INIT_BBLOCK(normal2, progState_t)
+    // INIT_BBLOCK(normal4, progState_t)
+    // INIT_BBLOCK(normal8, progState_t)
 
-    SMCEND(progState_t)
+    SMC(progState_t, callback)
 
-    cout << "log(MarginalLikelihood) = " << res << endl;
-
-    return 0;
-}
+})

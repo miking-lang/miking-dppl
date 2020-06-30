@@ -2,9 +2,9 @@
 #define SMC_INCLUDED
 
 #include <cstddef>
-#include "../../Macros/macros.cuh"
+#include "macros/macros.cuh"
 #ifdef GPU
-#include "../../Utils/cudaErrorUtils.cu"
+#include "utils/cuda_error_utils.cu"
 #include <curand_kernel.h>
 #endif
 
@@ -13,7 +13,10 @@ using namespace std;
 /*
 Settings for CUDA kernel launches
 */
-const int NUM_PARTICLES = 20000;// 1048576;// 55000;
+// const int NUM_PARTICLES = 100000;// 1048576;// 55000;
+#ifndef NUM_PARTICLES
+#define NUM_PARTICLES 10000
+#endif
 const int NUM_PARTICLES_NESTED = 50;
 
 const int NUM_THREADS_PER_BLOCK = 32;
@@ -21,9 +24,6 @@ const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS
 
 const int NUM_THREADS_PER_BLOCK_FUNCS = 128;
 const int NUM_BLOCKS_FUNCS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_FUNCS - 1) / NUM_THREADS_PER_BLOCK_FUNCS;
-
-const int NUM_THREADS_PER_BLOCK_INITRAND = 32;
-const int NUM_BLOCKS_INITRAND = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_INITRAND - 1) / NUM_THREADS_PER_BLOCK_INITRAND;
 
 const int NUM_THREADS_PER_BLOCK_NESTED = 32;
 const int NUM_BLOCKS_NESTED = (NUM_PARTICLES_NESTED + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
@@ -34,9 +34,6 @@ template <typename T>
 struct particles_t {
 
     T* progStates;
-    /*#ifdef GPU
-    curandState* randStates;
-    #endif*/
     int* pcs;
     floating_t* weights;
 };
@@ -51,8 +48,6 @@ using pplFunc_t = void (*)(
     int, 
     void*);
 
-// template <typename T>
-// using statusFunc_t = void (*)(particles_t<T>*);
 
 // Callback function, like bblock function but without index. As all particles are usually used here
 template <typename T>
@@ -100,4 +95,34 @@ N=1M    => 39.6% initRandStates, 55.1% execFuncs
 N=100K: ~19 speedup CPU -> GPU, without init costs   (~13 with costs)
 N=1M: ~30 speedup without init costs                 (~15 with costs)
 
+
+
+
+
+
+NUM_PARTICLES: [10000, 100000] 
+phylogenetics/crbd/crbd.cu
+
+With max weight scaling
+CPU: [0.946182988, 9.417857985]
+GPU: [0.5766381133333334, 1.087258693] 
+
+GPU Speedup: [[1.64086099 8.66202133]]
+
+With max weight scaling removed on GPU
+phylogenetics/crbd/crbd.cu
+CPU: [0.9422143126666667, 9.426604939333332]
+GPU: [0.44755016266666664, 0.94003224] 
+
+GPU Speedup: [[ 2.10527085 10.02795919]]
+
+*/
+
+/*
+25 runs
+GPU no max:
+Mean: 0.9295795017200001 , Std:  0.030816434479334492
+
+GPU with max:
+Mean: 1.0998520308400002 , Std:  0.03606856282216499
 */

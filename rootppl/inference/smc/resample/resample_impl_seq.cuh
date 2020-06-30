@@ -1,7 +1,7 @@
 #ifndef RESAMPLE_CPU_INCLUDED
 #define RESAMPLE_CPU_INCLUDED
 
-#include "resampleCommon.cuh"
+#include "resample_common.cuh"
 
 HOST DEV void expWeightsSeq(floating_t* w, int numParticles, floating_t maxLogWeight) {
     for(int i = 0; i < numParticles; i++) {

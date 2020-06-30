@@ -4,16 +4,16 @@
 #include <iostream>
 #include <limits>
 #include "smc.cuh"
-#include "../../Utils/Distributions/distributions.cuh"
+#include "utils/distributions/distributions.cuh"
 
 #ifdef GPU
 #include "cuda_profiler_api.h"
-#include "../../Utils/cudaErrorUtils.cu"
-#include "Resample/resampleImplPar.cuh"
-#include "generalKernels.cuh"
+#include "utils/cuda_error_utils.cu"
+#include "resample/resample_impl_par.cuh"
+#include "general_kernels.cuh"
 #endif
-#include "Resample/resampleImplSeq.cuh"
-#include "particlesMemoryHandler.cuh"
+#include "resample/resample_impl_seq.cuh"
+#include "particles_memory_handler.cuh"
 
 /* 
 This is an attempt to make most of the GPU memory available 
@@ -53,6 +53,12 @@ void configureMemSizeGPU() {
     #endif
 }
 
+/*
+Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
+optional callback that can use resulting particles before memory is cleaned up.
+Arg is an optional argument that can be passed to the bblocks. For top-level
+inference, this might as well be allocated as global data. 
+*/
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback = NULL, void* arg = NULL) {
     
@@ -118,8 +124,15 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
 }
 
 
-/* 
-Do not use parallel setting if GPU is not defined! 
+/*
+Runs Sequential Monte Carlo inference on the given bblock functions with arg as optional argument, 
+then calls the given callback with the ret pointer. This allows caller to extract results
+from the particles to a structure before particles are cleaned. 
+The boolean arguments define whether new kernels should be launched within this nested inference. 
+(Requires CUDA dynamic parallelism, which implies compute capability requirements and a couple of compile directives)
+
+Note:
+Do not use parallel settings if GPU is not defined! 
 New nested curandStates are only necessary with parallel execution (at least with systematic resampling)
 */
 template <typename T>
@@ -148,8 +161,6 @@ DEV double runSMCNested(
         initParticlesNoCurand<T><<<NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, NUM_PARTICLES_NESTED);
     cudaDeviceSynchronize();
     cudaCheckErrorDev();
-    //if(parentIdx == 0 || parentIdx == NUM_PARTICLES_NESTED-1 || parentIdx % 100 == 0)
-        //printf("Particles initialized! %d\n", parentIdx);
     #endif
 
     resampler_t resampler = initResamplerNested<T>();
@@ -180,12 +191,6 @@ DEV double runSMCNested(
         }
         
         floating_t weightSum;
-        //floating_t lol = 2;
-        //floating_t* maxWeight = &lol;
-        //floating_t* w = particles->weights;
-        //floating_t maxWeight = thrust::reduce(thrust::device, w, w + NUM_PARTICLES, floating_t(*w), thrust::maximum<floating_t>());
-        //printf("maxW: %f\n", maxWeight);
-        //floating_t* maxWeight = thrust::max_element(thrust::device, w, w + NUM_PARTICLES);
         if(parallelResampling) {
             #ifdef GPU
             weightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);

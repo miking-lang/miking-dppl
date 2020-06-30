@@ -3,13 +3,16 @@
 #include <random>
 #include <time.h>
 
-#include "../../Inference/Smc/smcImpl.cuh"
+#include "inference/smc/smc_impl.cuh"
 #include "airplane.cuh"
-#include "airplaneUtils.cuh"
+#include "airplane_utils.cuh"
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Airplane/*.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+/*
+Compile commands:
 
-// Compile CPU: g++ -x c++ Src/Models/Airplane/*.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/airplane/airplane.cu -o smc.exe -std=c++11 -O3
+g++ -x c++ -I . models/airplane/airplane.cu -o smc.exe -std=c++11 -O3
+*/
 
 using namespace std;
 
@@ -45,7 +48,6 @@ BBLOCK(propagateAndWeight, progState_t, {
     if(PSTATE.t >= TIME_STEPS - 1)
         PC = 2;
 
-    // RESAMPLE = true;
 })
 
 BBLOCK(particleInit, progState_t, {
@@ -54,7 +56,6 @@ BBLOCK(particleInit, progState_t, {
     PSTATE.t = 0;
 
     PC = 1;
-    // RESAMPLE = false;
     BBLOCK_CALL(propagateAndWeight);
 })
 
@@ -78,22 +79,8 @@ CALLBACK_HOST(callback, progState_t, {
 MAIN(
     initAirplane();
 
-    INITBBLOCK(particleInit, progState_t)
-    INITBBLOCK(propagateAndWeight, progState_t)
+    INIT_BBLOCK(particleInit, progState_t)
+    INIT_BBLOCK(propagateAndWeight, progState_t)
 
     SMC(progState_t, callback)
 )
-
-/*
-int main(int argc, char** argv) {
-
-    initAi-rplane();
-
-    // SMCSTART(progState_t, NUM_BBLOCKS)
-
-    INITBBLOCK(particleInit, progState_t)
-    INITBBLOCK(propagateAndWeight, progState_t)
-
-    SMC(progState_t, callback)
-}
-*/

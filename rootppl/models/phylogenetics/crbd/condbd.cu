@@ -1,6 +1,6 @@
-#include "../../../Inference/Smc/smcImpl.cuh"
+#include "inference/smc/smc_impl.cuh"
 
-#include "../TreeUtils/treeUtils.cuh"
+#include "../tree-utils/tree_utils.cuh"
 #include "simulations.cuh"
 #include "stack.cuh"
 
@@ -8,9 +8,12 @@
     This model traverses the tree with a DFS path that corresponds to the recursive calls. 
 */
 
-// nvcc -arch=sm_75 -rdc=true Src/Models/Phylogenetics/CRBD/condBDExample.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
+/*
+Compile commands:
 
-// Compile CPU: g++ -x c++ Src/Models/Phylogenetics/CRBD/condBDExample.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++11 -O3 
+g++ -x c++ -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++11 -O3
+*/
 
 #define NUM_BBLOCKS 5
 INIT_GLOBAL(pStack_t, NUM_BBLOCKS)
@@ -140,11 +143,11 @@ BBLOCK(condBD_init, pStack_t, {
 
 MAIN(
 
-    INITBBLOCK(condBD_init, pStack_t)
-    INITBBLOCK(condBD_1, pStack_t)
-    INITBBLOCK(condBD_2, pStack_t)
-    INITBBLOCK(condBD_3, pStack_t)
-    INITBBLOCK(condBD_4, pStack_t)
+    INIT_BBLOCK(condBD_init, pStack_t)
+    INIT_BBLOCK(condBD_1, pStack_t)
+    INIT_BBLOCK(condBD_2, pStack_t)
+    INIT_BBLOCK(condBD_3, pStack_t)
+    INIT_BBLOCK(condBD_4, pStack_t)
 
     SMC(pStack_t, NULL)
 )
