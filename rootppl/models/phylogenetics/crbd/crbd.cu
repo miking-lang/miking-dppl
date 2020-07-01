@@ -30,6 +30,7 @@ typedef double return_t;
 INIT_GLOBAL(progState_t, NUM_BBLOCKS)
 #define NUM_BBLOCKS_NESTED 1
 
+typedef bisse32_tree_t tree_t;
 BBLOCK_DATA(tree, tree_t, 1)
 
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
@@ -44,7 +45,7 @@ void initCBD() {
     *lambda = 0.2; // birth rate
     *mu = 0.1; // death rate
 
-    int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, NUM_NODES);
+    int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, tree->NUM_NODES);
     corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
 
     COPY_DATA_GPU(tree, tree_t, 1)

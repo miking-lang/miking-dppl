@@ -8,29 +8,23 @@ __global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t max
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    // bool negInfBefore = w[idx] == -INFINITY;
-    // w[idx] = exp(w[idx] - maxLogWeight);
     w[idx] = exp(w[idx] - maxLogWeight);
-    /*
-    if(w[idx] == 0)
-        if(! negInfBefore)
-            printf("RUINED!\n");
-    */
 }
 
-__global__ void renormaliseSumsKernel(floating_t* prefixSum, int numParticles, floating_t maxLogWeight=0) {
+__global__ void renormaliseSumsKernel(floating_t* prefixSum, int numParticles, floating_t maxLogWeight) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    prefixSum[idx] = exp(log(prefixSum[idx]) + maxLogWeight);
-
+    // prefixSum[idx] = exp(log(prefixSum[idx]) + maxLogWeight);
+    prefixSum[idx] = log(prefixSum[idx]) + maxLogWeight;
 }
 
 __global__ void systematicCumulativeOffspringKernel(const floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    floating_t expectedCumulativeOffspring = numParticles * prefixSum[idx] / prefixSum[numParticles - 1];
+    // floating_t expectedCumulativeOffspring = numParticles * prefixSum[idx] / prefixSum[numParticles - 1];
+    floating_t expectedCumulativeOffspring = numParticles * exp(prefixSum[idx] - prefixSum[numParticles - 1]);
     cumulativeOffspring[idx] = min(numParticles, static_cast<int>(floor(expectedCumulativeOffspring + u)));
 }
 

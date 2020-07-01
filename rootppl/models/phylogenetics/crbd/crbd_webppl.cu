@@ -14,12 +14,21 @@ nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd_webpp
 g++ -x c++ -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++11 -O3
 */
 
+// Bisse-32 tree
+// This model on local WebPPL with 10000 particles took ~42 sec
+// This program on CPU took ~0.11 sec
+// This program on GPU took ~0.265 sec
+
+// Primate tree tree
+// This model on local WebPPL with 10000 particles took ~323 sec
+// This program on CPU took ~1.04 sec
+// This program on GPU took ~0.606 sec
 
 typedef short treeIdx_t;
 struct progState_t {
     treeIdx_t treeIdx;
 };
-
+typedef primate_tree_t tree_t;
 
 BBLOCK_HELPER_DECLARE(crbdGoesUndetected, progState_t, bool);
 
@@ -132,16 +141,10 @@ BBLOCK_HELPER(simBranch, {
 }, floating_t, floating_t startTime, floating_t stopTime)
 
 
-
 BBLOCK(simTree, progState_t, {
 
     tree_t* treeP = DATA_POINTER(tree);
     int treeIdx = PSTATE.treeIdx;
-
-    if(treeIdx == -1) {
-        PC++;
-        return;
-    }
 
     int indexParent = treeP->idxParent[treeIdx];
     
@@ -159,7 +162,13 @@ BBLOCK(simTree, progState_t, {
     WEIGHT(lnProb1 + lnProb2 + lnProb3);
 
     // Instead of recurring, use pre-processed traversal order
-    PSTATE.treeIdx = treeP->idxNext[treeIdx];
+    int nextIdx = treeP->idxNext[treeIdx];
+    PSTATE.treeIdx = nextIdx;
+
+    if(nextIdx == -1) {
+        PC++;
+        return;
+    }
 
 })
 
@@ -193,17 +202,17 @@ BBLOCK(simCRBD, progState_t, {
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
 
-    int numLeaves = countLeaves(treeP->idxLeft, treeP->idxRight, NUM_NODES);
+    int numLeaves = countLeaves(treeP->idxLeft, treeP->idxRight, treeP->NUM_NODES);
     floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     WEIGHT(corrFactor);
-    printf("corrFactor: %f\n", corrFactor);
+    // printf("corrFactor: %f\n", corrFactor);
 
     // Resample here perhaps?
 
     const int MAX_M = 10000;
     int M = BBLOCK_CALL(M_crbdGoesUndetected, treeP->ages[PSTATE.treeIdx], MAX_M);
     WEIGHT(log(static_cast<floating_t>(M)));
-    printf("log(M): %f\n", log(static_cast<floating_t>(M)));
+    // printf("log(M): %f\n", log(static_cast<floating_t>(M)));
 
     PC++;
     // BBLOCK_CALL(simTree);

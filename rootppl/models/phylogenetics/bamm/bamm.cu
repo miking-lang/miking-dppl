@@ -2,7 +2,6 @@
 #include <cstring>
 
 #include "inference/smc/smc_impl.cuh"
-#include "utils/distributions.cuh"
 #include "tree-utils/tree_utils.cuh"
 #include "bamm.cuh"
 
@@ -18,6 +17,11 @@ g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
 #define MIN(a, b) a <= b ? a : b
 #define MAX(a, b) a >= b ? a : b
 
+#define DIST_LAMBDA() exp(SAMPLE(uniform, log(1e-2), log(1e1)))
+#define DIST_Z() SAMPLE(normal, 0, 0.001)
+#define DIST_MU(lam0) SAMPLE(uniform, 0.0, 0.1) * lam0
+
+typedef bisse32_tree_t tree_t;
 BBLOCK_DATA(tree, tree_t, 1);
 // BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
 // BBLOCK_DATA(mu, floating_t, 1)
@@ -48,74 +52,110 @@ DEV HOST inline floating_t lambdaFun(lambdaFun_t lf, floating_t t) {
     return lf.lambda * exp(lf.z * (lf.t1 - t));
 }
 
+DEV HOST inline floating_t robustExponentialSampler(floating_t a) {
+    if(a <= 0) return INFINITY;
+    if(a == INFINITY) return 0;
+    return SAMPLE(exponential, a);
+}
 
-BBLOCK_HELPER(lambdaWait, {
+BBLOCK_HELPER(M_bammGoesUndetected, {
 
-    //printf("Will write lambda vals...\n");
+    if(max_M == 0) { printf("M_bammGoesUndetected: MAX DEPTH REACHED!\n"); return 0;}
+
+    if(! BBLOCK_CALL(bammGoesUndetected, startTime, lf, mu, eta, rho) 
+    && ! BBLOCK_CALL(bammGoesUndetected, startTime, lf, mu, eta, rho)) return 1;
+    else return 1 + BBLOCK_CALL(M_bammGoesUndetected, startTime, lf, mu, eta, rho, max_M-1);
+
+}, int, floating_t startTime, lambdaFun_t lf, floating_t mu, floating_t eta, floating_t rho, int max_M)
+
+BBLOCK_HELPER(bammLambdaWait, {
+
     floating_t startLambda = lambdaFun(lf, startTime);
     floating_t stopLambda = lambdaFun(lf, stopTime);
 
     floating_t topLambda = MAX(startLambda, stopLambda);
-    //printf("Wrote lambda vals!\n");
 
-    floating_t t = startTime - BBLOCK_CALL(sampleExponential, topLambda);
-    // printf("Made exponential call!\n");
+    floating_t t = startTime - robustExponentialSampler(topLambda);
 
-    if(t < stopTime || BBLOCK_CALL(flipK, lambdaFun(lf, t) / topLambda))
-        return startTime - t;
+    if(t < stopTime) return INFINITY;
+    if(SAMPLE(bernoulli, lambdaFun(lf, t) / topLambda)) return startTime - t;
 
-    return startTime - BBLOCK_CALL(lambdaWait, lf, t, stopTime);
+    return startTime - t + BBLOCK_CALL(bammLambdaWait, lf, t, stopTime);
 
-}, floating_t, lambdaFun_t lf, floating_t startTime, floating_t stopTime)
+}, lambdaFun_t lf, floating_t startTime, floating_t stopTime)
 
-// Forward simulation from a starting time, returning extinction (true) or survival (false)
-BBLOCK_HELPER(goesExtinct, {
+BBLOCK_HELPER(bammGoesUndetected, {
 
-    //if(recursionCount > 80)
-        //printf("RecursionCount: %d\n", recursionCount);
-
-    floating_t t1 = BBLOCK_CALL(sampleExponential, mu + sigma);
-    floating_t tLambda = BBLOCK_CALL(lambdaWait, lf, startTime, 0);
+    floating_t t1 = robustExponentialSampler(mu + eta);
+    floating_t tLambda = bammLambdaWait(lf, startTime, 0);
 
     floating_t t = MIN(t1, tLambda);
 
     floating_t currentTime = startTime - t;
     if(currentTime < 0)
-        return false;
-    
+        return ! SAMPLE(bernoulli, rho);
+        
     if(t1 < tLambda) {
-        bool extinction = BBLOCK_CALL(flipK, mu / (mu+sigma));
-        if (extinction)
-            return true;
+        bool extinction = SAMPLE(bernoulli, mu / (mu + eta));
+        if(extinction) return true;
 
-        // No extinction, so rateshift
-        
-        floating_t lambda2 = BBLOCK_CALL(sampleGamma, 1.0, 1.0);
-        floating_t z2 = BBLOCK_CALL(sampleNormal, 0.0, 0.001);
-        floating_t mu2 = BBLOCK_CALL(sampleGamma, 1.0, 1.0);
-        lambdaFun_t lf2(lambda2, z2, t1);
-        
-        return BBLOCK_CALL(goesExtinct<T>, currentTime, lf2, mu2, sigma, recursionCount+1);
-        // return BBLOCK_CALL(goesExtinct<T>, currentTime, lambdaFun_t{ BBLOCK_CALL(gamma, 1.0, 1.0) , BBLOCK_CALL(normal, 0.0, 0.001) , t1}, BBLOCK_CALL(gamma, 1.0, 1.0) , sigma);
+        // No exctinction, so rateshift
+        floating_t lambda2 = DIST_LAMBDA();
+        floating_t z2 = DIST_Z();
+        floating_t mu2 = DIST_MU(lambda2);
+        lambdaFun_t lf2(lambda2, z2, currentTime);
+
+        return BBLOCK_CALL(bammGoesUndetected, currentTime, lf2, mu2, eta, rho));
     }
 
-    return BBLOCK_CALL(goesExtinct<T>, currentTime, lf, mu, sigma, recursionCount+1)
-        && BBLOCK_CALL(goesExtinct<T>, currentTime, lf, mu, sigma, recursionCount+1);
+    return BBLOCK_CALL(bammGoesUndetected, currentTime, lf, mu, eta, rho) && BBLOCK_CALL(bammGoesUndetected, currentTime, lf, mu, eta, rho));
 
-}, bool, floating_t startTime, lambdaFun_t lf, floating_t mu, floating_t sigma, int recursionCount = 0)
-
-
-BBLOCK(goesExtinctBblock, nestedProgState_t, {
-    tree_t* treeP = DATA_POINTER(tree);
-    double age = treeP->ages[ROOT_IDX];
-    bblockArgs_t params = *static_cast<bblockArgs_t*>(arg);
-    
-    PSTATE.extinct = BBLOCK_CALL(goesExtinct<nestedProgState_t>, age, params.lf, params.mu, params.sigma);
-    PC++;
-    RESAMPLE = true;
-})
+}, floating_t startTime, lambdaFun_t lf, floating_t mu, floating_t eta, floating_t rho)
 
 
+BBLOCK_HELPER(simBranch, {
+
+    floating_t tLambda = BBLOCK_CALL(bammLambdaWait, lambdaFun, startTime, stopTime);
+    floating_t tEta = robustExponentialSampler(eta);
+    floating_t t = MIN(tLambda, tEta);
+    floating_t currentTime = startTime - t;
+
+    if(currentTime <= stopTime) {
+        floating_t t1 = startTime - stopTime;
+        floating_t meanLambda = (lambdaFun(lf, startTime), lambdaFun(lf, stopTime)) / 2.0;
+        simBranchRet_t rt(lf, z, mu, meanLambda * t1, z * t1, mu * t1, 0, - mu * t1);
+        return rt;
+    }
+
+    // Check whether this is a rate shift, and handle this case
+    if(tEta < tLambda) {
+        floating_t lambda0_2 = DIST_LAMBDA();
+        floating_t z2 = DIST_Z();
+        floating_t mu2 = DIST_MU(lambda0_2);
+        lambdaFun_t lf2(lambda0_2, z2, currentTime);
+
+        simBranchRet_t ret = BBLOCK_CALL(simBranch, currentTime, stopTime, lf2, z2, mu2, eta, rho);
+
+        floating_t meanLambda = (lambdaFun(lf, startTime) + lambdaFun(lf, currentTime)) / 2.0;
+        simBranchRet_t rt(ret.lf, ret.r1, ret.r2, ret.r3 + meanLambda * t, ret.r4 + z * t, ret.r5 + mu * t, ret.r6 + 1, ret.r7 - mu * t);
+        return rt;
+    }
+
+    bool sideDetection = BBLOCK_CALL(bammGoesUndetected, currentTime, lf, mu, eta, rho);
+    if(! sideDetection) {
+        simBranchRet_t rt(lf, 0.0, 0.0, 0.0, 0.0, 0.0, 0, -INFINITY);
+        return rt;
+    }
+
+    simBranchRet_t ret = BBLOCK_CALL(simBranch, currentTime, stopTime, lf, z, mu, eta, rho);
+
+    floating_t meanLambda = (lambdaFun(lf, startTime) + lambdaFun(lf, currentTime)) / 2.0;
+    simBranchRet_t rt(ret.lf, ret.r1, ret.r2, ret.r3 + meanLambda * t, ret.r4 + z * t, ret.r5 + mu * t, ret.r6, ret.r7 + log(2.0) - mu * t);
+    return rt;
+
+}, simBranchRet_t, floating_t startTime, floating_t stopTime, lambdaFun_t lf, floating_t z, floating_t mu, floating_t eta, floating_t rho)
+
+/*
 BBLOCK_HELPER(simBranch, {
 
     floating_t tLambda = BBLOCK_CALL(lambdaWait, lf, startTime, stopTime);
@@ -173,7 +213,7 @@ BBLOCK_HELPER(simBranch, {
     return rt;
 
 }, simBranchRet_t, floating_t startTime, floating_t stopTime, lambdaFun_t lf, floating_t z, floating_t mu, floating_t sigma)
-
+*/
 
 // TODO: Should return tree info as string?
 BBLOCK(simTree, progState_t, {

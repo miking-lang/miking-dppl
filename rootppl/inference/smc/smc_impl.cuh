@@ -59,6 +59,7 @@ optional callback that can use resulting particles before memory is cleaned up.
 Arg is an optional argument that can be passed to the bblocks. For top-level
 inference, this might as well be allocated as global data. 
 */
+const floating_t LOG_NUM_PARTICLES = log(NUM_PARTICLES);
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback = NULL, void* arg = NULL) {
     
@@ -78,17 +79,14 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
 
     // cudaProfilerStart();
     // Run program/inference
-    int count = 0;
     while(true) {
 
         #ifdef GPU
         execFuncs<T><<<NUM_BLOCKS_FUNCS, NUM_THREADS_PER_BLOCK_FUNCS>>>(randStates, particles, bblocks, NUM_PARTICLES, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
-        floating_t weightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
-        if(weightSum == 0.0)
-            printf("WS=0, count=%d\n", count);
-        count++;
+        floating_t logWeightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        // floating_t logWeightSum = calcWeightSumSeq(particles->weights, resampler, NUM_PARTICLES);
         #else
 
         for(int i = 0; i < NUM_PARTICLES; i++) {
@@ -96,19 +94,29 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, callbackFunc_t<T> callback 
             if(pc < numBblocks)
                 bblocks[pc](particles, i, arg);
         }
-        floating_t weightSum = calcWeightSumSeq(particles->weights, resampler, NUM_PARTICLES);
+        floating_t logWeightSum = calcWeightSumSeq(particles->weights, resampler, NUM_PARTICLES);
         #endif
 
-        logNormConstant += log(weightSum / NUM_PARTICLES);
+        // logNormConstant += log(weightSum / NUM_PARTICLES);
+        logNormConstant += logWeightSum - LOG_NUM_PARTICLES;
         if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;
         
+        /*
+        resampleSystematicSeq<T>(
+            #ifdef GPU
+            randState, // Use parent's randState
+            #endif 
+            &particles, resampler, NUM_PARTICLES_NESTED);
+        */
 
+        
         #ifdef GPU
         resampleSystematicPar<T>(&particles, resampler);
         #else
         resampleSystematicSeq<T>(&particles, resampler, NUM_PARTICLES);
         #endif
+        
         
     }
     // cudaProfilerStop();
@@ -193,16 +201,17 @@ DEV double runSMCNested(
             }
         }
         
-        floating_t weightSum;
+        floating_t logWeightSum;
         if(parallelResampling) {
             #ifdef GPU
-            weightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
+            logWeightSum = calcWeightSumPar(particles->weights, resampler, NUM_PARTICLES_NESTED, NUM_BLOCKS_NESTED, NUM_THREADS_PER_BLOCK_NESTED);
             #endif
         } else {
-            weightSum = calcWeightSumSeq(particles->weights, resampler, NUM_PARTICLES_NESTED);
+            logWeightSum = calcWeightSumSeq(particles->weights, resampler, NUM_PARTICLES_NESTED);
         }
 
-        logNormConstant += log(weightSum / NUM_PARTICLES_NESTED);
+        logNormConstant += logWeightSum - log(static_cast<floating_t>(NUM_PARTICLES_NESTED));
+        // logNormConstant += log(weightSum / NUM_PARTICLES_NESTED);
         
         if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;

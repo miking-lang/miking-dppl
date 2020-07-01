@@ -3,11 +3,6 @@
 
 #include "resample_common.cuh"
 
-HOST DEV void expWeightsSeq(floating_t* w, int numParticles, floating_t maxLogWeight) {
-    for(int i = 0; i < numParticles; i++) {
-        w[i] = exp(w[i]- maxLogWeight);
-    }
-}
 
 HOST DEV void calcInclusivePrefixSumSeq(floating_t* w, floating_t* prefixSum, int numParticles) {
     prefixSum[0] = w[0];
@@ -20,25 +15,26 @@ HOST DEV floating_t calcWeightSumSeq(floating_t* w, resampler_t resampler, int n
 
     // Corresponds to ExpWeightsKernel used in the parallel implementation
     for(int i = 0; i < numParticles; i++)
-        w[i] = exp(w[i]- maxLogWeight);
+        w[i] = exp(w[i] - maxLogWeight);
 
-    // expWeightsSeq(particles->weights, numParticles, maxLogWeight);
 
     calcInclusivePrefixSumSeq(w, resampler.prefixSum, numParticles);
 
     // Corresponds to the renormaliseSumsKernel used in the parallel implementation
     for(int i = 0; i < numParticles; i++)
-        resampler.prefixSum[i] = exp(log(resampler.prefixSum[i]) + maxLogWeight);
+        resampler.prefixSum[i] = log(resampler.prefixSum[i]) + maxLogWeight;    
+        // resampler.prefixSum[i] = exp(log(resampler.prefixSum[i]) + maxLogWeight);
+
 
     return resampler.prefixSum[numParticles - 1];
 }
 
-HOST DEV
-void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
+HOST DEV void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
 
     floating_t totalSum = prefixSum[numParticles-1];
     for(int i = 0; i < numParticles; i++) {
-        floating_t expectedCumulativeOffspring = numParticles * prefixSum[i] / totalSum;
+        // floating_t expectedCumulativeOffspring = numParticles * prefixSum[i] / totalSum;
+        floating_t expectedCumulativeOffspring = numParticles * exp(prefixSum[i] - totalSum);
         cumulativeOffspring[i] = min(numParticles, static_cast<int>(floor(expectedCumulativeOffspring + u)));
     }
 }
