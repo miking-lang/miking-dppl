@@ -171,7 +171,7 @@ DEV T runNestedInference(RAND_STATE_DECLARE int parentIndex) {
 
     INIT_BBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
-    SMC_NESTED(nestedProgState_t, calcResult, ret, NULL, 100, parallelExec, parallelResampling, parentIndex)
+    SMC_NESTED(nestedProgState_t, 100, parallelExec, parallelResampling, parentIndex, calcResult, ret, NULL)
 
     return ret;
 }

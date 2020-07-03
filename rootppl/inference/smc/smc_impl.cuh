@@ -1,27 +1,33 @@
 #ifndef SMC_IMPL_INCLUDED
 #define SMC_IMPL_INCLUDED
 
+/*
+ * File smc_impl.cuh contains the implementation of the top-level SMC.
+ */
+
 #include <iostream>
-#include <limits>
 #include "smc.cuh"
 #include "utils/distributions/distributions.cuh"
-#include "resample/resample_impl_seq.cuh"
+#include "resample/systematic/sequential.cuh"
 #include "particles_memory_handler.cuh"
 
 #ifdef GPU
 #include "cuda_profiler_api.h"
 #include "utils/cuda_error_utils.cu"
-#include "resample/resample_impl_par.cuh"
-#include "general_kernels.cuh"
+#include "resample/systematic/parallel.cuh"
+#include "smc_kernels.cuh"
 #endif
 
+#include "smc_impl_nested.cuh"
 
-/* 
-This is an attempt to make most of the GPU memory available 
-from kernels via implicit stacks and device malloc calls
-When running programs that reaches the memory limit, this could 
-be tweaked to prioritize the memory type required by the program
-*/
+/**
+ * This is an attempt to make most of the GPU memory available 
+ * from kernels via implicit stacks and device malloc calls
+ * When running programs that reaches the memory limit, this could 
+ * be tweaked to prioritize the memory type required by the program
+ * 
+ * @param numParticles the number of particles used in SMC.
+ */
 void configureMemSizeGPU(int numParticles) {
     #ifdef GPU
 
@@ -54,32 +60,35 @@ void configureMemSizeGPU(int numParticles) {
     #endif
 }
 
-/*
-Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
-optional callback that can use resulting particles before memory is cleaned up.
-Arg is an optional argument that can be passed to the bblocks. For top-level
-inference, this might as well be allocated as global data. 
-*/
-// const floating_t LOG_NUM_PARTICLES = log(NUM_PARTICLES);
+/**
+ * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
+ * optional callback that can use resulting particles before memory is cleaned up.
+ * 
+ * @param bblocks the array of functions that will be executed by SMC.
+ * @param numBblocks the size of the bblocks array.
+ * @param numParticles number of particles to be used in SMC.
+ * @param callback optional function that should be called with the resulting particles after inference.
+ * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
+ * @return the logged normalization constant.
+ */
 template <typename T>
 double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackFunc_t<T> callback = NULL, void* arg = NULL) {
 
     floating_t logNormConstant = 0;
 
-    particles_t<T>* particles = allocateParticles<T>(numParticles, false);
+    particles_t<T> particles = allocateParticles<T>(numParticles, false);
     
     #ifdef GPU
     const int NUM_BLOCKS = (numParticles + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
 
     curandState* randStates;
     cudaSafeCall(cudaMallocManaged(&randStates, sizeof(curandState) * numParticles));
-    initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, particles, numParticles);
-    // initParticles<T>KERNEL_SETTINGS(numParticles, NUM_THREADS_PER_BLOCK)(randStates, particles, numParticles);
+    initCurandStates<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, numParticles, 0);
     cudaDeviceSynchronize();
     cudaCheckError();
     #endif
 
-    resampler_t resampler = initResampler<T>(numParticles);
+    resampler_t<T> resampler = initResampler<T>(numParticles);
 
     // cudaProfilerStart();
     // Run program/inference
@@ -89,29 +98,26 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackF
         execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
-        floating_t logWeightSum = calcWeightSumPar(particles->weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
-        // floating_t logWeightSum = calcWeightSumSeq(particles->weights, resampler, numParticles);
+        floating_t logWeightSum = calcWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
         #else
 
         for(int i = 0; i < numParticles; i++) {
-            int pc = particles->pcs[i];
+            int pc = particles.pcs[i];
             if(pc < numBblocks)
                 bblocks[pc](particles, i, arg);
         }
-        floating_t logWeightSum = calcWeightSumSeq(particles->weights, resampler, numParticles);
+        floating_t logWeightSum = calcWeightSumSeq(particles.weights, resampler, numParticles);
         #endif
 
-        // logNormConstant += log(weightSum / numParticles);
-        // logNormConstant += logWeightSum - LOG_numParticles;
         logNormConstant += logWeightSum - log(numParticles);
-        if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
+        if(particles.pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;
 
         
         #ifdef GPU
-        resampleSystematicPar<T>(&particles, resampler, numParticles, NUM_BLOCKS);
+        resampleSystematicPar<T>(particles, resampler, numParticles, NUM_BLOCKS);
         #else
-        resampleSystematicSeq<T>(&particles, resampler, numParticles);
+        resampleSystematicSeq<T>(particles, resampler, numParticles);
         #endif
         
         
@@ -126,117 +132,6 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackF
     freeParticles<T>(particles);
     #ifdef GPU
     cudaSafeCall(cudaFree(randStates));
-    #endif
-
-    return logNormConstant;
-}
-
-
-/*
-Runs Sequential Monte Carlo inference on the given bblock functions with arg as optional argument, 
-then calls the given callback with the ret pointer. This allows caller to extract results
-from the particles to a structure before particles are cleaned. 
-The boolean arguments define whether new kernels should be launched within this nested inference. 
-(Requires CUDA dynamic parallelism, which implies compute capability requirements and a couple of compile directives)
-
-Note:
-Do not use parallel settings if GPU is not defined! 
-New nested curandStates are only necessary with parallel execution (at least with systematic resampling)
-*/
-template <typename T>
-DEV double runSMCNested(
-    #ifdef GPU
-    curandState* randState, // Parent's randState
-    #endif
-    pplFunc_t<T>* bblocks, callbackFunc_t<T> callback, int numBblocks, int numParticles, void* ret, void* arg, bool parallelExec, bool parallelResampling, int parentIdx) {
-
-    if(parallelExec || parallelResampling) {
-        #ifndef GPU
-        printf("Cannot run in parallel when not compiled for GPU");
-        return 0.0;
-        #endif
-    }
-
-    floating_t logNormConstant = 0;
-    
-    particles_t<T>* particles = allocateParticlesNested<T>();
-    
-    #ifdef GPU
-    const int NUM_BLOCKS = (numParticles + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
-
-    curandState* randStates = new curandState[numParticles];
-    if(parallelExec)
-        initParticles<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, numParticles, parentIdx);
-    else
-        initParticlesNoCurand<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(particles, numParticles);
-    cudaDeviceSynchronize();
-    cudaCheckErrorDev();
-    #endif
-
-    resampler_t resampler = initResamplerNested<T>(numParticles);
-
-    // Run program/inference
-    while(true) {
-
-        if(parallelExec) {
-            #ifdef GPU
-            // Use nested randStates
-            execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, numParticles, arg);
-            cudaDeviceSynchronize();
-            cudaCheckErrorDev();
-            #endif
-        
-        } else {
-            
-            for(int i = 0; i < numParticles; i++) {
-                int pc = particles->pcs[i];
-                if(pc < numBblocks) {
-                    bblocks[pc](
-                        #ifdef GPU
-                        randState, // Use parent's randState
-                        #endif
-                        particles, i, arg); 
-                }
-            }
-        }
-        
-        floating_t logWeightSum;
-        if(parallelResampling) {
-            #ifdef GPU
-            logWeightSum = calcWeightSumPar(particles->weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED);
-            #endif
-        } else {
-            logWeightSum = calcWeightSumSeq(particles->weights, resampler, numParticles);
-        }
-
-        logNormConstant += logWeightSum - log(static_cast<floating_t>(numParticles));
-        // logNormConstant += log(weightSum / numParticles);
-        
-        if(particles->pcs[0] >= numBblocks) // Assumption: All terminate at the same time
-            break;
-
-        if(parallelResampling) {
-            #ifdef GPU
-            resampleSystematicParNested<T>(randState, &particles, resampler, numParticles, NUM_BLOCKS); // Use parent's randState
-            #endif
-        } else {
-            resampleSystematicSeq<T>(
-                #ifdef GPU
-                randState, // Use parent's randState
-                #endif 
-                &particles, resampler, numParticles);
-        }
-        
-        
-    }
-
-    callback(particles, numParticles, ret);
-        
-    // Clean up
-    destResamplerNested<T>(resampler);
-    freeParticlesNested<T>(particles);
-    #ifdef GPU
-    delete[] randStates;
     #endif
 
     return logNormConstant;

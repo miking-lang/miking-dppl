@@ -1,6 +1,11 @@
 #ifndef MACROS_ADAPTIVE_INCLUDED
 #define MACROS_ADAPTIVE_INCLUDED
 
+/*
+ * File macros_adaptive.cuh is an extension of macros.cuh, this file contains
+ * the macros that are different depending on if it is compiling for CPU or GPU.
+ */
+
 #ifdef GPU
 
 #define HOST __host__
@@ -51,7 +56,6 @@ __device__ type* pointerName ## Dev;
 #else
 
 // The macros below are equivalent to the GPU variants above, but for CPU
-
 #define HOST
 #define DEV
 #define DEV_POINTER(funcName, progStateType)
