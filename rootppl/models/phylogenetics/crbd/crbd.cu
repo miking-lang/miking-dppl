@@ -30,7 +30,7 @@ typedef double return_t;
 INIT_GLOBAL(progState_t, NUM_BBLOCKS)
 #define NUM_BBLOCKS_NESTED 1
 
-typedef bisse32_tree_t tree_t;
+typedef primate_tree_t tree_t;
 BBLOCK_DATA(tree, tree_t, 1)
 
 BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
@@ -48,7 +48,6 @@ void initCBD() {
     int numLeaves = countLeaves(tree->idxLeft, tree->idxRight, tree->NUM_NODES);
     corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
 
-    COPY_DATA_GPU(tree, tree_t, 1)
     COPY_DATA_GPU(lambda, floating_t, 1)
     COPY_DATA_GPU(mu, floating_t, 1)
 
@@ -153,12 +152,12 @@ BBLOCK(simTree, progState_t, {
 
 CALLBACK(calcResult, nestedProgState_t, {
     int numExtinct = 0;
-    for(int i = 0; i < NUM_PARTICLES_NESTED; i++)
+    for(int i = 0; i < numParticles; i++)
         numExtinct += PSTATE.extinct;
 
-    int numSurvived = NUM_PARTICLES_NESTED - numExtinct;
+    int numSurvived = numParticles - numExtinct;
     return_t* retP = static_cast<return_t*>(ret);
-    *retP = numSurvived / (double)NUM_PARTICLES_NESTED;
+    *retP = numSurvived / (double)numParticles;
     
 }, void* ret)
 
@@ -172,7 +171,7 @@ DEV T runNestedInference(RAND_STATE_DECLARE int parentIndex) {
 
     INIT_BBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
-    SMC_NESTED(nestedProgState_t, calcResult, ret, NULL, parallelExec, parallelResampling, parentIndex)
+    SMC_NESTED(nestedProgState_t, calcResult, ret, NULL, 100, parallelExec, parallelResampling, parentIndex)
 
     return ret;
 }

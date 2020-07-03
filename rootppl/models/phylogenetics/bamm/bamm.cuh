@@ -1,3 +1,4 @@
+const int MAX_DEPTH = 20;
 const int STACK_LIMIT = MAX_DEPTH * 2 + 1;
 
 struct lambdaFun_t {
@@ -16,17 +17,19 @@ struct lambdaFun_t {
 struct bblockArgs_t {
     lambdaFun_t lf;
     floating_t mu;
-    floating_t sigma;
+    floating_t eta;
+    floating_t rho;
 
     HOST DEV bblockArgs_t(){};
-    HOST DEV bblockArgs_t(lambdaFun_t lf_, floating_t mu_, floating_t sigma_){
+    HOST DEV bblockArgs_t(lambdaFun_t lf_, floating_t mu_, floating_t eta_, floating_t rho_){
         lf = lf_;
         mu = mu_;
-        sigma = sigma_;
+        eta = eta_;
+        rho = rho_;
     };
 };
 
-struct stack_t {
+struct pStack_t {
     int stackPointer = 0;
     bblockArgs_t args[STACK_LIMIT];
 
@@ -54,14 +57,16 @@ struct stack_t {
 
 typedef short treeIdx_t;
 struct progState_t {
-    stack_t stack;
+    pStack_t stack;
     treeIdx_t treeIdx;
 };
 
+/*
 struct nestedProgState_t {
     bool extinct;
 };
 typedef double return_t;
+*/
 
 struct simBranchRet_t {
     lambdaFun_t lf;

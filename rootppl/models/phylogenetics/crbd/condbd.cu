@@ -18,7 +18,7 @@ g++ -x c++ -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++11 -O3
 #define NUM_BBLOCKS 5
 INIT_GLOBAL(pStack_t, NUM_BBLOCKS)
 
-typedef bisse32_tree_t tree_t;
+typedef primate_tree_t tree_t;
 BBLOCK_DATA(tree, tree_t, 1)
 
 struct progState_t {
@@ -80,6 +80,7 @@ BBLOCK(condBD_2, pStack_t, {
             // pplFunc_t<pStack_t> funcToCall = DATA_POINTER(bblocksArr)[PC];
             // BBLOCK_CALL(funcToCall, NULL);
             BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC], NULL);
+            return;
         }
     }
 })

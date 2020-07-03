@@ -10,23 +10,9 @@
 
 using namespace std;
 
-/*
-Settings for CUDA kernel launches
-*/
-// const int NUM_PARTICLES = 100000;// 1048576;// 55000;
-#ifndef NUM_PARTICLES
-#define NUM_PARTICLES 10000
-#endif
-const int NUM_PARTICLES_NESTED = 50;
-
-const int NUM_THREADS_PER_BLOCK = 32;
-const int NUM_BLOCKS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
-
-const int NUM_THREADS_PER_BLOCK_FUNCS = 64;
-const int NUM_BLOCKS_FUNCS = (NUM_PARTICLES + NUM_THREADS_PER_BLOCK_FUNCS - 1) / NUM_THREADS_PER_BLOCK_FUNCS;
-
-const int NUM_THREADS_PER_BLOCK_NESTED = 32;
-const int NUM_BLOCKS_NESTED = (NUM_PARTICLES_NESTED + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
+// Kernel launch settings
+#define NUM_THREADS_PER_BLOCK 128
+#define NUM_THREADS_PER_BLOCK_NESTED 32
 
 
 // Particle structure, allocated at start of inference
@@ -51,7 +37,7 @@ using pplFunc_t = void (*)(
 
 // Callback function, like bblock function but without index. As all particles are usually used here
 template <typename T>
-using callbackFunc_t = void (*)(particles_t<T>*, void*);
+using callbackFunc_t = void (*)(particles_t<T>*, int, void*);
 
 
 #endif
@@ -125,4 +111,61 @@ Mean: 0.9295795017200001 , Std:  0.030816434479334492
 
 GPU with max:
 Mean: 1.0998520308400002 , Std:  0.03606856282216499
+*/
+
+
+/* 
+*********** 25 runs with compile constant NUM_PARTICLES
+
+NUM_PARTICLES: [10000, 50000] 
+
+airplane/airplane.cu
+CPU: [0.11122169364000001, 0.532083091]
+GPU: [0.25338271252, 0.26756725428] 
+
+phylogenetics/crbd/condbd.cu
+CPU: [1.2366959077600002, 7.54062331904]
+GPU: [0.7804601606, 1.6089079755600002] 
+
+phylogenetics/crbd/crbd.cu
+CPU: [0.92629217732, 4.609530027080001]
+GPU: [0.5813464418400001, 0.81274080452] 
+
+phylogenetics/bamm/bamm.cu
+CPU: [0.77797657724, 3.89442340208]
+GPU: [0.44647128028, 1.0050353062000001] 
+
+GPU Speedup:
+ [[0.43894744 1.9885957 ]
+ [1.58457276 4.68679591]
+ [1.59335658 5.67158681]
+ [1.74250083 3.87491203]]
+
+
+*********** 25 runs with program input NUM_PARTICLES
+
+NUM_PARTICLES: [10000, 50000] 
+
+airplane/airplane.cu
+CPU: [0.10831851243999999, 0.52815956272]
+GPU: [0.24631308676, 0.25710640492000003] 
+
+phylogenetics/crbd/condbd.cu
+CPU: [1.24617575236, 7.56731632812]
+GPU: [0.73282718444, 1.56183501552] 
+
+phylogenetics/crbd/crbd.cu
+CPU: [0.9353200202399999, 4.6345830359599995]
+GPU: [0.54944511172, 0.78363611832] 
+
+phylogenetics/bamm/bamm.cu
+CPU: [0.77110793224, 3.89562813756]
+GPU: [0.43441566996, 0.9865827383200001] 
+
+GPU Speedup:
+ [[0.43975947 2.05424506]
+ [1.70050426 4.8451445 ]
+ [1.70229928 5.91420294]
+ [1.77504631 3.94860764]]
+
 */

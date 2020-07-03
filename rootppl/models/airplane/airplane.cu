@@ -64,7 +64,7 @@ CALLBACK_HOST(callback, progState_t, {
     int numParticlesClose = 0;
     floating_t minX = 999999;
     floating_t maxX = -1;
-    for (int i = 0; i < NUM_PARTICLES; i++) {
+    for (int i = 0; i < numParticles; i++) {
         floating_t particleX = PSTATE.x;
         if(abs(particleX - planeX[TIME_STEPS-1]) < 10)
             numParticlesClose++;
@@ -72,7 +72,7 @@ CALLBACK_HOST(callback, progState_t, {
         maxX = max(maxX, particleX);
     }
 
-    cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / NUM_PARTICLES << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
+    cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / numParticles << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
 })
 
 

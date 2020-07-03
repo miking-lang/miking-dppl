@@ -28,6 +28,7 @@ typedef short treeIdx_t;
 struct progState_t {
     treeIdx_t treeIdx;
 };
+// typedef bisse32_tree_t tree_t;
 typedef primate_tree_t tree_t;
 
 BBLOCK_HELPER_DECLARE(crbdGoesUndetected, progState_t, bool);
@@ -52,7 +53,7 @@ void initCBD() {
     *mu = 0.1; // death rate
     *rho = 1.0;
 
-    COPY_DATA_GPU(tree, tree_t, 1)
+    // COPY_DATA_GPU(tree, tree_t, 1)
     COPY_DATA_GPU(lambda, floating_t, 1)
     COPY_DATA_GPU(mu, floating_t, 1)
     COPY_DATA_GPU(rho, floating_t, 1)

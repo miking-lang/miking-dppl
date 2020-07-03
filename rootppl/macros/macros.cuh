@@ -5,6 +5,7 @@
 #define GPU
 #endif
 
+#include <stdlib.h>
 #include "macros_adaptive.cuh"
 
 #define COMMA ,
@@ -21,6 +22,8 @@ typedef double floating_t; // To be able to switch between single and double pre
 - SMCEND with program state type and callback as arguments to start inference
 - Result (right now only normalizationConstant) available through local variable "res"
 */
+
+#define KERNEL_SETTINGS(n, tpb) <<<(n + tpb - 1) / tpb, tpb>>>
 
 // Used by BBLOCK, BBLOCK_HELPER and BBLOCK_CALL macros
 #define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>* particles, int i
@@ -49,8 +52,8 @@ body
 // #define BBLOCK_CALL_FNC_PTR(funcName, ...) funcName(RAND_STATE_ACCESS particles, i, ##__VA_ARGS__)
 
 // Functions that can be called from the framework, usually to use resulting particle distributions before clean up
-#define CALLBACK_HOST(funcName, progStateType, body) void funcName(particles_t<progStateType>* particles, void* arg=NULL) body
-#define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, arg) body
+#define CALLBACK_HOST(funcName, progStateType, body) void funcName(particles_t<progStateType>* particles, int numParticles, void* arg=NULL) body
+#define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>* particles, int numParticles, arg) body
 
 /* 
 Initialize the basic block (add it to the array of bblocks), the order of bblocks matters!
@@ -81,13 +84,13 @@ int bbIdx = 0;
 // Run SMC with given program state type (mandatory) and callback function (optional, can be declared with CALLBACK macro)
 #define SMC(progStateType, callback) \
 int numBblocks = bbIdx; \
-configureMemSizeGPU(); \
+configureMemSizeGPU(numParticles); \
 COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
 pplFunc_t<progStateType>* bblocksArrCudaManaged; \
 allocateMemory<pplFunc_t<progStateType>>(&bblocksArrCudaManaged, numBblocks); \
 for(int i = 0; i < numBblocks; i++) \
     bblocksArrCudaManaged[i] = bblocksArr[i]; \
-res = runSMC<progStateType>(bblocksArrCudaManaged, numBblocks, callback); \
+res = runSMC<progStateType>(bblocksArrCudaManaged, numBblocks, numParticles, callback); \
 freeMemory<pplFunc_t<progStateType>>(bblocksArrCudaManaged);
 
 // Prepare bblock array for initialization of bblocks, for nested inference only
@@ -105,9 +108,9 @@ Run the nested inference with arguments:
 - parallelResampling: boolean, whether new CUDA-kernels should be launched for nested resampling, otherwise run sequential variant (on GPU threads if top-level inference runs on the GPU)
 - parentIndex: 
 */
-#define SMC_NESTED(progStateType, callback, retStruct, arg, parallelExec, parallelResampling, parentIndex) \
+#define SMC_NESTED(progStateType, callback, retStruct, arg, numParticles, parallelExec, parallelResampling, parentIndex) \
 int numBblocks = bbIdx; \
-double res = runSMCNested<progStateType>(RAND_STATE_ACCESS bblocks, callback, numBblocks, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
+double res = runSMCNested<progStateType>(RAND_STATE_ACCESS bblocks, callback, numBblocks, numParticles, (void*)&retStruct, (void*)arg, parallelExec, parallelResampling, parentIndex); \
 delete[] bblocks;
 
 // Add log-weight to the particle
@@ -124,7 +127,11 @@ delete[] bblocks;
 
 // Main function
 #define MAIN(body) \
-int main() { \
+int main(int argc, char** argv) { \
+    int numParticles = 10000; \
+    if(argc > 1) { \
+        numParticles = atoi(argv[1]); \
+    } \
     initGen(); \
     double res = 0; \
     body \

@@ -21,14 +21,14 @@ struct resampler_t {
 };
 
 template <typename T>
-HOST DEV resampler_t initResamplerNested() {
+HOST DEV resampler_t initResamplerNested(int numParticles) {
 
     // generatorRes.seed(time(NULL) * 3); // avoid same seed as main?
     resampler_t resampler;
 
-    resampler.ancestor = new int[NUM_PARTICLES_NESTED];
-    resampler.cumulativeOffspring = new int[NUM_PARTICLES_NESTED];
-    resampler.prefixSum = new floating_t[NUM_PARTICLES_NESTED];
+    resampler.ancestor = new int[numParticles];
+    resampler.cumulativeOffspring = new int[numParticles];
+    resampler.prefixSum = new floating_t[numParticles];
     resampler.tempArr = allocateParticlesNested<T>();
 
     return resampler;
@@ -36,29 +36,21 @@ HOST DEV resampler_t initResamplerNested() {
 
 
 template <typename T>
-resampler_t initResampler() {
+resampler_t initResampler(int numParticles) {
 
     generatorRes.seed(time(NULL) * 3); // avoid same seed as main?
     resampler_t resampler;
 
-    /*
-    allocateMemory<int>(&ancestor, (size_t)NUM_PARTICLES);
-    allocateMemory<int>(&cumulativeOffspring, NUM_PARTICLES);
-    allocateMemory<floating_t>(&prefixSum, NUM_PARTICLES);
-    allocateMemory<particle_t<T>>(&tempArr, 1);
-    */
-
     #ifdef GPU
-    cudaSafeCall(cudaMallocManaged(&resampler.ancestor, NUM_PARTICLES * sizeof(int)));
-    cudaSafeCall(cudaMallocManaged(&resampler.cumulativeOffspring, NUM_PARTICLES * sizeof(int)));
-    cudaSafeCall(cudaMallocManaged(&resampler.prefixSum, NUM_PARTICLES * sizeof(floating_t)));
-    //cudaSafeCall(cudaMallocManaged(&resampler.tempArr, sizeof(particles_t<T>)));
+    cudaSafeCall(cudaMallocManaged(&resampler.ancestor, numParticles * sizeof(int)));
+    cudaSafeCall(cudaMallocManaged(&resampler.cumulativeOffspring, numParticles * sizeof(int)));
+    cudaSafeCall(cudaMallocManaged(&resampler.prefixSum, numParticles * sizeof(floating_t)));
     #else
-    resampler.ancestor = new int[NUM_PARTICLES];
-    resampler.cumulativeOffspring = new int[NUM_PARTICLES];
-    resampler.prefixSum = new floating_t[NUM_PARTICLES];
+    resampler.ancestor = new int[numParticles];
+    resampler.cumulativeOffspring = new int[numParticles];
+    resampler.prefixSum = new floating_t[numParticles];
     #endif
-    resampler.tempArr = allocateParticles<T>();
+    resampler.tempArr = allocateParticles<T>(numParticles);
 
     return resampler;
 }
@@ -69,7 +61,6 @@ HOST DEV void destResamplerNested(resampler_t resampler) {
     delete[] resampler.cumulativeOffspring;
     delete[] resampler.prefixSum;
     particles_t<T>* tempArrP = static_cast<particles_t<T>*>(resampler.tempArr);
-    // delete tempArrP;
     freeParticlesNested<T>(tempArrP);
 }
 
