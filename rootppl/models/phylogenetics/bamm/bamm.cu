@@ -1,3 +1,14 @@
+/*
+ * File bamm.cu defines the Bayesian Analysis of Macroevolutionary Mixtures (BAMM) model
+ * as defined in WebPPL in the script linked to below. 
+ * 
+ * https://github.com/phyppl/probabilistic-programming/blob/master/webppl/phywppl/models/bamm.wppl
+ *
+ * This model traverses the tree with a pre-computed DFS path (defined by the next 
+ * pointer in the tree) that corresponds to the recursive calls in the original model. 
+ */
+
+
 #include <iostream>
 #include <cstring>
 

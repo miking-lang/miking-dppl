@@ -47,7 +47,7 @@ __device__ type* pointerName ## Dev;
 #define RAND_STATE_DECLARE curandState* randState,
 
 // Used when calling SAMPLE from dists working on both CPU and GPU since they rely on other dists only, assumes dist has at least one more parameter
-#define RAND_STATE_ACCESS randState,
+// #define RAND_STATE_ACCESS randState,
 
 // Used in SAMPLE macro to provide the CUDA random generating state to the function call, assumes at least one more argument follows
 #define RAND_STATE randState,

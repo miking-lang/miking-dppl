@@ -1,12 +1,13 @@
+/*
+ * This model tests most distributions. 
+ */
+
+
 #include "inference/smc/smc_impl.cuh"
 
-/**
-    This model traverses the tree with a DFS path that corresponds to the recursive calls. 
-*/
+// nvcc -arch=sm_75 -rdc=true -I . models/random-examples/test_dists.cu -o smc.exe -lcudadevrt -std=c++11 -O3
 
-// nvcc -arch=sm_75 -rdc=true Src/Utils/Distributions/testDists.cu -o smc.exe -lcudadevrt -std=c++11 -O3 -D GPU
-
-// Compile CPU: g++ -x c++ Src/Utils/Distributions/testDists.cu -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ -I . models/random-examples/test_dists.cu -o smc.exe -std=c++11 -O3
 // const int n = 3;
 struct progState_t {
     floating_t x;
@@ -26,25 +27,25 @@ BBLOCK(test, progState_t, {
     //    xLcl += SAMPLE(uniform, 0, 1);
     //}
     
-    /*
+    
     printf("uniform: %f\n", SAMPLE(uniform, 0, 1));
     printf("normal: %f\n", SAMPLE(normal, 0, 1));
     printf("exponential: %f\n", SAMPLE(exponential, 3));
-    */
+    
     for(int t = 0; t < 1; t++) {
         // PSTATE.x += gamma(randState, 0.1, 2);
         xLcl += SAMPLE(normal, 0.1, 2);
         // xLcl += normal(randState, 0.1, 2);
         // xLcl += uniformRef(randStateLcl, 0.3, 7.6);
     }
-    /*
+    
     printf("gamma: %f\n", SAMPLE(gamma, 1, 2));
     printf("bernoulli: %d\n", SAMPLE(bernoulli, 0.3));
     printf("poisson: %d\n", SAMPLE(poisson, 5.3));
 
     floating_t res[2];
     floating_t alpha[2] = {1 CMA 5.3};
-    SAMPLE(dirichlet, alpha, res, 2);
+    SAMPLE(dirichlet, alpha, 2, res);
     printArrayF(res, 2);
 
     floating_t dist[2] = {0.3 CMA 0.7};
@@ -68,7 +69,7 @@ BBLOCK(test, progState_t, {
     int resI[3];
     floating_t dist2[3] = {0.1 CMA 0.2 CMA 0.7};
 
-    SAMPLE(multinomial, dist2, 1000, resI, 3);
+    SAMPLE(multinomial, dist2, 1000, 3, resI);
     printArrayI(resI, 3);
 
     floating_t mu[3] = {4 CMA 5 CMA 6};
@@ -77,7 +78,7 @@ BBLOCK(test, progState_t, {
     SAMPLE(diagCovNormal, mu, sigma, 3, resF);
     printArrayF(resF, 3);
 
-    SAMPLE(multivariateStandardNormal, resF, 3);
+    SAMPLE(multivariateStandardNormal, 3, resF);
     printArrayF(resF, 3);
 
     floating_t cov[3][3] = {
@@ -87,9 +88,8 @@ BBLOCK(test, progState_t, {
     };
     SAMPLE(multivariateNormal<3>, mu, cov, resF);
     printArrayF(resF, 3);
-    */
 
-    PSTATE.x = xLcl;
+    // PSTATE.x = xLcl;
     PC = 1;
 })
 
@@ -109,7 +109,7 @@ CALLBACK_HOST(resFunc, progState_t, {
 
 
 MAIN(
-    INITBBLOCK(test, progState_t)
+    INIT_BBLOCK(test, progState_t)
 
     SMC(progState_t, resFunc)
 )

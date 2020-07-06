@@ -1,6 +1,10 @@
 #ifndef LDA_INCLUDED
 #define LDA_INCLUDED
 
+/*
+ * File lda.cuh contains contants, type definitions and helper functions for LDA models. 
+ */
+
 #include "inference/smc/smc.cuh"
 #include <fstream>
 #include <sstream>

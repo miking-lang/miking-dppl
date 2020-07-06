@@ -1,7 +1,10 @@
-#ifndef CRBDUTILS_INCLUDED
-#define CRBDUTILS_INCLUDED
+#ifndef TREE_UTILS_INCLUDED
+#define TREE_UTILS_INCLUDED
 
-#include <math.h>
+/*
+ * File tree_utils.cuh contains helper functions for trees. 
+ */
+
 #include "trees.cuh"
 
 HOST DEV int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
@@ -11,15 +14,6 @@ HOST DEV int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
             numLeaves++;
     }
     return numLeaves;
-}
-
-
-HOST DEV double lnFactorial(int n) {
-    if(n == 1) {
-        return 0.0;
-    } else {
-        return log(static_cast<double>(n)) + lnFactorial(n-1);
-    }
 }
 
 #endif

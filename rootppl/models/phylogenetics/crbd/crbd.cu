@@ -1,11 +1,17 @@
+/*
+ * File crbd.cu defines an older variant of the constant 
+ * rate birth death model with nested inference. 
+ *
+ * This model traverses the tree with a pre-computed DFS path (defined by the next 
+ * pointer in the tree) that corresponds to the recursive calls in the originial model. 
+ */
+
+
 #include <iostream>
 #include <cstring>
 #include "inference/smc/smc_impl.cuh"
 #include "../tree-utils/tree_utils.cuh"
 
-/**
-    This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
-*/
 
 /*
 Compile commands:

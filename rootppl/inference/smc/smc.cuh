@@ -9,7 +9,7 @@
 #include <cstddef>
 #include "macros/macros.cuh"
 #ifdef GPU
-#include "utils/cuda_error_utils.cu"
+#include "utils/cuda_error_utils.cuh"
 #include <curand_kernel.h>
 #endif
 

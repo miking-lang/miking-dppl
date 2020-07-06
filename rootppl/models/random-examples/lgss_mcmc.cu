@@ -1,13 +1,13 @@
+/*
+ * WORK IN PROGRESS, NOT CURRENTLY WORKING
+ */
+
 #include "inference/mcmc/mcmc.cuh"
 #include "inference/mcmc/mcmc_impl.cuh"
 #include "utils/misc.cuh"
 
 #include <random>
 #include <time.h>
-
-/*
-WORK IN PROGRESS, NOT CURRENTLY WORKING
-*/
 
 
 default_random_engine generatorDists;

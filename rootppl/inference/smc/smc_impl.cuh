@@ -7,13 +7,13 @@
 
 #include <iostream>
 #include "smc.cuh"
-#include "utils/distributions/distributions.cuh"
+#include "utils/dists/dists.cuh"
 #include "resample/systematic/sequential.cuh"
 #include "particles_memory_handler.cuh"
 
 #ifdef GPU
 #include "cuda_profiler_api.h"
-#include "utils/cuda_error_utils.cu"
+#include "utils/cuda_error_utils.cuh"
 #include "resample/systematic/parallel.cuh"
 #include "smc_kernels.cuh"
 #endif
@@ -98,7 +98,7 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackF
         execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
-        floating_t logWeightSum = calcWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        floating_t logWeightSum = calcLogWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
         #else
 
         for(int i = 0; i < numParticles; i++) {
@@ -106,7 +106,7 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackF
             if(pc < numBblocks)
                 bblocks[pc](particles, i, arg);
         }
-        floating_t logWeightSum = calcWeightSumSeq(particles.weights, resampler, numParticles);
+        floating_t logWeightSum = calcLogWeightSumSeq(particles.weights, resampler, numParticles);
         #endif
 
         logNormConstant += logWeightSum - log(numParticles);

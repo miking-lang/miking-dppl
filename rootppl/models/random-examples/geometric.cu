@@ -1,3 +1,7 @@
+/*
+ * File geometric.cu defines the geometric distribution model. 
+ */
+
 #include <iostream>
 #include <vector>
 

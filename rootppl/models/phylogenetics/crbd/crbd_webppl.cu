@@ -1,3 +1,14 @@
+/*
+ * File crbd_webppl.cu defines the constant rate birth death model 
+ * as defined in WebPPL in the script linked to below. 
+ * 
+ * https://github.com/phyppl/probabilistic-programming/blob/master/webppl/phywppl/models/crbd.wppl
+ *
+ * This model traverses the tree with a pre-computed DFS path (defined by the next 
+ * pointer in the tree) that corresponds to the recursive calls in the original model. 
+ */
+
+
 #include <iostream>
 #include <cstring>
 #include "inference/smc/smc_impl.cuh"
@@ -36,7 +47,7 @@ BBLOCK_HELPER_DECLARE(crbdGoesUndetected, progState_t, bool);
 const int MAX_DIV = 5;
 const int MAX_LAM = 5;
 
-#define NUM_BBLOCKS 2
+#define NUM_BBLOCKS 3
 INIT_GLOBAL(progState_t, NUM_BBLOCKS)
 
 BBLOCK_DATA(tree, tree_t, 1)
@@ -173,29 +184,6 @@ BBLOCK(simTree, progState_t, {
 
 })
 
-/*
-BBLOCK(simCRBD1, progState_t, {
-    tree_t* treeP = DATA_POINTER(tree);
-
-    PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
-
-    int numLeaves = countLeaves(treeP->idxLeft, treeP->idxRight, NUM_NODES);
-    floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
-    WEIGHT(corrFactor);
-
-    PC++;
-})
-
-BBLOCK(simCRBD2, progState_t, {
-    tree_t* treeP = DATA_POINTER(tree);
-
-    const int MAX_M = 10000;
-    int M = BBLOCK_CALL(M_crbdGoesUndetected, treeP->ages[PSTATE.treeIdx], MAX_M);
-    WEIGHT(log(static_cast<floating_t>(M)));
-
-    PC++;
-})
-*/
 
 BBLOCK(simCRBD, progState_t, {
 
@@ -206,17 +194,17 @@ BBLOCK(simCRBD, progState_t, {
     int numLeaves = countLeaves(treeP->idxLeft, treeP->idxRight, treeP->NUM_NODES);
     floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     WEIGHT(corrFactor);
-    // printf("corrFactor: %f\n", corrFactor);
-
-    // Resample here perhaps?
-
-    const int MAX_M = 10000;
-    int M = BBLOCK_CALL(M_crbdGoesUndetected, treeP->ages[PSTATE.treeIdx], MAX_M);
-    WEIGHT(log(static_cast<floating_t>(M)));
-    // printf("log(M): %f\n", log(static_cast<floating_t>(M)));
 
     PC++;
-    // BBLOCK_CALL(simTree);
+})
+
+BBLOCK(survivorshipBias, progState_t, {
+    // Survivorship Bias, is done after simCRBD
+    floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
+    int MAX_M = 10000;
+    int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M);
+    WEIGHT(log(static_cast<floating_t>(M)));
+    PC++;
 })
 
 
@@ -224,9 +212,8 @@ MAIN(
     initCBD();
     
     INIT_BBLOCK(simCRBD, progState_t)
-    // INIT_BBLOCK(simCRBD1, progState_t)
-    // INIT_BBLOCK(simCRBD2, progState_t)
     INIT_BBLOCK(simTree, progState_t)
+    INIT_BBLOCK(survivorshipBias, progState_t)
 
     SMC(progState_t, NULL)
 )

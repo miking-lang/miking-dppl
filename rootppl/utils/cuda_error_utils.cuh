@@ -1,6 +1,12 @@
 #ifndef CUDAERRORUTILS_INCLUDED
 #define CUDAERRORUTILS_INCLUDED
 
+/*
+ * File cuda_error_utils.cuh contains error checking for CUDA. 
+ * If the RELEASE flag is defined it will be disabled as it may degrade performance. 
+ * These macros and functions are quite standard for CUDA development and I have not written them myself. 
+ */
+
 #include <stdio.h>
 #include <curand.h>
 

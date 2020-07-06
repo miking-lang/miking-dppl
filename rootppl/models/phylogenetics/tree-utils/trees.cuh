@@ -1,6 +1,10 @@
 #ifndef TREES_INCLUDED
 #define TREES_INCLUDED
 
+/*
+ * File trees.cuh contains pre-processed phylogenetic trees stored in SoA-format (Structure of Arrays). 
+ */
+
 const int ROOT_IDX = 0;
 
 

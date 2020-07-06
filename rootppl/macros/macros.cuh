@@ -31,7 +31,7 @@ typedef double floating_t;
 
 // Used by BBLOCK, BBLOCK_HELPER and BBLOCK_CALL macros.
 #define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>& particles, int i
-#define BBLOCK_ARGS RAND_STATE_ACCESS particles, i
+#define BBLOCK_ARGS RAND_STATE particles, i
 
 // Declarations of BBLOCK and BBLOCK_HELPER functions.
 #define BBLOCK_DECLARE(funcName, progStateType) DEV void funcName(RAND_STATE_SIGNATURE particles_t<progStateType>&, int, void*);
@@ -109,7 +109,7 @@ Run the nested inference with arguments:
 */
 #define SMC_NESTED(progStateType, numParticles, parallelExec, parallelResampling, parentIndex, callback, retStruct, arg) \
 int numBblocks = bbIdx; \
-double res = runSMCNested<progStateType>(RAND_STATE_ACCESS bblocks, numBblocks, numParticles, \
+double res = runSMCNested<progStateType>(RAND_STATE bblocks, numBblocks, numParticles, \
     parallelExec, parallelResampling, parentIndex, callback, (void*)&retStruct, (void*)arg); \
 delete[] bblocks;
 
@@ -125,7 +125,7 @@ delete[] bblocks;
 // Access the particle's program/model specific state.
 #define PSTATE particles.progStates[i]
 
-// Main function.
+// Main function with default number of particles, prints the normalization constant.
 #define MAIN(body) \
 int main(int argc, char** argv) { \
     int numParticles = 10000; \

@@ -93,10 +93,10 @@ DEV double runSMCNested(
         floating_t logWeightSum;
         if(parallelResampling) {
             #ifdef GPU
-            logWeightSum = calcWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED);
+            logWeightSum = calcLogWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED);
             #endif
         } else {
-            logWeightSum = calcWeightSumSeq(particles.weights, resampler, numParticles);
+            logWeightSum = calcLogWeightSumSeq(particles.weights, resampler, numParticles);
         }
 
         logNormConstant += logWeightSum - log(static_cast<floating_t>(numParticles));

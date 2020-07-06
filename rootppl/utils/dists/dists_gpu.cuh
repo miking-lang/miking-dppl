@@ -1,16 +1,46 @@
 #ifndef DISTS_GPU
 #define DISTS_GPU
 
+/*
+ * File dists_gpu.cuh contains primitive distributions specific for the GPU. 
+ */
 
 
-// (min, max]
+/**
+ * Returns a sample from the Uniform distribution on the interval (min, max]
+ * 
+ * @param randState the curandState pointer required by cuRAND to generate random numbers. 
+ * @param min the exclusive minimum value
+ * @param max the inclusive maximum value
+ * @return U(min, max]
+ */
 __device__ floating_t uniform(curandState* randState, floating_t min, floating_t max) {
     return (curand_uniform(randState) * (max - min)) + min;
 }
 
+/**
+ * Returns a sample from the Normal/Gaussian distribution. 
+ * 
+ * @param randState the curandState pointer required by cuRAND to generate random numbers. 
+ * @param mean the mean/location of the gaussian distribution
+ * @param std the standard deviation/scale of the gaussian destribution
+ * @return N(mean, std^2)
+ */
 __device__ floating_t normal(curandState* randState, floating_t mean, floating_t std) {
     return (curand_normal(randState) * std) + mean;
 }
+
+/**
+ * Returns a sample from the Poisson distribution. 
+ * 
+ * @param randState the curandState pointer required by cuRAND to generate random numbers. 
+ * @param lambda the rate parameter
+ * @return Po(lambda)
+ */
+__device__ unsigned int poisson(curandState* randState, double lambda) {
+    return curand_poisson(randState, lambda);
+}
+
 
 // This gamma sampling is based on the implementation used by GSL
 // k = shape, theta = scale
@@ -53,9 +83,5 @@ __device__ floating_t gamma(curandState* randState, floating_t k, floating_t the
     // return exponential(particles, i, 1.0); // exponential(1) is special case of gamma: gamma(1, 1)
 }
 */
-
-__device__ unsigned int poisson(curandState* randState, double lambda) {
-    return curand_poisson(randState, lambda);
-}
 
 #endif

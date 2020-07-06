@@ -1,13 +1,12 @@
+/*
+ * WORK IN PROGRESS, NOT CURRENTLY WORKING
+ */
 
 #include <algorithm>
 
 #include "inference/smc/smcImpl.cuh"
 #include "utils/misc.cuh"
 #include "lda.cuh"
-
-/*
-WORK IN PROGRESS, NOT CURRENTLY WORKING
-*/
 
 BBLOCK_DATA_2D(corpus, int, D, MAX_DOC_LENGTH); // DOCUMENTS
 BBLOCK_DATA(docLength, int, D); // length of each document

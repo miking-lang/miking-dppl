@@ -1,3 +1,7 @@
+/*
+ * WORK IN PROGRESS
+ */
+
 #include <algorithm>
 
 #include "inference/smc/smc_impl.cuh"
@@ -5,10 +9,6 @@
 #include "utils/misc.cuh"
 #include "lda.cuh"
 
-
-/*
-WORK IN PROGRESS, NOT CURRENTLY WORKING
-*/
 
 // THIS MODEL MIGHT HAVE AN ERROR, CHECK FOR SEGFAULT WITH LARGER NUMBER OF PARTICLES
 

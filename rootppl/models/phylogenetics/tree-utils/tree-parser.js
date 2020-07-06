@@ -1,11 +1,13 @@
 /*
-Just a bunch of functions to parse JSON trees into arrays, and give specs about trees.
+ * File tree-parser.js contains a bunch of functions to parse JSON trees into arrays, and give specs about trees.
+ *
+ * Can be executed online in the browser, e.g.: https://playcode.io/
+ */
 
-Note that this is JavaScript, can be executed online in the browser, ex: https://playcode.io/
-*/
-
+ // Queue implementation (library)
 function Queue(){var a=[],b=0;this.getLength=function(){return a.length-b};this.isEmpty=function(){return 0==a.length};this.enqueue=function(b){a.push(b)};this.dequeue=function(){if(0!=a.length){var c=a[b];2*++b>=a.length&&(a=a.slice(b),b=0);return c}};this.peek=function(){return 0<a.length?a[b]:void 0}};
 
+// Various phylogenetic trees
 var treeSimple = '{"right":{"right":{"age":0}, "left":{"age":0}, "age":4}, "left":{"right":{"age":0}, "left":{"age":0},"age":6}, "age":10}';
 var treeMonkeys = '{"right":{"right":{"right":{"right":{"age":0.000000},"left":{"age":0.000000},"age":2.600000}, "left":{"age":0.000000},"age":4.432900}, "left":{"right":{"right":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"age":0.000000},"age":2.096700},"age":4.888820},"left":{"age":0.000000},"age":8.340000},"left":{"right":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"age":0.000000},"age":1.330000},"age":2.810000},"age":4.340400},"age":5.692320},"left":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"age":0.000000},"age":1.720000},"age":2.239800},"age":3.045170},"age":6.135400},"age":10.237967},"age":11.016198},"left":{"right":{"right":{"right":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"age":0.000000},"age":2.994200},"age":3.283800},"age":5.900000},"left":{"age":0.000000},"age":7.110000},"left":{"right":{"right":{"age":0.000000},"left":{"right":{"age":0.000000},"left":{"age":0.000000},"age":0.022830},"age":1.107800},"left":{"age":0.000000},"age":3.196940},"age":7.310000},"left":{"right":{"right":{"age":0.000000},"left":{"age":0.000000},"age":2.957100},"left":{"age":0.000000},"age":5.485300},"age":11.330548},"age":17.993216}';
 var treeBisse = '{"age":13.016,"left":{"age":10.626,"left":{"age":8.352,"left":{"age":7.679,"left":{"age":5.187,"left":{"age":0},"right":{"age":0}},"right":{"age":5.196,"left":{"age":0},"right":{"age":4.871,"left":{"age":2.601,"left":{"age":0},"right":{"age":0}},"right":{"age":0}}}},"right":{"age":7.361,"left":{"age":3.818,"left":{"age":1.143,"left":{"age":0.0829,"left":{"age":0},"right":{"age":0}},"right":{"age":0}},"right":{"age":1.813,"left":{"age":0.0452,"left":{"age":0.0203,"left":{"age":0},"right":{"age":0}},"right":{"age":0}},"right":{"age":0}}},"right":{"age":1.868,"left":{"age":0.0866,"left":{"age":0},"right":{"age":0.0001,"left":{"age":0},"right":{"age":0}}},"right":{"age":1.06,"left":{"age":0},"right":{"age":0}}}}},"right":{"age":10.536,"left":{"age":8.291,"left":{"age":1.396,"left":{"age":0.0215,"left":{"age":0},"right":{"age":0}},"right":{"age":0}},"right":{"age":0}},"right":{"age":8.192,"left":{"age":0.056,"left":{"age":0},"right":{"age":0}},"right":{"age":0}}}},"right":{"age":8.958,"left":{"age":3.748,"left":{"age":0},"right":{"age":0.0033,"left":{"age":0},"right":{"age":0}}},"right":{"age":7.775,"left":{"age":0.0584,"left":{"age":0},"right":{"age":0}},"right":{"age":1.589,"left":{"age":0},"right":{"age":0}}}}}';
@@ -31,6 +33,7 @@ var rightIdx = [];
 var parentIdx = [];
 var nextIdx;
 
+// Breadth First Search that assigns pointers in the tree. 
 function bfsIdx(tree) {
     if(tree.left != null) {
         fifo.enqueue(tree.left);
@@ -45,7 +48,7 @@ function bfsIdx(tree) {
     if(tree.left == null) numNull++;
     if(tree.right == null) numNull++;
     if(numNull == 1)
-        alert("hori sheet, only one child");
+        alert("Caution: Only one child (unbalanced tree?)");
 
     // Add index
     tree.idx = idxCounter;
@@ -57,6 +60,7 @@ function bfsIdx(tree) {
     }
 }
 
+// Breadth First Search that fills the arrays with indices. Called after bfsIdx has been called. 
 function bfsArrs(tree) {
     if(tree.left != null) 
         fifo.enqueue(tree.left);
@@ -76,6 +80,7 @@ function bfsArrs(tree) {
     }
 }
 
+// Depth First Search that fills the array of next pointers (pre-processed tree traversal path)
 function dfsNext(tree) {
     if(tree.right != null)
         stack.push(tree.right);
@@ -94,6 +99,7 @@ function dfsNext(tree) {
     dfsNext(nextTree);
 }
 
+// The function that generates the transformed tree. JSON tree -> RootPPL SoA Tree
 function transformTree() {
     tree.parentIdx = -1;
     bfsIdx(tree);
@@ -121,6 +127,7 @@ function max(a, b) {
     return a >= b ? a : b;
 }
 
+// Finds the max depth of the tree
 function treeMaxDepth(tree) {
     if(tree.left == null && tree.right == null) {
         return 1;
@@ -139,7 +146,7 @@ transformTree();
 console.log("\nMax tree depth: ");
 console.log(treeMaxDepth(tree));
 
-
+// Takes WebPPL formatted tree (currently hardcoded in local variable tree) and creates WebPPL JSON object which is printed to stdout. 
 function convertTreeToJSONWebPPLFormat() {
     // Tree stuff
     var leaf = function( a, i ) {
@@ -156,7 +163,8 @@ function convertTreeToJSONWebPPLFormat() {
 
 // convertTreeToJSONWebPPLFormat();
 
-// From the webppl represantation
+// Takes WebPPL formatted tree (currently hardcoded in local variable tree) and creates RootPPL JSON object (type and index omitted)
+// (Which still need to be pre-processed). 
 function convertTreeToJSON() {
 
     var leaf = function( a, i ) {

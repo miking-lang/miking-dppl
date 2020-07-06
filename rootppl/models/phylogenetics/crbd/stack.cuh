@@ -1,3 +1,8 @@
+/*
+ * File stack.cuh contains the definition of an explicit stack. 
+ * This is a work in progress but works for types of byte size multiples of 4. 
+ */
+
 #ifndef STACK_INCLUDED
 #define STACK_INCLUDED
 

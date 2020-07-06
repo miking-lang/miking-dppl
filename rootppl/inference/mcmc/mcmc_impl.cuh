@@ -1,6 +1,10 @@
 
 #include "mcmc.cuh"
 
+/*
+ * WORK IN PROGRESS 
+ */
+
 default_random_engine generatorDistsTemp;
 
     uniform_real_distribution<floating_t> uniformDistTemp(0.0, 1.0);

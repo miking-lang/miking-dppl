@@ -1,3 +1,7 @@
+/*
+ * File lgss.cu defines the lgss model. 
+ */
+
 #include <cstring>
 
 #include "inference/smc/smc_impl.cuh"

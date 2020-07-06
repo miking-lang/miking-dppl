@@ -1,6 +1,10 @@
 #ifndef MCMC_INCLUDED
 #define MCMC_INCLUDED
 
+/*
+ * WORK IN PROGRESS 
+ */
+
 #include <cstddef>
 #include "macros.cuh"
 #ifdef GPU

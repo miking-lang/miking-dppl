@@ -1,3 +1,7 @@
+/*
+ * File bamm.cuh defines constants and type definitions used in the bamm model bamm.cu. 
+ */
+
 const int MAX_DEPTH = 20;
 const int STACK_LIMIT = MAX_DEPTH * 2 + 1;
 
