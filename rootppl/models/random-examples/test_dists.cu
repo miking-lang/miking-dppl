@@ -93,7 +93,7 @@ BBLOCK(test, progState_t, {
     PC = 1;
 })
 
-CALLBACK_HOST(resFunc, progState_t, {
+CALLBACK(resFunc, progState_t, {
     
     //floating_t sum = 0;
     //for(int i = 0; i < NUM_PARTICLES; i++) {

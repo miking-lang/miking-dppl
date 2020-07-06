@@ -79,7 +79,7 @@ BBLOCK_HELPER(pushChild, {
 }, void, progState_t parent, int childIdx)
 
 
-BBLOCK(condBD_1, pStack_t, {
+BBLOCK(condBD_1, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -95,7 +95,7 @@ BBLOCK(condBD_1, pStack_t, {
     // Resamples here
 })
 
-BBLOCK(condBD_2, pStack_t, {
+BBLOCK(condBD_2, {
     
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -125,7 +125,7 @@ BBLOCK(condBD_2, pStack_t, {
 })
 
 // Keep DFSing left
-BBLOCK(condBD_3, pStack_t, {
+BBLOCK(condBD_3, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -143,7 +143,7 @@ BBLOCK(condBD_3, pStack_t, {
 })
 
 // Keep DFSing right
-BBLOCK(condBD_4, pStack_t, {
+BBLOCK(condBD_4, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -159,7 +159,7 @@ BBLOCK(condBD_4, pStack_t, {
     BBLOCK_CALL(condBD_1);
 })
 
-BBLOCK(condBD_init, pStack_t, {
+BBLOCK(condBD_init, {
 
     //PSTATE.arr = DATA_POINTER(globalStack);
     //PSTATE.stackPointer = i;
@@ -183,11 +183,11 @@ BBLOCK(condBD_init, pStack_t, {
 
 MAIN(
 
-    INIT_BBLOCK(condBD_init, pStack_t)
-    INIT_BBLOCK(condBD_1, pStack_t)
-    INIT_BBLOCK(condBD_2, pStack_t)
-    INIT_BBLOCK(condBD_3, pStack_t)
-    INIT_BBLOCK(condBD_4, pStack_t)
+    INIT_BBLOCK(condBD_init)
+    INIT_BBLOCK(condBD_1)
+    INIT_BBLOCK(condBD_2)
+    INIT_BBLOCK(condBD_3)
+    INIT_BBLOCK(condBD_4)
 
-    SMC(pStack_t, NULL)
+    SMC(NULL)
 )

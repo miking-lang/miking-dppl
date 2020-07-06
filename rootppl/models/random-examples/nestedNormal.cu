@@ -24,7 +24,7 @@ INIT_GLOBAL(progState_t, NUM_BBLOCKS)
 #define NUM_BBLOCKS_NESTED 1
 
 
-CALLBACK(calcResult, progState_t, {
+CALLBACK_NESTED(calcResult, progState_t, {
     double sum = 0.0;
     for(int i = 0; i < NUM_PARTICLES_NESTED; i++)
         sum += PSTATE.val;
@@ -82,7 +82,7 @@ BBLOCK(normal2, progState_t, {
 })
 
 
-CALLBACK_HOST(callback, progState_t, {
+CALLBACK(callback, {
     double sum = 0.0;
     for(int i = 0; i < NUM_PARTICLES; i++)
         sum += PSTATE.val;
@@ -95,10 +95,10 @@ MAIN({
 
     initGen();
 
-    INIT_BBLOCK(normal2, progState_t)
+    INIT_BBLOCK(normal2)
     // INIT_BBLOCK(normal4, progState_t)
     // INIT_BBLOCK(normal8, progState_t)
 
-    SMC(progState_t, callback)
+    SMC(callback)
 
 })

@@ -153,7 +153,7 @@ BBLOCK_HELPER(simBranch, {
 }, floating_t, floating_t startTime, floating_t stopTime)
 
 
-BBLOCK(simTree, progState_t, {
+BBLOCK(simTree, {
 
     tree_t* treeP = DATA_POINTER(tree);
     int treeIdx = PSTATE.treeIdx;
@@ -185,7 +185,7 @@ BBLOCK(simTree, progState_t, {
 })
 
 
-BBLOCK(simCRBD, progState_t, {
+BBLOCK(simCRBD, {
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -198,7 +198,7 @@ BBLOCK(simCRBD, progState_t, {
     PC++;
 })
 
-BBLOCK(survivorshipBias, progState_t, {
+BBLOCK(survivorshipBias, {
     // Survivorship Bias, is done after simCRBD
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     int MAX_M = 10000;
@@ -211,10 +211,10 @@ BBLOCK(survivorshipBias, progState_t, {
 MAIN(
     initCBD();
     
-    INIT_BBLOCK(simCRBD, progState_t)
-    INIT_BBLOCK(simTree, progState_t)
-    INIT_BBLOCK(survivorshipBias, progState_t)
+    INIT_BBLOCK(simCRBD)
+    INIT_BBLOCK(simTree)
+    INIT_BBLOCK(survivorshipBias)
 
-    SMC(progState_t, NULL)
+    SMC(NULL)
 )
 

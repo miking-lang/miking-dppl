@@ -156,7 +156,7 @@ BBLOCK(simTree, progState_t, {
 
 })
 
-CALLBACK(calcResult, nestedProgState_t, {
+CALLBACK_NESTED(calcResult, nestedProgState_t, {
     int numExtinct = 0;
     for(int i = 0; i < numParticles; i++)
         numExtinct += PSTATE.extinct;
@@ -205,7 +205,7 @@ MAIN(
     INIT_BBLOCK(simCRBD, progState_t)
     INIT_BBLOCK(simTree, progState_t)
 
-    SMC(progState_t, NULL)
+    SMC(NULL)
 
     res += corrFactor;
 )

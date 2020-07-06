@@ -48,13 +48,13 @@ BBLOCK(lgss, progState_t, {
 
 })
 
-CALLBACK_HOST(callback, progState_t, {
+CALLBACK(callback, {
     
     floating_t xSum = 0;
-    for (int i = 0; i < NUM_PARTICLES; i++)
+    for (int i = 0; i < N; i++)
         xSum += PSTATE.x;
-    int i = NUM_PARTICLES / 2;
-    printf("Mean x: %f, Median x: %f\n", xSum / NUM_PARTICLES, PSTATE.x);
+    int i = N / 2;
+    printf("Mean x: %f, Median x: %f\n", xSum / N, PSTATE.x);
     
 })
 

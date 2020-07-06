@@ -53,24 +53,24 @@ BBLOCK(geometric, progState_t, {
 })
 
 
-CALLBACK_HOST(callback, progState_t, {
+CALLBACK(callback, {
 
     int tally[100] = {0};
 
-    for(int i = 0; i < NUM_PARTICLES; i++)
+    for(int i = 0; i < N; i++)
         tally[PSTATE.res]++;
 
     for(int i = 1; i < 10; i++)
-        printf("%d: %f\n", i, tally[i] / (double)NUM_PARTICLES);
+        printf("%d: %f\n", i, tally[i] / (double)N);
 
 })
 
 
 MAIN({
 
-    INIT_BBLOCK(particleInit, progState_t)
-    INIT_BBLOCK(geometric, progState_t)
+    INIT_BBLOCK(particleInit)
+    INIT_BBLOCK(geometric)
 
-    SMC(progState_t, callback)
+    SMC(callback)
 
 })

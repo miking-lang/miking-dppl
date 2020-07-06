@@ -29,6 +29,15 @@
 // To be able to switch between single and double precision easily.
 typedef double floating_t; 
 
+
+#define GET_MACRO(_1, _2, _3, NAME,...) NAME
+
+// Sets up globally accessible bblock array, that can be accessed from the bblocks.
+#define INIT_GLOBAL(progStateType, numBblocks) \
+BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
+int bbIdx = 0; \
+typedef progStateType progStateTypeTopLevel_t;
+
 // Used by BBLOCK, BBLOCK_HELPER and BBLOCK_CALL macros.
 #define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>& particles, int i
 #define BBLOCK_ARGS RAND_STATE particles, i
@@ -39,11 +48,17 @@ typedef double floating_t;
 template <typename T> \
 DEV returnType funcName(RAND_STATE_SIGNATURE particles_t<T>, int, ##__VA_ARGS__);
 
-// These will be executed by the framework.
-#define BBLOCK(funcName, progStateType, body) \
+// These will be executed by the framework. 
+#define BBLOCK_DEF(funcName, progStateType, body) \
 DEV void funcName(BBLOCK_PARAMS(progStateType), void* arg = NULL) \
 body \
 DEV_POINTER(funcName, progStateType)
+// Handles parameter overloading
+#define BBLOCK(...) GET_MACRO(__VA_ARGS__, BBLOCK_DEF, BBLOCK_DEF_NO_TYPE)(__VA_ARGS__)
+#define BBLOCK_DEF_NO_TYPE(funcName, body) BBLOCK_DEF(funcName, progStateTypeTopLevel_t, body)
+
+// Something like this could be used to count number bblocks during compile time. 
+// const char dummy ## funcName = __COUNTER__;
 
 // Regular helper functions that takes the particles as argument (syntactic sugar).
 #define BBLOCK_HELPER(funcName, body, returnType, ...) \
@@ -55,57 +70,59 @@ body
 #define BBLOCK_CALL(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)
 
 // Functions that can be called from the framework, usually to use resulting particle distributions before clean up.
-#define CALLBACK_HOST(funcName, progStateType, body) void funcName(particles_t<progStateType>& particles, int numParticles, void* arg=NULL) body
-#define CALLBACK(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>& particles, int numParticles, arg) body
+#define CALLBACK(funcName, body) void funcName(particles_t<progStateTypeTopLevel_t>& particles, int N, void* arg=NULL) body
+#define CALLBACK_NESTED(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>& particles, int numParticles, arg) body
 
 /* 
 Initialize the basic block (add it to the array of bblocks), the order of bblocks matters!
 The first bblock to be initialized will be the first to be executed, then the execution follows the
 index (PC) specified by the model (bblocks).
 */
-#define INIT_BBLOCK(funcName, progStateType) \
+#define INIT_BBLOCK_DEF(funcName, progStateType) \
 pplFunc_t<progStateType> funcName ## Host; \
 FUN_REF(funcName, progStateType) \
 bblocksArr[bbIdx] = funcName ## Host; \
 bbIdx++;
+// Handles parameter overloading
+#define INIT_BBLOCK(...) GET_MACRO(__VA_ARGS__, 0, INIT_BBLOCK_DEF, INIT_BBLOCK_NOTYPE)(__VA_ARGS__)
+#define INIT_BBLOCK_NOTYPE(funcName) INIT_BBLOCK_DEF(funcName, progStateTypeTopLevel_t)
 
 // Same as above, but for nested inference.
 #define INIT_BBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
-
-// Sets up globally accessible bblock array, that can be accessed from the bblocks.
-#define INIT_GLOBAL(progStateType, numBblocks) \
-BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
-int bbIdx = 0;
 
 // Samples from distributions, which should all take the curandState as argument first if on GPU.
 #define SAMPLE(distName, ...) distName(RAND_STATE __VA_ARGS__ )
 
 // Run SMC with given program state type (mandatory) and callback function (optional, can be declared with CALLBACK macro).
-#define SMC(progStateType, callback) \
+#define SMC(callback) \
 int numBblocks = bbIdx; \
 configureMemSizeGPU(numParticles); \
-COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
-pplFunc_t<progStateType>* bblocksArrCudaManaged; \
-allocateMemory<pplFunc_t<progStateType>>(&bblocksArrCudaManaged, numBblocks); \
+COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateTypeTopLevel_t>, numBblocks) \
+pplFunc_t<progStateTypeTopLevel_t>* bblocksArrCudaManaged; \
+allocateMemory<pplFunc_t<progStateTypeTopLevel_t>>(&bblocksArrCudaManaged, numBblocks); \
 for(int i = 0; i < numBblocks; i++) \
     bblocksArrCudaManaged[i] = bblocksArr[i]; \
-res = runSMC<progStateType>(bblocksArrCudaManaged, numBblocks, numParticles, callback); \
-freeMemory<pplFunc_t<progStateType>>(bblocksArrCudaManaged);
+res = runSMC<progStateTypeTopLevel_t>(bblocksArrCudaManaged, numBblocks, numParticles, callback); \
+freeMemory<pplFunc_t<progStateTypeTopLevel_t>>(bblocksArrCudaManaged);
+
 
 // Prepare bblock array for initialization of bblocks, for nested inference only.
 #define SMC_PREPARE_NESTED(progStateType, numBblocks) \
 pplFunc_t<progStateType>* bblocks = new pplFunc_t<progStateType>[numBblocks]; /*{}*/ \
 int bbIdx = 0;
 
+
+
 /* 
 Run the nested inference with arguments:
 - progStateType: The program state used by particles/bblocks in nested inference.
+- numParticles: the number of particles to use in the nested inference. 
+- parallelExec: boolean, whether new CUDA-kernels should be launched for nested inference, otherwise just run sequentially (on GPU threads if top-level inference runs on the GPU).
+- parallelResampling: boolean, whether new CUDA-kernels should be launched for nested resampling, otherwise run sequential variant (on GPU threads if top-level inference runs on the GPU).
+- parentIndex: the index of the current thread, used to seed curand
 - callback: Callback function to use resulting particle distribution before clean up.
 - retStruct: structure to fill with result in callback (passed to callback, handled by model, just passed by framework).
 - arg: argument to nested inference bblocks.
-- parallelExec: boolean, whether new CUDA-kernels should be launched for nested inference, otherwise just run sequentially (on GPU threads if top-level inference runs on the GPU).
-- parallelResampling: boolean, whether new CUDA-kernels should be launched for nested resampling, otherwise run sequential variant (on GPU threads if top-level inference runs on the GPU).
-- parentIndex: 
 */
 #define SMC_NESTED(progStateType, numParticles, parallelExec, parallelResampling, parentIndex, callback, retStruct, arg) \
 int numBblocks = bbIdx; \

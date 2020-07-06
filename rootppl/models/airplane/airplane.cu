@@ -40,7 +40,7 @@ void initAirplane() {
     COPY_DATA_GPU(mapApprox, floating_t, MAP_SIZE)
 }
 
-BBLOCK(propagateAndWeight, progState_t, {
+BBLOCK(propagateAndWeight, {
 
     // Propagate
     PSTATE.x += SAMPLE(normal, VELOCITY, TRANSITION_STD);
@@ -54,7 +54,7 @@ BBLOCK(propagateAndWeight, progState_t, {
 
 })
 
-BBLOCK(particleInit, progState_t, {
+BBLOCK(particleInit, {
 
     PSTATE.x = SAMPLE(uniform, 0, MAP_SIZE);
     PSTATE.t = 0;
@@ -63,12 +63,12 @@ BBLOCK(particleInit, progState_t, {
     BBLOCK_CALL(propagateAndWeight);
 })
 
-CALLBACK_HOST(callback, progState_t, {
+CALLBACK(callback, {
     // Checks how many particles are close to actual airplane to check for correctness
     int numParticlesClose = 0;
     floating_t minX = 999999;
     floating_t maxX = -1;
-    for (int i = 0; i < numParticles; i++) {
+    for (int i = 0; i < N; i++) {
         floating_t particleX = PSTATE.x;
         if(abs(particleX - planeX[TIME_STEPS-1]) < 10)
             numParticlesClose++;
@@ -76,15 +76,15 @@ CALLBACK_HOST(callback, progState_t, {
         maxX = max(maxX, particleX);
     }
 
-    cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / numParticles << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
+    cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / N << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
 })
 
 
 MAIN(
     initAirplane();
 
-    INIT_BBLOCK(particleInit, progState_t)
-    INIT_BBLOCK(propagateAndWeight, progState_t)
+    INIT_BBLOCK(particleInit)
+    INIT_BBLOCK(propagateAndWeight)
 
-    SMC(progState_t, callback)
+    SMC(callback)
 )

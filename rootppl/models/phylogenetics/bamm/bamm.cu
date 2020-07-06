@@ -68,7 +68,7 @@ BBLOCK_HELPER(bammLambdaWait, {
 
     floating_t topLambda = MAX(startLambda, stopLambda);
 
-    floating_t t = startTime - robustExponentialSampler(RAND_STATE_ACCESS topLambda);
+    floating_t t = startTime - robustExponentialSampler(RAND_STATE topLambda);
 
     if(t < stopTime) return INFINITY;
     if(SAMPLE(bernoulli, lambdaFun(lf, t) / topLambda)) return startTime - t;
@@ -79,7 +79,7 @@ BBLOCK_HELPER(bammLambdaWait, {
 
 BBLOCK_HELPER(bammGoesUndetected, {
 
-    floating_t t1 = robustExponentialSampler(RAND_STATE_ACCESS mu + eta);
+    floating_t t1 = robustExponentialSampler(RAND_STATE mu + eta);
     floating_t tLambda = BBLOCK_CALL(bammLambdaWait, lf, startTime, 0);
 
     floating_t t = MIN(t1, tLambda);
@@ -109,7 +109,7 @@ BBLOCK_HELPER(bammGoesUndetected, {
 BBLOCK_HELPER(simBranch, {
 
     floating_t tLambda = BBLOCK_CALL(bammLambdaWait, lf, startTime, stopTime);
-    floating_t tEta = robustExponentialSampler(RAND_STATE_ACCESS eta);
+    floating_t tEta = robustExponentialSampler(RAND_STATE eta);
     floating_t t = MIN(tLambda, tEta);
     floating_t currentTime = startTime - t;
 
@@ -150,7 +150,7 @@ BBLOCK_HELPER(simBranch, {
 
 
 // TODO: Should return tree info as string?
-BBLOCK(simTree, progState_t, {
+BBLOCK(simTree, {
 
     // Fetch tree data
     tree_t* treeP = DATA_POINTER(tree);
@@ -216,7 +216,7 @@ BBLOCK(simTree, progState_t, {
 })
 
 
-BBLOCK(simBAMM, progState_t, {
+BBLOCK(simBAMM, {
     tree_t* treeP = DATA_POINTER(tree);
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
@@ -252,7 +252,7 @@ BBLOCK(simBAMM, progState_t, {
     BBLOCK_CALL(simTree);
 })
 
-BBLOCK(survivorshipBias, progState_t, {
+BBLOCK(survivorshipBias, {
     // Survivorship Bias, is done after simBAMM
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     bblockArgs_t args = PSTATE.stack.pop();
@@ -263,17 +263,17 @@ BBLOCK(survivorshipBias, progState_t, {
 })
 
 
-CALLBACK_HOST(callback, progState_t, {
+CALLBACK(callback, {
     // printf("Done yay!\n");
 })
 
 MAIN({
     initGen();
 
-    INIT_BBLOCK(simBAMM, progState_t)
-    INIT_BBLOCK(simTree, progState_t)
-    INIT_BBLOCK(survivorshipBias, progState_t)
+    INIT_BBLOCK(simBAMM)
+    INIT_BBLOCK(simTree)
+    INIT_BBLOCK(survivorshipBias)
 
-    SMC(progState_t, callback)
+    SMC(callback)
 })
 
