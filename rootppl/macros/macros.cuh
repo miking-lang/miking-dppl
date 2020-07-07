@@ -84,6 +84,9 @@ body
 
 // Access the particle's program/model specific state.
 #define PSTATE particles.progStates[i]
+
+// Access the array of progStates, should not be used by particles, but in callbacks for example. 
+#define PSTATES particles.progStates
 /***    *****    ***/
 
 

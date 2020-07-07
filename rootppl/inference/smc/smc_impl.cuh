@@ -72,7 +72,7 @@ void configureMemSizeGPU(int numParticles) {
  * @return the logged normalization constant.
  */
 template <typename T>
-double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackFunc_t<T> callback = NULL, void* arg = NULL) {
+double runSMC(const pplFunc_t<T>* bblocks, int numBblocks, const int numParticles, callbackFunc_t<T> callback = NULL, void* arg = NULL) {
 
     floating_t logNormConstant = 0;
 
@@ -82,7 +82,7 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackF
     const int NUM_BLOCKS = (numParticles + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
 
     curandState* randStates;
-    cudaSafeCall(cudaMallocManaged(&randStates, sizeof(curandState) * numParticles));
+    cudaSafeCall(cudaMalloc(&randStates, sizeof(curandState) * numParticles));
     initCurandStates<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, numParticles, 0);
     cudaDeviceSynchronize();
     cudaCheckError();
@@ -110,9 +110,6 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackF
         #endif
 
         logNormConstant += logWeightSum - log(numParticles);
-        if(particles.pcs[0] >= numBblocks) // Assumption: All terminate at the same time
-            break;
-
         
         #ifdef GPU
         resampleSystematicPar<T>(particles, resampler, numParticles, NUM_BLOCKS);
@@ -120,6 +117,9 @@ double runSMC(pplFunc_t<T>* bblocks, int numBblocks, int numParticles, callbackF
         resampleSystematicSeq<T>(particles, resampler, numParticles);
         #endif
         
+        // This last resample increases variance perhaps? But convenient to not have to consider weights when extracting distribution. 
+        if(particles.pcs[0] >= numBblocks) // Assumption: All terminate at the same time
+            break;
         
     }
     // cudaProfilerStop();

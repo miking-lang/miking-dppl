@@ -2,7 +2,7 @@
 #define MISC_INCLUDED
 
 /*
- * File misc.cuh contains some helper functions of various kinds. 
+ * File misc.cuh contains helper functions of various kinds. 
  */
 
 #include <iostream>
@@ -10,6 +10,10 @@
 #include <cstring>
 #include <bits/stdc++.h> 
 #include <math.h>
+#include <limits> 
+#include <sstream>
+
+#include "math.cuh"
 
 using namespace std;
 
@@ -40,49 +44,6 @@ void freeMemory(T* pointer) {
     #else
     delete[] pointer;
     #endif
-}
-
-/**
- * Calculates the log factorial of the integer input. 
- * 
- * @param n the input value. 
- */
-HOST DEV double lnFactorial(int n) {
-    if(n == 1) {
-        return 0.0;
-    } else {
-        return log(static_cast<double>(n)) + lnFactorial(n-1);
-    }
-}
-
-/**
- * Calculates the sum of the array of type T. 
- * 
- * @param arr array of type T.
- * @param n number of elements in arr.
- * @return the sum of the elements of the array. 
- */
-template <typename T>
-HOST DEV T sumArray(T* arr, int n) {
-    T sum = 0;
-    for (int i = 0; i < n; i++)
-        sum += arr[i];
-    return sum;
-}
-
-/**
- * Normalizes the array of type T. 
- * 
- * @param arr array of type T.
- * @param n number of elements in arr.
- */
-template <typename T>
-HOST DEV void normalizeArray(T* arr, int n) {
-    floating_t sum = 0;
-    for (int i = 0; i < n; i++)
-        sum += arr[i];
-    for (int i = 0; i < n; i++)
-        arr[i] /= sum;
 }
 
 /**
@@ -128,101 +89,106 @@ DEV void printArrayI(int* arr, int n) {
     printf("]\n");
 }
 
+HOST DEV void calculateFrequencies(int* arr, int n, int maxVal, int* ret) {
+    for(int i = 0; i < maxVal; i++)
+        ret[i] = 0;
+
+    for(int i = 0; i < n; i++) {
+        int val = arr[i];
+        if(val < maxVal)
+            ret[val]++;
+    }
+}
+
+template <typename T>
+string to_string_with_precision(const T a_value, const int n = 6) {
+    ostringstream out;
+    out.precision(n);
+    out << fixed << a_value;
+    return out.str();
+}
+
+template <typename T>
+void printStars(int* freqs, int n, T minVal=0, T intervalSize=1) {
+    for(int i = 0; i < n; i++) {
+        if(is_same<T, int>::value) {
+            string str;
+            if(intervalSize == 1)
+                str = to_string(minVal + i);
+            else 
+                str = to_string(minVal + i * intervalSize);
+            cout << setw(10) << str;
+        } else {
+            string str = "[" + to_string_with_precision(minVal + intervalSize * static_cast<T>(i), 2) + " - " + to_string_with_precision(minVal + (intervalSize) * static_cast<T>(i + 1), 2) + "): ";
+            cout << setw(20) << str;
+        }
+        // cout << setw(10) << "[" << minVal + intervalSize * static_cast<T>(i) << " - " <<  minVal + intervalSize+ 1 * static_cast<T>(i) << "): ";
+        // printf("%f: ", minVal + intervalSize * i);
+        for(int j = 0; j < freqs[i]; j++)
+            printf("*");
+        printf("\n");
+    }
+}
+
+void printNormalizedFrequencies(int* arr, int n, int maxVal, int* ret) {
+    calculateFrequencies(arr, n, maxVal, ret);
+    floating_t arrF[maxVal];
+    for(int i = 0; i < maxVal; i++)
+        arrF[i] = ret[i];
+    normalizeArray<floating_t>(arrF, maxVal);
+    for(int i = 0; i < maxVal; i++)
+        ret[i] = (int)(arrF[i] * 100);
+    printArray<int>(ret, 10);
+    printStars<int>(ret, 10);
+}
+
+
 /**
- * Calculates the sign of the argument. 
- * 
- * @param val value of type which can be compared. 
- * @return the sign of val. -1 if it is negative, 0 if it is 0, 1 if it is positive. 
+ * Calculates and prints a horizontal histogram of the data provided.
+ * Prints to stdout. 
+ *
+ * @param arr the array containing the numeric data
+ * @param n the number of elements in arr
+ * @param numBins the number of groups to divide the data into and calculate frequencies for
+ * @param minVal the minimum value to consider.
+ * @param maxVal the maximum value to consider. 
  */
 template <typename T>
-HOST DEV int sgn(T val) {
-    return (T(0) < val) - (val < T(0));
-}
-
-/**
- * Finds the maximum value, sequential implementation. 
- * 
- * @param arr floating point array.
- * @param n number of elements in arr.
- * @return the maximum value. 
- */
-HOST DEV floating_t maxNaive(const floating_t* arr, const int n) {
-    floating_t maxVal = -INFINITY;
-    for(int i = 0; i < n; i++) {
-        maxVal = arr[i] >= maxVal ? arr[i] : maxVal;
-    }
-    return maxVal;
-}
-
-/**
- * Does a Cholesky Decomposition of the matrix. This is used when generating multi-variate gaussian RVs. 
- * 
- * @param matrix the square matrix of size n to be decomposed. 
- * @param lower the square matrix of size n that will be filled with the result. 
- */
-template <size_t n>
-HOST DEV void choleskyDecomposition(floating_t (&matrix)[n][n], floating_t (&lower)[n][n]) {
-    memset(lower, 0, sizeof(floating_t) * n * n); 
-
-    // Decomposing a matrix into Lower Triangular 
-    for (int i = 0; i < n; i++) { 
-        for (int j = 0; j <= i; j++) { 
-            floating_t sum = 0; 
-
-            if (j == i) { // summation for diagonals  
-                for (int k = 0; k < j; k++) 
-                    sum += pow(lower[j][k], 2); 
-                lower[j][j] = sqrt(matrix[j][j] - sum); 
-            } else { 
-
-                // Evaluating L(i, j) using L(j, j) 
-                for (int k = 0; k < j; k++) 
-                    sum += (lower[i][k] * lower[j][k]); 
-                lower[i][j] = (matrix[i][j] - sum) / lower[j][j]; 
-            } 
-        }
-    } 
-
-} 
-
-/**
- * Performs a matrix multiplication of matrices A and B and stores the results in matrix C.
- * Template arguments a, b and c defines the sizes of the matrices. 
- * 
- * @param A the first input matrix
- * @param B the second input matrix
- * @param C the output matrix
- */
-template <size_t a, size_t b, size_t c>
-HOST DEV void matmul(floating_t A[a][b], floating_t B[b][c], floating_t C[a][c]) {
-
-    for(int i = 0; i < a; i++)
-        for(int j = 0; j < c; j++)
-            C[i][j] = 0;
-
-    for(int i = 0; i < a; i++)
-        for(int j = 0; j < c; j++)
-            for(int k = 0; k < b; k++)
-                C[i][j] += A[i][k] * B[k][j];
-
-}
-
-/**
- * Linearly transforms a column. Used when generating multi-variate gaussian RVs. 
- * 
- * @param A the transformation matrix that will be multiplied with the column. 
- * @param col the column to be transformed
- * @param toAdd the column of values to be added to the column. 
- * @param C the output, the transformed column. 
- */
-template <size_t a, size_t b>
-HOST DEV void transformColumn(floating_t A[a][b], floating_t col[b], floating_t toAdd[a], floating_t C[a]) {
+void printHistogram(T* arr, int n, int numBins, T minVal, T maxVal) {
     
-    for(int i = 0; i < a; i++) {
-        C[i] = toAdd[i];
-        for(int k = 0; k < b; k++)
-            C[i] += A[i][k] * col[k];
+    // int bins[numBins] = {0};
+    int* bins = (int*)malloc(sizeof(int) * numBins);
+    for(int i = 0; i < numBins; i++)
+        bins[i] = 0;
+
+    T intervalSize = ceil(static_cast<floating_t>((maxVal - minVal + 1)) / numBins);
+    cout << "IntervalSize: " << intervalSize << endl;
+
+    for(int i = 0; i < n; i++) {
+        int bin = 0;
+        floating_t acc = minVal;
+        while(acc < arr[i]) {
+            bin++;
+            acc += intervalSize;
+        }
+        bins[bin]++;
     }
+
+    for(int b = 0; b < numBins; b++) {
+        bins[b] = bins[b] * 100 / n;
+    }
+
+    printStars<T>(bins, numBins, minVal, intervalSize);
+
+    free(bins);
+}
+
+template <typename T>
+void printHistogram(T* arr, int n, int numBins=10) {
+    T minVal = minNaiveCPU<T>(arr, n);
+    T maxVal = maxNaiveCPU<T>(arr, n);
+
+    printHistogram<T>(arr, n, numBins, minVal, maxVal);
 }
 
 #endif

@@ -25,6 +25,7 @@ const double PI = 3.1415926535897932384626433832795028841971693993751;
 
 #include "inference/smc/smc.cuh"
 #include "utils/misc.cuh"
+#include "utils/math.cuh"
 
 // Define the CPU generator and primitives, and initializes the generator state. 
 default_random_engine generatorDists;

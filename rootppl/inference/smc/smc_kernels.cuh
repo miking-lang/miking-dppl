@@ -39,7 +39,7 @@ __global__ void initCurandStates(curandState* randStates, int numParticles, int 
  * @param arg argument that are passed to the bblocks when invoking them, often not used and set to NULL. 
  */
 template <typename T>
-__global__ void execFuncs(curandState* randStates, particles_t<T> particles, pplFunc_t<T>* funcs, int numParticles, void* arg) {
+__global__ void execFuncs(curandState* randStates, particles_t<T> particles, const pplFunc_t<T>* funcs, int numParticles, void* arg) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if(i >= numParticles || i < 0) return;
 

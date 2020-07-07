@@ -189,9 +189,9 @@ BBLOCK(simCRBD, progState_t, {
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
 
-    // double survivalRate = runNestedInference<double>(RAND_STATE_ACCESS i);
+    double survivalRate = runNestedInference<double>(RAND_STATE i);
 
-    // WEIGHT(-2.0 * log(survivalRate));
+    WEIGHT(-2.0 * log(survivalRate));
 
     PC++;
     // PC = 2;

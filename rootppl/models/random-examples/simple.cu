@@ -24,8 +24,6 @@ INIT_MODEL(floating_t, 2) // Change name of this?
  */
 BBLOCK(init, {
     PSTATE = SAMPLE(normal, 0.0, 100);
-    if(PSTATE > 0)
-        WEIGHT(log(0.5));
     PC++;
 })
 
