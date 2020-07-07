@@ -20,7 +20,6 @@
 // Allocate data on host and device, should be followed by a COPY_DATA_GPU call before inference
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];\
 __constant__ type pointerName ## Dev[n];
-// __device__ type pointerName ## Dev[n];
 
 // Same as BBLOCK_DATA, but 2D-array
 #define BBLOCK_DATA_2D(pointerName, type, n, m) type pointerName[n][m];\
@@ -45,9 +44,6 @@ __device__ type* pointerName ## Dev;
 
 // Used when declaring dists working on both CPU and GPU, assumes dist has at least one more parameter
 #define RAND_STATE_DECLARE curandState* randState,
-
-// Used when calling SAMPLE from dists working on both CPU and GPU since they rely on other dists only, assumes dist has at least one more parameter
-// #define RAND_STATE_ACCESS randState,
 
 // Used in SAMPLE macro to provide the CUDA random generating state to the function call, assumes at least one more argument follows
 #define RAND_STATE randState,

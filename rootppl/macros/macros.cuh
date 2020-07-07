@@ -7,11 +7,12 @@
  * 
  * Short summary of how some of the most fundamental macros are used in models:
  *
- * - INIT_GLOBAL (mandatory) will set up globally accessible bblocks, takes number of bblocks as argument
+ * - INIT_MODEL (mandatory) will set up globally accessible bblocks, takes the program state type and the number of bblocks as argument
  * - BBLOCK_DATA (optional) will set up globally accessible data
+ * - BBLOCK will set up function that define the model together with other BBLOCK:s. 
  * - MAIN will set up main function and some necessary variables. 
- * - INIT_BBLOCK with BBLOCK function (defined with BBLOCK macro) and programState type as arguments for each BBLOCK
- * - SMC with program state type and callback as arguments to start inference
+ * - INIT_BBLOCK with BBLOCK function (defined with BBLOCK macro) as argument for each BBLOCK
+ * - SMC with callback as argument to start inference
  * - Result (currently only normalizationConstant) available through local variable "res" in MAIN
  */
 
@@ -29,14 +30,16 @@
 // To be able to switch between single and double precision easily.
 typedef double floating_t; 
 
-
+// Used to achieve parameter overloading in macros
 #define GET_MACRO(_1, _2, _3, NAME,...) NAME
 
-// Sets up globally accessible bblock array, that can be accessed from the bblocks.
-#define INIT_GLOBAL(progStateType, numBblocks) \
+// Sets up globally accessible bblock array, that can be accessed from the bblocks, and defines the type used in the model.
+#define INIT_MODEL(progStateType, numBblocks) \
 BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
-int bbIdx = 0; \
 typedef progStateType progStateTypeTopLevel_t;
+
+
+/***    BBLOCKS    ***/
 
 // Used by BBLOCK, BBLOCK_HELPER and BBLOCK_CALL macros.
 #define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>& particles, int i
@@ -68,6 +71,36 @@ body
 
 // Call functions that takes the particles as argument (syntactic sugar).
 #define BBLOCK_CALL(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)
+/***    *****    ***/
+
+
+/***    Access particles from BBLOCKS    ***/
+
+// Add log-weight to the particle.
+#define WEIGHT(w) particles.weights[i] += w
+
+// Access particle program counter (bblock index).
+#define PC particles.pcs[i]
+
+// Access the particle's program/model specific state.
+#define PSTATE particles.progStates[i]
+/***    *****    ***/
+
+
+// Main function with default number of particles, prints the normalization constant.
+#define MAIN(body) \
+int main(int argc, char** argv) { \
+    int numParticles = 10000; \
+    if(argc > 1) { \
+        numParticles = atoi(argv[1]); \
+    } \
+    initGen(); \
+    int bbIdx = 0; \
+    double res = 0; \
+    body \
+    cout << "log(normalizationConstant) = " << res << endl; \
+    return 0; \
+}
 
 // Functions that can be called from the framework, usually to use resulting particle distributions before clean up.
 #define CALLBACK(funcName, body) void funcName(particles_t<progStateTypeTopLevel_t>& particles, int N, void* arg=NULL) body
@@ -90,10 +123,10 @@ bbIdx++;
 // Same as above, but for nested inference.
 #define INIT_BBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
 
-// Samples from distributions, which should all take the curandState as argument first if on GPU.
+// Samples from distributions, which should all take the curandState as argument first if compiled for GPU.
 #define SAMPLE(distName, ...) distName(RAND_STATE __VA_ARGS__ )
 
-// Run SMC with given program state type (mandatory) and callback function (optional, can be declared with CALLBACK macro).
+// Run SMC with callback function (optional, can be declared with CALLBACK macro).
 #define SMC(callback) \
 int numBblocks = bbIdx; \
 configureMemSizeGPU(numParticles); \
@@ -106,12 +139,12 @@ res = runSMC<progStateTypeTopLevel_t>(bblocksArrCudaManaged, numBblocks, numPart
 freeMemory<pplFunc_t<progStateTypeTopLevel_t>>(bblocksArrCudaManaged);
 
 
+
+
 // Prepare bblock array for initialization of bblocks, for nested inference only.
 #define SMC_PREPARE_NESTED(progStateType, numBblocks) \
 pplFunc_t<progStateType>* bblocks = new pplFunc_t<progStateType>[numBblocks]; /*{}*/ \
 int bbIdx = 0;
-
-
 
 /* 
 Run the nested inference with arguments:
@@ -129,33 +162,6 @@ int numBblocks = bbIdx; \
 double res = runSMCNested<progStateType>(RAND_STATE bblocks, numBblocks, numParticles, \
     parallelExec, parallelResampling, parentIndex, callback, (void*)&retStruct, (void*)arg); \
 delete[] bblocks;
-
-// Add log-weight to the particle.
-#define WEIGHT(w) particles.weights[i] += w
-
-// Access particle weight.
-#define PWEIGHT particles.weights[i]
-
-// Access particle program counter (bblock index).
-#define PC particles.pcs[i]
-
-// Access the particle's program/model specific state.
-#define PSTATE particles.progStates[i]
-
-// Main function with default number of particles, prints the normalization constant.
-#define MAIN(body) \
-int main(int argc, char** argv) { \
-    int numParticles = 10000; \
-    if(argc > 1) { \
-        numParticles = atoi(argv[1]); \
-    } \
-    initGen(); \
-    double res = 0; \
-    body \
-    cout << "log(normalizationConstant) = " << res << endl; \
-    return 0; \
-}
-
 
 /* MCMC, work in progress */
 #define MCMCSTART(progStateType) arr100_t<pplFunc_t<progStateType>> bblocks;

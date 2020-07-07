@@ -17,7 +17,7 @@ g++ -x c++ -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++11 -O3
 */
 
 #define NUM_BBLOCKS 5
-INIT_GLOBAL(pStack_t, NUM_BBLOCKS)
+INIT_MODEL(pStack_t, NUM_BBLOCKS)
 
 typedef primate_tree_t tree_t;
 BBLOCK_DATA(tree, tree_t, 1)

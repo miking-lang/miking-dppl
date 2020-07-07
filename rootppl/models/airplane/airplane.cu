@@ -21,7 +21,7 @@ g++ -x c++ -I . models/airplane/airplane.cu -o smc.exe -std=c++11 -O3
 using namespace std;
 
 #define NUM_BBLOCKS 2
-INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 floating_t planeX[TIME_STEPS];
 

@@ -17,13 +17,19 @@ g++ -x c++ -I . models/random-examples/simple.cu -o smc.exe -std=c++11 -O3
  * First argument is the program state, second argument is 
  * the number of BBLOCKS in the model. 
  */
-INIT_GLOBAL(floating_t, 1) // Change name of this?
+INIT_MODEL(floating_t, 2) // Change name of this?
  
 /*
  * Define BBLOCK (fragment of model)
  */
 BBLOCK(init, {
     PSTATE = SAMPLE(normal, 0.0, 100);
+    if(PSTATE > 0)
+        WEIGHT(log(0.5));
+    PC++;
+})
+
+BBLOCK(next, {
     PC++;
 })
  
@@ -40,6 +46,7 @@ CALLBACK(callback, {
 
 MAIN({
     INIT_BBLOCK(init);
+    INIT_BBLOCK(next);
 
     SMC(callback);
 })

@@ -25,7 +25,7 @@ g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
 */
 
 #define NUM_BBLOCKS 3
-INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 #define MIN(a, b) a <= b ? a : b
 #define MAX(a, b) a >= b ? a : b

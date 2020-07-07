@@ -48,7 +48,7 @@ const int MAX_DIV = 5;
 const int MAX_LAM = 5;
 
 #define NUM_BBLOCKS 3
-INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 BBLOCK_DATA(tree, tree_t, 1)
 

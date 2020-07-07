@@ -15,7 +15,7 @@ struct progState_t {
 };
 
 #define NUM_BBLOCKS 1
-INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 BBLOCK(test, progState_t, {
 

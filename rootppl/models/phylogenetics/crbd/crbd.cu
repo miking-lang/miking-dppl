@@ -33,7 +33,7 @@ typedef double return_t;
 
 
 #define NUM_BBLOCKS 2
-INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t, NUM_BBLOCKS)
 #define NUM_BBLOCKS_NESTED 1
 
 typedef primate_tree_t tree_t;
