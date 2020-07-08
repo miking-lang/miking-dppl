@@ -33,6 +33,7 @@ template <typename T>
 HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t<T> resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
     floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
+    // floating_t maxLogWeight = maxNaive(w, numParticles);
     
     expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight);
 

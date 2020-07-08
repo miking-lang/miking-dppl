@@ -114,17 +114,17 @@ Initialize the basic block (add it to the array of bblocks), the order of bblock
 The first bblock to be initialized will be the first to be executed, then the execution follows the
 index (PC) specified by the model (bblocks).
 */
-#define INIT_BBLOCK_DEF(funcName, progStateType) \
+#define ADD_BBLOCK_DEF(funcName, progStateType) \
 pplFunc_t<progStateType> funcName ## Host; \
 FUN_REF(funcName, progStateType) \
 bblocksArr[bbIdx] = funcName ## Host; \
 bbIdx++;
 // Handles parameter overloading
-#define INIT_BBLOCK(...) GET_MACRO(__VA_ARGS__, 0, INIT_BBLOCK_DEF, INIT_BBLOCK_NOTYPE)(__VA_ARGS__)
-#define INIT_BBLOCK_NOTYPE(funcName) INIT_BBLOCK_DEF(funcName, progStateTypeTopLevel_t)
+#define ADD_BBLOCK(...) GET_MACRO(__VA_ARGS__, 0, ADD_BBLOCK_DEF, ADD_BBLOCK_NOTYPE)(__VA_ARGS__)
+#define ADD_BBLOCK_NOTYPE(funcName) ADD_BBLOCK_DEF(funcName, progStateTypeTopLevel_t)
 
 // Same as above, but for nested inference.
-#define INIT_BBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
+#define ADD_BBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
 
 // Samples from distributions, which should all take the curandState as argument first if compiled for GPU.
 #define SAMPLE(distName, ...) distName(RAND_STATE __VA_ARGS__ )

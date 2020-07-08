@@ -70,8 +70,8 @@ MAIN({
 
     COPY_DATA_GPU(data, floating_t, NUM_OBS);
 
-    INIT_BBLOCK(init, progState_t);
-    INIT_BBLOCK(lgss, progState_t);
+    ADD_BBLOCK(init, progState_t);
+    ADD_BBLOCK(lgss, progState_t);
 
     SMC(progState_t, callback);
 })

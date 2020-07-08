@@ -183,11 +183,11 @@ BBLOCK(condBD_init, {
 
 MAIN(
 
-    INIT_BBLOCK(condBD_init)
-    INIT_BBLOCK(condBD_1)
-    INIT_BBLOCK(condBD_2)
-    INIT_BBLOCK(condBD_3)
-    INIT_BBLOCK(condBD_4)
+    ADD_BBLOCK(condBD_init)
+    ADD_BBLOCK(condBD_1)
+    ADD_BBLOCK(condBD_2)
+    ADD_BBLOCK(condBD_3)
+    ADD_BBLOCK(condBD_4)
 
     SMC(NULL)
 )

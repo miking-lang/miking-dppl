@@ -37,10 +37,12 @@ g++ -x c++ -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++11 -
 
 typedef short treeIdx_t;
 struct progState_t {
+    floating_t lambda;
+    floating_t mu;
     treeIdx_t treeIdx;
 };
-// typedef bisse32_tree_t tree_t;
-typedef primate_tree_t tree_t;
+typedef bisse32_tree_t tree_t;
+// typedef primate_tree_t tree_t;
 
 BBLOCK_HELPER_DECLARE(crbdGoesUndetected, progState_t, bool);
 
@@ -52,21 +54,21 @@ INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 BBLOCK_DATA(tree, tree_t, 1)
 
-BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
-BBLOCK_DATA(mu, floating_t, 1)
+// BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
+// BBLOCK_DATA(mu, floating_t, 1)
 BBLOCK_DATA(rho, floating_t, 1)
 
 
 void initCBD() {
-    // lambda ~ gamma( 1.0, 1.0 )
-    // mu     ~ gamma( 1.0, 1.0 )
-    *lambda = 0.2; // birth rate
-    *mu = 0.1; // death rate
+    // lambda = SAMPLE(gamma, 1.0, 1.0);
+    // *mu = SAMPLE();
+    // *lambda = 0.2; // birth rate
+    // *mu = 0.1; // death rate
     *rho = 1.0;
 
     // COPY_DATA_GPU(tree, tree_t, 1)
-    COPY_DATA_GPU(lambda, floating_t, 1)
-    COPY_DATA_GPU(mu, floating_t, 1)
+    // COPY_DATA_GPU(lambda, floating_t, 1)
+    // COPY_DATA_GPU(mu, floating_t, 1)
     COPY_DATA_GPU(rho, floating_t, 1)
 
 }
@@ -87,8 +89,11 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
 
 BBLOCK_HELPER(crbdGoesUndetected, {
 
-    floating_t lambdaLocal = *DATA_POINTER(lambda);
-    floating_t muLocal = *DATA_POINTER(mu);
+    // floating_t lambdaLocal = *DATA_POINTER(lambda);
+    // floating_t muLocal = *DATA_POINTER(mu);
+    floating_t lambdaLocal = PSTATE.lambda;
+    floating_t muLocal = PSTATE.mu;
+
     floating_t rhoLocal = *DATA_POINTER(rho);
 
     // extreme values patch 1/2
@@ -123,7 +128,8 @@ BBLOCK_HELPER(crbdGoesUndetected, {
 
 BBLOCK_HELPER(simBranch, {
 
-    floating_t lambdaLocal = *DATA_POINTER(lambda);
+    // floating_t lambdaLocal = *DATA_POINTER(lambda);
+    floating_t lambdaLocal = PSTATE.lambda;
 
     // extreme values patch 2/2
 	if (lambdaLocal > MAX_LAM) {
@@ -163,11 +169,11 @@ BBLOCK(simTree, {
     floating_t parentAge = treeP->ages[indexParent];
     floating_t age = treeP->ages[treeIdx];
 
-    floating_t lnProb1 = - (*DATA_POINTER(mu)) * (parentAge - age);
+    floating_t lnProb1 = - PSTATE.mu * (parentAge - age);
 
     // Interior if at least one child
     bool interiorNode = treeP->idxLeft[treeIdx] != -1 || treeP->idxRight[treeIdx] != -1;
-    floating_t lnProb2 = interiorNode ? log(*DATA_POINTER(lambda)) : log(*DATA_POINTER(rho));
+    floating_t lnProb2 = interiorNode ? log(PSTATE.lambda) : log(*DATA_POINTER(rho));
 
     floating_t lnProb3 = BBLOCK_CALL(simBranch<progState_t>, parentAge, age);
 
@@ -186,6 +192,10 @@ BBLOCK(simTree, {
 
 
 BBLOCK(simCRBD, {
+
+    PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
+    floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
+    PSTATE.mu = epsilon * PSTATE.lambda;
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -211,9 +221,9 @@ BBLOCK(survivorshipBias, {
 MAIN(
     initCBD();
     
-    INIT_BBLOCK(simCRBD)
-    INIT_BBLOCK(simTree)
-    INIT_BBLOCK(survivorshipBias)
+    ADD_BBLOCK(simCRBD)
+    ADD_BBLOCK(simTree)
+    ADD_BBLOCK(survivorshipBias)
 
     SMC(NULL)
 )

@@ -270,9 +270,9 @@ CALLBACK(callback, {
 MAIN({
     initGen();
 
-    INIT_BBLOCK(simBAMM)
-    INIT_BBLOCK(simTree)
-    INIT_BBLOCK(survivorshipBias)
+    ADD_BBLOCK(simBAMM)
+    ADD_BBLOCK(simTree)
+    ADD_BBLOCK(survivorshipBias)
 
     SMC(callback)
 })

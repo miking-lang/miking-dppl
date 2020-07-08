@@ -44,7 +44,7 @@ DEV T runNestedInference(particles_t<progState_t>* particles, int i, pplFunc_t<p
 
     SMC_PREPARE_NESTED(progState_t, NUM_BBLOCKS_NESTED)
 
-    INIT_BBLOCK_NESTED(bblock, progState_t)
+    ADD_BBLOCK_NESTED(bblock, progState_t)
 
     unsigned long long seed = static_cast<unsigned long long>(SAMPLE(uniform, 0 ,1) * ULLONG_MAX);
     // int seed = i;
@@ -95,9 +95,9 @@ MAIN({
 
     initGen();
 
-    INIT_BBLOCK(normal2)
-    // INIT_BBLOCK(normal4, progState_t)
-    // INIT_BBLOCK(normal8, progState_t)
+    ADD_BBLOCK(normal2)
+    // ADD_BBLOCK(normal4, progState_t)
+    // ADD_BBLOCK(normal8, progState_t)
 
     SMC(callback)
 

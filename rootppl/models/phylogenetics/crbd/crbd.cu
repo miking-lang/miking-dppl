@@ -175,7 +175,7 @@ DEV T runNestedInference(RAND_STATE_DECLARE int parentIndex) {
 
     SMC_PREPARE_NESTED(nestedProgState_t, NUM_BBLOCKS_NESTED)
 
-    INIT_BBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
+    ADD_BBLOCK_NESTED(goesExtinctBblock, nestedProgState_t)
     
     SMC_NESTED(nestedProgState_t, 100, parallelExec, parallelResampling, parentIndex, calcResult, ret, NULL)
 
@@ -202,8 +202,8 @@ BBLOCK(simCRBD, progState_t, {
 MAIN(
     initCBD();
     
-    INIT_BBLOCK(simCRBD, progState_t)
-    INIT_BBLOCK(simTree, progState_t)
+    ADD_BBLOCK(simCRBD, progState_t)
+    ADD_BBLOCK(simTree, progState_t)
 
     SMC(NULL)
 

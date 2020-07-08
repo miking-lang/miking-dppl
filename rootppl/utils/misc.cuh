@@ -89,6 +89,50 @@ DEV void printArrayI(int* arr, int n) {
     printf("]\n");
 }
 
+/**
+ * Prints the value with a given precision.  
+ *
+ * @param val the value to stringify
+ * @param n the precision, corresponds to number of decimals for floating points. 
+ */
+template <typename T>
+string to_string_with_precision(const T val, const int n=6) {
+    ostringstream out;
+    out.precision(n);
+    out << fixed << val;
+    return out.str();
+}
+
+
+/**
+ * Prints rows of stars according to the numbers in the given array. 
+ *
+ * @param freqs the array containing the star frequencies. 
+ * @param n the number of elements in freqs.
+ * @param minVal the starting value for row titles.
+ * @param intervalSize the stepsize for row title increments. 
+ */
+template <typename T>
+void printStars(int* freqs, int n, T minVal=0, T intervalSize=1) {
+    for(int i = 0; i < n; i++) {
+        if(is_same<T, int>::value) {
+            string str;
+            if(intervalSize == 1)
+                str = to_string(minVal + i) + ": ";
+            else 
+                str = "[" + to_string(minVal + i * intervalSize) + " - " + to_string(minVal + (i + 1) * (intervalSize) - 1) + "]: ";
+            cout << setw(15) << str;
+        } else {
+            string str = "[" + to_string_with_precision(minVal + intervalSize * static_cast<T>(i), 2) + " - " + to_string_with_precision(minVal + (intervalSize) * static_cast<T>(i + 1), 2) + "): ";
+            cout << setw(20) << str;
+        }
+        for(int j = 0; j < freqs[i]; j++)
+            printf("*");
+        printf("\n");
+    }
+}
+
+/*
 HOST DEV void calculateFrequencies(int* arr, int n, int maxVal, int* ret) {
     for(int i = 0; i < maxVal; i++)
         ret[i] = 0;
@@ -97,36 +141,6 @@ HOST DEV void calculateFrequencies(int* arr, int n, int maxVal, int* ret) {
         int val = arr[i];
         if(val < maxVal)
             ret[val]++;
-    }
-}
-
-template <typename T>
-string to_string_with_precision(const T a_value, const int n = 6) {
-    ostringstream out;
-    out.precision(n);
-    out << fixed << a_value;
-    return out.str();
-}
-
-template <typename T>
-void printStars(int* freqs, int n, T minVal=0, T intervalSize=1) {
-    for(int i = 0; i < n; i++) {
-        if(is_same<T, int>::value) {
-            string str;
-            if(intervalSize == 1)
-                str = to_string(minVal + i);
-            else 
-                str = to_string(minVal + i * intervalSize);
-            cout << setw(10) << str;
-        } else {
-            string str = "[" + to_string_with_precision(minVal + intervalSize * static_cast<T>(i), 2) + " - " + to_string_with_precision(minVal + (intervalSize) * static_cast<T>(i + 1), 2) + "): ";
-            cout << setw(20) << str;
-        }
-        // cout << setw(10) << "[" << minVal + intervalSize * static_cast<T>(i) << " - " <<  minVal + intervalSize+ 1 * static_cast<T>(i) << "): ";
-        // printf("%f: ", minVal + intervalSize * i);
-        for(int j = 0; j < freqs[i]; j++)
-            printf("*");
-        printf("\n");
     }
 }
 
@@ -141,41 +155,44 @@ void printNormalizedFrequencies(int* arr, int n, int maxVal, int* ret) {
     printArray<int>(ret, 10);
     printStars<int>(ret, 10);
 }
+*/
 
 
 /**
  * Calculates and prints a horizontal histogram of the data provided.
- * Prints to stdout. 
+ * Prints to stdout. Not very thoroughly tested!
  *
- * @param arr the array containing the numeric data
- * @param n the number of elements in arr
- * @param numBins the number of groups to divide the data into and calculate frequencies for
+ * @param arr the array containing the numeric data.
+ * @param n the number of elements in arr.
+ * @param numBins the number of groups to divide the data into and calculate frequencies for.
  * @param minVal the minimum value to consider.
  * @param maxVal the maximum value to consider. 
  */
 template <typename T>
 void printHistogram(T* arr, int n, int numBins, T minVal, T maxVal) {
     
-    // int bins[numBins] = {0};
     int* bins = (int*)malloc(sizeof(int) * numBins);
     for(int i = 0; i < numBins; i++)
         bins[i] = 0;
 
-    T intervalSize = ceil(static_cast<floating_t>((maxVal - minVal + 1)) / numBins);
-    cout << "IntervalSize: " << intervalSize << endl;
+    T intervalSize;
+    if(is_same<T, int>::value)
+        intervalSize = ceil(static_cast<floating_t>((maxVal - minVal + 1)) / numBins);
+    else
+        intervalSize = static_cast<floating_t>((maxVal - minVal)) / numBins;
 
     for(int i = 0; i < n; i++) {
-        int bin = 0;
-        floating_t acc = minVal;
-        while(acc < arr[i]) {
-            bin++;
-            acc += intervalSize;
-        }
+        int bin = (arr[i] - minVal) / intervalSize;
+        // bin = bin >= numBins ? numBins - 1 : bin;
+        // bin = bin < 0 ? 0 : bin;
+        if(bin < 0 || bin >= numBins)
+            continue;
+
         bins[bin]++;
     }
 
     for(int b = 0; b < numBins; b++) {
-        bins[b] = bins[b] * 100 / n;
+        bins[b] = bins[b] * numBins * 10 / n;
     }
 
     printStars<T>(bins, numBins, minVal, intervalSize);
@@ -183,6 +200,15 @@ void printHistogram(T* arr, int n, int numBins, T minVal, T maxVal) {
     free(bins);
 }
 
+/**
+ * Calculates and prints a horizontal histogram of the data provided.
+ * Prints to stdout. Calculates the min and max values in the data and 
+ * that data range into intervals.
+ *
+ * @param arr the array containing the numeric data.
+ * @param n the number of elements in arr.
+ * @param numBins the number of groups to divide the data into and calculate frequencies for.
+ */
 template <typename T>
 void printHistogram(T* arr, int n, int numBins=10) {
     T minVal = minNaiveCPU<T>(arr, n);

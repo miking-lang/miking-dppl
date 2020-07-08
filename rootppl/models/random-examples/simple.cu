@@ -43,8 +43,8 @@ CALLBACK(callback, {
 })
 
 MAIN({
-    INIT_BBLOCK(init);
-    INIT_BBLOCK(next);
+    ADD_BBLOCK(init);
+    ADD_BBLOCK(next);
 
     SMC(callback);
 })

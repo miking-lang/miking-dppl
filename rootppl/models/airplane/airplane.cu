@@ -83,8 +83,8 @@ CALLBACK(callback, {
 MAIN(
     initAirplane();
 
-    INIT_BBLOCK(particleInit)
-    INIT_BBLOCK(propagateAndWeight)
+    ADD_BBLOCK(particleInit)
+    ADD_BBLOCK(propagateAndWeight)
 
     SMC(callback)
 )

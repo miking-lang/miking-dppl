@@ -109,7 +109,7 @@ CALLBACK(resFunc, progState_t, {
 
 
 MAIN(
-    INIT_BBLOCK(test, progState_t)
+    ADD_BBLOCK(test, progState_t)
 
     SMC(progState_t, resFunc)
 )
