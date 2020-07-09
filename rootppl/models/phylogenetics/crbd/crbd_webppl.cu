@@ -41,8 +41,8 @@ struct progState_t {
     floating_t mu;
     treeIdx_t treeIdx;
 };
-typedef bisse32_tree_t tree_t;
-// typedef primate_tree_t tree_t;
+// typedef bisse32_tree_t tree_t;
+typedef primate_tree_t tree_t;
 
 BBLOCK_HELPER_DECLARE(crbdGoesUndetected, progState_t, bool);
 
@@ -77,20 +77,26 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
 
     if(max_M == 0) {
         printf("Aborting crbdGoesUndetected simulation, too deep!\n");
-        return 0; // What do return instead of NaN?
+        return 1; // What do return instead of NaN?
     }
 
-    if(! BBLOCK_CALL(crbdGoesUndetected<T>, startTime) && ! BBLOCK_CALL(crbdGoesUndetected<T>, startTime))
+    // if(max_M < 9400)
+        // printf("Max_M: %d\n", max_M);
+    int numRecursions = 1;
+    while(BBLOCK_CALL(crbdGoesUndetected<T>, startTime) || BBLOCK_CALL(crbdGoesUndetected<T>, startTime)) {
+        numRecursions++;
+    }
+    return numRecursions;
+
+    /*if(! BBLOCK_CALL(crbdGoesUndetected<T>, startTime) && ! BBLOCK_CALL(crbdGoesUndetected<T>, startTime))
         return 1;
     else
-        return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, max_M - 1);
+        return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, max_M - 1);*/
 
 }, int, floating_t startTime, int max_M)
 
 BBLOCK_HELPER(crbdGoesUndetected, {
 
-    // floating_t lambdaLocal = *DATA_POINTER(lambda);
-    // floating_t muLocal = *DATA_POINTER(mu);
     floating_t lambdaLocal = PSTATE.lambda;
     floating_t muLocal = PSTATE.mu;
 
@@ -211,6 +217,7 @@ BBLOCK(simCRBD, {
 BBLOCK(survivorshipBias, {
     // Survivorship Bias, is done after simCRBD
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
+    // int MAX_M = 10000;
     int MAX_M = 10000;
     int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M);
     WEIGHT(log(static_cast<floating_t>(M)));
