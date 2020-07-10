@@ -28,9 +28,9 @@ const double PI = 3.1415926535897932384626433832795028841971693993751;
 #include "utils/math.cuh"
 
 // Define the CPU generator and primitives, and initializes the generator state. 
-default_random_engine generatorDists;
-uniform_real_distribution<floating_t> uniformDist(0.0, 1.0);
-normal_distribution<floating_t> normalDist(0, 1);
+std::default_random_engine generatorDists;
+std::uniform_real_distribution<floating_t> uniformDist(0.0, 1.0);
+std::normal_distribution<floating_t> normalDist(0, 1);
 void initGen() {
     generatorDists.seed(time(NULL));
 }

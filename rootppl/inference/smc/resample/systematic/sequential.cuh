@@ -5,7 +5,6 @@
  * File sequential.cuh contains the sequential implementation of the systematic resampling. 
  */
 
-
 #include "common.cuh"
 
 
@@ -52,7 +51,7 @@ HOST DEV void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumul
     for(int i = 0; i < numParticles; i++) {
 
         floating_t expectedCumulativeOffspring = numParticles * exp(prefixSum[i] - totalSum);
-        cumulativeOffspring[i] = min(numParticles, static_cast<int>(floor(expectedCumulativeOffspring + u)));
+        cumulativeOffspring[i] = MIN(numParticles, static_cast<int>(floor(expectedCumulativeOffspring + u)));
     }
 }
 

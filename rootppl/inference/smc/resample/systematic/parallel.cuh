@@ -12,10 +12,10 @@
 #include "utils/cuda_error_utils.cuh"
 
 #include <curand_kernel.h>
-#include <thrust/reduce.h>
+// #include <thrust/reduce.h>
 #include <thrust/scan.h>
-#include <thrust/execution_policy.h>
-#include <thrust/extrema.h>
+// #include <thrust/execution_policy.h>
+// #include <thrust/extrema.h>
 
 
 /**

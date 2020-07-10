@@ -15,7 +15,7 @@
 
 #include "math.cuh"
 
-using namespace std;
+// using namespace std;
 
 /**
  * Allocates memory on host or device depending on compiler. 
@@ -47,6 +47,43 @@ void freeMemory(T* pointer) {
 }
 
 /**
+ * This is an attempt to make most of the GPU memory available 
+ * from kernels via implicit stacks and device malloc calls
+ * When running programs that reaches the memory limit, this could 
+ * be tweaked to prioritize the memory type required by the program
+ */
+ void configureMemSizeGPU() {
+    #ifdef GPU
+
+    // Read memory properties and define limits
+    cudaDeviceProp devProp;
+    cudaGetDeviceProperties(&devProp, 0);
+    size_t MAX_THREADS_RESIDENT = devProp.maxThreadsPerMultiProcessor * devProp.multiProcessorCount;
+    size_t GPU_MEM_TOT = devProp.totalGlobalMem * 0.95; // Leave 5% of memory for global structures or just to be sure
+    size_t GPU_MEM_HEAP = GPU_MEM_TOT * 0.20; // Arbitrarily set 20% of GPU memory to device allocated heap memory
+    size_t GPU_MEM_STACK = GPU_MEM_TOT - GPU_MEM_HEAP;
+    size_t MAX_LOCAL_MEM_PER_THREAD = 512000; // 512 KB on all compute capabilities according to CUDA docs
+    size_t MAX_STACK_SIZE = min(MAX_LOCAL_MEM_PER_THREAD, GPU_MEM_STACK / MAX_THREADS_RESIDENT);
+    MAX_STACK_SIZE *= 0.5; // For some reason, with nested inference, this limit must be lower. Also, lower can give better performance.
+    
+    // Set limits and read the resulting set limits
+    size_t heapSize, stackSize;
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, GPU_MEM_HEAP);
+    cudaDeviceSetLimit(cudaLimitStackSize, MAX_STACK_SIZE);
+    cudaDeviceGetLimit(&heapSize, cudaLimitMallocHeapSize);
+    cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
+
+    if(false) {
+        std::cout << "Global Memory size: " << GPU_MEM_TOT / 1000000.0 << " MB" << std::endl;
+        std::cout << "MaxStackSize Per Thread: " << MAX_STACK_SIZE / 1000000.0 << " MB" << std::endl;
+        std::cout << "Device allocation heap max size: " << heapSize / 1000000.0 << " MB" << std::endl;
+        std::cout << "Stack per thread max size: " << stackSize / 1000.0 << " KB" << std::endl;
+    }
+    // cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+    #endif
+}
+
+/**
  * Prints the array of type T. Works only on the CPU. 
  * 
  * @param arr array of type T.
@@ -54,13 +91,13 @@ void freeMemory(T* pointer) {
  * @param optional title of the array to be printed. 
  */
 template <typename T>
-void printArray(T* arr, int n, string title="") {
+void printArray(T* arr, int n, std::string title="") {
     if(title.length() > 0)
-        cout << title << ": ";
-    cout << "[ ";
+        std::cout << title << ": ";
+    std::cout << "[ ";
     for(int i = 0; i < n; i++)
-        cout << arr[i] << " ";
-    cout << "]" << endl;
+        std::cout << arr[i] << " ";
+    std::cout << "]" << std::endl;
 }
 
 /**
@@ -96,10 +133,10 @@ DEV void printArrayI(int* arr, int n) {
  * @param n the precision, corresponds to number of decimals for floating points. 
  */
 template <typename T>
-string to_string_with_precision(const T val, const int n=6) {
-    ostringstream out;
+std::string to_string_with_precision(const T val, const int n=6) {
+    std::ostringstream out;
     out.precision(n);
-    out << fixed << val;
+    out << std::fixed << val;
     return out.str();
 }
 
@@ -115,16 +152,16 @@ string to_string_with_precision(const T val, const int n=6) {
 template <typename T>
 void printStars(int* freqs, int n, T minVal=0, T intervalSize=1) {
     for(int i = 0; i < n; i++) {
-        if(is_same<T, int>::value) {
-            string str;
+        if(std::is_same<T, int>::value) {
+            std::string str;
             if(intervalSize == 1)
-                str = to_string(minVal + i) + ": ";
+                str = std::to_string(minVal + i) + ": ";
             else 
-                str = "[" + to_string(minVal + i * intervalSize) + " - " + to_string(minVal + (i + 1) * (intervalSize) - 1) + "]: ";
-            cout << setw(15) << str;
+                str = "[" + std::to_string(minVal + i * intervalSize) + " - " + std::to_string(minVal + (i + 1) * (intervalSize) - 1) + "]: ";
+            std::cout << std::setw(15) << str;
         } else {
-            string str = "[" + to_string_with_precision(minVal + intervalSize * static_cast<T>(i), 2) + " - " + to_string_with_precision(minVal + (intervalSize) * static_cast<T>(i + 1), 2) + "): ";
-            cout << setw(20) << str;
+            std::string str = "[" + to_string_with_precision(minVal + intervalSize * static_cast<T>(i), 2) + " - " + to_string_with_precision(minVal + (intervalSize) * static_cast<T>(i + 1), 2) + "): ";
+            std::cout << std::setw(20) << str;
         }
         for(int j = 0; j < freqs[i]; j++)
             printf("*");
@@ -176,7 +213,7 @@ void printHistogram(T* arr, int n, int numBins, T minVal, T maxVal) {
         bins[i] = 0;
 
     T intervalSize;
-    if(is_same<T, int>::value)
+    if(std::is_same<T, int>::value)
         intervalSize = ceil(static_cast<floating_t>((maxVal - minVal + 1)) / numBins);
     else
         intervalSize = static_cast<floating_t>((maxVal - minVal)) / numBins;

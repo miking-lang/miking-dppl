@@ -5,16 +5,12 @@
  * File common.cuh contains definitions used by both sequential and parallel systematic resampling. 
  */
 
-#include <stdlib.h>
 #include <random>
 #include <time.h>
-#include "inference/smc/smc.cuh"
-#include "inference/smc/particles_memory_handler.cuh"
-#include "utils/misc.cuh"
 
 // Generator for CPU RNG
-default_random_engine generatorRes;
-uniform_real_distribution<floating_t> uniformCPU(0.0, 1.0);
+std::default_random_engine generatorRes;
+std::uniform_real_distribution<floating_t> uniformCPU(0.0, 1.0);
 
 /*
  * Resampler structure for Systematic resampling. Contains pointers to structures necessary for the resampling. 

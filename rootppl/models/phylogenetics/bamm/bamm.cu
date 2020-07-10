@@ -27,9 +27,6 @@ g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
 #define NUM_BBLOCKS 3
 INIT_MODEL(progState_t, NUM_BBLOCKS)
 
-#define MIN(a, b) a <= b ? a : b
-#define MAX(a, b) a >= b ? a : b
-
 #define DIST_LAMBDA() exp(SAMPLE(uniform, log(1e-2), log(1e1)))
 #define DIST_Z() SAMPLE(normal, 0, 0.001)
 #define DIST_MU(lam0) SAMPLE(uniform, 0.0, 0.1) * lam0

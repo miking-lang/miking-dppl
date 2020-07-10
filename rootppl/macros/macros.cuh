@@ -23,9 +23,17 @@
 #include <stdlib.h>
 #include "macros_adaptive.cuh"
 
+#ifdef GPU
+#include "utils/cuda_error_utils.cuh"
+#endif
+
 // Using a macro for "," is unfortunately necessary for some longer lists within bblocks. For example when doing array initialization.
 #define COMMA ,
 #define CMA ,
+
+// Convenient
+#define MIN(a, b) a <= b ? a : b
+#define MAX(a, b) a >= b ? a : b
 
 // To be able to switch between single and double precision easily.
 typedef double floating_t; 
@@ -101,7 +109,7 @@ int main(int argc, char** argv) { \
     int bbIdx = 0; \
     double res = 0; \
     body \
-    cout << "log(normalizationConstant) = " << res << endl; \
+    printf("%f\n", res); \
     return 0; \
 }
 
@@ -132,7 +140,7 @@ bbIdx++;
 // Run SMC with callback function (optional, can be declared with CALLBACK macro).
 #define SMC(callback) \
 int numBblocks = bbIdx; \
-configureMemSizeGPU(numParticles); \
+configureMemSizeGPU(); \
 COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateTypeTopLevel_t>, numBblocks) \
 pplFunc_t<progStateTypeTopLevel_t>* bblocksArrCudaManaged; \
 allocateMemory<pplFunc_t<progStateTypeTopLevel_t>>(&bblocksArrCudaManaged, numBblocks); \

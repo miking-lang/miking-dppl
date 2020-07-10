@@ -6,14 +6,11 @@
  * This file is included by smc_impl.cuh. 
  */
 
-#include <cstddef>
-#include "macros/macros.cuh"
+
+// using namespace std;
 #ifdef GPU
-#include "utils/cuda_error_utils.cuh"
 #include <curand_kernel.h>
 #endif
-
-using namespace std;
 
 // Kernel launch settings
 #define NUM_THREADS_PER_BLOCK 128

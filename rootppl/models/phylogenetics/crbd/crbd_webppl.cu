@@ -9,8 +9,6 @@
  */
 
 
-#include <iostream>
-#include <cstring>
 #include "inference/smc/smc_impl.cuh"
 #include "../tree-utils/tree_utils.cuh"
 
@@ -21,8 +19,8 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++14 -O3
+g++ -x c++ -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++14 -O3
 */
 
 // Bisse-32 tree

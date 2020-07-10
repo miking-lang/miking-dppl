@@ -39,6 +39,21 @@ HOST DEV T sumArray(T* arr, int n) {
     return sum;
 }
 
+/**
+ * Calculates the mean value of the array of type T. 
+ * 
+ * @param arr array of type T.
+ * @param n number of elements in arr.
+ * @return the mean of the elements of the array. 
+ */
+ template <typename T>
+ HOST DEV floating_t meanArray(T* arr, int n) {
+     T sum = 0;
+     for (int i = 0; i < n; i++)
+         sum += arr[i];
+     return static_cast<floating_t>(sum) / n;
+ }
+
 
 /**
  * Normalizes the array of type T. 

@@ -1,4 +1,6 @@
 *.exe
+*.o
 .vscode/
 .idea/
 __pycache__/
+Makefile

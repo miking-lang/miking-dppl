@@ -6,9 +6,6 @@
  * File smc_kernels.cuh contains kernels used by SMC. 
  */
 
-#include <curand_kernel.h>
-#include "smc.cuh"
-
 
 /**
  * This function initializes the curandStates.
