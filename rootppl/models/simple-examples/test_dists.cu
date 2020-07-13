@@ -5,9 +5,9 @@
 
 #include "inference/smc/smc_impl.cuh"
 
-// nvcc -arch=sm_75 -rdc=true -I . models/random-examples/test_dists.cu -o smc.exe -lcudadevrt -std=c++11 -O3
+// nvcc -arch=sm_75 -rdc=true -I . models/simple-examples/test_dists.cu -o smc.exe -lcudadevrt -std=c++11 -O3
 
-// Compile CPU: g++ -x c++ -I . models/random-examples/test_dists.cu -o smc.exe -std=c++11 -O3
+// Compile CPU: g++ -x c++ -I . models/simple-examples/test_dists.cu -o smc.exe -std=c++11 -O3
 // const int n = 3;
 struct progState_t {
     floating_t x;

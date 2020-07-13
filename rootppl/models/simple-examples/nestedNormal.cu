@@ -11,8 +11,8 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/random-examples/nestedNormal.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/random-examples/nestedNormal.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/nestedNormal.cu -o smc.exe -std=c++11 -O3
+g++ -x c++ -I . models/simple-examples/nestedNormal.cu -o smc.exe -std=c++11 -O3
 */
 
 struct progState_t {

@@ -8,8 +8,8 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/random-examples/coin_flip.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/random-examples/coin_flip.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/coin_flip.cu -o smc.exe -std=c++11 -O3
+g++ -x c++ -I . models/simple-examples/coin_flip.cu -o smc.exe -std=c++11 -O3
 */
  
 // Initialize the model with program state type and number of bblocks.

@@ -50,8 +50,8 @@ typedef progStateType progStateTypeTopLevel_t;
 /***    BBLOCKS    ***/
 
 // Used by BBLOCK, BBLOCK_HELPER and BBLOCK_CALL macros.
-#define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>& particles, int i
-#define BBLOCK_ARGS RAND_STATE particles, i
+#define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>& particles, int particleIdx
+#define BBLOCK_ARGS RAND_STATE particles, particleIdx
 
 // Declarations of BBLOCK and BBLOCK_HELPER functions.
 #define BBLOCK_DECLARE(funcName, progStateType) DEV void funcName(RAND_STATE_SIGNATURE particles_t<progStateType>&, int, void*);
@@ -85,13 +85,13 @@ body
 /***    Access particles from BBLOCKS    ***/
 
 // Add log-weight to the particle.
-#define WEIGHT(w) particles.weights[i] += w
+#define WEIGHT(w) particles.weights[particleIdx] += w
 
 // Access particle program counter (bblock index).
-#define PC particles.pcs[i]
+#define PC particles.pcs[particleIdx]
 
 // Access the particle's program/model specific state.
-#define PSTATE particles.progStates[i]
+#define PSTATE particles.progStates[particleIdx]
 
 // Access the array of progStates, should not be used by particles, but in callbacks for example. 
 #define PSTATES particles.progStates
@@ -101,10 +101,6 @@ body
 // Main function with default number of particles, prints the normalization constant.
 #define MAIN(body) \
 int main(int argc, char** argv) { \
-    int numParticles = 10000; \
-    if(argc > 1) { \
-        numParticles = atoi(argv[1]); \
-    } \
     initGen(); \
     int bbIdx = 0; \
     double res = 0; \
@@ -139,6 +135,10 @@ bbIdx++;
 
 // Run SMC with callback function (optional, can be declared with CALLBACK macro).
 #define SMC(callback) \
+int numParticles = 10000; \
+if(argc > 1) { \
+    numParticles = atoi(argv[1]); \
+} \
 int numBblocks = bbIdx; \
 configureMemSizeGPU(); \
 COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateTypeTopLevel_t>, numBblocks) \
@@ -151,6 +151,7 @@ freeMemory<pplFunc_t<progStateTypeTopLevel_t>>(bblocksArrCudaManaged);
 
 
 
+/*** Nested SMC, not as thoroughly developed as top-level SMC ***/
 
 // Prepare bblock array for initialization of bblocks, for nested inference only.
 #define SMC_PREPARE_NESTED(progStateType, numBblocks) \
@@ -173,16 +174,6 @@ int numBblocks = bbIdx; \
 double res = runSMCNested<progStateType>(RAND_STATE bblocks, numBblocks, numParticles, \
     parallelExec, parallelResampling, parentIndex, callback, (void*)&retStruct, (void*)arg); \
 delete[] bblocks;
-
-/* MCMC, work in progress */
-#define MCMCSTART(progStateType) arr100_t<pplFunc_t<progStateType>> bblocks;
-#define MCMCEND(progStateType) \
-bblocks.push_back(NULL); \
-pplFunc_t<progStateType>* bblocksArr; \
-allocateMemory<pplFunc_t<progStateType>>(&bblocksArr, bblocks.size()); \
-copy(bblocks.begin(), bblocks.end(), bblocksArr); \
-runMCMC<progStateType>(bblocksArr, statusFunc, bblocks.size()); \
-freeMemory<pplFunc_t<progStateType>>(bblocksArr);
 
 #endif
 

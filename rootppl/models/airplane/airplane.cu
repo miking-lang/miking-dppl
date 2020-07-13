@@ -69,7 +69,7 @@ CALLBACK(callback, {
     floating_t minX = 999999;
     floating_t maxX = -1;
     for (int i = 0; i < N; i++) {
-        floating_t particleX = PSTATE.x;
+        floating_t particleX = PSTATES[i].x;
         if(abs(particleX - planeX[TIME_STEPS-1]) < 10)
             numParticlesClose++;
         minX = min(minX, particleX);
