@@ -26,6 +26,7 @@ const double PI = 3.1415926535897932384626433832795028841971693993751;
 #include "inference/smc/smc.cuh"
 #include "utils/misc.cuh"
 #include "utils/math.cuh"
+#include "scores.cuh"
 
 // Define the CPU generator and primitives, and initializes the generator state. 
 std::default_random_engine generatorDists;
@@ -35,10 +36,10 @@ void initGen() {
     generatorDists.seed(time(NULL));
 }
 
+//#ifdef GPU
 #ifdef GPU
-
 #include "dists_gpu.cuh"
-
+//#endif
 #else
 
 #include "dists_cpu.cuh"
@@ -154,8 +155,8 @@ DEV int discrete(RAND_STATE_DECLARE const floating_t* ps, const int n) {
  * @param arr the values to choose from when returning.
  * @return A value in the array arr with the index sampled from Discrete. 
  */
-template <typename T2>
-DEV T2 categorical(RAND_STATE_DECLARE const floating_t* ps, const int n, T2* arr) {
+template <typename T>
+DEV T categorical(RAND_STATE_DECLARE const floating_t* ps, const int n, T* arr) {
     int idx = SAMPLE(discrete, ps, n);
     return arr[idx];
 }

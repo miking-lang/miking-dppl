@@ -8,8 +8,8 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/coin_flip.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/simple-examples/coin_flip.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/coin_flip.cu -o smc.exe -std=c++14 -O3
+g++ -x c++ -I . models/simple-examples/coin_flip.cu -o smc.exe -std=c++14 -O3
 */
  
 // Initialize the model with program state type and number of bblocks.
@@ -20,8 +20,10 @@ INIT_MODEL(double, 1)
 BBLOCK(coinFlip, {
      
     double x = SAMPLE(beta, 2, 2);
-    //if(! SAMPLE(bernoulli, x))
-    //    WEIGHT(-INFINITY);
+    // if(! SAMPLE(bernoulli, x))
+        // WEIGHT(-INFINITY);
+    // CONDITION(SAMPLE(bernoulli, x));
+    OBSERVE(bernoulli, x, true);
 
     PSTATE = x;
     PC++;
@@ -30,7 +32,7 @@ BBLOCK(coinFlip, {
  // Use result after inference. 
 CALLBACK(callback, {
  
-    printHistogram(PSTATES, N, 10, 0.0, 1.0);
+    // printHistogram(PSTATES, N, 10, 0.0, 1.0);
  
 })
  

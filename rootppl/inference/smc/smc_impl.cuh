@@ -9,7 +9,7 @@
 
 #include "macros/macros.cuh"
 #include "smc.cuh"
-#include "utils/dists/dists.cuh"
+#include "dists/dists.cuh"
 #include "particles_memory_handler.cuh"
 #include "resample/systematic/sequential.cuh"
 

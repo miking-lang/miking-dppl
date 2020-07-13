@@ -133,6 +133,14 @@ bbIdx++;
 // Samples from distributions, which should all take the curandState as argument first if compiled for GPU.
 #define SAMPLE(distName, ...) distName(RAND_STATE __VA_ARGS__ )
 
+// Condition on cond. Sets weight to negative infinity if condition is not met. 
+#define CONDITION(cond) if(! (cond)) WEIGHT(-INFINITY)
+
+// Observe value from distribution. Conceptually, this is equivalent to drawing a value from the distribution
+// and conditioning on it being equal to the passed value. Technically, it weights with the score at point value.
+// This macro should be called like this: OBSERVE(distName, distArgs, value)
+#define OBSERVE(distName, ...) WEIGHT(distName ## Score(__VA_ARGS__))
+
 // Run SMC with callback function (optional, can be declared with CALLBACK macro).
 #define SMC(callback) \
 int numParticles = 10000; \
