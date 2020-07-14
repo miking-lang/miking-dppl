@@ -12,8 +12,8 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++11 -O3 
-g++ -x c++ -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++14 -O3 
+g++ -x c++ -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++14 -O3
 */
 
 #define NUM_BBLOCKS 5
@@ -43,7 +43,7 @@ BBLOCK_HELPER(goesExtinct, {
     if (! speciation)
         return true;
     else 
-        return BBLOCK_CALL(goesExtinct<T>, currentTime, lambda, mu) && BBLOCK_CALL(goesExtinct<T>, currentTime, lambda, mu);
+        return BBLOCK_CALL(goesExtinct, currentTime, lambda, mu) && BBLOCK_CALL(goesExtinct, currentTime, lambda, mu);
 
 }, bool, floating_t startTime, floating_t lambda, floating_t mu)
 
@@ -57,11 +57,11 @@ BBLOCK_HELPER(simBranch, {
     if(currentTime <= stopTime)
         return 0.0;
     
-    bool sideExtinction = BBLOCK_CALL(goesExtinct<T>, currentTime, lambda, mu);
+    bool sideExtinction = BBLOCK_CALL(goesExtinct, currentTime, lambda, mu);
     if(! sideExtinction)
         return -INFINITY;
     
-    return BBLOCK_CALL(simBranch<T>, currentTime, stopTime, lambda, mu) + log(2.0);
+    return BBLOCK_CALL(simBranch, currentTime, stopTime, lambda, mu) + log(2.0);
 
 }, floating_t, floating_t startTime, floating_t stopTime, floating_t lambda, floating_t mu)
 
@@ -104,7 +104,7 @@ BBLOCK(condBD_2, {
 
     floating_t parentAge = treeP->ages[pState.parentIdx];
     floating_t treeAge = treeP->ages[pState.treeIdx];
-    floating_t w = BBLOCK_CALL(simBranch<pStack_t>, parentAge, treeAge, pState.lambda, pState.mu);
+    floating_t w = BBLOCK_CALL(simBranch, parentAge, treeAge, pState.lambda, pState.mu);
     WEIGHT(w);
     
 

@@ -59,7 +59,7 @@ variable and is never used. To store data that remains when the next block is ex
 state (```PSTATE```) should be used. Before defining the blocks, the model must be
 initialized with the macro ```INIT_MODEL``` that takes two arguments. First the type of the program
 state (this could be any type, e.g. ```int``` or a structure), then the number of basic blocks in
-the program. So changing the above example:
+the program. So, adding it to the above example:
 
 ```
 INIT_MODEL(int, 1)
@@ -131,8 +131,8 @@ Sample mean: 0.608000
 0.000000
 ```
 
-First we see our callback function's output. Then on the next line, is the logged
-normalization constant from the inference. This is simply 0 here, since the model contains
+First we see our callback function's output. Then on the next line, is the logarithm of the
+normalization constant approximated by the inference. This is simply 0 here, since the model contains
 no statements that alter the weights of the particles. 
 
 ### Building a more interesting model

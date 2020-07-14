@@ -29,6 +29,8 @@ BBLOCK(coinFlip, {
     PC++;
 })
  
+// WebPPL N=100K: -0.6949150213133173, -0.6918362896430406
+
  // Use result after inference. 
 CALLBACK(callback, {
  

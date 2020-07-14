@@ -1,6 +1,7 @@
 /*
- * File crbd_webppl.cu defines the constant rate birth death model 
- * as defined in WebPPL in the script linked to below. 
+ * File crbd_webppl_iterative.cu defines the constant rate birth death model 
+ * as defined in WebPPL in the script linked to below, but with an iterative solution.
+ * NOTE: WORK IN PROGRESS, NOT FULLY ITERATIVE YET
  * 
  * https://github.com/phyppl/probabilistic-programming/blob/master/webppl/phywppl/models/crbd.wppl
  *
@@ -19,8 +20,8 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++14 -O3
-g++ -x c++ -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++14 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd_webppl_iterative.cu -o smc.exe -std=c++14 -O3
+g++ -x c++ -I . models/phylogenetics/crbd/crbd_webppl_iterative.cu -o smc.exe -std=c++14 -O3
 */
 
 // Bisse-32 tree
@@ -59,15 +60,8 @@ BBLOCK_DATA(rho, floating_t, 1)
 
 
 void initCBD() {
-    // lambda = SAMPLE(gamma, 1.0, 1.0);
-    // *mu = SAMPLE();
-    // *lambda = 0.2; // birth rate
-    // *mu = 0.1; // death rate
     *rho = 1.0;
 
-    // COPY_DATA_GPU(tree, tree_t, 1)
-    // COPY_DATA_GPU(lambda, floating_t, 1)
-    // COPY_DATA_GPU(mu, floating_t, 1)
     COPY_DATA_GPU(rho, floating_t, 1)
 
 }
@@ -79,20 +73,19 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
         return 1; // What do return instead of NaN?
     }
 
-    // if(max_M < 9400)
-        // printf("Max_M: %d\n", max_M);
+    floating_t lambda = PSTATE.lambda;
+    floating_t mu = PSTATE.mu;
 
-    if(! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu) && ! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu))
-        return 1;
-    else
-        return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, max_M - 1, lambda, mu);
+    int numRecursions = 1;
+    while(BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu) || BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu)) {
+        numRecursions++;
+    }
+    return numRecursions;
 
-}, int, floating_t startTime, int max_M, floating_t lambda, floating_t mu)
+}, int, floating_t startTime, int max_M)
 
 BBLOCK_HELPER(crbdGoesUndetected, {
 
-    // floating_t lambdaLocal = PSTATE.lambda;
-    // floating_t muLocal = PSTATE.mu;
 
     floating_t rhoLocal = *DATA_POINTER(rho);
 
@@ -102,12 +95,6 @@ BBLOCK_HELPER(crbdGoesUndetected, {
     
     if (lambda == 0.0) {
         return ! SAMPLE(bernoulli, rhoLocal);
-        /*
-        if (flip(rhoLocal))
-            return false
-        else
-            return true
-        */
     }
     // end extreme values patch 1/2
 
@@ -128,17 +115,12 @@ BBLOCK_HELPER(crbdGoesUndetected, {
 
 BBLOCK_HELPER(simBranch, {
 
-    // floating_t lambdaLocal = *DATA_POINTER(lambda);
-    // floating_t lambdaLocal = PSTATE.lambda;
-
     // extreme values patch 2/2
 	if (lambda > MAX_LAM) {
-	    //console.log( "lambda: ", lambda )
 	    return -INFINITY;
 	}
 	
 	if (lambda == 0.0) {
-	    // var t1 = startTime - stopTime
         return 0.0;
 	}
 	// extreme values patch 2/2
@@ -216,7 +198,7 @@ BBLOCK(survivorshipBias, {
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     // int MAX_M = 10000;
     int MAX_M = 10000;
-    int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu);
+    int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M);
     WEIGHT(log(static_cast<floating_t>(M)));
     PC++;
 })

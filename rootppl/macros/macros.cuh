@@ -54,10 +54,11 @@ typedef progStateType progStateTypeTopLevel_t;
 #define BBLOCK_ARGS RAND_STATE particles, particleIdx
 
 // Declarations of BBLOCK and BBLOCK_HELPER functions.
-#define BBLOCK_DECLARE(funcName, progStateType) DEV void funcName(RAND_STATE_SIGNATURE particles_t<progStateType>&, int, void*);
-#define BBLOCK_HELPER_DECLARE(funcName, progStateType, returnType, ...) \
-template <typename T> \
-DEV returnType funcName(RAND_STATE_SIGNATURE particles_t<T>, int, ##__VA_ARGS__);
+#define BBLOCK_DECLARE(funcName) DEV void funcName(RAND_STATE_SIGNATURE particles_t<progStateTypeTopLevel_t>&, int, void*);
+#define BBLOCK_HELPER_DECLARE(funcName, returnType, ...) \
+DEV returnType funcName(RAND_STATE_SIGNATURE particles_t<progStateTypeTopLevel_t>&, int, ##__VA_ARGS__);
+
+// template <typename T> \
 
 // These will be executed by the framework. 
 #define BBLOCK_DEF(funcName, progStateType, body) \
@@ -73,9 +74,10 @@ DEV_POINTER(funcName, progStateType)
 
 // Regular helper functions that takes the particles as argument (syntactic sugar).
 #define BBLOCK_HELPER(funcName, body, returnType, ...) \
-template <typename T> \
-DEV returnType funcName(BBLOCK_PARAMS(T), ##__VA_ARGS__) \
+DEV returnType funcName(BBLOCK_PARAMS(progStateTypeTopLevel_t), ##__VA_ARGS__) \
 body
+
+// template <typename T> \
 
 // Call functions that takes the particles as argument (syntactic sugar).
 #define BBLOCK_CALL(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)

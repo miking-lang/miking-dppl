@@ -16,13 +16,20 @@
  * 
  * @param n the input value. 
  */
- HOST DEV double lnFactorial(int n) {
-    if(n == 1) {
+HOST DEV double lnFactorial(int n) {
+    /*if(n == 1) {
         return 0.0;
     } else {
         return log(static_cast<double>(n)) + lnFactorial(n-1);
+    }*/
+    double res = 0;
+    while(n > 1) {
+        res += log(static_cast<double>(n));
+        n--;
     }
+    return res;
 }
+
 
 /**
  * Calculates the sum of the array of type T. 

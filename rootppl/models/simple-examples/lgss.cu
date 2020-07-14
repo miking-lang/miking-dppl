@@ -25,8 +25,8 @@ INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 BBLOCK_DATA(data, floating_t, NUM_OBS);
 
-BBLOCK_DECLARE(init, progState_t)
-BBLOCK_DECLARE(lgss, progState_t)
+BBLOCK_DECLARE(init)
+BBLOCK_DECLARE(lgss)
 
 BBLOCK(init, progState_t, {
     PSTATE.x = SAMPLE(normal, 0.0, 100);
@@ -41,7 +41,7 @@ BBLOCK(lgss, progState_t, {
     floating_t* dataP = DATA_POINTER(data);
     
     PSTATE.x = SAMPLE(normal, PSTATE.x + 2.0, 1);
-    WEIGHT(logPDFNormal(dataP[PSTATE.t], PSTATE.x, 1.0));
+    WEIGHT(normalScore(dataP[PSTATE.t], PSTATE.x, 1.0));
 
     if(++PSTATE.t == NUM_OBS)
         PC++;
@@ -52,9 +52,9 @@ CALLBACK(callback, {
     
     floating_t xSum = 0;
     for (int i = 0; i < N; i++)
-        xSum += PSTATE.x;
+        xSum += PSTATES[i].x;
     int i = N / 2;
-    printf("Mean x: %f, Median x: %f\n", xSum / N, PSTATE.x);
+    printf("Mean x: %f, Median x: %f\n", xSum / N, PSTATES[i].x);
     
 })
 
@@ -70,8 +70,8 @@ MAIN({
 
     COPY_DATA_GPU(data, floating_t, NUM_OBS);
 
-    ADD_BBLOCK(init, progState_t);
-    ADD_BBLOCK(lgss, progState_t);
+    ADD_BBLOCK(init);
+    ADD_BBLOCK(lgss);
 
-    SMC(progState_t, callback);
+    SMC(callback);
 })

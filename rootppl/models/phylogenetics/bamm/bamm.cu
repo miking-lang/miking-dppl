@@ -20,12 +20,14 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++14 -O3
+g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++14 -O3
 */
 
 #define NUM_BBLOCKS 3
 INIT_MODEL(progState_t, NUM_BBLOCKS)
+
+BBLOCK_HELPER_DECLARE(bammGoesUndetected, bool, floating_t, lambdaFun_t, floating_t, floating_t, floating_t);
 
 #define DIST_LAMBDA() exp(SAMPLE(uniform, log(1e-2), log(1e1)))
 #define DIST_Z() SAMPLE(normal, 0, 0.001)
@@ -179,7 +181,7 @@ BBLOCK(simTree, {
     bblockArgs_t args = PSTATE.stack.pop();
 
     floating_t treeAge = treeP->ages[treeIdx];
-    simBranchRet_t ret = BBLOCK_CALL(simBranch<progState_t>, treeP->ages[indexParent], treeAge, args.lf, args.lf.z, args.mu, args.eta, args.rho);
+    simBranchRet_t ret = BBLOCK_CALL(simBranch, treeP->ages[indexParent], treeAge, args.lf, args.lf.z, args.mu, args.eta, args.rho);
 
     // Collect node info
     lambdaFun_t lambdaFun2 = ret.lf;

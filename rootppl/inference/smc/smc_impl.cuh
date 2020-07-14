@@ -21,7 +21,7 @@
 #include "smc_kernels.cuh"
 #endif
 
-#include "smc_impl_nested.cuh"
+// #include "smc_impl_nested.cuh"
 
 /**
  * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 

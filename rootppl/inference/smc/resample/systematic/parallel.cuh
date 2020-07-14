@@ -17,6 +17,14 @@
 // #include <thrust/execution_policy.h>
 // #include <thrust/extrema.h>
 
+template <typename T>
+HOST DEV void prefixSumNaive(floating_t* w, resampler_t<T> resampler, int numParticles) {
+    // Calculates in the inclusive prefix sum
+    resampler.prefixSum[0] = w[0];
+    for(int i = 1; i < numParticles; i++)
+        resampler.prefixSum[i] = resampler.prefixSum[i-1] + w[i];
+}
+
 
 /**
  * Calculates the log weight prefix sums safely according to the identity in the appendix of 
@@ -32,12 +40,14 @@
 template <typename T>
 HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t<T> resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
-    floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
-    // floating_t maxLogWeight = maxNaive(w, numParticles);
+    // floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
+    floating_t maxLogWeight = maxNaive(w, numParticles);
     
     expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight);
-
-    thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
+    cudaDeviceSynchronize();
+    // thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
+    // Calculates in the inclusive prefix sum
+    prefixSumNaive(w, resampler, numParticles);
 
     renormaliseSumsKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.prefixSum, numParticles, maxLogWeight);
     

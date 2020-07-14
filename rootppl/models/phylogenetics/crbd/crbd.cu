@@ -16,8 +16,8 @@
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/phylogenetics/crbd/crbd.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd.cu -o smc -std=c++14 -O3
+g++ -x c++ -I . models/phylogenetics/crbd/crbd.cu -o smc -std=c++14 -O3
 */
 
 
@@ -59,7 +59,8 @@ void initCBD() {
 
 }
 
-BBLOCK_HELPER(goesExtinct, {
+DEV bool goesExtinct(RAND_STATE_DECLARE floating_t startTime) {
+// BBLOCK_HELPER(goesExtinct, {
 
     floating_t lambdaLocal = *DATA_POINTER(lambda);
     floating_t muLocal = *DATA_POINTER(mu);
@@ -74,9 +75,10 @@ BBLOCK_HELPER(goesExtinct, {
     if (! speciation)
         return true;
     else 
-        return BBLOCK_CALL(goesExtinct<T>, currentTime) && BBLOCK_CALL(goesExtinct<T>, currentTime);
+        return goesExtinct(RAND_STATE currentTime) && goesExtinct(RAND_STATE currentTime);
 
-}, bool, floating_t startTime)
+// }, bool, floating_t startTime)
+}
 
 
 
@@ -84,9 +86,8 @@ BBLOCK(goesExtinctBblock, nestedProgState_t, {
     tree_t* treeP = DATA_POINTER(tree);
     double age = treeP->ages[ROOT_IDX];
     
-    PSTATE.extinct = BBLOCK_CALL(goesExtinct<nestedProgState_t>, age);
+    PSTATE.extinct = goesExtinct(RAND_STATE age);
     PC++;
-    // RESAMPLE = true;
 })
 
 
@@ -101,13 +102,13 @@ BBLOCK_HELPER(simBranch, {
     if(currentTime <= stopTime)
         return 0.0;
     
-    bool sideExtinction = BBLOCK_CALL(goesExtinct<T>, currentTime);
+    bool sideExtinction = goesExtinct(RAND_STATE currentTime);
     if(! sideExtinction)
         return -INFINITY;
 
     // WEIGHT(log(2.0)); // was previously done above survival call, no reason to do it before though (unless resample occurrs there)
     
-    return BBLOCK_CALL(simBranch<T>, currentTime, stopTime) + log(2.0);
+    return BBLOCK_CALL(simBranch, currentTime, stopTime) + log(2.0);
 
 }, floating_t, floating_t startTime, floating_t stopTime)
 
@@ -143,7 +144,7 @@ BBLOCK(simTree, progState_t, {
     bool interiorNode = treeP->idxLeft[treeIdx] != -1 || treeP->idxRight[treeIdx] != -1;
     floating_t lnProb2 = interiorNode ? log(*DATA_POINTER(lambda)) : 0.0;
 
-    floating_t lnProb3 = BBLOCK_CALL(simBranch<progState_t>, parentAge, age);
+    floating_t lnProb3 = BBLOCK_CALL(simBranch, parentAge, age);
 
     /*
     if(treeP->idxLeft[treeIdx] != -1) { // If left branch exists, so does right..
@@ -159,7 +160,7 @@ BBLOCK(simTree, progState_t, {
 CALLBACK_NESTED(calcResult, nestedProgState_t, {
     int numExtinct = 0;
     for(int i = 0; i < numParticles; i++)
-        numExtinct += PSTATE.extinct;
+        numExtinct += PSTATES[i].extinct;
 
     int numSurvived = numParticles - numExtinct;
     return_t* retP = static_cast<return_t*>(ret);
@@ -189,7 +190,7 @@ BBLOCK(simCRBD, progState_t, {
 
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
 
-    double survivalRate = runNestedInference<double>(RAND_STATE i);
+    double survivalRate = runNestedInference<double>(RAND_STATE particleIdx);
 
     WEIGHT(-2.0 * log(survivalRate));
 
