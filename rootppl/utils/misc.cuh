@@ -33,6 +33,20 @@ void allocateMemory(T** pointer, size_t n) {
 }
 
 /**
+ * Allocates memory on host or device depending on compiler. 
+ * 
+ * @param pointer address of the pointer which should point to the allocated memory. 
+ * @param allocSize the size of memory to allocate. 
+ */
+ void allocateMemoryVoid(void** pointer, size_t allocSize) {
+     #ifdef GPU
+     cudaSafeCall(cudaMallocManaged(pointer, allocSize));
+     #else
+     *pointer = malloc(allocSize);
+     #endif
+ }
+
+ /**
  * Frees memory on host or device depending on compiler. 
  * 
  * @param pointer address of the allocated memory. 
@@ -43,6 +57,19 @@ void freeMemory(T* pointer) {
     cudaSafeCall(cudaFree(pointer));
     #else
     delete[] pointer;
+    #endif
+}
+
+/**
+ * Frees memory on host or device depending on compiler. 
+ * 
+ * @param pointer address of the allocated memory. 
+ */
+void freeMemoryVoid(void* pointer) {
+    #ifdef GPU
+    cudaSafeCall(cudaFree(pointer));
+    #else
+    free(pointer);
     #endif
 }
 

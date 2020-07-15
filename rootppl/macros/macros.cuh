@@ -43,7 +43,7 @@ typedef double floating_t;
 
 // Sets up globally accessible bblock array, that can be accessed from the bblocks, and defines the type used in the model.
 #define INIT_MODEL(progStateType, numBblocks) \
-BBLOCK_DATA(bblocksArr, pplFunc_t<progStateType>, numBblocks) \
+BBLOCK_DATA(bblocksArr, pplFunc_t, numBblocks) \
 typedef progStateType progStateTypeTopLevel_t;
 
 
@@ -54,9 +54,9 @@ typedef progStateType progStateTypeTopLevel_t;
 #define BBLOCK_ARGS RAND_STATE particles, particleIdx
 
 // Declarations of BBLOCK and BBLOCK_HELPER functions.
-#define BBLOCK_DECLARE(funcName) DEV void funcName(RAND_STATE_SIGNATURE particles_t<progStateTypeTopLevel_t>&, int, void*);
+#define BBLOCK_DECLARE(funcName) DEV void funcName(RAND_STATE_SIGNATURE particles_t&, int, void*);
 #define BBLOCK_HELPER_DECLARE(funcName, returnType, ...) \
-DEV returnType funcName(RAND_STATE_SIGNATURE particles_t<progStateTypeTopLevel_t>&, int, ##__VA_ARGS__);
+DEV returnType funcName(RAND_STATE_SIGNATURE particles_t&, int, ##__VA_ARGS__);
 
 // template <typename T> \
 
@@ -112,8 +112,8 @@ int main(int argc, char** argv) { \
 }
 
 // Functions that can be called from the framework, usually to use resulting particle distributions before clean up.
-#define CALLBACK(funcName, body) void funcName(particles_t<progStateTypeTopLevel_t>& particles, int N, void* arg=NULL) body
-#define CALLBACK_NESTED(funcName, progStateType, body, arg) DEV void funcName(particles_t<progStateType>& particles, int numParticles, arg) body
+#define CALLBACK(funcName, body) void funcName(particles_t& particles, int N, void* arg=NULL) body
+#define CALLBACK_NESTED(funcName, progStateType, body, arg) DEV void funcName(particles_t& particles, int numParticles, arg) body
 
 /* 
 Initialize the basic block (add it to the array of bblocks), the order of bblocks matters!
@@ -155,13 +155,13 @@ if(argc > 2) { \
 } \
 int numBblocks = bbIdx; \
 configureMemSizeGPU(); \
-COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateTypeTopLevel_t>, numBblocks) \
-pplFunc_t<progStateTypeTopLevel_t>* bblocksArrCudaManaged; \
-allocateMemory<pplFunc_t<progStateTypeTopLevel_t>>(&bblocksArrCudaManaged, numBblocks); \
+COPY_DATA_GPU(bblocksArr, pplFunc_t, numBblocks) \
+pplFunc_t* bblocksArrCudaManaged; \
+allocateMemory<pplFunc_t>(&bblocksArrCudaManaged, numBblocks); \
 for(int i = 0; i < numBblocks; i++) \
     bblocksArrCudaManaged[i] = bblocksArr[i]; \
-res = runSMC<progStateTypeTopLevel_t>(bblocksArrCudaManaged, numBblocks, numParticles, particlesPerThread, callback); \
-freeMemory<pplFunc_t<progStateTypeTopLevel_t>>(bblocksArrCudaManaged);
+res = runSMC(bblocksArrCudaManaged, numBblocks, numParticles, particlesPerThread, sizeof(progStateTypeTopLevel_t), callback); \
+freeMemory<pplFunc_t>(bblocksArrCudaManaged);
 
 
 

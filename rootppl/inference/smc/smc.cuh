@@ -27,9 +27,9 @@
  * pcs: These are the "program counters" which are used by the particles to define what BBLOCK to execute in each BBLOCK-iteration.
  * weights: These are the weights used in resampling and approximation of the normalization constant. Equivalent to "factor" in WebPPL.
  */
-template <typename T>
+ 
 struct particles_t {
-    T* progStates;
+    void* progStates;
     int* pcs;
     floating_t* weights;
 };
@@ -42,16 +42,18 @@ struct particles_t {
  * 
  * curandState*: The RNG states required for sampling on the GPU. These are only included when compiled for the GPU. 
  * particles_t: The SMC particles, required for particles to access the weight, PC and progStates during execution of BBLOCKS.
- * int: The index of the executing particle. 
+ * void*: The address of the current particles' program state
+ * int&: The PC of the executing particle. 
+ * floating_t&: The weight of executing particle.
  * void*: optional argument, often set to NULL and ignored for top-level inference. 
  */
-template <typename T>
+ // FIX DOC PARAMS
 using pplFunc_t = void (*)(
     #ifdef GPU 
     curandState*, 
     #endif
-    particles_t<T>&, 
-    int, 
+    particles_t&,
+    int,
     void*);
 
 
@@ -66,7 +68,7 @@ using pplFunc_t = void (*)(
  * void*: Argument to be passed. Mostly ignored in top-level inference. Can be used as a way of keeping data from nested inference after its clean up.
  */
 template <typename T>
-using callbackFunc_t = void (*)(particles_t<T>&, int, void*);
+using callbackFunc_t = void (*)(particles_t&, int, void*);
 
 
 #endif

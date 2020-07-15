@@ -34,13 +34,12 @@
  * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
  * @return the logged normalization constant.
  */
-template <typename T>
-double runSMC(const pplFunc_t<T>* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
-                callbackFunc_t<T> callback = NULL, void* arg = NULL) {
+double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
+                const int progStateSize, callbackFunc_t callback = NULL, void* arg = NULL) {
 
     floating_t logNormConstant = 0;
 
-    particles_t<T> particles = allocateParticles<T>(numParticles, false);
+    particles_t particles = allocateParticles(numParticles, progStateSize, false);
     
     #ifdef GPU
     // Rather add an extra thread than add iterations for a few threads
@@ -58,7 +57,7 @@ double runSMC(const pplFunc_t<T>* bblocks, int numBblocks, const int numParticle
     cudaCheckError();
     #endif
 
-    resampler_t<T> resampler = initResampler<T>(numParticles);
+    resampler_t<char[progStateSize]> resampler = initResampler<T>(numParticles);
 
     // cudaProfilerStart();
     // Run program/inference

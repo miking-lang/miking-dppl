@@ -20,13 +20,12 @@ std::uniform_real_distribution<floating_t> uniformCPU(0.0, 1.0);
  * prefixSum: Array used to store the inclusive prefix sum. 
  * auxParticles: Particles structure used to copy particles in resample propagation. Required as the propagation is not in-place. 
  */
-template <typename T>
 struct resampler_t {
 
     int* ancestor; 
     int* cumulativeOffspring;
     floating_t* prefixSum;
-    particles_t<T> auxParticles;
+    particles_t auxParticles;
 };
 
 /**
@@ -37,16 +36,16 @@ struct resampler_t {
  * @return the allocated resampler struct. 
  */
  template <typename T>
-resampler_t<T> initResampler(int numParticles) {
+resampler_t initResampler(int numParticles, size_t progStateSize) {
 
     generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions. 
-    resampler_t<T> resampler;
+    resampler_t resampler;
 
     allocateMemory<int>(&resampler.ancestor, numParticles);
     allocateMemory<int>(&resampler.cumulativeOffspring, numParticles);
     allocateMemory<floating_t>(&resampler.prefixSum, numParticles);
     
-    resampler.auxParticles = allocateParticles<T>(numParticles);
+    resampler.auxParticles = allocateParticles(numParticles, progStateSize);
 
     return resampler;
 }
@@ -58,7 +57,7 @@ resampler_t<T> initResampler(int numParticles) {
  * @param numParticles the number of particles used in nested SMC.
  * @return the allocated resampler struct. 
  */
-template <typename T>
+/*template <typename T>
 HOST DEV resampler_t<T> initResamplerNested(int numParticles) {
 
     resampler_t<T> resampler;
@@ -69,7 +68,7 @@ HOST DEV resampler_t<T> initResamplerNested(int numParticles) {
     resampler.auxParticles = allocateParticlesNested<T>(numParticles);
 
     return resampler;
-}
+}*/
 
 /**
  * Frees the allocated arrays used by the resampler.
@@ -77,13 +76,12 @@ HOST DEV resampler_t<T> initResamplerNested(int numParticles) {
  *
  * @param resampler the resampler which should be freed.
  */
-template <typename T>
-void destResampler(resampler_t<T> resampler) {
+void destResampler(resampler_t resampler) {
 
     freeMemory<int>(resampler.ancestor);
     freeMemory<int>(resampler.cumulativeOffspring);
     freeMemory<floating_t>(resampler.prefixSum);
-    freeParticles<T>(resampler.auxParticles);
+    freeParticles(resampler.auxParticles);
 }
 
 /**
@@ -92,13 +90,13 @@ void destResampler(resampler_t<T> resampler) {
  *
  * @param resampler the resampler which should be freed.
  */
-template <typename T>
+/*template <typename T>
 HOST DEV void destResamplerNested(resampler_t<T> resampler) {
     delete[] resampler.ancestor;
     delete[] resampler.cumulativeOffspring;
     delete[] resampler.prefixSum;
     freeParticlesNested<T>(resampler.auxParticles);
-}
+}*/
 
 /**
  * Copies data from one particle in the source array to a particle in the destination array and resets the weight. 
@@ -112,7 +110,7 @@ HOST DEV void destResamplerNested(resampler_t<T> resampler) {
  */
 template <typename T>
 DEV void copyParticle(particles_t<T> particlesDst, const particles_t<T> particlesSrc, int dstIdx, int srcIdx) {
-    particlesDst.progStates[dstIdx] = particlesSrc.progStates[srcIdx];
+    // particlesDst.progStates[dstIdx] = particlesSrc.progStates[srcIdx];
     particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
     particlesDst.weights[dstIdx] = 0;
 }
