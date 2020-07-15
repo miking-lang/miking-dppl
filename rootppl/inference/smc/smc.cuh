@@ -67,7 +67,6 @@ using pplFunc_t = void (*)(
  * int: The number of particles. 
  * void*: Argument to be passed. Mostly ignored in top-level inference. Can be used as a way of keeping data from nested inference after its clean up.
  */
-template <typename T>
 using callbackFunc_t = void (*)(particles_t&, int, void*);
 
 

@@ -80,8 +80,7 @@ __global__ void cumulativeOffspringToAncestorKernel(const int* cumulativeOffspri
  * @param ancestor the array containing the ancestor indices. 
  * @param numParticles the number of particles used in SMC.
  */
-template <typename T>
-__global__ void copyStatesKernel(particles_t<T> particlesDst, const particles_t<T> particlesSrc, int* ancestor, int numParticles) {
+__global__ void copyStatesKernel(particles_t particlesDst, const particles_t particlesSrc, int* ancestor, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 

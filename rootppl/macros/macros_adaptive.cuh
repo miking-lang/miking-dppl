@@ -12,10 +12,10 @@
 #define DEV __device__
 
 // A device pointer to a bblock
-#define DEV_POINTER(funcName, progStateType) __device__ pplFunc_t<progStateType> funcName ## Dev = funcName;
+#define DEV_POINTER(funcName, progStateType) __device__ pplFunc_t funcName ## Dev = funcName;
 
 // Copies a reference to a device function to a host pointer, necessary to handle GPU function pointers on CPU
-#define FUN_REF(funcName, progStateType) cudaSafeCall(cudaMemcpyFromSymbol(&funcName ## Host, funcName ## Dev, sizeof(pplFunc_t<progStateType>))); 
+#define FUN_REF(funcName, progStateType) cudaSafeCall(cudaMemcpyFromSymbol(&funcName ## Host, funcName ## Dev, sizeof(pplFunc_t))); 
 
 // Allocate data on host and device, should be followed by a COPY_DATA_GPU call before inference
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];\

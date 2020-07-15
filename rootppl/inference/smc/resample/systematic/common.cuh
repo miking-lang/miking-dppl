@@ -26,6 +26,7 @@ struct resampler_t {
     int* cumulativeOffspring;
     floating_t* prefixSum;
     particles_t auxParticles;
+    size_t progStateSize;
 };
 
 /**
@@ -35,7 +36,6 @@ struct resampler_t {
  * @param numParticles the number of particles used in SMC.
  * @return the allocated resampler struct. 
  */
- template <typename T>
 resampler_t initResampler(int numParticles, size_t progStateSize) {
 
     generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions. 
@@ -46,6 +46,7 @@ resampler_t initResampler(int numParticles, size_t progStateSize) {
     allocateMemory<floating_t>(&resampler.prefixSum, numParticles);
     
     resampler.auxParticles = allocateParticles(numParticles, progStateSize);
+    resampler.progStateSize = progStateSize;
 
     return resampler;
 }
@@ -108,9 +109,10 @@ HOST DEV void destResamplerNested(resampler_t<T> resampler) {
  * @param dstIdx the index in particlesDst to write to.
  * @param srcIdx the index in particlesSrc to read from. 
  */
-template <typename T>
-DEV void copyParticle(particles_t<T> particlesDst, const particles_t<T> particlesSrc, int dstIdx, int srcIdx) {
+HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, int progStateSize) {
     // particlesDst.progStates[dstIdx] = particlesSrc.progStates[srcIdx];
+    for(int i = 0; i < progStateSize/4; i++)
+        static_cast<int*>(particlesDst.progStates)[dstIdx + i] = static_cast<int*>(particlesSrc.progStates)[srcIdx + i];
     particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
     particlesDst.weights[dstIdx] = 0;
 }

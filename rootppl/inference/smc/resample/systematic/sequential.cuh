@@ -17,8 +17,7 @@
  * @param numParticles the number of particles used in SMC.
  * @return the logarithm of the total weight sum. 
  */
-template <typename T>
-HOST DEV floating_t calcLogWeightSumSeq(floating_t* w, resampler_t<T> resampler, int numParticles) {
+HOST DEV floating_t calcLogWeightSumSeq(floating_t* w, resampler_t resampler, int numParticles) {
     floating_t maxLogWeight = maxNaive(w, numParticles);
 
     // Corresponds to ExpWeightsKernel used in the parallel implementation
@@ -78,13 +77,16 @@ HOST DEV void cumulativeOffspringToAncestorSeq(int* cumulativeOffspring, int* an
  * @param resampler the resampler struct reference.
  * @param numParticles the number of particles used in SMC.
  */
-template <typename T>
-HOST DEV void copyStatesSeq(particles_t<T>& particles, resampler_t<T>& resampler, int numParticles) {
+HOST DEV void copyStatesSeq(particles_t& particles, resampler_t& resampler, int numParticles) {
         
     for(int i = 0; i < numParticles; i++)
-        copyParticle(resampler.auxParticles, particles, i, resampler.ancestor[i]);
+        copyParticle(resampler.auxParticles, particles, i, resampler.ancestor[i], resampler.progStateSize);
     
-    particles_t<T> tempAux = resampler.auxParticles;
+    // printf("pre: %d\n", static_cast<int*>(resampler.auxParticles.progStates)[0]);
+    // memcpy(resampler.auxParticles.progStates, particles.progStates, numParticles * resampler.progStateSize);
+    // printf("post: %d\n", static_cast<int*>(resampler.auxParticles.progStates)[0]);
+    // printf("progStateSize: %lu\n", resampler.progStateSize);
+    particles_t tempAux = resampler.auxParticles;
     resampler.auxParticles = particles;
     particles = tempAux;
 }
@@ -97,14 +99,13 @@ HOST DEV void copyStatesSeq(particles_t<T>& particles, resampler_t<T>& resampler
  * @param resampler the resampler struct reference.
  * @param numParticles the number of particles used in SMC.
  */
-template <typename T>
-DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t<T>& particles, resampler_t<T>& resampler, int numParticles) {
+DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t& particles, resampler_t& resampler, int numParticles) {
     
     floating_t u = SAMPLE(uniform, 0.0f, 1.0f);
 
     systematicCumulativeOffspringSeq(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
     cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor, numParticles);
-    copyStatesSeq<T>(particles, resampler, numParticles);
+    copyStatesSeq(particles, resampler, numParticles);
 }
 
 #endif

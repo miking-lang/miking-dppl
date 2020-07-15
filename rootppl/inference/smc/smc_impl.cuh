@@ -21,7 +21,7 @@
 #include "smc_kernels.cuh"
 #endif
 
-#include "smc_impl_nested.cuh"
+// #include "smc_impl_nested.cuh"
 
 /**
  * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
@@ -57,14 +57,14 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     cudaCheckError();
     #endif
 
-    resampler_t<char[progStateSize]> resampler = initResampler<T>(numParticles);
+    resampler_t resampler = initResampler(numParticles, progStateSize);
 
     // cudaProfilerStart();
     // Run program/inference
     while(true) {
 
         #ifdef GPU
-        execFuncs<T><<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, arg);
+        execFuncs<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
         floating_t logWeightSum = calcLogWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
@@ -81,9 +81,9 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
         logNormConstant += logWeightSum - log(numParticles);
         
         #ifdef GPU
-        resampleSystematicPar<T>(particles, resampler, numParticles, NUM_BLOCKS);
+        resampleSystematicPar(particles, resampler, numParticles, NUM_BLOCKS);
         #else
-        resampleSystematicSeq<T>(particles, resampler, numParticles);
+        resampleSystematicSeq(particles, resampler, numParticles);
         #endif
         
         // This last resample increases variance perhaps? But convenient to not have to consider weights when extracting distribution. 
@@ -97,8 +97,8 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
         callback(particles, numParticles, NULL);
 
     // Clean up
-    destResampler<T>(resampler);
-    freeParticles<T>(particles);
+    destResampler(resampler);
+    freeParticles(particles);
     #ifdef GPU
     cudaSafeCall(cudaFree(randStates));
     #endif

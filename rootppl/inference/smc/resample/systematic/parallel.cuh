@@ -17,8 +17,7 @@
 // #include <thrust/execution_policy.h>
 // #include <thrust/extrema.h>
 
-template <typename T>
-HOST DEV void prefixSumNaive(floating_t* w, resampler_t<T> resampler, int numParticles) {
+HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numParticles) {
     // Calculates in the inclusive prefix sum
     resampler.prefixSum[0] = w[0];
     for(int i = 1; i < numParticles; i++)
@@ -37,8 +36,7 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t<T> resampler, int numPar
  * @param numThreadsPerBlock kernel launch setting.
  * @return the logarithm of the total weight sum. 
  */
-template <typename T>
-HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t<T> resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
     // floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
     floating_t maxLogWeight = maxNaive(w, numParticles);
@@ -64,8 +62,7 @@ HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t<T> resampler,
  * @param numBlocks kernel launch setting.
  * @param numThreadsPerBlock kernel launch setting.
  */
-template <typename T>
-HOST DEV void decideAncestors(resampler_t<T>& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST DEV void decideAncestors(resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
     systematicCumulativeOffspringKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
 
@@ -83,17 +80,22 @@ HOST DEV void decideAncestors(resampler_t<T>& resampler, floating_t u, int numPa
  * @param numBlocks kernel launch setting.
  * @param numThreadsPerBlock kernel launch setting.
  */
-template <typename T>
-HOST DEV void postUniform(particles_t<T>& particles, resampler_t<T>& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
+ // SHOULD BE HOST DEV FOR NESTED SMC TO WORK
+HOST void postUniform(particles_t& particles, resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
-    decideAncestors<T>(resampler, u, numParticles, numBlocks, numThreadsPerBlock);
+    decideAncestors(resampler, u, numParticles, numBlocks, numThreadsPerBlock);
 
     // Copy states
-    copyStatesKernel<T><<<numBlocks, numThreadsPerBlock>>>(resampler.auxParticles, particles, resampler.ancestor, numParticles);
+    #if defined(__CUDA_ARCH__)
+    cudaMemcpy(resampler.auxParticles.progStates, particles.progStates, numParticles * resampler.progStateSize, cudaMemcpyDeviceToDevice);
+    #else
+    memcpy(resampler.auxParticles.progStates, particles.progStates, numParticles * resampler.progStateSize);
+    #endif
+    // copyStatesKernel<T><<<numBlocks, numThreadsPerBlock>>>(resampler.auxParticles, particles, resampler.ancestor, numParticles);
     cudaDeviceSynchronize();
 
     // Swap pointers
-    particles_t<T> tempAux = resampler.auxParticles;
+    particles_t tempAux = resampler.auxParticles;
     resampler.auxParticles = particles;
     particles = tempAux;
 }
@@ -108,13 +110,14 @@ HOST DEV void postUniform(particles_t<T>& particles, resampler_t<T>& resampler, 
  * @param numParticles the number of particles used in SMC.
  * @param numBlocks kernel launch setting.
  */
-template <typename T>
+/*template <typename T>
 DEV void resampleSystematicParNested(curandState* randState, particles_t<T>& particles, resampler_t<T>& resampler, int numParticles, int numBlocks) {
     
     floating_t u = uniform(randState, 0.0f, 1.0f);
     
     postUniform<T>(particles, resampler, u, numParticles, numBlocks, NUM_THREADS_PER_BLOCK_NESTED);
 }
+*/
 #endif
 
 /**
@@ -125,12 +128,11 @@ DEV void resampleSystematicParNested(curandState* randState, particles_t<T>& par
  * @param numParticles the number of particles used in SMC.
  * @param numBlocks kernel launch setting.
  */
-template <typename T>
-void resampleSystematicPar(particles_t<T>& particles, resampler_t<T>& resampler, int numParticles, int numBlocks) {
+void resampleSystematicPar(particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks) {
 
     floating_t u = uniformCPU(generatorRes);
 
-    postUniform<T>(particles, resampler, u, numParticles, numBlocks, NUM_THREADS_PER_BLOCK);
+    postUniform(particles, resampler, u, numParticles, numBlocks, NUM_THREADS_PER_BLOCK);
 }
 
 #endif

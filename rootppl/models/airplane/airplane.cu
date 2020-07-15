@@ -70,6 +70,7 @@ CALLBACK(callback, {
     floating_t maxX = -1;
     for (int i = 0; i < N; i++) {
         floating_t particleX = PSTATES[i].x;
+        printf("x: %f\n", PSTATES[i].x);
         if(abs(particleX - planeX[TIME_STEPS-1]) < 10)
             numParticlesClose++;
         minX = min(minX, particleX);

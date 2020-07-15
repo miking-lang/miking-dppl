@@ -50,7 +50,7 @@ typedef progStateType progStateTypeTopLevel_t;
 /***    BBLOCKS    ***/
 
 // Used by BBLOCK, BBLOCK_HELPER and BBLOCK_CALL macros.
-#define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t<progStateType>& particles, int particleIdx
+#define BBLOCK_PARAMS(progStateType) RAND_STATE_DECLARE particles_t& particles, int particleIdx
 #define BBLOCK_ARGS RAND_STATE particles, particleIdx
 
 // Declarations of BBLOCK and BBLOCK_HELPER functions.
@@ -93,10 +93,10 @@ body
 #define PC particles.pcs[particleIdx]
 
 // Access the particle's program/model specific state.
-#define PSTATE particles.progStates[particleIdx]
+#define PSTATE static_cast<progStateTypeTopLevel_t*>(particles.progStates)[particleIdx]
 
 // Access the array of progStates, should not be used by particles, but in callbacks for example. 
-#define PSTATES particles.progStates
+#define PSTATES static_cast<progStateTypeTopLevel_t*>(particles.progStates)
 /***    *****    ***/
 
 
@@ -121,7 +121,7 @@ The first bblock to be initialized will be the first to be executed, then the ex
 index (PC) specified by the model (bblocks).
 */
 #define ADD_BBLOCK_DEF(funcName, progStateType) \
-pplFunc_t<progStateType> funcName ## Host; \
+pplFunc_t funcName ## Host; \
 FUN_REF(funcName, progStateType) \
 bblocksArr[bbIdx] = funcName ## Host; \
 bbIdx++;

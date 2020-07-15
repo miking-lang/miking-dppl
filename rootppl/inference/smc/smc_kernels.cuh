@@ -34,8 +34,7 @@ __global__ void initCurandStates(curandState* randStates, int numThreads, int se
  * @param numParticles the number of particles used by SMC.
  * @param arg argument that are passed to the bblocks when invoking them, often not used and set to NULL. 
  */
-template <typename T>
-__global__ void execFuncs(curandState* randStates, particles_t<T> particles, const pplFunc_t<T>* funcs, 
+__global__ void execFuncs(curandState* randStates, particles_t particles, const pplFunc_t* funcs, 
                             int numParticles, int numThreads, void* arg) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
