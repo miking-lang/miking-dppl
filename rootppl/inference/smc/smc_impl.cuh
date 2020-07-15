@@ -21,7 +21,7 @@
 #include "smc_kernels.cuh"
 #endif
 
-// #include "smc_impl_nested.cuh"
+#include "smc_impl_nested.cuh"
 
 /**
  * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
@@ -35,18 +35,25 @@
  * @return the logged normalization constant.
  */
 template <typename T>
-double runSMC(const pplFunc_t<T>* bblocks, int numBblocks, const int numParticles, callbackFunc_t<T> callback = NULL, void* arg = NULL) {
+double runSMC(const pplFunc_t<T>* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
+                callbackFunc_t<T> callback = NULL, void* arg = NULL) {
 
     floating_t logNormConstant = 0;
 
     particles_t<T> particles = allocateParticles<T>(numParticles, false);
     
     #ifdef GPU
+    // Rather add an extra thread than add iterations for a few threads
+    const int numThreads = (numParticles + particlesPerThread - 1) / particlesPerThread;
+    printf("NumThreads: %d, NumParticles: %d\n", numThreads, numParticles);
+    printf("NumThreads*ParticlesPerThread = %d, Should be equal to: %d\n", numThreads*particlesPerThread, numParticles);
+
+    const int NUM_BLOCKS_EXEC = (numThreads + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     const int NUM_BLOCKS = (numParticles + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
 
     curandState* randStates;
-    cudaSafeCall(cudaMalloc(&randStates, sizeof(curandState) * numParticles));
-    initCurandStates<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, numParticles, 0);
+    cudaSafeCall(cudaMalloc(&randStates, sizeof(curandState) * numThreads));
+    initCurandStates<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, numThreads, 0);
     cudaDeviceSynchronize();
     cudaCheckError();
     #endif
@@ -58,7 +65,7 @@ double runSMC(const pplFunc_t<T>* bblocks, int numBblocks, const int numParticle
     while(true) {
 
         #ifdef GPU
-        execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, arg);
+        execFuncs<T><<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
         floating_t logWeightSum = calcLogWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);

@@ -57,7 +57,7 @@ DEV double runSMCNested(
     curandState* randStates;
     if(requireRandStates) {
         randStates = new curandState[numParticles];
-        initCurandStates<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, numParticles, parentIdx);
+        initCurandStates<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, numParticles, parentIdx);
         cudaDeviceSynchronize();
         cudaCheckErrorDev();
     }
@@ -71,7 +71,7 @@ DEV double runSMCNested(
         if(parallelExec) {
             #ifdef GPU
             // Use nested randStates
-            execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, numParticles, arg);
+            execFuncs<T><<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, numParticles, numParticles, arg);
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
             #endif

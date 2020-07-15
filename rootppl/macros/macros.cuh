@@ -149,6 +149,10 @@ int numParticles = 10000; \
 if(argc > 1) { \
     numParticles = atoi(argv[1]); \
 } \
+int particlesPerThread = 1; \
+if(argc > 2) { \
+    particlesPerThread = atoi(argv[2]); \
+} \
 int numBblocks = bbIdx; \
 configureMemSizeGPU(); \
 COPY_DATA_GPU(bblocksArr, pplFunc_t<progStateTypeTopLevel_t>, numBblocks) \
@@ -156,7 +160,7 @@ pplFunc_t<progStateTypeTopLevel_t>* bblocksArrCudaManaged; \
 allocateMemory<pplFunc_t<progStateTypeTopLevel_t>>(&bblocksArrCudaManaged, numBblocks); \
 for(int i = 0; i < numBblocks; i++) \
     bblocksArrCudaManaged[i] = bblocksArr[i]; \
-res = runSMC<progStateTypeTopLevel_t>(bblocksArrCudaManaged, numBblocks, numParticles, callback); \
+res = runSMC<progStateTypeTopLevel_t>(bblocksArrCudaManaged, numBblocks, numParticles, particlesPerThread, callback); \
 freeMemory<pplFunc_t<progStateTypeTopLevel_t>>(bblocksArrCudaManaged);
 
 

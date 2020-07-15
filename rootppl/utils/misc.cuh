@@ -64,7 +64,7 @@ void freeMemory(T* pointer) {
     size_t GPU_MEM_STACK = GPU_MEM_TOT - GPU_MEM_HEAP;
     size_t MAX_LOCAL_MEM_PER_THREAD = 512000; // 512 KB on all compute capabilities according to CUDA docs
     size_t MAX_STACK_SIZE = min(MAX_LOCAL_MEM_PER_THREAD, GPU_MEM_STACK / MAX_THREADS_RESIDENT);
-    MAX_STACK_SIZE *= 0.5; // For some reason, with nested inference, this limit must be lower. Also, lower can give better performance.
+    MAX_STACK_SIZE *= 1.0; // For some reason, with nested inference, this limit must be lower. Also, lower can give better performance.
     
     // Set limits and read the resulting set limits
     size_t heapSize, stackSize;
@@ -73,11 +73,11 @@ void freeMemory(T* pointer) {
     cudaDeviceGetLimit(&heapSize, cudaLimitMallocHeapSize);
     cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
 
-    if(false) {
+    if(true) {
         std::cout << "Global Memory size: " << GPU_MEM_TOT / 1000000.0 << " MB" << std::endl;
-        std::cout << "MaxStackSize Per Thread: " << MAX_STACK_SIZE / 1000000.0 << " MB" << std::endl;
+        std::cout << "Stack per thread max size attempted to set: " << MAX_STACK_SIZE / 1000.0 << " KB" << std::endl;
+        std::cout << "Stack per thread max size set: " << stackSize / 1000.0 << " KB" << std::endl;
         std::cout << "Device allocation heap max size: " << heapSize / 1000000.0 << " MB" << std::endl;
-        std::cout << "Stack per thread max size: " << stackSize / 1000.0 << " KB" << std::endl;
     }
     // cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     #endif
