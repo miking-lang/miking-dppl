@@ -34,7 +34,6 @@
  * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
  * @return the logged normalization constant.
  */
-template <typename T>
 double runSMC(const pplFunc_t<T>* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
                 callbackFunc_t<T> callback = NULL, void* arg = NULL) {
 
