@@ -26,7 +26,7 @@
  */
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
-    #ifdef GPU
+    #ifdef __NVCC__
     cudaSafeCall(cudaMallocManaged(pointer, sizeof(T) * n));
     #else
     *pointer = new T[n];
@@ -48,7 +48,7 @@ void allocateMemory(T** pointer, size_t n) {
  */
 template <typename T>
 void freeMemory(T* pointer) {
-    #ifdef GPU
+    #ifdef __NVCC__
     cudaSafeCall(cudaFree(pointer));
     #else
     delete[] pointer;

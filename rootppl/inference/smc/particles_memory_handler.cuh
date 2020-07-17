@@ -9,77 +9,36 @@
  * the same API (as opposed to the host functions for handling memory on the device). 
  */
 
-#include <cstring>
-#include "utils/misc.cuh"
-
 /**
  * Allocates particles for top-level SMC.
  * 
  * @param numParticles the number of particles that should be allocated.
+ * @param progStateSize the size of the particles program states in bytes. 
  * @param printMemSize whether the total size of the allocated particles should be printed. 
  * @return particle structure with pointers to the allocated data.
  */
-particles_t allocateParticles(int numParticles, size_t progStateSize, bool printMemSize=false) {
-
-    particles_t particles;
-    
-    allocateMemoryVoid(&particles.progStates, numParticles * progStateSize);
-    allocateMemory<int>(&particles.pcs, numParticles);
-    allocateMemory<floating_t>(&particles.weights, numParticles);
-
-    #ifdef GPU
-    cudaMemset(particles.pcs, 0, sizeof(int) * numParticles);
-    cudaMemset(particles.weights, 0, sizeof(floating_t) * numParticles);
-    #else
-    memset(particles.pcs, 0, sizeof(int) * numParticles);
-    memset(particles.weights, 0, sizeof(floating_t) * numParticles);
-    #endif
-
-    if (printMemSize) {
-        floating_t totalMem = progStateSize * numParticles + sizeof(int) * numParticles + sizeof(floating_t) * numParticles;
-        printf("Particles memory size for N=%d: %fMB\n", numParticles, totalMem * 2 / 1000000.0);
-    }
-    
-    return particles;
-}
+particles_t allocateParticles(int numParticles, size_t progStateSize, bool printMemSize=false);
 
 /**
  * Frees particles for top-level SMC.
  *  
  * @param particles structure with pointers to the allocated data.
  */
-void freeParticles(particles_t particles) {
-    freeMemoryVoid(particles.progStates);
-    freeMemory<int>(particles.pcs);
-    freeMemory<floating_t>(particles.weights);
-}
+void freeParticles(particles_t particles);
 
 /**
  * Allocates particles for nested SMC.
  *  
  * @param numParticles the number of particles that should be allocated.
+ * @param progStateSize the size of the particles program states in bytes. 
  */
-/*template <typename T>
-HOST DEV particles_t<T> allocateParticlesNested(int numParticles) {
-    particles_t<T> particles;
-    particles.progStates = new T[numParticles];
-    particles.pcs = new int[numParticles];
-    memset(particles.pcs, 0, sizeof(int) * numParticles);
-    particles.weights = new floating_t[numParticles];
-    memset(particles.weights, 0, sizeof(floating_t) * numParticles);
-    return particles;
-}*/
+HOST DEV particles_t allocateParticlesNested(int numParticles, size_t progStateSize);
 
 /**
  * Frees particles for nested SMC.
  *  
  * @param particles structure with pointers to the allocated data.
  */
-/*template <typename T>
-HOST DEV void freeParticlesNested(particles_t<T> particles) {
-    delete[] particles.progStates;
-    delete[] particles.pcs;
-    delete[] particles.weights;
-}*/
+HOST DEV void freeParticlesNested(particles_t particles);
 
 #endif

@@ -6,6 +6,8 @@
  * File smc_kernels.cuh contains kernels used by SMC. 
  */
 
+ #include <curand_kernel.h>
+ #include "inference/smc/smc.cuh"
 
 /**
  * This function initializes the curandStates.
@@ -14,16 +16,7 @@
  * @param numThreads the number of particles used by SMC.
  * @param seed used in curand_init to achieve unique RNG states in nested SMC (set to zero for top-level SMC).
  */
-__global__ void initCurandStates(curandState* randStates, int numThreads, int seed) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if(i >= numThreads || i < 0) return;
-
-    // Double check this seed, need only to be unique over one inference, as time should vary between inferences. 
-    // curand_init(1234 + clock64(), seed * numThreads + i, 0, &particles->randStates[i]);
-    curandState randStateLocal = randStates[i];
-    curand_init(1234 + clock64(), seed * numThreads + i, 0, &randStateLocal);
-    randStates[i] = randStateLocal;
-}
+__global__ void initCurandStates(curandState* randStates, int numThreads, int seed);
 
 /**
  * Each thread executes the bblock pointed to by the corresponding particle's PC. 
@@ -35,22 +28,6 @@ __global__ void initCurandStates(curandState* randStates, int numThreads, int se
  * @param arg argument that are passed to the bblocks when invoking them, often not used and set to NULL. 
  */
 __global__ void execFuncs(curandState* randStates, particles_t particles, const pplFunc_t* funcs, 
-                            int numParticles, int numThreads, void* arg) {
-
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    // if(i >= numParticles || i < 0) return;
-    if(i >= numThreads || i < 0) return;
-
-    curandState randStateLocal = randStates[i];
-    
-    for(int j = i; j < numParticles; j += numThreads) {
-        // printf("j: %d\n", j);
-        // funcs[particles.pcs[i]](&randStateLocal, particles, i, arg);
-        funcs[particles.pcs[j]](&randStateLocal, particles, j, arg);
-    }
-
-
-    randStates[i] = randStateLocal;
-}
+                            int numParticles, int numThreads, void* arg);
 
 #endif

@@ -14,7 +14,7 @@
 #include "resample/systematic/sequential.cuh"
 // #include "smc_include.cuh"
 
-#ifdef GPU
+#ifdef __NVCC__
 #include <curand_kernel.h>
 // #include "cuda_profiler_api.h"
 #include "utils/cuda_error_utils.cuh"
@@ -22,28 +22,15 @@
 #include "smc_kernels.cuh"
 #endif
 
-// #include "smc_impl_nested.cuh"
 
-
-/**
- * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
- * optional callback that can use resulting particles before memory is cleaned up.
- * 
- * @param bblocks the array of functions that will be executed by SMC.
- * @param numBblocks the size of the bblocks array.
- * @param numParticles number of particles to be used in SMC.
- * @param callback optional function that should be called with the resulting particles after inference.
- * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
- * @return the logged normalization constant.
- */
 double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
-                const int progStateSize, callbackFunc_t callback, void* arg) {
+                size_t progStateSize, callbackFunc_t callback, void* arg) {
 
     floating_t logNormConstant = 0;
 
     particles_t particles = allocateParticles(numParticles, progStateSize, false);
     
-    #ifdef GPU
+    #ifdef __NVCC__
     // Rather add an extra thread than add iterations for a few threads
     const int numThreads = (numParticles + particlesPerThread - 1) / particlesPerThread;
     printf("NumThreads: %d, NumParticles: %d\n", numThreads, numParticles);
@@ -65,7 +52,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     // Run program/inference
     while(true) {
 
-        #ifdef GPU
+        #ifdef __NVCC__
         execFuncs<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
@@ -82,7 +69,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
         logNormConstant += logWeightSum - log(numParticles);
         
-        #ifdef GPU
+        #ifdef __NVCC__
         resampleSystematicPar(particles, resampler, numParticles, NUM_BLOCKS);
         #else
         resampleSystematicSeq(particles, resampler, numParticles);
@@ -101,7 +88,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     // Clean up
     destResampler(resampler);
     freeParticles(particles);
-    #ifdef GPU
+    #ifdef __NVCC__
     cudaSafeCall(cudaFree(randStates));
     #endif
 
@@ -110,7 +97,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
 
 void configureMemSizeGPU() {
-    #ifdef GPU
+    #ifdef __NVCC__
 
     // Read memory properties and define limits
     cudaDeviceProp devProp;

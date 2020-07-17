@@ -6,7 +6,7 @@
  * the macros that are different depending on if it is compiling for CPU or GPU.
  */
 
-#ifdef GPU
+#ifdef __NVCC__
 
 #define HOST __host__
 #define DEV __device__

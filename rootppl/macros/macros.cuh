@@ -16,15 +16,11 @@
  * - Result (currently only normalizationConstant) available through local variable "res" in MAIN
  */
 
-#ifdef __NVCC__
-#define GPU
-#endif
-
 #include <stdlib.h>
 // #include "utils/misc.cuh"
 #include "macros_adaptive.cuh"
 
-#ifdef GPU
+#ifdef __NVCC__
 #include "utils/cuda_error_utils.cuh"
 #endif
 
@@ -93,11 +89,17 @@ body
 // Access particle program counter (bblock index).
 #define PC particles.pcs[particleIdx]
 
-// Access the particle's program/model specific state.
+// Access the particle's program/model specific state. Uses the top-level program state type.
 #define PSTATE static_cast<progStateTypeTopLevel_t*>(particles.progStates)[particleIdx]
 
-// Access the array of progStates, should not be used by particles, but in callbacks for example. 
+// Access the array of progStates, should not be used by particles, but in callbacks for example. Uses the top-level program state type.
 #define PSTATES static_cast<progStateTypeTopLevel_t*>(particles.progStates)
+
+// Access the particle's program/model specific state.
+#define PSTATE_TYPE(progStateType) static_cast<progStateType*>(particles.progStates)[particleIdx]
+
+// Access the array of progStates, should not be used by particles, but in callbacks for example. 
+#define PSTATES_TYPE(progStateType) static_cast<progStateType*>(particles.progStates)
 /***    *****    ***/
 
 
@@ -173,7 +175,7 @@ FREE(bblocksArrCudaManaged)
 
 // Prepare bblock array for initialization of bblocks, for nested inference only.
 #define SMC_PREPARE_NESTED(progStateType, numBblocks) \
-pplFunc_t<progStateType>* bblocks = new pplFunc_t<progStateType>[numBblocks]; /*{}*/ \
+pplFunc_t* bblocks = new pplFunc_t[numBblocks]; /*{}*/ \
 int bbIdx = 0;
 
 /* 
@@ -189,7 +191,7 @@ Run the nested inference with arguments:
 */
 #define SMC_NESTED(progStateType, numParticles, parallelExec, parallelResampling, parentIndex, callback, retStruct, arg) \
 int numBblocks = bbIdx; \
-double res = runSMCNested<progStateType>(RAND_STATE bblocks, numBblocks, numParticles, \
+double res = runSMCNested(RAND_STATE bblocks, numBblocks, numParticles, sizeof(progStateType), \
     parallelExec, parallelResampling, parentIndex, callback, (void*)&retStruct, (void*)arg); \
 delete[] bblocks;
 

@@ -6,12 +6,12 @@
  * This file is included by smc_impl.cuh. 
  */
 
-#include <math.h>
+// #include <math.h>
 
 #include "macros/macros.cuh"
 #include "dists/dists.cuh"
-// using namespace std;
-#ifdef GPU
+
+#ifdef __NVCC__
 #include <curand_kernel.h>
 #endif
 
@@ -45,14 +45,11 @@ struct particles_t {
  * 
  * curandState*: The RNG states required for sampling on the GPU. These are only included when compiled for the GPU. 
  * particles_t: The SMC particles, required for particles to access the weight, PC and progStates during execution of BBLOCKS.
- * void*: The address of the current particles' program state
- * int&: The PC of the executing particle. 
- * floating_t&: The weight of executing particle.
+ * int: The particle index of the executing particle. 
  * void*: optional argument, often set to NULL and ignored for top-level inference. 
  */
- // FIX DOC PARAMS
 using pplFunc_t = void (*)(
-    #ifdef GPU 
+    #ifdef __NVCC__ 
     curandState*, 
     #endif
     particles_t&,
@@ -80,12 +77,14 @@ using callbackFunc_t = void (*)(particles_t&, int, void*);
  * @param bblocks the array of functions that will be executed by SMC.
  * @param numBblocks the size of the bblocks array.
  * @param numParticles number of particles to be used in SMC.
+ * @param particlesPerThread indirectly determines how many CUDA threads will be necessary. Not used in CPU variant.
+ * @param progStateSize The size of the program state used by each particle. 
  * @param callback optional function that should be called with the resulting particles after inference.
  * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
  * @return the logged normalization constant.
  */
 double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
-    const int progStateSize, callbackFunc_t callback = NULL, void* arg = NULL);
+    size_t progStateSize, callbackFunc_t callback = NULL, void* arg = NULL);
 
     
 /**
@@ -95,6 +94,40 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
  * be tweaked to prioritize the memory type required by the program
  */
 void configureMemSizeGPU();
+
+
+
+
+/**
+ * Runs Sequential Monte Carlo inference on the given bblock functions with arg as optional argument, 
+ * then calls the given callback with the ret pointer. This allows caller to extract results
+ * from the particles to a structure before particles are cleaned. 
+ * The boolean arguments define whether new kernels should be launched within this nested inference. 
+ * (Requires CUDA dynamic parallelism, which implies compute capability requirements and a couple of compile directives) 
+ *
+ * Note:
+ * Do not use parallel settings if GPU is not defined! 
+ * New nested curandStates are only necessary with parallel execution (at least with systematic resampling)
+ *
+ * @param randState GPU only, parent particle's randState required for RNG without the new particles.
+ * @param bblocks the array of functions that will be executed by SMC.
+ * @param numBblocks the size of the bblocks array.
+ * @param numParticles number of particles to be used in SMC.
+ * @param progStateSize The size of the program state used by each particle. 
+ * @param parallelExec whether new kernels should be launched for executing the bblocks.
+ * @param parallelResampling whether new kernels should be launched within resampling.
+ * @param parentIdx the index of the parent SMC particle.
+ * @param callback optional function that should be called with the resulting particles after inference.
+ * @param ret optional return structure to be passed to the callback function so that data can be stored there and kept after SMC cleanup.
+ * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
+ * @return the logged normalization constant.
+ */
+ DEV double runSMCNested(
+    #ifdef __NVCC__
+    curandState* randState,
+    #endif
+    pplFunc_t* bblocks, int numBblocks, int numParticles, size_t progStateSize, bool parallelExec, bool parallelResampling, int parentIdx, 
+    callbackFunc_t callback = NULL, void* ret = NULL, void* arg = NULL);
 
 
 #endif

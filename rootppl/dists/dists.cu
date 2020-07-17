@@ -16,7 +16,7 @@
 #include <random>
 #include <time.h>
 
-#ifdef GPU
+#ifdef __NVCC__
 #include <curand_kernel.h>
 #endif
 
@@ -36,8 +36,8 @@ void initGen() {
     generatorDists.seed(time(NULL));
 }
 
-//#ifdef GPU
-#ifdef GPU
+//#ifdef __NVCC__
+#ifdef __NVCC__
 #include "dists_gpu.cuh"
 //#endif
 #else

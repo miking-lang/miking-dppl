@@ -7,7 +7,6 @@
 
 #include "common.cuh"
 
-
 /**
  * Calculates the log weight prefix sums safely according to the identity in the appendix of 
  * the paper "Parallel resampling in the particle filter", L. M. Murray et. al. 
@@ -17,24 +16,7 @@
  * @param numParticles the number of particles used in SMC.
  * @return the logarithm of the total weight sum. 
  */
-HOST DEV floating_t calcLogWeightSumSeq(floating_t* w, resampler_t resampler, int numParticles) {
-    floating_t maxLogWeight = maxNaive(w, numParticles);
-
-    // Corresponds to ExpWeightsKernel used in the parallel implementation
-    for(int i = 0; i < numParticles; i++)
-        w[i] = exp(w[i] - maxLogWeight);
-
-    // Calculates in the inclusive prefix sum
-    resampler.prefixSum[0] = w[0];
-    for(int i = 1; i < numParticles; i++)
-        resampler.prefixSum[i] = resampler.prefixSum[i-1] + w[i];
-
-    // Corresponds to the renormaliseSumsKernel used in the parallel implementation
-    for(int i = 0; i < numParticles; i++)
-        resampler.prefixSum[i] = log(resampler.prefixSum[i]) + maxLogWeight;    
-
-    return resampler.prefixSum[numParticles - 1];
-}
+HOST DEV floating_t calcLogWeightSumSeq(floating_t* w, resampler_t resampler, int numParticles);
 
 /**
  * Calculates the cumulative offspring of each particle. 
@@ -44,15 +26,7 @@ HOST DEV floating_t calcLogWeightSumSeq(floating_t* w, resampler_t resampler, in
  * @param u a sample from the standard uniform distribution. 
  * @param numParticles the number of particles used in SMC.
  */
-HOST DEV void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
-
-    floating_t totalSum = prefixSum[numParticles-1];
-    for(int i = 0; i < numParticles; i++) {
-
-        floating_t expectedCumulativeOffspring = numParticles * exp(prefixSum[i] - totalSum);
-        cumulativeOffspring[i] = MIN(numParticles, static_cast<int>(floor(expectedCumulativeOffspring + u)));
-    }
-}
+HOST DEV void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles);
 
 /**
  * Uses the cumulative offspring to assign the ancestor indices used for resample propagation. 
@@ -61,14 +35,7 @@ HOST DEV void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumul
  * @param ancestor the array to store the result in. 
  * @param numParticles the number of particles used in SMC.
  */
-HOST DEV void cumulativeOffspringToAncestorSeq(int* cumulativeOffspring, int* ancestor, int numParticles) {
-    for(int i = 0; i < numParticles; i++) {
-        int start = i == 0 ? 0 : cumulativeOffspring[i - 1];
-        int numCurrentOffspring = cumulativeOffspring[i] - start;
-        for(int j = 0; j < numCurrentOffspring; j++)
-            ancestor[start+j] = i;
-    }
-}
+HOST DEV void cumulativeOffspringToAncestorSeq(int* cumulativeOffspring, int* ancestor, int numParticles);
 
 /**
  * Propagates the particles. Copies them from the ancestor to the new particles. 
@@ -77,19 +44,7 @@ HOST DEV void cumulativeOffspringToAncestorSeq(int* cumulativeOffspring, int* an
  * @param resampler the resampler struct reference.
  * @param numParticles the number of particles used in SMC.
  */
-HOST DEV void copyStatesSeq(particles_t& particles, resampler_t& resampler, int numParticles) {
-        
-    for(int i = 0; i < numParticles; i++)
-        copyParticle(resampler.auxParticles, particles, i, resampler.ancestor[i], resampler.progStateSize);
-    
-    // printf("pre: %d\n", static_cast<int*>(resampler.auxParticles.progStates)[0]);
-    // memcpy(resampler.auxParticles.progStates, particles.progStates, numParticles * resampler.progStateSize);
-    // printf("post: %d\n", static_cast<int*>(resampler.auxParticles.progStates)[0]);
-    // printf("progStateSize: %lu\n", resampler.progStateSize);
-    particles_t tempAux = resampler.auxParticles;
-    resampler.auxParticles = particles;
-    particles = tempAux;
-}
+HOST DEV void copyStatesSeq(particles_t& particles, resampler_t& resampler, int numParticles);
 
 /**
  * Performs sequential resampling. Used in both top-level and nested SMC. 
@@ -99,13 +54,6 @@ HOST DEV void copyStatesSeq(particles_t& particles, resampler_t& resampler, int 
  * @param resampler the resampler struct reference.
  * @param numParticles the number of particles used in SMC.
  */
-DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t& particles, resampler_t& resampler, int numParticles) {
-    
-    floating_t u = SAMPLE(uniform, 0.0f, 1.0f);
-
-    systematicCumulativeOffspringSeq(resampler.prefixSum, resampler.cumulativeOffspring, u, numParticles);
-    cumulativeOffspringToAncestorSeq(resampler.cumulativeOffspring, resampler.ancestor, numParticles);
-    copyStatesSeq(particles, resampler, numParticles);
-}
+DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t& particles, resampler_t& resampler, int numParticles);
 
 #endif

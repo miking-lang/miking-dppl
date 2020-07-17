@@ -2,15 +2,15 @@
 #define RESAMPLE_COMMON_INCLUDED
 
 /*
- * File common.cuh contains definitions used by both sequential and parallel systematic resampling. 
+ * File common.cuh contains headers used by both sequential and parallel systematic resampling. 
  */
 
 #include <random>
-#include <time.h>
+#include "inference/smc/smc.cuh"
 
 // Generator for CPU RNG
-std::default_random_engine generatorRes;
-std::uniform_real_distribution<floating_t> uniformCPU(0.0, 1.0);
+extern std::default_random_engine generatorRes;
+extern std::uniform_real_distribution<floating_t> uniformCPU;
 
 /*
  * Resampler structure for Systematic resampling. Contains pointers to structures necessary for the resampling. 
@@ -34,42 +34,20 @@ struct resampler_t {
  * This should be used for top-level inference.  
  *
  * @param numParticles the number of particles used in SMC.
+ * @param progStateSize the size of the particles program states in bytes. 
  * @return the allocated resampler struct. 
  */
-resampler_t initResampler(int numParticles, size_t progStateSize) {
-
-    generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions. 
-    resampler_t resampler;
-
-    allocateMemory<int>(&resampler.ancestor, numParticles);
-    allocateMemory<int>(&resampler.cumulativeOffspring, numParticles);
-    allocateMemory<floating_t>(&resampler.prefixSum, numParticles);
-    
-    resampler.auxParticles = allocateParticles(numParticles, progStateSize);
-    resampler.progStateSize = progStateSize;
-
-    return resampler;
-}
+resampler_t initResampler(int numParticles, size_t progStateSize);
 
 /**
  * Allocates resampler and its arrays. 
  * This should be used for nseted inference. 
  *
  * @param numParticles the number of particles used in nested SMC.
+ * @param progStateSize the size of the particles program states in bytes. 
  * @return the allocated resampler struct. 
  */
-/*template <typename T>
-HOST DEV resampler_t<T> initResamplerNested(int numParticles) {
-
-    resampler_t<T> resampler;
-
-    resampler.ancestor = new int[numParticles];
-    resampler.cumulativeOffspring = new int[numParticles];
-    resampler.prefixSum = new floating_t[numParticles];
-    resampler.auxParticles = allocateParticlesNested<T>(numParticles);
-
-    return resampler;
-}*/
+HOST DEV resampler_t initResamplerNested(int numParticles, size_t progStateSize);
 
 /**
  * Frees the allocated arrays used by the resampler.
@@ -77,13 +55,7 @@ HOST DEV resampler_t<T> initResamplerNested(int numParticles) {
  *
  * @param resampler the resampler which should be freed.
  */
-void destResampler(resampler_t resampler) {
-
-    freeMemory<int>(resampler.ancestor);
-    freeMemory<int>(resampler.cumulativeOffspring);
-    freeMemory<floating_t>(resampler.prefixSum);
-    freeParticles(resampler.auxParticles);
-}
+void destResampler(resampler_t resampler);
 
 /**
  * Frees the allocated arrays used by the resampler.
@@ -91,13 +63,7 @@ void destResampler(resampler_t resampler) {
  *
  * @param resampler the resampler which should be freed.
  */
-/*template <typename T>
-HOST DEV void destResamplerNested(resampler_t<T> resampler) {
-    delete[] resampler.ancestor;
-    delete[] resampler.cumulativeOffspring;
-    delete[] resampler.prefixSum;
-    freeParticlesNested<T>(resampler.auxParticles);
-}*/
+HOST DEV void destResamplerNested(resampler_t resampler);
 
 /**
  * Copies data from one particle in the source array to a particle in the destination array and resets the weight. 
@@ -109,16 +75,6 @@ HOST DEV void destResamplerNested(resampler_t<T> resampler) {
  * @param dstIdx the index in particlesDst to write to.
  * @param srcIdx the index in particlesSrc to read from. 
  */
-HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
-    // particlesDst.progStates[dstIdx] = particlesSrc.progStates[srcIdx];
-    // int* progStates;
-    // for(int i = 0; i < progStateSize/4; i++)
-        // static_cast<int*>(particlesDst.progStates)[dstIdx + i] = static_cast<int*>(particlesSrc.progStates)[srcIdx + i];
-    char* psDst = static_cast<char*>(particlesDst.progStates);
-    char* psSrc = static_cast<char*>(particlesSrc.progStates);
-    memcpy(&(psDst[progStateSize * dstIdx]), &(psSrc[progStateSize * srcIdx]), progStateSize);
-    particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
-    particlesDst.weights[dstIdx] = 0;
-}
+HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize);
 
 #endif

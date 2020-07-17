@@ -15,7 +15,7 @@
 // using namespace std;
 
 void allocateMemoryVoid(void** pointer, size_t allocSize) {
-     #ifdef GPU
+     #ifdef __NVCC__
      cudaSafeCall(cudaMallocManaged(pointer, allocSize));
      #else
      *pointer = malloc(allocSize);
@@ -23,7 +23,7 @@ void allocateMemoryVoid(void** pointer, size_t allocSize) {
 }
 
 void freeMemoryVoid(void* pointer) {
-    #ifdef GPU
+    #ifdef __NVCC__
     cudaSafeCall(cudaFree(pointer));
     #else
     free(pointer);

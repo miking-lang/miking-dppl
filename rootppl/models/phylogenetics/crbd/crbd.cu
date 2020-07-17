@@ -11,6 +11,7 @@
 #include <cstring>
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
+#include "utils/math.cuh"
 
 
 /*
@@ -86,7 +87,7 @@ BBLOCK(goesExtinctBblock, nestedProgState_t, {
     tree_t* treeP = DATA_POINTER(tree);
     double age = treeP->ages[ROOT_IDX];
     
-    PSTATE.extinct = goesExtinct(RAND_STATE age);
+    PSTATE_TYPE(nestedProgState_t).extinct = goesExtinct(RAND_STATE age);
     PC++;
 })
 
@@ -160,7 +161,7 @@ BBLOCK(simTree, progState_t, {
 CALLBACK_NESTED(calcResult, nestedProgState_t, {
     int numExtinct = 0;
     for(int i = 0; i < numParticles; i++)
-        numExtinct += PSTATES[i].extinct;
+        numExtinct += PSTATES_TYPE(nestedProgState_t)[i].extinct;
 
     int numSurvived = numParticles - numExtinct;
     return_t* retP = static_cast<return_t*>(ret);

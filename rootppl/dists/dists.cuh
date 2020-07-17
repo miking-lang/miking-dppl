@@ -1,7 +1,7 @@
 #ifndef DISTS_INCLUDED
 #define DISTS_INCLUDED
 
-#ifdef GPU
+#ifdef __NVCC__
 #include <curand_kernel.h>
 #endif
 
