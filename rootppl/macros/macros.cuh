@@ -21,6 +21,7 @@
 #endif
 
 #include <stdlib.h>
+// #include "utils/misc.cuh"
 #include "macros_adaptive.cuh"
 
 #ifdef GPU
@@ -143,6 +144,7 @@ bbIdx++;
 // This macro should be called like this: OBSERVE(distName, distArgs, value)
 #define OBSERVE(distName, ...) WEIGHT(distName ## Score(__VA_ARGS__))
 
+
 // Run SMC with callback function (optional, can be declared with CALLBACK macro).
 #define SMC(callback) \
 int numParticles = 10000; \
@@ -157,13 +159,15 @@ int numBblocks = bbIdx; \
 configureMemSizeGPU(); \
 COPY_DATA_GPU(bblocksArr, pplFunc_t, numBblocks) \
 pplFunc_t* bblocksArrCudaManaged; \
-allocateMemory<pplFunc_t>(&bblocksArrCudaManaged, numBblocks); \
+ALLOC_TYPE(&bblocksArrCudaManaged, pplFunc_t, numBblocks); \
 for(int i = 0; i < numBblocks; i++) \
     bblocksArrCudaManaged[i] = bblocksArr[i]; \
 res = runSMC(bblocksArrCudaManaged, numBblocks, numParticles, particlesPerThread, sizeof(progStateTypeTopLevel_t), callback); \
-freeMemory<pplFunc_t>(bblocksArrCudaManaged);
+FREE(bblocksArrCudaManaged)
 
+// freeMemory<pplFunc_t>(bblocksArrCudaManaged);
 
+// allocateMemory<pplFunc_t>(&bblocksArrCudaManaged, numBblocks); \
 
 /*** Nested SMC, not as thoroughly developed as top-level SMC ***/
 

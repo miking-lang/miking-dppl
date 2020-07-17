@@ -7,9 +7,10 @@
 #include <random>
 #include <time.h>
 
-#include "inference/smc/smc_impl.cuh"
+#include "inference/smc/smc.cuh"
 
 using namespace std;
+
 #include "airplane.cuh"
 #include "airplane_utils.cuh"
 
@@ -46,6 +47,7 @@ BBLOCK(propagateAndWeight, {
     PSTATE.x += SAMPLE(normal, VELOCITY, TRANSITION_STD);
 
     // Weight
+    // printf("t: %d\n", PSTATE.t);
     WEIGHT(logNormalPDFObs(DATA_POINTER(planeObs)[PSTATE.t], mapLookupApprox(DATA_POINTER(mapApprox), PSTATE.x)));
     PSTATE.t++;
 
@@ -70,7 +72,6 @@ CALLBACK(callback, {
     floating_t maxX = -1;
     for (int i = 0; i < N; i++) {
         floating_t particleX = PSTATES[i].x;
-        printf("x: %f\n", PSTATES[i].x);
         if(abs(particleX - planeX[TIME_STEPS-1]) < 10)
             numParticlesClose++;
         minX = min(minX, particleX);
@@ -78,6 +79,14 @@ CALLBACK(callback, {
     }
 
     cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / N << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
+
+    /*
+    floating_t xs[N];
+    for(int i = 0; i < N; i++)
+        xs[i] = PSTATES[i].x;
+    printHistogram<floating_t>(xs, N, 20, 0, MAP_SIZE);
+    printf("Plane pos: %f\n", planeX[TIME_STEPS-1]);
+    */
 })
 
 

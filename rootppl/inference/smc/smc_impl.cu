@@ -12,6 +12,7 @@
 #include "dists/dists.cuh"
 #include "particles_memory_handler.cuh"
 #include "resample/systematic/sequential.cuh"
+// #include "smc_include.cuh"
 
 #ifdef GPU
 #include <curand_kernel.h>
@@ -22,6 +23,7 @@
 #endif
 
 // #include "smc_impl_nested.cuh"
+
 
 /**
  * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
@@ -35,7 +37,7 @@
  * @return the logged normalization constant.
  */
 double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
-                const int progStateSize, callbackFunc_t callback = NULL, void* arg = NULL) {
+                const int progStateSize, callbackFunc_t callback, void* arg) {
 
     floating_t logNormConstant = 0;
 
@@ -104,6 +106,38 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     #endif
 
     return logNormConstant;
+}
+
+
+void configureMemSizeGPU() {
+    #ifdef GPU
+
+    // Read memory properties and define limits
+    cudaDeviceProp devProp;
+    cudaGetDeviceProperties(&devProp, 0);
+    size_t MAX_THREADS_RESIDENT = devProp.maxThreadsPerMultiProcessor * devProp.multiProcessorCount;
+    size_t GPU_MEM_TOT = devProp.totalGlobalMem * 0.95; // Leave 5% of memory for global structures or just to be sure
+    size_t GPU_MEM_HEAP = GPU_MEM_TOT * 0.20; // Arbitrarily set 20% of GPU memory to device allocated heap memory
+    size_t GPU_MEM_STACK = GPU_MEM_TOT - GPU_MEM_HEAP;
+    size_t MAX_LOCAL_MEM_PER_THREAD = 512000; // 512 KB on all compute capabilities according to CUDA docs
+    size_t MAX_STACK_SIZE = min(MAX_LOCAL_MEM_PER_THREAD, GPU_MEM_STACK / MAX_THREADS_RESIDENT);
+    MAX_STACK_SIZE *= 1.0; // For some reason, with nested inference, this limit must be lower. Also, lower can give better performance.
+    
+    // Set limits and read the resulting set limits
+    size_t heapSize, stackSize;
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, GPU_MEM_HEAP);
+    cudaDeviceSetLimit(cudaLimitStackSize, MAX_STACK_SIZE);
+    cudaDeviceGetLimit(&heapSize, cudaLimitMallocHeapSize);
+    cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
+
+    if(true) {
+        std::cout << "Global Memory size: " << GPU_MEM_TOT / 1000000.0 << " MB" << std::endl;
+        std::cout << "Stack per thread max size attempted to set: " << MAX_STACK_SIZE / 1000.0 << " KB" << std::endl;
+        std::cout << "Stack per thread max size set: " << stackSize / 1000.0 << " KB" << std::endl;
+        std::cout << "Device allocation heap max size: " << heapSize / 1000000.0 << " MB" << std::endl;
+    }
+    // cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+    #endif
 }
 
 

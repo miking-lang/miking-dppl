@@ -109,10 +109,14 @@ HOST DEV void destResamplerNested(resampler_t<T> resampler) {
  * @param dstIdx the index in particlesDst to write to.
  * @param srcIdx the index in particlesSrc to read from. 
  */
-HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, int progStateSize) {
+HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
     // particlesDst.progStates[dstIdx] = particlesSrc.progStates[srcIdx];
-    for(int i = 0; i < progStateSize/4; i++)
-        static_cast<int*>(particlesDst.progStates)[dstIdx + i] = static_cast<int*>(particlesSrc.progStates)[srcIdx + i];
+    // int* progStates;
+    // for(int i = 0; i < progStateSize/4; i++)
+        // static_cast<int*>(particlesDst.progStates)[dstIdx + i] = static_cast<int*>(particlesSrc.progStates)[srcIdx + i];
+    char* psDst = static_cast<char*>(particlesDst.progStates);
+    char* psSrc = static_cast<char*>(particlesSrc.progStates);
+    memcpy(&(psDst[progStateSize * dstIdx]), &(psSrc[progStateSize * srcIdx]), progStateSize);
     particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
     particlesDst.weights[dstIdx] = 0;
 }

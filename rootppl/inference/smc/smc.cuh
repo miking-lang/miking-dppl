@@ -6,7 +6,10 @@
  * This file is included by smc_impl.cuh. 
  */
 
+#include <math.h>
 
+#include "macros/macros.cuh"
+#include "dists/dists.cuh"
 // using namespace std;
 #ifdef GPU
 #include <curand_kernel.h>
@@ -68,6 +71,30 @@ using pplFunc_t = void (*)(
  * void*: Argument to be passed. Mostly ignored in top-level inference. Can be used as a way of keeping data from nested inference after its clean up.
  */
 using callbackFunc_t = void (*)(particles_t&, int, void*);
+
+
+/**
+ * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
+ * optional callback that can use resulting particles before memory is cleaned up.
+ * 
+ * @param bblocks the array of functions that will be executed by SMC.
+ * @param numBblocks the size of the bblocks array.
+ * @param numParticles number of particles to be used in SMC.
+ * @param callback optional function that should be called with the resulting particles after inference.
+ * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
+ * @return the logged normalization constant.
+ */
+double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
+    const int progStateSize, callbackFunc_t callback = NULL, void* arg = NULL);
+
+    
+/**
+ * This is an attempt to make most of the GPU memory available 
+ * from kernels via implicit stacks and device malloc calls
+ * When running programs that reaches the memory limit, this could 
+ * be tweaked to prioritize the memory type required by the program
+ */
+void configureMemSizeGPU();
 
 
 #endif

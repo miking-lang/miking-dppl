@@ -11,6 +11,9 @@
 #define HOST __host__
 #define DEV __device__
 
+#define ALLOC_TYPE(pointerAddress, type, n) cudaSafeCall(cudaMallocManaged(pointerAddress, sizeof(type) * n));
+#define FREE(pointer) cudaSafeCall(cudaFree(pointer));
+
 // A device pointer to a bblock
 #define DEV_POINTER(funcName, progStateType) __device__ pplFunc_t funcName ## Dev = funcName;
 
@@ -54,6 +57,8 @@ __device__ type* pointerName ## Dev;
 // The macros below are equivalent to the GPU variants above, but for CPU
 #define HOST
 #define DEV
+#define ALLOC_TYPE(pointerAddress, type, n) *pointerAddress = new type[n];
+#define FREE(pointer) delete[] pointer;
 #define DEV_POINTER(funcName, progStateType)
 #define FUN_REF(funcName, progStateType) funcName ## Host = funcName;
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];

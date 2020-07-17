@@ -6,12 +6,15 @@
 #ifndef STACK_INCLUDED
 #define STACK_INCLUDED
 
+#include <string.h>
 
-const int MAX_STACK_DEPTH = 100;
+
+const int MAX_STACK_DEPTH = 70;
 
 #define WORDS
 #ifdef WORDS
 const bool LARGE_COPIES = true;
+// int maxDepth = 0;
 
 // const int INCR_LEN = NUM_PARTICLES;
 
@@ -21,7 +24,7 @@ struct pStack_t {
     // int* arr;
 
     // Overloading of Assignment Operator
-    HOST DEV void operator=(const pStack_t &S ) { 
+    /*HOST DEV void operator=(const pStack_t &S ) { 
         // printf("overload\n");
         stackPointer = S.stackPointer;
         for(int i = 0; i < stackPointer; i++)
@@ -31,11 +34,12 @@ struct pStack_t {
         // copy(S.arr, S.arr + stackPointer, arr);
         // memcpy(this, &S, sizeof(int) + S.stackPointer * sizeof(int));
         // arr = S.arr;
-    }
+    }*/
 
     HOST DEV void push(int element) {
         arr[stackPointer] = element;
         stackPointer++;
+        // maxDepth = MAX(maxDepth, stackPointer);
         //stackPointer += INCR_LEN;
         //printf("SP: %d, max: %d\n", stackPointer, MAX_STACK_DEPTH * NUM_PARTICLES);
     }

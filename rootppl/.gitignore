@@ -3,4 +3,4 @@
 .vscode/
 .idea/
 __pycache__/
-Makefile
+out/

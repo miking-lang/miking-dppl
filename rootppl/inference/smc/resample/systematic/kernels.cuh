@@ -80,11 +80,11 @@ __global__ void cumulativeOffspringToAncestorKernel(const int* cumulativeOffspri
  * @param ancestor the array containing the ancestor indices. 
  * @param numParticles the number of particles used in SMC.
  */
-__global__ void copyStatesKernel(particles_t particlesDst, const particles_t particlesSrc, int* ancestor, int numParticles) {
+__global__ void copyStatesKernel(particles_t particlesDst, const particles_t particlesSrc, int* ancestor, int numParticles, size_t progStateSize) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    copyParticle(particlesDst, particlesSrc, idx, ancestor[idx]);
+    copyParticle(particlesDst, particlesSrc, idx, ancestor[idx], progStateSize);
 }
 
 

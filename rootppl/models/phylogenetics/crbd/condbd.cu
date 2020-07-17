@@ -3,8 +3,9 @@
  * This model traverses the tree with a DFS path that corresponds to the recursive calls in the original model. 
  */
 
+#include <stdio.h>
 
-#include "inference/smc/smc_impl.cuh"
+#include "inference/smc/smc.cuh"
 
 #include "../tree-utils/tree_utils.cuh"
 #include "stack.cuh"
@@ -190,4 +191,5 @@ MAIN(
     ADD_BBLOCK(condBD_4)
 
     SMC(NULL)
+    //printf("Max: %d\n", maxDepth);
 )

@@ -38,14 +38,14 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
  */
 HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
-    // floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
-    floating_t maxLogWeight = maxNaive(w, numParticles);
+    floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
+    // floating_t maxLogWeight = maxNaive(w, numParticles);
     
     expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight);
     cudaDeviceSynchronize();
-    // thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
+    thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
     // Calculates in the inclusive prefix sum
-    prefixSumNaive(w, resampler, numParticles);
+    // prefixSumNaive(w, resampler, numParticles);
 
     renormaliseSumsKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.prefixSum, numParticles, maxLogWeight);
     
@@ -80,18 +80,19 @@ HOST DEV void decideAncestors(resampler_t& resampler, floating_t u, int numParti
  * @param numBlocks kernel launch setting.
  * @param numThreadsPerBlock kernel launch setting.
  */
- // SHOULD BE HOST DEV FOR NESTED SMC TO WORK
-HOST void postUniform(particles_t& particles, resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST DEV void postUniform(particles_t& particles, resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
     decideAncestors(resampler, u, numParticles, numBlocks, numThreadsPerBlock);
 
     // Copy states
+    /*
     #if defined(__CUDA_ARCH__)
     cudaMemcpy(resampler.auxParticles.progStates, particles.progStates, numParticles * resampler.progStateSize, cudaMemcpyDeviceToDevice);
     #else
     memcpy(resampler.auxParticles.progStates, particles.progStates, numParticles * resampler.progStateSize);
     #endif
-    // copyStatesKernel<T><<<numBlocks, numThreadsPerBlock>>>(resampler.auxParticles, particles, resampler.ancestor, numParticles);
+    */
+    copyStatesKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.auxParticles, particles, resampler.ancestor, numParticles, resampler.progStateSize);
     cudaDeviceSynchronize();
 
     // Swap pointers

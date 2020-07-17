@@ -12,8 +12,9 @@
 #include <iostream>
 #include <cstring>
 
-#include "inference/smc/smc_impl.cuh"
+#include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
+#include "utils/math.cuh"
 #include "bamm.cuh"
 
 
