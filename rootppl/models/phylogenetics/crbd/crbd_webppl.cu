@@ -10,7 +10,6 @@
 
 #include <stdio.h>
 
-
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
@@ -42,9 +41,9 @@ struct progState_t {
     floating_t mu;
     treeIdx_t treeIdx;
 };
-typedef bisse32_tree_t tree_t;
+// typedef bisse32_tree_t tree_t;
 // typedef bisse32precision_tree_t tree_t;
-// typedef primate_tree_t tree_t;
+typedef primate_tree_t tree_t;
 
 const int MAX_DIV = 5;
 const int MAX_LAM = 5;

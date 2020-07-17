@@ -4,7 +4,9 @@
  */
 
 #include <stdio.h>
+#include <math.h>
 
+#include "macros/macros.cuh"
 #include "inference/smc/smc.cuh"
 
 #include "../tree-utils/tree_utils.cuh"

@@ -9,7 +9,7 @@
 #include <string.h>
 
 
-const int MAX_STACK_DEPTH = 70;
+const int MAX_STACK_DEPTH = 100;
 
 #define WORDS
 #ifdef WORDS
