@@ -33,8 +33,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     #ifdef __NVCC__
     // Rather add an extra thread than add iterations for a few threads
     const int numThreads = (numParticles + particlesPerThread - 1) / particlesPerThread;
-    printf("NumThreads: %d, NumParticles: %d\n", numThreads, numParticles);
-    printf("NumThreads*ParticlesPerThread = %d, Should be equal to: %d\n", numThreads*particlesPerThread, numParticles);
 
     const int NUM_BLOCKS_EXEC = (numThreads + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
     const int NUM_BLOCKS = (numParticles + NUM_THREADS_PER_BLOCK - 1) / NUM_THREADS_PER_BLOCK;
@@ -117,7 +115,7 @@ void configureMemSizeGPU() {
     cudaDeviceGetLimit(&heapSize, cudaLimitMallocHeapSize);
     cudaDeviceGetLimit(&stackSize, cudaLimitStackSize);
 
-    if(true) {
+    if(false) {
         std::cout << "Global Memory size: " << GPU_MEM_TOT / 1000000.0 << " MB" << std::endl;
         std::cout << "Stack per thread max size attempted to set: " << MAX_STACK_SIZE / 1000.0 << " KB" << std::endl;
         std::cout << "Stack per thread max size set: " << stackSize / 1000.0 << " KB" << std::endl;

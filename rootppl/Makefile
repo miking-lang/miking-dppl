@@ -12,9 +12,10 @@
 
 ifdef arch
 # GPU
-CC=/usr/local/cuda-11.0/bin/nvcc
-FLAGS=-I. -std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3 -DRELEASE
-FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3 -DRELEASE
+# CC=/usr/local/cuda-11.0/bin/nvcc
+CC=nvcc
+FLAGS=-I. -std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
+FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 else
 # CPU
 CC=g++
