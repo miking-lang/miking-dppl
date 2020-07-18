@@ -18,13 +18,6 @@
     This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
 */
 
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++14 -O3
-g++ -x c++ -I . models/phylogenetics/crbd/crbd_webppl.cu -o smc.exe -std=c++14 -O3
-*/
-
 // Bisse-32 tree
 // This model on local WebPPL with 10000 particles took ~42 sec
 // This program on CPU took ~0.11 sec

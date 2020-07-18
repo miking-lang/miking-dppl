@@ -18,13 +18,6 @@
 #include "bamm.cuh"
 
 
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++14 -O3
-g++ -x c++ -I . models/phylogenetics/bamm/bamm.cu -o smc.exe -std=c++14 -O3
-*/
-
 #define NUM_BBLOCKS 3
 INIT_MODEL(progState_t, NUM_BBLOCKS)
 
