@@ -116,7 +116,7 @@ int main(int argc, char** argv) { \
 
 // Functions that can be called from the framework, usually to use resulting particle distributions before clean up.
 #define CALLBACK(funcName, body) void funcName(particles_t& particles, int N, void* arg=NULL) body
-#define CALLBACK_NESTED(funcName, progStateType, body, arg) DEV void funcName(particles_t& particles, int numParticles, arg) body
+#define CALLBACK_NESTED(funcName, progStateType, body, arg) DEV void funcName(particles_t& particles, int N, arg) body
 
 /* 
 Initialize the basic block (add it to the array of bblocks), the order of bblocks matters!

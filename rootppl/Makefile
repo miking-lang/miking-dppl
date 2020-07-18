@@ -1,20 +1,20 @@
 # SRC_FILE=models/phylogenetics/crbd/crbd_webppl.cu
 # MODEL=models/airplane/airplane.cu
-define \n
+# define \n
 
 
-endef
+# endef
 
 
 # ifndef MODEL
 # $(error MODEL argument needs to be set with e.g.: $(\n)make MODEL=path/to/model.cu$(\n))
 # endif
 
-ifdef GPU
+ifdef arch
 # GPU
 CC=/usr/local/cuda-11.0/bin/nvcc
-FLAGS=-I. -std=c++14 -arch=sm_75 -rdc=true -lcudadevrt -O3 -DRELEASE
-FLAGS_LINK=-std=c++14 -arch=sm_75 -rdc=true -lcudadevrt -O3 -DRELEASE
+FLAGS=-I. -std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3 -DRELEASE
+FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3 -DRELEASE
 else
 # CPU
 CC=g++
@@ -27,6 +27,7 @@ EXEC_NAME=program
 SMC_SRC=inference/smc/smc.cu
 SMC_NESTED_SRC=inference/smc/smc_nested.cu
 DISTS_SRC=dists/dists.cu
+SCORES_SRC=dists/scores.cu
 PARTICLES_MEMORY_HANDLER_SRC=inference/smc/particles_memory_handler.cu
 MISC_SRC=utils/misc.cu
 MATH_SRC=utils/math.cu
@@ -37,7 +38,7 @@ SYSTEMATIC_PARALLEL_SRC=inference/smc/resample/systematic/parallel.cu
 SYSTEMATIC_KERNELS_SRC=inference/smc/resample/systematic/kernels.cu
 
 OBJDIR=out
-_OBJ_FILES_FRAMEWORK=smc.o smc_nested.o dists.o particles_memory_handler.o misc.o math.o \
+_OBJ_FILES_FRAMEWORK=smc.o smc_nested.o dists.o scores.o particles_memory_handler.o misc.o math.o \
 	smc_kernels.o systematic_common.o systematic_seq.o systematic_parallel.o systematic_kernels.o
 OBJ_FILES_FRAMEWORK=$(patsubst %.o, $(OBJDIR)/%.o, $(_OBJ_FILES_FRAMEWORK))
 
@@ -79,6 +80,9 @@ $(OBJDIR)/smc_nested.o: $(FRAMEWORK_FILES)
 # $(OBJDIR)/dists.o: $(wildcard dists/*) utils/misc.cuh utils/math.cuh $(wildcard macros/*.cuh)
 $(OBJDIR)/dists.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(DISTS_SRC) -o $@
+
+$(OBJDIR)/scores.o: $(FRAMEWORK_FILES)
+	$(CC) -c $(FLAGS) $(SCORES_SRC) -o $@
 
 # $(OBJDIR)/particles_memory_handler.o: $(PARTICLES_MEMORY_HANDLER_SRC) inference/smc/smc.cuh utils/misc.cuh
 $(OBJDIR)/particles_memory_handler.o: $(FRAMEWORK_FILES)

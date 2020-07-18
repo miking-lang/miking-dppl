@@ -2,15 +2,11 @@
  * File mixture.cu defines a mixture model example. 
  */
 
-#include "inference/smc/smc_impl.cuh"
+#include <stdio.h>
 
+#include "inference/smc/smc.cuh"
+#include "utils/misc.cuh"
 
-/*
-Compile commands:
- 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/mixture.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/simple-examples/mixture.cu -o smc.exe -std=c++11 -O3
-*/
   
 // Initialize the model with program state type and number of bblocks.
 INIT_MODEL(double, 1)

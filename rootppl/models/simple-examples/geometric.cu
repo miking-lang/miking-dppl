@@ -2,15 +2,10 @@
  * File geometric.cu defines the geometric distribution model. 
  */
 
-#include "inference/smc/smc_impl.cuh"
+#include <stdio.h>
 
-
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/geometric.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/simple-examples/geometric.cu -o smc.exe -std=c++11 -O3
-*/
+#include "inference/smc/smc.cuh"
+#include "utils/misc.cuh"
 
 // Initialize the model with program state type and number of bblocks.
 INIT_MODEL(int, 1)
@@ -23,23 +18,15 @@ BBLOCK_HELPER(geometricRecursive, {
     else
         return BBLOCK_CALL(geometricRecursive, p) + 1;
 
-}, int, floating_t p)
+}, int, double p)
 
 // Define the model (or fragment of model) with a BBLOCK. 
 BBLOCK(geometric, {
-    
-    int numFlips = 0;
-    int currFlip = 0;
-    
-    while(! currFlip) {
-
+    int numFlips = 1;
+    while(! SAMPLE(bernoulli, 0.6))
         numFlips++;
-        currFlip = SAMPLE(bernoulli, 0.6);
-    }
 
     PSTATE = numFlips;
-    
-
     // PSTATE = BBLOCK_CALL(geometricRecursive, 0.6);
     PC++;
 })

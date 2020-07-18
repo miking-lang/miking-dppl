@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-#include "inference/smc/smc_impl.cuh"
+#include "inference/smc/smc.cuh"
 #include "utils/distributions.cuh"
 #include "utils/misc.cuh"
 #include "lda.cuh"

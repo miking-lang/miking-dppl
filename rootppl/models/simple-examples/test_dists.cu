@@ -1,13 +1,12 @@
 /*
  * This model tests most distributions. 
+ * NOTE: This model seems to be broken, fix the comma separator problem again? Related to new way of compiling or new c++ version?
  */
 
+#include <stdio.h>
 
-#include "inference/smc/smc_impl.cuh"
+#include "inference/smc/smc.cuh"
 
-// nvcc -arch=sm_75 -rdc=true -I . models/simple-examples/test_dists.cu -o smc.exe -lcudadevrt -std=c++11 -O3
-
-// Compile CPU: g++ -x c++ -I . models/simple-examples/test_dists.cu -o smc.exe -std=c++11 -O3
 // const int n = 3;
 struct progState_t {
     floating_t x;
@@ -93,7 +92,7 @@ BBLOCK(test, progState_t, {
     PC = 1;
 })
 
-CALLBACK(resFunc, progState_t, {
+CALLBACK(resFunc, {
     
     //floating_t sum = 0;
     //for(int i = 0; i < NUM_PARTICLES; i++) {
@@ -109,8 +108,8 @@ CALLBACK(resFunc, progState_t, {
 
 
 MAIN(
-    ADD_BBLOCK(test, progState_t)
+    ADD_BBLOCK(test)
 
-    SMC(progState_t, resFunc)
+    SMC(resFunc)
 )
 

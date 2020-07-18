@@ -160,12 +160,12 @@ BBLOCK(simTree, progState_t, {
 
 CALLBACK_NESTED(calcResult, nestedProgState_t, {
     int numExtinct = 0;
-    for(int i = 0; i < numParticles; i++)
+    for(int i = 0; i < N; i++)
         numExtinct += PSTATES_TYPE(nestedProgState_t)[i].extinct;
 
-    int numSurvived = numParticles - numExtinct;
+    int numSurvived = N - numExtinct;
     return_t* retP = static_cast<return_t*>(ret);
-    *retP = numSurvived / (double)numParticles;
+    *retP = numSurvived / (double)N;
     
 }, void* ret)
 

@@ -2,15 +2,9 @@
  * File coin_flip_mean.cu defines a simple example that is useful for demonstrating RootPPL. 
  */
 
+#include <stdio.h>
 
-#include "inference/smc/smc_impl.cuh"
-
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/coin_flip_mean.cu -o smc.exe -std=c++14 -O3
-g++ -x c++ -I . models/simple-examples/coin_flip_mean.cu -o smc.exe -std=c++14 -O3
-*/
+#include "inference/smc/smc.cuh"
 
 /* 
 * Initialize array for storing BBLOCK function pointers and define progState to be used in BBLOCKS. 

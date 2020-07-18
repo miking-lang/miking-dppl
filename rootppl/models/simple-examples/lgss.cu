@@ -2,16 +2,10 @@
  * File lgss.cu defines the lgss model. 
  */
 
+#include <stdio.h>
 #include <cstring>
 
-#include "inference/smc/smc_impl.cuh"
-
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/lgss.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/simple-examples/lgss.cu -o smc.exe -std=c++11 -O3
-*/
+#include "inference/smc/smc.cuh"
 
 const int NUM_OBS = 3;
 

@@ -5,6 +5,8 @@
 #include <curand_kernel.h>
 #endif
 
+#include "scores.cuh"
+
 /*
  * File dists.cuh contains distributions that builds upon the hardware specific distributions. 
  * These implementations will be the same regardless of the hardware. Most of these distributions

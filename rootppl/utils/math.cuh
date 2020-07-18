@@ -13,7 +13,8 @@
 #include "macros/macros.cuh"
 
 const double PI = 3.1415926535897932384626433832795028841971693993751;
-
+const floating_t LOG_PI = 1.1447298858494002;
+const floating_t LOG_2PI = 1.8378770664093453;
 
 /**
  * Calculates the log factorial of the integer input. 
