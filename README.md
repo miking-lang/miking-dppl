@@ -16,7 +16,7 @@ The instructions below are tested on Ubuntu 18.04 but should work for other Linu
 Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++ (gcc is also required to install CUDA).  In order to build for GPU, [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide") must be installed. The distribution-specific installation is recommended if possible (as opposed to the runfile), to avoid problems with the video drivers. 
 
 ### Build
-To build the program, change directory to the rootppl folder. Then to compile the model:
+To build the program, clone this repository and change directory to the rootppl folder. Then to compile the model:
 ```
 make MODEL=path/to/model.cu
 ```
