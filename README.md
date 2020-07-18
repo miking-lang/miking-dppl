@@ -16,16 +16,23 @@ The instructions below are tested on Ubuntu 18.04 but should work for other Linu
 Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++ (gcc is also required to install CUDA).  In order to build for GPU, [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide") must be installed. The distribution-specific installation is recommended if possible (as opposed to the runfile), to avoid problems with the video drivers. 
 
 ### Build
-To build the program, only the model needs to be compiled. For example, to compile the Airplane model to GPU, being in the rootppl directory:
+To build the program, change directory to the rootppl folder. Then to compile the model:
 ```
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/airplane/airplane.cu -o model -std=c++14 -O3
+make MODEL=path/to/model.cu
 ```
-`-arch=sm_75` defines that it is being compiled for a GPU of minimum compute capability 7.5. This should be set to match the GPU being used. 
+This will compile the model along with the inference framework for CPU. To compile it for GPU, add your GPU:s compute capability to the arch variable.
+You can find your GPU:s compute capability in the [Wikipedia table](https://en.wikipedia.org/wiki/CUDA#GPUs_supported).
+Here is an example that will compile the airplane example for a GPU with a minimum compute capability of 7.5
+(simply remove ```arch=75``` to compile for CPU):
+```
+make MODEL=models/airplane/airplane.cu arch=75 -j5
+```
 
-The program can also be built for CPU (currently only sequential single-core) using `g++` like so:
+The first ```make``` will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run make with the ```-j numThreads``` to use multiple threads when building). 
 
+This should generate an executable named ```program```. Execute it with either ```make run N=num_particles```or ```./program num_particles```. For example:
 ```
-g++ -x c++ -I . models/airplane/airplane.cu -o model -std=c++14 -O3
+make run N=1000
 ```
 
 ### Building a simple model
@@ -38,7 +45,7 @@ to be executed. So, incrementing it means that the next block will be executed a
 ```BBLOCK``` below does this. However, if no following blocks are defined, 
 the inference will terminate as the model program has been executed. 
 
-```
+```CUDA
 BBLOCK(useless, {
     PC++;
 })
@@ -47,7 +54,7 @@ BBLOCK(useless, {
 Any interesting model will contain random choices, i.e. sampling from distributions. 
 Below is a coin flip example which flips a biased coin.
 
-```
+```CUDA
 BBLOCK(coinFlip, {
     int coinSample = SAMPLE(bernoulli, 0.6);
     PC++;
@@ -61,7 +68,7 @@ initialized with the macro ```INIT_MODEL``` that takes two arguments. First the 
 state (this could be any type, e.g. ```int``` or a structure), then the number of basic blocks in
 the program. So, adding it to the above example:
 
-```
+```CUDA
 INIT_MODEL(int, 1)
   
 BBLOCK(coinFlip, {
@@ -74,7 +81,7 @@ Now to run this program, only one thing remains to be defined, the main function
 This is done with the ```MAIN``` macro, taking a code block as argument.
 The code below shows what we need in order to run the program and perform SMC. 
 
-```
+```CUDA
 MAIN({
     ADD_BBLOCK(coinFlip);
  
@@ -98,7 +105,7 @@ parameter ```N``` (which is hidden within the macro).
 Here is an example callback, called "sampleMean" that calculates and prints the mean 
 of the samples. 
 
-```
+```CUDA
 CALLBACK(sampleMean, {
     double sum = 0;
     for(int i = 0; i < N; i++)
@@ -113,17 +120,13 @@ changed to: ```SMC(sampleMean);```
 
 This example can be found in
 [rootppl/models/simple-examples/coin_flip_mean.cu](rootppl/models/simple-examples/coin_flip_mean.cu)
-and, being in the rootppl directory, compiled with either:
+and, being in the rootppl directory, compiled with:
 ```
-g++ -x c++ -I . models/simple-examples/coin_flip_mean.cu -o model -std=c++14 -O3
-```
-or: 
-```
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/simple-examples/coin_flip_mean.cu -o model -std=c++14 -O3
+make MODEL=models/simple-examples/coin_flip_mean.cu
 ```
 
 Then it can be executed with the executable followed by the
-number of particles, for example: ```./model 1000```. 
+number of particles, for example: ```./program 1000```. 
 
 An example output is then:
 ```
@@ -135,5 +138,79 @@ First we see our callback function's output. Then on the next line, is the logar
 normalization constant approximated by the inference. This is simply 0 here, since the model contains
 no statements that alter the weights of the particles. 
 
+### Supplementary Examples
+
+Below follows some examples, these are all models that are defined within one single block. 
+
+#### Coin Flip Posterior
+Full example: [rootppl/models/simple-examples/coin_flip.cu](rootppl/models/simple-examples/coin_flip.cu)
+
+In this model, a bias for a coin is sampled from the prior beta distribution. Then we observe that the coin flip is true. This model thus infers the
+posterior distribution of the bias, conditioned on the observation. 
+```CUDA
+BBLOCK(coinFlip, {
+    double x = SAMPLE(beta, 2, 2);
+    OBSERVE(bernoulli, x, true);
+
+    PSTATE = x;
+    PC++;
+})
+```
+
+#### Gaussian Mixture Model
+Full example: [rootppl/models/simple-examples/mixture.cu](rootppl/models/simple-examples/mixture.cu)
+
+This model demonstrates an example of *stochastic branching*, meaning that different code is executed depending on the outcome of the sample. 
+```CUDA
+BBLOCK(mixture, {
+    double x;
+    if(SAMPLE(bernoulli, 0.7))
+        x = SAMPLE(normal, -2, 1);
+    else
+        x = SAMPLE(normal, 3, 1);
+ 
+    PSTATE = x;
+    PC++;
+})
+```
+
+#### Geometric Distribution
+Full example: [rootppl/models/simple-examples/geometric.cu](rootppl/models/simple-examples/geometric.cu)
+
+This model combines stochastic branching with recursion. Basic blocks do not fully support recursion themselves, as they take no custom arguments or return values. Instead, a helper function is used to express the recursive model:
+
+```CUDA
+BBLOCK_HELPER(geometricRecursive, {
+    if(SAMPLE(bernoulli, p))
+        return 1;
+    else
+        return BBLOCK_CALL(geometricRecursive, p) + 1;
+
+}, int, double p)
+```
+```CUDA
+BBLOCK(geometric, {
+    PSTATE = BBLOCK_CALL(geometricRecursive, 0.6);
+    PC++;
+})
+```
+
+Note that the helper function takes its return value and parameters comma-separated after the function body. 
+
+While recursive functions is supported by CUDA, iterative solutions are encouraged. Here is the same model, implemented with a loop instead:
+```CUDA
+BBLOCK(geometric, {
+    int numFlips = 1;
+    while(! SAMPLE(bernoulli, 0.6))
+        numFlips++;
+    PSTATE = numFlips;
+    PC++;
+})
+```
+
 ### Building a more interesting model
-TODO
+TODO, stuff not yet demonstrated: 
+- WEIGHT macro
+- Multiple BBLOCK models
+- Global data accessible by bblocks on GPU
+- Program States containing more than a primitive datatype, e.g. structs. 
