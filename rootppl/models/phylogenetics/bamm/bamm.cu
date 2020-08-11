@@ -148,7 +148,6 @@ BBLOCK(simTree, {
     // Fetch tree data
     tree_t* treeP = DATA_POINTER(tree);
     treeIdx_t treeIdx = PSTATE.treeIdx;
-    PSTATE.treeIdx = treeP->idxNext[treeIdx];
 
     // Terminate if tree is fully traversed
     if(treeIdx == -1) {
@@ -157,20 +156,23 @@ BBLOCK(simTree, {
         return;
     }
 
+    PSTATE.treeIdx = treeP->idxNext[treeIdx];
+
+    
     int indexParent = treeP->idxParent[treeIdx];
 
-    if(indexParent == -1) {
+    /* if(indexParent == -1) {
         // Recursive call under diversification rates
         
         // Return total subtree with diversification info attached as an 'extended newick' character string
 
         // Root seems to only recurse and conclude tree info?
-        bblockArgs_t args = PSTATE.stack.peek();
-        PSTATE.stack.push(args);
+        // bblockArgs_t args = PSTATE.stack.peek();
+        // PSTATE.stack.push(args);
         // RESAMPLE = false;
         BBLOCK_CALL(simTree);
         return;
-    }
+    } */
 
     bblockArgs_t args = PSTATE.stack.pop();
 
