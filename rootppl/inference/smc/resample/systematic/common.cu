@@ -56,9 +56,22 @@ HOST DEV void destResamplerNested(resampler_t resampler) {
 }
 
 HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
+    
+    /*
     char* psDst = static_cast<char*>(particlesDst.progStates);
     char* psSrc = static_cast<char*>(particlesSrc.progStates);
     memcpy(&(psDst[progStateSize * dstIdx]), &(psSrc[progStateSize * srcIdx]), progStateSize);
+    */
+
+    
+    long* psDst = static_cast<long*>(particlesDst.progStates);
+    long* psSrc = static_cast<long*>(particlesSrc.progStates);
+    // printf("progStateSize: %lu\n", progStateSize);
+    int numDblWords = progStateSize/8;
+    for(int i = 0; i < numDblWords; i++)
+        psDst[numDblWords * dstIdx + i] = psSrc[numDblWords * srcIdx + i];
+    
+    // cudaMemcpyAsync(&(psDst[progStateSize * dstIdx]), &(psSrc[progStateSize * srcIdx]), progStateSize, cudaMemcpyDeviceToDevice);
     particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
     particlesDst.weights[dstIdx] = 0;
 }
