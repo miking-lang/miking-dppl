@@ -15,6 +15,10 @@
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
+
+// typedef bisse32_tree_t tree_t;
+// typedef bisse32precision_tree_t tree_t;
+typedef primate_tree_t tree_t;
 #include "clads2.cuh"
  
 
@@ -23,9 +27,6 @@ INIT_MODEL(progState_t, NUM_BBLOCKS)
  
 BBLOCK_HELPER_DECLARE(clads2GoesUndetected, bool, floating_t, floating_t, floating_t, floating_t, floating_t, floating_t);
 
-// typedef bisse32_tree_t tree_t;
-// typedef bisse32precision_tree_t tree_t;
-typedef primate_tree_t tree_t;
 BBLOCK_DATA(tree, tree_t, 1);
 
 const int MAX_DIV = 5;

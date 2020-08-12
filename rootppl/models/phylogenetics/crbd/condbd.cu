@@ -138,6 +138,8 @@ BBLOCK(condBD_3, {
     PSTATE.pushType<progState_t>(pState); // Need to use this state again when exploring right sibling
     PSTATE.push(4); // PC = condBD_4
 
+    // printf("treeIdx: %d\n", pState.treeIdx);
+    // printf("parentIdx: %d\n", pState.parentIdx);
     int leftIdx = treeP->idxLeft[pState.treeIdx];
     BBLOCK_CALL(pushChild, pState, leftIdx);
 

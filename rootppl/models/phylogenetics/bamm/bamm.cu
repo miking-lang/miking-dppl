@@ -15,6 +15,9 @@
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
+
+typedef bisse32_tree_t tree_t;
+// typedef primate_tree_t tree_t;
 #include "bamm.cuh"
 
 
@@ -27,8 +30,7 @@ BBLOCK_HELPER_DECLARE(bammGoesUndetected, bool, floating_t, lambdaFun_t, floatin
 #define DIST_Z() SAMPLE(normal, 0, 0.001)
 #define DIST_MU(lam0) SAMPLE(uniform, 0.0, 0.1) * lam0
 
-typedef bisse32_tree_t tree_t;
-// typedef primate_tree_t tree_t;
+
 BBLOCK_DATA(tree, tree_t, 1);
 
 

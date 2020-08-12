@@ -5,7 +5,6 @@
 #include <stdio.h>
 
 #include "inference/smc/smc.cuh"
-#include "utils/misc.cuh"
 
 // Initialize the model with program state type and number of bblocks.
 INIT_MODEL(int, 1)
@@ -31,10 +30,19 @@ BBLOCK(geometric, {
     PC++;
 })
 
-// Use result after inference. 
+// Use result after inference. Prints frequencies that represents resulting distribution. 
 CALLBACK(callback, {
 
-    printHistogram(PSTATES, N, 10, 1, 10);
+    int frequencies[10] = {0};
+
+    for(int i = 0; i < N; i++) {
+        int outcome = PSTATES[i];
+        if(outcome <= 10)
+            frequencies[outcome-1]++;
+    }
+
+    for(int i = 0; i < 10; i++)
+        printf("%d: %f\n", i+1, frequencies[i] / (double)N);
 
 })
 

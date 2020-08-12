@@ -18,7 +18,7 @@ const bool LARGE_COPIES = true;
 
 // const int INCR_LEN = NUM_PARTICLES;
 
-struct pStack_t {
+struct alignas(8) pStack_t {
     int stackPointer = 0;
     int arr[MAX_STACK_DEPTH];
     // int* arr;

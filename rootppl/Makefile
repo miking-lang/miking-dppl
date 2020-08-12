@@ -1,10 +1,7 @@
-# SRC_FILE=models/phylogenetics/crbd/crbd_webppl.cu
-# MODEL=models/airplane/airplane.cu
 # define \n
 
 
 # endef
-
 
 # ifndef MODEL
 # $(error MODEL argument needs to be set with e.g.: $(\n)make MODEL=path/to/model.cu$(\n))
@@ -51,7 +48,7 @@ FRAMEWORK_FILES = $(wildcard inference/*) $(wildcard inference/*/*) $(wildcard i
 # $< is dependency list
 
 # Link object files to executable
-$(EXEC_NAME): $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
+$(EXEC_NAME): $(OBJDIR) $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
 	$(CC) $(FLAGS_LINK) out/*.o -o $@
 	rm $(OBJDIR)/model.o
 
@@ -60,9 +57,13 @@ $(OBJDIR)/model.o: $(MODEL)
 	$(CC) -c $(FLAGS) $(MODEL) -o $@
 # $(CC) -c $(FLAGS) $(MODEL) -o model.o
 
+$(OBJDIR):
+	mkdir $(OBJDIR)
+
+
 # Compile only framework
 .PHONY: framework
-framework: $(OBJ_FILES_FRAMEWORK)
+framework: $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
 
 # $(OBJ_FILES_FRAMEWORK): $(FRAMEWORK_FILES)
 	# $(CC) -c $(FLAGS) $< -o $@

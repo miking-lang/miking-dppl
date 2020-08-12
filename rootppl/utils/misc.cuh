@@ -8,7 +8,7 @@
 #include <iostream>
 #include <vector>
 #include <cstring>
-#include <bits/stdc++.h> 
+// #include <bits/stdc++.h> 
 #include <math.h>
 #include <limits> 
 #include <sstream>
@@ -101,6 +101,7 @@ DEV void printArrayI(int* arr, int n);
  * @param val the value to stringify
  * @param n the precision, corresponds to number of decimals for floating points. 
  */
+/*
 template <typename T>
 std::string to_string_with_precision(const T val, const int n=6) {
     std::ostringstream out;
@@ -108,6 +109,7 @@ std::string to_string_with_precision(const T val, const int n=6) {
     out << std::fixed << val;
     return out.str();
 }
+*/
 
 
 /**
@@ -118,6 +120,7 @@ std::string to_string_with_precision(const T val, const int n=6) {
  * @param minVal the starting value for row titles.
  * @param intervalSize the stepsize for row title increments. 
  */
+/*
 template <typename T>
 void printStars(int* freqs, int n, T minVal=0, T intervalSize=1) {
     for(int i = 0; i < n; i++) {
@@ -137,7 +140,7 @@ void printStars(int* freqs, int n, T minVal=0, T intervalSize=1) {
         printf("\n");
     }
 }
-
+*/
 
 /**
  * Calculates and prints a horizontal histogram of the data provided.
@@ -149,6 +152,7 @@ void printStars(int* freqs, int n, T minVal=0, T intervalSize=1) {
  * @param minVal the minimum value to consider.
  * @param maxVal the maximum value to consider. 
  */
+/*
 template <typename T>
 void printHistogram(T* arr, int n, int numBins, T minVal, T maxVal) {
     
@@ -180,7 +184,7 @@ void printHistogram(T* arr, int n, int numBins, T minVal, T maxVal) {
 
     free(bins);
 }
-
+*/
 /**
  * Calculates and prints a horizontal histogram of the data provided.
  * Prints to stdout. Calculates the min and max values in the data and 
@@ -190,6 +194,7 @@ void printHistogram(T* arr, int n, int numBins, T minVal, T maxVal) {
  * @param n the number of elements in arr.
  * @param numBins the number of groups to divide the data into and calculate frequencies for.
  */
+/*
 template <typename T>
 void printHistogram(T* arr, int n, int numBins=10) {
     T minVal = minNaiveCPU<T>(arr, n);
@@ -197,5 +202,6 @@ void printHistogram(T* arr, int n, int numBins=10) {
 
     printHistogram<T>(arr, n, numBins, minVal, maxVal);
 }
+*/
 
 #endif

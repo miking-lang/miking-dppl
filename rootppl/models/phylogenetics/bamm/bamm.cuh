@@ -2,7 +2,9 @@
  * File bamm.cuh defines constants and type definitions used in the bamm model bamm.cu. 
  */
 
-const int MAX_DEPTH = 20;
+// #include "../tree-utils/tree_utils.cuh"
+
+const int MAX_DEPTH = tree_t::MAX_DEPTH;
 const int STACK_LIMIT = MAX_DEPTH * 2 + 1;
 
 struct lambdaFun_t {
@@ -38,29 +40,29 @@ struct pStack_t {
     bblockArgs_t args[STACK_LIMIT];
 
     DEV void push(bblockArgs_t element) {
-        if(stackPointer >= STACK_LIMIT || stackPointer < 0)
-            printf("Illegal stack push with sp=%d\n", stackPointer);
+        //if(stackPointer >= STACK_LIMIT || stackPointer < 0)
+            //printf("Illegal stack push with sp=%d\n", stackPointer);
         args[stackPointer] = element;
         stackPointer++;
     }
 
     DEV bblockArgs_t pop() {
         stackPointer--;
-        if(stackPointer < 0)
-            printf("SP < 0!\n");
+        //if(stackPointer < 0)
+            //printf("SP < 0!\n");
         return args[stackPointer];
     }
 
     DEV bblockArgs_t peek() {
-        if(stackPointer-1 < 0)
-            printf("SP < 0!\n");
+        //if(stackPointer-1 < 0)
+            //printf("SP < 0!\n");
         return args[stackPointer - 1];
     }
 };
 
 
 typedef short treeIdx_t;
-struct progState_t {
+struct alignas(8) progState_t {
     pStack_t stack;
     treeIdx_t treeIdx;
 };

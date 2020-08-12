@@ -19,6 +19,7 @@ extern std::uniform_real_distribution<floating_t> uniformCPU;
  * cumulativeOffspring: Array used to store the cumulative number of offspring for each particle. 
  * prefixSum: Array used to store the inclusive prefix sum. 
  * auxParticles: Particles structure used to copy particles in resample propagation. Required as the propagation is not in-place. 
+ * progStateSize: the size of the program state
  */
 struct resampler_t {
 

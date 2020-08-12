@@ -5,7 +5,6 @@
 #include <stdio.h>
 
 #include "inference/smc/smc.cuh"
-#include "utils/misc.cuh"
 
  
 // Initialize the model with program state type and number of bblocks.
@@ -21,13 +20,15 @@ BBLOCK(coinFlip, {
     PSTATE = x;
     PC++;
 })
- 
-// WebPPL N=100K: -0.6949150213133173, -0.6918362896430406
 
- // Use result after inference. 
-CALLBACK(callback, {
+// Use result after inference. 
+CALLBACK(sampleMean, {
  
-    printHistogram(PSTATES, N, 10, 0.0, 1.0);
+    double sum = 0;
+    for(int i = 0; i < N; i++)
+        sum += PSTATES[i];
+    double mean = sum / N;
+    printf("Sample mean: %f\n", mean);
  
 })
  
@@ -37,6 +38,6 @@ MAIN({
     ADD_BBLOCK(coinFlip);
  
      // Run SMC inference
-    SMC(callback);
+    SMC(sampleMean);
 })
  

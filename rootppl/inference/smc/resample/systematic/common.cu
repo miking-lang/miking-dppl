@@ -55,23 +55,46 @@ HOST DEV void destResamplerNested(resampler_t resampler) {
     freeParticlesNested(resampler.auxParticles);
 }
 
-HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
+HOST DEV void copyParticle(const particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
     
-    /*
-    char* psDst = static_cast<char*>(particlesDst.progStates);
-    char* psSrc = static_cast<char*>(particlesSrc.progStates);
-    memcpy(&(psDst[progStateSize * dstIdx]), &(psSrc[progStateSize * srcIdx]), progStateSize);
-    */
+    char* psDstAddress = static_cast<char*>(particlesDst.progStates) + progStateSize * dstIdx;
+    char* psSrcAddress = static_cast<char*>(particlesSrc.progStates) + progStateSize * srcIdx;
 
+    // If the struct is aligned in the correct way, the loop long copying can give huge speedups compared to memcpy on GPU
+    bool longAligned = progStateSize % sizeof(long) == 0 
+                    && ((std::uintptr_t)psDstAddress) % sizeof(long) == 0
+                    && ((std::uintptr_t)psSrcAddress) % sizeof(long) == 0;
+
+    if(longAligned) {
+        long* psDstLong = (long*)(psDstAddress);
+        long* psSrcLong = (long*)(psSrcAddress);
+
+        int numDblWords = progStateSize / sizeof(long);
+
+        for(int i = 0; i < numDblWords; i++) {
+            psDstLong[i] = psSrcLong[i];
+        }
+        
+    } else {
+        bool intAligned = progStateSize % sizeof(int) == 0 
+                    && ((std::uintptr_t)psDstAddress) % sizeof(int) == 0
+                    && ((std::uintptr_t)psSrcAddress) % sizeof(int) == 0;
+        if(intAligned) {
+
+            int* psDstInt = (int*)(psDstAddress);
+            int* psSrcInt = (int*)(psSrcAddress);
+
+            int numWords = progStateSize / sizeof(int);
+
+            for(int i = 0; i < numWords; i++) {
+                psDstInt[i] = psSrcInt[i];
+            }
+
+        } else {
+            memcpy(psDstAddress, psSrcAddress, progStateSize);
+        }
+    }
     
-    long* psDst = static_cast<long*>(particlesDst.progStates);
-    long* psSrc = static_cast<long*>(particlesSrc.progStates);
-    // printf("progStateSize: %lu\n", progStateSize);
-    int numDblWords = progStateSize/8;
-    for(int i = 0; i < numDblWords; i++)
-        psDst[numDblWords * dstIdx + i] = psSrc[numDblWords * srcIdx + i];
-    
-    // cudaMemcpyAsync(&(psDst[progStateSize * dstIdx]), &(psSrc[progStateSize * srcIdx]), progStateSize, cudaMemcpyDeviceToDevice);
     particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
     particlesDst.weights[dstIdx] = 0;
 }

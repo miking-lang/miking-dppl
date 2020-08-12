@@ -3,7 +3,7 @@
  * File clads2.cuh defines constants and type definitions used in the clads2 model clads2.cu. 
  */
 
-const int MAX_DEPTH = 20;
+const int MAX_DEPTH = tree_t::MAX_DEPTH;
 const int STACK_LIMIT = MAX_DEPTH * 2 + 1;
 
 struct pStack_t {

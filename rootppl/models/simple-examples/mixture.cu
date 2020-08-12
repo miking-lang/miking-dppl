@@ -25,10 +25,14 @@ BBLOCK(mixture, {
     PC++;
 })
   
-  // Use result after inference. 
+// Use result after inference. Calculates sample mean, which perhaps is not very meaningful for a mixture model.
 CALLBACK(callback, {
   
-    printHistogram(PSTATES, N, 50, -6.0, 6.0);
+    double sum = 0;
+    for(int i = 0; i < N; i++)
+        sum += PSTATES[i];
+    double mean = sum / N;
+    printf("Sample mean: %f\n", mean);
   
 })
   

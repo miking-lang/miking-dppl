@@ -65,8 +65,8 @@ BBLOCK(particleInit, {
     BBLOCK_CALL(propagateAndWeight);
 })
 
+// Checks how many particles are close to actual airplane to check for correctness
 CALLBACK(callback, {
-    // Checks how many particles are close to actual airplane to check for correctness
     int numParticlesClose = 0;
     floating_t minX = 999999;
     floating_t maxX = -1;
@@ -80,13 +80,6 @@ CALLBACK(callback, {
 
     cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / N << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
 
-    /*
-    floating_t xs[N];
-    for(int i = 0; i < N; i++)
-        xs[i] = PSTATES[i].x;
-    printHistogram<floating_t>(xs, N, 20, 0, MAP_SIZE);
-    printf("Plane pos: %f\n", planeX[TIME_STEPS-1]);
-    */
 })
 
 
