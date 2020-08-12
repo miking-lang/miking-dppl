@@ -7,13 +7,17 @@ To be written...
 
 # RootPPL
 
-RootPPL can be seen as an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. These models are currently hardcoded, see examples in the folder rootppl/models. The idea is that high level Miking probabilistic programming languages should be compiled to this intermediate language. 
+RootPPL can be seen as an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. These models are currently hardcoded, see examples in the folder rootppl/models. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language. 
 
 ## Getting Started
 The instructions below are tested on Ubuntu 18.04 but should work for other Linux distributions, Windows, and Mac. 
 
 ### Install
-Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++ (gcc is also required to install CUDA).  In order to build for GPU, [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide") must be installed. The distribution-specific installation is recommended if possible (as opposed to the runfile), to avoid problems with the video drivers. 
+Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++ (gcc is also required to install CUDA).  In 
+order to build for GPU, CUDA must be installed. See
+CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide Linux"), 
+[Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html "CUDA Installation Guide Windows"), 
+[Mac](https://docs.nvidia.com/cuda/cuda-installation-guide-mac-os-x/index.html "CUDA Installation Guide Mac") 
 
 ### Build
 To build the program, clone this repository and change directory to the rootppl folder. Then to compile the model:
@@ -36,21 +40,24 @@ This should generate an executable named `program`. Execute it with either `make
 make run N=1000
 ```
 
+An example out of this:
+```
+./program 1000
+Num particles close to target: 96.5%, MinX: 63.1558, MaxX: 84.4023
+-119.270143
+```
+First is the command that is executed from the Makefile, it executes the executable `program` with program argument 1000.
+The second row comes from a print statement within the model. Lastly, the log normalization constant approximated by the inference is printed. 
+
 ### Building a simple model
 Models are divided into fragments to enable pausing the execution within models. 
 These fragments are functions referred to as basic blocks (`BBLOCK`). 
 To control the program execution flow, a program counter (`PC`) can be modified. 
-If it remains unchanged in when the basic block returns, resampling will be done usual, and then
+If it remains unchanged in when the basic block returns, resampling will be done, and then
 the same block will be executed again. The program counter corresponds to the index of the basic block 
-to be executed. So, incrementing it means that the next block will be executed after resampling. The 
-`BBLOCK` below does this. However, if no following blocks are defined, 
+to be executed. So, incrementing it means that the next block will be executed after resampling. An 
+example of this can be seen in the example below. However, if no following blocks are defined, 
 the inference will terminate as the model program has been executed. 
-
-```CUDA
-BBLOCK(useless, {
-    PC++;
-})
-```
 
 Any interesting model will contain random choices, i.e. sampling from distributions. 
 Below is a coin flip example which flips a biased coin.
