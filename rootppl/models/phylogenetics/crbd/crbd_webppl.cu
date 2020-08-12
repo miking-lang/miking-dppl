@@ -18,16 +18,6 @@
     This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
 */
 
-// Bisse-32 tree
-// This model on local WebPPL with 10000 particles took ~42 sec
-// This program on CPU took ~0.11 sec
-// This program on GPU took ~0.265 sec
-
-// Primate tree tree
-// This model on local WebPPL with 10000 particles took ~323 sec
-// This program on CPU took ~1.04 sec
-// This program on GPU took ~0.606 sec
-
 typedef short treeIdx_t;
 struct progState_t {
     floating_t lambda;
@@ -48,28 +38,18 @@ BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating
 
 BBLOCK_DATA(tree, tree_t, 1)
 
-// BBLOCK_DATA(lambda, floating_t, 1) // prolly faster to just pass these as args... they should be generated in particle anyway?
-// BBLOCK_DATA(mu, floating_t, 1)
 BBLOCK_DATA(rho, floating_t, 1)
 
 
 void initCBD() {
-    // lambda = SAMPLE(gamma, 1.0, 1.0);
-    // *mu = SAMPLE();
-    // *lambda = 0.2; // birth rate
-    // *mu = 0.1; // death rate
     *rho = 1.0;
 
-    // COPY_DATA_GPU(tree, tree_t, 1)
-    // COPY_DATA_GPU(lambda, floating_t, 1)
-    // COPY_DATA_GPU(mu, floating_t, 1)
     COPY_DATA_GPU(rho, floating_t, 1)
-
 }
 
 BBLOCK_HELPER(M_crbdGoesUndetected, {
 
-    if(max_M == 0) {
+    if(maxM == 0) {
         printf("Aborting crbdGoesUndetected simulation, too deep!\n");
         return 1; // What do return instead of NaN?
     }
@@ -80,14 +60,11 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
     if(! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu) && ! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu))
         return 1;
     else
-        return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, max_M - 1, lambda, mu);
+        return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, maxM - 1, lambda, mu);
 
-}, int, floating_t startTime, int max_M, floating_t lambda, floating_t mu)
+}, int, floating_t startTime, int maxM, floating_t lambda, floating_t mu)
 
 BBLOCK_HELPER(crbdGoesUndetected, {
-
-    // floating_t lambdaLocal = PSTATE.lambda;
-    // floating_t muLocal = PSTATE.mu;
 
     floating_t rhoLocal = *DATA_POINTER(rho);
 
@@ -95,15 +72,9 @@ BBLOCK_HELPER(crbdGoesUndetected, {
     if (lambda - mu > MAX_DIV)
         return false;
     
-    if (lambda == 0.0) {
+    if (lambda == 0.0) 
         return ! SAMPLE(bernoulli, rhoLocal);
-        /*
-        if (flip(rhoLocal))
-            return false
-        else
-            return true
-        */
-    }
+
     // end extreme values patch 1/2
 
     floating_t t = SAMPLE(exponential, lambda + mu);
@@ -123,12 +94,8 @@ BBLOCK_HELPER(crbdGoesUndetected, {
 
 BBLOCK_HELPER(simBranch, {
 
-    // floating_t lambdaLocal = *DATA_POINTER(lambda);
-    // floating_t lambdaLocal = PSTATE.lambda;
-
     // extreme values patch 2/2
 	if (lambda > MAX_LAM) {
-	    //console.log( "lambda: ", lambda )
 	    return -INFINITY;
 	}
 	
@@ -209,7 +176,6 @@ BBLOCK(simCRBD, {
 BBLOCK(survivorshipBias, {
     // Survivorship Bias, is done after simCRBD
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
-    // int MAX_M = 10000;
     int MAX_M = 10000;
     int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu);
     WEIGHT(log(static_cast<floating_t>(M)));
