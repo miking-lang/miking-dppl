@@ -60,7 +60,12 @@ example of this can be seen in the example below. However, if no following block
 the inference will terminate as the model program has been executed. 
 
 Any interesting model will contain random choices, i.e. sampling from distributions. 
-Below is a coin flip example which flips a biased coin.
+Below is a coin flip example which flips a biased coin. `SAMPLE` is a macro that can take variable number of arguments.
+First is the distribution name, followed by the distribution specific arguments. 
+
+Sampling is done differently on the CPU and the GPU,but these differences are hidden in the model with the help 
+of this `SAMPLE` macro. All of these RootPPL keywords are macros similar to `SAMPLE`, they provide higher-level 
+constructs that can be used in the same way regardless of if the model will be executed on the CPU or the GPU.   
 
 ```CUDA
 BBLOCK(coinFlip, {
@@ -182,8 +187,8 @@ BBLOCK(mixture, {
 })
 ```
 
-#### Geometric Distribution
-Full example: [rootppl/models/simple-examples/geometric.cu](rootppl/models/simple-examples/geometric.cu)
+#### Geometric Distribution (Recursive)
+Full example: [rootppl/models/simple-examples/geometric_recursive.cu](rootppl/models/simple-examples/geometric_recursive.cu)
 
 This model combines stochastic branching with recursion. Basic blocks do not fully support recursion themselves, as they take no custom arguments or return values. Instead, a helper function is used to express the recursive model:
 
@@ -205,7 +210,9 @@ BBLOCK(geometric, {
 
 Note that the helper function takes its return value and parameters comma-separated after the function body. 
 
-While recursive functions is supported by CUDA, iterative solutions are encouraged. Here is the same model, implemented with a loop instead:
+While recursive functions is supported by CUDA, iterative solutions are encouraged. Below is the same model, implemented with a loop instead.
+#### Geometric Distribution (Iterative)
+Full example: [rootppl/models/simple-examples/geometric_iterative.cu](rootppl/models/simple-examples/geometric_iterative.cu)
 ```CUDA
 BBLOCK(geometric, {
     int numFlips = 1;
@@ -216,8 +223,54 @@ BBLOCK(geometric, {
 })
 ```
 
+### Phylogenetic Models
+
+More sophisticated models can be found in the [phylogenetics directory](rootppl/models/phylogenetics). These probabilistic
+models to inference on observed phylogenetic trees. These observed trees can be found in [phylogenetics/tree-utils/trees.cuh](rootppl/models/phylogenetics/tree-utils/trees.cuh).
+The correct phylogenetic models contain a link in the top of the file to the WebPPL source code used as reference when implementing them.
+These models contain a number of new things, e.g.: 
+- Multiple basic blocks
+- Structures as program states
+- Recursive simulations
+- Global data used by the model
+- Resampling throughout the traversal of the observed tree
+
+#### Constant Rate Birth Death
+In [phylogenetics/crbd](rootppl/models/phylogenetics/crbd), the Constant Rate Birth Death models can be found. 
+The most interesting file here is [crbd_webppl.cu](rootppl/models/phylogenetics/crbd/crbd_webppl.cu) as it is a correct model
+used by evolutionary biologists. This model uses a pre-processed DFS traversal path over the observed tree, rather than using a call stack. 
+
+Another interesting model here is [condbd.cu](rootppl/models/phylogenetics/crbd/condbd.cu), 
+which is not a correct CRBD model, but demonstrates how a stack can be used to traverse trees without any pre-processing of the tree.
+This is similar to the WebPPL models that traverse the tree using the implicit call stack.  
+
+#### BAMM
+In [phylogenetics/bamm](rootppl/models/phylogenetics/bamm), the Bayesian Analysis of Macroevolutionary Mixtures (BAMM) model can be found.
+This is another correct model used by evolutionary biologists, with significantly increased complexity compared to the CRBD model. 
+BAMM also uses the same pre-processed traversal path as the CRBD model. However, BAMM requires a stack to keep track of the
+parameters that is modified throughout the traversal of the tree. 
+
+#### ClaDS2
+In [phylogenetics/clads2](rootppl/models/phylogenetics/clads2), the Cladogenetic Diversification rate Shift 2 (ClaDS2) model can be found.
+This is a correct model used by evolutionary biologists as well. This is similar to BAMM in that is uses the pre-processed traversal
+and a stack to keep track of parameters. 
+
+
+### The RootPPL Architecture
+
+The architecture's main goal is to decouple the inference from the probabilistic models, this is the case for probabilistic
+programming languages. In the `inference` directory, the code for inference methods can be found. Currently, only SMC is supported. 
+Within the `smc` directory, the `resampling` directory contain resampling strategies. Currently only Systematic Resampling is supported. The resampling has 
+a parallel implementation for the GPU and a sequential implementation for the CPU. 
+
+- The `dists` directory contains distributions and scoring functions. Both models and inference can rely on these. 
+- The `macros` directory contains all the macros/constructs that are mostly used by models but also in inference code. 
+- The `utils` directory contains code that RootPPL uses, but can be used by models as well. 
+- The `models` directory contains example models that use the inference. 
+
+
 ### Building a more interesting model
-TODO, stuff not yet demonstrated: 
+TODO, stuff not yet demonstrated explicitly in README: 
 - WEIGHT macro
 - Multiple BBLOCK models
 - Global data accessible by bblocks on GPU

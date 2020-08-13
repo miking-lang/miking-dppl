@@ -1,5 +1,5 @@
 /*
- * File geometric.cu defines the geometric distribution model. 
+ * File geometric_recursive.cu defines the recursive geometric distribution model. 
  */
 
 #include <stdio.h>
@@ -21,12 +21,7 @@ BBLOCK_HELPER(geometricRecursive, {
 
 // Define the model (or fragment of model) with a BBLOCK. 
 BBLOCK(geometric, {
-    int numFlips = 1;
-    while(! SAMPLE(bernoulli, 0.6))
-        numFlips++;
-
-    PSTATE = numFlips;
-    // PSTATE = BBLOCK_CALL(geometricRecursive, 0.6);
+    PSTATE = BBLOCK_CALL(geometricRecursive, 0.6);
     PC++;
 })
 

@@ -1,6 +1,8 @@
 
 /*
  * File parallel.cuh contains the parallel implementation of the systematic resampling. 
+ * This implementation is inspired by the paper by L. M. Murray et. al.: 
+ * Parallel resampling in the particle filter https://arxiv.org/abs/1301.4019
  */
 
 #ifdef __NVCC__
@@ -11,10 +13,7 @@
 #include "parallel.cuh"
 
 #include <curand_kernel.h>
-// #include <thrust/reduce.h>
 #include <thrust/scan.h>
-// #include <thrust/execution_policy.h>
-// #include <thrust/extrema.h>
 
 HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numParticles) {
     resampler.prefixSum[0] = w[0];
