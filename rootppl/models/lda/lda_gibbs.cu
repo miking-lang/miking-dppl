@@ -1,14 +1,14 @@
+/*
+ * WORK IN PROGRESS
+ */
+
 #include <algorithm>
 
-#include "inference/smc/smc_impl.cuh"
+#include "inference/smc/smc.cuh"
 #include "utils/distributions.cuh"
 #include "utils/misc.cuh"
 #include "lda.cuh"
 
-
-/*
-WORK IN PROGRESS, NOT CURRENTLY WORKING
-*/
 
 // THIS MODEL MIGHT HAVE AN ERROR, CHECK FOR SEGFAULT WITH LARGER NUMBER OF PARTICLES
 
@@ -245,7 +245,7 @@ int main() {
 
     SMCSTART(progState_t);
 
-    INIT_BBLOCK(gibbs, progState_t);
+    ADD_BBLOCK(gibbs, progState_t);
 
     SMCEND(progState_t);
 }

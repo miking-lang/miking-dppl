@@ -1,85 +1,44 @@
 #ifndef PARICLES_MEMORY_HANDLER_INCLUDED
 #define PARICLES_MEMORY_HANDLER_INCLUDED
 
-#include <cstring>
-#include "utils/misc.cuh"
+/*
+ * File particles_memory_handler.cuh contains helper functions used by the smc implementation files. 
+ * Functions for allocating and deleting particles belongs here. The memory management differs in 
+ * top-level SMC and nested SMC, since the top-level will differ depending whether its compiled for CPU 
+ * or GPU. While nested inference is done either on the device or CPU and both have 
+ * the same API (as opposed to the host functions for handling memory on the device). 
+ */
 
-template <typename T>
-particles_t<T>* allocateParticles(bool printMemSize=false) {
-    particles_t<T>* particles;
-    allocateMemory<particles_t<T>>(&particles, 1);
-    
-    #ifdef GPU
-    cudaSafeCall(cudaMallocManaged(&particles->progStates, sizeof(T) * NUM_PARTICLES));
-    // cudaSafeCall(cudaMallocManaged(&particles->randStates, sizeof(curandState) * NUM_PARTICLES));
-    cudaSafeCall(cudaMallocManaged(&particles->pcs, sizeof(int) * NUM_PARTICLES));
-    // cudaSafeCall(cudaMemset(particles->pcs, 0, NUM_PARTICLES * sizeof(int)));
-    cudaSafeCall(cudaMallocManaged(&particles->weights, sizeof(floating_t) * NUM_PARTICLES));
-    // cudaSafeCall(cudaMemset(particles->weights, 0, NUM_PARTICLES * sizeof(floating_t)));
-    // cudaSafeCall(cudaMallocManaged(&particles->resample, sizeof(bool) * NUM_PARTICLES));
-    #else
-    particles->progStates = new T[NUM_PARTICLES];
-    particles->pcs = new int[NUM_PARTICLES];
-    memset(particles->pcs, 0, sizeof(int) * NUM_PARTICLES);
-    particles->weights = new floating_t[NUM_PARTICLES];
-    memset(particles->weights, 0, sizeof(floating_t) * NUM_PARTICLES);
-    // particles->resample = new bool[NUM_PARTICLES];
-    #endif
+/**
+ * Allocates particles for top-level SMC.
+ * 
+ * @param numParticles the number of particles that should be allocated.
+ * @param progStateSize the size of the particles program states in bytes. 
+ * @param printMemSize whether the total size of the allocated particles should be printed. 
+ * @return particle structure with pointers to the allocated data.
+ */
+particles_t allocateParticles(int numParticles, size_t progStateSize, bool printMemSize=false);
 
-    if (printMemSize) {
-        floating_t totalMem = sizeof(T) * NUM_PARTICLES + sizeof(int) * NUM_PARTICLES + sizeof(floating_t) * NUM_PARTICLES; // + sizeof(bool) * NUM_PARTICLES;
-        #ifdef GPU
-        totalMem += sizeof(curandState) * NUM_PARTICLES;
-        #endif
-        printf("Particles memory size for N=%d: %fMB\n", NUM_PARTICLES, totalMem * 2 / 1000000.0);
-    }
-    
-    return particles;
-}
+/**
+ * Frees particles for top-level SMC.
+ *  
+ * @param particles structure with pointers to the allocated data.
+ */
+void freeParticles(particles_t particles);
 
-template <typename T>
-void freeParticles(particles_t<T>* particles) {
-    #ifdef GPU
-    cudaSafeCall(cudaFree(particles->progStates));
-    // cudaSafeCall(cudaFree(particles->randStates));
-    cudaSafeCall(cudaFree(particles->pcs));
-    cudaSafeCall(cudaFree(particles->weights));
-    // cudaSafeCall(cudaFree(particles->resample));
-    #else
-    delete[] particles->progStates;
-    delete[] particles->pcs;
-    delete[] particles->weights;
-    // delete[] particles->resample;
-    #endif
+/**
+ * Allocates particles for nested SMC.
+ *  
+ * @param numParticles the number of particles that should be allocated.
+ * @param progStateSize the size of the particles program states in bytes. 
+ */
+HOST DEV particles_t allocateParticlesNested(int numParticles, size_t progStateSize);
 
-    freeMemory(particles);
-}
-
-template <typename T>
-HOST DEV particles_t<T>* allocateParticlesNested() {
-    particles_t<T>* particles = new particles_t<T>[1]; // {}
-    particles->progStates = new T[NUM_PARTICLES_NESTED];
-    //#ifdef GPU
-    //particles->randStates = new curandState[NUM_PARTICLES_NESTED];
-    //#endif
-    particles->pcs = new int[NUM_PARTICLES_NESTED];
-    memset(particles->pcs, 0, sizeof(int) * NUM_PARTICLES_NESTED);
-    particles->weights = new floating_t[NUM_PARTICLES_NESTED];
-    memset(particles->weights, 0, sizeof(floating_t) * NUM_PARTICLES_NESTED);
-    //particles->resample = new bool[NUM_PARTICLES_NESTED];
-    return particles;
-}
-
-template <typename T>
-HOST DEV void freeParticlesNested(particles_t<T>* particles) {
-    delete[] particles->progStates;
-    //#ifdef GPU
-    //delete[] particles->randStates;
-    //#endif
-    delete[] particles->pcs;
-    delete[] particles->weights;
-    // delete[] particles->resample;
-    delete[] particles;
-}
+/**
+ * Frees particles for nested SMC.
+ *  
+ * @param particles structure with pointers to the allocated data.
+ */
+HOST DEV void freeParticlesNested(particles_t particles);
 
 #endif

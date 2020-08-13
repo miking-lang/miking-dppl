@@ -1,169 +1,108 @@
 #ifndef MISC_INCLUDED
 #define MISC_INCLUDED
 
+/*
+ * File misc.cuh contains helper functions of various kinds. 
+ */
+
 #include <iostream>
 #include <vector>
 #include <cstring>
-#include <bits/stdc++.h> 
+#include <math.h>
+#include <limits> 
+#include <sstream>
 
-using namespace std;
+#include "macros/macros.cuh"
+#include "math.cuh"
 
+// using namespace std;
 
+/**
+ * Allocates memory on host or device depending on compiler. 
+ * 
+ * @param pointer address of the pointer which should point to the allocated memory. 
+ * @param n the number of elements of type T to be allocated. 
+ */
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
-    #ifdef GPU
+    #ifdef __NVCC__
     cudaSafeCall(cudaMallocManaged(pointer, sizeof(T) * n));
     #else
     *pointer = new T[n];
     #endif
 }
 
+/**
+ * Allocates memory on host or device depending on compiler. 
+ * 
+ * @param pointer address of the pointer which should point to the allocated memory. 
+ * @param allocSize the size of memory to allocate. 
+ */
+ void allocateMemoryVoid(void** pointer, size_t allocSize);
+
+ /**
+ * Frees memory on host or device depending on compiler. 
+ * 
+ * @param pointer address of the allocated memory. 
+ */
 template <typename T>
 void freeMemory(T* pointer) {
-    #ifdef GPU
+    #ifdef __NVCC__
     cudaSafeCall(cudaFree(pointer));
     #else
     delete[] pointer;
     #endif
 }
 
-template <typename T>
-HOST DEV T sumArray(T* arr, int n) {
-    T sum = 0;
-    for (int i = 0; i < n; i++)
-        sum += arr[i];
-    return sum;
-}
+/**
+ * Frees memory on host or device depending on compiler. 
+ * 
+ * @param pointer address of the allocated memory. 
+ */
+void freeMemoryVoid(void* pointer);
 
-
+/**
+ * Prints the array of type T. Works only on the CPU. 
+ * 
+ * @param arr array of type T.
+ * @param n number of elements in arr.
+ * @param optional title of the array to be printed. 
+ */
 template <typename T>
-HOST DEV void normalizeArray(T* arr, int n) {
-    floating_t sum = 0;
-    for (int i = 0; i < n; i++)
-        sum += arr[i];
-    for (int i = 0; i < n; i++)
-        arr[i] /= sum;
-}
-
-template <typename T>
-void printArray(T* arr, int n, string title="") {
+void printArray(T* arr, int n, std::string title="") {
     if(title.length() > 0)
-        cout << title << ": ";
-    cout << "[ ";
+        std::cout << title << ": ";
+    std::cout << "[ ";
     for(int i = 0; i < n; i++)
-        cout << arr[i] << " ";
-    cout << "]" << endl;
+        std::cout << arr[i] << " ";
+    std::cout << "]" << std::endl;
 }
 
-DEV void printArrayF(floating_t* arr, int n) {
-    printf("[ ");
-    for(int i = 0; i < n; i++)
-        printf("%f ", arr[i]);
-    printf("]\n");
-}
+/**
+ * Prints the floating point array.
+ * 
+ * @param arr floating point array.
+ * @param n number of elements in arr.
+ */
+DEV void printArrayF(floating_t* arr, int n);
 
-DEV void printArrayI(int* arr, int n) {
-    printf("[ ");
-    for(int i = 0; i < n; i++)
-        printf("%d ", arr[i]);
-    printf("]\n");
-}
+/**
+ * Prints the integer array.
+ * 
+ * @param arr integer array.
+ * @param n number of elements in arr.
+ */
+DEV void printArrayI(int* arr, int n);
 
-template <typename T>
-HOST DEV int sgn(T val) {
-    return (T(0) < val) - (val < T(0));
-}
-
-HOST DEV floating_t maxNaive(const floating_t* arr, const int n) {
-    floating_t maxVal = -INFINITY;
-    for(int i = 0; i < n; i++) {
-        maxVal = arr[i] >= maxVal ? arr[i] : maxVal;
-    }
-    return maxVal;
-}
-
-// matrix: input, n: size of matrix, lower: return matrix
-// const int MAX_SIZE_MG = 3;
-// HOST DEV void choleskyDecomposition(floating_t matrix[MAX_SIZE_MG][MAX_SIZE_MG], int n, floating_t lower[MAX_SIZE_MG][MAX_SIZE_MG]) { 
-template <size_t n>
-HOST DEV void choleskyDecomposition(floating_t (&matrix)[n][n], floating_t (&lower)[n][n]) {     
-//HOST DEV void choleskyDecomposition(int n, floating_t matrix[n][n], floating_t lower[n][n]) {         
-    // floating_t lower[n][n]; 
-    memset(lower, 0, sizeof(floating_t) * n * n); 
-
-    // Decomposing a matrix into Lower Triangular 
-    for (int i = 0; i < n; i++) { 
-        for (int j = 0; j <= i; j++) { 
-            floating_t sum = 0; 
-            // printf("[%d][%d]: %f\n", i, j, matrix[i][j]);
-
-            if (j == i) { // summation for diagonals  
-                for (int k = 0; k < j; k++) 
-                    sum += pow(lower[j][k], 2); 
-                lower[j][j] = sqrt(matrix[j][j] - sum); 
-            } else { 
-
-                // Evaluating L(i, j) using L(j, j) 
-                for (int k = 0; k < j; k++) 
-                    sum += (lower[i][k] * lower[j][k]); 
-                lower[i][j] = (matrix[i][j] - sum) / lower[j][j]; 
-            } 
-        }
-    } 
-
-    // Displaying Lower Triangular and its Transpose 
-    // cout << setw(6) << " Lower Triangular" << setw(30) << "Transpose" << endl; 
-    //for (int i = 0; i < n; i++) { 
-
-        // Lower Triangular 
-        //for (int j = 0; j < n; j++) 
-            //printf("%f ", lower[i][j]);
-            // cout << setw(6) << lower[i][j]; 
-        //printf("\n"); 
-
-        // Transpose of Lower Triangular 
-        //for (int j = 0; j < n; j++) 
-        //    cout << setw(6) << lower[j][i] << "\t"; 
-        //cout << endl; 
-    //} 
-} 
-
-template <size_t a, size_t b, size_t c>
-HOST DEV void matmul(floating_t A[a][b], floating_t B[b][c], floating_t C[a][c]) {
-
-    for(int i = 0; i < a; i++)
-        for(int j = 0; j < c; j++)
-            C[i][j] = 0;
-
-    for(int i = 0; i < a; i++)
-        for(int j = 0; j < c; j++)
-            for(int k = 0; k < b; k++)
-                C[i][j] += A[i][k] * B[k][j];
-
-    /*for(int i = 0; i < a; i++) {
-        printf("[ ");
-        for(int j = 0; j < c; j++)
-            printf("%f ", C[i][j]);
-        printf("]\n\n");
-    }*/
-}
-
-
-template <size_t a, size_t b>
-HOST DEV void transformColumn(floating_t A[a][b], floating_t col[b], floating_t toAdd[a], floating_t C[a]) {
-    //for(int i = 0; i < a; i++)
-        //C[i] = 0;
-
-    for(int i = 0; i < a; i++) {
-        C[i] = toAdd[i];
-        for(int k = 0; k < b; k++)
-            C[i] += A[i][k] * col[k];
-    }
-
-    /*printf("[ ");
-    for(int j = 0; j < a; j++)
-        printf("%f ", C[j]);
-    printf("]\n\n");*/
-}
+/**
+ * Calculates and prints a horizontal histogram of the data provided.
+ * Prints to stdout. Not very thoroughly tested!
+ *
+ * @param arr the array containing the numeric data.
+ * @param n the number of elements in arr.
+ * @param numBins the number of groups to divide the data into and calculate frequencies for.
+ * @param minVal the minimum value to consider.
+ * @param maxVal the maximum value to consider. 
+ */
 
 #endif

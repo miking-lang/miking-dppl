@@ -1,9 +1,13 @@
-#ifndef CBDUTILS_INCLUDED
-#define CBDUTILS_INCLUDED
+#ifndef TREE_UTILS_INCLUDED
+#define TREE_UTILS_INCLUDED
+
+/*
+ * File tree_utils.cuh contains helper functions for trees. 
+ */
 
 #include "trees.cuh"
 
-int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
+HOST DEV int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
     int numLeaves = 0;
     for(int i = 0; i < size; i++) {
         if(leftIdx[i] == -1 && rightIdx[i] == -1)
@@ -11,16 +15,6 @@ int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
     }
     return numLeaves;
 }
-
-// make tail-recursive?
-double lnFactorial(int n) {
-    if(n == 1) {
-        return 0.0;
-    } else {
-        return log(n) + lnFactorial(n-1);
-    }
-}
-
 
 #endif
 

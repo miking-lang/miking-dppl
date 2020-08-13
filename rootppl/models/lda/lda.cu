@@ -1,13 +1,12 @@
+/*
+ * WORK IN PROGRESS, NOT CURRENTLY WORKING
+ */
 
 #include <algorithm>
 
-#include "inference/smc/smcImpl.cuh"
+#include "inference/smc/smc.cuh"
 #include "utils/misc.cuh"
 #include "lda.cuh"
-
-/*
-WORK IN PROGRESS, NOT CURRENTLY WORKING
-*/
 
 BBLOCK_DATA_2D(corpus, int, D, MAX_DOC_LENGTH); // DOCUMENTS
 BBLOCK_DATA(docLength, int, D); // length of each document
@@ -247,9 +246,9 @@ int main() {
 
     SMCSTART(progState_t); // allokera array
 
-    INIT_BBLOCK(init, progState_t); // create func pointer and add to array
-    INIT_BBLOCK(newDocument, progState_t);
-    INIT_BBLOCK(newWord, progState_t);
+    ADD_BBLOCK(init, progState_t); // create func pointer and add to array
+    ADD_BBLOCK(newDocument, progState_t);
+    ADD_BBLOCK(newWord, progState_t);
 
     SMCEND(progState_t);
     floating_t meanRatio = ratioSum / 1000.0;

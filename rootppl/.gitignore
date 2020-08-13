@@ -1,4 +1,7 @@
 *.exe
+*.o
 .vscode/
 .idea/
 __pycache__/
+out/
+program

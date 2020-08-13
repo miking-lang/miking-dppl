@@ -1,23 +1,28 @@
+/*
+ * File airplane.cu defines the airplane model which is a common example to demonstrate SMC. 
+ */
+
 #include <stdio.h>
 #include <math.h>
 #include <random>
 #include <time.h>
 
-#include "inference/smc/smc_impl.cuh"
+#include "inference/smc/smc.cuh"
+
+using namespace std;
+
 #include "airplane.cuh"
 #include "airplane_utils.cuh"
 
 /*
 Compile commands:
 
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/airplane/airplane.cu -o smc.exe -std=c++11 -O3
-g++ -x c++ -I . models/airplane/airplane.cu -o smc.exe -std=c++11 -O3
+nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/airplane/airplane.cu -o smc.exe -std=c++14 -O3
+g++ -x c++ -I . models/airplane/airplane.cu -o smc.exe -std=c++14 -O3
 */
 
-using namespace std;
-
 #define NUM_BBLOCKS 2
-INIT_GLOBAL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 floating_t planeX[TIME_STEPS];
 
@@ -36,12 +41,13 @@ void initAirplane() {
     COPY_DATA_GPU(mapApprox, floating_t, MAP_SIZE)
 }
 
-BBLOCK(propagateAndWeight, progState_t, {
+BBLOCK(propagateAndWeight, {
 
     // Propagate
     PSTATE.x += SAMPLE(normal, VELOCITY, TRANSITION_STD);
 
     // Weight
+    // printf("t: %d\n", PSTATE.t);
     WEIGHT(logNormalPDFObs(DATA_POINTER(planeObs)[PSTATE.t], mapLookupApprox(DATA_POINTER(mapApprox), PSTATE.x)));
     PSTATE.t++;
 
@@ -50,7 +56,7 @@ BBLOCK(propagateAndWeight, progState_t, {
 
 })
 
-BBLOCK(particleInit, progState_t, {
+BBLOCK(particleInit, {
 
     PSTATE.x = SAMPLE(uniform, 0, MAP_SIZE);
     PSTATE.t = 0;
@@ -59,28 +65,29 @@ BBLOCK(particleInit, progState_t, {
     BBLOCK_CALL(propagateAndWeight);
 })
 
-CALLBACK_HOST(callback, progState_t, {
-    // Checks how many particles are close to actual airplane to check for correctness
+// Checks how many particles are close to actual airplane to check for correctness
+CALLBACK(callback, {
     int numParticlesClose = 0;
     floating_t minX = 999999;
     floating_t maxX = -1;
-    for (int i = 0; i < NUM_PARTICLES; i++) {
-        floating_t particleX = PSTATE.x;
+    for (int i = 0; i < N; i++) {
+        floating_t particleX = PSTATES[i].x;
         if(abs(particleX - planeX[TIME_STEPS-1]) < 10)
             numParticlesClose++;
         minX = min(minX, particleX);
         maxX = max(maxX, particleX);
     }
 
-    cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / NUM_PARTICLES << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
+    cout << "Num particles close to target: " << 100 * static_cast<floating_t>(numParticlesClose) / N << "%, MinX: " << minX << ", MaxX: " << maxX << endl;
+
 })
 
 
 MAIN(
     initAirplane();
 
-    INIT_BBLOCK(particleInit, progState_t)
-    INIT_BBLOCK(propagateAndWeight, progState_t)
+    ADD_BBLOCK(particleInit)
+    ADD_BBLOCK(propagateAndWeight)
 
-    SMC(progState_t, callback)
+    SMC(callback)
 )

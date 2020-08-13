@@ -1,6 +1,9 @@
 #ifndef AIRPLANE_UTILS_INCLUDED
 #define AIRPLANE_UTILS_INCLUDED
 
+/*
+ * File airplane_utils.cuh contains some helper functions for the airplane model. 
+ */
 
 #include <math.h>
 #include <iostream>
