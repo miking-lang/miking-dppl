@@ -8,12 +8,12 @@
  #include "smc.cuh"
  #include "dists/dists.cuh"
  #include "particles_memory_handler.cuh"
- #include "resample/systematic/sequential.cuh"
+ #include "resample/systematic/systematic_cpu.cuh"
  
  #ifdef __NVCC__
  #include <curand_kernel.h>
  #include "utils/cuda_error_utils.cuh"
- #include "resample/systematic/parallel.cuh"
+ #include "resample/systematic/systematic_gpu.cuh"
  #include "smc_kernels.cuh"
  #endif
 
@@ -80,10 +80,10 @@ DEV double runSMCNested(
         floating_t logWeightSum;
         if(parallelResampling) {
             #ifdef __NVCC__
-            logWeightSum = calcLogWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED);
+            logWeightSum = calcLogWeightSumGpu(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED);
             #endif
         } else {
-            logWeightSum = calcLogWeightSumSeq(particles.weights, resampler, numParticles);
+            logWeightSum = calcLogWeightSumCpu(particles.weights, resampler, numParticles);
         }
 
         logNormConstant += logWeightSum - log(static_cast<floating_t>(numParticles));
@@ -93,10 +93,10 @@ DEV double runSMCNested(
 
         if(parallelResampling) {
             #ifdef __NVCC__
-            resampleSystematicParNested(randState, particles, resampler, numParticles, NUM_BLOCKS);
+            resampleSystematicGpuNested(randState, particles, resampler, numParticles, NUM_BLOCKS);
             #endif
         } else {
-            resampleSystematicSeq(
+            resampleSystematicCpu(
                 #ifdef __NVCC__
                 randState,
                 #endif 

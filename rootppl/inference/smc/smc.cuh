@@ -77,13 +77,14 @@ using callbackFunc_t = void (*)(particles_t&, int, void*);
  * @param bblocks the array of functions that will be executed by SMC.
  * @param numBblocks the size of the bblocks array.
  * @param numParticles number of particles to be used in SMC.
+ * @param ompThreads controls the maximum number of threads used by Open MP on the CPU variant. 
  * @param particlesPerThread indirectly determines how many CUDA threads will be necessary. Not used in CPU variant.
  * @param progStateSize The size of the program state used by each particle. 
  * @param callback optional function that should be called with the resulting particles after inference.
  * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
  * @return the logged normalization constant.
  */
-double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
+double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int ompThreads, const int particlesPerThread,
     size_t progStateSize, callbackFunc_t callback = NULL, void* arg = NULL);
 
     

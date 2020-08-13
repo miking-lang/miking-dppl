@@ -2,21 +2,20 @@
 #define RESAMPLE_CPU_INCLUDED
 
 /*
- * File sequential.cuh contains the sequential implementation of the systematic resampling. 
+ * File systematic_cpu.cuh contains the CPU implementation of the systematic resampling. 
  */
 
 #include "common.cuh"
 
 /**
- * Calculates the log weight prefix sums safely according to the identity in the appendix of 
- * the paper "Parallel resampling in the particle filter", L. M. Murray et. al. 
+ * Calculates the log weight prefix sums. 
  * 
  * @param w the weight array.
  * @param resampler the resampler struct.
  * @param numParticles the number of particles used in SMC.
  * @return the logarithm of the total weight sum. 
  */
-HOST DEV floating_t calcLogWeightSumSeq(floating_t* w, resampler_t resampler, int numParticles);
+HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t resampler, int numParticles);
 
 /**
  * Calculates the cumulative offspring of each particle. 
@@ -26,7 +25,7 @@ HOST DEV floating_t calcLogWeightSumSeq(floating_t* w, resampler_t resampler, in
  * @param u a sample from the standard uniform distribution. 
  * @param numParticles the number of particles used in SMC.
  */
-HOST DEV void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles);
+HOST DEV void systematicCumulativeOffspringCpu(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles);
 
 /**
  * Uses the cumulative offspring to assign the ancestor indices used for resample propagation. 
@@ -35,7 +34,7 @@ HOST DEV void systematicCumulativeOffspringSeq(floating_t* prefixSum, int* cumul
  * @param ancestor the array to store the result in. 
  * @param numParticles the number of particles used in SMC.
  */
-HOST DEV void cumulativeOffspringToAncestorSeq(int* cumulativeOffspring, int* ancestor, int numParticles);
+HOST DEV void cumulativeOffspringToAncestorCpu(int* cumulativeOffspring, int* ancestor, int numParticles);
 
 /**
  * Propagates the particles. Copies them from the ancestor to the new particles. 
@@ -44,16 +43,16 @@ HOST DEV void cumulativeOffspringToAncestorSeq(int* cumulativeOffspring, int* an
  * @param resampler the resampler struct reference.
  * @param numParticles the number of particles used in SMC.
  */
-HOST DEV void copyStatesSeq(particles_t& particles, resampler_t& resampler, int numParticles);
+HOST DEV void copyStatesCpu(particles_t& particles, resampler_t& resampler, int numParticles);
 
 /**
- * Performs sequential resampling. Used in both top-level and nested SMC. 
+ * Performs CPU resampling. Used in both top-level and nested SMC. 
  * 
  * @param takes a curandState as argument if it runs on the GPU (nested SMC).
  * @param particles the particles struct reference.
  * @param resampler the resampler struct reference.
  * @param numParticles the number of particles used in SMC.
  */
-DEV void resampleSystematicSeq(RAND_STATE_DECLARE particles_t& particles, resampler_t& resampler, int numParticles);
+DEV void resampleSystematicCpu(RAND_STATE_DECLARE particles_t& particles, resampler_t& resampler, int numParticles);
 
 #endif
