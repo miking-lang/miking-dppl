@@ -40,7 +40,7 @@ The corresponding parallel CPU (OpenMP) example is:
 make model=models/airplane/airplane.cu omp -j5
 ```
 
-The first `make` will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run make with the `-j numThreads` to use multiple threads when building). 
+The first `make` will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run make with the `-j numThreads` to use multiple threads and speed up the build). 
 __Note that if the inference framework is compiled for GPU, and then the model is compiled for CPU, 
 there will be errors. So always perform a `make clean` before switching between CPU and GPU. The same goes for switching to/from OpenMP.__
 
