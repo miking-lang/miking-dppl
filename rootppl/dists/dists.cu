@@ -49,7 +49,6 @@ std::normal_distribution<floating_t> normalDist(0, 1);
 void initGen() {
     #ifdef _OPENMP
     int maxThreads = omp_get_max_threads();
-    printf("maxNumThreads: %d\n", maxThreads);
     // generatorDists = new std::default_random_engine[maxThreads];
     genWrappers = new generator_wrapper[maxThreads];
     for(int i = 0; i < maxThreads; i++) {
