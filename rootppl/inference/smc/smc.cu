@@ -30,7 +30,8 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
                 size_t progStateSize, callbackFunc_t callback, void* arg) {
 
     #ifdef _OPENMP
-    omp_set_num_threads(ompThreads);
+    if(ompThreads > 0)
+        omp_set_num_threads(ompThreads);
     #endif
     floating_t logNormConstant = 0;
 
@@ -52,7 +53,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
     resampler_t resampler = initResampler(numParticles, progStateSize);
 
-    // cudaProfilerStart();
     // Run program/inference
     while(true) {
 
@@ -65,10 +65,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
         #pragma omp parallel for
         for(int i = 0; i < numParticles; i++) {
-            /*if (tid == 0) {
-                int nthreads = omp_get_num_threads(); 
-                printf("Number of threads = %d\n", nthreads); 
-            }*/
             int pc = particles.pcs[i];
             if(pc < numBblocks && pc >= 0)
                 bblocks[pc](particles, i, arg);
@@ -89,7 +85,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
             break;
         
     }
-    // cudaProfilerStop();
 
     if(callback != NULL)
         callback(particles, numParticles, NULL);

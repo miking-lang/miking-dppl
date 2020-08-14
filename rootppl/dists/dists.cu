@@ -16,6 +16,10 @@
 #include <random>
 #include <time.h>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #ifdef __NVCC__
 #include <curand_kernel.h>
 #endif
@@ -29,11 +33,37 @@
 #include "dists.cuh"
 
 // Define the CPU generator and primitives, and initializes the generator state. 
-std::default_random_engine generatorDists;
+#ifdef _OPENMP
+// Unable to simply create an array of default_random_engine, so wrapped in a struct
+struct generator_wrapper {
+    std::default_random_engine gen;
+};
+generator_wrapper* genWrappers;
+// std::default_random_engine* generatorDists = new std::default_random_engine[8];
+#else
+std::default_random_engine gen;
+#endif
+
 std::uniform_real_distribution<floating_t> uniformDist(0.0, 1.0);
 std::normal_distribution<floating_t> normalDist(0, 1);
 void initGen() {
-    generatorDists.seed(time(NULL));
+    #ifdef _OPENMP
+    int maxThreads = omp_get_max_threads();
+    printf("maxNumThreads: %d\n", maxThreads);
+    // generatorDists = new std::default_random_engine[maxThreads];
+    genWrappers = new generator_wrapper[maxThreads];
+    for(int i = 0; i < maxThreads; i++) {
+        genWrappers[i].gen.seed(time(NULL) + i);
+    }
+    #else
+    gen.seed(time(NULL));
+    #endif
+}
+
+void freeGen() {
+    #ifdef _OPENMP
+    delete[] genWrappers;
+    #endif
 }
 
 //#ifdef __NVCC__

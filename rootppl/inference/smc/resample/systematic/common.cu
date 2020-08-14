@@ -10,12 +10,16 @@
 #include "utils/misc.cuh"
 #include "inference/smc/particles_memory_handler.cuh"
 
+#ifdef __NVCC__
 std::default_random_engine generatorRes;
 std::uniform_real_distribution<floating_t> uniformCPU(0.0, 1.0);
+#endif
 
 resampler_t initResampler(int numParticles, size_t progStateSize) {
 
+    #ifdef __NVCC__
     generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions. 
+    #endif
     resampler_t resampler;
 
     allocateMemory<int>(&resampler.ancestor, numParticles);

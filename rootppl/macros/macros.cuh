@@ -111,6 +111,7 @@ int main(int argc, char** argv) { \
     double res = 0; \
     body \
     printf("log normalization constant = %f\n", res); \
+    freeGen(); \
     return 0; \
 }
 
@@ -153,7 +154,7 @@ int numParticles = 10000; \
 if(argc > 1) { \
     numParticles = atoi(argv[1]); \
 } \
-int ompThreads = 4; \
+int ompThreads = -1; \
 if(argc > 2) { \
     ompThreads = atoi(argv[2]); \
 } \

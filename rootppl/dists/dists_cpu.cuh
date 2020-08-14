@@ -5,6 +5,10 @@
  * File dists_cpu.cuh contains primitive distributions specific for the CPU. 
  */
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 
 /**
  * Returns a sample from the Uniform distribution on the interval [min, max)
@@ -14,7 +18,13 @@
  * @return U[min, max)
  */
 floating_t uniform(floating_t min, floating_t max) {
-    return (uniformDist(generatorDists) * (max - min)) + min;
+    floating_t u;
+    #ifdef _OPENMP
+    u = uniformDist(genWrappers[omp_get_thread_num()].gen);
+    #else
+    u = uniformDist(gen);
+    #endif
+    return (u * (max - min)) + min;
 }
 
 /**
@@ -25,7 +35,13 @@ floating_t uniform(floating_t min, floating_t max) {
  * @return N(mean, std^2)
  */
 floating_t normal(floating_t mean, floating_t std) {
-    return (normalDist(generatorDists) * std) + mean;
+    floating_t n;
+    #ifdef _OPENMP
+    n = normalDist(genWrappers[omp_get_thread_num()].gen);
+    #else
+    n = normalDist(gen);
+    #endif
+    return (n * std) + mean;
 }
 
 /**
@@ -37,7 +53,11 @@ floating_t normal(floating_t mean, floating_t std) {
 unsigned int poisson(double lambda) {
     // Reuse distribution object when possible? However, does not seem to be that expensive to create dist object
     std::poisson_distribution<unsigned int> poissonDist(lambda);
-    return poissonDist(generatorDists);
+    #ifdef _OPENMP
+    return poissonDist(genWrappers[omp_get_thread_num()].gen);
+    #else
+    return poissonDist(gen);
+    #endif
 }
 
 #endif
