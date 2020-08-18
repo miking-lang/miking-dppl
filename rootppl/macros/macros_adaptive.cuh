@@ -11,6 +11,8 @@
 #define HOST __host__
 #define DEV __device__
 
+#define LOG(x) log(static_cast<floating_t>(x))
+
 #define ALLOC_TYPE(pointerAddress, type, n) cudaSafeCall(cudaMallocManaged(pointerAddress, sizeof(type) * n));
 #define FREE(pointer) cudaSafeCall(cudaFree(pointer));
 
@@ -57,6 +59,7 @@ __device__ type* pointerName ## Dev;
 // The macros below are equivalent to the GPU variants above, but for CPU
 #define HOST
 #define DEV
+#define LOG(x) log(x)
 #define ALLOC_TYPE(pointerAddress, type, n) *pointerAddress = new type[n];
 #define FREE(pointer) delete[] pointer;
 #define DEV_POINTER(funcName, progStateType)

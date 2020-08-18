@@ -54,9 +54,6 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
         return 1; // What do return instead of NaN?
     }
 
-    // if(max_M < 9400)
-        // printf("Max_M: %d\n", max_M);
-
     if(! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu) && ! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu))
         return 1;
     else
@@ -100,7 +97,6 @@ BBLOCK_HELPER(simBranch, {
 	}
 	
 	if (lambda == 0.0) {
-	    // var t1 = startTime - stopTime
         return 0.0;
 	}
 	// extreme values patch 2/2
@@ -148,11 +144,8 @@ BBLOCK(simTree, {
     int nextIdx = treeP->idxNext[treeIdx];
     PSTATE.treeIdx = nextIdx;
 
-    if(nextIdx == -1) {
+    if(nextIdx == -1)
         PC++;
-        return;
-    }
-
 })
 
 
@@ -174,11 +167,10 @@ BBLOCK(simCRBD, {
 })
 
 BBLOCK(survivorshipBias, {
-    // Survivorship Bias, is done after simCRBD
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     int MAX_M = 10000;
     int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu);
-    WEIGHT(log(static_cast<floating_t>(M)));
+    WEIGHT(LOG(M));
     PC++;
 })
 
