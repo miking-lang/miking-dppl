@@ -6,26 +6,33 @@
  */
 
 #include <iostream>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #include "macros/macros.cuh"
 #include "smc.cuh"
 #include "dists/dists.cuh"
 #include "particles_memory_handler.cuh"
-#include "resample/systematic/sequential.cuh"
+#include "resample/systematic/systematic_cpu.cuh"
 // #include "smc_include.cuh"
 
 #ifdef __NVCC__
 #include <curand_kernel.h>
 // #include "cuda_profiler_api.h"
 #include "utils/cuda_error_utils.cuh"
-#include "resample/systematic/parallel.cuh"
+#include "resample/systematic/systematic_gpu.cuh"
 #include "smc_kernels.cuh"
 #endif
 
-
-double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int particlesPerThread, 
+ 
+double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int ompThreads, const int particlesPerThread,
                 size_t progStateSize, callbackFunc_t callback, void* arg) {
 
+    #ifdef _OPENMP
+    if(ompThreads > 0)
+        omp_set_num_threads(ompThreads);
+    #endif
     floating_t logNormConstant = 0;
 
     particles_t particles = allocateParticles(numParticles, progStateSize, false);
@@ -46,7 +53,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
     resampler_t resampler = initResampler(numParticles, progStateSize);
 
-    // cudaProfilerStart();
     // Run program/inference
     while(true) {
 
@@ -54,23 +60,24 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
         execFuncs<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
-        floating_t logWeightSum = calcLogWeightSumPar(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        floating_t logWeightSum = calcLogWeightSumGpu(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
         #else
 
+        #pragma omp parallel for
         for(int i = 0; i < numParticles; i++) {
             int pc = particles.pcs[i];
             if(pc < numBblocks && pc >= 0)
                 bblocks[pc](particles, i, arg);
         }
-        floating_t logWeightSum = calcLogWeightSumSeq(particles.weights, resampler, numParticles);
+        floating_t logWeightSum = calcLogWeightSumCpu(particles.weights, resampler, numParticles);
         #endif
 
         logNormConstant += logWeightSum - log(numParticles);
         
         #ifdef __NVCC__
-        resampleSystematicPar(particles, resampler, numParticles, NUM_BLOCKS);
+        resampleSystematicGpu(particles, resampler, numParticles, NUM_BLOCKS);
         #else
-        resampleSystematicSeq(particles, resampler, numParticles);
+        resampleSystematicCpu(particles, resampler, numParticles);
         #endif
         
         // This last resample increases variance perhaps? But convenient to not have to consider weights when extracting distribution. 
@@ -78,7 +85,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
             break;
         
     }
-    // cudaProfilerStop();
 
     if(callback != NULL)
         callback(particles, numParticles, NULL);

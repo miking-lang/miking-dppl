@@ -265,7 +265,6 @@ CALLBACK(callback, {
 })
 
 MAIN({
-    initGen();
 
     ADD_BBLOCK(simBAMM)
     ADD_BBLOCK(simTree)

@@ -20,10 +20,15 @@
  * This curandState will be present in the BBLOCK and BBLOCK_HELPER functions. 
  */
 
- /**
-  * Should be called before inference starts. Done in MAIN macro.
-  */
- void initGen();
+/**
+ * Initializes the generator(s) used on CPU. Should be called before inference starts. Done in MAIN macro.
+ */
+void initGen();
+
+/**
+ * Frees the generator(s) used on CPU. Should be called after inference is done. Done in MAIN macro.
+ */
+void freeGen();
 
  /**
  * Returns a sample from the Uniform distribution on the interval (min, max]

@@ -2,7 +2,7 @@
 #define RESAMPLE_GPU_INCLUDED
 
 /*
- * File parallel.cuh contains the parallel implementation of the systematic resampling. 
+ * File systematic_gpu.cuh contains the GPU implementation of the systematic resampling. 
  */
 
 #ifdef __NVCC__
@@ -21,7 +21,7 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
  * @param numThreadsPerBlock kernel launch setting.
  * @return the logarithm of the total weight sum. 
  */
-HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
+HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
 
 /**
  * Calculates the cumulative offsprings and then uses it to calculate the ancestor indices. 
@@ -47,7 +47,7 @@ HOST DEV void decideAncestors(resampler_t& resampler, floating_t u, int numParti
 HOST DEV void postUniform(particles_t& particles, resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock);
 
 /**
- * Performs parallel resampling. Uses CUDA Dynamic Parallelism (launches kernels within kernels). Used in nested inference.
+ * Performs GPU resampling. Uses CUDA Dynamic Parallelism (launches kernels within kernels). Used in nested inference.
  * 
  * @param randState the curandState used to draw a random uniform sample on the GPU. 
  * @param particles the particles struct reference.
@@ -55,17 +55,17 @@ HOST DEV void postUniform(particles_t& particles, resampler_t& resampler, floati
  * @param numParticles the number of particles used in SMC.
  * @param numBlocks kernel launch setting.
  */
-DEV void resampleSystematicParNested(curandState* randState, particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks);
+DEV void resampleSystematicGpuNested(curandState* randState, particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks);
 
 /**
- * Performs parallel resampling. Uses CUDA Dynamic Parallelism (launches kernels within kernels). Used in top-level inference. 
+ * Performs GPU resampling. Uses CUDA Dynamic Parallelism (launches kernels within kernels). Used in top-level inference. 
  * 
  * @param particles the particles struct reference.
  * @param resampler the resampler struct reference.
  * @param numParticles the number of particles used in SMC.
  * @param numBlocks kernel launch setting.
  */
-void resampleSystematicPar(particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks);
+void resampleSystematicGpu(particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks);
 
 #endif
 

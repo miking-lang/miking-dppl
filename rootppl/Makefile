@@ -3,9 +3,14 @@
 
 # endef
 
-# ifndef MODEL
-# $(error MODEL argument needs to be set with e.g.: $(\n)make MODEL=path/to/model.cu$(\n))
+# ifndef model
+# $(error model argument needs to be set with e.g.: $(\n)make model=path/to/model.cu$(\n))
 # endif
+
+# ifdef ompthreads
+# OMP = -fopenmp
+# endif
+
 
 ifdef arch
 # GPU
@@ -16,8 +21,8 @@ FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 else
 # CPU
 CC=g++
-FLAGS=-I. -xc++ -std=c++14 -O3
-FLAGS_LINK=-std=c++14 -O3
+FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP)
+FLAGS_LINK=-std=c++14 -O3 $(OMP)
 endif
 
 EXEC_NAME=program
@@ -31,8 +36,8 @@ MISC_SRC=utils/misc.cu
 MATH_SRC=utils/math.cu
 SMC_KERNELS_SRC=inference/smc/smc_kernels.cu
 SYSTEMATIC_COMMON_SRC=inference/smc/resample/systematic/common.cu
-SYSTEMATIC_SEQ_SRC=inference/smc/resample/systematic/sequential.cu
-SYSTEMATIC_PARALLEL_SRC=inference/smc/resample/systematic/parallel.cu
+SYSTEMATIC_SEQ_SRC=inference/smc/resample/systematic/systematic_cpu.cu
+SYSTEMATIC_PARALLEL_SRC=inference/smc/resample/systematic/systematic_gpu.cu
 SYSTEMATIC_KERNELS_SRC=inference/smc/resample/systematic/kernels.cu
 
 OBJDIR=out
@@ -53,17 +58,25 @@ $(EXEC_NAME): $(OBJDIR) $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
 	rm $(OBJDIR)/model.o
 
 # Compile model, which is always recompiled as it is deleted after the executable is created.
-$(OBJDIR)/model.o: $(MODEL)
-	$(CC) -c $(FLAGS) $(MODEL) -o $@
-# $(CC) -c $(FLAGS) $(MODEL) -o model.o
+$(OBJDIR)/model.o: $(model)
+	$(CC) -c $(FLAGS) $(model) -o $@
+# $(CC) -c $(FLAGS) $(model) -o model.o
 
 $(OBJDIR):
 	mkdir $(OBJDIR)
 
-
 # Compile only framework
 .PHONY: framework
 framework: $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+.PHONY: ompframework
+ompframework: openmpflag $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+.PHONY: omp openmpflag
+omp: openmpflag $(EXEC_NAME)
+
+openmpflag:
+	$(eval OMP = -fopenmp)
 
 # $(OBJ_FILES_FRAMEWORK): $(FRAMEWORK_FILES)
 	# $(CC) -c $(FLAGS) $< -o $@

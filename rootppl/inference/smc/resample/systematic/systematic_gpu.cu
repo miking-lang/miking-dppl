@@ -1,6 +1,6 @@
 
 /*
- * File parallel.cuh contains the parallel implementation of the systematic resampling. 
+ * File systematic_gpu.cuh contains the GPU implementation of the systematic resampling. 
  * This implementation is inspired by the paper by L. M. Murray et. al.: 
  * Parallel resampling in the particle filter https://arxiv.org/abs/1301.4019
  */
@@ -10,7 +10,7 @@
 #include "common.cuh"
 #include "kernels.cuh"
 #include "utils/cuda_error_utils.cuh"
-#include "parallel.cuh"
+#include "systematic_gpu.cuh"
 
 #include <curand_kernel.h>
 #include <thrust/scan.h>
@@ -21,7 +21,7 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
         resampler.prefixSum[i] = resampler.prefixSum[i-1] + w[i];
 }
 
-HOST DEV floating_t calcLogWeightSumPar(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
     floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
     // floating_t maxLogWeight = maxNaive(w, numParticles);
@@ -59,14 +59,14 @@ HOST DEV void postUniform(particles_t& particles, resampler_t& resampler, floati
     particles = tempAux;
 }
 
-DEV void resampleSystematicParNested(curandState* randState, particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks) {
+DEV void resampleSystematicGpuNested(curandState* randState, particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks) {
     
     floating_t u = uniform(randState, 0.0f, 1.0f);
     
     postUniform(particles, resampler, u, numParticles, numBlocks, NUM_THREADS_PER_BLOCK_NESTED);
 }
 
-void resampleSystematicPar(particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks) {
+void resampleSystematicGpu(particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks) {
 
     floating_t u = uniformCPU(generatorRes);
 
