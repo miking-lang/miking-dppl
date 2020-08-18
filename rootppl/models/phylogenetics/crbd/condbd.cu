@@ -12,12 +12,6 @@
 #include "../tree-utils/tree_utils.cuh"
 #include "stack.cuh"
 
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++14 -O3 
-g++ -x c++ -I . models/phylogenetics/crbd/condbd.cu -o smc.exe -std=c++14 -O3
-*/
 
 #define NUM_BBLOCKS 5
 INIT_MODEL(pStack_t, NUM_BBLOCKS)

@@ -12,6 +12,7 @@
 
 #include "macros/macros.cuh"
 #include "utils/math.cuh"
+#include "scores.cuh"
 
 HOST DEV floating_t logGamma(floating_t xx) {
     const floating_t gammaCof[6] = {

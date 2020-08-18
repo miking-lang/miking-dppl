@@ -14,10 +14,6 @@
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 
-/**
-    This file traverses the tree with a precomputed DFS path that corresponds to the recursive calls. 
-*/
-
 typedef short treeIdx_t;
 struct progState_t {
     floating_t lambda;

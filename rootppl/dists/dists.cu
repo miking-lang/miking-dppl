@@ -39,7 +39,6 @@ struct generator_wrapper {
     std::default_random_engine gen;
 };
 generator_wrapper* genWrappers;
-// std::default_random_engine* generatorDists = new std::default_random_engine[8];
 #else
 std::default_random_engine gen;
 #endif
@@ -49,7 +48,6 @@ std::normal_distribution<floating_t> normalDist(0, 1);
 void initGen() {
     #ifdef _OPENMP
     int maxThreads = omp_get_max_threads();
-    // generatorDists = new std::default_random_engine[maxThreads];
     genWrappers = new generator_wrapper[maxThreads];
     for(int i = 0; i < maxThreads; i++) {
         genWrappers[i].gen.seed(time(NULL) + i);
@@ -65,12 +63,9 @@ void freeGen() {
     #endif
 }
 
-//#ifdef __NVCC__
 #ifdef __NVCC__
 #include "dists_gpu.cuh"
-//#endif
 #else
-
 #include "dists_cpu.cuh"
 
 #endif

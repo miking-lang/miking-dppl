@@ -14,14 +14,6 @@
 #include "utils/math.cuh"
 
 
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/phylogenetics/crbd/crbd.cu -o smc -std=c++14 -O3
-g++ -x c++ -I . models/phylogenetics/crbd/crbd.cu -o smc -std=c++14 -O3
-*/
-
-
 typedef short treeIdx_t;
 struct progState_t {
     treeIdx_t treeIdx;
