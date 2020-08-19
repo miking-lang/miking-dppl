@@ -30,18 +30,12 @@ const int MAX_LAM = 5;
 #define NUM_BBLOCKS 3
 INIT_MODEL(progState_t, NUM_BBLOCKS)
 
-BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating_t);
+BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating_t, floating_t);
 
 BBLOCK_DATA(tree, tree_t, 1)
 
-BBLOCK_DATA(rho, floating_t, 1)
+BBLOCK_DATA_CONST(rho, floating_t, 1.0)
 
-
-void initCBD() {
-    *rho = 1.0;
-
-    COPY_DATA_GPU(rho, floating_t, 1)
-}
 
 BBLOCK_HELPER(M_crbdGoesUndetected, {
 
@@ -50,23 +44,23 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
         return 1; // What do return instead of NaN?
     }
 
-    if(! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu) && ! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu))
+    if(! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu, rho) && ! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu, rho))
         return 1;
     else
-        return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, maxM - 1, lambda, mu);
+        return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, maxM - 1, lambda, mu, rho);
 
-}, int, floating_t startTime, int maxM, floating_t lambda, floating_t mu)
+}, int, floating_t startTime, int maxM, floating_t lambda, floating_t mu, floating_t rho)
 
 BBLOCK_HELPER(crbdGoesUndetected, {
 
-    floating_t rhoLocal = *DATA_POINTER(rho);
+    // floating_t rhoLocal = *DATA_POINTER(rho);
 
     // extreme values patch 1/2
     if (lambda - mu > MAX_DIV)
         return false;
     
     if (lambda == 0.0) 
-        return ! SAMPLE(bernoulli, rhoLocal);
+        return ! SAMPLE(bernoulli, rho);
 
     // end extreme values patch 1/2
 
@@ -74,15 +68,15 @@ BBLOCK_HELPER(crbdGoesUndetected, {
     
     floating_t currentTime = startTime - t;
     if(currentTime < 0)
-        return ! SAMPLE(bernoulli, rhoLocal);
+        return ! SAMPLE(bernoulli, rho);
     
     bool speciation = SAMPLE(bernoulli, lambda / (lambda + mu));
     if (! speciation)
         return true;
     
-    return BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu) && BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu);
+    return BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu, rho) && BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu, rho);
 
-}, bool, floating_t startTime, floating_t lambda, floating_t mu)
+}, bool, floating_t startTime, floating_t lambda, floating_t mu, floating_t rho)
 
 
 BBLOCK_HELPER(simBranch, {
@@ -104,13 +98,13 @@ BBLOCK_HELPER(simBranch, {
     if(currentTime <= stopTime)
         return 0.0;
     
-    bool sideDetection = BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu);
+    bool sideDetection = BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu, rho);
     if(! sideDetection)
         return -INFINITY;
     
-    return BBLOCK_CALL(simBranch, currentTime, stopTime, lambda, mu) + log(2.0);
+    return BBLOCK_CALL(simBranch, currentTime, stopTime, lambda, mu, rho) + log(2.0);
 
-}, floating_t, floating_t startTime, floating_t stopTime, floating_t lambda, floating_t mu)
+}, floating_t, floating_t startTime, floating_t stopTime, floating_t lambda, floating_t mu, floating_t rho)
 
 
 BBLOCK(simTree, {
@@ -120,6 +114,8 @@ BBLOCK(simTree, {
 
     floating_t lambdaLocal = PSTATE.lambda;
     floating_t muLocal = PSTATE.mu;
+    // floating_t rhoLocal = *DATA_POINTER(rho);
+    floating_t rhoLocal = DATA_CONST(rho);
 
     int indexParent = treeP->idxParent[treeIdx];
     
@@ -130,9 +126,9 @@ BBLOCK(simTree, {
 
     // Interior if at least one child
     bool interiorNode = treeP->idxLeft[treeIdx] != -1 || treeP->idxRight[treeIdx] != -1;
-    floating_t lnProb2 = interiorNode ? log(lambdaLocal) : log(*DATA_POINTER(rho));
+    floating_t lnProb2 = interiorNode ? log(lambdaLocal) : log(rhoLocal);
 
-    floating_t lnProb3 = BBLOCK_CALL(simBranch, parentAge, age, lambdaLocal, muLocal);
+    floating_t lnProb3 = BBLOCK_CALL(simBranch, parentAge, age, lambdaLocal, muLocal, rhoLocal);
 
     WEIGHT(lnProb1 + lnProb2 + lnProb3);
 
@@ -165,14 +161,13 @@ BBLOCK(simCRBD, {
 BBLOCK(survivorshipBias, {
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     int MAX_M = 10000;
-    int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu);
+    int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, DATA_CONST(rho));
     WEIGHT(LOG(M));
     PC++;
 })
 
 
 MAIN(
-    initCBD();
     
     ADD_BBLOCK(simCRBD)
     ADD_BBLOCK(simTree)
