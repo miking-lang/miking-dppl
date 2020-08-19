@@ -8,6 +8,7 @@
  * pointer in the tree) that corresponds to the recursive calls in the original model. 
  */
 
+ // primate tree, 10K particles. omp: ~2 sec, gpu: ~1.8 sec
 
 #include <iostream>
 #include <cstring>
@@ -16,8 +17,8 @@
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 
-typedef bisse32_tree_t tree_t;
-// typedef primate_tree_t tree_t;
+// typedef bisse32_tree_t tree_t;
+typedef primate_tree_t tree_t;
 #include "bamm.cuh"
 
 
@@ -25,6 +26,8 @@ typedef bisse32_tree_t tree_t;
 INIT_MODEL(progState_t, NUM_BBLOCKS)
 
 BBLOCK_HELPER_DECLARE(bammGoesUndetected, bool, floating_t, lambdaFun_t, floating_t, floating_t, floating_t);
+
+BBLOCK_DATA_CONST(rho, floating_t, 1.0);
 
 #define DIST_LAMBDA() exp(SAMPLE(uniform, log(1e-2), log(1e1)))
 #define DIST_Z() SAMPLE(normal, 0, 0.001)
@@ -163,23 +166,12 @@ BBLOCK(simTree, {
     
     int indexParent = treeP->idxParent[treeIdx];
 
-    /* if(indexParent == -1) {
-        // Recursive call under diversification rates
-        
-        // Return total subtree with diversification info attached as an 'extended newick' character string
-
-        // Root seems to only recurse and conclude tree info?
-        // bblockArgs_t args = PSTATE.stack.peek();
-        // PSTATE.stack.push(args);
-        // RESAMPLE = false;
-        BBLOCK_CALL(simTree);
-        return;
-    } */
-
     bblockArgs_t args = PSTATE.stack.pop();
+    floating_t eta = PSTATE.eta;
+    floating_t rhoLocal = DATA_CONST(rho);
 
     floating_t treeAge = treeP->ages[treeIdx];
-    simBranchRet_t ret = BBLOCK_CALL(simBranch, treeP->ages[indexParent], treeAge, args.lf, args.lf.z, args.mu, args.eta, args.rho);
+    simBranchRet_t ret = BBLOCK_CALL(simBranch, treeP->ages[indexParent], treeAge, args.lf, args.lf.z, args.mu, eta, rhoLocal);
 
     // Collect node info
     lambdaFun_t lambdaFun2 = ret.lf;
@@ -189,7 +181,7 @@ BBLOCK(simTree, {
     // nodeInfo = ...
 
     bool interiorNode = treeP->idxLeft[treeIdx] != -1 || treeP->idxRight[treeIdx] != -1;
-    floating_t lnSpecProb = interiorNode ? log(lambdaFun(lambdaFun2, treeAge)) : log(args.rho);
+    floating_t lnSpecProb = interiorNode ? log(lambdaFun(lambdaFun2, treeAge)) : log(rhoLocal);
     WEIGHT(ret.r7 + lnSpecProb);
     
     // Collect branch info
@@ -197,7 +189,7 @@ BBLOCK(simTree, {
     // branchInfo  = ...
 
     if(interiorNode) {
-        bblockArgs_t args2(ret.lf, mu2, args.eta, args.rho); // lf contains z, lf.z always seem to be equal to z in WebPPL-script
+        bblockArgs_t args2(ret.lf, mu2); // lf contains z, lf.z always seem to be equal to z in WebPPL-script
         PSTATE.stack.push(args2);
         PSTATE.stack.push(args2);
 
@@ -232,14 +224,15 @@ BBLOCK(simBAMM, {
     lambdaFun_t lf_0(lambda_0, z_0, age);
     floating_t mu_0 = DIST_MU(lambda_0);
     floating_t eta = SAMPLE(gamma, 1, 1);
-    floating_t rho = 1.0;
+
+    PSTATE.eta = eta;
 
     // Correction Factor
     int numLeaves = countLeaves(treeP->idxLeft, treeP->idxRight, treeP->NUM_NODES);
     floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     WEIGHT(corrFactor);
 
-    bblockArgs_t args(lf_0, mu_0, eta, rho);
+    bblockArgs_t args(lf_0, mu_0);
     // one for each child, and one for Survivorship Bias after tree simulations
     PSTATE.stack.push(args);
     PSTATE.stack.push(args);
@@ -254,14 +247,9 @@ BBLOCK(survivorshipBias, {
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     bblockArgs_t args = PSTATE.stack.pop();
     int MAX_M = 10000;
-    int M = BBLOCK_CALL(M_bammGoesUndetected, age, args.lf, args.mu, args.eta, args.rho, MAX_M);
-    WEIGHT(log(static_cast<floating_t>(M)));
+    int M = BBLOCK_CALL(M_bammGoesUndetected, age, args.lf, args.mu, PSTATE.eta, DATA_CONST(rho), MAX_M);
+    WEIGHT(LOG(M));
     PC++;
-})
-
-
-CALLBACK(callback, {
-    // printf("Done yay!\n");
 })
 
 MAIN({
@@ -270,6 +258,6 @@ MAIN({
     ADD_BBLOCK(simTree)
     ADD_BBLOCK(survivorshipBias)
 
-    SMC(callback)
+    SMC(NULL)
 })
 

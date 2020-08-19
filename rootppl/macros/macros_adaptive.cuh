@@ -39,7 +39,7 @@ __constant__ type pointerName ## Dev[n][m][z];
 __constant__ type* pointerName ## Dev;
 
 // Declare and initialize a constant on host and device
-#define BBLOCK_DATA_CONST(constName, type, value) type constName = value; \
+#define BBLOCK_DATA_CONST(constName, type, value) const type constName = value; \
 __constant__ type constName ## Dev = value;
 
 // Copy the data from the host pointer to the device pointer (to the GPU), pointers should be allocated with a BBLOCK_DATA macro
@@ -75,7 +75,7 @@ __constant__ type constName ## Dev = value;
 #define BBLOCK_DATA_PTR(pointerName, type) type* pointerName;
 #define BBLOCK_DATA_2D(pointerName, type, n, m) type pointerName[n][m];
 #define BBLOCK_DATA_3D(pointerName, type, n, m, z) type pointerName[n][m][z];
-#define BBLOCK_DATA_CONST(constName, type, value) type constName = value;
+#define BBLOCK_DATA_CONST(constName, type, value) const type constName = value;
 #define COPY_DATA_GPU(pointerName, type, n)
 #define DATA_POINTER(pointerName) pointerName
 #define DATA_CONST(constName) constName

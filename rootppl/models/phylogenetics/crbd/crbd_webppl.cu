@@ -53,8 +53,6 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
 
 BBLOCK_HELPER(crbdGoesUndetected, {
 
-    // floating_t rhoLocal = *DATA_POINTER(rho);
-
     // extreme values patch 1/2
     if (lambda - mu > MAX_DIV)
         return false;
