@@ -8,8 +8,6 @@
  * pointer in the tree) that corresponds to the recursive calls in the original model. 
  */
 
- // primate tree, 10K particles. omp: ~2 sec, gpu: ~1.8 sec
-
 #include <iostream>
 #include <cstring>
 
@@ -17,8 +15,8 @@
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 
-// typedef bisse32_tree_t tree_t;
-typedef primate_tree_t tree_t;
+typedef bisse32_tree_t tree_t;
+// typedef primate_tree_t tree_t;
 #include "bamm.cuh"
 
 

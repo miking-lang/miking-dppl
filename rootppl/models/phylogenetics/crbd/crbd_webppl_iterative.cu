@@ -13,16 +13,6 @@
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
 
-// Bisse-32 tree
-// This model on local WebPPL with 10000 particles took ~42 sec
-// This program on CPU took ~0.11 sec
-// This program on GPU took ~0.265 sec
-
-// Primate tree tree
-// This model on local WebPPL with 10000 particles took ~323 sec
-// This program on CPU took ~1.04 sec
-// This program on GPU took ~0.606 sec
-
 typedef short treeIdx_t;
 struct progState_t {
     floating_t lambda;
@@ -30,7 +20,6 @@ struct progState_t {
     treeIdx_t treeIdx;
 };
 // typedef bisse32_tree_t tree_t;
-// typedef bisse32precision_tree_t tree_t;
 typedef primate_tree_t tree_t;
 
 const int MAX_DIV = 5;

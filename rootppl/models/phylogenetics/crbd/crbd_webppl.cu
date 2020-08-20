@@ -21,8 +21,8 @@ struct progState_t {
     treeIdx_t treeIdx;
 };
 // typedef bisse32_tree_t tree_t;
-// typedef bisse32precision_tree_t tree_t;
-typedef primate_tree_t tree_t;
+// typedef primate_tree_t tree_t;
+typedef moth_div_tree_t tree_t;
 
 const int MAX_DIV = 5;
 const int MAX_LAM = 5;
@@ -141,9 +141,12 @@ BBLOCK(simTree, {
 
 BBLOCK(simCRBD, {
 
-    PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
-    floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
-    PSTATE.mu = epsilon * PSTATE.lambda;
+    // PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
+    PSTATE.lambda = 0.2;
+    // floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
+    floating_t epsilon = 0.5;
+    // PSTATE.mu = epsilon * PSTATE.lambda;
+    PSTATE.mu = 0.1;
 
     tree_t* treeP = DATA_POINTER(tree);
 
