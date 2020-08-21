@@ -21,7 +21,7 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
  * @param numThreadsPerBlock kernel launch setting.
  * @return the logarithm of the total weight sum. 
  */
-HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
+HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
 
 /**
  * Calculates the cumulative offsprings and then uses it to calculate the ancestor indices. 
@@ -66,6 +66,19 @@ DEV void resampleSystematicGpuNested(curandState* randState, particles_t& partic
  * @param numBlocks kernel launch setting.
  */
 void resampleSystematicGpu(particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks);
+
+
+/**
+ * Takes the log of the exponentiated log weight, scales back with the maximum log weight and subtracts with the logarithm of the sum of weights. 
+ *
+ * @param w the array of scaled particle weights
+ * @param resampler the resampler struct.
+ * @param logWeightSum the logarithm of the sum of weights. 
+ * @param numParticles the number of particles used in SMC.
+ * @param numBlocks kernel launch setting.
+ * @param numThreadsPerBlock kernel launch setting.
+ */
+void logAndRenormaliseWeightsGpu(floating_t* w, resampler_t resampler, floating_t logWeightSum, int numParticles, int numBlocks, int numThreadsPerBlock);
 
 #endif
 

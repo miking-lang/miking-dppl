@@ -39,6 +39,7 @@ struct progState_t {
     floating_t sigma;
     floating_t epsilon;
     floating_t rho;
+    floating_t lambda_0;
     treeIdx_t treeIdx;
 };
 

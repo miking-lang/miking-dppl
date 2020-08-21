@@ -56,5 +56,15 @@ __global__ void cumulativeOffspringToAncestorKernel(const int* cumulativeOffspri
 __global__ void copyStatesKernel(particles_t particlesDst, const particles_t particlesSrc, int* ancestor, int numParticles, size_t progStateSize);
 
 
+/**
+ * Takes the log of the exponentiated log weight, scales back with the maximum log weight and subtracts with the logarithm of the sum of weights. 
+ * 
+ * @param w the scaled particle weights
+ * @param maxLogWeight the maximum log weight
+ * @param logWeightSum the logarithm of the sum of weights
+ * @param numParticles the number of particles used in SMC. 
+ */
+__global__ void logAndRenormaliseWeightsKernel(floating_t* w, floating_t maxLogWeight, floating_t logWeightSum, int numParticles);
+
 
 #endif

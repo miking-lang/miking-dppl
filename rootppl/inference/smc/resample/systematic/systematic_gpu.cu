@@ -21,9 +21,10 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
         resampler.prefixSum[i] = resampler.prefixSum[i-1] + w[i];
 }
 
-HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
     floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
+    resampler.maxLogWeight = maxLogWeight;
     // floating_t maxLogWeight = maxNaive(w, numParticles);
     
     expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight);
@@ -71,6 +72,11 @@ void resampleSystematicGpu(particles_t& particles, resampler_t& resampler, int n
     floating_t u = uniformCPU(generatorRes);
 
     postUniform(particles, resampler, u, numParticles, numBlocks, NUM_THREADS_PER_BLOCK);
+}
+
+void logAndRenormaliseWeightsGpu(floating_t* w, resampler_t resampler, floating_t logWeightSum, int numParticles, int numBlocks, int numThreadsPerBlock) {
+    logAndRenormaliseWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.maxLogWeight, logWeightSum, numParticles);
+    cudaDeviceSynchronize();
 }
 
 

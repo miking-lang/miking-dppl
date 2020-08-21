@@ -28,6 +28,7 @@ struct resampler_t {
     floating_t* prefixSum;
     particles_t auxParticles;
     size_t progStateSize;
+    floating_t maxLogWeight;
 };
 
 /**

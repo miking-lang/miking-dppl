@@ -9,10 +9,13 @@
  */
 
 #include <stdio.h>
+#include <string>
+#include <fstream>
 
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
+
 
 typedef short treeIdx_t;
 struct progState_t {
@@ -141,12 +144,12 @@ BBLOCK(simTree, {
 
 BBLOCK(simCRBD, {
 
-    // PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
-    PSTATE.lambda = 0.2;
-    // floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
-    floating_t epsilon = 0.5;
-    // PSTATE.mu = epsilon * PSTATE.lambda;
-    PSTATE.mu = 0.1;
+    PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
+    // PSTATE.lambda = 0.2;
+    floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
+    // floating_t epsilon = 0.5;
+    PSTATE.mu = epsilon * PSTATE.lambda;
+    // PSTATE.mu = 0.1;
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -167,6 +170,21 @@ BBLOCK(survivorshipBias, {
     PC++;
 })
 
+// Write particle data to file. 
+CALLBACK(saveResults, {
+    std::string fileName = "parameterData";
+    std::ofstream resFile (fileName);
+    if(resFile.is_open()) {
+
+        for(int i = 0; i < N; i++)
+            resFile << PSTATES[i].lambda << " " << PSTATES[i].mu << " " << exp(WEIGHTS[i]) << "\n";
+
+        resFile.close();
+    } else {
+        printf("Could not open file %s\n", fileName.c_str());
+    }
+})
+
 
 MAIN(
     
@@ -174,6 +192,6 @@ MAIN(
     ADD_BBLOCK(simTree)
     ADD_BBLOCK(survivorshipBias)
 
-    SMC(NULL)
+    SMC(saveResults)
 )
 

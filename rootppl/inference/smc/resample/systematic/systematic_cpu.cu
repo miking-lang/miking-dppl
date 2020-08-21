@@ -80,3 +80,11 @@ DEV void resampleSystematicCpu(RAND_STATE_DECLARE particles_t& particles, resamp
     cumulativeOffspringToAncestorCpu(resampler.cumulativeOffspring, resampler.ancestor, numParticles);
     copyStatesCpu(particles, resampler, numParticles);
 }
+
+DEV void logAndRenormaliseWeightsCpu(floating_t* w, resampler_t resampler, floating_t logWeightSum, int numParticles) {
+
+    #pragma omp parallel for
+    for(int i = 0; i < numParticles; i++)
+        w[i] = log(w[i]) + resampler.maxLogWeight - logWeightSum;
+    
+}
