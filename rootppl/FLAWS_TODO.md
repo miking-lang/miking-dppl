@@ -17,3 +17,7 @@ Some flaws/TODO:s to be aware of:
 - Program States in particles are laid out in memory as an array of structs, as the program state struct is a custom struct for each model. This however, is sub-optimal for GPU:s, and the optimal way would be a struct of arrays. This is the case for other particle members such as the weights and program counters. If the program states could be set up in this way as well, GPU performance could be significantly improved. 
 
 - No automated tests of the inference exists. It has only been manually verified by comparing model results to analytical results or inference results from other systems. 
+
+- Fix build for Mac OS. Currently, the Makefile assumes g++. Clang should be supported for Mac and used by default as it is the default host compiler used by CUDA on Mac. Instructions for how to use Open MP on Mac should be added to the README. 
+
+- Fix build for Windows. Currently the only verified solution for windows is thorugh Cygwin with gcc and adding a static library to the Makefile. This worked for Open MP as well. But Nvidia recommends Visual Studio for CUDA development. However, build settings should be set up to handle the different main files as well as different compile options (vanilla CPU, Open MP, CUDA). Perhaps a Makefile solution could work here as well, but it should use cl.exe as compiler then (which is the default host compiler used by NVCC on Windows).

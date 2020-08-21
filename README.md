@@ -13,7 +13,7 @@ RootPPL can be seen as an intermediate language for representing probabilistic m
 The instructions below are tested on Ubuntu 18.04 but should work for other Linux distributions, Windows, and Mac. 
 
 ### Install
-Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++ (gcc is also required to install CUDA).  In 
+Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++.  In 
 order to build for GPU, CUDA must be installed. See
 CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide Linux"), 
 [Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html "CUDA Installation Guide Windows"), 
