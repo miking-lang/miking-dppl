@@ -123,7 +123,8 @@ inference, but before clean up of the particles. This way, the results can be us
 generate desired distributions or values before particles are deleted. 
 Within the `CALLBACK` macro, the array of program states is accessed 
 with `PSTATES` and the number of particles is accessed with the 
-parameter `N` (which is hidden within the macro). 
+parameter `N` (which is hidden within the macro). Also, the log-weights array can be accessed with
+the `WEIGHTS` macro. These weights are normalised (so that the exponent of these log-weights sum to 1).
 Here is an example callback, called "sampleMean" that calculates and prints the mean 
 of the samples. 
 
@@ -270,7 +271,7 @@ and a stack to keep track of parameters.
 The architecture's main goal is to decouple the inference from the probabilistic models, this is the case for probabilistic
 programming languages. In the `inference` directory, the code for inference methods can be found. Currently, only SMC is supported. 
 Within the `smc` directory, the `resampling` directory contain resampling strategies. Currently only Systematic Resampling is supported. The resampling has 
-a parallel implementation for the GPU and a sequential implementation for the CPU. 
+a parallel implementation for the GPU, and a sequential and parallel implementation for the CPU. 
 
 - The `dists` directory contains distributions and scoring functions. Both models and inference can rely on these. 
 - The `macros` directory contains all the macros/constructs that are mostly used by models but also in inference code. 
