@@ -49,6 +49,13 @@ __global__ void copyStatesKernel(particles_t particlesDst, const particles_t par
     copyParticle(particlesDst, particlesSrc, idx, ancestor[idx], progStateSize);
 }
 
+__global__ void logAndRenormaliseWeightsKernel(floating_t* w, floating_t maxLogWeight, floating_t logWeightSum, int numParticles) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= numParticles || idx < 0) return;
+
+    w[idx] = log(w[idx]) + maxLogWeight - logWeightSum;
+}
+
 
 
 #endif

@@ -55,4 +55,14 @@ HOST DEV void copyStatesCpu(particles_t& particles, resampler_t& resampler, int 
  */
 DEV void resampleSystematicCpu(RAND_STATE_DECLARE particles_t& particles, resampler_t& resampler, int numParticles);
 
+/**
+ * Takes the log of the exponentiated log weight, scales back with the maximum log weight and subtracts with the logarithm of the sum of weights. 
+ *
+ * @param w the array of scaled particle weights
+ * @param resampler the resampler struct.
+ * @param logWeightSum the logarithm of the sum of weights. 
+ * @param numParticles the number of particles used in SMC.
+ */
+ DEV void logAndRenormaliseWeightsCpu(floating_t* w, resampler_t resampler, floating_t logWeightSum, int numParticles);
+
 #endif

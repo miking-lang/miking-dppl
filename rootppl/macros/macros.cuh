@@ -100,6 +100,9 @@ body
 
 // Access the array of progStates, should not be used by particles, but in callbacks for example. 
 #define PSTATES_TYPE(progStateType) static_cast<progStateType*>(particles.progStates)
+
+// Access the array of weights, should not be used by particles, but in callbacks for example.
+#define WEIGHTS particles.weights
 /***    *****    ***/
 
 

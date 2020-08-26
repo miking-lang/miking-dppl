@@ -73,16 +73,22 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
         #endif
 
         logNormConstant += logWeightSum - log(numParticles);
+
+        // Resampling will be skipped the last SMC iteration. Instead, weights will be renormalised and logged so the represent log-probabilities.
+        if(particles.pcs[0] >= numBblocks) { // Assumption: All terminate at the same time
+            #ifdef __NVCC__
+            logAndRenormaliseWeightsGpu(particles.weights, resampler, logWeightSum, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+            #else
+            logAndRenormaliseWeightsCpu(particles.weights, resampler, logWeightSum, numParticles);
+            #endif
+            break;
+        }
         
         #ifdef __NVCC__
         resampleSystematicGpu(particles, resampler, numParticles, NUM_BLOCKS);
         #else
         resampleSystematicCpu(particles, resampler, numParticles);
         #endif
-        
-        // This last resample increases variance perhaps? But convenient to not have to consider weights when extracting distribution. 
-        if(particles.pcs[0] >= numBblocks) // Assumption: All terminate at the same time
-            break;
         
     }
 

@@ -11,14 +11,16 @@
 
 #include <iostream>
 #include <cstring>
+#include <string>
+#include <fstream>
 
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 
 // typedef bisse32_tree_t tree_t;
-// typedef bisse32precision_tree_t tree_t;
 typedef primate_tree_t tree_t;
+// typedef moth_div_tree_t tree_t;
 #include "clads2.cuh"
  
 
@@ -161,12 +163,27 @@ BBLOCK(simClaDS2, {
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
  
     // Test settings
+    /*
     floating_t lambda_0 = 0.2;
     floating_t alpha    = 1.0;
     floating_t sigma    = 0.0000001;
     floating_t epsilon  = 0.5;   // Corresponds to mu = epsilon*lambda = 0.1
+    */
     floating_t rho      = 1.0;
+    
 
+    floating_t lambda_0 = SAMPLE(exponential, 1.0);
+
+    floating_t sigmaSquared = 1.0 / SAMPLE(gamma, 1.0, 1.0 / 0.2);
+
+    floating_t sigma = sqrt(sigmaSquared);
+
+    floating_t alpha = exp(SAMPLE(normal, 0.0, sigma));
+
+    floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
+    
+
+    PSTATE.lambda_0 = lambda_0;
     PSTATE.alpha = alpha;
     PSTATE.sigma = sigma;
     PSTATE.epsilon = epsilon;
@@ -219,9 +236,23 @@ BBLOCK(conditionOnDetection, {
 
 })
  
- 
-CALLBACK(callback, {
-    // printf("Done!\n");
+// Write particle data to file
+CALLBACK(saveResults, {
+    std::string fileName = "parameterData";
+
+    std::ofstream resultFile (fileName);
+    if(resultFile.is_open()) {
+
+        for(int i = 0; i < N; i++)
+            resultFile << 
+                PSTATES[i].lambda_0 << " " << PSTATES[i].sigma << " " << PSTATES[i].alpha << " " << PSTATES[i].epsilon << " " << 
+                exp(WEIGHTS[i]) << "\n";
+
+        resultFile.close();
+    } else {
+        printf("Could not open file %s\n", fileName.c_str());
+    }
+
 })
 
 MAIN({
@@ -230,7 +261,7 @@ MAIN({
     ADD_BBLOCK(simTree);
     ADD_BBLOCK(conditionOnDetection);
 
-    SMC(callback);
+    SMC(saveResults);
 })
  
  

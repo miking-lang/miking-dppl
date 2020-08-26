@@ -6,6 +6,8 @@
 #include <math.h>
 #include <random>
 #include <time.h>
+#include <string>
+#include <fstream>
 
 #include "inference/smc/smc.cuh"
 
@@ -14,12 +16,6 @@ using namespace std;
 #include "airplane.cuh"
 #include "airplane_utils.cuh"
 
-/*
-Compile commands:
-
-nvcc -arch=sm_75 -rdc=true -lcudadevrt -I . models/airplane/airplane.cu -o smc.exe -std=c++14 -O3
-g++ -x c++ -I . models/airplane/airplane.cu -o smc.exe -std=c++14 -O3
-*/
 
 #define NUM_BBLOCKS 2
 INIT_MODEL(progState_t, NUM_BBLOCKS)

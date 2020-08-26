@@ -3,6 +3,9 @@
  */
 
 #include <stdio.h>
+#include <math.h>
+#include <string>
+#include <fstream>
 
 #include "inference/smc/smc.cuh"
 
@@ -22,13 +25,13 @@ BBLOCK(coinFlip, {
 })
 
 // Use result after inference. 
-CALLBACK(sampleMean, {
+CALLBACK(mean, {
  
-    double sum = 0;
+    double weightedSum = 0;
     for(int i = 0; i < N; i++)
-        sum += PSTATES[i];
-    double mean = sum / N;
-    printf("Sample mean: %f\n", mean);
+        weightedSum += PSTATES[i] * exp(WEIGHTS[i]);
+
+    printf("Estimated Mean: %f\n", weightedSum);
  
 })
  
@@ -38,6 +41,6 @@ MAIN({
     ADD_BBLOCK(coinFlip);
  
      // Run SMC inference
-    SMC(sampleMean);
+    SMC(mean);
 })
  

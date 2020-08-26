@@ -2,7 +2,6 @@
  * File bamm.cuh defines constants and type definitions used in the bamm model bamm.cu. 
  */
 
-// #include "../tree-utils/tree_utils.cuh"
 
 const int MAX_DEPTH = tree_t::MAX_DEPTH;
 const int STACK_LIMIT = MAX_DEPTH * 2 + 1;
@@ -23,15 +22,11 @@ struct lambdaFun_t {
 struct bblockArgs_t {
     lambdaFun_t lf;
     floating_t mu;
-    floating_t eta;
-    floating_t rho;
 
     DEV bblockArgs_t(){};
-    DEV bblockArgs_t(lambdaFun_t lf_, floating_t mu_, floating_t eta_, floating_t rho_){
+    DEV bblockArgs_t(lambdaFun_t lf_, floating_t mu_) {
         lf = lf_;
         mu = mu_;
-        eta = eta_;
-        rho = rho_;
     };
 };
 
@@ -40,22 +35,16 @@ struct pStack_t {
     bblockArgs_t args[STACK_LIMIT];
 
     DEV void push(bblockArgs_t element) {
-        //if(stackPointer >= STACK_LIMIT || stackPointer < 0)
-            //printf("Illegal stack push with sp=%d\n", stackPointer);
         args[stackPointer] = element;
         stackPointer++;
     }
 
     DEV bblockArgs_t pop() {
         stackPointer--;
-        //if(stackPointer < 0)
-            //printf("SP < 0!\n");
         return args[stackPointer];
     }
 
     DEV bblockArgs_t peek() {
-        //if(stackPointer-1 < 0)
-            //printf("SP < 0!\n");
         return args[stackPointer - 1];
     }
 };
@@ -64,15 +53,9 @@ struct pStack_t {
 typedef short treeIdx_t;
 struct alignas(8) progState_t {
     pStack_t stack;
+    floating_t eta;
     treeIdx_t treeIdx;
 };
-
-/*
-struct nestedProgState_t {
-    bool extinct;
-};
-typedef double return_t;
-*/
 
 struct simBranchRet_t {
     lambdaFun_t lf;
