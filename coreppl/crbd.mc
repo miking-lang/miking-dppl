@@ -2,35 +2,36 @@
 -- TODO Parse this as a regular program when support is added for this in
 -- Miking.
 
-include "ast.mc"
-include "pprint.mc"
-include "ast-builder.mc"
-include "mexpr/ast-builder.mc"
 include "math.mc"
 
+include "ast.mc"
+include "symbolize.mc"
+include "ast-builder.mc"
+include "pprint.mc"
+
 mexpr
-use PPLCorePrettyPrint in
+use PPLCore in
 
 let leaf_ = lam age.
-  app_ (var_ "Leaf") (record_ [{key = "age", value = float_ age}])
+  conapp_ "Leaf" (record_ [("age", float_ age)])
 in
 
 let node_ = lam age. lam left. lam right.
-  app_ (var_ "Node") (record_ [{key = "age", value = float_ age},
-                               {key = "l",   value = left},
-                               {key = "r",   value = right}])
+  conapp_ "Node" (record_ [("age", float_ age),
+                           ("l", left),
+                           ("r", right)])
 in
 
 let crbdGoesUndetected =
-  ureclet_ "crbdGoesUndetected"
+  reclet_ "crbdGoesUndetected"
     (ulams_ ["startTime", "lambda", "mu"]
       (bindall_ [
-        ulet_ "t" (sampleExp_ (addi_ (var_ "lambda") (var_ "mu"))),
-        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
+        let_ "t" (sampleExp_ (addi_ (var_ "lambda") (var_ "mu"))),
+        let_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
         if_ (ltf_ (var_ "currentTime") (float_ 0.0))
           false_
           (bindall_ [
-            ulet_ "speciation"
+            let_ "speciation"
               (sampleBern_
                 (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu")))),
             if_ (not_ (var_ "speciation"))
@@ -46,56 +47,87 @@ let crbdGoesUndetected =
 in
 
 let simBranch =
-  ureclet_ "simBranch"
+  reclet_ "simBranch"
     (ulams_ ["startTime", "stopTime", "lambda", "mu"]
       (bindall_ [
-        ulet_ "t" (sampleExp_ (var_ "lambda")),
-        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
+        let_ "t" (sampleExp_ (var_ "lambda")),
+        let_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
         if_ (ltf_ (var_ "currentTime") (float_ 0.0))
           unit_
           (bind_
-            (ulet_ "_" (weight_ (float_ 0.3))) -- weight(log(2))
+            (let_ "_" (weight_ (app_ (var_ "log") (float_ 2.0))))
             (if_ (not_ (appf3_ (var_ "crbdGoesUndetected") (var_ "currentTime")
                           (var_ "lambda") (var_ "mu")))
-              (weight_ (negf_ (float_ inf)))
+              (weight_ (app_ (var_ "log") (float_ 0.0)))
               (appf4_ (var_ "simBranch")
                  (var_ "currentTime") (var_ "stopTime")
                  (var_ "lambda") (var_ "mu"))))
       ]))
 in
 
--- TODO We need pattern matching on Leaf{age:float} and
--- Node{age:float,l:Tree,r:Tree} here. Specifically, we need it for tree.age
--- and parent.age, and for checking tree.type == 'node' in WebPPL script.
+let getAge = lam tree.
+  match_ tree (pcon_ "Leaf" (prec_ [("age",(pvar_ "age"))]))
+    (var_ "age")
+    (match_ tree (pcon_ "Node" (prec_ [("age",(pvar_ "age"))]))
+       (var_ "age") never_)
+in
+
 let simTree =
-  ureclet_ "simBranch"
+  reclet_ "simTree"
     (ulams_ ["tree", "parent", "lambda", "mu"]
       (bindall_ [
-         ulet_ "_"
+         let_ "pAge" (getAge (var_ "parent")),
+         let_ "tAge" (getAge (var_ "tree")),
+         let_ "_"
            (weight_
              (mulf_ (negf_ (var_ "mu"))
-                    (subf_ (var_ "TODO") (var_ "TODO"))))
+                (subf_ (var_ "pAge") (var_ "tAge")))),
+         let_ "_"
+           (appf4_ (var_ "simBranch")
+                 (var_ "pAge") (var_ "tAge")
+                 (var_ "lambda") (var_ "mu")),
+         match_ (var_ "tree")
+           (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
+           (bindall_ [
+             let_ "_" (weight_ (app_ (var_ "log") (var_ "lambda"))),
+             let_ "_"
+               (appf4_ (var_ "simTree") (var_ "left")
+                  (var_ "tree") (var_ "lambda") (var_ "mu")),
+             (appf4_ (var_ "simTree") (var_ "right")
+                (var_ "tree") (var_ "lambda") (var_ "mu"))
+           ])
+           unit_
     ]))
 in
 
 let crbd =
   bindall_ [
-    condef_ "Leaf" tydyn_,
-    condef_ "Node" tydyn_,
-    ulet_ "tree" (node_ 1.0 (leaf_ 0.0) (leaf_ 0.0)),
+    let_ "log" unit_, -- TODO Need log implementation?
+
+    ucondef_ "Leaf",
+    ucondef_ "Node",
+
+    let_ "tree" (node_ 1.0 (leaf_ 0.0) (leaf_ 0.0)),
+
     crbdGoesUndetected,
     simBranch,
     simTree,
-    ulet_ "lambda" (float_ 0.2),
-    ulet_ "mu" (float_ 0.1),
-    ulet_ "_" (weight_ (float_ 0.3)), -- weight(log(2))
-    -- TODO Add pattern matching to deconstruct tree to tree.left and tree.right
-    ulet_ "_" (appf4_ (var_ "simTree") (var_ "TODO")
+
+    let_ "lambda" (float_ 0.2),
+    let_ "mu" (float_ 0.1),
+
+    let_ "_" (weight_ (app_ (var_ "log") (float_ 2.0))),
+
+    match_ (var_ "tree")
+      (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
+      (bindall_ [
+         let_ "_" (appf4_ (var_ "simTree") (var_ "left")
                      (var_ "tree") (var_ "lambda") (var_ "mu")),
-    ulet_ "_" (appf4_ (var_ "simTree") (var_ "TODO")
-                      (var_ "tree") (var_ "lambda") (var_ "mu")),
-    (record_ [{key = "1", value = (var_ "lambda")},
-              {key = "2", value = (var_ "mu")}])
+         let_ "_" (appf4_ (var_ "simTree") (var_ "right")
+                     (var_ "tree") (var_ "lambda") (var_ "mu")),
+         tuple_ [(var_ "lambda"), (var_ "mu")]
+      ])
+      never_
   ]
 in
 

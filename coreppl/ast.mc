@@ -2,7 +2,7 @@
 
 include "mexpr/ast.mc"
 
-lang PPLCoreAst = MExprAst
+lang PPLCore = MExprAst
 
   syn Expr =
   | TmWeight { arg: Expr }
