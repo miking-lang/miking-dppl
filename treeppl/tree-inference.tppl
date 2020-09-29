@@ -1,0 +1,123 @@
+// TreePPL tree inference algorithm
+// First draft
+
+// With delayed sampling working properly
+// and the CTMC distribution implemented
+// correctly, an SMC algorithm applied to
+// this program should be fairly efficient.
+
+// The SMC algorithm would in that case
+// essentially be the same algorithm
+// as the one described in Bouchard-Côté et al
+// (2012) (needs checking).
+
+
+///////// Tree functions (should be in a separate library / module / package)  /////////////
+
+// Tree leaf constructor
+var leaf = function( index, states )
+{
+    return { type: "leaf", index: index, age: 0.0, states: states };
+}
+
+// Tree node constructor
+var node = function( left, right, age, states )
+{
+    return { type: "node", left: left, right: right, age: age, states: states };
+}
+
+// Recursive function to convert a tree to a Newick string (with ages and not branch lengths)
+var tree_to_Newick = function( tree )
+{
+    if ( tree.type == "leaf" )
+        return tree.index + ":" + tree.age;
+    else
+        return "(" + tree_to_Newick( tree.left ) + "," + tree_to_Newick( tree.right ) + "):" + tree.age;
+}
+
+// Recursive function to convert a tree topology to a Newick string
+var top_to_Newick = function( tree )
+{
+    if ( tree.type == "leaf" )
+        return tree.index;
+    else
+        return "(" + top_to_Newick( tree.left ) + "," + top_to_Newick( tree.right ) + ")";
+}
+
+
+//////// Data //////////
+
+// Specify the data we have
+D = [ [ 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 ] ];
+
+//////// Core model functions //////////
+
+// Recursive function to randomly build a tree
+var cluster = function( Q, trees, max_age )
+{
+    // Check if we are done
+    if ( trees.length <= 1 )
+        return trees;
+
+    // Pick two random trees in the trees vector
+    (i, j) ~ RandomOrderedPair( 0:trees.length-1 );
+
+    // Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
+    propose s ~ iid( Q.stationary(), trees[i].states.length );
+
+    // Propose node_age (new node age) from prior 
+    t ~ exponential( {a: 20.0} );
+    node_age = max_age + t;
+
+    // Combine picked pair of trees into a new node
+    new_node = node( trees[i], trees[j], node_age, s );
+
+    // Observe (leaves) or draw states iid from continuous time Markov chain (CTMC)
+    trees[i].states ~ iid( CTMC( new_node.states, Q, new_node.age - trees[i].age ) );
+    trees[j].states ~ iid( CTMC( new_node.states, Q, new_node.age - trees[j].age ) );
+
+    // Compute new_trees vector
+    new_trees = trees.rm( trees[i], trees[j] ).add( new_node );
+
+    // cluster new_trees
+    cluster( Q, new_trees, node_age );
+}
+
+// Define model
+var model = function ()
+{
+    // Construct rate matrix
+    pi ~ Dirichlet( 1, 1 );
+    Q = scaledRateMatrix( pi:pi, er: [1,1], states: ["0","1"] );
+
+    // Define the initial trees vector (containing leaves)
+    // We might want to introduce an observe distribution that goes from latent
+    // states to actual observed conditions, that is, the observed states are
+    // drawn iid from this distribution given the latent states. This can
+    // deal with sequencing error, uncertain observations (like: "A or C, not T or G").
+    leaves = [ leaf(0, D[0]), leaf(1, D[1]), leaf(2, D[2]), leaf(3, D[3]) ]
+
+    // Build the tree by random clustering
+    var tree = cluster( leaves, 0.0 )[ 0 ];
+
+    // Assumption about the draw of root states
+    var dist = Categorical( { ps: [0.8, 0.2], vs: [0, 1] } );
+    observe tree.states ~iid( dist, tree.states.length );
+
+    // Convert tree to readable format
+    var tree_string = top_to_Newick( tree );
+
+    // Return tree
+    return tree_string;
+}
+
+///////// Inference ////////
+
+// Do inference
+Dist = Infer( model: model, method: 'SMC', particles: 10000 );
+console.log( Dist );
+
+
