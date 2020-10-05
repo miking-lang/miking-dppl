@@ -1,0 +1,206 @@
+/**
+ * Basic ideas
+ *
+ * 1. TreePPL should be mainly inspired by one language; design follows that language unless good
+ * reasons not to do so.
+ *
+ * a. Possible inspirational languages: julia, R, python, TypeScript, O'Caml, Haskell
+ *
+ * b. Initial assumption (for discussion, and example below):
+ * TreePPL is based on a functional subset of TypeScript
+ *
+ * 2. TreePPL should have a type system in order to make debugging easier.
+ * Types are
+ *
+ * a. optional, i.e. type annotations, for example in function declaration possible but not necessary
+ * b. inferred
+ * 
+ * let a = "hello
+ * 
+ * a is a string */
+
+/**
+ * 3. Sample function declaration 
+ *    alternative syntax commented out */
+function simple_evolution_model(
+    observed_nucleotide:   Phylo.Nucleotide,
+    sequencing_accuracy_p: Probability = 0.9, // default value
+//  sequencing_accuracy_p: Real in [0, 1],
+//  sequencing_accuracy_p: Real passes positive_probability,
+    Q : Phylo.InstantaneousRateMatrix,
+//  Q : Real[][] passes check_QT,
+    time : Real,
+    μ : Real in [0, Infinity) ) : Phylo.Nucleotide // return value of the function
+{
+  return Phylo.A
+}
+
+
+/**
+ * Arguments to functions can be labeled (like R, Python...)
+ * Labelling is optional
+ * Arguments can have default values
+ *  Reordering the named values should be possible
+ *  mixing of keyword and positional arguments should be possible
+ *  Example:
+ * foo( mean = mu, sd = sigma )
+ */
+
+
+/**
+ * 4.  PPL constructs in TreePPL:
+ *
+ * a. sample 
+ * Distributions are usually capitalized but their parameters are key-value pairs,
+ * not objects like in WebPPL */
+
+x ~ Dist( params )           // x is either sampled or observed from dist, like '~' in Birch
+sample x ~ Dist( params )    // x is sampled from dist, like '<~' in Birch (I think)
+observe x ~ Dist( params )   // x is observed from dist, like '~>' in Birch (I think)
+propose x ~ Dist( params )   // x is proposed from some suitable distribution, it is defined later
+// what distribution it is sampled from
+x ~iid( Dist( params ), num_reps )    // iid distribution of length num_reps
+
+/**
+ * b. propose 
+ * The propose statement is used for bridge sampling. */
+
+// Expressed in WebPPL:
+ var x = sample( Exponential( {a: 1} ) )    // sample from proposal distribution
+
+// potentially lots of intervening code
+// compensate for the fact that we proposed from the wrong distribution
+factor( -Exponential( {a: 1} ).score(x) )  // remove weight due to proposal
+factor( Gamma( {a: 2, b: 1} ).score(x) )   // add weight from correct dist.
+
+// Equivalent code might look like this in TreePPL:
+propose x ~ Exponential( rate=1 )    // sample from proposal distribution
+// potentially lots of code and function calls
+// specify correct distribution (automatically correct for proposal density mismatch)
+ x ~ Gamma( alpha=2, beta=1 )
+
+
+/**
+ * 5.  MCMC kernels. In WebPPL this would be expressed like
+ * guide distribution
+ */
+// WebPPL Reference Code Guide Distributions
+// https://docs.webppl.org/en/master/guides.html?highlight=guide#default-guide-distributions
+ var x = sample(Bernoulli({p: 0.5}), {guide: function() {
+     return Bernoulli({p: Math.sigmoid(param())});
+ }});
+
+// Potential ideas for TreePPL:
+// NB! There are special requirements on WhatEverFxn to be able to compute Hastings ratios
+//     that is, we must be able to compute both forward and backward probabilities
+t ~ Exponential( rate = 20.0, guide = WhatEverFxn( a = 11 ))
+// Alternatives
+//t ~ Exponential( rate = 20.0 ) guided by WhatEverFxn
+//t ~ Exponential( rate = 20.0 ), guide = WhatEverFxn
+//t ~ Exponential( rate = 20.0 ) @ WhatEverFxn
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+
+///////// Help functions (should be moved to library / package / module) (leaf and node should be types?) /////////////
+
+
+//////// Data //////////
+// reference typescript syntax
+// Specify the data we have
+D:Boolean[ 1 | 0, 1 | 0] =
+    [ [ 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 ] ]
+
+
+//////// Core model functions //////////
+
+/**
+ * Recursive function to randomly build a tree
+ */
+let cluster = function(
+    Q: Phylo.InstantenousRateMatrix,
+    trees: Array<Phylo.Tree>,
+    max_age : Real): Array[1]<Phylo.Tree>
+{
+    // Check if we are done
+    if ( trees.length == 1 )
+        return trees
+
+    // Pick two random trees in the trees vector
+    // Here the default for categorical is equal probability
+    // 0:(trees.length - 1) is an index vector 0,1,2
+    // TODO we should seriously think if we want to index from 1 instead!!!
+    // The array that is returned by iid is transofrmed into the two variables i and j
+    (i, j) ~ iid(Categorical(0:(trees.length - 1)), 2)
+
+    // Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
+    propose s ~ iid(dist = Q.stationary(), n = trees[i].states.length)
+
+    // Propose node_age (new node age) from prior 
+    t ~ Exponential(rate = 20.0)
+    node_age = max_age + t 
+
+    // Combine picked pair of trees into a new node
+    new_node = Phylo.Node(left = trees[i], right = trees[j], age = node_age, states = s )
+
+    // Observe states iid from continuous time Markov chain (CTMC)
+    // Note that trees[i].states can be observed if trees[i] is a leaf, otherwise it
+    // is a latent variable
+    trees[i].states ~ iid( CTMC( new_node.states, Q, new_node.age - trees[i].age ) )
+    trees[j].states ~ iid( CTMC( new_node.states, Q, new_node.age - trees[j].age ) )
+
+    // Compute new_trees vector
+    // Even though this is convenient, too much . invocation
+    // new_trees = trees.rm( trees[i], trees[j] ).add( new_node )
+    // TODO think filtering, tidyverse, set operations
+    // I would like to have more generic infix notation on list operations
+    new_trees = trees \ [trees[i], trees[j]] %union% new_node
+    
+    // cluster new_trees
+    cluster( Q, new_trees, node_age )
+}
+
+
+// Define model
+// this limitations that models are functions of 0 arguments should not be present
+model = function (
+    pi ~ Dirichlet( 1, 1 ),
+    Q = scaled_rate_matrix( pi:pi, er: [1,1], state_labels: ["0","1"] )
+)
+{
+
+    // Define the initial trees vector (containing leaves)
+    leaves = [
+	Phylo.Node
+	(left = NULL,
+	 right = NULL,
+	 states = D[0]),
+	Phylo.Node(states =  D[1]),
+	Phylo.Node(states =  D[2]),
+	Phylo.Node(states =  D[3]) ]
+    
+    // Build the tree by random clustering
+    tree = cluster( Q = Q, trees = leaves, max_age = 0.0 )[ 0 ]
+
+    // Assumption about the draw of root states
+    Dist = Categorical( ps = [0.8, 0.2], vs = [0, 1] )
+    observe tree.states ~iid( Dist, tree.states.length )
+
+    // Convert tree to readable format
+    tree_string = tree.top_to_Newick
+
+    // Return tree
+    return tree_string
+}
+
+///////// Inference ////////
+
+// Do inference
+dist = Infer( model=model, method='SMC', particles=10000 )
+print( dist )
+
+
