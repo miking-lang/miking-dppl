@@ -8,6 +8,7 @@ include "ast.mc"
 include "symbolize.mc"
 include "ast-builder.mc"
 include "pprint.mc"
+include "anf.mc"
 
 mexpr
 use PPLCore in
@@ -131,4 +132,8 @@ let crbd =
   ]
 in
 
-printLn (expr2str crbd)
+let _ = printLn "--- BEFORE ANF ---" in
+let _ = printLn (expr2str crbd) in
+let _ = printLn "\n--- AFTER SYMBOLIZE AND ANF ---" in
+let _ = printLn (expr2str (normalizeTerm (symbolize crbd))) in
+()
