@@ -15,7 +15,7 @@ let cluster = function (
     Q: Phylo.InstantenousRateMatrix,
     trees: Array<Phylo.Tree>,
     max_age : Real
-) => Array[1]<Phylo.Tree>
+) => Array<Phylo.Tree>
 {
     // Check if we are done
     if ( trees.length == 1 )
@@ -26,7 +26,7 @@ let cluster = function (
     // 0:(trees.length - 1) is an index vector 0,1,2
     // TODO we should seriously think if we want to index from 1 instead!!!
     // The array that is returned by iid is transofrmed into the two variables i and j
-    // i != j and they are random ints  
+    // i != j and they are random ints       
     v ~ RandomPermutation( 0:(trees.length - 1) )
     i = v[0]
     j = v[1]
