@@ -1,0 +1,100 @@
+//////// Data //////////
+
+type BinaryState = 1 | 0
+D: BinaryState[][] =  // alternative Matrix<BinaryState>
+    [ [ 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 ] ]
+
+
+//////// Core model functions //////////
+
+/** Recursive function to randomly build a tree */
+let cluster = function (
+    Q: Phylo.InstantenousRateMatrix,
+    trees: Array<Phylo.Tree>,
+    max_age : Real
+) => Array[1]<Phylo.Tree>
+{
+    // Check if we are done
+    if ( trees.length == 1 )
+        return trees
+
+    // Pick two random trees in the trees vector
+    // Here the default for categorical is equal probability
+    // 0:(trees.length - 1) is an index vector 0,1,2
+    // TODO we should seriously think if we want to index from 1 instead!!!
+    // The array that is returned by iid is transofrmed into the two variables i and j
+    // i != j and they are random ints  
+    v ~ RandomPermutation( 0:(trees.length - 1) )
+    i = v[0]
+    j = v[1]
+    
+    // alternative (i, j) ~ Phylo.RandomPair(0:(trees.length - 1))
+
+    // Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
+    propose s ~ iid(dist = Q.stationary(), n = trees[i].states.length)
+
+    // Propose node_age (new node age) from prior 
+    t ~ Exponential(rate = 20.0)
+    node_age = max_age + t 
+
+    // Combine picked pair of trees into a new node
+    new_node = Phylo.Node(left = trees[i], right = trees[j], age = node_age, states = s )
+
+    // Observe states iid from continuous time Markov chain (CTMC)
+    // Note that trees[i].states can be observed if trees[i] is a leaf, otherwise it
+    // is a latent variable
+    trees[i].states ~ iid( CTMC( new_node.states, Q, new_node.age - trees[i].age ) )
+    trees[j].states ~ iid( CTMC( new_node.states, Q, new_node.age - trees[j].age ) )
+    // Alternative notation (comprehension style)
+    // trees[i].states[k] ~ CTMC( new_node.states[k], Q, new_node.age - trees[i].age ) | k in 0:(new_node.states.length-1)
+
+    // Compute new_trees vector
+    // Even though this is convenient, too much . invocation
+    // new_trees = trees.rm( trees[i], trees[j] ).add( new_node )
+    // TODO think filtering, tidyverse, set operations
+    // I would like to have more generic infix notation on list operations
+    new_trees = trees \ [trees[i], trees[j]] %union% new_node
+    
+    // cluster new_trees
+    cluster( Q, new_trees, node_age )
+}
+
+
+// Define model
+// this limitations that models are functions of 0 arguments should not be present
+let model = function (
+    pi ~ Dirichlet( 1, 1 ),
+    Q = scaled_rate_matrix( pi:pi, er: [1,1], state_labels: ["0","1"] )
+) => Phylo.Newick
+{
+    // Define the initial trees vector (containing leaves)
+    leaves =
+	[ Phylo.Node(left = NULL, right = NULL, states = D[0]),
+	  Phylo.Node(states =  D[1]),
+	  Phylo.Node(states =  D[2]),
+	  Phylo.Node(states =  D[3]) ]
+    
+    // Build the tree by random clustering
+    tree = cluster(Q = Q, trees = leaves, max_age = 0.0)[ 0 ]
+
+    // Assumption about the draw of root states
+    Dist = Categorical(ps = [0.8, 0.2], vs = [0, 1])
+    observe tree.states ~iid( Dist, tree.states.length )
+
+    // Convert tree to readable format
+    tree_string = tree.top_to_Newick
+
+    // Return tree
+    return tree_string
+}
+
+///////// Inference ////////
+
+// Do inference
+dist = Infer(model=model, method='SMC', particles=10000)
+print(dist)
+
+

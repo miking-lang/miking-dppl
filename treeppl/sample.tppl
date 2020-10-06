@@ -1,0 +1,33 @@
+/** PPL Constructs
+ * a. sample 
+ * Distributions are usually capitalized but their parameters are key-value pairs,
+ * not objects like in WebPPL */
+
+x ~ Dist(params)           // x is either sampled or observed from dist, like '~' in Birch
+sample x ~ Dist(params)    // x is sampled from dist, like '<~' in Birch (I think)
+observe x ~ Dist(params)   // x is observed from dist, like '~>' in Birch (I think)
+propose x ~ Dist(params)   // x is proposed from some suitable distribution, it is defined later
+                             // what distribution it is sampled from
+x ~ iid( Dist( params ), num_reps )    // iid distribution of length num_reps
+x[i] ~ Dist( params ) | i in 0:(num_reps-1)       // alternative: comprehension style
+for (i in 0:num_reps-1) x[i] ~ Dist( params )  // alternative for loop
+
+/**
+ * b. propose 
+ * The propose statement is used for bridge sampling. */
+
+// Expressed in WebPPL:
+var x = sample( Exponential( {a: 1} ) )    // sample from proposal distribution
+
+// potentially lots of intervening code
+// compensate for the fact that we proposed from the wrong distribution
+factor( -Exponential( {a: 1} ).score(x) )  // remove weight due to proposal
+factor( Gamma( {a: 2, b: 1} ).score(x) )   // add weight from correct dist.
+
+// Equivalent code might look like this in TreePPL:
+propose x ~ Exponential( rate=1 )    // sample from proposal distribution
+// potentially lots of code and function calls
+// specify correct distribution (automatically correct for proposal density mismatch)
+ x ~ Gamma( alpha=2, beta=1 )
+
+
