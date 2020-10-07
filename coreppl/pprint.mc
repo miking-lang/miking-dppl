@@ -3,18 +3,21 @@
 include "ast.mc"
 include "mexpr/pprint.mc"
 
-lang PPLCorePrettyPrint = PPLCoreAst + MExprPrettyPrint
+lang PPLCore = PPLCore + MExprPrettyPrint
 
-  sem pprintCode (indent : Int) =
+  sem pprintCode (indent : Int) (env: Env) =
   | TmWeight t ->
-    let arg = pprintCode indent t.arg in
-    strJoin "" ["weight(", arg, ")"]
+    match printParen (incr indent) env t.arg with (env,arg) then
+      (env, join ["weight", newline (incr indent), arg])
+    else never
   | TmSampleExp t ->
-    let a = pprintCode indent t.a in
-    strJoin "" ["sampleExp(", a, ")"]
+    match printParen (incr indent) env t.a with (env,a) then
+      (env,join ["sampleExp", newline (incr indent), a])
+    else never
   | TmSampleBern t ->
-    let p = pprintCode indent t.p in
-    strJoin "" ["sampleBern(", p, ")"]
-  | TmResample _ -> "resample"
+    match printParen (incr indent) env t.p with (env,p) then
+      (env,join ["sampleBern", newline (incr indent), p])
+    else never
+  | TmResample _ -> (env,"resample")
 
 end

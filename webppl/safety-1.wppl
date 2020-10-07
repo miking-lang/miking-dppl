@@ -1,0 +1,15 @@
+var model = function()
+{
+    var a = 0
+    var t = exponential({a: a})
+}
+
+var dist = Infer(
+    {
+	method: "SMC",
+	particles: 1000,
+	model: model
+    }
+)
+
+dist.normalizationConstant
