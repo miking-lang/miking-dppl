@@ -10,13 +10,16 @@ D: BinaryState[][] =  // alternative Matrix<BinaryState>
 
 //////// Core model functions //////////
 type Rate = x where x: Real, x <= 1, x >= -1
+type InstantaneousRateMatrix = Rate[][]
+// Potentially InstantaneousRateMatrix = A where A: Rate[][], checksum(A)
+// checksum checks that the rows sum up to 1
 
 /** Recursive function to randomly build a tree */
 cluster = function(
-    Q: Rate[][],
-    trees: the Array,
+    Q: InstantaneousRateMatrix,
+    trees: Array<Tree>,
     max_age : Real
-) => Array
+) => Array<Tree>
 {
     // Check if we are done
     if trees.length == 1
