@@ -1,7 +1,10 @@
+type NonnegativeReal = x where x: Real, x >= 0
+type Tree = {left: Tree | NULL, right: Tree | NULL, age: NonnegativeReal}
+
 //////// Data //////////
 
-type BinaryState = 1 | 0
-D: BinaryState[][] =  // alternative Matrix<BinaryState>
+type State = 0 | 1 | 2 | 3
+D: State[][] =  // alternative Matrix<BinaryState>
     [ [ 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
       [ 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
       [ 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 ],
@@ -38,7 +41,13 @@ cluster = function(
     // alternative (i, j) ~ Phylo.RandomPair(0:(trees.length - 1))
 
     // Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
-    propose s ~ iid(dist = Q.stationary(), n = trees[i].states.length)
+    P=transition_probabilities(Q)
+    Dist = Categorical(
+      ps = P[trees[i].states],
+      vs = [0, 1]
+    }
+    
+    propose s ~ iid(dist = Dist, n = trees[i].states.length)
     
     // Propose node_age (new node age) from prior 
     t ~ Exponential(rate = 20.0)
