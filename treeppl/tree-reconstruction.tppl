@@ -9,16 +9,17 @@ D: BinaryState[][] =  // alternative Matrix<BinaryState>
 
 
 //////// Core model functions //////////
+type Rate = x where x: Real, x <= 1, x >= -1
 
 /** Recursive function to randomly build a tree */
-let cluster = function (
-    Q: Phylo.InstantenousRateMatrix,
-    trees: Array<Phylo.Tree>,
+cluster = function(
+    Q: Rate[][],
+    trees: the Array,
     max_age : Real
-) => Array<Phylo.Tree>
+) => Array
 {
     // Check if we are done
-    if ( trees.length == 1 )
+    if trees.length == 1
         return trees
 
     // Pick two random trees in the trees vector
@@ -27,7 +28,7 @@ let cluster = function (
     // TODO we should seriously think if we want to index from 1 instead!!!
     // The array that is returned by iid is transofrmed into the two variables i and j
     // i != j and they are random ints       
-    v ~ RandomPermutation( 0:(trees.length - 1) )
+    v ~ Permutation(0:(trees.length - 1))
     i = v[0]
     j = v[1]
     
@@ -35,7 +36,7 @@ let cluster = function (
 
     // Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
     propose s ~ iid(dist = Q.stationary(), n = trees[i].states.length)
-
+    
     // Propose node_age (new node age) from prior 
     t ~ Exponential(rate = 20.0)
     node_age = max_age + t 
