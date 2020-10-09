@@ -30,21 +30,19 @@ type NonnegativeReal = x where x: Real, x >= 0
 type PositiveReal = x where x: Real, x > 0
 
 /** Tree */
-type LeafType = "leaf"
-type NodeType = "node"
 
-const Leaf: LeafType = "leaf"
-const Node: NodeType = "node"
+const Leaf = "leaf"
+const Node = "node"
 
 type Leaf = {
-    type: LeafType,
+    type: Leaf,
     index: BigInt,
     age: NonnegativeRea;l,
     states: State[]
 }
 
 type Tree = {
-    type: NodeType,
+    type: Node,
     left: Tree | Leaf,
     right: Tree | Leaf,
     age: NonnegativeReal,
