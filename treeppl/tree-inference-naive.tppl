@@ -258,6 +258,15 @@ cluster = function(
 	)
     ) where k in 0:(new_node.states.length - 1)
     
+    trees[j].states ~ Infer(
+	ctmc(
+	    parental_state = parental_node.states[k],
+	    evolution_time = parental_node.age - trees[j].age,
+	    Q = Q,
+	    P = transition_probabilities(Q)
+	)
+    ) where k in 0:(new_node.states.length - 1)
+    
     // Compute new_trees vector
     // new_trees = trees.rm( trees[i], trees[j] ).add( new_node )
     // ...arr1 converts the array to arguments, think unlist in R
