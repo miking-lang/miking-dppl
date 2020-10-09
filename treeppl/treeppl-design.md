@@ -42,3 +42,18 @@
 	a. Nice documentation
 	b. Interesting examples
 	c. Easy tools, maybe embedding in a higher level language such as Python and R
+
+
+
+
+
+
+Semantics:
+1. How do we handle typing?
+How about gradual typing together with a mix of interpretation and compilation?
+"Piggy-back on miking".
+
+2. When instructing the user, how do they think about models, do they in object or in function?
+
+Syntax:
+3. Inspirational syntax, what language do we as a template language?
