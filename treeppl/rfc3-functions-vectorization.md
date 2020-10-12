@@ -66,3 +66,15 @@ Most of this syntax is inspired by R
 	a.reduce(function(accummulator, x) {
 		accummulator + x
 	} // output should be 55
+
+## List comprehension
+```
+ trees[i].states ~ Infer(
+	ctmc(
+	    parental_state = parental_node.states[k],
+	    evolution_time = parental_node.age - trees[i].age,
+	    Q = Q,
+	    P = transition_probabilities(Q)
+	)
+    ) where k in 0:(new_node.states.length - 1)
+    ```
