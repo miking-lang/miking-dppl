@@ -78,41 +78,26 @@ State is 0 or 1 or 2 or 3:
 	
 ### Recursive type
 
+	enum NodeType =
+	{
+		Leaf,
+		InternalNode
+	}
 
+	type Leaf = {
+		type: NodeType,
+		index: BigInt,
+		age: NonnegativeRea;l,
+		states: State[]
+	}
 
+	type Tree = {
+		type: NodeType,
+		left: Tree | Leaf,
+		right: Tree | Leaf,
+		age: NonnegativeReal,
+		states: State[]
+	}
 
-
-/**
- *  Sample function declaration 
- *    alternative syntax commented out */
-
-let simple_evolution_model = function(a: TypeA, b: TypeB) => TypeC
-
-function simple_evolution_model(a: TypeA, TypeB) : TypeC
-
-simple_evolution_model(
-    observed_nucleotide:   Phylo.Nucleotide,
-    sequencing_accuracy_p: Probability = 0.9, // default value
-//  sequencing_accuracy_p: Real in [0, 1],
-//  sequencing_accuracy_p: Real passes positive_probability,
-    Q: Phylo.InstantaneousRateMatrix,
-//  Q: Real[][] passes check_QT,
-    time: Real,
-    μ: Real in [0, Infinity)
-): Phylo.Nucleotide // return value of the function
-{
-  return Phylo.A
-}
-
-
-/**
- * Arguments to functions can be labeled (like R, Python...)
- * Labelling is optional
- * Arguments can have default values
- *  Reordering the named values should be possible
- *  mixing of keyword and positional arguments should be possible
- *  Example:
- * foo( mean = mu, sd = sigma )
- */
 
 

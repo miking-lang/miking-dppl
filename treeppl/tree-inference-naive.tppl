@@ -31,18 +31,21 @@ type PositiveReal = x where x: Real, x > 0
 
 /** Tree */
 
-const Leaf = "leaf"
-const Node = "node"
+enum NodeType =
+    {
+	Leaf,
+	InternalNode
+    }
 
 type Leaf = {
-    type: Leaf,
+    type: NodeType,
     index: BigInt,
     age: NonnegativeRea;l,
     states: State[]
 }
 
 type Tree = {
-    type: Node,
+    type: NodeType,
     left: Tree | Leaf,
     right: Tree | Leaf,
     age: NonnegativeReal,
