@@ -30,21 +30,19 @@ type NonnegativeReal = x where x: Real, x >= 0
 type PositiveReal = x where x: Real, x > 0
 
 /** Tree */
-type LeafType = "leaf"
-type NodeType = "node"
 
-const Leaf: LeafType = "leaf"
-const Node: NodeType = "node"
+const Leaf = "leaf"
+const Node = "node"
 
 type Leaf = {
-    type: LeafType,
+    type: Leaf,
     index: BigInt,
     age: NonnegativeRea;l,
     states: State[]
 }
 
 type Tree = {
-    type: NodeType,
+    type: Node,
     left: Tree | Leaf,
     right: Tree | Leaf,
     age: NonnegativeReal,
@@ -254,6 +252,15 @@ cluster = function(
 	ctmc(
 	    parental_state = parental_node.states[k],
 	    evolution_time = parental_node.age - trees[i].age,
+	    Q = Q,
+	    P = transition_probabilities(Q)
+	)
+    ) where k in 0:(new_node.states.length - 1)
+    
+    trees[j].states ~ Infer(
+	ctmc(
+	    parental_state = parental_node.states[k],
+	    evolution_time = parental_node.age - trees[j].age,
 	    Q = Q,
 	    P = transition_probabilities(Q)
 	)
