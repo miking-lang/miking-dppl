@@ -247,7 +247,8 @@ cluster = function(
     // trees[i].states ~ iid( CTMC( parental_node.states, Q, parental_node.age - trees[i].age ) )
     // trees[j].states ~ iid( CTMC( parental_node.states, Q, parental_node.age - trees[j].age ) )
     // (comprehension style)
-    // These could probably be pre-computed somehow because it is only 4 characters,
+    // These could probably be pre-computed
+    somehow because it is only 4 characters,
     // and always the same time. So this is not the most efficient way to write it.
     trees[i].states ~ Infer(
 	ctmc(
@@ -273,7 +274,7 @@ cluster = function(
 // this limitations that models are functions of 0 arguments should not be present
 let model = function () => String
 {
-    pi ~ Dirichlet(1, 1),
+    pi ~ Dirichlet([1, 1, 1, 1]),
     //Q = scaled_rate_matrix( pi:pi, er: [1,1], state_labels: ["0","1"] )
     
     Q = gtr(p = pi, r = rep(1, 6))
@@ -296,6 +297,5 @@ let model = function () => String
 }
 
 /// Inference ///
-dist = Infer(model=model, method='SMC')
-
+dist = Infer(model = model, method='SMC')
 dist
