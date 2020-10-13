@@ -2,7 +2,9 @@
 
 Semantics:
 
-1. How do we handle typing (dynamically typed language, or a statistically typed language when all checking is done in compile down, which is more conservative)?
+1. How do we handle typing 
+ - dynamically typed language?
+ - or a statistically typed language when all checking is done at compile-time (more conservative)?
 
 2. When instructing the user, how do they think about models, do they think in terms of objects or in functions?
 
