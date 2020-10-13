@@ -4,7 +4,7 @@ Semantics:
 
 1. How do we handle typing?
 
-2. When instructing the user, how do they think about models, do they in object or in function?
+2. When instructing the user, how do they think about models, do they thenik in terms of objects or in functions?
 
 Syntax:
 
