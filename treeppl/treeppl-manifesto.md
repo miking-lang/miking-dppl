@@ -38,11 +38,11 @@ _TreePPL is a universal, functional and vectorized, phylogenetic, interpreted, c
 	
 4. *Interpreted, compiled, and gradually typed*
 
-	a. For fast prototyping a line-by-line execution is possible.
+	a. For fast prototyping a line-by-line (interpreted) execution is possible.
 	
-	b. Identifiers can be optionally typed.
+	b. Identifiers can be optionally typed: a mix of dynamical and statical typing.
 	
-	c. Programs can be compiled to efficient CUDA-based code.
+	c. Programs can be compiled to efficient low-level code.
 	
 5. *Inspired by WebPPL, Birch, R and Python*
 
