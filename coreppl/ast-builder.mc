@@ -3,10 +3,10 @@
 include "ast.mc"
 include "mexpr/ast-builder.mc"
 
-let weight_ = use PPLCore in lam arg. TmWeight {arg = arg}
+let weight_ = use CorePPL in lam arg. TmWeight {arg = arg}
 
-let sampleExp_ = use PPLCore in lam a. TmSampleExp {a = a}
+let sampleExp_ = use CorePPL in lam a. TmSampleExp {a = a}
 
-let sampleBern_ = use PPLCore in lam p. TmSampleBern {p = p}
+let sampleBern_ = use CorePPL in lam p. TmSampleBern {p = p}
 
-let resample_ = use PPLCore in TmResample {}
+let resample_ = use CorePPL in TmResample {}

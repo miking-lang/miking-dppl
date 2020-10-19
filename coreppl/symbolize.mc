@@ -1,7 +1,7 @@
 include "ast.mc"
 include "mexpr/symbolize.mc"
 
-lang PPLCore = PPLCore + MExprSym
+lang CorePPL = CorePPL + MExprSym
   sem symbolizeExpr (env : Env) =
   | TmWeight { arg = expr } -> TmWeight { arg = symbolizeExpr env expr }
   | TmSampleExp { a = expr } -> TmSampleExp { a = symbolizeExpr env expr}

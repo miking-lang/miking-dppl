@@ -1,7 +1,7 @@
 include "ast.mc"
 include "mexpr/eq.mc"
 
-lang PPLCore = PPLCore + MExprEq
+lang CorePPL = CorePPL + MExprEq
 
   sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmWeight { arg = arg2 } ->
@@ -20,5 +20,6 @@ lang PPLCore = PPLCore + MExprEq
     else None ()
 
   | TmResample {} ->
+    match lhs with TmResample {} then Some free else None ()
 
 end
