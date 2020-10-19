@@ -146,7 +146,7 @@ in
 -- let _ = printLn (float2string (subf t2 t1)) in
 -- let _ = print "expr2str time: " in
 -- let _ = printLn (float2string (subf t3 t2)) in
--- expr2str is really slow (3.697662 seconds)
+-- expr2str is really slow (3.7 seconds)
 
 let _ = printLn "--- BEFORE ANF ---" in
 let _ = printLn (expr2str crbd) in
