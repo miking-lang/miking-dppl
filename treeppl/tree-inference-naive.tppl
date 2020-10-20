@@ -11,23 +11,23 @@
 /// Distributions ///
 
 /** We need the following distributions. 
- * Following syntax is to document this, not essential to the language */
-use Permutation
-use Categorical
-use Exponentual
-use Dirichlet
+ * Following syntax is to document this, not essential to the language
+
+ // use Permutation
+ // use Categorical
+ // use Exponentual
+ // use Dirichlet
+ 
+ */
 
 /// Types ///
 
 /** A state can be one of 4 possible states **/
-type State = 0 | 1 | 2 | 3
-
-/** An array containing all four states **/
-const States: State[4] = [0, 1, 2, 3]
+type State = Enum { A, C, G, T }
 
 /** Numbers */
-type NonnegativeReal = x where x: Real, x >= 0
-type PositiveReal = x where x: Real, x > 0
+type NonnegativeReal = Real | x => x >= 0
+type PositiveReal = Real   | x => x > 0
 
 /** Tree */
 
@@ -217,19 +217,25 @@ top_to_newick = function(t: Tree)
 cluster = function(
     Q: InstantaneousRateMatrix,
     trees: Array<Tree>,
-    max_age : Age
+    max_age: NonnegativeReal
 ) => Array<Tree>
 {
     // Check if we are done
-    if trees.length == 1
-        return trees
+    if length(tree) == 1 return trees
 
     // Pick two random trees in the trees vector
-    v ~ Permutation(0:(trees.length - 1))
+    // Illustrated features
+    //   series expansion
+    //   sampling from a built-in distribution
+    v ~ Permutation(0..trees.length)  // 0..3 transforms to [0,1,2]
     i = v[0]
     j = v[1]
 
     // Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
+    // Illustrated features:
+    //   iid
+    //   named arguments
+    //   propose
     propose s ~ iid(
 	dist = Categorical(probabilities = stationary_distribution(Q), support = States),
 	n = trees[i].states.length
@@ -240,7 +246,7 @@ cluster = function(
     parental_age = max_age + t 
 
     // Combine picked pair of trees into a new node
-    parental_node = node(left = trees[i], right = trees[j], age = parental_age, states = s)
+    parental_node = Node(left = trees[i], right = trees[j], age = parental_age, states = s)
 
     // Observe states iid from continuous time Markov chain (CTMC)
     // Note that trees[i].states can be observed if trees[i] is a leaf, otherwise it
