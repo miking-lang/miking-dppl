@@ -83,6 +83,7 @@ let crbd = use CorePPL in
            (weight_
              (mulf_ (negf_ (var_ "mu"))
                 (subf_ (var_ "pAge") (var_ "tAge")))),
+         let_ "_" (resample_),
          let_ "_"
            (appf4_ (var_ "simBranch")
                  (var_ "pAge") (var_ "tAge")
@@ -91,6 +92,7 @@ let crbd = use CorePPL in
            (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
            (bindall_ [
              let_ "_" (weight_ (app_ (var_ "log") (var_ "lambda"))),
+             let_ "_" (resample_),
              let_ "_"
                (appf4_ (var_ "simTree") (var_ "left")
                   (var_ "tree") (var_ "lambda") (var_ "mu")),
