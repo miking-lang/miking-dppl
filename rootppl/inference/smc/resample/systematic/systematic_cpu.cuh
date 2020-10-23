@@ -15,7 +15,7 @@
  * @param numParticles the number of particles used in SMC.
  * @return the logarithm of the total weight sum. 
  */
-HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t resampler, int numParticles);
+HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t& resampler, int numParticles);
 
 /**
  * Calculates the cumulative offspring of each particle. 
