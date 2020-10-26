@@ -1,0 +1,125 @@
+/*  Basic Algorithm for Phylogeny Reconstruction in TreePPL 
+    Everything in this file should be proper ReasonML
+    Possible to check here:
+    https://sketch.sh/
+
+    Except for the sections which are annotated by NEW SYNTAX */
+
+
+/* Include the standard library module */
+include Library
+
+/*  Data 
+    Data is represent as an array of array of the Library type dna;
+    but it could be represented as a rectangular array (matrix).
+ */
+let data: array(array(Library.dna)) = 
+    [| [| C, C, A, A, C, A, A, A, A, A, A, A, A, A, A |],
+       [| C, C, A, A, A, C, A, A, A, A, A, A, A, A, A |],
+       [| A, A, C, C, A, A, C, A, A, A, A, A, A, A, A |],
+       [| A, A, C, C, A, A, A, C, A, A, A, A, A, A, A |] |]
+
+
+/* Core model functions */
+
+
+/** Recursive function to randomly build a tree */
+let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
+{
+    let n = List.length(trees)
+    
+    // Check if we are done
+    if (n > 1) {
+	
+	// Pick two random trees in the trees vector
+	let v ~ Permutation(~vec = 0:(n-1))
+	//^^^NEW SYNTAX^^^^^^^^^^^^^^^^^^^ sec 1.1, 1.2 and sec 2 
+	let i = v[0]
+	let j = v[1]
+
+	// Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
+	propose s ~ iid(
+	    ~dist = Categorical(~prob = stationary_distribution(q), support = [A, C, G, T]),
+	    ~n = Array.length(trees[i].states)
+	)
+	//^^^NEW SYNTAX^^^^^^^^^^^^^^^ see sec 1, iid samping
+	
+	// Propose node_age (new node age) from prior 
+	let t ~ Exponential(~rate = 20.0)
+	let parental_age = max_age + t 
+
+    // Combine picked pair of trees into a new node
+	let parental_node = Node(~left = trees[i],
+				 ~right = trees[j],
+				 ~age = parental_age,
+				 ~states = s)
+
+	// Observe states iid from continuous time Markov chain (CTMC)
+	// Note that trees[i].states can be observed if trees[i] is a leaf, otherwise it
+	// is a latent variable
+	let m = Array.length(parental_node)
+	trees[i].states ~ Array.map(
+	    k => Infer(
+		ctmc_analytical(
+		    ~parental_state = parental_node.states[k],
+		    ~evolution_time = parental_node.age - trees[i].age,
+		    ~q = q
+		)
+	    ),  0:(m - 1))
+
+
+	trees[j].states ~ Array.map( k => Infer(
+	    ctmc_analytical(
+		parental_state = parental_node.states[k],
+		evolution_time = parental_node.age - trees[j].age,
+		q = q
+	    )
+	), 0:(m - 1))
+	
+	// Compute new_trees list
+	// new_trees = trees.rm( trees[i], trees[j] ).add( new_node )
+	// ...arr1 converts the array to arguments, think unlist in R
+	// -[i,k] removes i-th and k-th position from the array
+	new_trees = [...trees[-[i,k]], new_node]
+	// ^^^^^^^^^^^^^^ NEW SYNTAX
+    
+	// cluster new_trees
+	cluster(~q = q, ~trees = new_trees, ~max_age = node_age)
+    }
+
+    trees
+}
+
+
+// Define model
+// this limitations that models are functions of 0 arguments should not be present
+let model =  () => string
+{
+    let pi ~ Dirichlet([1, 1, 1, 1]),
+    //Q = scaled_rate_matrix( pi:pi, er: [1,1], state_labels: ["0","1"] )
+    
+    let q = gtr(~p = pi, ~r = [|1, 1, 1, 1, 1, 1|])
+    
+    // Define the initial trees vector (containing leaves)
+    let leaves = [Leaf(~states = data[0]), Leaf(~states = data[1]), leaf(~states = data[2]), leaf(~states = data[3])]
+    
+    // Build the tree by random clustering
+    let tree = cluster(~q = q, ~trees = leaves, ~max_age = 0.0)[0]
+    
+    // Assumption about the draw of root states    observe
+    tree.states ~ iid(
+	~dist = Categorical(~prob = stationary_distribution(Q), ~support = [0, 1, 2, 3]),
+	~n = Array.length(tree.states.length)
+    )
+    // ^^^^^^^^ NEW SYNTAX ^^^^^^^^^^^
+    
+    // Convert tree to readable format
+    let tree_string = top_to_newick(tree)
+
+    // Return tree
+    tree_string
+}
+
+/// Inference ///
+let dist = Infer(model = model, method= 'SMC')
+dist
