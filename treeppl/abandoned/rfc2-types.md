@@ -6,17 +6,27 @@ Types are
 
 a. Optional (gradual typing), i.e. type annotations, for example in function declaration possible but not necessary. 
 
-	a: BigInt = 4
-	b = 5
-
 b. Inferred, where possible
 	
-	a = "hello" /* a is a string */
+Examples: 
 
+	a: bigint = 4
+	b = 5n         /* b is bigint   */
+	c = 5          /* c is number   */
+	a = "hello"    /* a is a string */
+	
+## Declarations
+
+	a = "hello"     /* OK */
+	let a = "hello" /* also OK, let is optional/ implicitly understood */
+	//var a = "hello"   /* NOT implementing this */
+	//const a = "hello" /* NOT implemented, remapping of identifiers not needed, everything is a const */
 
 ## Built-in Types
 
-See https://www.typescriptlang.org/docs/handbook/basic-types.html
+We are reusing the TypeScript basic types from
+
+https://www.typescriptlang.org/docs/handbook/basic-types.html
 
 ### Boolean
 
@@ -37,7 +47,7 @@ Or a rational number?
 All values in the array are of the same type.
 
 	list: number[] = [1, 2, 3]
-	list: Array<number> = [1, 2, 3];	 
+	list: Array<number> = [1, 2, 3]
  
 ### Tuple
 
@@ -57,47 +67,56 @@ Tuple types allow you to express an array with a fixed number of elements whose 
 		Green,
 		Blue,
 	}
+	
 	c: Color = Color.Green
 
 ### Unknown, Any, Void
 
-We have to thing about this.
+TODO Ask David and Daniel to think about how to take care of "uncertain" types.
 
 
 ## User-defined types
 
-### OR (|)
+### Union types and Recursive Types
 
-State is 0 or 1 or 2 or 3:
+Note, this is just example, not how will end up implementing the tree datastructure in the library.
 
-	type State = 0 | 1 | 2 | 3
+	type ExtantLeaf =
+	{
+		t: NonnegativeReal
+	}
+	
+	type ExtinctLeaf = 
+	{
+		t: NonnegativeReal
+	}
+	
+	type Speciation = 
+	{
+		t: NonnegativeReal,
+		left:  Tree,
+		right: Tree
+	}
+	
+	type Tree = Extant | Extinct | Speciation
+
 
 ### Restrictions on the domain
 
-	type PositiveReal = x where x: Real, x > 0
+TODO Discuss with David and Daniel
+
+	type PositiveReal = Real | x => x > 0
+	type PositiveReal = Real : x => x > 0
+	type PositiveReal = Real where x => x > 0
+	type PositiveReal = Real passing x => x > 0
 	
-### Recursive type
-
-	enum NodeType =
+	function fn(x) 
 	{
-		Leaf,
-		InternalNode
+		x > 0
 	}
-
-	type Leaf = {
-		type: NodeType,
-		index: BigInt,
-		age: NonnegativeRea;l,
-		states: State[]
-	}
-
-	type Tree = {
-		type: NodeType,
-		left: Tree | Leaf,
-		right: Tree | Leaf,
-		age: NonnegativeReal,
-		states: State[]
-	}
-
-
-
+	
+	type PositiveReal = Real | fn
+	type PositiveReal = Real : fn
+	type PositiveReal = Real where fn
+	type PositiveReal = Real passing fn
+	

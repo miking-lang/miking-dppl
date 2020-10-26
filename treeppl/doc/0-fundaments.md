@@ -2,6 +2,7 @@
 
 TreePPL is a universal, functional and vectorized, phylogenetic, interpreted, compiled and gradually typed, probabilistic programming language, inspired by ReasonML.
 
+
 1. **Universal PPL**
 
 	a. We are able to express any stochastic model that can be written down as a TreePPL program.
@@ -26,11 +27,11 @@ TreePPL is a universal, functional and vectorized, phylogenetic, interpreted, co
 	
 4. **Interpreted, compiled, and gradually typed**
 
-	a. For fast prototyping a line-by-line execution is possible.
+	a. For fast prototyping a line-by-line (interpreted) execution is possible.
 	
-	b. Identifiers can be optionally typed.
+	b. Identifiers can be optionally typed: a mix of dynamical and statical typing.
 	
-	c. Programs can be compiled to efficient CUDA-based code.
+	c. Programs can be compiled to efficient low-level code.
 	
 5. **Inspired by ReasonML**
 
