@@ -24,7 +24,7 @@ let data: array(array(Library.dna)) =
 
 
 /** Recursive function to randomly build a tree */
-let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
+let rec cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
 {
     let n = List.length(trees)
     
@@ -62,16 +62,19 @@ let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
 	// is a latent variable
 	let m = Array.length(parental_node)
 	trees[i].states ~ Array.map(
-	    (k) => Infer(ctmc_analytical(~parental_state = parental_node.states[k], ~evolution_time = parental_node.age - trees[i].age,	~q = q))),
+	    (k) => Infer(~model = ctmc_analytical(~parental_state = parental_node.states[k], ~evolution_time = parental_node.age - trees[i].age,
+	    		~q = q))),
 	    0..m - 1
 	)
+	// ^^^^^ NEW SYNTAX ^^^^^^^ Section 1.3
+	
 
 
 	trees[j].states ~ Array.map( k => Infer(
 	    ctmc_analytical(
-		parental_state = parental_node.states[k],
-		evolution_time = parental_node.age - trees[j].age,
-		q = q
+		~parental_state = parental_node.states[k],
+		~evolution_time = parental_node.age - trees[j].age,
+		~q = q
 	    )
 	), 0.. m - 1)
 	
@@ -79,22 +82,24 @@ let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
 	// new_trees = trees.rm( trees[i], trees[j] ).add( new_node )
 	// ...arr1 converts the array to arguments, think unlist in R
 	// -[i,k] removes i-th and k-th position from the array
-	new_trees = [...trees[-[i,k]], new_node]
-	// ^^^^^^^^^^^^^^ NEW SYNTAX
+	
+	new_trees = trees[-[i,k]] @ [new_node]
+	// ^^^^^^^^^^^^^^ NEW SYNTAX Section 2.2
+	// or do it with filtering, TODO suggest how
     
 	// cluster new_trees
 	cluster(~q = q, ~trees = new_trees, ~max_age = node_age)
     }
-
-    trees
+   
+    else trees
 }
 
 
 // Define model
 // this limitations that models are functions of 0 arguments should not be present
-let model =  () => string
+let model = (): string =>
 {
-    let pi ~ Dirichlet([1, 1, 1, 1]),
+    assume pi ~ Dirichlet([|1, 1, 1, 1|]),
     //Q = scaled_rate_matrix( pi:pi, er: [1,1], state_labels: ["0","1"] )
     
     let q = gtr(~p = pi, ~r = [|1, 1, 1, 1, 1, 1|])
@@ -104,10 +109,11 @@ let model =  () => string
     
     // Build the tree by random clustering
     let tree = cluster(~q = q, ~trees = leaves, ~max_age = 0.0)[0]
+    //// ^^^^^^^^^^^^^^^^^^^^^^^^^^ NEW SYNTAX, we index the list here
     
-    // Assumption about the draw of root states    observe
+    // Assumption about the draw of root states
     tree.states ~ iid(
-	~dist = Categorical(~prob = stationary_distribution(Q), ~support = [0, 1, 2, 3]),
+	~dist = Categorical(~prob = stationary_distribution(q), ~support = [|0, 1, 2, 3|]),
 	~n = Array.length(tree.states.length)
     )
     // ^^^^^^^^ NEW SYNTAX ^^^^^^^^^^^
@@ -120,5 +126,5 @@ let model =  () => string
 }
 
 /// Inference ///
-let dist = Infer(model = model, method= 'SMC')
+let dist = Infer(~model = model, ~method= 'SMC')
 dist
