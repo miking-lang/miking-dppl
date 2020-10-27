@@ -13,7 +13,7 @@ include Library
     Data is represent as an array of array of the Library type dna;
     but it could be represented as a rectangular array (matrix).
  */
-let data: array(array(Library.dna)) = 
+let data: array(array(dna)) = 
     [| [| C, C, A, A, C, A, A, A, A, A, A, A, A, A, A |],
        [| C, C, A, A, A, C, A, A, A, A, A, A, A, A, A |],
        [| A, A, C, C, A, A, C, A, A, A, A, A, A, A, A |],
