@@ -32,7 +32,7 @@ let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
     if (n > 1) {
 	
 	// Pick two random trees in the trees vector
-	let v ~ Permutation(~vec = 0:(n-1))
+	assume v ~ Permutation(~vec = 0..n-1)
 	//^^^NEW SYNTAX^^^^^^^^^^^^^^^^^^^ sec 1.1, 1.2 and sec 2 
 	let i = v[0]
 	let j = v[1]
