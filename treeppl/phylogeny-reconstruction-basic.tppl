@@ -32,23 +32,26 @@ let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
     if (n > 1) {
 	
 	// Pick two random trees in the trees vector
-	assume v ~ Permutation(~vec = 0..n-1)
-	//^^^NEW SYNTAX^^^^^^^^^^^^^^^^^^^ sec 1.1, 1.2 and sec 2 
+	assume v ~ Permutation(~vec = 0..n - 1)
+	//^^^NEW SYNTAX^^^^^^^^^^^^^^^^^^^^^^^^ sec 1.1, 1.2 and sec 2.1 
 	let i = v[0]
 	let j = v[1]
 
 	// Propose s (new node states) from arbitrary proposal distribution (here stationary distribution)
 	propose s ~ iid(
-	    ~dist = Categorical(~prob = stationary_distribution(q), support = [A, C, G, T]),
+	    ~dist = Categorical(
+	    	~prob = stationary_distribution(q),
+		~support = [A, C, G, T]
+	    ),
 	    ~n = Array.length(trees[i].states)
 	)
-	//^^^NEW SYNTAX^^^^^^^^^^^^^^^ see sec 1, iid samping
+	//^^^^^^^^^^NEW SYNTAX^^^^^^^^^^^^^^^ see sec 1.3, iid samping
 	
 	// Propose node_age (new node age) from prior 
-	let t ~ Exponential(~rate = 20.0)
+	assume t ~ Exponential(~rate = 20.0)
 	let parental_age = max_age + t 
 
-    // Combine picked pair of trees into a new node
+        // Combine picked pair of trees into a new node
 	let parental_node = Node(~left = trees[i],
 				 ~right = trees[j],
 				 ~age = parental_age,
@@ -59,13 +62,9 @@ let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
 	// is a latent variable
 	let m = Array.length(parental_node)
 	trees[i].states ~ Array.map(
-	    k => Infer(
-		ctmc_analytical(
-		    ~parental_state = parental_node.states[k],
-		    ~evolution_time = parental_node.age - trees[i].age,
-		    ~q = q
-		)
-	    ),  0:(m - 1))
+	    (k) => Infer(ctmc_analytical(~parental_state = parental_node.states[k], ~evolution_time = parental_node.age - trees[i].age,	~q = q))),
+	    0..m - 1
+	)
 
 
 	trees[j].states ~ Array.map( k => Infer(
@@ -74,7 +73,7 @@ let cluster = (q: irmatrix, trees: list(tree), max_age: age)) => list(tree)
 		evolution_time = parental_node.age - trees[j].age,
 		q = q
 	    )
-	), 0:(m - 1))
+	), 0.. m - 1)
 	
 	// Compute new_trees list
 	// new_trees = trees.rm( trees[i], trees[j] ).add( new_node )
