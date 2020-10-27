@@ -34,8 +34,8 @@ Distribution over `v: PositiveReal[d]`.
 General syntax. x is unitialized yet (in the scope), or we want to throw away its previous binding:
 
 	assume x ~ Dist(params)  // now x is random variable (a structure with variate/ realization and the associated distribution), OR <=>
-	let x = sample(Dist(params))  
-	let x = sample(Dist(params), ~immediate = TRUE)   // forced sampling in the sense of immediate sampling as opposed to delayed sampling
+	let x = assume(Dist(params))  
+	let x = assume(Dist(params), ~sample = TRUE)   // forced sampling in the sense of immediate sampling as opposed to delayed sampling
 	
 For example
 
@@ -55,7 +55,7 @@ WebPPL refernce behavior
 
 ### Observe
 
-General syntax. `x` has a value, then:
+General syntax. `x` must exist and have value. Then:
 
 	observe x ~ Dist(params)
 	
@@ -69,7 +69,9 @@ Reference WebPPL code:
 	
 ### Automatic behavior
 
-If x already posses a value (x is a random variable with a variate/ realization), then
+Note: this potentially could be difficult.
+
+If `x` is in the current execution environment and has a value (`x` is e.g. `float`), then
 
 	x ~ Dist(params) // is equivalent to:
 	observe x ~ Dist(params)
@@ -86,6 +88,7 @@ If the binding does not exist, x is sampled, then:
 The propose statement is used for bridge sampling.
 
 	propose x ~ Dist(params)
+	update x ~ OtherDist(params)
 
 `x` is proposed from some suitable distribution, it is defined later
 what distribution it is sampled from.
@@ -104,7 +107,7 @@ Here is reference WebPPL code
 	propose x ~ Exponential(~rate = 1)    // sample from proposal distribution
 	// potentially lots of code and function calls
 	// specify correct distribution (automatically correct for proposal density mismatch)
-	x ~ Gamma(~alpha=2, ~beta=1)
+	update x ~ Gamma(~alpha = 2, ~beta = 1)
 
 
 ### IID Sampling
@@ -115,10 +118,15 @@ Here is reference WebPPL code
 
 ## 1.3 Inference
 
-The general inference syntax is similar to WebPPL with the exception that model can be a function of arguments.
+The general inference syntax is similar to WebPPL with the exception that model 
+can have some additional arguments.
+	
+	let mymod = (~p, _) =>
+	{
+		flip(p)
+	}
 
-	let dist = Infer(~model = model, ~method = 'SMC') // OR
-	let dist1 = Infer(~model = model(a), ~method = 'SMC)
+	let dist = Infer(~model = model(p, _), ~method = 'SMC')
 	dist
-
-TODO Can Infer support model functions with arguments? WebPPL doesn't :(
+	
+	
