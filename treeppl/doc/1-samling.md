@@ -29,18 +29,57 @@ Distribution over `v: PositiveReal[d]`.
 
 ## 1.2 Sampling
 
-### Sample
+### Assume/sample
 
-	let x ~ Dist(params) // OR
-	let x = Dist.sample(params)
+General syntax. x is unitialized yet (in the scope), or we want to throw away its previous binding:
 
-`x` is sampled from `dist`, like '~' in Birch.
+	assume x ~ Dist(params)  // now x is random variable (a structure with variate/ realization and the associated distribution), OR <=>
+	let x = sample(Dist(params))  
+	let x = sample(Dist(params), ~immediate = TRUE)   // forced sampling in the sense of immediate sampling as opposed to delayed sampling
+	
+For example
 
-### Observe or sample
+	assume x ~ Exponential(~rate = 1) 
+	// x is r.v. but may not have a realization yet
+	
+	let x = assume(Exponential(~rate = 1))
+	// x is r.v. but may not have a realization yet same as 44
+	
+	let x = assume(Exponential(~rate = 1), ~sample = TRUE)
+	// x is r.v. with a concreate realization of a value
+	
+WebPPL refernce behavior
 
-	`x ~ Dist(params)`
+	x = sample(Exponential({rate: 1})
+	//sample is always immediate in WebPPL :(
 
-`x` is observed from Dist, like `~>` in Birch. If the binding does not exist, x is sampled
+### Observe
+
+General syntax. `x` has a value, then:
+
+	observe x ~ Dist(params)
+	
+For example
+	
+	observe 2 ~ Exponential(~rate = 1)
+	
+Reference WebPPL code:
+
+	observe(Exponential({rate: 1}), 2)
+	
+### Automatic behavior
+
+If x already posses a value (x is a random variable with a variate/ realization), then
+
+	x ~ Dist(params) // is equivalent to:
+	observe x ~ Dist(params)
+
+`x` is observed from Dist, like `~>` in Birch.
+
+If the binding does not exist, x is sampled, then:
+
+	x ~ Dist(params) // is equivalent to
+	assume x ~ Dist(params)
 
 ### Propose
 
@@ -62,15 +101,16 @@ Here is reference WebPPL code
 	factor( Gamma( {a: 2, b: 1} ).score(x) )   // add weight from correct dist.
 
 	// Equivalent code might look like this in TreePPL:
-	propose x ~ Exponential( rate=1 )    // sample from proposal distribution
+	propose x ~ Exponential(~rate = 1)    // sample from proposal distribution
 	// potentially lots of code and function calls
 	// specify correct distribution (automatically correct for proposal density mismatch)
-	x ~ Gamma( alpha=2, beta=1 )
+	x ~ Gamma(~alpha=2, ~beta=1)
 
 
 ### IID Sampling
 
-	let x ~ iid(~dist = Dist(params), ~n = num_reps)    // iid distribution of length num_reps	
+	assume x ~ iid(~dist = Dist(params), ~n = num_reps)    // iid distribution of length num_reps	
+	// x is a array or list of r.v.
 
 
 ## 1.3 Inference
