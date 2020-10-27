@@ -117,7 +117,8 @@ Here is reference WebPPL code
 
 The general inference syntax is similar to WebPPL with the exception that model can be a function of arguments.
 
-
 	let dist = Infer(~model = model, ~method = 'SMC') // OR
 	let dist1 = Infer(~model = model(a), ~method = 'SMC)
 	dist
+
+TODO Can Infer support model functions with arguments? WebPPL doesn't :(
