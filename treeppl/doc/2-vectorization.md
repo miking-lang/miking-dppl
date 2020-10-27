@@ -1,10 +1,16 @@
 # 2. Vectorization
 		 
-## 2.1 Column operator 
+## 2.1 .. operator 
 
-	let a = 0:10 
-	// [| 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 |]
-	// results in array, not list
+	let a = 0..10 
+	// [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
+	// results in list, or?
+	
+Precedence works like this
+
+	let n = 4
+	let a = 1..n - 1
+	// a is [1, 2, 3]
 	
 ## 2.2 Subsetting and filtering
 
