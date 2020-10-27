@@ -37,6 +37,6 @@ TreePPL is a universal, functional and vectorized, phylogenetic, interpreted, co
 
 	a. The syntax of TreePPL follows (a subset) of ReasonML.
 	
-	b. There are extensions for probabilisitc programming (Secion 1).
+	b. There are extensions for probabilistic programming (Section 1).
 	
 	c. There are extensions for vectorization (Section 2).
