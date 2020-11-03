@@ -120,13 +120,35 @@ Here is reference WebPPL code
 
 The general inference syntax is similar to WebPPL with the exception that model 
 can have some additional arguments.
+
+	// We believe in
+	// - named arguments
+	// - no currying
+	// - default arguments
+	 
+	// R
+	generic_model = function(p = 0.5) {
 	
-	let mymod = (~p, _) =>
+	}
+	
+	// JavaScript with some type annotation
+	function generic_model(p: float = 0.5):float {
+	}
+	
+	// ReasonML
+	let generic_model = (p: float = 0.5):float =>
 	{
 		flip(p)
 	}
-
-	let dist = Infer(~model = model(p, _), ~method = 'SMC')
+	
+	let mymod = () =>
+	{
+		generic_model(0.6)
+	}
+	
+	let dist = Infer(model = mymod, method = 'SMC')
+	
 	dist
+	
 	
 	
