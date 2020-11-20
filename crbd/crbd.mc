@@ -113,10 +113,10 @@ let crbd = use CorePPL in
   in
 
   bindall_ [
-    ulet_ "log" unit_, -- TODO Need log implementation?
+    let_ "log" tyunit_ unit_, -- TODO Need log implementation?
 
-    ucondef_ "Leaf",
-    ucondef_ "Node",
+    condef_ "Leaf" (tyarrow_ tyleafrec_ tytree_),
+    condef_ "Node" (tyarrow_ tynoderec_ tytree_),
 
     ulet_ "tree" tree,
 
@@ -140,6 +140,6 @@ let crbd = use CorePPL in
                      (var_ "tree") (var_ "lambda") (var_ "mu")),
          tuple_ [(var_ "lambda"), (var_ "mu")]
       ])
-      never_
+      unit_
   ]
 
