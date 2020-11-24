@@ -15,7 +15,7 @@ include "../coreppl/ast-builder.mc"
 
 let crbd = use CorePPL in
 
-  let tytree_ = tycon_ "Tree" in
+  let tytree_ = tyvar_ "Tree" in
 
   let tyleafrec_ = tyrecord_ [("age", tyfloat_)] in
   let leaf_ = lam age.
@@ -114,6 +114,8 @@ let crbd = use CorePPL in
 
   bindall_ [
     let_ "log" tyunit_ unit_, -- TODO Need log implementation?
+
+    type_ "Tree" tyunit_, -- TODO Should not be unit
 
     condef_ "Leaf" (tyarrow_ tyleafrec_ tytree_),
     condef_ "Node" (tyarrow_ tynoderec_ tytree_),
