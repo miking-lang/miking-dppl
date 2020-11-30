@@ -5,8 +5,8 @@
 - You don't end statements with ';'.
 - Type annotations are possible.
 - No need to explicitly write `let`; the name binding is taken care of by the operator `=`.
-- Support unicode characters an extended character set including the Greek.
-- Support of identifiers starting with a capital letter, but discoraged.
+- Support Unicode characters an extended character set including the Greek.
+- Support of identifiers starting with a capital letter, but discouraged.
 - Overshadowing (reassignment) possible;
 - Blocks of statements are enclosed in `{ }`
 
@@ -43,7 +43,7 @@ transition_probability: float = 1
 
 ## 0.2 Functions
 
-- Anononymous functions OK.
+- Anonymous functions OK.
 - A function can be defined as a single expression (no curly braces needed).
 - If a function is defined as a sequence of statements (with curly braces), an explicit return is needed. There is no need to put parenthesis around `return`. If no `return` is provided, the function is considered to have the unit type.
 - No currying.
@@ -234,7 +234,7 @@ Pattern matching works with `switch`. Example:
 ```
 switch (child) {
         | Node => {
-            observe 0 ~ Exponetial(λ)
+            observe 0 ~ Exponential(λ)
             simulate_tree(child.left, child, λ, μ)
             simulate_tree(child.right, child, λ, μ)
         }

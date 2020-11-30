@@ -1,6 +1,6 @@
 # Imaginary R syntax to read to invoke TreePPL form R
 
-tree = phyjson.read(filename="some phyjson file")
+tree = phyjson.read(filename="some PhyJSON file")
 k_lambda = 1
 theta_lambda = 0.2
 

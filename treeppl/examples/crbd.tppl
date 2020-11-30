@@ -10,10 +10,9 @@ type tree =
     | Leaf(age: float, index: int)
     | Node(age: float, left: tree, right: tree)
 
-
-
+  
 /**  Simulates side branches under the CRBD model
- * 
+ *  
  * The following is a function that simulates the hidden
  * (extinct or undetected) evolutionary side-branches under
  * the CRBD model.
@@ -62,7 +61,7 @@ simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
     // pattern matching, Section 0.6
     switch (child) {
         | Node => {
-            observe 0 ~ Exponetial(λ)
+            observe 0 ~ Exponential(λ)
             simulate_tree(child.left, child, λ, μ)
             simulate_tree(child.right, child, λ, μ)
         }
@@ -73,7 +72,7 @@ simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
 
 /** Model 
  * 
- * Every program has a model funciton, see Section 1.4.
+ * Every program has a model function, see Section 1.4.
  * */ 
 model = (k_λ = 1, θ_λ = 0.2, k_μ = 1, θ_μ = 0.1, data: json) => {
     observation: tree = Node(13.016,
