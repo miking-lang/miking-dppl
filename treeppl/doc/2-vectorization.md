@@ -1,18 +1,28 @@
 # 2. Vectorization
-		 
+
 ## 2.1 Ranges
 
-	a = 0 to 10 
-	// [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+	a = 0:10 
+	// [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 	
-	
-Precedence works like this
+Employ disambiguation of precedence
 
 	n = 4
-	a = 1 to n - 1
+	a = 1 : n - 1
+	// Error
+
+	a = 1 : (n - 1)
+	a
 	// [1, 2, 3]
+
+	t = 10 : 1
+	t
+	// [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
 	
 ## 2.2 Subsetting and filtering
+
+	type nucleotide = A | C | G | T
+	type dna = array(nucleotide)
 
 	data: array(dna) = 
     [ [ C, C, A, A, C, A, A, A, A, A, A, A, A, A, A ],
@@ -20,10 +30,10 @@ Precedence works like this
       [ A, A, C, C, A, A, C, A, A, A, A, A, A, A, A ],
       [ A, A, C, C, A, A, A, C, A, A, A, A, A, A, A ] ]
 
-	data[0]
+	data[1]
 	// [ C, C, A, A, C, A, A, A, A, A, A, A, A, A, A ]
 
-	data[[0, 1]]
+	data[ [ 1, 2 ] ]
 	// [ [ C, C, A, A, C, A, A, A, A, A, A, A, A, A, A ],
       [ C, C, A, A, A, C, A, A, A, A, A, A, A, A, A ] ]
 
@@ -57,8 +67,11 @@ Precedence works like this
 	x[![0, 1]]
 	// [T]
 		
-	x != A // map( (k) => k != A, x)
+	x != A 
 	// [false, true, true]
+
+	ix = map( (k) => k != A, x)
+	x[ix]
 
 	x[x != A]
 	// [C, T]

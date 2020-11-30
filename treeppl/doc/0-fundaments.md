@@ -1,26 +1,29 @@
 # 0. Language Fundamentals
 
-## 0.1 Identifiers and assignment
+## 0.1 Identifiers, statements, and expressions
 
-Changes to ReasonML are:
+- You don't end statements with ';'.
+- Type annotations are possible.
+- No need to explicitly write `let`; the name binding is taken care of by the operator `=`.
+- Support unicode characters an extended character set including the Greek.
+- Support of identifiers starting with a capital letter, but discoraged.
+- Overshadowing (reassignment) possible;
+- Blocks of statements are enclosed in `{ }`
 
-  - no need to explicitly write `let`; the "binding" is taken care of by the assignment operator `=`;
-  - support unicode characters an extended character set including the Greek;
-  - support of identifiers starting with a capital letter, but discoraged.
-
-Similarities to ReasonML:
-
-  - overshadowing (reassignment) possible;
-  - type annotations are possible.
+Examples:
 
 ```
 x = 1
 x
 // - : int = 1;
 
-x = 2
+{
+  x = 2
+  x
+  // - : int = 2;
+}
 x
-// - : int = 2;
+// - : int = 1
 
 x = 1.
 x
@@ -40,21 +43,16 @@ transition_probability: float = 1
 
 ## 0.2 Functions
 
-Changes to ReasonML:
-  - explicit returns allowed; no need to put parenth. around;
-  - no currying;
-  - tilde not needed when naming params;
-  - default arguments supported;
-  - no need to type `rec`.
-
- Similarities to ReasonML:
-  - anononymous functions OK;
-  - curly braces not needed if just one expression; and
-  - last expression is the default return value.
-
-A future note:
-  - optional types.
-
+- Anononymous functions OK.
+- A function can be defined as a single expression (no curly braces needed).
+- If a function is defined as a sequence of statements (with curly braces), an explicit return is needed. There is no need to put parenthesis around `return`. If no `return` is provided, the function is considered to have the unit type.
+- No currying.
+- Parameters can be named.
+- Default arguments supported.
+- No need to type `rec` to indicate that the function is recursive.
+- Parameter and return types can be annotated.
+  
+Examples:
 ```
 x = (p: int) => p + 1 
 
@@ -62,9 +60,10 @@ x(2)
 // - int: 3
 
 x = (p: int): int => {
-	d = 2
-	if (p == 0)	return -1
-	p*d
+	d = 2  // binding 2 to d
+
+	if (p == 0)	-1 
+  else p*d
 }
 
 x(2)
@@ -78,7 +77,7 @@ x(0)
  *
  * Returns the area. Default is a square with side x.
  */
-make_rectangle = (x: float, y: float = 0.) => {
+make_rectangle = (x: float, y: float = 0.): float => {
 	if (y == 0.0) x*x else x*y
 }
 
@@ -111,23 +110,23 @@ make_rectangle(2, y = 3)
 
 ## 0.3 Primitive types and operators
 
-We take ReasonML primitive datatypes with the following changes:
-  - unit and optional are removed;
-  - array literals uses the `[]` rather than `[||]`;
-  - lists can be instantiated with a special constructor working on an array.
+We take ReasonML primitive datatypes (without `optional`).
 
 ```
 Int	      x: int = 10;
-Float	  x: float = 10.0;
+Float	    x: float = 10.0;
 Boolean	  x: bool = false;
 String	  x: string = "ten";
-Char	  x: char = 'c';
-Tuple	  x: (int, string) = (10, "ten");
-Array	  x: array(int) = [1, 2, 3];
+Char	    x: char = 'c';
+Tuple	    x: (int, string) = (10, "ten");
+Array	    x: array(int) = [1, 2, 3];
 Functions x: (int, int) => int = (a, b) => a + b;
+Unit      x: (int, int): () => { // some side effect }
 ```
 
-Adding of float works with `+` !
+- Array literals uses the `[]` rather than `[||]`.
+- Overloading of arithmetic operators for `int` and `float`.
+- Adding of float works with `+` !
 
 ```
 x = 3.14
@@ -147,12 +146,6 @@ data: array(array(dna)) =
       [ A, A, C, C, A, A, A, C, A, A, A, A, A, A, A ] ]
 ```
 
-Linked lists are implemented via a constructor:
-
-```
-x: list(int) = List([1, 2, 3])
-```
-
 ## 0.4 User defined types
 
 We want to implement as much as possible of ReasonML's type system. For example, we have:
@@ -160,12 +153,25 @@ We want to implement as much as possible of ReasonML's type system. For example,
   - algebraic types;
   - recursive types.
 
+Constructors start with a capital letter.
+
+Types are always small letters.
+
 For example, to define a `tree`, we use
 
 ```
 type tree =
     | Leaf(age, dna)
     | Node(age, dna, tree, tree);
+```
+
+It is also possible to name the constructors:
+
+```
+type tree =
+    | Leaf(age: age, states: dna)
+    | Node(age: age, states: dna, left: tree, right: tree);
+
 ```
 
 We support the _module system_ for code organization.
@@ -188,21 +194,66 @@ type person = {
 
 As a vision we want types such as `real`, `positive_real`, etc.
 
+```
+  x: probability = 0.5
+  // okay
+
+  x: probability = 1.2
+  // not okay
+```
+
 ## 0.5 Conditionals
 
-As in ReasonML, i.e. `if` and `switch`.
+Examples:
 
-## 0.6 Loops
+```
+  y = 3
 
-Loops are discouraged in most cases. Instead functional programming patterns like map, filter, or reduce can usually be used in their place.
+  // the following is an if-expression
+  x = if (y > 5) true else false
+
+  x
+  // false
+
+  // the following is an if-statement
+  if (y < 5) {
+    print(y)
+  }
+  // 3
+
+  if (y < 5) print(y)
+  // error
+```
+
+- We have both `if`-statements and `if`-expressions.
+
+## 0.6 Pattern matching
+
+Pattern matching works with `switch`. Example:
+
+```
+switch (child) {
+        | Node => {
+            observe 0 ~ Exponetial(λ)
+            simulate_tree(child.left, child, λ, μ)
+            simulate_tree(child.right, child, λ, μ)
+        }
+    }
+```
+
+- We allow for named arguments/parameters, i.e. `child.left`.
+
+## 0.7 Loops 
+
+Loops are discouraged in most cases. Instead functional programming patterns like map, filter, (see Section 2) or reduce can usually be used in their place.
 
 ```
 x = 1;
 y = 5;
 
 for (i in x to y) {
-  print_int(i);
-  print_string(" ");
+  print_int(i)
+  print_string(" ")
 };
 /* Prints: 1 2 3 4 5 */
 ```
@@ -211,8 +262,8 @@ The reverse direction is also possible using the downto keyword:
 
 ```
 for (i in y downto x) {
-  print_int(i);
-  print_string(" ");
-};
+  print_int(i)
+  print_string(" ")
+}
 /* Prints: 5 4 3 2 1 */
 ```
