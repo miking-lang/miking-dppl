@@ -1,22 +1,22 @@
--- Pretty printing for PPLCore
+-- Pretty printing for CorePPL
 
 include "ast.mc"
 include "mexpr/pprint.mc"
 
-lang PPLCore = PPLCore + MExprPrettyPrint
+lang CorePPL = CorePPL + MExprPrettyPrint
 
   sem pprintCode (indent : Int) (env: Env) =
   | TmWeight t ->
-    match printParen (incr indent) env t.arg with (env,arg) then
-      (env, join ["weight", newline (incr indent), arg])
+    match printParen (pprintIncr indent) env t.arg with (env,arg) then
+      (env, join ["weight", pprintNewline (pprintIncr indent), arg])
     else never
   | TmSampleExp t ->
-    match printParen (incr indent) env t.a with (env,a) then
-      (env,join ["sampleExp", newline (incr indent), a])
+    match printParen (pprintIncr indent) env t.a with (env,a) then
+      (env,join ["sampleExp", pprintNewline (pprintIncr indent), a])
     else never
   | TmSampleBern t ->
-    match printParen (incr indent) env t.p with (env,p) then
-      (env,join ["sampleBern", newline (incr indent), p])
+    match printParen (pprintIncr indent) env t.p with (env,p) then
+      (env,join ["sampleBern", pprintNewline (pprintIncr indent), p])
     else never
   | TmResample _ -> (env,"resample")
 

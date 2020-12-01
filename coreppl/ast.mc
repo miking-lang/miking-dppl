@@ -1,8 +1,8 @@
--- PPLCore AST
+-- CorePPL AST
 
 include "mexpr/ast.mc"
 
-lang PPLCore = MExprAst
+lang CorePPL = MExprAst
 
   syn Expr =
   | TmWeight { arg: Expr }

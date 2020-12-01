@@ -1,7 +1,7 @@
 include "ast.mc"
 include "mexpr/anf.mc"
 
-lang PPLCore = PPLCore + MExprANF
+lang CorePPL = CorePPL + MExprANF
 
   sem isValue =
   | TmWeight _ -> false
@@ -11,13 +11,13 @@ lang PPLCore = PPLCore + MExprANF
 
   sem normalize (k : Expr -> Expr) =
   | TmWeight { arg = arg } ->
-    normalizeName (lam arg. bind k (TmWeight { arg = arg })) arg
+    normalizeName (lam arg. k (TmWeight { arg = arg })) arg
 
   | TmSampleExp { a = a } ->
-    normalizeName (lam a. bind k (TmSampleExp { a = a })) a
+    normalizeName (lam a. k (TmSampleExp { a = a })) a
 
   | TmSampleBern { p = p } ->
-    normalizeName (lam p. bind k (TmSampleBern { p = p })) p
+    normalizeName (lam p. k (TmSampleBern { p = p })) p
 
   | TmResample {} -> k (TmResample {})
 
