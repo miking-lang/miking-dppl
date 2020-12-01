@@ -105,6 +105,12 @@ make_rectangle(y = 2, 3)
 
 make_rectangle(2, y = 3)
 // - float: 6.0
+
+g = (a, b) => {
+	return a + b
+}
+
+
 ```
 
 
