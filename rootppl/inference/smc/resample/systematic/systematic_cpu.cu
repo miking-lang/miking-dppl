@@ -9,7 +9,7 @@
 
 #include <math.h>
 
-HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t resampler, int numParticles) {
+HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t& resampler, int numParticles) {
     floating_t maxLogWeight;
     #ifdef _OPENMP
     maxLogWeight = -INFINITY;
@@ -21,6 +21,7 @@ HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t resampler, in
     #else
     maxLogWeight = maxNaive(w, numParticles);
     #endif
+    resampler.maxLogWeight = maxLogWeight;
 
     // Corresponds to ExpWeightsKernel used in the parallel implementation
     #pragma omp parallel for

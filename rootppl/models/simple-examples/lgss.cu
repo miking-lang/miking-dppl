@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <cstring>
+#include <math.h>
 
 #include "inference/smc/smc.cuh"
 
@@ -35,7 +36,8 @@ BBLOCK(lgss, progState_t, {
     floating_t* dataP = DATA_POINTER(data);
     
     PSTATE.x = SAMPLE(normal, PSTATE.x + 2.0, 1);
-    WEIGHT(normalScore(dataP[PSTATE.t], PSTATE.x, 1.0));
+    // WEIGHT(normalScore(dataP[PSTATE.t], PSTATE.x, 1.0));
+    OBSERVE(normal, PSTATE.x, 1.0, dataP[PSTATE.t]);
 
     if(++PSTATE.t == NUM_OBS)
         PC++;
@@ -44,12 +46,11 @@ BBLOCK(lgss, progState_t, {
 
 CALLBACK(callback, {
     
-    floating_t xSum = 0;
+    floating_t weightedSum = 0;
     for (int i = 0; i < N; i++)
-        xSum += PSTATES[i].x;
-    int i = N / 2;
-    printf("Mean x: %f, Median x: %f\n", xSum / N, PSTATES[i].x);
-    
+        weightedSum += PSTATES[i].x * exp(WEIGHTS[i]);
+        
+    printf("Estimated Mean x: %f\n", weightedSum);
 })
 
 void setup() {
