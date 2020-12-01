@@ -1,3 +1,4 @@
 _*
 _build/
 .merlin
+.vscode
