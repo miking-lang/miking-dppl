@@ -47,7 +47,8 @@ transition_probability: float = 1
 - A function can be defined as a single expression (no curly braces needed).
 - If a function is defined as a sequence of statements (with curly braces), an explicit return is needed. There is no need to put parenthesis around `return`. If no `return` is provided, the function is considered to have the unit type.
 - No currying.
-- Parameters can be named.
+- Parameters can be named. 
+- Mixing of positional and named arguments: you can begin with positional arguments and then add some named arguments, but certain "inconvenient" cases are disallowed.
 - Default arguments supported.
 - No need to type `rec` to indicate that the function is recursive.
 - Parameter and return types can be annotated.
@@ -110,6 +111,12 @@ g = (a, b) => {
 	return a + b
 }
 
+
+h = (a, b = 1, c) => {
+//
+}
+
+h(342, 42)
 
 ```
 
