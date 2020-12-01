@@ -1,9 +1,5 @@
 /**  Constant-rate birth-death model */
 
-// compiler hints, see Section 1.3
-//~PARTICLES: 10000
-//~METHOD: "SMC"
-
 /**  Phylogenetic tree */
 // types, Section 0.4
 type tree =
@@ -40,7 +36,7 @@ simulate_side_branch = (start_time: float, λ: float, μ: float) => {
 
 
 simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
-    //~RESAMPLE 
+    #resample
 
     // k is the number of hidden speciation events
     k ~ Poisson(λ*(parent.age - child.age))
