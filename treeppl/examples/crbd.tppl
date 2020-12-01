@@ -19,7 +19,7 @@ type tree =
  * function is unit, as no explicit return specified and
  * it is a sequence of statements rather than a simple expression.
  */
-simulate_side_branch = (start_time: float, λ: float, μ: float) => {
+simulate_side_branch = (start_time: float, λ: float, μ: float): () => {
     t ~ Exponential(rate=λ + μ) // sampling, section 1.2
     current_time = start_time - t // expressions, Section 0.1
     if (current_time < 0) { // conditionals, Section 0.5
@@ -82,8 +82,7 @@ model = (k_λ = 1, θ_λ = 0.2, k_μ = 1, θ_μ = 0.1, data: json) => {
     λ ~ Gamma(k_λ, θ_λ)
     μ ~ Gamma(k_μ, θ_μ)
 
-    (λ, μ) = init(k_λ, θ_λ, k_μ, θ_μ)
     simulate_tree(observation.left, observation, λ, μ)
     simulate_tree(observation.right, observation, λ, μ)
-    return(λ, μ)
+    return (λ, μ)
 }
