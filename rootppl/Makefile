@@ -21,7 +21,7 @@ FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 else
 # CPU
 CC=g++
-FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP) -g -Wfatal-errors
+FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP)
 FLAGS_LINK=-std=c++14 -O3 $(OMP)
 endif
 
