@@ -157,6 +157,10 @@ HOST DEV floating_t laplaceScore(floating_t loc, floating_t scale, floating_t x)
     return -1 * (log(2 * scale) + abs(x - loc) / scale);
 }
 
+HOST DEV floating_t lomaxScore(floating_t x, floating_t lambda, floating_t alpha) {
+    return log(alpha) - log(lambda) - (alpha + 1) * log(1 + x / lambda);
+}
+
 // multinomial
 
 // multiVariateNormal

@@ -195,3 +195,12 @@ DEV void multivariateStandardNormal(RAND_STATE_DECLARE int n, floating_t* ret) {
     }
 }
 
+DEV floating_t lomax(RAND_STATE_DECLARE floating_t lambda, floating_t alpha) {
+    floating_t u = SAMPLE(uniform, 0, 1);
+    return lambda*(pow(u, -1.0/alpha) - 1.0);
+}
+
+DEV int negativeBinomial(RAND_STATE_DECLARE floating_t p, int n) {
+    return n - SAMPLE(binomial, p, n);
+}
+

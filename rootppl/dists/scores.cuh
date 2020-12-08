@@ -43,6 +43,8 @@ HOST DEV floating_t gammaScore(floating_t k, floating_t theta, floating_t x);
 
 HOST DEV floating_t laplaceScore(floating_t loc, floating_t scale, floating_t x);
 
+HOST DEV floating_t lomaxScore(floating_t x, floating_t lambda, floating_t alpha);
+
 // multinomial
 
 // multiVariateNormal

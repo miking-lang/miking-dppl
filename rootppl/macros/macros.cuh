@@ -16,7 +16,8 @@
  * - Result (currently only normalizationConstant) available through local variable "res" in MAIN
  */
 
-#include <stdlib.h>
+#include <fstream>
+#include <string>
 // #include "utils/misc.cuh"
 #include "macros_adaptive.cuh"
 
@@ -113,7 +114,6 @@ int main(int argc, char** argv) { \
     int bbIdx = 0; \
     double res = 0; \
     body \
-    printf("log normalization constant = %f\n", res); \
     freeGen(); \
     return 0; \
 }
@@ -157,22 +157,28 @@ int numParticles = 10000; \
 if(argc > 1) { \
     numParticles = atoi(argv[1]); \
 } \
-int ompThreads = -1; \
+int numRuns = 1; \
 if(argc > 2) { \
-    ompThreads = atoi(argv[2]); \
+    numRuns = atoi(argv[2]); \
+} \
+int ompThreads = -1; \
+if(argc > 3) { \
+    ompThreads = atoi(argv[3]); \
 } \
 int particlesPerThread = 1; \
-if(argc > 3) { \
-    particlesPerThread = atoi(argv[3]); \
+if(argc > 4) { \
+    particlesPerThread = atoi(argv[4]); \
 } \
 int numBblocks = bbIdx; \
-configureMemSizeGPU(); \
+prepareSMC(); \
 COPY_DATA_GPU(bblocksArr, pplFunc_t, numBblocks) \
 pplFunc_t* bblocksArrCudaManaged; \
 ALLOC_TYPE(&bblocksArrCudaManaged, pplFunc_t, numBblocks); \
 for(int i = 0; i < numBblocks; i++) \
     bblocksArrCudaManaged[i] = bblocksArr[i]; \
-res = runSMC(bblocksArrCudaManaged, numBblocks, numParticles, ompThreads, particlesPerThread, sizeof(progStateTypeTopLevel_t), callback); \
+for(int i = 0; i < numRuns; i++) \
+    res = runSMC(bblocksArrCudaManaged, numBblocks, numParticles, ompThreads, particlesPerThread, sizeof(progStateTypeTopLevel_t), callback); \
+finishFilesSMC(); \
 FREE(bblocksArrCudaManaged)
 
 // freeMemory<pplFunc_t>(bblocksArrCudaManaged);

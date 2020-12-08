@@ -87,6 +87,18 @@ using callbackFunc_t = void (*)(particles_t&, int, void*);
 double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int ompThreads, const int particlesPerThread,
     size_t progStateSize, callbackFunc_t callback = NULL, void* arg = NULL);
 
+
+/**
+ * Called on program start, before inference starts. Called once per program, even if SMC is executed many times. 
+ * This will call configureMemSizeGPU and set up result files. 
+ */
+void prepareSMC();
+
+/*
+ * Called before terminating the program. 
+ */
+void finishFilesSMC();
+
     
 /**
  * This is an attempt to make most of the GPU memory available 
@@ -95,8 +107,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
  * be tweaked to prioritize the memory type required by the program
  */
 void configureMemSizeGPU();
-
-
 
 
 /**

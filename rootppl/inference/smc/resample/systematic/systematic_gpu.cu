@@ -7,7 +7,7 @@
 
 #ifdef __NVCC__
 
-#include "common.cuh"
+#include "inference/smc/resample/common.cuh"
 #include "kernels.cuh"
 #include "utils/cuda_error_utils.cuh"
 #include "systematic_gpu.cuh"
@@ -32,10 +32,25 @@ HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t& resampler, i
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
     // prefixSumNaive(w, resampler, numParticles);
 
-    renormaliseSumsKernel<<<numBlocks, numThreadsPerBlock>>>(resampler.prefixSum, numParticles, maxLogWeight);
+    renormaliseKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.prefixSum, numParticles, maxLogWeight);
     
     cudaDeviceSynchronize();
     return resampler.prefixSum[numParticles - 1];
+}
+
+HOST DEV floating_t calcESSGpu(floating_t* w, floating_t logWeightSum, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+
+    // Kernel saving new square exp log weights
+    expSquareWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.wSquared, resampler.maxLogWeight, numParticles);
+
+    // Thrust for summing squared weights
+    cudaDeviceSynchronize();
+    floating_t wSumOfSquares = (thrust::reduce(thrust::device, resampler.wSquared, resampler.wSquared + numParticles));
+
+    floating_t scaledLogSum = logWeightSum - resampler.maxLogWeight;
+    floating_t wSumSquared = exp(scaledLogSum + scaledLogSum);
+
+    return wSumSquared / wSumOfSquares;
 }
 
 HOST DEV void decideAncestors(resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
@@ -74,8 +89,8 @@ void resampleSystematicGpu(particles_t& particles, resampler_t& resampler, int n
     postUniform(particles, resampler, u, numParticles, numBlocks, NUM_THREADS_PER_BLOCK);
 }
 
-void logAndRenormaliseWeightsGpu(floating_t* w, resampler_t resampler, floating_t logWeightSum, int numParticles, int numBlocks, int numThreadsPerBlock) {
-    logAndRenormaliseWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.maxLogWeight, logWeightSum, numParticles);
+void normaliseWeightsGpu(floating_t* w, floating_t logWeightSum, int numParticles, int numBlocks, int numThreadsPerBlock) {
+    normaliseWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, logWeightSum, numParticles);
     cudaDeviceSynchronize();
 }
 

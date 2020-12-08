@@ -17,14 +17,25 @@
 __global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight);
 
 /**
- * Takes the logarithm of the prefixSum belonging to the current particle then scales back. 
+ * Takes the logarithm of the prefixSum and weight belonging to the current particle then scales back. 
  * This is used when calculating the weight sums safely. 
  * 
+ * @param w the weight array.
  * @param prefixSum the calculated inclusive prefix sums which should be logged and scaled back. 
  * @param numParticles the number of particles used in SMC.
  * @param maxLogWeight the log of the maximum weight. 
  */
-__global__ void renormaliseSumsKernel(floating_t* prefixSum, int numParticles, floating_t maxLogWeight);
+__global__ void renormaliseKernel(floating_t* w, floating_t* prefixSum, int numParticles, floating_t maxLogWeight);
+
+/**
+ *  Calculate the array of squared weights. 
+ * 
+ * @param w the input log-weight array.
+ * @param w the squared weight array too store the result in.
+ * @param maxLogWeight the maximum log weight.
+ * @param numParticles the number of particles used in SMC.
+ */
+__global__ void expSquareWeightsKernel(floating_t* w, floating_t* wSquared, floating_t maxLogWeight, int numParticles);
 
 /**
  * Calculates the cumulative offspring of each particle. 
@@ -57,14 +68,13 @@ __global__ void copyStatesKernel(particles_t particlesDst, const particles_t par
 
 
 /**
- * Takes the log of the exponentiated log weight, scales back with the maximum log weight and subtracts with the logarithm of the sum of weights. 
+ * Takes the log of the exponentiated log weight and subtracts with the logarithm of the sum of weights. 
  * 
  * @param w the scaled particle weights
- * @param maxLogWeight the maximum log weight
  * @param logWeightSum the logarithm of the sum of weights
  * @param numParticles the number of particles used in SMC. 
  */
-__global__ void logAndRenormaliseWeightsKernel(floating_t* w, floating_t maxLogWeight, floating_t logWeightSum, int numParticles);
+__global__ void normaliseWeightsKernel(floating_t* w, floating_t logWeightSum, int numParticles);
 
 
 #endif
