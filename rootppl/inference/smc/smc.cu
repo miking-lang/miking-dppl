@@ -32,7 +32,7 @@
 #include "smc_kernels.cuh"
 #endif
 
-// Resample if ESS < RESAMPLE_THRESHOLD * N (default threshold in Birch is 0.7) 
+// Resample if relative ESS < RESAMPLE_THRESHOLD * N (default threshold in Birch is 0.7) 
 const floating_t RESAMPLE_THRESHOLD = 0.7;
  
 double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int ompThreads, const int particlesPerThread,
@@ -72,6 +72,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
         cudaCheckError();
         floating_t logWeightSum = calcLogWeightSumGpu(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
         floating_t ess = calcESSGpu(particles.weights, logWeightSum, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        cudaDeviceSynchronize();
         #else
 
         #pragma omp parallel for

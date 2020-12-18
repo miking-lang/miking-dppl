@@ -54,4 +54,7 @@ HOST DEV floating_t normalScore(floating_t mean, floating_t std, floating_t x);
 // The range differs on CPU and GPU unfortunately, should that affect this? Is it negligible?
 HOST DEV floating_t uniformScore(floating_t min, floating_t max, floating_t x);
 
+// V: negative binomial score signature
+HOST DEV floating_t negativeBinomialScore(floating_t x, floating_t k, floating_t p);
+
 #endif
