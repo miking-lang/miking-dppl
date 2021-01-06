@@ -1,0 +1,24 @@
+let observe = lam v. lam dist. weight (logpdf v dist) in
+
+let lgss steps xprev data = match data with
+  | [] -> (steps, xprev)
+  | y:ys ->
+    (
+      let x = sample (normal (xprev + 2) 1) in
+      let ys =
+        if sample (bernoulli 0.5) then observe y (normal x 10); resample(); ys
+        else y:ys in
+      lgss (steps + 1) x ys
+    ) in
+
+let data = [
+  16.3,
+  22.0,
+  29.6,
+  30.1
+] in
+
+let x0 = sample (uniform 0 100) in
+
+lgss 0 x0 data
+
