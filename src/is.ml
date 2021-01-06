@@ -23,7 +23,7 @@ let infer n env program =
       let w = w +. w' in
 
       (* If weight is degenerate, don't bother to continue with execution *)
-      if w = neg_infinity then
+      if w = neg_infinity && !Options.opt0 then
         w,V{at=va;v=VUnit}
       else
         eval [] (w, mkapp ~t1:(tm_of_val cont) ~t2:nop)

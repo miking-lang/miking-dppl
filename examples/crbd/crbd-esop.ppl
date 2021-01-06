@@ -1,0 +1,56 @@
+// All leaves have age = 0, representing present extant (non-extinct) species.
+let tree =
+  { left: { left: { age: 0 },
+            right: { age: 0 },
+            age: 4 },
+    right: { left: { age: 0 },
+             right: { age: 0 },
+             age: 6 },
+    age: 10 }
+in
+
+// Speciation and extinction rate priors
+// let lambda = sample (exponential 5) in
+// let mu = (sample (uniform 0 1)) * lambda in
+let lambda = 0.2 in
+let mu = 0.1 in
+
+// Returns true if all lineages go extinct before age 0, and false otherwise.
+let crbdGoesExtinct startTime =
+  let currentTime = startTime - (sample (exponential (lambda + mu))) in
+  if currentTime < 0 then false
+  else
+    let speciation = sample (bernoulli (lambda / (lambda + mu))) in
+    if !speciation then true
+    else crbdGoesExtinct currentTime && crbdGoesExtinct currentTime
+in
+
+// Simulate extinct lineages on a branch in the observed tree
+let simBranch startTime stopTime =
+  let currentTime = startTime - sample (exponential lambda) in
+  if currentTime < stopTime then ()
+
+  // #1 It is impossible that extinct side branches survive to the present
+  else if not (crbdGoesExtinct currentTime) then (weight (log 0); ())
+
+  // #2 If a side branch does go extinct, account for rotational symmetry
+  else (weight (log 2); simBranch currentTime stopTime)
+in
+
+// Recurse over observed tree
+let simTree tree parent =
+  // #3 Called the same number of times for each particle
+  weight (- mu * (parent.age - tree.age));
+  resample ();
+
+  simBranch parent.age tree.age;
+  match tree with
+  | { left, right, age } ->
+    // #4 Called the same number of times for each particle
+    weight (log lambda);
+    simTree left tree; simTree right tree
+  | { age } -> () // Leaf
+in
+
+// Start recursion
+simTree tree.left tree; simTree tree.right tree; (lambda, mu)

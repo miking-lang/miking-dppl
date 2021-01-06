@@ -165,6 +165,8 @@ let main =
         | i            -> samples := i),
     " Specifies the number of samples in affected inference algorithms.";
 
+    "--opt0", Arg.Set(Options.opt0), " Immediately abort 0-weight executions.";
+
     "--test", Arg.Set(utest), "";
 
     "--debug-input",              Arg.Set(debug_input), " ";

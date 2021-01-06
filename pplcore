@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+dune exec -- src/pplcore.exe "$@"
