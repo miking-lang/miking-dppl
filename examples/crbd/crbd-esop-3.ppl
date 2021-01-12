@@ -28,7 +28,7 @@ let simBranch startTime stopTime =
 
 let simTree tree parent =
   let w = -mu * (parent.age - tree.age) in
-  weight w; // #3
+  weight w; resample(); // #3
   simBranch parent.age tree.age;
   match tree with
   | {left,right,age} ->

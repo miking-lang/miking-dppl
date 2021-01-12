@@ -1,0 +1,7 @@
+let observe = lam v. lam dist. weight (logpdf v dist) in
+
+let h = sample(normal 1.7 0.5) in
+if sample (bernoulli 0.5) then
+  observe 2.0 (normal h 0.1)
+else ();
+h

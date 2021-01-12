@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+
+const { PerformanceObserver, performance } = require('perf_hooks');
+const { execSync } = require("child_process");
+const ss = require('simple-statistics')
+
+const RUNS = 20
+
+function runExperiment(file) {
+  let times = []
+  process.stdout.write(`Running experiment for ${file}: `)
+  for(let i = 0; i < RUNS; i++) {
+    process.stdout.write(".")
+    var tStart = performance.now()
+    execSync(`../../_build/default/src/pplcore.exe ${file}`
+      + ` --inference smc-manual --samples 50000 --output none`)
+    var tEnd = performance.now()
+    times.push(tEnd-tStart)
+  }
+  process.stdout.write("\n")
+  process.stdout.write(`  Mean: ${ss.mean(times)/1000} s\n`)
+  process.stdout.write(`  Sample standard deviation: ${ss.sampleStandardDeviation(times)/1000} s\n`)
+}
+
+runExperiment("crbd-esop-123.ppl")
+runExperiment("crbd-esop-3.ppl")
+runExperiment("crbd-esop-13.ppl")

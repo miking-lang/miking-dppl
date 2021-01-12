@@ -22,13 +22,13 @@ let simBranch startTime stopTime =
     sample (exponential lambda) in
   if curTime < stopTime then ()
   else if not (crbdGoesExtinct curTime)
-  then weight (log 0) // #1
-  else (weight (log 2); // #2
+  then (weight (log 0); resample ()) // #1
+  else (weight (log 2); resample (); // #2
         simBranch curTime stopTime) in
 
 let simTree tree parent =
   let w = -mu * (parent.age - tree.age) in
-  weight w; // #3
+  weight w; resample(); // #3
   simBranch parent.age tree.age;
   match tree with
   | {left,right,age} ->
