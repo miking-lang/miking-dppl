@@ -10,16 +10,16 @@ lang CorePPL = CorePPL + MExprANF
   | TmResample _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmWeight { arg = arg } ->
-    normalizeName (lam arg. k (TmWeight { arg = arg })) arg
+  | TmWeight ({ arg = arg } & t) ->
+    normalizeName (lam arg. k (TmWeight { t with arg = arg })) arg
 
-  | TmSampleExp { a = a } ->
-    normalizeName (lam a. k (TmSampleExp { a = a })) a
+  | TmSampleExp ({ a = a } & t) ->
+    normalizeName (lam a. k (TmSampleExp { t with a = a })) a
 
-  | TmSampleBern { p = p } ->
-    normalizeName (lam p. k (TmSampleBern { p = p })) p
+  | TmSampleBern ({ p = p } & t) ->
+    normalizeName (lam p. k (TmSampleBern { t with p = p })) p
 
-  | TmResample {} -> k (TmResample {})
+  | TmResample t -> k (TmResample t)
 
 end
 
