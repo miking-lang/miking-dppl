@@ -17,10 +17,12 @@ std::uniform_real_distribution<floating_t> uniformCPU(0.0, 1.0);
 
 resampler_t initResampler(int numParticles, size_t progStateSize) {
 
+    resampler_t resampler;
+
     #ifdef __NVCC__
     generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions. 
+    allocateMemory<floating_t>(&resampler.wSquared, numParticles);
     #endif
-    resampler_t resampler;
 
     allocateMemory<int>(&resampler.ancestor, numParticles);
     allocateMemory<int>(&resampler.cumulativeOffspring, numParticles);
@@ -49,6 +51,9 @@ void destResampler(resampler_t resampler) {
     freeMemory<int>(resampler.ancestor);
     freeMemory<int>(resampler.cumulativeOffspring);
     freeMemory<floating_t>(resampler.prefixSum);
+    #ifdef __NVCC__
+    freeMemory<floating_t>(resampler.wSquared);
+    #endif
     freeParticles(resampler.auxParticles);
 }
 
@@ -101,4 +106,17 @@ HOST DEV void copyParticle(const particles_t particlesDst, const particles_t par
     
     particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
     particlesDst.weights[dstIdx] = 0;
+}
+
+// This could probably be optimized by sorting the particles by descending weights first
+DEV int sampleAncestor(RAND_STATE_DECLARE const floating_t* w, const floating_t logWeightSum, const int numParticles) {
+    floating_t u = SAMPLE(uniform, 0.0f, logWeightSum);
+    floating_t accLogWeightSum = 0;
+    for (int i = 0; i < numParticles; i++) {
+        accLogWeightSum += w[i];
+        if (accLogWeightSum >= u) {
+            return i;
+        }
+    }
+    return numParticles - 1;
 }

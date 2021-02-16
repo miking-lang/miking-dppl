@@ -20,6 +20,7 @@ extern std::uniform_real_distribution<floating_t> uniformCPU;
  * prefixSum: Array used to store the inclusive prefix sum. 
  * auxParticles: Particles structure used to copy particles in resample propagation. Required as the propagation is not in-place. 
  * progStateSize: the size of the program state
+ * wSquared: the array that will contain the squared weights, necessary for GPU (done in-place on the CPU)
  */
 struct resampler_t {
 
@@ -29,6 +30,9 @@ struct resampler_t {
     particles_t auxParticles;
     size_t progStateSize;
     floating_t maxLogWeight;
+    #ifdef __NVCC__
+    floating_t* wSquared;
+    #endif
 };
 
 /**
@@ -78,5 +82,16 @@ HOST DEV void destResamplerNested(resampler_t resampler);
  * @param srcIdx the index in particlesSrc to read from. 
  */
 HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize);
+
+
+/**
+ * Samples an ancestor from the categorical distribution defined by the weights. 
+ * 
+ * @param w the particle weight array.
+ * @param logWeightSum the sum of log weights.
+ * @param numParticles the number of particles used in the inference.
+ * @return the index of the ancestor particle.
+ */
+DEV int sampleAncestor(RAND_STATE_DECLARE const floating_t* w, const floating_t logWeightSum, const int numParticles);
 
 #endif

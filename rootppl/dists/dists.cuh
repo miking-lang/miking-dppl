@@ -123,6 +123,15 @@ DEV floating_t gamma(RAND_STATE_DECLARE floating_t k, floating_t theta);
 DEV floating_t laplace(RAND_STATE_DECLARE floating_t loc, floating_t scale);
 
 /**
+ * Returns a sample from the Lomax distribution.
+ *
+ * @param lambda parameter of the lomax distribution
+ * @param alpha parameter of the lomax distribution
+ * @return Lomax(lambda, alpha)
+ */
+DEV floating_t lomax(RAND_STATE_DECLARE floating_t lambda, floating_t alpha);
+
+/**
  * Returns a sample from the Multinomial distribution. The number of successes for each "bin".
  * 
  * @param ps the success probabilities.
@@ -148,6 +157,15 @@ DEV void multivariateStandardNormal(RAND_STATE_DECLARE int n, floating_t* ret);
  * @return N(mean, std^2)
  */
 DEV floating_t normal(RAND_STATE_DECLARE floating_t mean, floating_t std);
+
+/**
+ * Returns a sample from the Negative Binomial distribution.
+ * 
+ * @param p the success probability.
+ * @param n the number of trials.
+ * @return the number of failures over n independent trials with success probability p. 
+ */
+ DEV int negativeBinomial(RAND_STATE_DECLARE floating_t p, int n);
 
 /**
  * Returns a sample from the Poisson distribution. 

@@ -35,14 +35,15 @@ PARTICLES_MEMORY_HANDLER_SRC=inference/smc/particles_memory_handler.cu
 MISC_SRC=utils/misc.cu
 MATH_SRC=utils/math.cu
 SMC_KERNELS_SRC=inference/smc/smc_kernels.cu
-SYSTEMATIC_COMMON_SRC=inference/smc/resample/systematic/common.cu
+SYSTEMATIC_COMMON_SRC=inference/smc/resample/common.cu
 SYSTEMATIC_SEQ_SRC=inference/smc/resample/systematic/systematic_cpu.cu
 SYSTEMATIC_PARALLEL_SRC=inference/smc/resample/systematic/systematic_gpu.cu
 SYSTEMATIC_KERNELS_SRC=inference/smc/resample/systematic/kernels.cu
+FILE_HANDLER_SRC=inference/smc/file_handler.cu
 
 OBJDIR=out
 _OBJ_FILES_FRAMEWORK=smc.o smc_nested.o dists.o scores.o particles_memory_handler.o misc.o math.o \
-	smc_kernels.o systematic_common.o systematic_seq.o systematic_parallel.o systematic_kernels.o
+	smc_kernels.o systematic_common.o systematic_seq.o systematic_parallel.o systematic_kernels.o file_handler.o
 OBJ_FILES_FRAMEWORK=$(patsubst %.o, $(OBJDIR)/%.o, $(_OBJ_FILES_FRAMEWORK))
 
 # SMC_DEPS = $(wildcard inference/smc/*.cuh) $(wildcard inference/smc/resample/*/*.cuh) $(wildcard macros/*.cuh) dists/dists.cuh utils/cuda_error_utils.cuh utils/misc.cuh utils/math.cuh
@@ -129,6 +130,9 @@ $(OBJDIR)/systematic_parallel.o: $(FRAMEWORK_FILES)
 # $(OBJDIR)/systematic_kernels.o: $(SYSTEMATIC_KERNELS_SRC) inference/smc/smc.cuh
 $(OBJDIR)/systematic_kernels.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(SYSTEMATIC_KERNELS_SRC) -o $@
+
+$(OBJDIR)/file_handler.o: $(FRAMEWORK_FILES)
+	$(CC) -c $(FLAGS) $(FILE_HANDLER_SRC) -o $@
 
 .PHONY: clean
 clean:

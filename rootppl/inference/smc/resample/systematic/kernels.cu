@@ -7,7 +7,7 @@
 
 #include <curand_kernel.h>
 #include "inference/smc/smc.cuh"
-#include "common.cuh"
+#include "inference/smc/resample/common.cuh"
 #include "kernels.cuh"
 
 __global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight) {
@@ -17,11 +17,24 @@ __global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t max
     w[idx] = exp(w[idx] - maxLogWeight);
 }
 
-__global__ void renormaliseSumsKernel(floating_t* prefixSum, int numParticles, floating_t maxLogWeight) {
+__global__ void renormaliseKernel(floating_t* w, floating_t* prefixSum, int numParticles, floating_t maxLogWeight) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
+    w[idx] = log(w[idx]) + maxLogWeight;
     prefixSum[idx] = log(prefixSum[idx]) + maxLogWeight;
+}
+
+__global__ void expSquareWeightsKernel(floating_t* w, floating_t* wSquared, floating_t maxLogWeight, int numParticles) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= numParticles || idx < 0) return;
+
+    floating_t scaledW = w[idx] - maxLogWeight;
+    floating_t expWSquared = exp(scaledW);
+    if (isnan(expWSquared))
+        wSquared[idx] = 0;
+    else
+        wSquared[idx] = expWSquared * expWSquared;
 }
 
 __global__ void systematicCumulativeOffspringKernel(const floating_t* logPrefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
@@ -49,11 +62,11 @@ __global__ void copyStatesKernel(particles_t particlesDst, const particles_t par
     copyParticle(particlesDst, particlesSrc, idx, ancestor[idx], progStateSize);
 }
 
-__global__ void logAndRenormaliseWeightsKernel(floating_t* w, floating_t maxLogWeight, floating_t logWeightSum, int numParticles) {
+__global__ void normaliseWeightsKernel(floating_t* w, floating_t logWeightSum, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    w[idx] = log(w[idx]) + maxLogWeight - logWeightSum;
+    w[idx] -= logWeightSum;
 }
 
 

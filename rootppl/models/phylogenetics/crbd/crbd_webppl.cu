@@ -23,12 +23,12 @@ struct progState_t {
     floating_t mu;
     treeIdx_t treeIdx;
 };
-// typedef bisse32_tree_t tree_t;
+typedef bisse32_tree_t tree_t;
 // typedef primate_tree_t tree_t;
-typedef moth_div_tree_t tree_t;
+// typedef moth_div_tree_t tree_t;
 
-const int MAX_DIV = 5;
-const int MAX_LAM = 5;
+// const int MAX_DIV = 5;
+// const int MAX_LAM = 5;
 
 #define NUM_BBLOCKS 3
 INIT_MODEL(progState_t, NUM_BBLOCKS)
@@ -56,6 +56,7 @@ BBLOCK_HELPER(M_crbdGoesUndetected, {
 
 BBLOCK_HELPER(crbdGoesUndetected, {
 
+    /*
     // extreme values patch 1/2
     if (lambda - mu > MAX_DIV)
         return false;
@@ -64,6 +65,7 @@ BBLOCK_HELPER(crbdGoesUndetected, {
         return ! SAMPLE(bernoulli, rho);
 
     // end extreme values patch 1/2
+    */
 
     floating_t t = SAMPLE(exponential, lambda + mu);
     
@@ -82,6 +84,7 @@ BBLOCK_HELPER(crbdGoesUndetected, {
 
 BBLOCK_HELPER(simBranch, {
 
+    /*
     // extreme values patch 2/2
 	if (lambda > MAX_LAM) {
 	    return -INFINITY;
@@ -90,7 +93,8 @@ BBLOCK_HELPER(simBranch, {
 	if (lambda == 0.0) {
         return 0.0;
 	}
-	// extreme values patch 2/2
+    // extreme values patch 2/2
+    */
 
     floating_t t = SAMPLE(exponential, lambda);
 
@@ -146,10 +150,10 @@ BBLOCK(simCRBD, {
 
     PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
     // PSTATE.lambda = 0.2;
-    floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
+    // floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
     // floating_t epsilon = 0.5;
-    PSTATE.mu = epsilon * PSTATE.lambda;
-    // PSTATE.mu = 0.1;
+    // PSTATE.mu = epsilon * PSTATE.lambda;
+    PSTATE.mu = 0.1;
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -160,6 +164,7 @@ BBLOCK(simCRBD, {
     WEIGHT(corrFactor);
 
     PC++;
+    BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC], NULL);
 })
 
 BBLOCK(survivorshipBias, {
@@ -172,7 +177,8 @@ BBLOCK(survivorshipBias, {
 
 // Write particle data to file. 
 CALLBACK(saveResults, {
-    std::string fileName = "parameterData";
+    
+    std::string fileName = "parameterDataImmediate";
     std::ofstream resFile (fileName);
     if(resFile.is_open()) {
 
@@ -183,6 +189,7 @@ CALLBACK(saveResults, {
     } else {
         printf("Could not open file %s\n", fileName.c_str());
     }
+    
 })
 
 
@@ -190,7 +197,7 @@ MAIN(
     
     ADD_BBLOCK(simCRBD)
     ADD_BBLOCK(simTree)
-    ADD_BBLOCK(survivorshipBias)
+    // ADD_BBLOCK(survivorshipBias)
 
     SMC(saveResults)
 )
