@@ -1,6 +1,4 @@
-include "../coreppl/ast.mc"
-include "../coreppl/ast-builder.mc"
-include "../coreppl/pprint.mc"
+include "../coreppl/coreppl.mc"
 
 let simpleModel = use CorePPL in
   bind_
