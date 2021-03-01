@@ -1,22 +1,25 @@
 -- CorePPL
 
 include "mexpr/ast.mc"
-include "mexpr/anf.mc"
-include "mexpr/eq.mc"
-include "mexpr/symbolize.mc"
 include "mexpr/pprint.mc"
-include "mexpr/ast-builder.mc"
 
-lang Infer
+lang Infer = MExprAst + MExprPrettyPrint
+
+  syn Const =
+  | CInfer { method: Option Const }
+  | CInferMethod { method: InferMethod }
 
   syn InferMethod =
 
-  syn Const =
-  | CInfer { method: Option InferMethod }
+  sem getConstStringCode (indent : Int) =
+  | CInfer c -> join ["infer", pprintNewline (pprintIncr indent), getConstStringCode indent c.method]
+  | CInferMethod c ->  join ["infer method", pprintNewline (pprintIncr indent), getInferStringCode indent c.method]
+
+  sem getInferStringCode (indent : Int) =
 
 end
 
-lang CorePPL = MExprAst + MExprANF + MExprEq + MExprPrettyPrint + MExprSym 
+lang CorePPL = MExprAst + MExprPrettyPrint
 
   syn Const =
   | CWeight {}
@@ -28,58 +31,36 @@ lang CorePPL = MExprAst + MExprANF + MExprEq + MExprPrettyPrint + MExprSym
   | DBern { p: Option Float }
   | DBeta { a: Option Float, b: Option Float }
 
-  sem eqConst (lhs:Const) =
-  | CWeight {} -> match lhs with CWeight _ then true else false
-  | CSample {} -> match lhs with CSample _ then true else false
-  | CDist { d = d2 } ->
-    match lhs with CDist { d = d1 } then
-      eqDist d1 d2
-    else None ()
-
-  sem eqDist (lhs:Dist) =
-  | DExp { a = a2 } ->
-    match lhs with DExp { a = a1 } then
-      eqConst a1 a2
-    else None ()
-
-  | DBern { p = p2 } ->
-    match lhs with DBern { p = p1 } then
-      eqConst p1 p2
-    else None ()
-
-  | DBeta { a = a2, b = b2 } ->
-    match lhs with DBeta { a = a1, b = b1 } then
-      if eqConst a1 a2 then
-        eqConst b1 b2
-      else None ()
-    else None ()
-
-  sem getConstStringCode (indent : Int) =
+   sem getConstStringCode (indent : Int) =
   | CWeight _ -> "weight"
   | CSample _ -> "sample"
-  | CDist _ -> "dist"
-  | DExp d -> join ["exp", pprintNewline (pprintIncr indent), d.a]
-  | DBern d -> join ["bern", pprintNewline (pprintIncr indent), d.p]
+  | CDist d -> join ["distribution", pprintNewline (pprintIncr indent), getDistStringCode indent d.dist]
+
+  sem getDistStringCode (indent : Int) =
+  | DExp d -> join ["exponential", pprintNewline (pprintIncr indent), d.a]
+  | DBern d -> join ["bernoulli", pprintNewline (pprintIncr indent), d.p]
   | DBeta d -> join ["beta", pprintNewline (pprintIncr indent), d.a, " ", d.b]
 end
 
-lang CorePPLSMC = CorePPL
-
-  syn Const =
-  | CResample {}
-
-end
-
-lang Empirical
+lang Empirical = MExprPrettyPrint
 
   syn Dist =
   | DEmpirical { sample: [(Float, Expr)] }
+
+  sem getConstStringCode (indent : Int) =
+  | DEmpirical d ->
+    let pprintEnvEmpty = { nameMap = mapEmpty nameCmp,
+                          count = mapEmpty cmpString,
+                          strings = mapEmpty cmpString } in
+    join ["empirical", pprintNewline (pprintIncr indent), pprintCode indent pprintEnvEmpty d.sample]
 
 end
 
 -- Convenience functions for manually constructing ASTs
 
 let infer_ = use Infer in lam m. CInfer {method = m}
+
+let method_ = use Infer in lam m. CInferMethod {method = m}
 
 let weight_ = use CorePPL in CWeight {}
 
@@ -92,7 +73,5 @@ let dexp_ = use CorePPL in lam a. DExp {a = a}
 let dbern_ = use CorePPL in lam p. DBern {p = p}
 
 let dbeta_ = use CorePPL in lam a. lam b. DBeta {a = a, b = b}
-
-let resample_ = use CorePPLSMC in CResample {}
 
 let dempirical_ = use Empirical in lam s. DEmpirical {sample = s}
