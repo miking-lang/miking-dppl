@@ -31,6 +31,7 @@ SMC_SRC=inference/smc/smc.cu
 SMC_NESTED_SRC=inference/smc/smc_nested.cu
 DISTS_SRC=dists/dists.cu
 SCORES_SRC=dists/scores.cu
+DELAYED_SRC = dists/delayed.cu
 PARTICLES_MEMORY_HANDLER_SRC=inference/smc/particles_memory_handler.cu
 MISC_SRC=utils/misc.cu
 MATH_SRC=utils/math.cu
@@ -42,11 +43,11 @@ SYSTEMATIC_KERNELS_SRC=inference/smc/resample/systematic/kernels.cu
 FILE_HANDLER_SRC=inference/smc/file_handler.cu
 
 OBJDIR=out
-_OBJ_FILES_FRAMEWORK=smc.o smc_nested.o dists.o scores.o particles_memory_handler.o misc.o math.o \
+_OBJ_FILES_FRAMEWORK=smc.o smc_nested.o dists.o scores.o delayed.o particles_memory_handler.o misc.o math.o \
 	smc_kernels.o systematic_common.o systematic_seq.o systematic_parallel.o systematic_kernels.o file_handler.o
 OBJ_FILES_FRAMEWORK=$(patsubst %.o, $(OBJDIR)/%.o, $(_OBJ_FILES_FRAMEWORK))
 
-# SMC_DEPS = $(wildcard inference/smc/*.cuh) $(wildcard inference/smc/resample/*/*.cuh) $(wildcard macros/*.cuh) dists/dists.cuh utils/cuda_error_utils.cuh utils/misc.cuh utils/math.cuh
+# SMC_DEPS = $(wildcard inference/smc/*.cuh) $(wildcard inference/smc/resample/*/*.cuh) $(wildcard macros/*.cuh) dists/dists.cuh utils/cuda_error_utils.cuh utils/misc.cuh utils/math.cuh dists/delayed.cuh
 FRAMEWORK_FILES = $(wildcard inference/*) $(wildcard inference/*/*) $(wildcard inference/*/*/*) $(wildcard inference/*/*/*/*) \
 	$(wildcard dists/*) $(wildcard macros/*) $(wildcard utils/*)
 
@@ -100,6 +101,10 @@ $(OBJDIR)/dists.o: $(FRAMEWORK_FILES)
 $(OBJDIR)/scores.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(SCORES_SRC) -o $@
 
+$(OBJDIR)/delayed.o: $(FRAMEWORK_FILES)
+	$(CC) -c $(FLAGS) $(DELAYED_SRC) -o $@
+
+
 # $(OBJDIR)/particles_memory_handler.o: $(PARTICLES_MEMORY_HANDLER_SRC) inference/smc/smc.cuh utils/misc.cuh
 $(OBJDIR)/particles_memory_handler.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(PARTICLES_MEMORY_HANDLER_SRC) -o $@
@@ -142,3 +147,4 @@ clean:
 .PHONY: run
 run:
 	./$(EXEC_NAME) $(N)
+
