@@ -87,8 +87,18 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
         essList.push_back(ess);
 
-        if(logWeightSum == -INFINITY || isnan(logWeightSum)) {
-            printf("Weight Sum = 0, terminating...\n");
+        // if(logWeightSum == -INFINITY || isnan(logWeightSum)) {
+        //     printf("Weight Sum = 0, terminating...\n");
+        //     break;
+        // }
+
+        if(logWeightSum == -INFINITY) {
+            printf("logWeightSum is -INFINITY, terminating...\n");
+            break;
+        }
+        
+        if (isnan(logWeightSum)) {
+            printf("Weight Sum is NaN, terminating...\n");
             break;
         }
 
