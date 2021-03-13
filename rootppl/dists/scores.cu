@@ -9,7 +9,6 @@
 
 #include <math.h>
 #include <stdio.h>
-// V: for assert
 #include <cassert>
 
 #include "macros/macros.cuh"

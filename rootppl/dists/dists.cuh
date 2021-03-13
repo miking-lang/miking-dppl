@@ -180,8 +180,10 @@ DEV unsigned int poisson(RAND_STATE_DECLARE double lambda);
  * 
  * @param n the exclusive upper limit. 
  * @return A value in the interval [0, n).
+
  */
 DEV int randomInteger(RAND_STATE_DECLARE const int n);
+
 
 /**
  * Returns a sample from the Uniform distribution on the interval (min, max]
@@ -221,5 +223,25 @@ DEV void multivariateNormal(RAND_STATE_DECLARE floating_t mu[n], floating_t (&co
     SAMPLE(multivariateStandardNormal, n, z);
     transformColumn<n, n>(A, z, mu, ret);
 }*/
+
+
+/**
+ * Returns a sample from the Chi-squared distribution.
+ *
+ * @param k > 0 real, degrees of freedom.
+ */
+DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k);
+
+
+/**
+ * Returns a sample from Student's t-distribution.
+ *
+ * @param k > 0 real, degrees of freedom.
+ * @param mu location parameter.
+ * @param v scale parameter.
+ */
+DEV floating_t student_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v);
+
+
 
 #endif

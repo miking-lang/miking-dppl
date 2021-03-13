@@ -15,6 +15,7 @@
 
 #include <random>
 #include <time.h>
+#include <cassert>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -204,3 +205,17 @@ DEV int negativeBinomial(RAND_STATE_DECLARE floating_t p, int n) {
     return n - SAMPLE(binomial, p, n);
 }
 
+
+DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k) {
+  assert(0.0 < k);
+  std::chi_squared_distribution<double> dist(k);
+  return dist(gen);
+}
+
+DEV floating_t student_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v) {
+  assert(0.0 < k);
+  assert(0.0 < v);
+  floating_t y = SAMPLE(normal, 0.0, sqrt(v/k));
+  floating_t z = SAMPLE(chi_squared, k);
+  return mu + y/sqrt(z/k);
+}
