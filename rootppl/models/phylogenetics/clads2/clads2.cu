@@ -18,9 +18,9 @@
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 
-//typedef bisse32_tree_t tree_t;
+typedef bisse32_tree_t tree_t;
 //typedef primate_tree_t tree_t;
- typedef moth_div_tree_t tree_t;
+//typedef moth_div_tree_t tree_t;
 #include "clads2.cuh"
  
 
