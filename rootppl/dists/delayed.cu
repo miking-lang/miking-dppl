@@ -59,7 +59,7 @@ DEV floating_t sample_NormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseG
   floating_t v = prior.v;
   floating_t a = prior.a;
   floating_t b = prior.b;
-  floating_t f = SAMPLE(student_t, 2.0*a, m0, (1.0 + v)*2.0*b);
+  floating_t f = SAMPLE(student_t, 2.0*a, m0, (1.0 + 1.0/v)*2.0*b);
   prior.m0 = (v*m0 + f)/(v + 1);
   prior.v  = v + 1;
   prior.a  = a + 0.5;

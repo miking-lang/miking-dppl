@@ -238,6 +238,7 @@ BBLOCK(simTree, {
         //floating_t lambda2 = LAMBDA_CHOOSER(lambda, lambdaEnd, PSTATE.alpha, PSTATE.sigma);
         floating_t f1 = SAMPLE(normal, log(PSTATE.alpha), PSTATE.sigma);
         floating_t f2 = SAMPLE(normal, log(PSTATE.alpha), PSTATE.sigma);
+
         floating_t leftf = factorEnd*exp(f1);
         floating_t rightf = factorEnd*exp(f2);
 
@@ -295,6 +296,7 @@ BBLOCK(simClaDS2, {
     //floating_t lambda2 = LAMBDA_CHOOSER(lambda_0, lambda_0, alpha, sigma);
     floating_t f1 = SAMPLE(normal, log(alpha), sigma);
     floating_t f2 = SAMPLE(normal, log(alpha), sigma);
+    	printf("%f %f\n", f1, exp(f1));
     floating_t leftf = factor*exp(f1);
     floating_t rightf = factor*exp(f2);
 

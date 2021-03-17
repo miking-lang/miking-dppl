@@ -5,7 +5,7 @@ NUMPART=10000
 NUMRUN=10
 CORES=32
 # test var needs to be set 
-for test in  testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTime  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal
+for test in  testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTime  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed
 do
     make model=$TESTDIR/$test.cu -j$CORES
     ./program $NUMPART $NUMRUN

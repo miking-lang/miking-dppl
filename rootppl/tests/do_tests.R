@@ -37,4 +37,8 @@ do_test_logz(left = "testObserveXEvents", right = "testObserveXEvents")
 do_test(left= "testStudentClassic", right = "testStudentClassicBirch", size = 1000)
 do_test(left= "testStudent", right = "testStudentBirch", size = 1000)
 
-do_test(left= "testNormalInverseGammaNormal", right = "testNormalInverseGammaNormal", size = 1000)
+do_test(left= "testNormalInverseGammaNormal", right = "testNormalInverseGammaNormalBirch", size = 1000)
+
+do_test(left= "testNormalInverseGammaNormalMultipass", right = "testNormalInverseGammaNormalBirchMultipass", size = 1000)
+
+do_test(left= "testLogAlphaSigmaSquared", right = "testLogAlphaSigmaSquaredDelayed", size = 1000)

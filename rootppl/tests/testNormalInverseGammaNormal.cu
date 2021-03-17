@@ -31,6 +31,7 @@ BBLOCK(testNormalInverseGammaNormal, {
     normalInverseGamma_t prior(m0, v, a, b);
     
     floating_t statistic = sample_NormalInverseGammaNormal(prior);
+  
     // TODO do it with SAMPLE, instead of invoking the function directly
        
     PSTATE = statistic;
