@@ -17,9 +17,9 @@
 #include "utils/stack.cuh"
 #include "dists/delayed.cuh"
 
-//typedef bisse32_tree_t tree_t;
+typedef bisse32_tree_t tree_t;
 //typedef primate_tree_t tree_t;
-typedef moth_div_tree_t tree_t;
+//typedef moth_div_tree_t tree_t;
 
 
 /**

@@ -206,11 +206,7 @@ DEV int negativeBinomial(RAND_STATE_DECLARE floating_t p, int n) {
 }
 
 
-DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k) {
-  assert(0.0 < k);
-  std::chi_squared_distribution<double> dist(k);
-  return dist(gen);
-}
+
 
 DEV floating_t student_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v) {
   assert(0.0 < k);
