@@ -1,25 +1,3 @@
-/*
- * ClaDS2 Model
- * - uses the framework
- * - delayed sampling for lambda0
- *
- */
-
-#include <iostream>
-#include <cstring>
-#include <string>
-#include <fstream>
-#include <algorithm>
-
-#include "inference/smc/smc.cuh"
-#include "../tree-utils/tree_utils.cuh"
-#include "utils/math.cuh"
-#include "utils/stack.cuh"
-#include "dists/delayed.cuh"
-
-typedef bisse32_tree_t tree_t;
-//typedef primate_tree_t tree_t;
-//typedef moth_div_tree_t tree_t;
 
 
 /**
@@ -90,6 +68,7 @@ BBLOCK_HELPER(clads2GoesUndetectedDelayed, {
     
     // t is the waiting time until the next event (speciation or extinction)
     floating_t tSp  = sample_GammaExponential(lambda0, factor);
+    
     floating_t tExt = sample_GammaExponential(mu, factor);
     floating_t t    = std::min(tSp, tExt);
    
@@ -134,6 +113,7 @@ BBLOCK_HELPER(clads2GoesUndetectedDelayed, {
 BBLOCK_HELPER(simBranchDelayed, {
 
     floating_t t1 = startTime - stopTime;
+    assert(0.0 <= t1);
     
     // extreme values patch 2/2
     if (factor > 1e5 ) {
@@ -247,25 +227,7 @@ BBLOCK(simClaDS2, {
     // Make sure this is the correct starting point
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
  
-    // Test settings
-    /*
-    floating_t lambda_0 = 0.2;
-    floating_t alpha    = 1.0;
-    floating_t sigma    = 0.0000001;
-    floating_t epsilon  = 0.5;   // Corresponds to mu = epsilon*lambda = 0.1
-    */
-    floating_t rho      = 1.0;
 
-    floating_t k = 1;
-    floating_t theta = 0.2;
-    floating_t kMu = 1;
-    floating_t thetaMu = 0.1;
-    
-    floating_t m0 = 0;
-    floating_t v = 1;
-    floating_t a = 1.0;
-    floating_t b = 0.2;
-    
 
    // floating_t lambda_0 = SAMPLE(gamma, k, theta);
     gamma_t lambda_0(k, theta);
@@ -353,9 +315,9 @@ BBLOCK(sampleFinalLambda, {
  
 // Write particle data to file
 CALLBACK(saveResults, {
-      std::string fileName = "results/clads2-delayed.csv";
-      std::ofstream resultFile (fileName);
-      resultFile << "lambda0 k theta mu0 sigma alpha epsilon weight\n";
+      std::string fileName = "results/clads2-delayed-primate.csv";
+      std::ofstream resultFile (fileName, std::ios_base::app);
+      //resultFile << "lambda0 k theta mu0 sigma alpha epsilon weight\n";
       if(resultFile.is_open()) {
 
           for(int i = 0; i < N; i++)
@@ -370,14 +332,3 @@ CALLBACK(saveResults, {
 
   })
 
-MAIN({
-
-    ADD_BBLOCK(simClaDS2);
-    ADD_BBLOCK(simTree);
-    ADD_BBLOCK(conditionOnDetection);
-    ADD_BBLOCK(sampleFinalLambda);
-    SMC(saveResults);
-    //SMC(NULL)
-})
- 
- 

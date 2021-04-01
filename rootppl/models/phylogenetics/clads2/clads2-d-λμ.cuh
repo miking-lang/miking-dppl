@@ -1,26 +1,3 @@
-/*
- * ClaDS2 Model
- * - uses the framework
- * - delayed sampling for lambda0
- *
- */
-
-#include <iostream>
-#include <cstring>
-#include <string>
-#include <fstream>
-#include <algorithm>
-
-#include "inference/smc/smc.cuh"
-#include "../tree-utils/tree_utils.cuh"
-#include "utils/math.cuh"
-#include "utils/stack.cuh"
-#include "dists/delayed.cuh"
-
-//typedef bisse32_tree_t tree_t;
-typedef primate_tree_t tree_t;
-//typedef moth_div_tree_t tree_t;
-
 
 /**
  * The delayed program state now has the latest k
@@ -233,23 +210,11 @@ BBLOCK(simClaDS2, {
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
  
     // Test settings
-    /*
-    floating_t lambda_0 = 0.2;
-    floating_t alpha    = 1.0;
-    floating_t sigma    = 0.0000001;
-    floating_t epsilon  = 0.5;   // Corresponds to mu = epsilon*lambda = 0.1
-    */
-    floating_t rho      = 1.0;
 
-    floating_t k = 1;
-    floating_t kMu = 1;
-    floating_t theta = 0.2;
-    floating_t thetaMu = 0.1;
-
-    gamma_t lambda_0(k, theta);
+    gamma_t lambda_0(kLambda, thetaLambda);
     gamma_t mu(kMu, thetaMu);
 
-    floating_t sigmaSquared = 1.0 / SAMPLE(gamma, 1.0, 1.0 / 0.2);
+    floating_t sigmaSquared = 1.0 / SAMPLE(gamma, 1.0, a / b);
     floating_t sigma = sqrt(sigmaSquared);
     floating_t alpha = exp(SAMPLE(normal, 0.0, sigma));
     
@@ -339,14 +304,3 @@ CALLBACK(saveResults, {
 
   })
 
-MAIN({
-
-    ADD_BBLOCK(simClaDS2);
-    ADD_BBLOCK(simTree);
-    ADD_BBLOCK(conditionOnDetection);
-    ADD_BBLOCK(sampleFinalLambda);
-    SMC(saveResults);
-    //SMC(NULL)
-})
- 
- 
