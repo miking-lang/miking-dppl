@@ -5,7 +5,6 @@
  * File trees.cuh contains pre-processed phylogenetic trees stored in SoA-format (Structure of Arrays). 
  */
 
-const int ROOT_IDX = 0;
 
 
 // simple toy tree, nodes: 7, maxDepth: 3

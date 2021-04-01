@@ -1,17 +1,33 @@
-/*
+/**
  * File tree-parser.js contains a bunch of functions to parse JSON trees into arrays, and give specs about trees.
  *
- * Can be executed online in the browser, e.g.: https://playcode.io/
+ * Can be executed online in the browser, e.g.: https://playcode.io/.
+ * 
+ * Or, use node
+ *
+ *   node tree-parser.js TREEFILE STRUCTNAME
+ *
+ * where
+ *   TREEFILE is the fully qualified path to a PhyJSON file, containing a tree.
+ *   STRUCTNAME is the (prefix of the) name of the generated datastrcuture.
+ *
+ * The output is written on the standard output.
+ *
+ * Example:
+ *
+ *   node tree-parser.js /home/viktor/ownCloud/probabilistic-programming/data/bisse_32.phyjson
  */
 
- // Queue implementation (library)
+// Configuration, change if needed
+const phyjs = require("/home/viktor/ownCloud/probabilistic-programming/webppl/phyjs/index.js");
+
+// Queue implementation (library)
 function Queue(){var a=[],b=0;this.getLength=function(){return a.length-b};this.isEmpty=function(){return 0==a.length};this.enqueue=function(b){a.push(b)};this.dequeue=function(){if(0!=a.length){var c=a[b];2*++b>=a.length&&(a=a.slice(b),b=0);return c}};this.peek=function(){return 0<a.length?a[b]:void 0}};
 
+var tree = phyjs.read_phyjson(process.argv[2]);
 
-var tree = JSON.parse(treeMothDiv);
-
-console.log(tree);
-
+//var tree = JSON.parse(treeMothDiv);
+//console.log(tree);
 // console.log(tree.right)
 
 var idxCounter = 0;
@@ -101,18 +117,33 @@ function transformTree() {
     dfsNext(tree);
 
     var str = JSON.stringify(tree, null, 32);
-    console.log(str);
+    //console.log(str);
 
-    console.log("\nAges:");
-    console.log(ages);
-    console.log("\nleftIdx:");
-    console.log(leftIdx);
-    console.log("\nrightIdx:");
-    console.log(rightIdx);    
-    console.log("\nparentIdx:");
-    console.log(parentIdx);    
-    console.log("\nnextIdx:");
-    console.log(nextIdx);    
+    console.log("struct %s_tree_t {", process.argv[3].split(".")[0]);
+    console.log("\tstatic const int NUM_NODES = %d;", ages.length);
+    console.log("\tstatic const int MAX_DEPTH = %d;", treeMaxDepth(tree));
+    
+    //console.log("\nAges:");
+    //console.log(ages);
+    console.log("\tconst floating_t ages[NUM_NODES] = ", JSON.stringify(ages, null, 0).replace("[", "{").replace("]", "}").concat(";"));
+    
+    //console.log("\nleftIdx:");
+    //console.log(leftIdx);
+    console.log("\tconst int idxLeft[NUM_NODES] = ", JSON.stringify(leftIdx, null, 0).replace("[", "{").replace("]", "}").concat(";"));
+    
+    //console.log("\nrightIdx:");
+    //console.log(rightIdx);
+    console.log("\tconst int idxRight[NUM_NODES] = ", JSON.stringify(rightIdx, null, 0).replace("[", "{").replace("]", "}").concat(";"));
+    
+    //console.log("\nparentIdx:");
+    //console.log(parentIdx);
+    console.log("\tconst int idxParent[NUM_NODES] = ", JSON.stringify(parentIdx, null, 0).replace("[", "{").replace("]", "}").concat(";"));
+    
+    //console.log("\nnextIdx:");
+    //console.log(nextIdx);
+    console.log("\tconst int idxNext[NUM_NODES] = ", JSON.stringify(nextIdx, null, 0).replace("[", "{").replace("]", "}").concat(";"));
+
+    console.log("};\n");
 }
 
 function max(a, b) {
@@ -135,8 +166,8 @@ function treeMaxDepth(tree) {
 
 transformTree();
 
-console.log("\nMax tree depth: ");
-console.log(treeMaxDepth(tree));
+//console.log("\nMax tree depth: ");
+//console.log(treeMaxDepth(tree));
 
 // Takes WebPPL formatted tree (currently hardcoded in local variable tree) and creates WebPPL JSON object which is printed to stdout. 
 function convertTreeToJSONWebPPLFormat() {

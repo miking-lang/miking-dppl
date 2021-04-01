@@ -5,7 +5,11 @@
  * File tree_utils.cuh contains helper functions for trees. 
  */
 
+const int ROOT_IDX = 0;
+
 #include "trees.cuh"
+#include "birds.cuh"
+#include "moth.cuh"
 
 HOST DEV int countLeaves(const int* leftIdx, const int* rightIdx, int size) {
     int numLeaves = 0;
