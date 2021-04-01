@@ -1,19 +1,3 @@
-/*
- * Delayed version of CRBD model.
- * Both parameters are delayed.
- *
- * This model traverses the tree with a pre-computed DFS path (defined by the next 
- * pointer in the tree) that corresponds to the recursive calls in the original model. 
- */
-
-#include <stdio.h>
-#include <string>
-#include <fstream>
-#include <math.h>
-
-#include "inference/smc/smc.cuh"
-#include "../tree-utils/tree_utils.cuh"
-#include "utils/math.cuh"
 
 typedef short treeIdx_t;
 // V: changed the progstate to add delayed mu
@@ -60,9 +44,6 @@ struct ret_delayed_t_bothways {
  
  
  
-typedef bisse32_tree_t tree_t;
-// typedef primate_tree_t tree_t;
-// typedef moth_div_tree_t tree_t;
 
 // const int MAX_DIV = 5;
 // const int MAX_LAM = 5;
@@ -75,7 +56,7 @@ BBLOCK_HELPER_DECLARE(crbdGoesUndetectedDelayed, ret_delayed_t_bothways, floatin
 
 BBLOCK_DATA(tree, tree_t, 1)
 
-BBLOCK_DATA_CONST(rho, floating_t, 1.0)
+BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
 
 BBLOCK_HELPER(delayedSample, {
     floating_t t = SAMPLE(lomax, 1/theta, k);
@@ -272,13 +253,13 @@ BBLOCK(simCRBD, {
 
     // V: Instead of fixing mu, we draw it from gamma now
     //PSTATE.mu = 0.1;
-    PSTATE.kMu = 1;
-    PSTATE.thetaMu = 0.1;
+    PSTATE.kMu = kMu;
+    PSTATE.thetaMu = thetaMu;
     
     // floating_t k_lambda = 1;
     // floating_t theta_lambda = 0.2;
-    PSTATE.kLambda = 1;
-    PSTATE.thetaLambda = 0.2;
+    PSTATE.kLambda = kLambda;
+    PSTATE.thetaLambda = thetaLambda;
 
 
     tree_t* treeP = DATA_POINTER(tree);
@@ -327,20 +308,3 @@ CALLBACK(saveResults, {
 })
 
 
-MAIN(
-    
-    ADD_BBLOCK(simCRBD)
-    ADD_BBLOCK(simTree)
-    // ADD_BBLOCK(survivorshipBias)
-    ADD_BBLOCK(sampleFinalLambda)
-    
-    SMC(saveResults)
-)
-  
-  
- 
- 
- 
- 
- 
-   

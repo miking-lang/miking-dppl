@@ -1,31 +1,10 @@
-/*
- * File crbd_webppl.cu defines the constant rate birth death model 
- * as defined in WebPPL in the script linked to below. 
- * 
- * https://github.com/phyppl/probabilistic-programming/blob/master/webppl/phywppl/models/crbd.wppl
- *
- * This model traverses the tree with a pre-computed DFS path (defined by the next 
- * pointer in the tree) that corresponds to the recursive calls in the original model. 
- */
-
-#include <stdio.h>
-#include <string>
-#include <fstream>
-
-#include "inference/smc/smc.cuh"
-#include "../tree-utils/tree_utils.cuh"
-#include "utils/math.cuh"
-
-
 typedef short treeIdx_t;
 struct progState_t {
     floating_t lambda;
     floating_t mu;
     treeIdx_t treeIdx;
 };
-typedef bisse32_tree_t tree_t;
-// typedef primate_tree_t tree_t;
-// typedef moth_div_tree_t tree_t;
+
 
 // const int MAX_DIV = 5;
 // const int MAX_LAM = 5;
@@ -37,7 +16,7 @@ BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating
 
 BBLOCK_DATA(tree, tree_t, 1)
 
-BBLOCK_DATA_CONST(rho, floating_t, 1.0)
+BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
 
 
 BBLOCK_HELPER(M_crbdGoesUndetected, {
@@ -148,12 +127,14 @@ BBLOCK(simTree, {
 
 BBLOCK(simCRBD, {
 
-    PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
+
+
+    PSTATE.lambda = SAMPLE(gamma, k, theta);
     // PSTATE.lambda = 0.2;
-    // floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
+    floating_t epsilon = SAMPLE(uniform, epsMin, epsMax);
     // floating_t epsilon = 0.5;
-    // PSTATE.mu = epsilon * PSTATE.lambda;
-    PSTATE.mu = 0.1;
+    PSTATE.mu = epsilon * PSTATE.lambda;
+    // PSTATE.mu = mu;
 
     tree_t* treeP = DATA_POINTER(tree);
 
@@ -191,14 +172,4 @@ CALLBACK(saveResults, {
     }
     
 })
-
-
-MAIN(
-    
-    ADD_BBLOCK(simCRBD)
-    ADD_BBLOCK(simTree)
-    // ADD_BBLOCK(survivorshipBias)
-
-    SMC(saveResults)
-)
 
