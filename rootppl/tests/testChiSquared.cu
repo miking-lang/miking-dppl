@@ -31,14 +31,6 @@ BBLOCK(testChiSquared, {
 });
 
 
-
-
-
-
-
-
-
-
 CALLBACK(stats, {
     std::string fileName = "tests/" + testName + ".csv";
     std::ofstream resultFile (fileName, std::ios_base::app);
@@ -63,6 +55,5 @@ MAIN({
     }
     
     ADD_BBLOCK(testChiSquared);
-  
     SMC(stats);
   })
