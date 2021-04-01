@@ -1,4 +1,4 @@
-const int STACK_LIMIT = 8096;
+const int STACK_LIMIT = 2048;
 
 struct pStack_t {
     int stackPointer = 0;
