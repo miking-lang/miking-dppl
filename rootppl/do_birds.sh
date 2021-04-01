@@ -1,5 +1,5 @@
 #!/bin/bash
-BIRDDIR=/home/viktor/ownCloud/miking-dppl/rootppl/models/phylogenetics/birds
+BIRDDIR=/home/viktor/ownCloud/miking-dppl/rootppl/analysis/birds
 NUMPART=$1
 NUMRUN=$2
 CORES=32
