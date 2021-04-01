@@ -1,22 +1,22 @@
 -- CorePPL SMC
 
-include "coreppl.mc"
+include "mexpr/ast-builder.mc"
 
-lang CorePPLSMC = CorePPL + Infer
+lang CorePPLSMC = Infer + Ast
 
   syn InferMethod =
-  | MethodSMC { particles: Option Int }
+  | MethodSMC { particles: Expr }
 
   syn Const =
   | CResample {}
 
-  sem delta (arg : Expr) =
-  | CInfer ({method = None ()} & c) -> CInfer {c with method = Some arg}
-  | CInfer {method = Some (MethodSMC r)} -> error "todo"
-  -- Extract the environment from the closure and call eval
-  -- perform the inference in CPS style
-  -- return an empirical distribution
-  -- arg is a thunk
+
+  -- Lower to an MExpr expression
+  sem toMExpr =
+  | TmAssume r -> unit_ -- TODO
+  | TmObserve r -> unit_ -- TODO
+  | TmWeight r -> unit_ -- TODO
+
 
   sem getConstStringCode (indent : Int) =
   | CResample _ -> "resample"
