@@ -1,5 +1,6 @@
 #include <random>
 #include <time.h>
+#include <cassert>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -41,11 +42,15 @@ DEV floating_t score_GammaExponential(RAND_STATE_DECLARE floating_t x, gamma_t& 
 
 DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, floating_t f)
 {
-  if (f < 1e-5) {
+  assert(0.0 <= f);
+  assert(0.0 <= t);
+  assert(0.0 <= rate.theta);
+  if (f*rate.theta < 1e-5) {
     return 0.0;
   }
   // TODO guard maybe on f*theta
   // TODO instead of multiplication do add in negativeBionomial score
+  // second idea not going to work because log1p in denominator, I think
   floating_t score = negativeBinomialScore(x, rate.k, 1/(1 + t*f*rate.theta));
   
   rate.theta = rate.theta / (1 + t*f*rate.theta);

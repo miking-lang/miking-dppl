@@ -60,21 +60,21 @@ unsigned int poisson(double lambda) {
     #endif
 }
 
-
 /**
  * Returns a sample from the Chi-squared distribution.
  *
  * @param k > 0 real, degrees of freedom.
  */
-floating_t chi_squared(RAND_STATE_DECLARE floating_t k) {
-  assert(0.0 < k);
-  std::chi_squared_distribution<double> dist(k);
+// DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k) {
+//   assert(0.0 < k);
+//   std::chi_squared_distribution<double> dist(k);
 
-  #ifdef _OPENMP
-  return dist(genWrappers[omp_get_thread_num()].gen);
-  #else
-  return dist(gen);
-  #endif
-}
+//   #ifdef _OPENMP
+//   return dist(genWrappers[omp_get_thread_num()].gen);
+//   #else
+//   return dist(gen);
+//   #endif
+// }
+
 
 #endif

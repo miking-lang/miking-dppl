@@ -208,6 +208,15 @@ DEV int negativeBinomial(RAND_STATE_DECLARE floating_t p, int n) {
 
 
 
+
+/* Mathematically the Chi Square //
+     distribution with n degrees of freedom is equivalent to a Gamma        
+     distribution with shape parameter n/2 and scale parameter 2. */
+DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k) {
+  floating_t result = SAMPLE(gamma, k/2.0, 2.0);
+  return result;
+}
+
 DEV floating_t student_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v) {
   assert(0.0 < k);
   assert(0.0 < v);

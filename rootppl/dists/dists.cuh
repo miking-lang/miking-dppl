@@ -231,7 +231,7 @@ DEV void multivariateNormal(RAND_STATE_DECLARE floating_t mu[n], floating_t (&co
  * @param k > 0 real, degrees of freedom.
  */
 // Moved this to dists_cpu.cuh
-//DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k);
+DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k);
 
 
 /**
