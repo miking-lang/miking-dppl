@@ -20,7 +20,8 @@ resdir = c("birds-10000")
 
 birchdir = c("/home/viktor/ownCloud/probabilistic-programming/data/birds-results")
 
-models = c("clads2-d-λ", "clads2-d-λμ", "clads2-d-λμασ", "clads2", "crbd-d-λ", "crbd-d-λμ", "crbd", "birch-clads2", "birch-crbda")
+#models = c("clads2-d-λ", "clads2-d-λμ", "clads2-d-λμασ", "clads2-factor", "crbd-d-λ", "crbd-d-λμ", "crbd", "birch-clads2", "birch-crbda")
+models = c("birch-clads2", "clads2-d-λ", "clads2-d-λμ", "clads2-d-λμασ", "clads2-factor")
 
 prepare_tree = function(treenr) {
   do.call(rbind, lapply(models, function(m) {
@@ -35,6 +36,7 @@ prepare_tree = function(treenr) {
 }
 
 plot_tree = function(df) {
+  df$model = factor(df$model, levels = models, ordered = TRUE)
    ggplot2::ggplot(df, ggplot2::aes(model, logz)) + ggplot2::geom_boxplot() + ggplot2::theme(axis.text = ggplot2::element_text(size = 8))  
 }
 

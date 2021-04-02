@@ -118,11 +118,13 @@ BBLOCK_HELPER(simBranchDelayed, {
     // extreme values patch 2/2
     if (factor > 1e5 ) {
       simBranchRet_t ret(0.0, 0.0, -INFINITY);
+      return ret;
     }
 
     if (factor < 1e-5) {
       floating_t ret0 = score_GammaPoisson(0, t1, mu, factor);
       simBranchRet_t ret(factor, 0.0, ret0);
+      return ret;
     }
     // end extreme values patch 2/2
 
