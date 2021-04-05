@@ -45,9 +45,8 @@ Models:
 
 
 ```
-[1] "clads2-d-<U+03BB>"    "clads2-d-<U+03BB>µ"   "clads2-d-<U+03BB>µas"
-[4] "clads2"               "crbd-d-<U+03BB>"      "crbd-d-<U+03BB>µ"    
-[7] "crbd"                 "birch-clads2"         "birch-crbda"         
+[1] "birch-clads2"         "clads2-d-<U+03BB>"    "clads2-d-<U+03BB>µ"  
+[4] "clads2-d-<U+03BB>µas" "clads2-factor"       
 ```
 
 - Survivorship bias correction for CRBD not implemented in RootPPL

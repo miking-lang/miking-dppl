@@ -2,10 +2,10 @@
 TESTDIR=tests
 DATADIR=test-data
 NUMPART=10000
-NUMRUN=10
+NUMRUN=50
 CORES=32
 # test var needs to be set 
-for test in  testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTime  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed
+for test in  testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTimeDelayed  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed
 do
     make model=$TESTDIR/$test.cu -j$CORES
     ./program $NUMPART $NUMRUN
@@ -15,4 +15,12 @@ done
 echo
 echo
 cd $TESTDIR
-Rscript ./do_tests.R
+Rscript ./do_tests.R $NUMPART
+
+   echo "Removing data..."
+for test in testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTimeDelayed  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed
+do
+ 
+    rm $DATADIR/$test.csv 
+    rm $DATADIR/$test.logz
+done
