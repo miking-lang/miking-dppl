@@ -7,9 +7,12 @@
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/pprint.mc"
+include "mexpr/mexpr.mc"
+include "mexpr/info.mc"
 include "dist.mc"
+include "string.mc"
 include "mikingmain.mc"
-
 
 
 
@@ -26,26 +29,57 @@ end
 
 
 -- Assume defines a new random variable
-lang Assume = Ast + Dist
+lang Assume = Ast + Dist + PrettyPrint
   syn Expr =
   | TmAssume { dist: Expr,
-               info: Info} 
+               info: Info}
+
+  sem isAtomic =
+  | TmAssume _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmAssume r ->
+    match pprintCode 0 env r.dist with (env,dist) then
+      (env, join ["assume ", dist])
+    else never
 
 end
 
 
 -- Observe gives a random variable conditioned on a specific value
-lang Observe = Ast + Dist
+lang Observe = Ast + Dist + PrettyPrint
   syn Expr =
-  | TmObserve { dist: Expr,
-                value: Expr,
+  | TmObserve { value: Expr,
+                dist: Expr,
                 info: Info }                
+
+  sem isAtomic =
+  | TmObserve _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmObserve r ->
+    match pprintCode 0 env r.value with (env, value) then
+      match pprintCode 0 env r.dist with (env, dist) then
+        (env, join ["observe ", value, " ", dist])
+      else never
+    else never
+    
 end
 
 -- Defines a weight term
-lang Weight = Ast
+lang Weight = Ast + PrettyPrint
   syn Expr =
-  | TmWeight { weight: Float }
+  | TmWeight { weight: Expr }
+
+  sem isAtomic =
+  | TmWeight _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmWeight r ->
+    match pprintCode 0 env r.weight with (env,weight) then
+      (env, join ["weight ", weight])
+    else never
+
 end
 
 -- Translations in between weight and observe terms
@@ -62,20 +96,38 @@ lang ObserveWeightTranslation = Observe + Weight
 end
 
 
+-- Convenience functions for manually constructing ASTs
+
+let assume_ = use Assume in
+  lam d. TmAssume {dist = d, info = NoInfo ()}
+
+let observe_ = use Observe in
+  lam v. lam d. TmObserve {value = v, dist = d, info = NoInfo ()}
+
+let weight_ = use Weight in
+  lam w. TmWeight {weight = w, info = NoInfo ()}
 
    
+-- Language compositions
 
+lang CorePPL = Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
 
-lang CorePPL = Ast + Assume + Observe + Weight + ObserveWeightTranslation
+lang CorePPLinference = CorePPL -- + Importance + SMC 
 
+lang MExprPPL = CorePPLinference + MExpr
 
-lang CorePPLinference = CorePPL -- + SMC 
 
 
 
 mexpr
 
-utest 1 with 1 in
+use MExprPPL in
 
+utest expr2str (assume_ (bern_ (float_ 0.7)))
+  with "assume (Bern 7.0e-1)" in
+utest expr2str (observe_ (float_ 1.5) (beta_ (float_ 1.0) (float_ 2.0)))
+  with "observe 1.50e+0 (Beta 1.0e-0, 2.0e+0)" in
+utest expr2str (weight_ (float_ 1.5)) 
+  with "weight 1.50e+0" in
 ()
 

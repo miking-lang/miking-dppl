@@ -1,5 +1,6 @@
 -- CorePPL SMC
 
+/-
 include "mexpr/ast-builder.mc"
 
 lang CorePPLSMC = Infer + Ast
@@ -29,3 +30,4 @@ end
 -- Convenience functions for manually constructing ASTs
 let resample_ = use CorePPLSMC in CResample {}
 let methodsmc_ = use CorePPLSMC in lam p. MethodSMC {particles = p}
+-/
