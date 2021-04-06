@@ -8,19 +8,15 @@ include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 include "mexpr/ast-builder.mc"
 include "dist.mc"
-include "smc.mc"
-
--- We will add this to the Miking later on
-lang Ast 
-  syn Expr =
-end
+include "mikingmain.mc"
 
 
 
-lang Infer = 
+
+lang Infer = Ast
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
-  | TmInfer { method: InferMethod
+  | TmInfer { method: InferMethod,
               model: Expr}
 
   -- Interface type for infer methods
@@ -30,7 +26,7 @@ end
 
 
 -- Assume defines a new random variable
-lang Assume = Dist
+lang Assume = Ast + Dist
   syn Expr =
   | TmAssume { dist: Expr,
                info: Info} 
@@ -39,7 +35,7 @@ end
 
 
 -- Observe gives a random variable conditioned on a specific value
-lang Observe = Dist
+lang Observe = Ast + Dist
   syn Expr =
   | TmObserve { dist: Expr,
                 value: Expr,
@@ -47,14 +43,14 @@ lang Observe = Dist
 end
 
 -- Defines a weight term
-lang Weight =
+lang Weight = Ast
   syn Expr =
   | TmWeight { weight: Float }
 end
 
-
 -- Translations in between weight and observe terms
 lang ObserveWeightTranslation = Observe + Weight
+/-
   -- Translates ALL observe terms into weight terms. 
   sem observeToWeight =
   | TmObserve -> unit_ -- TODO
@@ -62,8 +58,8 @@ lang ObserveWeightTranslation = Observe + Weight
   -- Translates SOME weight terms into observe terms.
   sem weightToObserve =
   | TmWeight -> unit_ -- TODO
+-/
 end
-
 
 
 
@@ -73,4 +69,13 @@ end
 lang CorePPL = Ast + Assume + Observe + Weight + ObserveWeightTranslation
 
 
-lang CorePPLinference = CorePPL + SMC 
+lang CorePPLinference = CorePPL -- + SMC 
+
+
+
+mexpr
+
+utest 1 with 1 in
+
+()
+

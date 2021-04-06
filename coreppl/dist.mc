@@ -38,17 +38,19 @@ lang EmpiricalDist = Dist
   syn Dist =
   | DEmpirical { sample: [(Float, Expr)] }
 
+/-
   sem getConstStringCode (indent : Int) =
   | DEmpirical d ->
     let pprintEnvEmpty = { nameMap = mapEmpty nameCmp,
                           count = mapEmpty cmpString,
                           strings = mapEmpty cmpString } in
     join ["empirical", pprintNewline (pprintIncr indent), pprintCode indent pprintEnvEmpty d.sample]
+-/
 
 end
 
 
 
-lang DistAll = DExpr + DBern + DBeta + DEmpirical
+lang DistAll = ExpDist + BernDist + BetaDist + EmpiricalDist
 
 
