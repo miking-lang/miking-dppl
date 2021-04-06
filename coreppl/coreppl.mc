@@ -1,100 +1,133 @@
 -- CorePPL
+-- Note that we should NOT implement eval or compile functions
+-- CorePPL. Instead, we implement function 'toMExpr' which translates
+-- the core terms into an MExpr term. By doing so, we can use the
+-- standard eval and compile functions when running the inference.
 
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
--- include "mexpr/anf.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/pprint.mc"
+include "mexpr/mexpr.mc"
+include "mexpr/info.mc"
+include "dist.mc"
+include "string.mc"
+include "mikingmain.mc"
 
--- anf.mc file content
---lang CorePPL = CorePPL + MExprANF
---
---  sem isValue =
---  | TmWeight _ -> false
---  | TmSampleExp _ -> false
---  | TmSampleBern _ -> false
---  | TmResample _ -> false
---
---  sem normalize (k : Expr -> Expr) =
---  | TmWeight ({ arg = arg } & t) ->
---    normalizeName (lam arg. k (TmWeight { t with arg = arg })) arg
---
---  | TmSampleExp ({ a = a } & t) ->
---    normalizeName (lam a. k (TmSampleExp { t with a = a })) a
---
---  | TmSampleBern ({ p = p } & t) ->
---    normalizeName (lam p. k (TmSampleBern { t with p = p })) p
---
---  | TmResample t -> k (TmResample t)
---end
 
-lang Infer = MExprAst + MExprPrettyPrint
 
-  syn Const =
-  | CInfer { method: Option Const }
-  | CInferMethod { method: InferMethod }
+lang Infer = Ast
+  -- Evaluation of TmInfer returns a TmDist
+  syn Expr =
+  | TmInfer { method: InferMethod,
+              model: Expr}
 
+  -- Interface type for infer methods
   syn InferMethod =
 
-  sem getConstStringCode (indent : Int) =
-  | CInfer c -> join ["infer", pprintNewline (pprintIncr indent), getConstStringCode indent c.method]
-  | CInferMethod c ->  join ["infer method", pprintNewline (pprintIncr indent), getInferStringCode indent c.method]
+end
 
-  sem getInferStringCode (indent : Int) =
+
+-- Assume defines a new random variable
+lang Assume = Ast + Dist + PrettyPrint
+  syn Expr =
+  | TmAssume { dist: Expr,
+               info: Info}
+
+  sem isAtomic =
+  | TmAssume _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmAssume r ->
+    match pprintCode 0 env r.dist with (env,dist) then
+      (env, join ["assume ", dist])
+    else never
 
 end
 
-lang CorePPL = MExprAst + MExprPrettyPrint
 
-  syn Const =
-  | CWeight {}
-  | CSample {}
-  | CDist { dist: Dist }
+-- Observe gives a random variable conditioned on a specific value
+lang Observe = Ast + Dist + PrettyPrint
+  syn Expr =
+  | TmObserve { value: Expr,
+                dist: Expr,
+                info: Info }                
 
-  syn Dist =
-  | DExp { a: Option Float }
-  | DBern { p: Option Float }
-  | DBeta { a: Option Float, b: Option Float }
+  sem isAtomic =
+  | TmObserve _ -> false
 
-   sem getConstStringCode (indent : Int) =
-  | CWeight _ -> "weight"
-  | CSample _ -> "sample"
-  | CDist d -> join ["distribution", pprintNewline (pprintIncr indent), getDistStringCode indent d.dist]
-
-  sem getDistStringCode (indent : Int) =
-  | DExp d -> join ["exponential", pprintNewline (pprintIncr indent), d.a]
-  | DBern d -> join ["bernoulli", pprintNewline (pprintIncr indent), d.p]
-  | DBeta d -> join ["beta", pprintNewline (pprintIncr indent), d.a, " ", d.b]
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmObserve r ->
+    match pprintCode 0 env r.value with (env, value) then
+      match pprintCode 0 env r.dist with (env, dist) then
+        (env, join ["observe ", value, " ", dist])
+      else never
+    else never
+    
 end
 
-lang Empirical = MExprPrettyPrint
+-- Defines a weight term
+lang Weight = Ast + PrettyPrint
+  syn Expr =
+  | TmWeight { weight: Expr }
 
-  syn Dist =
-  | DEmpirical { sample: [(Float, Expr)] }
+  sem isAtomic =
+  | TmWeight _ -> false
 
-  sem getConstStringCode (indent : Int) =
-  | DEmpirical d ->
-    let pprintEnvEmpty = { nameMap = mapEmpty nameCmp,
-                          count = mapEmpty cmpString,
-                          strings = mapEmpty cmpString } in
-    join ["empirical", pprintNewline (pprintIncr indent), pprintCode indent pprintEnvEmpty d.sample]
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmWeight r ->
+    match pprintCode 0 env r.weight with (env,weight) then
+      (env, join ["weight ", weight])
+    else never
 
 end
+
+-- Translations in between weight and observe terms
+lang ObserveWeightTranslation = Observe + Weight
+/-
+  -- Translates ALL observe terms into weight terms. 
+  sem observeToWeight =
+  | TmObserve -> unit_ -- TODO
+
+  -- Translates SOME weight terms into observe terms.
+  sem weightToObserve =
+  | TmWeight -> unit_ -- TODO
+-/
+end
+
 
 -- Convenience functions for manually constructing ASTs
 
-let infer_ = use Infer in lam m. CInfer {method = m}
+let assume_ = use Assume in
+  lam d. TmAssume {dist = d, info = NoInfo ()}
 
-let method_ = use Infer in lam m. CInferMethod {method = m}
+let observe_ = use Observe in
+  lam v. lam d. TmObserve {value = v, dist = d, info = NoInfo ()}
 
-let weight_ = use CorePPL in CWeight {}
+let weight_ = use Weight in
+  lam w. TmWeight {weight = w, info = NoInfo ()}
 
-let sample_ = use CorePPL in CSample {}
+   
+-- Language compositions
 
-let cdist_ = use CorePPL in lam d. CDist {d = d}
+lang CorePPL = Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
 
-let dexp_ = use CorePPL in lam a. DExp {a = a}
+lang CorePPLinference = CorePPL -- + Importance + SMC 
 
-let dbern_ = use CorePPL in lam p. DBern {p = p}
+lang MExprPPL = CorePPLinference + MExpr
 
-let dbeta_ = use CorePPL in lam a. lam b. DBeta {a = a, b = b}
 
-let dempirical_ = use Empirical in lam s. DEmpirical {sample = s}
+
+
+mexpr
+
+use MExprPPL in
+
+utest expr2str (assume_ (bern_ (float_ 0.7)))
+  with "assume (Bern 7.0e-1)" in
+utest expr2str (observe_ (float_ 1.5) (beta_ (float_ 1.0) (float_ 2.0)))
+  with "observe 1.50e+0 (Beta 1.0e-0, 2.0e+0)" in
+utest expr2str (weight_ (float_ 1.5)) 
+  with "weight 1.50e+0" in
+()
+
