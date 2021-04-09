@@ -7,7 +7,6 @@ let bernoullimodel = use MExprPPL in
   , ureclet_ "assume_rec"
               (ulam_ "n" (ulam_ "samples"
               (if_ (eqi_ (var_ "n") (int_ 0)) (var_ "samples") (app_ (app_ (var_ "assume_rec") (subi_ (var_ "n") (int_ 1))) (cons_ (assume_ (bern_ (var_ "theta"))) (var_ "samples"))))
-              --(subi_ (var_ "n") (int_ 1))
               ))
   , app_ (app_ (var_ "assume_rec") (var_ "n")) (var_ "theta")
   ]
