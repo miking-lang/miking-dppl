@@ -51,7 +51,7 @@ lang Observe = Ast + Dist + PrettyPrint
   syn Expr =
   | TmObserve { value: Expr,
                 dist: Expr,
-                info: Info }                
+                info: Info }
 
   sem isAtomic =
   | TmObserve _ -> false
@@ -63,7 +63,7 @@ lang Observe = Ast + Dist + PrettyPrint
         (env, join ["observe ", value, " ", dist])
       else never
     else never
-    
+
 end
 
 -- Defines a weight term
@@ -85,7 +85,7 @@ end
 -- Translations in between weight and observe terms
 lang ObserveWeightTranslation = Observe + Weight
 /-
-  -- Translates ALL observe terms into weight terms. 
+  -- Translates ALL observe terms into weight terms.
   sem observeToWeight =
   | TmObserve -> unit_ -- TODO
 
@@ -107,12 +107,12 @@ let observe_ = use Observe in
 let weight_ = use Weight in
   lam w. TmWeight {weight = w, info = NoInfo ()}
 
-   
+
 -- Language compositions
 
 lang CorePPL = Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
 
-lang CorePPLinference = CorePPL -- + Importance + SMC 
+lang CorePPLinference = CorePPL -- + Importance + SMC
 
 lang MExprPPL = CorePPLinference + MExpr
 
@@ -127,7 +127,11 @@ utest expr2str (assume_ (bern_ (float_ 0.7)))
   with "assume (Bern 7.0e-1)" in
 utest expr2str (observe_ (float_ 1.5) (beta_ (float_ 1.0) (float_ 2.0)))
   with "observe 1.50e+0 (Beta 1.0e-0, 2.0e+0)" in
-utest expr2str (weight_ (float_ 1.5)) 
+utest expr2str (weight_ (float_ 1.5))
   with "weight 1.50e+0" in
+utest expr2str (assume_ (categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5])))
+  with "assume (Categorical [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
+utest expr2str (assume_ (multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5])))
+  with "assume (Multinomial 5, [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
 ()
 
