@@ -1,6 +1,6 @@
 # miking-ppl
 
-# PPLCore
+# CorePPL
 
 To be written...
 
