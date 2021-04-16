@@ -129,9 +129,5 @@ utest expr2str (observe_ (float_ 1.5) (beta_ (float_ 1.0) (float_ 2.0)))
   with "observe 1.50e+0 (Beta 1.0e-0, 2.0e+0)" in
 utest expr2str (weight_ (float_ 1.5))
   with "weight 1.50e+0" in
-utest expr2str (assume_ (categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5])))
-  with "assume (Categorical [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
-utest expr2str (assume_ (multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5])))
-  with "assume (Multinomial 5, [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
 ()
 

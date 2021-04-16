@@ -109,14 +109,19 @@ let empirical_ = use EmpiricalDist in
 
 -- Language compositions
 
-lang DistAll = BernDist + BetaDist + EmpiricalDist + CategoricalDist + MultinomialDist
+lang DistAll = BernDist + BetaDist + EmpiricalDist + CategoricalDist + MultinomialDist + PrettyPrint
+
+lang Test = DistAll + MExprAst + MExprPrettyPrint
 
 mexpr
 
-use DistAll in
+use Test in
 
 utest expr2str (empirical_ [(1.0, float_ 1.5), (3.0, float_ 1.3)]) with "(Empirical size=2)" in
-
+utest expr2str (categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]))
+  with "(Categorical [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
+utest expr2str (multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]))
+  with "(Multinomial 5, [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
 ()
 
 
