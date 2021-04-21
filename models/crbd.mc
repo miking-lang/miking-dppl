@@ -7,8 +7,7 @@ include "math.mc"
 -- TODO(dlunde,2020-10-19): I very much dislike using ".." in includes. I guess
 -- we can fix this (by, e.g., adding the root of the repo to the path) when the
 -- build procedure gets more mature.
-include "../coreppl/ast.mc"
-include "../coreppl/ast-builder.mc"
+include "../coreppl/coreppl.mc"
 
 -- TODO(dlunde,2020-11-11): Type annotate everything manually. This can later
 -- be done by the type checker.
@@ -39,7 +38,7 @@ let crbd = use CorePPL in
   let crbdGoesUndetected =
     lams_ [("startTime", tyfloat_), ("lambda", tyfloat_), ("mu", tyfloat_)]
       (bindall_ [
-        ulet_ "t" (sampleExp_ (addi_ (var_ "lambda") (var_ "mu"))),
+        ulet_ "t" (assume_ (exp_ (addi_ (var_ "lambda") (var_ "mu")))),
         ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
         if_ (ltf_ (var_ "currentTime") (float_ 0.0))
           false_
@@ -62,7 +61,7 @@ let crbd = use CorePPL in
   let simBranch =
     ulams_ ["startTime", "stopTime", "lambda", "mu"]
      (bindall_ [
-       ulet_ "t" (sampleExp_ (var_ "lambda")),
+       ulet_ "t" (assume_ (exp_ (var_ "lambda"))),
        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
        if_ (ltf_ (var_ "currentTime") (float_ 0.0))
          unit_
@@ -92,7 +91,7 @@ let crbd = use CorePPL in
            (weight_
              (mulf_ (negf_ (var_ "mu"))
                 (subf_ (var_ "pAge") (var_ "tAge")))),
-         ulet_ "_" (resample_),
+         -- ulet_ "_" (resample_),
          ulet_ "_"
            (appf4_ (var_ "simBranch")
                  (var_ "pAge") (var_ "tAge")
@@ -101,7 +100,7 @@ let crbd = use CorePPL in
            (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
            (bindall_ [
              ulet_ "_" (weight_ (app_ (var_ "log") (var_ "lambda"))),
-             ulet_ "_" (resample_),
+             -- ulet_ "_" (resample_),
              ulet_ "_"
                (appf4_ (var_ "simTree") (var_ "left")
                   (var_ "tree") (var_ "lambda") (var_ "mu")),
