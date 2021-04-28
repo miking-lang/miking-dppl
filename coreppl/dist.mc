@@ -21,9 +21,6 @@ lang Dist = PrettyPrint
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmDist r -> pprintDist env r.dist
 
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmDist t -> TmDist { t with dist = f t.dist}
-
 end
 
 lang BernDist = Dist
