@@ -10,7 +10,7 @@
 all:
 
 test:
-	boot run --test coreppl
+	boot eval --test coreppl
 
 clean:
 	rm -f coreppl/*~

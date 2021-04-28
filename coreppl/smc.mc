@@ -1,8 +1,5 @@
 -- CorePPL SMC
-
 /-
-include "mexpr/ast-builder.mc"
-
 lang CorePPLSMC = Infer + Ast
 
   syn InferMethod =
@@ -28,6 +25,85 @@ lang CorePPLSMC = Infer + Ast
 end
 
 -- Convenience functions for manually constructing ASTs
-let resample_ = use CorePPLSMC in CResample {}
 let methodsmc_ = use CorePPLSMC in lam p. MethodSMC {particles = p}
 -/
+
+include "mexpr/ast-builder.mc"
+include "mexpr/pprint.mc"
+include "mexpr/eq.mc"
+
+-- Explicit resample inference annotation for SMC
+lang Resample = Ast + PrettyPrint + Eq
+
+  syn Expr =
+  | TmResample { ty: Type, info: Info }
+
+  sem infoTm =
+  | TmResample t -> t.info
+
+  sem ty =
+  | TmResample t -> t.ty
+
+  sem withType (ty: Type) =
+  | TmResample t -> TmResample { t with ty = ty }
+
+  sem smap_Expr_Expr (f: Expr -> a) =
+  | TmResample t -> TmResample t
+
+  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | TmResample t -> acc
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmResample _ -> (env, "resample")
+
+  -- Equality
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmResample _ ->
+    match lhs with TmResample _ then Some free else None ()
+
+end
+
+-----------------
+-- AST BUILDER --
+-----------------
+
+let resample_ = use Resample in
+  TmResample { ty = tyunknown_, info = NoInfo () }
+
+
+lang Test = Resample + VarEq
+
+mexpr
+
+use Test in
+
+------------------------
+-- PRETTY-PRINT TESTS --
+------------------------
+
+utest expr2str resample_
+with strJoin "\n" [
+  "resample"
+] in
+
+----------------------
+-- EQUALITY TESTS --
+----------------------
+
+utest resample_ with resample_ using eqExpr in
+utest eqExpr resample_ (var_ "x") with false in
+
+----------------------
+-- SMAP/SFOLD TESTS --
+----------------------
+
+let tmVar = var_ "x" in
+let mapVar = (lam. tmVar) in
+let foldToSeq = lam a. lam e. cons e a in
+
+utest smap_Expr_Expr mapVar resample_ with resample_ using eqExpr in
+
+utest sfold_Expr_Expr foldToSeq [] resample_ with [] in
+
+()
+

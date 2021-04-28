@@ -12,7 +12,7 @@ include "../coreppl/coreppl.mc"
 -- TODO(dlunde,2020-11-11): Type annotate everything manually. This can later
 -- be done by the type checker.
 
-let crbd = use CorePPL in
+let crbd = use MExprPPL in
 
   let tytree_ = tyvar_ "Tree" in
 
@@ -44,8 +44,8 @@ let crbd = use CorePPL in
           false_
           (bindall_ [
             ulet_ "speciation"
-              (sampleBern_
-                (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu")))),
+              (assume_ (bern_
+                (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu"))))),
             if_ (not_ (var_ "speciation"))
               true_
               (and_
@@ -144,3 +144,8 @@ let crbd = use CorePPL in
       unit_
   ]
 
+mexpr
+
+use MExprPPL in
+
+print (expr2str crbd)
