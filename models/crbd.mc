@@ -18,17 +18,15 @@ let crbd = use MExprPPL in
 
   let tyleafrec_ = tyrecord_ [("age", tyfloat_)] in
   let leaf_ = lam age.
-    asc_ tytree_
-      (conapp_ "Leaf" (asc_ tyleafrec_ (record_ [("age", float_ age)])))
+      conapp_ "Leaf" (record_ [("age", float_ age)])
   in
 
   let tynoderec_ =
     tyrecord_ [("age", tyfloat_), ("l", tytree_), ("r", tytree_)] in
   let node_ = lam age. lam left. lam right.
-    asc_ tytree_
-      (conapp_ "Node" (asc_ tynoderec_ (record_ [("age", float_ age),
-                                                 ("l", left),
-                                                 ("r", right)])))
+      conapp_ "Node" (record_ [("age", float_ age),
+                               ("l", left),
+                               ("r", right)])
   in
 
   let tree =
