@@ -194,6 +194,12 @@ let rejectmodel9 =
   , plate_ (ulam_ "x" (var_ "theta")) (seq_ [1., 2.])
   ] in
 
+let rejectmodel10 =
+  bindall_
+  [ ulet_ "theta" (if_ true_ (assume_ (beta_ (float_ 10.0) (float_ 10.0))) (assume_ (beta_ (float_ 10.0) (float_ 15.0))))
+  , var_ "theta"
+  ] in
+
 let example1expanded = use MExprPPL in
   bindall_
   [ ulet_ "theta" (assume_ (beta_ (float_ 10.0) (float_ 10.0)))
@@ -307,6 +313,7 @@ let valid_tests =
  , (rejectmodel7, Some ("Plate fun check: Not supported expression in plate fun"), env)
  , (rejectmodel8, Some ("Distribution check: Not supported distribution"), env)
  , (rejectmodel9, Some ("Plate fun check: Not supported expression in plate fun"), env)
+ , (rejectmodel10, Some ("Not supported inexpression"), env)
  , (lambdaletmodel1, None (), env)
  , (lda, None (), env)
 ] in
