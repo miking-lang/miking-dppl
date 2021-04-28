@@ -21,8 +21,10 @@ lang Dist = PrettyPrint
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmDist r -> pprintDist env r.dist
 
-end
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmDist t -> TmDist { t with dist = f t.dist}
 
+end
 
 lang BernDist = Dist
 
@@ -35,8 +37,6 @@ lang BernDist = Dist
       (env, join ["(Bern ", p, ")"])
     else never
 end
-
-
 
 lang BetaDist = Dist
 
@@ -79,6 +79,18 @@ lang MultinomialDist = Dist
     else never
 end
 
+lang DirichletDist = Dist
+
+  syn Dist =
+  | DDirichlet { a: [Expr] }
+
+  sem pprintDist (env: PprintEnv) =
+  | DDirichlet r ->
+    match pprintCode 0 env r.a with (env, a) then
+      (env, join ["(Dirichlet ", a, ")"])
+    else never
+end
+
 lang ExpDist = Dist
 
   syn Dist =
@@ -116,6 +128,9 @@ let categorical_ = use CategoricalDist in
 let multinomial_ = use MultinomialDist in
   lam n. lam p. TmDist {dist = DMultinomial {n = n, p = p}, info = NoInfo ()}
 
+let dirichlet_ = use DirichletDist in
+  lam a. TmDist {dist = DDirichlet {a = a}, info = NoInfo ()}
+
 let exp_ = use ExpDist in
   lam rate. TmDist { dist = DExp {rate = rate}, info = NoInfo () }
 
@@ -126,7 +141,7 @@ let empirical_ = use EmpiricalDist in
 
 lang DistAll =
   BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
-  MultinomialDist + PrettyPrint
+  MultinomialDist + DirichletDist + PrettyPrint
 
 lang Test = DistAll + MExprAst + MExprPrettyPrint
 
@@ -139,6 +154,8 @@ utest expr2str (categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]))
   with "(Categorical [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
 utest expr2str (multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]))
   with "(Multinomial 5, [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
+utest expr2str (dirichlet_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]))
+  with "(Dirichlet [ 3.0e-1,\n  2.0e-1,\n  5.0e-1 ])" in
 utest expr2str (exp_ (float_ 1.0)) with "(Exp 1.0e-0)" in
 
 ()
