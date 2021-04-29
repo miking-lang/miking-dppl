@@ -7,7 +7,7 @@ include "mexpr/eq.mc"
 include "string.mc"
 include "seq.mc"
 
-lang Dist = PrettyPrint
+lang Dist = PrettyPrint + Eq + Sym
   syn Expr =
   | TmDist { dist: Dist,
              ty: Type,
@@ -55,11 +55,19 @@ lang Dist = PrettyPrint
   | TmDist r ->
     match lhs with TmDist l then eqExprHDist env free l.dist r.dist else None ()
 
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  -- Intentionally left blank
+
+  sem symbolizeExpr (env: SymEnv) =
+  | TmDist t ->
+    TmDist {{ t with dist = symbolizeDist env t.dist }
+                with ty = symbolizeType env t.ty }
 
 end
 
 
-lang BernDist = Eq + Dist
+lang BernDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
   | DBern { p: Expr }
@@ -83,11 +91,15 @@ lang BernDist = Eq + Dist
   | DBern l ->
     match lhs with DBern r then eqExprH env free l.p r.p else None ()
 
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DBern t -> DBern { t with p = symbolizeExpr env t.p }
+
 end
 
 
 
-lang BetaDist = Dist
+lang BetaDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
   | DBeta { a: Expr, b: Expr }
@@ -116,10 +128,16 @@ lang BetaDist = Dist
       else None ()
     else None ()
 
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DBeta t -> DBeta {{ t with a = symbolizeExpr env t.a }
+                          with b = symbolizeExpr env t.b }
+
+
 end
 
 -- DCategorical {p=p} is equivalent to DMultinomial {n=1, p=p}
-lang CategoricalDist = Dist
+lang CategoricalDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
   | DCategorical { p: [Expr] }
@@ -143,12 +161,17 @@ lang CategoricalDist = Dist
   | DCategorical t ->
     error "TODO"
 
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DCategorical t ->
+    error "TODO"
+
 end
 
 -- NOTE(dlunde,2021-04-28): This is implicitly over integers (I assume?), since
 -- we have no way to specify the values for the different categories (as is the
 -- case for, e.g., the Categorical distribution)
-lang MultinomialDist = Dist
+lang MultinomialDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
   | DMultinomial { n: Expr, p:[Expr] }
@@ -173,9 +196,14 @@ lang MultinomialDist = Dist
   | DMultinomial t ->
     error "TODO"
 
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DMultinomial t ->
+    error "TODO"
+
 end
 
-lang ExpDist = Dist
+lang ExpDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
   | DExp { rate: Expr }
@@ -198,9 +226,13 @@ lang ExpDist = Dist
   | DExp l ->
     match lhs with DExp r then eqExprH env free l.rate r.rate else None ()
 
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DExp t -> DExp { t with rate = symbolizeExpr env t.rate }
+
 end
 
-lang EmpiricalDist = Dist
+lang EmpiricalDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
   | DEmpirical { samples: [(Float, Expr)] }
@@ -221,6 +253,10 @@ lang EmpiricalDist = Dist
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | DEmpirical t ->
     error "TODO"
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DEmpirical t -> error "TODO"
 
 end
 
@@ -259,9 +295,9 @@ let empirical_ = use EmpiricalDist in
 
 lang DistAll =
   BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
-  MultinomialDist + PrettyPrint
+  MultinomialDist
 
-lang Test = DistAll + MExprAst + MExprPrettyPrint + MExprEq
+lang Test = DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym
 
 mexpr
 
@@ -349,6 +385,15 @@ with [ int_ 2, int_ 1 ] using eqSeq eqExpr in
 utest smap_Expr_Expr mapVar tmExp with exp_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmExp
 with [ float_ 1.0 ] using eqSeq eqExpr in
+
+---------------------
+-- SYMBOLIZE TESTS --
+---------------------
+-- TODO(dlunde,2021-04-28): Categorical, multinomial, empirical
+
+utest symbolize tmBern with tmBern using eqExpr in
+utest symbolize tmBeta with tmBeta using eqExpr in
+utest symbolize tmExp with tmExp using eqExpr in
 
 ()
 

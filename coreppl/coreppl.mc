@@ -16,7 +16,7 @@ include "string.mc"
 
 
 
-lang Infer = Ast + PrettyPrint + Eq
+lang Infer = Ast + PrettyPrint + Eq + Sym
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
@@ -63,11 +63,17 @@ lang Infer = Ast + PrettyPrint + Eq
       eqExprH env free l.model r.model
     else None ()
 
+  -- Symbolize
+  sem symbolizeExpr (env: SymEnv) =
+  | TmInfer t ->
+    TmInfer {{ t with model = symbolizeExpr env t.model }
+                 with ty = symbolizeType env t.ty }
+
 end
 
 
 -- Assume defines a new random variable
-lang Assume = Ast + Dist + PrettyPrint + Eq
+lang Assume = Ast + Dist + PrettyPrint + Eq + Sym
 
   syn Expr =
   | TmAssume { dist: Expr,
@@ -107,11 +113,17 @@ lang Assume = Ast + Dist + PrettyPrint + Eq
       eqExprH env free l.dist r.dist
     else None ()
 
+  -- Symbolize
+  sem symbolizeExpr (env: SymEnv) =
+  | TmAssume t ->
+    TmAssume {{ t with dist = symbolizeExpr env t.dist }
+                  with ty = symbolizeType env t.ty }
+
 end
 
 
 -- Observe gives a random variable conditioned on a specific value
-lang Observe = Ast + Dist + PrettyPrint + Eq
+lang Observe = Ast + Dist + PrettyPrint + Eq + Sym
 
   syn Expr =
   | TmObserve { value: Expr,
@@ -155,10 +167,17 @@ lang Observe = Ast + Dist + PrettyPrint + Eq
       else None ()
     else None ()
 
+  -- Symbolize
+  sem symbolizeExpr (env: SymEnv) =
+  | TmObserve t ->
+    TmObserve {{{ t with value = symbolizeExpr env t.value }
+                    with dist = symbolizeExpr env t.dist }
+                    with ty = symbolizeType env t.ty }
+
 end
 
 -- Defines a weight term
-lang Weight = Ast + PrettyPrint + Eq
+lang Weight = Ast + PrettyPrint + Eq + Sym
   syn Expr =
   | TmWeight { weight: Expr, ty: Type, info: Info }
 
@@ -194,6 +213,12 @@ lang Weight = Ast + PrettyPrint + Eq
     match lhs with TmWeight l then
       eqExprH env free l.weight r.weight
     else None ()
+
+  -- Symbolize
+  sem symbolizeExpr (env: SymEnv) =
+  | TmWeight t ->
+    TmWeight {{ t with weight = symbolizeExpr env t.weight }
+                  with ty = symbolizeType env t.ty }
 
 end
 
@@ -240,7 +265,8 @@ lang CorePPL =
 
 lang CorePPLInference = CorePPL -- + Importance + SMC
 
-lang MExprPPL = CorePPLInference + MExpr + MExprEq
+lang MExprPPL =
+  CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym
 
 
 mexpr
@@ -317,6 +343,14 @@ with [
 utest smap_Expr_Expr mapVar tmWeight with weight_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmWeight
 with [ float_ 1.5 ] using eqSeq eqExpr in
+
+---------------------
+-- SYMBOLIZE TESTS --
+---------------------
+
+utest symbolize tmAssume with tmAssume using eqExpr in
+utest symbolize tmObserve with tmObserve using eqExpr in
+utest symbolize tmWeight with tmWeight using eqExpr in
 
 ()
 
