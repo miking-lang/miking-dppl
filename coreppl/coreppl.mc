@@ -160,7 +160,7 @@ end
 -- Defines a weight term
 lang Weight = Ast + PrettyPrint + Eq
   syn Expr =
-  | TmWeight { weight: Expr }
+  | TmWeight { weight: Expr, ty: Type, info: Info }
 
   sem infoTm =
   | TmWeight t -> t.info
