@@ -88,8 +88,8 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DBern l ->
-    match lhs with DBern r then eqExprH env free l.p r.p else None ()
+  | DBern r ->
+    match lhs with DBern l then eqExprH env free l.p r.p else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
@@ -121,8 +121,8 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DBeta l ->
-    match lhs with DBeta r then
+  | DBeta r ->
+    match lhs with DBeta l then
       match eqExprH env free l.a r.a with Some free then
         eqExprH env free l.b r.b
       else None ()
@@ -140,66 +140,73 @@ end
 lang CategoricalDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
-  | DCategorical { p: [Expr] }
+  -- p has type [Int]: the list of probabilities
+  | DCategorical { p: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DCategorical t -> DCategorical { t with p = map f t.p }
+  | DCategorical t -> DCategorical { t with p = f t.p }
 
   sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DCategorical t -> foldl f acc t.p
+  | DCategorical t -> f acc t.p
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
   | DCategorical t ->
     let i = pprintIncr indent in
-    match printArgs i env t.p with (env,args) then
-      (env, join ["Categorical", pprintNewline i, args])
+    match printArgs i env [t.p] with (env,p) then
+      (env, join ["Categorical", pprintNewline i, p])
     else never
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DCategorical t ->
-    error "TODO"
+  | DCategorical { p = p2 } ->
+    match lhs with DCategorical { p = p1 } then
+      eqExprH env free p1 p2
+    else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
   | DCategorical t ->
-    error "TODO"
+    DCategorical { t with p = symbolizeExpr env t.p }
 
 end
 
--- NOTE(dlunde,2021-04-28): This is implicitly over integers (I assume?), since
--- we have no way to specify the values for the different categories (as is the
--- case for, e.g., the Categorical distribution)
 lang MultinomialDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
-  | DMultinomial { n: Expr, p:[Expr] }
+  -- n has type Int: the number of trials
+  -- p has type [Int]: the list of probabilities
+  | DMultinomial { n: Expr, p: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DMultinomial t -> DMultinomial {{ t with n = f t.n }
-                                        with b = f t.p }
+                                        with p = f t.p }
 
   sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DMultinomial t -> f (f acc t.a) t.b
+  | DMultinomial t -> f (f acc t.n) t.p
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
   | DMultinomial t ->
     let i = pprintIncr indent in
-    match printArgs i env (cons t.n t.p) with (env,args) then
+    match printArgs i env [t.n, t.p] with (env,args) then
       (env, join ["Multinomial", pprintNewline i, args])
     else never
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DMultinomial t ->
-    error "TODO"
+  | DMultinomial { n = n2, p = p2 } ->
+    match lhs with DMultinomial { n = n1, p = p1 } then
+      match eqExprH env free n1 n2 with Some free then
+        eqExprH env free p1 p2
+      else None ()
+    else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
   | DMultinomial t ->
-    error "TODO"
+    DMultinomial {{ t with n = symbolizeExpr env t.n }
+                      with p = symbolizeExpr env t.p }
 
 end
 
@@ -223,8 +230,8 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DExp l ->
-    match lhs with DExp r then eqExprH env free l.rate r.rate else None ()
+  | DExp r ->
+    match lhs with DExp l then eqExprH env free l.rate r.rate else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
@@ -235,28 +242,34 @@ end
 lang EmpiricalDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
-  | DEmpirical { samples: [(Float, Expr)] }
+  -- samples has type [(Float,a)]: A set of weighted samples over type a
+  | DEmpirical { samples: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DEmpirical t -> error "TODO"
+  | DEmpirical t -> DEmpirical { t with samples = f t.samples }
 
   sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DEmpirical t -> error "TODO"
+  | DEmpirical t -> f acc t.samples
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
-  | DEmpirical r ->
-    -- NOTE(dlunde,2021-04-28): I'm not sure why we want to print the size here
-    (env, join ["(Empirical size=", int2string (length r.samples), ")"])
+  | DEmpirical t ->
+    let i = pprintIncr indent in
+    match printParen i env t.samples with (env,samples) then
+      (env, join ["Empirical", pprintNewline i, samples])
+    else never
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DEmpirical t ->
-    error "TODO"
+  | DEmpirical { samples = s2 } ->
+    match lhs with DEmpirical { samples = s1 } then
+      eqExprH env free s1 s2
+    else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
-  | DEmpirical t -> error "TODO"
+  | DEmpirical t ->
+    DEmpirical { t with samples = symbolizeExpr env t.samples }
 
 end
 
@@ -306,18 +319,19 @@ use Test in
 
 let tmBern = bern_ (float_ 0.5) in
 let tmBeta = beta_ (int_ 1) (int_ 2) in
-let tmCategorical = categorical_ [float_ 0.3, float_ 0.2, float_ 0.5] in
-let tmMultinomial = multinomial_ (int_ 5) [float_ 0.3, float_ 0.2, float_ 0.5] in
+let tmCategorical =
+  categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
+let tmMultinomial =
+  multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmExp = exp_ (float_ 1.0) in
-let tmEmpirical = empirical_ [(1.0, float_ 1.5), (3.0, float_ 1.3)] in
+let tmEmpirical = empirical_ (seq_ [
+    tuple_ [float_ 1.0, float_ 1.5],
+    tuple_ [float_ 3.0, float_ 1.3]
+  ]) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
 ------------------------
-
--- NOTE(dlunde,2021-04-28): Probably not the print we want for DEmpirical
-utest expr2str tmEmpirical
-with "(Empirical size=2)" in
 
 utest expr2str tmBern with strJoin "\n" [
   "Bern",
@@ -332,17 +346,17 @@ utest expr2str tmBeta with strJoin "\n" [
 
 utest expr2str tmCategorical with strJoin "\n" [
   "Categorical",
-  "  3.0e-1",
-  "  2.0e-1",
-  "  5.0e-1"
+  "  [ 3.0e-1,",
+  "    2.0e-1,",
+  "    5.0e-1 ]"
 ] in
 
 utest expr2str tmMultinomial with strJoin "\n" [
   "Multinomial",
   "  5",
-  "  3.0e-1",
-  "  2.0e-1",
-  "  5.0e-1"
+  "  [ 3.0e-1,",
+  "    2.0e-1,",
+  "    5.0e-1 ]"
 ] in
 
 utest expr2str tmExp with strJoin "\n" [
@@ -350,11 +364,16 @@ utest expr2str tmExp with strJoin "\n" [
   "  1.0e-0"
 ] in
 
+utest expr2str tmEmpirical with strJoin "\n" [
+  "Empirical",
+  "  [ (1.0e-0, 1.50e+0),",
+  "    (3.0e+0, 1.300000e+0) ]"
+] in
+
 
 --------------------
 -- EQUALITY TESTS --
 --------------------
--- TODO(dlunde,2021-04-28): Categorical, multinomial, empirical
 
 utest tmBern with tmBern using eqExpr in
 utest eqExpr tmBern (bern_ (float_ 0.4)) with false in
@@ -362,13 +381,39 @@ utest eqExpr tmBern (bern_ (float_ 0.4)) with false in
 utest tmBeta with tmBeta using eqExpr in
 utest eqExpr tmBeta (beta_ (int_ 1) (int_ 1)) with false in
 
+utest tmCategorical with tmCategorical using eqExpr in
+utest eqExpr tmCategorical
+  (categorical_ (seq_ [float_ 0.2, float_ 0.2, float_ 0.5])) with false in
+utest eqExpr tmCategorical
+  (categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.6])) with false in
+
+utest tmMultinomial with tmMultinomial using eqExpr in
+utest eqExpr tmMultinomial
+  (multinomial_ (int_ 4) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]))
+with false in
+utest eqExpr tmMultinomial
+  (multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.3, float_ 0.5]))
+with false in
+
 utest tmExp with tmExp using eqExpr in
 utest eqExpr tmExp (exp_ (float_ 1.1)) with false in
+
+utest tmEmpirical with tmEmpirical using eqExpr in
+utest eqExpr tmEmpirical (empirical_ (seq_ [
+    tuple_ [float_ 2.0, float_ 1.5],
+    tuple_ [float_ 3.0, float_ 1.3]
+  ]))
+with false in
+utest eqExpr tmEmpirical (empirical_ (seq_ [
+    tuple_ [float_ 2.0, float_ 1.5],
+    tuple_ [float_ 3.0, float_ 1.4]
+  ]))
+with false in
+
 
 ----------------------
 -- SMAP/SFOLD TESTS --
 ----------------------
--- TODO(dlunde,2021-04-28): Categorical, multinomial, empirical
 
 let tmVar = var_ "x" in
 let mapVar = (lam. tmVar) in
@@ -382,18 +427,35 @@ utest smap_Expr_Expr mapVar tmBeta with beta_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmBeta
 with [ int_ 2, int_ 1 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmCategorical with categorical_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmCategorical
+with [ seq_ [float_ 0.3, float_ 0.2, float_ 0.5] ] using eqSeq eqExpr in
+
+utest smap_Expr_Expr mapVar tmMultinomial
+with multinomial_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmMultinomial
+with [ seq_ [float_ 0.3, float_ 0.2, float_ 0.5], int_ 5 ] using eqSeq eqExpr in
+
 utest smap_Expr_Expr mapVar tmExp with exp_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmExp
 with [ float_ 1.0 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmEmpirical with empirical_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmEmpirical
+with [
+  seq_ [ tuple_ [float_ 1.0, float_ 1.5], tuple_ [float_ 3.0, float_ 1.3] ]
+] using eqSeq eqExpr in
+
 ---------------------
 -- SYMBOLIZE TESTS --
 ---------------------
--- TODO(dlunde,2021-04-28): Categorical, multinomial, empirical
 
 utest symbolize tmBern with tmBern using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
+utest symbolize tmCategorical with tmCategorical using eqExpr in
+utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmExp with tmExp using eqExpr in
+utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 
 ()
 

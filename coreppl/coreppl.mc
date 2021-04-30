@@ -307,6 +307,7 @@ with strJoin "\n" [
 --------------------
 -- EQUALITY TESTS --
 --------------------
+-- TODO(dlunde,2021-04-28): TmInfer test
 
 utest tmAssume with tmAssume using eqExpr in
 utest eqExpr tmAssume (assume_ (bern_ (float_ 0.6)))
@@ -347,6 +348,7 @@ with [ float_ 1.5 ] using eqSeq eqExpr in
 ---------------------
 -- SYMBOLIZE TESTS --
 ---------------------
+-- TODO(dlunde,2021-04-28): TmInfer test
 
 utest symbolize tmAssume with tmAssume using eqExpr in
 utest symbolize tmObserve with tmObserve using eqExpr in
