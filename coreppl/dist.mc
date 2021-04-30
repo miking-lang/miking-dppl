@@ -66,7 +66,6 @@ lang Dist = PrettyPrint + Eq + Sym
 
 end
 
-
 lang BernDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
@@ -96,8 +95,6 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym
   | DBern t -> DBern { t with p = symbolizeExpr env t.p }
 
 end
-
-
 
 lang BetaDist = Dist + PrettyPrint + Eq + Sym
 
@@ -140,7 +137,7 @@ end
 lang CategoricalDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
-  -- p has type [Int]: the list of probabilities
+  -- p has type [Float]: the list of probabilities
   | DCategorical { p: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
@@ -175,7 +172,7 @@ lang MultinomialDist = Dist + PrettyPrint + Eq + Sym
 
   syn Dist =
   -- n has type Int: the number of trials
-  -- p has type [Int]: the list of probabilities
+  -- p has type [Float]: the list of probabilities
   | DMultinomial { n: Expr, p: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
@@ -207,6 +204,40 @@ lang MultinomialDist = Dist + PrettyPrint + Eq + Sym
   | DMultinomial t ->
     DMultinomial {{ t with n = symbolizeExpr env t.n }
                       with p = symbolizeExpr env t.p }
+
+end
+
+lang DirichletDist = Dist + PrettyPrint + Eq + Sym
+
+  syn Dist =
+  -- a has type [Float]: the list of concentration parameters
+  | DDirichlet { a: Expr }
+
+  sem smapDist_Expr_Expr (f: Expr -> a) =
+  | DDirichlet t -> DDirichlet { t with a = f t.a }
+
+  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | DDirichlet t -> f acc t.a
+
+  -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DDirichlet t ->
+    let i = pprintIncr indent in
+    match printArgs i env [t.a] with (env,a) then
+      (env, join ["Dirichlet", pprintNewline i, a])
+    else never
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | DDirichlet { a = a2 } ->
+    match lhs with DDirichlet { a = a1 } then
+      eqExprH env free a1 a2
+    else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DDirichlet t ->
+    DDirichlet { t with a = symbolizeExpr env t.a }
 
 end
 
@@ -293,6 +324,9 @@ let multinomial_ = use MultinomialDist in
   lam n. lam p.
   TmDist {dist = DMultinomial {n = n, p = p}, ty = tyunknown_, info = NoInfo ()}
 
+let dirichlet_ = use DirichletDist in
+  lam a. TmDist {dist = DDirichlet {a = a}, ty = tyunknown_, info = NoInfo ()}
+
 let exp_ = use ExpDist in
   lam rate.
   TmDist { dist = DExp {rate = rate}, ty = tyunknown_, info = NoInfo () }
@@ -307,9 +341,7 @@ let empirical_ = use EmpiricalDist in
 ---------------------------
 
 lang DistAll =
-  BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
-  MultinomialDist
-
+  BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist + MultinomialDist + DirichletDist
 lang Test = DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym
 
 mexpr
@@ -328,6 +360,7 @@ let tmEmpirical = empirical_ (seq_ [
     tuple_ [float_ 1.0, float_ 1.5],
     tuple_ [float_ 3.0, float_ 1.3]
   ]) in
+let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -370,6 +403,13 @@ utest expr2str tmEmpirical with strJoin "\n" [
   "    (3.0e+0, 1.300000e+0) ]"
 ] in
 
+utest expr2str tmDirichlet with strJoin "\n" [
+  "Dirichlet",
+  "  [ 1.300000e+0,",
+  "    1.300000e+0,",
+  "    1.50e+0 ]"
+] in
+
 
 --------------------
 -- EQUALITY TESTS --
@@ -410,6 +450,9 @@ utest eqExpr tmEmpirical (empirical_ (seq_ [
   ]))
 with false in
 
+utest tmDirichlet with tmDirichlet using eqExpr in
+utest eqExpr tmDirichlet
+  (dirichlet_ (seq_ [float_ 1.2, float_ 0.5, float_ 1.5])) with false in
 
 ----------------------
 -- SMAP/SFOLD TESTS --
@@ -446,6 +489,10 @@ with [
   seq_ [ tuple_ [float_ 1.0, float_ 1.5], tuple_ [float_ 3.0, float_ 1.3] ]
 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmDirichlet with dirichlet_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmDirichlet
+with [ seq_ [float_ 1.3, float_ 1.3, float_ 1.5] ] using eqSeq eqExpr in
+
 ---------------------
 -- SYMBOLIZE TESTS --
 ---------------------
@@ -456,6 +503,6 @@ utest symbolize tmCategorical with tmCategorical using eqExpr in
 utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmExp with tmExp using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
-
+utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 ()
 
