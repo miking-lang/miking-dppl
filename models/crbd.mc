@@ -12,23 +12,21 @@ include "../coreppl/coreppl.mc"
 -- TODO(dlunde,2020-11-11): Type annotate everything manually. This can later
 -- be done by the type checker.
 
-let crbd = use CorePPL in
+let crbd = use MExprPPL in
 
   let tytree_ = tyvar_ "Tree" in
 
   let tyleafrec_ = tyrecord_ [("age", tyfloat_)] in
   let leaf_ = lam age.
-    asc_ tytree_
-      (conapp_ "Leaf" (asc_ tyleafrec_ (record_ [("age", float_ age)])))
+      conapp_ "Leaf" (record_ [("age", float_ age)])
   in
 
   let tynoderec_ =
     tyrecord_ [("age", tyfloat_), ("l", tytree_), ("r", tytree_)] in
   let node_ = lam age. lam left. lam right.
-    asc_ tytree_
-      (conapp_ "Node" (asc_ tynoderec_ (record_ [("age", float_ age),
-                                                 ("l", left),
-                                                 ("r", right)])))
+      conapp_ "Node" (record_ [("age", float_ age),
+                               ("l", left),
+                               ("r", right)])
   in
 
   let tree =
@@ -44,8 +42,8 @@ let crbd = use CorePPL in
           false_
           (bindall_ [
             ulet_ "speciation"
-              (sampleBern_
-                (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu")))),
+              (assume_ (bern_
+                (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu"))))),
             if_ (not_ (var_ "speciation"))
               true_
               (and_
@@ -144,3 +142,8 @@ let crbd = use CorePPL in
       unit_
   ]
 
+mexpr
+
+use MExprPPL in
+
+print (expr2str crbd)
