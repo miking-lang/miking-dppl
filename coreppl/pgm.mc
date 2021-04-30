@@ -109,7 +109,7 @@ lang ProbabilisticGraphicalModel = CorePPL + MExprAst + PlatePrettyPrint
 end
 
 let plate_ = use PlateAst in
-  lam f. lam lst. TmPlate {fun=f, lst=lst, info=NoInfo()}
+  lam f. lam lst. TmPlate {fun=f, lst=lst, ty=tyunknown_, info=NoInfo()}
 
 lang TestLang = ProbabilisticGraphicalModel
 
