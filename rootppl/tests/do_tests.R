@@ -71,3 +71,5 @@ do_test(left= "testNormalInverseGammaNormalMultipass", right = "testNormalInvers
 
 renormalize_weights(test_file = "testLogAlphaSigmaSquared", numparts = args[[1]])
 do_test(left= "testLogAlphaSigmaSquared", right = "testLogAlphaSigmaSquaredDelayed", size = 1000)
+
+do_test(left= "testWaitingTimeMultipass", right = "testWaitingTimeDelayedMultipass", size = 1000)

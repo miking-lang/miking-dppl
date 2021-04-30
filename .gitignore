@@ -3,4 +3,4 @@ _build/
 .merlin
 .vscode
 rootppl/.gb.data
-rootppl/results/.Rhistory
+rootppl/results/

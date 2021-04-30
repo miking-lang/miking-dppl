@@ -1,9 +1,9 @@
 #!/bin/bash
-BIRDDIR=/home/viktor/ownCloud/miking-dppl-copy-1/rootppl/analysis/birds-factor
+BIRDDIR=/home/viktor/ownCloud/miking-dppl/rootppl/analysis/birds
 NUMPART=$1
 NUMRUN=$2
 CORES=32
-RESULTDIR=results/birds-$NUMPART
+RESULTDIR=/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-e2-$NUMPART
 if [ ! -f $RESULTDIR ]
 then
     mkdir $RESULTDIR
@@ -15,4 +15,5 @@ do
     make model=$BIRDDIR/$model -j$CORES
     ./program $NUMPART $NUMRUN
     cp log_norm_const.txt $RESULTDIR/$model.logz
+    mv results/EXP-* $RESULTDIR/
 done

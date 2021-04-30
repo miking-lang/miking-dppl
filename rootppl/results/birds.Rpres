@@ -1,54 +1,209 @@
-Verification of RootPPL on the Bird Trees
+Verification of RootPPL
 ========================================================
 author: Viktor Senderov
-date: 01 Apri 2021
+date: 21 April 2021
 width: 1920
 height: 1080
 
 
 ```{r include=FALSE}
-trees = c("Accipitridae",
-          "BC7",
-          "P20b",
-          "TitTyranRest")
+
 
 num_nodes = c(349, 179, 249, 631)
 
 depth = c(30, 14, 15, 22)
 
-resdir = c("birds-10000")
-
-birchdir = c("/home/viktor/ownCloud/probabilistic-programming/data/birds-results")
 
 #models = c("clads2-d-λ", "clads2-d-λμ", "clads2-d-λμασ", "clads2-factor", "crbd-d-λ", "crbd-d-λμ", "crbd", "birch-clads2", "birch-crbda")
-models = c("birch-clads2", "clads2-d-λ", "clads2-d-λμ", "clads2-d-λμασ", "clads2-factor")
 
-prepare_tree = function(treenr) {
-  do.call(rbind, lapply(models, function(m) {
-    # find m in results
-    logzfile = paste0(resdir, "/", trees[treenr], "-", m, ".cu.logz")
-    logz = tryCatch(jsonlite::fromJSON(logzfile),
-                    error = function(e) {
-                      as.numeric(readLines(logzfile))
-                    })
-    data.frame(logz = logz, model = rep(m, length(logz)), runs = rep(length(logz), length(logz)))
-  }))
+trees = c("Accipitridae", "BC7", "P20b", "TitTyranRest")
+ 
+logz_plot = function(
+  tree,
+  birchdir = c("/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-e2-20000"),
+  resdir = c("/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-e2-20000"),
+  #models = c("birch-clads2", "clads2-d-λμασ", "clads2-factor"),
+  models = c("birch-clads2", "clads2-d-λμασ")
+  
+) {
+  trees = tree
+  prepare_tree = function(treenr) {
+    do.call(rbind, lapply(models, function(m) {
+      # find m in results
+      logzfile = paste0(resdir, "/", trees[treenr], "-", m, ".cu.logz")
+      logz = tryCatch(jsonlite::fromJSON(logzfile),
+                      error = function(e) {
+                        as.numeric(readLines(logzfile))
+                      })
+      data.frame(logz = logz, model = rep(m, length(logz)), runs = rep(length(logz), length(logz)))
+    }))
+  }
+
+  plot_tree = function(df) {
+    df$model = factor(df$model, levels = models, ordered = TRUE)
+    ggplot2::ggplot(df, ggplot2::aes(model, logz)) + ggplot2::geom_boxplot() + ggplot2::theme(axis.text = ggplot2::element_text(size = 8)) + ggplot2::ggtitle(paste(tree, "Plot: log Z Sweeps: ", length(df$logz)/length(models)))
+  }
+  
+  plot_tree(prepare_tree(1))
+
 }
 
-plot_tree = function(df) {
-  df$model = factor(df$model, levels = models, ordered = TRUE)
-   ggplot2::ggplot(df, ggplot2::aes(model, logz)) + ggplot2::geom_boxplot() + ggplot2::theme(axis.text = ggplot2::element_text(size = 8))  
-}
+  
 
 evaluate_tree = function(df) {
   var = sapply(models, function(m) {
     var(dplyr::filter(df, model == m)$logz)
   })
+  evil = sapply(models, function(m) {
+    mean(dplyr::filter(df, model == m)$logz)
+  }) 
   R = sapply(models, function(m) {
     nrow(dplyr::filter(df, model == m))
   })
-  data.frame(var, R)
+  data.frame(var, mean= evil, R)
 }
+
+
+
+#' A global parameter plot vs concept paper results
+#'
+#' @param tree name of phylogenetic tree
+#' @param resdir directory where raw results are storred
+#' @param global_parameter which global parameter do we want to plot
+#' @param iter_size Number of samples per sweep
+#' @param Ni  # Ni - automatic computation of total number of sweeps
+#' @param m name of model
+#'
+#' @return
+#' @export
+#'
+#' @examples
+global_parameter_plot = function(tree,
+                                 resdir = c("/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-e2-20000"),                                           global_parameter = "λ",
+                                 iter_size = 1000, Ni = -1,
+                                 m = "clads2-d-λμασ") {
+  # read logz data
+  logzfile = paste0(resdir, "/", tree, "-", m, ".cu.logz")
+  logz = tryCatch(jsonlite::fromJSON(logzfile),
+                  error = function(e) {
+                    as.numeric(readLines(logzfile))
+                  })
+  data.frame(logz = logz, model = rep(m, length(logz)), runs = rep(length(logz), length(logz)))
+  
+  # read the birch data
+  birch_dat = read.table(paste0(resdir, "/", tree, "-birch-pdf_", global_parameter, ".csv"), sep = ";")
+  birch_dat$treatment = rep("birch", nrow(birch_dat))
+  names(birch_dat) = c(global_parameter, "pdf", "treatment")
+ # 
+
+  # read the rootppl data (all sweeps)
+  db = read.table(paste0(resdir, "/", tree, ".csv"), sep = ",")
+  names(db) = c( "λ", "μ", "epsilon", "log_α", "σ2", "log_weight")
+  # how many iterations in total, Ni = number of iterations
+  if (Ni == -1) Ni = nrow(db)/iter_size
+  
+  # renormalize weights based on log Z (Importance Sampling)
+  logweightlogz = unlist(lapply(0:(Ni-1), function(iteration) {
+    # add the normalizing log-weight (i.e. multiply by the exp(weight)) to
+    # sweep (iteration)
+    db[(iteration*iter_size + 1):((iteration + 1)*iter_size), "log_weight"] + logz[iteration + 1]
+  }))
+  unnormalized_weight = exp(logweightlogz - max(logweightlogz))
+  db$weight = unnormalized_weight/sum(unnormalized_weight)
+  
+  # Plot rootPPL 
+  # + ggplot2::geom_histogram(ggplot2::aes(y = ..density..), binwidth = 0.05, position = "dodge")
+  # +  ggplot2::geom_histogram(ggplot2::aes(y = ..density..), binwidth = 0.05, position = "dodge") 
+  colors <- c("RootPPL" = 1, "Birch" = 2)
+  atitle = paste(tree, "Plot:", global_parameter, "Sweeps:", Ni)
+  ggplot2::ggplot(db, ggplot2::aes_string(x=global_parameter) ) + ggplot2::geom_density(aes(color = "RootPPL")) +  ggplot2::ggtitle(atitle)  + ggplot2::geom_line(data = birch_dat, ggplot2::aes_string(x = global_parameter, y = "pdf", color = '"Birch"')) + theme_light()+  scale_color_manual(values = colors)
+      #+ ylim(0,5) + ggplot2::xlim(0, 4.0)
+  #theme(panel.background = element_blank()) +
+  
+  # compute quantiles for rootppl data
+  # rbind(birch_dat, do.call(rbind, lapply(0:(Ni-1), function(iteration) {
+  #  
+  #   data.frame(
+  #              quantile = birch_dat$quantile,
+  #              value = Hmisc::wtd.quantile(db[(iteration*iter_size + 1):((iteration + 1)*iter_size),][[global_parameter]], probs= birch_dat$quantile, weights = db$weight, normwt = TRUE),
+  #              "treatment" = iteration)
+  # 
+  # })))
+  
+  
+
+  
+}
+
+
+
+
+#' Plots the distribution of the factors
+#'
+#' @param tree name of phylogenetic tree
+#' @param resdir directory where raw results are storred
+#' @param iter_size Number of samples per sweep
+#' @param Ni  # Ni - automatic computation of total number of sweeps
+#' @param m name of model
+#'
+#' @return
+#' @export
+#'
+#' @examples
+factors_plot = function(tree,
+                        resdir = c("/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-e2-20000"), 
+                        iter_size = 1000, Ni = -1,
+                        m = "clads2-d-λμασ") {
+  # read logz data
+  logzfile = paste0(resdir, "/", tree, "-", m, ".cu.logz")
+  logz = tryCatch(jsonlite::fromJSON(logzfile),
+                  error = function(e) {
+                    as.numeric(readLines(logzfile))
+                  })
+  data.frame(logz = logz, model = rep(m, length(logz)), runs = rep(length(logz), length(logz)))
+
+  # read the rootppl data (all sweeps)
+  db = read.table(paste0(resdir, "/", tree, "-factors.csv"), sep = ",")
+  weight_index = ncol(db)
+  # how many iterations in total, Ni = number of iterations
+  if (Ni == -1) Ni = nrow(db)/iter_size
+  
+  # renormalize weights based on log Z (Importance Sampling)
+  logweightlogz = unlist(lapply(0:(Ni-1), function(iteration) {
+    # add the normalizing log-weight (i.e. multiply by the exp(weight)) to
+    # sweep (iteration)
+    db[(iteration*iter_size + 1):((iteration + 1)*iter_size), weight_index] + logz[iteration + 1]
+  }))
+  unnormalized_weight = exp(logweightlogz - max(logweightlogz))
+  db$weight = unnormalized_weight/sum(unnormalized_weight)
+  
+  # compute mean and variance and unique as a function of factor number
+  unique_samples = sapply(2:(weight_index - 1), function(nr) {
+    length(unique(db[,nr]))
+  })
+  
+  # map_factor = sapply(2:(weight_index - 1), function(nr) {
+  #   tryCatch({
+  #     map_estimate(db[,nr])  
+  #   }, error = function(e) 
+  #     {
+  #       return(NA)
+  #     })
+  #   
+  # })
+  
+  # var_factor = sapply(1:(weight_index - 1), function(nr) {
+  #   var(db[,nr])
+  # })
+  
+  db1 = data.frame(nr = 2:(weight_index - 1), log(unique_samples))
+  
+  ggplot(data = db1, aes(x = nr, y = log.unique_samples.)) + geom_point() + ylab("log(# unique samples)") + xlab("Factor Nr.") + ggtitle(tree, "Factor plot")
+  
+}
+
+
+
 ```
 
 What I tested?
@@ -59,8 +214,11 @@ trees
 num_nodes
 depth
 ```
-- 10,000 and 100,000 particles
-- Comparison to Birch results
+- 20,000 and 200,000 particles -- ClaDS2 model with delayed sampling.
+- 10,000 and 100,000 particles -- ClaDS2 model without delayed sampling but with factorization.
+- Birch results with 5,000 particles with AFP from concept paper.
+- log Z computation on the moth tree with 2411 nodes and 41 maximum depth.
+- 200,000 particle model resamples at the end and drops only 5,000 samples
 
 Models and priors
 ========================================================
@@ -71,7 +229,9 @@ Models:
 models
 ```
 
-- Survivorship bias correction for CRBD not implemented in RootPPL
+- CRBD Model also available but not shown in this iteration of the tests.
+- Partial delayed models are available (not all parameters delayed).
+
 
 Priors:
 
@@ -88,32 +248,14 @@ floating_t b = 0.2;
 
 - ρ as needed.
 
-Accipitridae (10,000)
+Accipitridae (20,000) -- log Z
 ========================================================
 
 ```{r echo=FALSE, out.width = "100%"}
-ggplot2::ggsave("Accipitridae.png", plot_tree(prepare_tree(1)) + ggplot2::coord_cartesian(ylim = c(-1235, -1190)), dpi = 1200)
+#ggplot2::ggsave("Accipitridae-logz.png", plot_tree(prepare_tree(1)) + ggplot2::coord_cartesian(ylim = c(-1235, -1190)), dpi = 1200)
+knitr::include_graphics('Accipitridae-logz.png')
 ```
 
-![alt text](Accipitridae.png)
-
-***
-
-```{r}
-evaluate_tree(prepare_tree(1))
-num_nodes[1]
-depth[1]
-```
-
-Accipitridae (100,000)
-========================================================
-
-```{r echo=FALSE, out.width = "100%"}
-resdir = c("birds-100000")
-ggplot2::ggsave("Accipitridae-100000.png", plot_tree(prepare_tree(1))  + ggplot2::coord_cartesian(ylim = c(-1235, -1190)), dpi = 1200)
-```
-
-![alt text](Accipitridae-100000.png)
 
 ***
 
@@ -124,53 +266,385 @@ depth[1]
 ```
 
 
-BC7 (10,000)
+Accipitridae (20,000), λ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+ggplot2::ggsave("Accipitridae-λ0-one.png", global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 1)), dpi = 1200)
+knitr::include_graphics('Accipitridae-λ0-one.png')
+```
+
+Accipitridae (20,000), λ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+#ggplot2::ggsave("Accipitridae-λ0-several.png", global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 3)), dpi = 1200)
+knitr::include_graphics('Accipitridae-λ0-several.png')
+```
+
+Accipitridae (20,000), μ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+#ggplot2::ggsave("Accipitridae-μ0-one.png", global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 1, global_parameter = "μ"), atitle = "Accipitridae, μ0, one iteration"), dpi = 1200)
+knitr::include_graphics('Accipitridae-μ0-one.png')
+```
+
+Accipitridae (20,000), μ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+#ggplot2::ggsave("Accipitridae-μ0-several.png",  global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 3, global_parameter = "μ"), atitle = "Accipitridae, μ0, several iterations"), dpi = 1200)
+knitr::include_graphics('Accipitridae-μ0-several.png')
+```
+
+Accipitridae (20,000), log α
+========================================================
+
+- Error reading the Birch quantiles, so only RootPPL data shown
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+data1 = prepare_global_parameter_plot("Accipitridae", Ni = 4, global_parameter = "log_α")
+ggplot2::ggsave("Accipitridae-log_α.png",  global_parameter_plot(data1[201:nrow(data1),], atitle = "Accipitridae, log α"), dpi = 1200)
+knitr::include_graphics('Accipitridae-log_α.png')
+```
+
+Accipitridae (20,000), σ2, one iteration
+========================================================
+
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+#ggplot2::ggsave("Accipitridae-σ2.png",  global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 1, global_parameter = "σ2"), atitle = "Accipitridae, σ2, one iteration"), dpi = 1200)
+knitr::include_graphics('Accipitridae-σ2.png')
+```
+
+
+Accipitridae (20,000), σ2, several iterations
+========================================================
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+#ggplot2::ggsave("Accipitridae-σ2-several.png",  global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 4, global_parameter = "σ2"), atitle = "Accipitridae, σ2, several iteration"), dpi = 1200)
+knitr::include_graphics('Accipitridae-σ2-several.png')
+```
+
+
+
+
+
+Accipitridae (200,000) -- log Z
 ========================================================
 
 ```{r echo=FALSE, out.width = "100%"}
-resdir = c("birds-10000")
-ggplot2::ggsave("BC7.png", plot_tree(prepare_tree(2))  + ggplot2::coord_cartesian(ylim = c(-578, -567)), dpi = 1200)
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("Accipitridae-200000-logz.png", plot_tree(prepare_tree(1)) + ggplot2::coord_cartesian(ylim = c(-1235, -1190)), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-logz.png')
 ```
 
-![alt text](BC7.png)
 
 ***
 
 ```{r}
-evaluate_tree(prepare_tree(2))
-num_nodes[2]
-depth[2]
+evaluate_tree(prepare_tree(1))
+num_nodes[1]
+depth[1]
 ```
 
 
-BC7 (100,000)
+
+Accipitridae (200,000), λ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("Accipitridae-200000-λ0-one.png", global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 1, iter_size = 5000), atitle = "Accipitridae (200,000), λ0, one iteration"), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-λ0-one.png')
+```
+
+
+Accipitridae (200,000), λ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("Accipitridae-200000-λ0-several.png", global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 5, iter_size = 5000), atitle = "Accipitridae (200,000), λ0, several iterations"), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-λ0-several.png')
+```
+
+
+
+
+Accipitridae (20,000), μ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("Accipitridae-200000-μ0-one.png", global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 1, global_parameter = "μ", iter_size = 5000), atitle = "Accipitridae, μ0, one iteration"), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-μ0-one.png')
+```
+
+
+
+Accipitridae (200,000), μ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("Accipitridae-200000-μ0-several.png",  global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 5, global_parameter = "μ", iter_size = 5000), atitle = "Accipitridae, μ0, several iterations"), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-μ0-several.png')
+```
+
+
+
+
+
+Accipitridae (200,000), log α
+========================================================
+
+- Error reading the Birch quantiles, so only RootPPL data shown
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#data1 = prepare_global_parameter_plot("Accipitridae", Ni = 4, global_parameter = "log_α", iter_size = 5000)
+#ggplot2::ggsave("Accipitridae-200000-log_α.png",  global_parameter_plot(data1[201:nrow(data1),], atitle = "Accipitridae, log α"), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-log_α.png')
+```
+
+Accipitridae (200,000), σ2, one iteration
+========================================================
+
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("Accipitridae-200000-σ2.png",  global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 1, global_parameter = "σ2", iter_size = 5000), atitle = "Accipitridae, σ2, one iteration"), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-σ2.png')
+```
+
+
+Accipitridae (200,000), σ2, several iterations
+========================================================
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("Accipitridae-200000-σ2-several.png",  global_parameter_plot(prepare_global_parameter_plot("Accipitridae", Ni = 4, global_parameter = "σ2", iter_size =5000), atitle = "Accipitridae, σ2, several iteration"), dpi = 1200)
+knitr::include_graphics('Accipitridae-200000-σ2-several.png')
+```
+
+
+
+
+
+BC7 (20,000) -- log Z
 ========================================================
 
 ```{r echo=FALSE, out.width = "100%"}
-resdir = c("birds-100000")
-ggplot2::ggsave("BC7-100000.png", plot_tree(prepare_tree(2))   + ggplot2::coord_cartesian(ylim = c(-578, -567)), dpi = 1200)
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("BC7-logz.png", plot_tree(prepare_tree(1)) + ggplot2::coord_cartesian(ylim = c(-1235, -1190)), dpi = 1200)
+knitr::include_graphics('BC7-logz.png')
 ```
 
-![alt text](BC7-100000.png)
 
 ***
 
 ```{r}
-evaluate_tree(prepare_tree(2))
-num_nodes[2]
-depth[2]
+evaluate_tree(prepare_tree(1))
+num_nodes[1]
+depth[1]
 ```
 
 
-P20b (10,000)
+BC7 (20,000), λ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("BC7-λ0-one.png", global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 1)), dpi = 1200)
+knitr::include_graphics('BC7-λ0-one.png')
+```
+
+BC7 (20,000), λ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("BC7-λ0-several.png", global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 3)), dpi = 1200)
+knitr::include_graphics('BC7-λ0-several.png')
+```
+
+BC7 (20,000), μ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("BC7-μ0-one.png", global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 1, global_parameter = "μ"), atitle = "BC7, μ0, one iteration"), dpi = 1200)
+knitr::include_graphics('BC7-μ0-one.png')
+```
+
+BC7 (20,000), μ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("BC7-μ0-several.png",  global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 3, global_parameter = "μ"), atitle = "BC7, μ0, several iterations"), dpi = 1200)
+knitr::include_graphics('BC7-μ0-several.png')
+```
+
+BC7 (20,000), log α
+========================================================
+
+- Error reading the Birch quantiles, so only RootPPL data shown
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = c("/home/viktor/data-output/birds-20000")
+#data1 = prepare_global_parameter_plot("BC7", Ni = 4, global_parameter = "log_α")
+#ggplot2::ggsave("BC7-log_α.png",  global_parameter_plot(data1[201:nrow(data1),], atitle = "BC7, log α"), dpi = 1200)
+knitr::include_graphics('BC7-log_α.png')
+```
+
+BC7 (20,000), σ2, one iteration
+========================================================
+
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("BC7-σ2.png",  global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 1, global_parameter = "σ2"), atitle = "BC7, σ2, one iteration"), dpi = 1200)
+knitr::include_graphics('BC7-σ2.png')
+```
+
+
+BC7 (20,000), σ2, several iterations
+========================================================
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("BC7-σ2-several.png",  global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 4, global_parameter = "σ2"), atitle = "BC7, σ2, several iteration"), dpi = 1200)
+knitr::include_graphics('BC7-σ2-several.png')
+```
+
+
+
+
+
+BC7 (200,000) -- log Z
 ========================================================
 
 ```{r echo=FALSE, out.width = "100%"}
-resdir = c("birds-10000")
-ggplot2::ggsave("P20b.png", plot_tree(prepare_tree(3))   + ggplot2::coord_cartesian(ylim = c(-750, -730)), dpi = 1200)
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("BC7-200000-logz.png", plot_tree(prepare_tree(1)) + ggplot2::coord_cartesian(ylim = c(-1235, -1190)), dpi = 1200)
+knitr::include_graphics('BC7-200000-logz.png')
 ```
 
-![alt text](P20b.png)
+
+***
+
+```{r}
+evaluate_tree(prepare_tree(1))
+num_nodes[1]
+depth[1]
+```
+
+
+
+BC7 (200,000), λ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("BC7-200000-λ0-one.png", global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 1, iter_size = 5000), atitle = "BC7 (200,000), λ0, one iteration"), dpi = 1200)
+knitr::include_graphics('BC7-200000-λ0-one.png')
+```
+
+
+BC7 (200,000), λ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("BC7-200000-λ0-several.png", global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 5, iter_size = 5000), atitle = "BC7 (200,000), λ0, several iterations"), dpi = 1200)
+knitr::include_graphics('BC7-200000-λ0-several.png')
+```
+
+
+
+
+BC7 (200,000), μ0, one iteration
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("BC7-200000-μ0-one.png", global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 1, global_parameter = "μ", iter_size = 5000), atitle = "BC7, μ0, one iteration"), dpi = 1200)
+knitr::include_graphics('BC7-200000-μ0-one.png')
+```
+
+
+
+BC7 (200,000), μ0, several iterations
+========================================================
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("BC7-200000-μ0-several.png",  global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 5, global_parameter = "μ", iter_size = 5000), atitle = "BC7, μ0, several iterations"), dpi = 1200)
+knitr::include_graphics('BC7-200000-μ0-several.png')
+```
+
+
+
+
+
+BC7 (200,000), log α
+========================================================
+
+- Error reading the Birch quantiles, so only RootPPL data shown
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#data1 = prepare_global_parameter_plot("BC7", Ni = 4, global_parameter = "log_α", iter_size = 5000)
+#ggplot2::ggsave("BC7-200000-log_α.png",  global_parameter_plot(data1[201:nrow(data1),], atitle = "BC7, log α"), dpi = 1200)
+knitr::include_graphics('BC7-200000-log_α.png')
+```
+
+BC7 (200,000), σ2, one iteration
+========================================================
+
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("BC7-200000-σ2.png",  global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 1, global_parameter = "σ2", iter_size = 5000), atitle = "BC7, σ2, one iteration"), dpi = 1200)
+knitr::include_graphics('BC7-200000-σ2.png')
+```
+
+
+BC7 (200,000), σ2, several iterations
+========================================================
+- Maybe I need to square my σ?
+
+```{r fig.width=10, fig.height=6, echo=FALSE}
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("BC7-200000-σ2-several.png",  global_parameter_plot(prepare_global_parameter_plot("BC7", Ni = 4, global_parameter = "σ2", iter_size =5000), atitle = "BC7, σ2, several iteration"), dpi = 1200)
+knitr::include_graphics('BC7-200000-σ2-several.png')
+```
+
+
+
+
+
+
+
+P20b (20,000)
+========================================================
+
+```{r echo=FALSE, out.width = "100%"}
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("P20b-20000-logz.png", plot_tree(prepare_tree(3))   + ggplot2::coord_cartesian(ylim = c(-750, -730)), dpi = 1200)
+knitr::include_graphics('P20b-20000-logz.png')
+```
+
 
 ***
 
@@ -180,15 +654,18 @@ num_nodes[3]
 depth[3]
 ```
 
-P20b (100,000)
+
+
+
+
+P20b (200,000)
 ========================================================
 
 ```{r echo=FALSE, out.width = "100%"}
-resdir = c("birds-100000")
-ggplot2::ggsave("P20b-100000.png", plot_tree(prepare_tree(3))   + ggplot2::coord_cartesian(ylim = c(-750, -730)), dpi = 1200)
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+#ggplot2::ggsave("P20b-200000-logz.png", plot_tree(prepare_tree(3))   + ggplot2::coord_cartesian(ylim = c(-750, -730)), dpi = 1200)
+knitr::include_graphics('P20b-200000-logz.png')
 ```
-
-![alt text](P20b-100000.png)
 
 ***
 
@@ -200,15 +677,14 @@ depth[3]
 
 
 
-TitTyranRest (10,000)
+TitTyranRest (20,000)
 ========================================================
 
 ```{r echo=FALSE, out.width = "100%"}
-resdir = c("birds-10000")
-ggplot2::ggsave("TitTyranRest.png", plot_tree(prepare_tree(4))  + ggplot2::coord_cartesian(ylim = c(-2325, -2250)), dpi = 1200)
+resdir = c("/home/viktor/data-output/birds-20000")
+#ggplot2::ggsave("TitTyranRest-20000-logz.png", plot_tree(prepare_tree(4))  + ggplot2::coord_cartesian(ylim = c(-2325, -2250)), dpi = 1200)
+knitr::include_graphics('TitTyranRest-20000-logz.png')
 ```
-
-![alt text](TitTyranRest.png)
 
 ***
 
@@ -218,15 +694,17 @@ num_nodes[4]
 depth[4]
 ```
 
-TitTyranRest (100,000)
+
+
+TitTyranRest (200,000)
 ========================================================
 
 ```{r echo=FALSE, out.width = "100%"}
-resdir = c("birds-100000")
-ggplot2::ggsave("TitTyranRest-100000.png", plot_tree(prepare_tree(4)) + ggplot2::coord_cartesian(ylim = c(-2325, -2250)), dpi = 1200)
+resdir = "/home/viktor/ownCloud/miking-dppl/rootppl/results/birds-200000/"
+resdir = c("/home/viktor/data-output/birds-20000")
+ggplot2::ggsave("TitTyranRest-200000-logz.png", plot_tree(prepare_tree(4))  + ggplot2::coord_cartesian(ylim = c(-2325, -2250)), dpi = 1200)
+knitr::include_graphics('TitTyranRest-200000-logz.png')
 ```
-
-![alt text](TitTyranRest-100000.png)
 
 ***
 
@@ -234,4 +712,75 @@ ggplot2::ggsave("TitTyranRest-100000.png", plot_tree(prepare_tree(4)) + ggplot2:
 evaluate_tree(prepare_tree(4))
 num_nodes[4]
 depth[4]
+```
+
+
+
+What more?
+========================================================
+
+- factors: have the data, but haven't visualized them yet
+- global parameters for two more trees
+- for the moth tree, var Z is (based on 1.5 mio parts)
+```{r}
+logz = c(-11053.1,-11053.3,-11051.8,-11052,-11053.5,-11053.1,-11051.3,-11051.9,-11053.5,-11054,-11052.5,-11054.5,-11051.1,-11052.4,-11052.4,-11052.9,-11054,-11053.7,-11051)
+var(logz)
+```
+
+
+JUNK
+========================================================
+
+Prepare data
+
+```{r eval=FALSE, include=FALSE}
+
+
+
+global_parameter_plot = function(data, global_parameter = "λ") {
+  ggplot(data, aes(x=value, color = iteration, fill = treatment) ) + geom_histogram(aes(y = ..density..), binwidth = 0.01, position = "dodge") + xlim(0, 4.0) + geom_density(alpha=.2) +  ggtitle("Accipitridae (20,000), λ0")
+}
+
+# count iterations from 0
+prepare_data_lambda_plot = function(tree, iteration = 0, iter_size = 20000)
+{
+  birch_dat = read.table(paste0(resdir, "/", tree, "-birch-pdf_λ.csv"), sep = ";")
+  birch_dat$treatment = rep("birch", nrow(birch_dat))
+  names(birch_dat) = c("quantile", "value", "treatment")
+  db = read.table(paste0(resdir, "/", tree, ".csv"), sep = ",")[(iteration*iter_size + 1):((iteration + 1)*iter_size),]
+  names(db) = c( "lambda0", "mu0", "epsilon", "alpha", "sigma", "weight")
+  data = rbind(birch_dat, data.frame(quantile = birch_dat$quantile, value = Hmisc::wtd.quantile(db$lambda0, probs= birch_dat$quantile, weights = db$weight, normwt = TRUE), treatment = rep("rootppl", nrow(birch_dat))))
+
+  #ggplot2::ggplot(birch_dat ) + geom_freqpoly(aes(x=value, (..count..)/sum(..count..), quantile=quantile, color = "red"), binwidth = 0.03) +  geom_freqpoly(aes(x=rootquants, (..count..)/sum(..count..), color = "blue"), binwidth = 0.03) + xlim(0, 1.25) 
+
+  #ggplot2::ggplot(birch_dat ) + geom_histogram(aes(x=value, (..count..)/sum(..count..), fill = "treatment"), binwidth = 0.02) +  geom_histogram(aes(x=rootquants, (..count..)/sum(..count..), fill = "blue"), binwidth = 0.02) + xlim(0, 1.25) 
+  return(data)
+}
+
+prepare_lambda_plot = function(data) {
+  ggplot(data, aes(x=value, fill = treatment) ) + geom_histogram(aes(y = ..density..), binwidth = 0.05, position = "dodge") + xlim(0, 4.0) + geom_density(alpha=.2) +  ggtitle("Accipitridae (20,000), λ0") + ylim(0,5)
+}
+
+add_lambda_plot = function(p) {
+  p + geom_histogram(aes(y = ..density..), binwidth = 0.01, position = "dodge")
+}
+  
+
+  #ggplot2::ggplot(birch_dat ) + geom_freqpoly(aes(x=rootquants, (..count..)/sum(..count..), quantile=quantile, color = "red"), binwidth = 0.03) + xlim(0, 1.25) 
+
+  #ggplot2::ggplot(db,  aes(x=lambda0, weight = weight)) + geom_freqpoly() + xlim(0, 1.25)
+
+p = prepare_lambda_plot(prepare_data_lambda_plot("Accipitridae"))
+
+add_lambda_plot()
+
+
+
+global_parameter_plot2 = function(data, atitle = "Accipitridae (20,000), λ0") {
+  ggplot2::ggplot(data, ggplot2::aes(x=λ) ) + ggplot2::geom_histogram(ggplot2::aes(y = ..density..), binwidth = 0.05, position = "dodge")  + ggplot2::geom_density(alpha=.2) +  ggplot2::ggtitle(atitle) #+ ylim(0,5) + ggplot2::xlim(0, 4.0)
+}
+
+global_parameter_plot = function(data, atitle = "Accipitridae (20,000), λ0") {
+  ggplot2::ggplot(data, ggplot2::aes(x=value, fill = treatment) ) + ggplot2::geom_histogram(ggplot2::aes(y = ..density..), binwidth = 0.05, position = "dodge")  + ggplot2::geom_density(alpha=.2) +  ggplot2::ggtitle(atitle) #+ ylim(0,5) + ggplot2::xlim(0, 4.0)
+}
 ```

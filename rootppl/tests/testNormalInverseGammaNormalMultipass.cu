@@ -16,6 +16,7 @@ const floating_t m0 = 0.1; // mean
 const floating_t v = 0.9; // variance multiplier
 const floating_t a = 10; // scale
 const floating_t b = 0.2; // scale
+const int passes = 100;
 
 const std::string testName = "testNormalInverseGammaNormalMultipass";
 
@@ -33,7 +34,10 @@ BBLOCK(testNormalInverseGammaNormal, {
     floating_t statistic = sample_NormalInverseGammaNormal(prior);
     floating_t statistic2 = sample_NormalInverseGammaNormal(prior);
     floating_t statistic3 = sample_NormalInverseGammaNormal(prior);
-  
+    for (int i = 0; i < passes; i++) {
+      statistic3 = sample_NormalInverseGammaNormal(prior);
+    }
+    
     // TODO do it with SAMPLE, instead of invoking the function directly
        
     PSTATE = statistic3;

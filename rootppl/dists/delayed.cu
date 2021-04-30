@@ -20,6 +20,8 @@
 
 DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f) {
   floating_t t = SAMPLE(lomax, 1/(f*rate.theta), rate.k);
+
+  assert(0.0 < rate.theta/(1 + t*f*rate.theta));					  
   rate.k = rate.k + 1;
   rate.theta = rate.theta/(1 + t*f*rate.theta);
   return t;
@@ -27,12 +29,13 @@ DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floatin
 
 
 DEV floating_t score_GammaExponential(RAND_STATE_DECLARE floating_t x, gamma_t& rate,  floating_t f) {
-  if (f < 1e-5) {
-    return -INFINITY;
-  } 
-  // TODO Maybe guard on f*theta
+  // if (f < 1e-5) {
+  //   return -INFINITY;
+  // } 
   // TODO instead of multiply here, add the logs in lomax
   floating_t score = lomaxScore(x, 1/(f*rate.theta), rate.k);
+
+  assert(0.0 < rate.theta/(1 + x*f*rate.theta));
   
   rate.k = rate.k + 1;
   rate.theta =  rate.theta/(1 + x*f*rate.theta);
@@ -45,14 +48,16 @@ DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, flo
   assert(0.0 <= f);
   assert(0.0 <= t);
   assert(0.0 <= rate.theta);
-  if (f*rate.theta < 1e-5) {
-    return 0.0;
-  }
+  //if (f*rate.theta < 1e-5) {
+   // if (f < 1e-5) {
+  //    return 0.0;
+  // }
   // TODO guard maybe on f*theta
   // TODO instead of multiplication do add in negativeBionomial score
   // second idea not going to work because log1p in denominator, I think
   floating_t score = negativeBinomialScore(x, rate.k, 1/(1 + t*f*rate.theta));
-  
+
+  assert(0.0 < rate.theta/(1 + t*f*rate.theta));
   rate.theta = rate.theta / (1 + t*f*rate.theta);
   return score;
 }

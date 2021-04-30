@@ -13,7 +13,7 @@
 #include <algorithm>
 
 #include "inference/smc/smc.cuh"
-#include "../tree-utils/tree_utils.cuh"
+#include "../../models/phylogenetics/tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 #include "utils/stack.cuh"
 #include "dists/delayed.cuh"
@@ -23,7 +23,9 @@
 //typedef moth_div_tree_t tree_t;
 typedef P20b_tree_t tree_t;
 //typedef Alcedinidae_tree_t tree_t;
- 
+
+std::string analysisName = "P20b";
+
 // Test settings
 
 floating_t rho      = 0.7668711656441718;
@@ -38,15 +40,16 @@ floating_t v = 1;
 floating_t a = 1.0;
 floating_t b = 0.2;
 
-#include "../clads2/clads2-d-λμασ.cuh"
+#include "../../models/phylogenetics/clads2/clads2-d-λμασ.cuh"
 
 MAIN({
 
     ADD_BBLOCK(simClaDS2);
     ADD_BBLOCK(simTree);
     ADD_BBLOCK(conditionOnDetection);
+    ADD_BBLOCK(justResample);
     ADD_BBLOCK(sampleFinalLambda);
-    //SMC(saveResults);
-    SMC(NULL)
+    SMC(saveResults);
+    //SMC(NULL)
 })
  

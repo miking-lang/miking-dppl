@@ -16,17 +16,18 @@
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 
-//typedef bisse32_tree_t tree_t;
+typedef bisse32_tree_t tree_t;
 // typedef primate_tree_t tree_t;
 // typedef moth_div_tree_t tree_t;
-typedef Accipitridae_tree_t tree_t;
+//typedef Accipitridae_tree_t tree_t;
 
 floating_t k = 1.0;
 floating_t theta = 1.0;
 floating_t epsMin = 0.0;
 floating_t epsMax = 1.0;
 
-floating_t rhoConst      = 0.7142857142857143;
+floating_t rho = 1.0;
+//floating_t rhoConst      = 0.7142857142857143;
 
 //floating_t mu = 0.1;
 

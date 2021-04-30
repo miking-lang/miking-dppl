@@ -15,18 +15,18 @@
 #include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 
-// typedef bisse32_tree_t tree_t;
+ typedef bisse32_tree_t tree_t;
 // typedef primate_tree_t tree_t;
 // typedef moth_div_tree_t tree_t;
-typedef Accipitridae_tree_t tree_t;
+//typedef Accipitridae_tree_t tree_t;
  
 floating_t kMu = 1;
 floating_t thetaMu = 0.5;
 floating_t kLambda = 1;
 floating_t thetaLambda = 1.0;
 
-
-floating_t rhoConst      = 0.7142857142857143;
+floating_t rhoConst = 1.0;
+//floating_t rhoConst      = 0.7142857142857143;
 
 
 #include "../crbd/crbd-d-λμ.cuh"

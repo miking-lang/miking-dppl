@@ -16,7 +16,7 @@ BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating
 
 BBLOCK_DATA(tree, tree_t, 1)
 
-BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
+//BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
 
 
 BBLOCK_HELPER(M_crbdGoesUndetected, {
@@ -99,7 +99,8 @@ BBLOCK(simTree, {
     floating_t lambdaLocal = PSTATE.lambda;
     floating_t muLocal = PSTATE.mu;
     // floating_t rhoLocal = *DATA_POINTER(rho);
-    floating_t rhoLocal = DATA_CONST(rho);
+    //floating_t rhoLocal = DATA_CONST(rho);
+    floating_t rhoLocal = rho;
 
     int indexParent = treeP->idxParent[treeIdx];
     
@@ -128,10 +129,9 @@ BBLOCK(simTree, {
 BBLOCK(simCRBD, {
 
 
-
-    PSTATE.lambda = SAMPLE(gamma, k, theta);
+    PSTATE.lambda = SAMPLE(gamma, 1.0, 1.0);
     // PSTATE.lambda = 0.2;
-    floating_t epsilon = SAMPLE(uniform, epsMin, epsMax);
+    floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
     // floating_t epsilon = 0.5;
     PSTATE.mu = epsilon * PSTATE.lambda;
     // PSTATE.mu = mu;
@@ -151,7 +151,8 @@ BBLOCK(simCRBD, {
 BBLOCK(survivorshipBias, {
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     int MAX_M = 10000;
-    int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, DATA_CONST(rho));
+    //int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, DATA_CONST(rho));
+    int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, rho);
     WEIGHT(LOG(M));
     PC++;
 })

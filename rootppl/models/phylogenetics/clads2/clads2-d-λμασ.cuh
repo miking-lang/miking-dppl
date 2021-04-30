@@ -1,4 +1,4 @@
-
+BBLOCK_DATA(tree, tree_t, 1);
 
 /**
  * The delayed program state now has the latest k
@@ -6,9 +6,19 @@
  */
 typedef short treeIdx_t;
 struct progStateDelayed_t {
-  pStack_t stack;
+ 
+  floating_t factorArr[(tree->NUM_NODES)];
+  // This array stores for each node
+  // the factor at the beginning of its parent node.
+  // TODO Technically we don't need a factor for the root (it is assumed to be 1)
+  // so we can do one less.
+  // But for now we are going to waste one posistion for easier debuggin
+
+  floating_t factorEndArr[(tree->NUM_NODES)];
+  // the factors at the end of the branches
+  
   gamma_t lambda_0;
-  gamma_t mu;
+  gamma_t mu_0;
   normalInverseGamma_t alphaSigma;
 
   floating_t lambda0;
@@ -69,7 +79,7 @@ BBLOCK_HELPER(clads2GoesUndetectedDelayed, {
     // t is the waiting time until the next event (speciation or extinction)
     floating_t tSp  = sample_GammaExponential(lambda0, factor);
     
-    floating_t tExt = sample_GammaExponential(mu, factor);
+    floating_t tExt = sample_GammaExponential(mu_0, factor);
     floating_t t    = std::min(tSp, tExt);
    
     floating_t currentTime = startTime - t;
@@ -78,7 +88,6 @@ BBLOCK_HELPER(clads2GoesUndetectedDelayed, {
         bool undetected = !SAMPLE(bernoulli, rho);  
         return undetected;
     }
-            
    
     bool speciation =  (tSp < tExt) ? true : false;
     bool extinction = !speciation;
@@ -92,15 +101,15 @@ BBLOCK_HELPER(clads2GoesUndetectedDelayed, {
     floating_t f1 = sample_NormalInverseGammaNormal(alphaSigma);
     floating_t f2 = sample_NormalInverseGammaNormal(alphaSigma);
 
-    bool ret1 = BBLOCK_CALL(clads2GoesUndetectedDelayed, currentTime, lambda0, mu, factor*exp(f1), alphaSigma, rho);
+    bool ret1 = BBLOCK_CALL(clads2GoesUndetectedDelayed, currentTime, lambda0, mu_0, factor*exp(f1), alphaSigma, rho);
     
     bool leftDetection = !ret1;
     if (leftDetection) return ret1; // no need to descend to the right side of the tree
     
-    bool ret2 = BBLOCK_CALL(clads2GoesUndetectedDelayed, currentTime, lambda0, mu, factor*exp(f2), alphaSigma, rho);
+    bool ret2 = BBLOCK_CALL(clads2GoesUndetectedDelayed, currentTime, lambda0, mu_0, factor*exp(f2), alphaSigma, rho);
     return ret2;
     
-  }, bool, floating_t startTime, gamma_t& lambda0, gamma_t& mu, floating_t factor, normalInverseGamma_t& alphaSigma, floating_t rho)
+  }, bool, floating_t startTime, gamma_t& lambda0, gamma_t& mu_0, floating_t factor, normalInverseGamma_t& alphaSigma, floating_t rho)
 
 
 
@@ -122,8 +131,9 @@ BBLOCK_HELPER(simBranchDelayed, {
     }
 
     if (factor < 1e-5) {
-      floating_t ret0 = score_GammaPoisson(0, t1, mu, factor);
-      simBranchRet_t ret(factor, 0.0, ret0);
+      //floating_t ret0 = score_GammaPoisson(0, t1, mu, factor);
+      //floating_t ret0 = 0.0;
+      simBranchRet_t ret(factor, 0.0, -INFINITY);
       return ret;
     }
     // end extreme values patch 2/2
@@ -133,7 +143,7 @@ BBLOCK_HELPER(simBranchDelayed, {
     
 
     if(currentTime <= stopTime) {
-      floating_t ret1 = score_GammaPoisson(0, t1, mu, factor);
+      floating_t ret1 = score_GammaPoisson(0, t1, mu_0, factor);
       simBranchRet_t ret(factor, 0.0, ret1);
       return ret;
     }
@@ -145,7 +155,7 @@ BBLOCK_HELPER(simBranchDelayed, {
     // we need to check if the side was undetected
     // w.l.o.g. we choose the right side to die
     //rate_t rightRate(lambdaRate.k, lambdaRate.theta, lambdaRate.factor*exp(f2));
-    bool sideUndetected = BBLOCK_CALL(clads2GoesUndetectedDelayed, currentTime, lambda0, mu, factor*exp(f2), alphaSigma, rho);
+    bool sideUndetected = BBLOCK_CALL(clads2GoesUndetectedDelayed, currentTime, lambda0, mu_0, factor*exp(f2), alphaSigma, rho);
 
     if(! sideUndetected) {
       // this particle needs to die
@@ -158,9 +168,9 @@ BBLOCK_HELPER(simBranchDelayed, {
     // and accummulate the factor
     //    rate_t leftRate(lambdaRate.k, lambdaRate.theta, lambdaRate.factor*exp(f1));
     
-    simBranchRet_t ret7 = BBLOCK_CALL(simBranchDelayed, currentTime, stopTime, lambda0, mu, factor*exp(f1), alphaSigma,  rho);
+    simBranchRet_t ret7 = BBLOCK_CALL(simBranchDelayed, currentTime, stopTime, lambda0, mu_0, factor*exp(f1), alphaSigma,  rho);
 
-    floating_t extinctionProb = score_GammaPoisson(0, t, mu, factor);  // branch didn't go extinct
+    floating_t extinctionProb = score_GammaPoisson(0, t, mu_0, factor);  // branch didn't go extinct
     
     // Now gather all weights and add 2 for the end of the branch
     // 1 and 2 are probs, 3 is a bool, 4 is a prob again
@@ -169,16 +179,16 @@ BBLOCK_HELPER(simBranchDelayed, {
 
   return rt;
     
-  }, simBranchRet_t, floating_t startTime, floating_t stopTime, gamma_t& lambda0, gamma_t& mu, floating_t factor, normalInverseGamma_t& alphaSigma, floating_t rho);
+  }, simBranchRet_t, floating_t startTime, floating_t stopTime, gamma_t& lambda0, gamma_t& mu_0, floating_t factor, normalInverseGamma_t& alphaSigma, floating_t rho);
 
 
 
  
 
-#define NUM_BBLOCKS 4
+#define NUM_BBLOCKS 5
 INIT_MODEL(progStateDelayed_t, NUM_BBLOCKS)
 
-BBLOCK_DATA(tree, tree_t, 1);
+
 
 // Not called on root as in WebPPL, instead root is handled in simClaDS2 bblock
 BBLOCK(simTree, {
@@ -195,15 +205,33 @@ BBLOCK(simTree, {
     }
     
     PSTATE.treeIdx = treeP->idxNext[treeIdx];
+
+   
     
     int indexParent = treeP->idxParent[treeIdx];
+
     
-    floating_t factor = PSTATE.stack.pop();
     
-    simBranchRet_t ret = BBLOCK_CALL(simBranchDelayed, treeP->ages[indexParent], treeP->ages[treeIdx],  PSTATE.lambda_0, PSTATE.mu, factor, PSTATE.alphaSigma, PSTATE.rho);
+    //floating_t factor = PSTATE.stack.pop();
+
+     floating_t factor = PSTATE.factorArr[treeIdx];
+     //std::cout << "Simulating from: " << indexParent << "to" << treeIdx << ", ";
+     // std::cout << "Reading factor[" << treeIdx << "] = " << PSTATE.factorArr[treeIdx]<< "\n";
+     // std::cout << "popped: " << factor << "\n";
+ 
+     // if (std::abs(factor - PSTATE.factorArr[treeIdx]) > 0.1) {
+     //   std::cout << "ERROR CONDITION!";
+          
+     // }
+     
+     
+    
+    simBranchRet_t ret = BBLOCK_CALL(simBranchDelayed, treeP->ages[indexParent], treeP->ages[treeIdx],  PSTATE.lambda_0, PSTATE.mu_0, factor, PSTATE.alphaSigma, PSTATE.rho);
 
     floating_t factorEnd = ret.r0;
+    PSTATE.factorEndArr[treeIdx] = factorEnd;
 
+    
     bool interiorNode = treeP->idxLeft[treeIdx] != -1 || treeP->idxRight[treeIdx] != -1;
     floating_t lnTerminalProb = interiorNode ? score_GammaExponential(0, PSTATE.lambda_0, factorEnd) : log(PSTATE.rho);
     WEIGHT(ret.r2 + lnTerminalProb);
@@ -216,8 +244,14 @@ BBLOCK(simTree, {
       floating_t leftf = factorEnd*exp(f1);
       floating_t rightf = factorEnd*exp(f2);
       
-      PSTATE.stack.push(rightf);
-      PSTATE.stack.push(leftf);
+      //      PSTATE.stack.push(rightf);
+      //PSTATE.stack.push(leftf);
+      //std::cout << "Creating factor[" << (treeP->idxLeft[treeIdx]  ) << "] =" << leftf <<"\n";
+      //std::cout << "and factor[" << (treeP->idxRight[treeIdx] ) << "]=" << rightf << "\n";
+      PSTATE.factorArr[treeP->idxLeft[treeIdx]] = leftf;
+      PSTATE.factorArr[treeP->idxRight[treeIdx]] = rightf;
+//      PSTATE.factorArr[treeIdx - 1] = rightf;
+//      PSTATE.factorArr[treeP->idxNext[treeIdx] - 1] = leftf;
     }
     
 })
@@ -228,12 +262,12 @@ BBLOCK(simClaDS2, {
 
     // Make sure this is the correct starting point
     PSTATE.treeIdx = treeP->idxLeft[ROOT_IDX];
- 
+    //std::cout << "At ROOT " << PSTATE.treeIdx << "\n";
 
 
    // floating_t lambda_0 = SAMPLE(gamma, k, theta);
     gamma_t lambda_0(k, theta);
-    gamma_t mu(kMu, thetaMu);
+    gamma_t mu_0(kMu, thetaMu);
 
     //floating_t sigmaSquared = 1.0 / SAMPLE(gamma, 1.0, 1.0 / 0.2);
     //floating_t sigma = sqrt(sigmaSquared);
@@ -247,7 +281,7 @@ BBLOCK(simClaDS2, {
     floating_t factor = 1.0;
     
     PSTATE.lambda_0 = lambda_0;
-    PSTATE.mu = mu;
+    PSTATE.mu_0 = mu_0;
     PSTATE.alphaSigma = alphaSigma;
     PSTATE.epsilon = epsilon;
     PSTATE.rho = rho;
@@ -267,12 +301,17 @@ BBLOCK(simClaDS2, {
 
     // bblockArgs_t args(lambda1, lambda2);
     // one for each child, and one for Survivorship Bias after tree simulations
-    PSTATE.stack.push(rightf);
-    PSTATE.stack.push(leftf);
-    PSTATE.stack.push(factor);
+    //    PSTATE.stack.push(rightf);
+    //PSTATE.stack.push(leftf);
+    //PSTATE.stack.push(factor);
+    //std::cout << "Creating factor[" << (PSTATE.treeIdx) << "] =" << leftf << "\n";
+    //std::cout << "and factor[" << (treeP->idxRight[ROOT_IDX] ) << "] = " << rightf << "\n";
+    PSTATE.factorArr[PSTATE.treeIdx] = leftf;
+    PSTATE.factorArr[treeP->idxRight[ROOT_IDX]] = rightf;
 
     PC++;
     BBLOCK_CALL(simTree);
+
 
     // Condition on detection (clads2GoesUndetected simulations)
     // Nested inference with "forward" method here, just simulation with WEIGHT( -2.0 * log(number of false))?
@@ -284,7 +323,9 @@ BBLOCK(conditionOnDetection, {
 
     tree_t* treeP = DATA_POINTER(tree);
     floating_t treeAge = treeP->ages[ROOT_IDX];
-    floating_t factor = PSTATE.stack.pop();
+    //floating_t factor = PSTATE.stack.pop();
+    floating_t factor = 1.0;
+
     
     floating_t epsilon = PSTATE.epsilon;
     floating_t rho = PSTATE.rho;
@@ -292,7 +333,7 @@ BBLOCK(conditionOnDetection, {
     int numSamples = 100;
     int numDetected = 0;
     for(int i = 0; i < numSamples; i++) {
-      bool undetected = BBLOCK_CALL(clads2GoesUndetectedDelayed, treeAge, PSTATE.lambda_0, PSTATE.mu, factor, PSTATE.alphaSigma, rho);
+      bool undetected = BBLOCK_CALL(clads2GoesUndetectedDelayed, treeAge, PSTATE.lambda_0, PSTATE.mu_0, factor, PSTATE.alphaSigma, rho);
         if(! undetected)
             numDetected++;
     }
@@ -303,34 +344,115 @@ BBLOCK(conditionOnDetection, {
 
 })
 
+BBLOCK(justResample, {
+    //std::cout << "Resampling...\r\r\r\r\r\r\r\r\r\r\r\r";
+    PC++;
+})
+
 
 BBLOCK(sampleFinalLambda, {
     PSTATE.lambda0 = SAMPLE(gamma, PSTATE.lambda_0.k, PSTATE.lambda_0.theta);
-    PSTATE.mu0 = SAMPLE(gamma, PSTATE.mu.k, PSTATE.mu.theta);
-    PSTATE.epsilon = PSTATE.lambda0/PSTATE.mu0;
+    PSTATE.mu0 = SAMPLE(gamma, PSTATE.mu_0.k, PSTATE.mu_0.theta);
+    PSTATE.epsilon = PSTATE.mu0/PSTATE.lambda0;
     
     floating_t sigmaSquared = 1.0 / SAMPLE(gamma, PSTATE.alphaSigma.a, 1.0 / PSTATE.alphaSigma.b);
-    PSTATE.sigma = sqrt(sigmaSquared);
+    PSTATE.sigma = sigmaSquared;
     PSTATE.alpha = SAMPLE(normal, PSTATE.alphaSigma.m0, 1/PSTATE.alphaSigma.v * PSTATE.sigma);
     PC++;
 })
  
 // Write particle data to file
 CALLBACK(saveResults, {
-      std::string fileName = "results/clads2-delayed-primate.csv";
-      std::ofstream resultFile (fileName, std::ios_base::app);
-      //resultFile << "lambda0 k theta mu0 sigma alpha epsilon weight\n";
-      if(resultFile.is_open()) {
-
-          for(int i = 0; i < N; i++)
+    int M = std::min(1000, N);
+    
+    std::string fileName = "results/EXP-" + analysisName + ".csv";
+    std::ofstream resultFile (fileName, std::ios_base::app);
+    //resultFile << "lambda0 mu0 alpha log-alpha sigma2 epsilon log-weight\n";
+    // lambda0 mu0 epsilon alpha sigma 
+    if(resultFile.is_open()) {
+      
+      for(int i = 0; i < M; i++)
               resultFile << 
-		PSTATES[i].lambda0 << " " << PSTATES[i].lambda_0.k << " " << PSTATES[i].lambda_0.theta << " " << PSTATES[i].mu0 << " " << PSTATES[i].sigma << " " << PSTATES[i].alpha << " " << PSTATES[i].epsilon << " " << 
-                  exp(WEIGHTS[i]) << "\n";
+		PSTATES[i].lambda0 << ", " <<
+		PSTATES[i].mu0 << ", " <<
+		PSTATES[i].epsilon << ", " <<
+		PSTATES[i].alpha << ", " <<
+		PSTATES[i].sigma << ", " <<
+		WEIGHTS[i] << "\n";
 
           resultFile.close();
       } else {
           printf("Could not open file %s\n", fileName.c_str());
       }
+
+      std::string fileName2 = "results/EXP-" + analysisName + "-factors.csv";
+      std::ofstream resultFile2 (fileName2, std::ios_base::app);
+      if(resultFile2.is_open()) {
+
+	for(int i = 0; i < M; i++) {
+	  for (int j = 0; j < (tree->NUM_NODES); j++) {
+	    resultFile2 << PSTATES[i].factorArr[j] << ", ";
+	  }
+	  resultFile2 << WEIGHTS[i] << "\n";
+	}
+	
+	resultFile2.close();
+      } else {
+	printf("Could not open file %s\n", fileName2.c_str());
+      }
+
+      std::string fileName3 = "results/EXP-" + analysisName + "-end-factors.csv";
+      std::ofstream resultFile3 (fileName3, std::ios_base::app);
+      if(resultFile3.is_open()) {
+
+	for(int i = 0; i < M; i++) {
+	  for (int j = 0; j < (tree->NUM_NODES); j++) {
+	    resultFile3 << PSTATES[i].factorEndArr[j] << ", ";
+	  }
+	  resultFile3 << WEIGHTS[i] << "\n";
+	}
+	
+	resultFile3.close();
+      } else {
+	printf("Could not open file %s\n", fileName3.c_str());
+      }
+
+      // new lambdas at beginning of branches
+      std::string fileName4 = "results/EXP-" + analysisName + "-new-lambdas.csv";
+      std::ofstream resultFile4 (fileName4, std::ios_base::app);
+      if(resultFile4.is_open()) {
+	
+	for(int i = 0; i < M; i++) {
+	  resultFile4 << PSTATES[i].lambda0 << ", ";
+	  for (int j = 1; j < (tree->NUM_NODES); j++) {
+	    resultFile4 << SAMPLE(gamma, PSTATES[i].lambda_0.k, PSTATES[i].lambda_0.theta*PSTATES[i].factorArr[j]) <<  ", ";
+	  }
+	  resultFile4 << WEIGHTS[i] << "\n";
+	}
+	
+	resultFile4.close();
+      } else {
+	printf("Could not open file %s\n", fileName4.c_str());
+      }
+
+
+      // new lambdas at the end of branches
+      std::string fileName5 = "results/EXP-" + analysisName + "-new-lambdas-end.csv";
+      std::ofstream resultFile5 (fileName5, std::ios_base::app);
+      if(resultFile5.is_open()) {
+	
+	for(int i = 0; i < M; i++) {
+	  for (int j = 0; j < (tree->NUM_NODES); j++) {
+	    resultFile5 << SAMPLE(gamma, PSTATES[i].lambda_0.k, PSTATES[i].lambda_0.theta*PSTATES[i].factorEndArr[j]) <<  ", ";
+	  }
+	  resultFile5 << WEIGHTS[i] << "\n";
+	}
+	
+	resultFile5.close();
+      } else {
+	printf("Could not open file %s\n", fileName4.c_str());
+      }
+
 
   })
 
