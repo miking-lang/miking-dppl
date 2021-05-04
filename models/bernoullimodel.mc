@@ -12,5 +12,8 @@ let bernoullimodel = use MExprPPL in
   ]
 mexpr
 use MExprPPL in
-printLn (expr2str bernoullimodel);
+
+-- printLn (expr2str bernoullimodel);
+utest expr2str bernoullimodel with () using (lam. lam. true) in
+
 ()

@@ -1,16 +1,10 @@
 
-
-
-
-
-
 .PHONY : all test clean
-
 
 all:
 
 test:
-	@boot eval --test coreppl
+	@$(MAKE) -s -f test.mk all
 
 clean:
 	@rm -f coreppl/*~
