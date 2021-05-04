@@ -3,7 +3,7 @@ include "coreppl.mc"
 include "name.mc"
 
 type Env = Map Name Expr
-let _emptyEnv = mapEmpty nameEq
+let _emptyEnv = mapEmpty nameCmp
 
 lang PlateAst
   syn Expr =
@@ -119,7 +119,7 @@ mexpr
 use TestLang in
 let valid: Expr -> Env = lam t: Expr. lam e: Env. validate e t in
 
-let env = builtinEnv in
+let env = _emptyEnv in
 
 let lambdaletmodel1 =
   bindall_
