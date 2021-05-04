@@ -1,11 +1,9 @@
 -- CorePPL compiler, targeting the RootPPL framework
+-- TODO(dlunde,2021-05-04): Out of date
 
-include "coreppl/ast.mc"
-include "coreppl/symbolize.mc"
-include "coreppl/anf.mc"
-include "coreppl/pprint.mc"
+include "../coreppl/coreppl.mc"
 
-include "crbd/crbd.mc"
+include "../models/crbd.mc"
 
 mexpr
 use CorePPL in
@@ -26,7 +24,8 @@ use CorePPL in
 -- let _ = printLn (float2string (subf t3 t2)) in
 -- expr2str is really slow (3.7 seconds)
 
-let _ = writeFile "_crbd-init.mc" (expr2str crbd) in
-let anf = normalizeTerm (symbolize crbd) in
-let _ = writeFile "_crbd-anf.mc" (expr2str anf) in
+-- writeFile "_crbd-init.mc" (expr2str crbd);
+-- let anf = normalizeTerm (symbolize crbd) in
+-- writeFile "_crbd-anf.mc" (expr2str anf);
+
 ()

@@ -8,7 +8,7 @@ let simpleModel = use CorePPL in
 mexpr
 use CorePPL in
 
-let _ = printLn (expr2str simpleModel) in
+-- printLn (expr2str simpleModel) in
 ()
 -- let anf = normalizeTerm (symbolize crbd) in
 -- let _ = writeFile "_crbd-anf.mc" (expr2str anf) in

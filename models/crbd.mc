@@ -146,4 +146,9 @@ mexpr
 
 use MExprPPL in
 
-print (expr2str crbd)
+-- print (expr2str crbd)
+
+utest expr2str crbd with () using (lam. lam. true) in
+
+()
+
