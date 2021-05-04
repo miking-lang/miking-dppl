@@ -3,4 +3,3 @@ _build/
 .merlin
 .vscode
 rootppl/.gb.data
-rootppl/results/
