@@ -77,10 +77,10 @@ BBLOCK_HELPER(clads2GoesUndetectedDelayed, {
     // end extreme values patch 1
     
     // t is the waiting time until the next event (speciation or extinction)
-    floating_t tSp  = sample_GammaExponential(lambda0, factor);
+    floating_t tSp  = SAMPLE(sample_GammaExponential, lambda0, factor);
     
-    floating_t tExt = sample_GammaExponential(mu_0, factor);
-    floating_t t    = std::min(tSp, tExt);
+    floating_t tExt = SAMPLE(sample_GammaExponential, mu_0, factor);
+    floating_t t    = MIN(tSp, tExt);
    
     floating_t currentTime = startTime - t;
     
@@ -98,8 +98,8 @@ BBLOCK_HELPER(clads2GoesUndetectedDelayed, {
     
     // Realizes the new factor by which the current lambda (= lambda_0 x old factors)
     // is going to be multiplied. One for left and right.
-    floating_t f1 = sample_NormalInverseGammaNormal(alphaSigma);
-    floating_t f2 = sample_NormalInverseGammaNormal(alphaSigma);
+    floating_t f1 = SAMPLE(sample_NormalInverseGammaNormal, alphaSigma);
+    floating_t f2 = SAMPLE(sample_NormalInverseGammaNormal, alphaSigma);
 
     bool ret1 = BBLOCK_CALL(clads2GoesUndetectedDelayed, currentTime, lambda0, mu_0, factor*exp(f1), alphaSigma, rho);
     
@@ -138,7 +138,7 @@ BBLOCK_HELPER(simBranchDelayed, {
     }
     // end extreme values patch 2/2
 
-    floating_t t = sample_GammaExponential(lambda0, factor);
+    floating_t t = SAMPLE(sample_GammaExponential, lambda0, factor);
     floating_t currentTime = startTime - t;
     
 
@@ -149,8 +149,8 @@ BBLOCK_HELPER(simBranchDelayed, {
     }
     
     // sample factors for left and right subtrees
-    floating_t f1 = sample_NormalInverseGammaNormal(alphaSigma);
-    floating_t f2 = sample_NormalInverseGammaNormal(alphaSigma);
+    floating_t f1 = SAMPLE(sample_NormalInverseGammaNormal, alphaSigma);
+    floating_t f2 = SAMPLE(sample_NormalInverseGammaNormal, alphaSigma);
     
     // we need to check if the side was undetected
     // w.l.o.g. we choose the right side to die
@@ -238,8 +238,8 @@ BBLOCK(simTree, {
 
     // TODO Collect node and branch info, todo?    
     if(interiorNode) {
-      floating_t f1 = sample_NormalInverseGammaNormal(PSTATE.alphaSigma);
-      floating_t f2 = sample_NormalInverseGammaNormal(PSTATE.alphaSigma);
+      floating_t f1 = SAMPLE(sample_NormalInverseGammaNormal, PSTATE.alphaSigma);
+      floating_t f2 = SAMPLE(sample_NormalInverseGammaNormal, PSTATE.alphaSigma);
 
       floating_t leftf = factorEnd*exp(f1);
       floating_t rightf = factorEnd*exp(f2);
@@ -292,8 +292,8 @@ BBLOCK(simClaDS2, {
     WEIGHT(corrFactor);
     
     // TODO the following with a sample MACRO
-    floating_t f1 = sample_NormalInverseGammaNormal(PSTATE.alphaSigma);
-    floating_t f2 = sample_NormalInverseGammaNormal(PSTATE.alphaSigma);
+    floating_t f1 = SAMPLE(sample_NormalInverseGammaNormal, PSTATE.alphaSigma);
+    floating_t f2 = SAMPLE(sample_NormalInverseGammaNormal, PSTATE.alphaSigma);
 
     floating_t leftf = factor*exp(f1);
     floating_t rightf = factor*exp(f2);
@@ -363,7 +363,8 @@ BBLOCK(sampleFinalLambda, {
  
 // Write particle data to file
 CALLBACK(saveResults, {
-    int M = std::min(1000, N);
+    std::default_random_engine generator;
+    int M = MIN(1000, N);
     
     std::string fileName = "results/EXP-" + analysisName + ".csv";
     std::ofstream resultFile (fileName, std::ios_base::app);
@@ -425,7 +426,14 @@ CALLBACK(saveResults, {
 	for(int i = 0; i < M; i++) {
 	  resultFile4 << PSTATES[i].lambda0 << ", ";
 	  for (int j = 1; j < (tree->NUM_NODES); j++) {
-	    resultFile4 << SAMPLE(gamma, PSTATES[i].lambda_0.k, PSTATES[i].lambda_0.theta*PSTATES[i].factorArr[j]) <<  ", ";
+
+      floating_t k = PSTATES[i].lambda_0.k;
+      floating_t theta = PSTATES[i].lambda_0.theta*PSTATES[i].factorArr[j];
+      // Uses (alpha, beta) instead of (k, theta), alpha=k, beta=1/theta
+      std::gamma_distribution<double> gammaDist(k, 1.0 / theta); 
+
+      resultFile4 << gammaDist(generator) <<  ", ";
+	    // resultFile4 << SAMPLE(gamma, PSTATES[i].lambda_0.k, PSTATES[i].lambda_0.theta*PSTATES[i].factorArr[j]) <<  ", ";
 	  }
 	  resultFile4 << WEIGHTS[i] << "\n";
 	}
@@ -443,7 +451,14 @@ CALLBACK(saveResults, {
 	
 	for(int i = 0; i < M; i++) {
 	  for (int j = 0; j < (tree->NUM_NODES); j++) {
-	    resultFile5 << SAMPLE(gamma, PSTATES[i].lambda_0.k, PSTATES[i].lambda_0.theta*PSTATES[i].factorEndArr[j]) <<  ", ";
+      
+      floating_t k = PSTATES[i].lambda_0.k;
+      floating_t theta = PSTATES[i].lambda_0.theta*PSTATES[i].factorEndArr[j];
+      // Uses (alpha, beta) instead of (k, theta), alpha=k, beta=1/theta
+      std::gamma_distribution<double> gammaDist(k, 1.0 / theta); 
+
+      resultFile5 << gammaDist(generator) <<  ", ";
+	    // resultFile5 << SAMPLE(gamma, PSTATES[i].lambda_0.k, PSTATES[i].lambda_0.theta*PSTATES[i].factorEndArr[j]) <<  ", ";
 	  }
 	  resultFile5 << WEIGHTS[i] << "\n";
 	}
