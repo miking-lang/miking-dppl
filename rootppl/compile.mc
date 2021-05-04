@@ -14,7 +14,7 @@ let compile: Expr -> CProg = lam prog.
   let prog = symbolizeExpr symEnvEmpty prog in
 
   -- Type annotate
-  let prog = typeAnnot prog in
+  -- let prog = typeAnnot prog in
 
   -- ANF transformation
   -- let prog = normalizeTerm prog in
@@ -33,6 +33,6 @@ let compile: Expr -> CProg = lam prog.
 
 in
 
-print (expr2str (compile crbd));
+-- print (expr2str (compile crbd));
 
 ()
