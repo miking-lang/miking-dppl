@@ -9,9 +9,6 @@ include "math.mc"
 -- build procedure gets more mature.
 include "../coreppl/coreppl.mc"
 
--- TODO(dlunde,2020-11-11): Type annotate everything manually. This can later
--- be done by the type checker.
-
 let crbd = use MExprPPL in
 
   let tytree_ = tyvar_ "Tree" in

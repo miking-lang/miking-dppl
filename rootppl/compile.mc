@@ -6,26 +6,33 @@ include "../coreppl/coreppl.mc"
 include "../models/crbd.mc"
 
 mexpr
-use CorePPL in
+use MExprPPL in
 
--- let t0 = wallTimeMs () in
--- let r1 = symbolize crbd in
--- let t1 = wallTimeMs () in
--- let r2 = normalizeTerm r1 in
--- let t2 = wallTimeMs () in
--- let r3 = expr2str r2 in
--- let t3 = wallTimeMs () in
+let compile: Expr -> CProg = lam prog.
 
--- let _ = print "\nSymbolize time: " in
--- let _ = printLn (float2string (subf t1 t0)) in
--- let _ = print "ANF time: " in
--- let _ = printLn (float2string (subf t2 t1)) in
--- let _ = print "expr2str time: " in
--- let _ = printLn (float2string (subf t3 t2)) in
--- expr2str is really slow (3.7 seconds)
+  -- Symbolize with empty environment
+  let prog = symbolizeExpr symEnvEmpty prog in
 
--- writeFile "_crbd-init.mc" (expr2str crbd);
--- let anf = normalizeTerm (symbolize crbd) in
--- writeFile "_crbd-anf.mc" (expr2str anf);
+  -- Type annotate
+  let prog = typeAnnot prog in
+
+  -- ANF transformation
+  -- let prog = normalizeTerm prog in
+
+  -- Type lift
+  -- match typeLift prog with (env, prog) then
+
+  --   -- Run C compiler
+  --   let cprog = compileWithMain env prog in
+
+  --   cprog
+
+  -- else never
+
+  prog
+
+in
+
+print (expr2str (compile crbd));
 
 ()
