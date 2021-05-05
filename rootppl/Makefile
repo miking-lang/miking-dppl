@@ -1,16 +1,7 @@
-# define \n
-
-
-# endef
 
 # ifndef model
 # $(error model argument needs to be set with e.g.: $(\n)make model=path/to/model.cu$(\n))
 # endif
-
-# ifdef ompthreads
-# OMP = -fopenmp
-# endif
-
 
 ifdef arch
 # GPU
@@ -20,7 +11,7 @@ FLAGS=-I. -std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 else
 # CPU
-CC=g++
+CC=$(CXX)
 FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP)
 FLAGS_LINK=-std=c++14 -O3 $(OMP)
 endif
