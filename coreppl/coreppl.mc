@@ -14,9 +14,20 @@ include "mexpr/eq.mc"
 include "dist.mc"
 include "string.mc"
 
+-------------
+-- HELPERS --
+-------------
+
+let _isUnitTy = use RecordTypeAst in lam ty.
+  match ty with TyRecord { fields = fields } then mapIsEmpty fields
+  else false
 
 
-lang Infer = Ast + PrettyPrint + Eq + Sym
+-----------
+-- TERMS --
+-----------
+
+lang Infer = Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
@@ -68,6 +79,19 @@ lang Infer = Ast + PrettyPrint + Eq + Sym
   | TmInfer t ->
     TmInfer {{ t with model = symbolizeExpr env t.model }
                  with ty = symbolizeType env t.ty }
+
+  -- Type annotate
+  sem typeAnnotExpr (env: TypeEnv) =
+  | TmInfer t ->
+    let model = typeAnnotExpr env t.dist in
+    let ty =
+      match ty model with TyArrow { from = from, to = to } then
+        if _isUnitTy from then to
+        else tyunknown_
+      else tyunknown_ in
+    TmInfer {{ t with model = model }
+                 with ty = TyDist { info = t.info, ty = ty } }
+
 
 end
 
