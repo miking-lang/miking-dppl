@@ -68,7 +68,7 @@ DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floatin
  * rate - reference to rate (will modify)
  * f - factor by which the scale may be multiplied
  */
-DEV floating_t score_GammaExponential(RAND_STATE_DECLARE floating_t x, gamma_t& rate,  floating_t f);
+DEV floating_t score_GammaExponential(floating_t x, gamma_t& rate,  floating_t f);
 
 
 

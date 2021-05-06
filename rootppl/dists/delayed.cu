@@ -28,7 +28,7 @@ DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floatin
 }
 
 
-DEV floating_t score_GammaExponential(RAND_STATE_DECLARE floating_t x, gamma_t& rate,  floating_t f) {
+DEV floating_t score_GammaExponential( floating_t x, gamma_t& rate,  floating_t f) {
   // if (f < 1e-5) {
   //   return -INFINITY;
   // } 

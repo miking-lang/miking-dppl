@@ -24,12 +24,12 @@ typedef Accipitridae_tree_t tree_t;
 //typedef moth_div_tree_t tree_t;
 
 // Test settings
-floating_t rho      = 1.0;
+const floating_t rho      = 1.0;
 
-floating_t k = 1.0;
-floating_t theta = 1.0;
-floating_t epsMin = 0.0;
-floating_t epsMax = 1.0;
+const floating_t k = 1.0;
+const floating_t theta = 1.0;
+const floating_t epsMin = 0.0;
+const floating_t epsMax = 1.0;
 
 #include "clads2-factor.cuh"
 

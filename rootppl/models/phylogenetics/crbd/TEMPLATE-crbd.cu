@@ -25,10 +25,11 @@ const floating_t k = 1.0;
 const floating_t theta = 1.0;
 const floating_t kMu = 1.0;
 const floating_t thetaMu = 0.5;
-//const floating_t epsMin = 0.0;
-//const floating_t epsMax = 1.0;
 
-floating_t rho = 1.0;
+const floating_t epsMin = 0.0;
+const floating_t epsMax = 1.0;
+
+const floating_t rho = 1.0;
 //floating_t rhoConst      = 0.7142857142857143;
 
 //floating_t mu = 0.1;

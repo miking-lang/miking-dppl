@@ -11,6 +11,7 @@
 #include <string>
 #include <fstream>
 #include <algorithm>
+#include <random>
 
 #include "inference/smc/smc.cuh"
 #include "../tree-utils/tree_utils.cuh"
@@ -19,6 +20,7 @@
 #include "dists/delayed.cuh"
 
 typedef bisse32_tree_t tree_t;
+//typedef toy_tree_t tree_t;
 //typedef primate_tree_t tree_t;
 //typedef moth_div_tree_t tree_t;
 //typedef Accipitridae_tree_t tree_t;
@@ -27,17 +29,17 @@ typedef bisse32_tree_t tree_t;
 // Test settings
 
 //floating_t rho      = 0.7142857142857143;
-floating_t rho = 1.0;
+const floating_t rho = 1.0;
 
-floating_t k = 1;
-floating_t theta = 1;
-floating_t kMu = 1;
-floating_t thetaMu = 0.5;
+const floating_t k = 1;
+const floating_t theta = 1;
+const floating_t kMu = 1;
+const floating_t thetaMu = 0.5;
 
-floating_t m0 = 0;
-floating_t v = 1;
-floating_t a = 1.0;
-floating_t b = 0.2;
+const floating_t m0 = 0;
+const floating_t v = 1;
+const floating_t a = 1.0;
+const floating_t b = 0.2;
 
 std::string analysisName = "Bisse32";
 

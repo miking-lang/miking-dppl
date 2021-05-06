@@ -24,13 +24,13 @@ typedef Accipitridae_tree_t tree_t;
 
 //floating_t mu = 0.1;
 
-floating_t kLambda = 1.0;
-floating_t thetaLambda = 0.2;
-floating_t epsMin = 0.0;
-floating_t epsMax = 1.0;
+const floating_t kLambda = 1.0;
+const floating_t thetaLambda = 0.2;
+const floating_t epsMin = 0.0;
+const floating_t epsMax = 1.0;
 
 
-floating_t rhoConst      = 0.7142857142857143;
+const floating_t rhoConst      = 0.7142857142857143;
 
 
 #include "../crbd/crbd-d-λ.cuh"

@@ -25,20 +25,20 @@ typedef Accipitridae_tree_t tree_t;
 // Test settings
 #ifndef PRIORS
 #define PRIORS
-floating_t lambda_0 = 0.2;
-floating_t alpha    = 1.0;
-floating_t sigma    = 0.0000001;
-floating_t epsilon  = 0.5;
+const floating_t lambda_0 = 0.2;
+const floating_t alpha    = 1.0;
+const floating_t sigma    = 0.0000001;
+const floating_t epsilon  = 0.5;
 #endif
 
-floating_t kLambda  = 1.0;
-floating_t thetaLambda = 1.0;
-floating_t epsMin = 0.0;
-floating_t epsMax = 1.0;
-floating_t a = 1.0;
-floating_t b = 0.2;
+const floating_t kLambda  = 1.0;
+const floating_t thetaLambda = 1.0;
+const floating_t epsMin = 0.0;
+const floating_t epsMax = 1.0;
+const floating_t a = 1.0;
+const floating_t b = 0.2;
 
-floating_t rho      = 0.7142857142857143;
+const floating_t rho      = 0.7142857142857143;
 
 #include "../clads2/clads2.cuh"
 
