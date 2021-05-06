@@ -3,3 +3,4 @@ _build/
 .merlin
 .vscode
 rootppl/.gb.data
+rootppl/log_norm_const.txt
