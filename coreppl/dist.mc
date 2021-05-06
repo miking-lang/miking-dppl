@@ -82,7 +82,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot
       Some (TyDist {t1 with ty = t})
     else None ()
 
-  sem tyDist (env: TypeEnv) =
+  sem tyDist (env: TypeEnv) (info: Info) =
   -- Intentionally left blank
 
   sem typeAnnotDist (env: TypeEnv) =
@@ -91,13 +91,13 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot
   sem typeAnnotExpr (env: TypeEnv) =
   | TmDist t ->
     let dist = typeAnnotDist env t.dist in
-    let ty = TyDist { info = t.info, ty = tyDist env dist } in
+    let ty = TyDist { info = t.info, ty = tyDist env t.info dist } in
     TmDist {{ t with dist = dist }
                 with ty = ty }
 
 end
 
-lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst
+lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
 
   syn Dist =
   | DBern { p: Expr }
@@ -126,8 +126,10 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst
   | DBern t -> DBern { t with p = symbolizeExpr env t.p }
 
   -- Type Annotate
-  sem tyDist (env: TypeEnv) =
-  | DBern t -> TyBool { info = NoInfo () }
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DBern t ->
+    match ty t.p with TyFloat _ then TyBool { info = NoInfo () }
+    else infoErrorExit info "Type error"
 
 end
 
@@ -166,13 +168,20 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
                           with b = symbolizeExpr env t.b }
 
   -- Type Annotate
-  sem tyDist (env: TypeEnv) =
-  | DBeta t -> TyFloat { info = NoInfo () }
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DBeta t ->
+    let err = lam. infoErrorExit info "Type error" in
+    match ty t.a with TyFloat _ then
+      match ty t.b with TyFloat _ then
+        TyFloat { info = NoInfo () }
+      else err ()
+    else err ()
 
 end
 
 -- DCategorical {p=p} is equivalent to DMultinomial {n=1, p=p}
-lang CategoricalDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst
+lang CategoricalDist =
+  Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + FloatTypeAst
 
   syn Dist =
   -- p has type [Float]: the list of probabilities
@@ -205,12 +214,15 @@ lang CategoricalDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst
     DCategorical { t with p = symbolizeExpr env t.p }
 
   -- Type Annotate
-  sem tyDist (env: TypeEnv) =
-  | DCategorical t -> TyInt { info = NoInfo () }
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DCategorical t ->
+    match ty t.p with TySeq { ty = TyFloat _ } then TyInt { info = NoInfo () }
+    else infoErrorExit info "Type error"
 
 end
 
-lang MultinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst
+lang MultinomialDist =
+  Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + FloatTypeAst
 
   syn Dist =
   -- n has type Int: the number of trials
@@ -248,8 +260,14 @@ lang MultinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst
                       with p = symbolizeExpr env t.p }
 
   -- Type Annotate
-  sem tyDist (env: TypeEnv) =
-  | DMultinomial t -> TyInt { info = NoInfo () }
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DMultinomial t ->
+    let err = lam. infoErrorExit info "Type error" in
+    match ty t.n with TyInt _ then
+      match ty t.p with TySeq { ty = TyFloat _ } then
+        TyInt { info = NoInfo () }
+      else err ()
+    else err ()
 
 end
 
@@ -286,8 +304,11 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
     DDirichlet { t with a = symbolizeExpr env t.a }
 
   -- Type Annotate
-  sem tyDist (env: TypeEnv) =
-  | DDirichlet t -> TySeq { info = NoInfo (), ty = TyFloat { info = NoInfo () } }
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DDirichlet t ->
+    match ty t.a with TySeq { ty = TyFloat _ } then
+      TySeq { info = NoInfo (), ty = TyFloat { info = NoInfo () } }
+    else infoErrorExit info "Type error"
 
 end
 
@@ -319,8 +340,10 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DExp t -> DExp { t with rate = symbolizeExpr env t.rate }
 
   -- Type Annotate
-  sem tyDist (env: TypeEnv) =
-  | DExp t -> TyFloat { info = NoInfo () }
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DExp t ->
+    match ty t.rate with TyFloat _ then TyFloat { info = NoInfo () }
+    else infoErrorExit info "Type error"
 
 end
 
@@ -358,18 +381,19 @@ lang EmpiricalDist =
     DEmpirical { t with samples = symbolizeExpr env t.samples }
 
   -- Type Annotate
-  sem tyDist (env: TypeEnv) =
+  sem tyDist (env: TypeEnv) (info: Info) =
   | DEmpirical t ->
+    let err = lam. infoErrorExit info "Type error" in
     match ty t.samples
     with TySeq { ty = TyRecord { fields = fields } } then
       if eqi (mapSize fields) 2 then
         match mapLookup (stringToSid "0") fields with Some TyFloat _ then
           match mapLookup (stringToSid "1") fields with Some ty then
             ty
-          else tyunknown_
-        else tyunknown_
-      else tyunknown_
-    else tyunknown_
+          else err ()
+        else err ()
+      else err ()
+    else err ()
 
 end
 
@@ -422,7 +446,7 @@ mexpr
 use Test in
 
 let tmBern = bern_ (float_ 0.5) in
-let tmBeta = beta_ (int_ 1) (int_ 2) in
+let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
 let tmCategorical =
   categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmMultinomial =
@@ -445,8 +469,8 @@ utest expr2str tmBern with strJoin "\n" [
 
 utest expr2str tmBeta with strJoin "\n" [
   "Beta",
-  "  1",
-  "  2"
+  "  1.0e-0",
+  "  2.0e+0"
 ] in
 
 utest expr2str tmCategorical with strJoin "\n" [
@@ -491,7 +515,7 @@ utest tmBern with tmBern using eqExpr in
 utest eqExpr tmBern (bern_ (float_ 0.4)) with false in
 
 utest tmBeta with tmBeta using eqExpr in
-utest eqExpr tmBeta (beta_ (int_ 1) (int_ 1)) with false in
+utest eqExpr tmBeta (beta_ (float_ 1.0) (float_ 1.0)) with false in
 
 utest tmCategorical with tmCategorical using eqExpr in
 utest eqExpr tmCategorical
@@ -540,7 +564,7 @@ with [ float_ 0.5 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmBeta with beta_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmBeta
-with [ int_ 2, int_ 1 ] using eqSeq eqExpr in
+with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmCategorical with categorical_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmCategorical
