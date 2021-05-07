@@ -14,9 +14,20 @@ include "mexpr/eq.mc"
 include "dist.mc"
 include "string.mc"
 
+-------------
+-- HELPERS --
+-------------
+
+let _isUnitTy = use RecordTypeAst in lam ty.
+  match ty with TyRecord { fields = fields } then mapIsEmpty fields
+  else false
 
 
-lang Infer = Ast + PrettyPrint + Eq + Sym
+-----------
+-- TERMS --
+-----------
+
+lang Infer = Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeAnnot
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
@@ -69,11 +80,26 @@ lang Infer = Ast + PrettyPrint + Eq + Sym
     TmInfer {{ t with model = symbolizeExpr env t.model }
                  with ty = symbolizeType env t.ty }
 
+  -- Type annotate
+  sem typeAnnotExpr (env: TypeEnv) =
+  | TmInfer t ->
+    let err = lam. infoErrorExit t.info "Type error" in
+    let model = typeAnnotExpr env t.model in
+    let ty =
+      match ty model with TyArrow { from = from, to = to } then
+        if _isUnitTy from then to
+        else err ()
+      else err ()
+    in
+    TmInfer {{ t with model = model }
+                 with ty = TyDist { info = t.info, ty = ty } }
+
+
 end
 
 
 -- Assume defines a new random variable
-lang Assume = Ast + Dist + PrettyPrint + Eq + Sym
+lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot
 
   syn Expr =
   | TmAssume { dist: Expr,
@@ -119,11 +145,23 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym
     TmAssume {{ t with dist = symbolizeExpr env t.dist }
                   with ty = symbolizeType env t.ty }
 
+  -- Type annotate
+  sem typeAnnotExpr (env: TypeEnv) =
+  | TmAssume t ->
+    let err = lam. infoErrorExit t.info "Type error" in
+    let dist = typeAnnotExpr env t.dist in
+    let ty =
+      match ty dist with TyDist { ty = ty } then ty
+      else err ()
+    in
+    TmAssume {{ t with dist = dist }
+                  with ty = ty }
+
 end
 
 
 -- Observe gives a random variable conditioned on a specific value
-lang Observe = Ast + Dist + PrettyPrint + Eq + Sym
+lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot
 
   syn Expr =
   | TmObserve { value: Expr,
@@ -174,10 +212,29 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym
                     with dist = symbolizeExpr env t.dist }
                     with ty = symbolizeType env t.ty }
 
+  -- Type annotate
+  sem typeAnnotExpr (env: TypeEnv) =
+  | TmObserve t ->
+    let err = lam. infoErrorExit t.info "Type error" in
+    let value = typeAnnotExpr env t.value in
+    let dist = typeAnnotExpr env t.dist in
+    let ty =
+      match ty value with ty1 then
+        match ty dist with TyDist { ty = ty2 } then
+          match compatibleType env ty1 ty2 with Some _ then
+            tyunit_
+          else err ()
+        else err ()
+      else err ()
+    in
+    TmObserve {{{ t with value = value }
+                    with dist = dist }
+                    with ty = ty }
+
 end
 
 -- Defines a weight term
-lang Weight = Ast + PrettyPrint + Eq + Sym
+lang Weight = Ast + PrettyPrint + Eq + Sym + TypeAnnot + FloatTypeAst
   syn Expr =
   | TmWeight { weight: Expr, ty: Type, info: Info }
 
@@ -219,6 +276,18 @@ lang Weight = Ast + PrettyPrint + Eq + Sym
   | TmWeight t ->
     TmWeight {{ t with weight = symbolizeExpr env t.weight }
                   with ty = symbolizeType env t.ty }
+
+  -- Type annotate
+  sem typeAnnotExpr (env: TypeEnv) =
+  | TmWeight t ->
+    let err = lam. infoErrorExit t.info "Type error" in
+    let weight = typeAnnotExpr env t.weight in
+    let ty =
+      match ty weight with TyFloat _ then tyunit_
+      else err ()
+    in
+    TmWeight {{ t with weight = weight }
+                  with ty = ty }
 
 end
 
@@ -266,7 +335,8 @@ lang CorePPL =
 lang CorePPLInference = CorePPL -- + Importance + SMC
 
 lang MExprPPL =
-  CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym
+  CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
+  MExprTypeAnnot
 
 
 mexpr
@@ -353,6 +423,18 @@ with [ float_ 1.5 ] using eqSeq eqExpr in
 utest symbolize tmAssume with tmAssume using eqExpr in
 utest symbolize tmObserve with tmObserve using eqExpr in
 utest symbolize tmWeight with tmWeight using eqExpr in
+
+
+-------------------------
+-- TYPE-ANNOTATE TESTS --
+-------------------------
+-- TODO(dlunde,2021-04-28): TmInfer test
+
+let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
+
+utest ty (typeAnnot tmAssume) with tybool_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmObserve) with tyunit_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmWeight) with tyunit_ using eqTypeEmptyEnv in
 
 ()
 

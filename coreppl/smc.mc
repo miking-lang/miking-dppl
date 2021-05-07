@@ -31,6 +31,7 @@ let methodsmc_ = use CorePPLSMC in lam p. MethodSMC {particles = p}
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
+include "mexpr/type-annot.mc"
 
 -- Explicit resample inference annotation for SMC
 lang Resample = Ast + PrettyPrint + Eq + Sym
@@ -70,6 +71,10 @@ lang Resample = Ast + PrettyPrint + Eq + Sym
   | TmResample t ->
     TmResample { t with ty = symbolizeType env t.ty }
 
+  -- Type annotate
+  sem typeAnnotExpr (env: TypeEnv) =
+  | TmResample t -> TmResample { t with ty = tyunit_ }
+
 end
 
 -----------------
@@ -80,7 +85,7 @@ let resample_ = use Resample in
   TmResample { ty = tyunknown_, info = NoInfo () }
 
 
-lang Test = Resample + MExprEq + MExprSym
+lang Test = Resample + MExprEq + MExprSym + MExprTypeAnnot
 
 mexpr
 
@@ -123,6 +128,15 @@ utest sfold_Expr_Expr foldToSeq [] resample_ with [] in
 ---------------------
 
 utest symbolize resample_ with resample_ using eqExpr in
+
+
+-------------------------
+-- TYPE-ANNOTATE TESTS --
+-------------------------
+
+let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
+
+utest ty (typeAnnot resample_) with tyunit_ using eqTypeEmptyEnv in
 
 ()
 
