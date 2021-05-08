@@ -51,7 +51,7 @@ MAIN({
 
     ADD_BBLOCK(simClaDS2);
     ADD_BBLOCK(simTree);
-    ADD_BBLOCK(conditionOnDetection);
+    //ADD_BBLOCK(conditionOnDetection);
     ADD_BBLOCK(justResample);
     ADD_BBLOCK(sampleFinalLambda);
     //SMC(saveResults);
