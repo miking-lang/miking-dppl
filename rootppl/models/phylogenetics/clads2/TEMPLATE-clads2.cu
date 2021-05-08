@@ -23,13 +23,13 @@
 typedef Accipitridae_tree_t tree_t;
 
 // Test settings
-#ifndef PRIORS
-#define PRIORS
-const floating_t lambda_0 = 0.2;
-const floating_t alpha    = 1.0;
-const floating_t sigma    = 0.0000001;
-const floating_t epsilon  = 0.5;
-#endif
+// #ifndef PRIORS
+// #define PRIORS
+// const floating_t lambda_0 = 0.2;
+// const floating_t alpha    = 1.0;
+// const floating_t sigma    = 0.0000001;
+// const floating_t epsilon  = 0.5;
+// #endif
 
 const floating_t kLambda  = 1.0;
 const floating_t thetaLambda = 1.0;
