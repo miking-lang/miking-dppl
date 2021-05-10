@@ -5,10 +5,12 @@ include "mexpr/pprint.mc"
 include "mexpr/info.mc"
 include "mexpr/eq.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/anf.mc"
+
 include "string.mc"
 include "seq.mc"
 
-lang Dist = PrettyPrint + Eq + Sym + TypeAnnot
+lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF
   syn Expr =
   | TmDist { dist: Dist,
              ty: Type,
@@ -95,6 +97,20 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot
     TmDist {{ t with dist = dist }
                 with ty = ty }
 
+  -- ANF
+  sem isValueDist =
+  -- Intentionally left blank
+
+  sem normalizeDist (k : Dist -> Expr) =
+  -- Intentionally left blank
+
+  sem isValue =
+  | TmDist t -> isValueDist t.dist
+
+  sem normalize (k : Expr -> Expr) =
+  | TmDist ({ dist = dist } & t) ->
+    normalizeDist (lam dist. k (TmDist { t with dist = dist })) dist
+
 end
 
 lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
@@ -130,6 +146,14 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   | DBern t ->
     match ty t.p with TyFloat _ then TyBool { info = NoInfo () }
     else infoErrorExit info "Type error"
+
+  -- ANF
+  sem isValueDist =
+  | DBern _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DBern ({ p = p } & t) ->
+    normalizeName (lam p. k (DBern { t with p = p })) p
 
 end
 
@@ -177,6 +201,16 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
       else err ()
     else err ()
 
+  -- ANF
+  sem isValueDist =
+  | DBeta _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DBeta ({ a = a, b = b } & t) ->
+    normalizeName (lam a.
+      normalizeName (lam b.
+        k (DBeta {{ t with a = a } with b = b})) b) a
+
 end
 
 -- DCategorical {p=p} is equivalent to DMultinomial {n=1, p=p}
@@ -218,6 +252,14 @@ lang CategoricalDist =
   | DCategorical t ->
     match ty t.p with TySeq { ty = TyFloat _ } then TyInt { info = NoInfo () }
     else infoErrorExit info "Type error"
+
+  -- ANF
+  sem isValueDist =
+  | DCategorical _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DCategorical ({ p = p } & t) ->
+    normalizeName (lam p. k (DCategorical {t with p = p})) p
 
 end
 
@@ -269,6 +311,16 @@ lang MultinomialDist =
       else err ()
     else err ()
 
+  -- ANF
+  sem isValueDist =
+  | DMultinomial _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DMultinomial ({ n = n, p = p } & t) ->
+    normalizeName (lam n.
+      normalizeName (lam p.
+        k (DMultinomial {{ t with n = n } with p = p})) p) n
+
 end
 
 lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
@@ -310,6 +362,14 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
       TySeq { info = NoInfo (), ty = TyFloat { info = NoInfo () } }
     else infoErrorExit info "Type error"
 
+  -- ANF
+  sem isValueDist =
+  | DDirichlet _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DDirichlet ({ a = a } & t) ->
+    normalizeName (lam a. k (DDirichlet { t with a = a })) a
+
 end
 
 lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
@@ -344,6 +404,14 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DExp t ->
     match ty t.rate with TyFloat _ then TyFloat { info = NoInfo () }
     else infoErrorExit info "Type error"
+
+  -- ANF
+  sem isValueDist =
+  | DExp _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DExp ({ rate = rate } & t) ->
+    normalizeName (lam rate. k (DExp { t with rate = rate })) rate
 
 end
 
@@ -395,6 +463,15 @@ lang EmpiricalDist =
       else err ()
     else err ()
 
+  -- ANF
+  sem isValueDist =
+  | DEmpirical _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DEmpirical ({ samples = samples } & t) ->
+      normalizeName
+        (lam samples. k (DEmpirical { t with samples = samples })) samples
+
 end
 
 -----------------
@@ -439,6 +516,7 @@ lang DistAll =
 
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
+  + MExprANF
 
 mexpr
 
@@ -617,6 +695,39 @@ utest ty (typeAnnot tmExp) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_)
 using eqTypeEmptyEnv in
+
+---------------
+-- ANF TESTS --
+---------------
+
+let _anf = compose normalizeTerm symbolize in
+
+utest _anf tmBern with bind_ (ulet_ "t" tmBern) (var_ "t") using eqExpr in
+utest _anf tmBeta with bind_ (ulet_ "t" tmBeta) (var_ "t") using eqExpr in
+utest _anf tmCategorical with bindall_ [
+  ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
+  ulet_ "t1" (categorical_ (var_ "t")),
+  var_ "t1"
+] using eqExpr in
+utest _anf tmMultinomial with bindall_ [
+  ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
+  ulet_ "t1" (multinomial_ (int_ 5) (var_ "t")),
+  var_ "t1"
+] using eqExpr in
+utest _anf tmExp with bind_ (ulet_ "t" tmExp) (var_ "t") using eqExpr in
+utest _anf tmEmpirical with bindall_ [
+  ulet_ "t" (tuple_ [float_ 3.0, float_ 1.3]),
+  ulet_ "t1" (tuple_ [float_ 1.0, float_ 1.5]),
+  ulet_ "t2" (seq_ [(var_ "t1"), (var_ "t")]),
+  ulet_ "t3" (empirical_ (var_ "t2")),
+  var_ "t3"
+] using eqExpr in
+-- print (expr2str (_anf tmEmpirical)); print "\n";
+utest _anf tmDirichlet with bindall_ [
+  ulet_ "t" (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]),
+  ulet_ "t1" (dirichlet_ (var_ "t")),
+  var_ "t1"
+] using eqExpr in
 
 ()
 
