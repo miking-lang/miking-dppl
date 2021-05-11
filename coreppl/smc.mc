@@ -33,9 +33,10 @@ include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/anf.mc"
+include "mexpr/type-lift.mc"
 
 -- Explicit resample inference annotation for SMC
-lang Resample = Ast + PrettyPrint + Eq + Sym + ANF
+lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
 
   syn Expr =
   | TmResample { ty: Type, info: Info }
@@ -83,6 +84,12 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF
   sem normalize (k : Expr -> Expr) =
   | TmResample t -> k (TmResample t)
 
+  -- Type lift
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmResample t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TmResample { t with ty = ty })
+    else never
 end
 
 -----------------
@@ -93,7 +100,8 @@ let resample_ = use Resample in
   TmResample { ty = tyunknown_, info = NoInfo () }
 
 
-lang Test = Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
+lang Test =
+  Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF + MExprTypeLift
 
 mexpr
 
@@ -153,6 +161,12 @@ utest ty (typeAnnot resample_) with tyunit_ using eqTypeEmptyEnv in
 let _anf = compose normalizeTerm symbolize in
 
 utest _anf resample_ with resample_ using eqExpr in
+
+---------------------
+-- TYPE-LIFT TESTS --
+---------------------
+
+utest (typeLift resample_).1 with resample_ using eqExpr in
 
 ()
 

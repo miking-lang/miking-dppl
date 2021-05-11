@@ -12,6 +12,8 @@ include "mexpr/mexpr.mc"
 include "mexpr/info.mc"
 include "mexpr/eq.mc"
 include "mexpr/anf.mc"
+include "mexpr/type-annot.mc"
+include "mexpr/type-lift.mc"
 
 include "dist.mc"
 include "string.mc"
@@ -30,7 +32,7 @@ let _isUnitTy = use RecordTypeAst in lam ty.
 -----------
 
 lang Infer =
-  Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeAnnot + ANF
+  Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeAnnot + ANF + TypeLift
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
@@ -105,11 +107,21 @@ lang Infer =
   | TmInfer ({ model = model } & t) ->
     normalizeName (lam model. k (TmInfer { t with model = model })) model
 
+  -- Type lift
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmInfer t ->
+    match typeLiftExpr env t.model with (env, model) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmInfer {{t with model = model}
+                          with ty = ty})
+      else never
+    else never
+
 end
 
 
 -- Assume defines a new random variable
-lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF
+lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
 
   syn Expr =
   | TmAssume { dist: Expr,
@@ -175,11 +187,21 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF
   | TmAssume ({ dist = dist } & t) ->
     normalizeName (lam dist. k (TmAssume { t with dist = dist })) dist
 
+  -- Type lift
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmAssume t ->
+    match typeLiftExpr env t.dist with (env, dist) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmAssume {{t with dist = dist}
+                           with ty = ty})
+      else never
+    else never
+
 end
 
 
 -- Observe gives a random variable conditioned on a specific value
-lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF
+lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
 
   syn Expr =
   | TmObserve { value: Expr,
@@ -264,10 +286,24 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF
         dist)
       value
 
+  -- Type lift
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmObserve t ->
+    match typeLiftExpr env t.value with (env, value) then
+      match typeLiftExpr env t.dist with (env, dist) then
+        match typeLiftType env t.ty with (env, ty) then
+          (env, TmObserve {{{ t with value = value }
+                                with dist = dist }
+                                with ty = ty })
+        else never
+      else never
+    else never
+
 end
 
 -- Defines a weight term
-lang Weight = Ast + PrettyPrint + Eq + Sym + TypeAnnot + FloatTypeAst + ANF
+lang Weight =
+  Ast + PrettyPrint + Eq + Sym + TypeAnnot + FloatTypeAst + ANF + TypeLift
   syn Expr =
   | TmWeight { weight: Expr, ty: Type, info: Info }
 
@@ -330,6 +366,16 @@ lang Weight = Ast + PrettyPrint + Eq + Sym + TypeAnnot + FloatTypeAst + ANF
   | TmWeight ({ weight = weight } & t) ->
     normalizeName (lam weight. k (TmWeight { t with weight = weight })) weight
 
+  -- Type lift
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmWeight t ->
+    match typeLiftExpr env t.weight with (env, weight) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmWeight {{ t with weight = weight }
+                            with ty = ty })
+      else never
+    else never
+
 end
 
 -- Translations in between weight and observe terms
@@ -377,7 +423,7 @@ lang CorePPLInference = CorePPL -- + Importance + SMC
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANF
+  MExprTypeAnnot + MExprANF + MExprTypeLift
 
 
 mexpr
@@ -498,6 +544,15 @@ utest _anf tmWeight with bindall_ [
   ulet_ "t" (weight_ (float_ 1.5)),
   var_ "t"
 ] using eqExpr in
+
+---------------------
+-- TYPE-LIFT TESTS --
+---------------------
+-- TODO(dlunde,2021-05-10): TmInfer test
+
+utest (typeLift tmAssume).1 with tmAssume using eqExpr in
+utest (typeLift tmObserve).1 with tmObserve using eqExpr in
+utest (typeLift tmWeight).1 with tmWeight using eqExpr in
 
 ()
 

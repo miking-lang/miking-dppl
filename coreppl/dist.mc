@@ -6,11 +6,12 @@ include "mexpr/info.mc"
 include "mexpr/eq.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/anf.mc"
+include "mexpr/type-lift.mc"
 
 include "string.mc"
 include "seq.mc"
 
-lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF
+lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   syn Expr =
   | TmDist { dist: Dist,
              ty: Type,
@@ -111,6 +112,19 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF
   | TmDist ({ dist = dist } & t) ->
     normalizeDist (lam dist. k (TmDist { t with dist = dist })) dist
 
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  -- Intentionally left blank
+
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmDist t ->
+    match typeLiftDist env t.dist with (env, dist) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmDist {{ t with dist = dist }
+                          with ty = ty })
+      else never
+    else never
+
 end
 
 lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
@@ -154,6 +168,13 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   sem normalizeDist (k : Dist -> Expr) =
   | DBern ({ p = p } & t) ->
     normalizeName (lam p. k (DBern { t with p = p })) p
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DBern ({ p = p } & t) ->
+    match typeLiftExpr env p with (env, p) then
+      (env, DBern {t with p = p})
+    else never
 
 end
 
@@ -211,6 +232,16 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
       normalizeName (lam b.
         k (DBeta {{ t with a = a } with b = b})) b) a
 
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DBeta ({ a = a, b = b } & t) ->
+    match typeLiftExpr env a with (env, a) then
+      match typeLiftExpr env b with (env, b) then
+        (env, DBeta {{ t with a = a }
+                         with b = b })
+      else never
+    else never
+
 end
 
 -- DCategorical {p=p} is equivalent to DMultinomial {n=1, p=p}
@@ -260,6 +291,13 @@ lang CategoricalDist =
   sem normalizeDist (k : Dist -> Expr) =
   | DCategorical ({ p = p } & t) ->
     normalizeName (lam p. k (DCategorical {t with p = p})) p
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DCategorical ({ p = p } & t) ->
+    match typeLiftExpr env p with (env, p) then
+      (env, DCategorical {t with p = p})
+    else never
 
 end
 
@@ -321,6 +359,16 @@ lang MultinomialDist =
       normalizeName (lam p.
         k (DMultinomial {{ t with n = n } with p = p})) p) n
 
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DMultinomial ({ n = n, p = p } & t) ->
+    match typeLiftExpr env n with (env, n) then
+      match typeLiftExpr env p with (env, p) then
+        (env, DMultinomial {{ t with n = n }
+                                with p = p })
+      else never
+    else never
+
 end
 
 lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
@@ -370,6 +418,13 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   | DDirichlet ({ a = a } & t) ->
     normalizeName (lam a. k (DDirichlet { t with a = a })) a
 
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DDirichlet ({ a = a } & t) ->
+    match typeLiftExpr env a with (env, a) then
+      (env, DDirichlet {t with a = a})
+    else never
+
 end
 
 lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
@@ -412,6 +467,13 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem normalizeDist (k : Dist -> Expr) =
   | DExp ({ rate = rate } & t) ->
     normalizeName (lam rate. k (DExp { t with rate = rate })) rate
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DExp ({ rate = rate } & t) ->
+    match typeLiftExpr env rate with (env, rate) then
+      (env, DExp {t with rate = rate})
+    else never
 
 end
 
@@ -472,6 +534,13 @@ lang EmpiricalDist =
       normalizeName
         (lam samples. k (DEmpirical { t with samples = samples })) samples
 
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DEmpirical ({ samples = samples } & t) ->
+    match typeLiftExpr env samples with (env, samples) then
+      (env, DEmpirical {t with samples = samples})
+    else never
+
 end
 
 -----------------
@@ -516,7 +585,7 @@ lang DistAll =
 
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF
+  + MExprANF + MExprTypeLift
 
 mexpr
 
@@ -728,6 +797,18 @@ utest _anf tmDirichlet with bindall_ [
   ulet_ "t1" (dirichlet_ (var_ "t")),
   var_ "t1"
 ] using eqExpr in
+
+---------------------
+-- TYPE-LIFT TESTS --
+---------------------
+
+utest (typeLift tmBern).1 with tmBern using eqExpr in
+utest (typeLift tmBeta).1 with tmBeta using eqExpr in
+utest (typeLift tmCategorical).1 with tmCategorical using eqExpr in
+utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
+utest (typeLift tmExp).1 with tmExp using eqExpr in
+utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
+utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 
 ()
 
