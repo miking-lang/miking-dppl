@@ -55,6 +55,12 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmDist t -> pprintDist indent env t.dist
 
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyDist t ->
+    match getTypeStringCode indent env t.ty with (env, ty) then
+      (env, join ["Dist(", ty, ")"])
+    else never
+
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
@@ -125,6 +131,12 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
       else never
     else never
 
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TyDist t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TyDist {t with ty = ty})
+    else never
+
 end
 
 lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
@@ -159,7 +171,7 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBern t ->
     match ty t.p with TyFloat _ then TyBool { info = NoInfo () }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error bern"
 
   -- ANF
   sem isValueDist =
@@ -215,7 +227,7 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBeta t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error beta" in
     match ty t.a with TyFloat _ then
       match ty t.b with TyFloat _ then
         TyFloat { info = NoInfo () }
@@ -282,7 +294,7 @@ lang CategoricalDist =
   sem tyDist (env: TypeEnv) (info: Info) =
   | DCategorical t ->
     match ty t.p with TySeq { ty = TyFloat _ } then TyInt { info = NoInfo () }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error categorical"
 
   -- ANF
   sem isValueDist =
@@ -342,10 +354,10 @@ lang MultinomialDist =
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DMultinomial t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error multinomial" in
     match ty t.n with TyInt _ then
       match ty t.p with TySeq { ty = TyFloat _ } then
-        TyInt { info = NoInfo () }
+        TySeq { ty = TyInt { info = NoInfo () }, info = NoInfo () }
       else err ()
     else err ()
 
@@ -408,7 +420,7 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   | DDirichlet t ->
     match ty t.a with TySeq { ty = TyFloat _ } then
       TySeq { info = NoInfo (), ty = TyFloat { info = NoInfo () } }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error dirichlet"
 
   -- ANF
   sem isValueDist =
@@ -458,7 +470,7 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DExp t ->
     match ty t.rate with TyFloat _ then TyFloat { info = NoInfo () }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error exponential"
 
   -- ANF
   sem isValueDist =
@@ -513,7 +525,7 @@ lang EmpiricalDist =
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DEmpirical t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error empirical" in
     match ty t.samples
     with TySeq { ty = TyRecord { fields = fields } } then
       if eqi (mapSize fields) 2 then

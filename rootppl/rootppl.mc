@@ -7,27 +7,32 @@ lang RootPPL = CTopAst + CStmtAst
 
   syn CTop =
 
-    -- Global data declarations
-    | TBBlockData { ty: CType,
-                    id: Name }
+  -- Global data declarations
+  | TBBlockData { ty: CType,
+                  id: Name }
 
-    -- Basic block helpers (essentially regular functions with special syntax)
-    | TBBlockHelper { ty     : CType,
-                      id     : Name,
-                      params : [(CType,Name)],
-                      body   : [Stmt] }
+  -- Basic block helpers (essentially regular functions with special syntax)
+  | TBBlockHelper { ty     : CType,
+                    id     : Name,
+                    params : [(CType,Name)],
+                    body   : [Stmt] }
 
-    -- Basic blocks
-    | TBBlock { id   : Name,
-                body : [Stmt] }
+  -- Basic blocks
+  | TBBlock { id   : Name,
+              body : [Stmt] }
 
-  -- TODO(dlunde,2021-05-04)
   syn CExpr =
-    | TmWeight  { arg: Expr }
-    | TmPush    { arg: Expr }
-    | TmPop     { arg: Expr }
-    | TmSetPC   { arg: Expr }
-    | TmPCCall  { arg: Expr }
+  | CESample { dist: CDist }
+  | CEWeight { weight: CExpr }
+
+  syn CDist =
+  | CDBern { p: CExpr }
+  | CDBeta { a: CExpr, b: CExpr}
+  | CDCategorical { p: CExpr }
+  | CDMultinomial { n: CExpr, p: CExpr }
+  | CDDirichlet { a: CExpr }
+  | CDExp { rate: CExpr }
+  | CDEmpirical { samples: CExpr }
 
 end
 
