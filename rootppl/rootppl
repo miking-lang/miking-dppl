@@ -1,0 +1,56 @@
+#!/bin/bash
+
+
+##### START PARSE ARGS #####
+args=""
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -o|--out)
+    out_name="$2"
+    args="${args} EXEC_NAME=${out_name}"
+    shift # past argument
+    shift # past value
+    ;;
+    -j|--jobs)
+    num_compile_threads="$2"
+    args="${args} -j${num_compile_threads}"
+    shift # past argument
+    shift # past value
+    ;;
+    -a|--arch)
+    arch="$2"
+    args="${args} arch=${arch}"
+    shift # past argument
+    shift # past value
+    ;;
+    --omp)
+    # LIBPATH="$2"
+    args="${args} omp"
+    shift # past argument
+    ;;
+    --cxx)
+    cxx="$2"
+    args="${args} CXX=${cxx}"
+    shift # past argument
+    shift # past value
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+##### END PARSE ARGS #####
+
+
+if [ "$1" = "clean" ]; then
+make clean
+else
+make model=$1 $args
+fi

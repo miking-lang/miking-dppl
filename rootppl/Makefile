@@ -3,6 +3,10 @@
 # $(error model argument needs to be set with e.g.: $(\n)make model=path/to/model.cu$(\n))
 # endif
 
+ifndef EXEC_NAME
+EXEC_NAME=program
+endif
+
 ifdef arch
 # GPU
 # CC=/usr/local/cuda-11.0/bin/nvcc
@@ -16,7 +20,7 @@ FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP)
 FLAGS_LINK=-std=c++14 -O3 $(OMP)
 endif
 
-EXEC_NAME=program
+# EXEC_NAME=program
 
 SMC_SRC=inference/smc/smc.cu
 SMC_NESTED_SRC=inference/smc/smc_nested.cu
@@ -52,6 +56,7 @@ $(EXEC_NAME): $(OBJDIR) $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
 # Compile model, which is always recompiled as it is deleted after the executable is created.
 $(OBJDIR)/model.o: $(model)
 	$(CC) -c $(FLAGS) $(model) -o $@
+	
 # $(CC) -c $(FLAGS) $(model) -o model.o
 
 $(OBJDIR):
@@ -127,7 +132,9 @@ $(OBJDIR)/file_handler.o: $(FRAMEWORK_FILES)
 
 .PHONY: clean
 clean:
-	rm out/*.o $(EXEC_NAME)
+	rm out/*.o
+
+# rm out/*.o $(EXEC_NAME)
 
 # run: ./$(EXEC_NAME)
 .PHONY: run
