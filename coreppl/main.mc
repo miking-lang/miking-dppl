@@ -1,33 +1,56 @@
-
+-- Miking is licensed under the MIT license.
+-- Copyright (C) David Broman. See file LICENSE.txt
+--
+-- File main.mc is the main file of the Miking DPPL project
 
 
 include "arg.mc"
+include "option.mc"
+include "string.mc"
 
-
+-- Options type
 type Options = {
-  debugParse : Bool,
   particles : Int
 }
 
-let optionDefaults = {
-
+-- Default values for options
+let default = {
+  particles = 5000
 }
 
-let optionConfig = [
-("--particles", "=", "Number of particles for SMC an importance sampling",
-  lam o. lam v. {o with particles = argInt v})
+-- Options configuration
+let config = [
+  (["--particles"], ["="], "Number of particles for importance sampling. Default 5000.",
+    lam o:Options. lam v. {o with particles = argInt v})
 ]
 
 -- Menu
-let menu = join [
-  "Usage: mi <command> [<options>] file [<options>]\n\n",
-  argHelpArgString optionConfig
+let menu = lam. join [
+  "Usage: midppl file.pmc [<options>]\n\n",
+  "Options:\n",
+  argHelpOptions config,
+  "\n"
 ]
-
 
 mexpr
 
+-- Use the arg.mc library to parse arguments
+match argParse default config with Some r then
+  -- Help the type annotator
+  let r : ArgResult = r in
+  let options : Options = r.options in
+  -- Print menu if no file arguments
+  if eqi (length r.strings) 0 then
+    print (menu ());
+    exit 1
+  else
+  -- Parsing OK. Run program
+    print (join ["files: ", int2string (length r.strings),
+                 " particles: ", int2string options.particles, "\n"])
+else
+  -- Error in Argument parsing
+  --argPrintError default config;
+  exit 1
 
-utest xvar with 1 in
 
-()
+
