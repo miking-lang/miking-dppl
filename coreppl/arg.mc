@@ -126,13 +126,4 @@ let config = [
     lam o:Options. lam s. {o with message = s})
 ] in
 
-/-
-     This is a
-   test that we
-   can take a
-   look at.
--/
-
-utest 1 with 1 in
-
 ()
