@@ -1,6 +1,34 @@
 -- CorePPL compiler, targeting the RootPPL framework
 -- TODO(dlunde,2021-05-04): Out of date
 
+-- NOTE
+--
+-- #include <stdio.h>
+
+-- struct Ty {
+--   int a;
+--   char b;
+-- };
+
+-- int main() {
+--   char stack[1000];
+
+--   int test = 1;
+--   printf("Size: %zu\n", sizeof(struct Ty));
+
+--   struct Ty *ptr = (struct Ty *) stack;
+--   ptr->a = 32;
+--   ptr->b = 'a';
+
+--   struct Ty *ptr2 = (struct Ty *) (stack + sizeof(struct Ty));
+--   ptr2->a = 31;
+--   ptr2->b = 'b';
+
+--   printf("ptr->a = %d, ptr->b = %c\n", ptr->a, ptr->b);
+--   printf("ptr2->a = %d, ptr2->b = %c\n", ptr2->a, ptr2->b);
+
+-- }
+
 include "../coreppl/coreppl.mc"
 
 include "../models/crbd.mc"
@@ -32,8 +60,8 @@ lang Compiler = MExprPPL + RootPPL + MExprCCompileGCC
   | TyDist _ -> 12
 
   sem normalize (k : Expr -> Expr) =
-  -- Ensures argument to assume is not lifted (first-class distributions not
-  -- supported in RootPPL)
+  -- Ensures argument to assume is not lifted by ANF (first-class distributions
+  -- not supported in RootPPL)
   | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
     normalizeDist
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
@@ -123,12 +151,12 @@ let compile: Expr -> CProg = lam prog.
   -- Type lift
   match typeLift prog with (env, prog) then
 
-    print (expr2str prog); print "\n\n";
+    -- print (expr2str prog); print "\n\n";
 
     -- Run C compiler
     let cprog = compileWithMain env prog in
 
-    -- printCompiledCProg prog;
+    print (printCompiledCProg cprog);
     cprog
 
   else never
