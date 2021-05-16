@@ -423,7 +423,7 @@ lang CorePPLInference = CorePPL -- + Importance + SMC
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANF + MExprTypeLift
+  MExprTypeAnnot + MExprANF + MExprTypeLift + MExprPPLCmpTypeIndex
 
 
 mexpr

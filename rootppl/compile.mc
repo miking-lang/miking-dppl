@@ -41,31 +41,24 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "c/compile.mc"
 
-lang Compiler = MExprPPL + RootPPL + MExprCCompileGCC
+lang Compiler = MExprPPL + RootPPL + MExprCCompile
 
-  sem typeIndex =
-  | TyUnknown _ -> 0
-  | TyBool _ -> 1
-  | TyInt _ -> 2
-  | TyFloat _ -> 3
-  | TyChar _ -> 4
-  | TyArrow _ -> 5
-  | TySeq _ -> 6
-  | TyRecord _ -> 7
-  | TyVariant _ -> 8
-  | TyVar _ -> 9
-  | TyApp _ -> 10
-  | TyTensor _ -> 11
-  -- This is the only addition compared to MExprCmpTypeIndex in mexpr/cmp.mc
-  | TyDist _ -> 12
-
-  sem normalize (k : Expr -> Expr) =
+  ------------------
+  -- ANF OVERRIDE --
+  ------------------
   -- Ensures argument to assume is not lifted by ANF (first-class distributions
   -- not supported in RootPPL)
+
+  sem normalize (k : Expr -> Expr) =
   | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
     normalizeDist
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
       dist
+
+
+  -----------------------------------------
+  -- ADDITIONS TO EXPRESSION COMPILATION --
+  -----------------------------------------
 
   sem compileDist =
   | DBern { p = p } -> CDBern { p = compileExpr p }
@@ -84,60 +77,49 @@ lang Compiler = MExprPPL + RootPPL + MExprCCompileGCC
     CESample { dist = compileDist dist }
   | TmWeight { weight = weight } -> CEWeight { weight = compileExpr weight }
 
+
+  ---------------
+  -- C COMPILE --
+  ---------------
+  -- Because of the rather involved method of allocating stuff, we need to defer allocations performed by alloc to a later stage
+
+  -- Internal compiler extension to C initializers
+  syn CExpr =
+  | CEAlloc {}
   sem printCExpr (env: PprintEnv) =
-  | CESample { dist = dist } ->
-    match printCDist env dist with (env,dist) then
-      (env, _par (join ["SAMPLE(", dist, ")"]))
-    else never
-  | CEWeight { weight = weight } ->
-    match printCExpr env weight with (env,weight) then
-      (env, _par (join ["WEIGHT(", weight, ")"]))
+  | CEAlloc {} -> (env, "CEAlloc")
+
+  -- Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]
+  sem alloc (name: Name) =
+  | CTyVar { id = tyName } & ty ->
+    let allocName = nameSym "alloc" in
+    [
+      -- Placeholder definition of pointer to allocated struct
+      { ty = ty
+      , id = Some name
+      , init = Some (CIExpr { expr = CEAlloc {} })
+      }
+    ]
+  | _ -> error "Not a CTyVar in alloc"
+
+  sem printCompiledRPProg =
+  | rpprog -> printRPProg cCompilerNames rpprog
+
+  sem rootPPLCompile (typeEnv: [(Name,Type)]) =
+  | prog ->
+    match compile typeEnv prog with (types, tops, inits) then
+      -- Temporary
+      let initbb = CTBBlock { id = nameSym "init", body = inits } in
+      RPProg { includes = _includes, pStateTy = CTyVoid {}, tops = join [types, tops, [initbb]] }
     else never
 
-  sem printCDist (env: PprintEnv) =
-  | CDBern { p = p } ->
-    match printCExpr env p with (env,p) then
-      (env, strJoin ", " ["bernoulli", p])
-    else never
-
-  | CDBeta { a = a, b = b } ->
-    match printCExpr env a with (env,a) then
-      match printCExpr env b with (env,b) then
-        (env, strJoin ", " ["beta", a, b])
-      else never
-    else never
-
-  | CDCategorical { p = p } ->
-    match printCExpr env p with (env,p) then
-      (env, strJoin ", " ["discrete", p, "TODO"])
-    else never
-
-  | CDMultinomial { n = n, p = p } ->
-    match printCExpr env n with (env,n) then
-      match printCExpr env p with (env,p) then
-        (env, strJoin ", " ["multinomial", p, n, "TODO", "TODO"])
-      else never
-    else never
-
-  | CDDirichlet { a = a } ->
-    match printCExpr env a with (env,a) then
-      (env, strJoin ", " ["dirichlet", a, "TODO", "TODO"])
-    else never
-
-  | CDExp { rate = rate } ->
-    match printCExpr env rate with (env,rate) then
-      (env, strJoin ", " ["exponential", rate])
-    else never
-
-  | CDEmpirical { samples = samples } ->
-    error "Empirical distribution cannot be compiled"
 
 end
 
 mexpr
 use Compiler in
 
-let compile: Expr -> CProg = lam prog.
+let compile: Expr -> RPProg = lam prog.
 
   -- Symbolize with empty environment
   let prog = symbolizeExpr symEnvEmpty prog in
@@ -154,10 +136,10 @@ let compile: Expr -> CProg = lam prog.
     -- print (expr2str prog); print "\n\n";
 
     -- Run C compiler
-    let cprog = compileWithMain env prog in
+    let rpprog = rootPPLCompile env prog in
 
-    print (printCompiledCProg cprog);
-    cprog
+    -- print (printCompiledRPProg rpprog);
+    rpprog
 
   else never
 

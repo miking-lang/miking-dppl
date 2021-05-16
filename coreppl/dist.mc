@@ -595,9 +595,32 @@ lang DistAll =
   BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
   MultinomialDist + DirichletDist
 
+end
+
+lang MExprPPLCmpTypeIndex = MExprAst + Dist
+
+  -- This is required for type comparisons (required in turn for type lifting)
+  sem typeIndex =
+  | TyUnknown _ -> 0
+  | TyBool _ -> 1
+  | TyInt _ -> 2
+  | TyFloat _ -> 3
+  | TyChar _ -> 4
+  | TyArrow _ -> 5
+  | TySeq _ -> 6
+  | TyRecord _ -> 7
+  | TyVariant _ -> 8
+  | TyVar _ -> 9
+  | TyApp _ -> 10
+  | TyTensor _ -> 11
+  -- This is the only addition compared to MExprCmpTypeIndex in mexpr/cmp.mc
+  | TyDist _ -> 12
+
+end
+
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF + MExprTypeLift
+  + MExprANF + MExprTypeLift + MExprPPLCmpTypeIndex
 
 mexpr
 
@@ -771,7 +794,7 @@ let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
 utest ty (typeAnnot tmBern) with tydist_ tybool_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmBeta) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmCategorical) with tydist_ tyint_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmMultinomial) with tydist_ tyint_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmMultinomial) with tydist_ (tyseq_ tyint_) using eqTypeEmptyEnv in
 utest ty (typeAnnot tmExp) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_)
