@@ -22,6 +22,14 @@ endif
 
 # EXEC_NAME=program
 
+.PHONY :\
+	install
+	clean
+	framework
+	ompframework
+	omp
+	openmpflag
+
 SMC_SRC=inference/smc/smc.cu
 SMC_NESTED_SRC=inference/smc/smc_nested.cu
 DISTS_SRC=dists/dists.cu
@@ -45,13 +53,38 @@ OBJ_FILES_FRAMEWORK=$(patsubst %.o, $(OBJDIR)/%.o, $(_OBJ_FILES_FRAMEWORK))
 FRAMEWORK_FILES = $(wildcard inference/*) $(wildcard inference/*/*) $(wildcard inference/*/*/*) $(wildcard inference/*/*/*/*) \
 	$(wildcard dists/*) $(wildcard macros/*) $(wildcard utils/*)
 
-# $@ is target name
-# $< is dependency list
-
 # Link object files to executable
 $(EXEC_NAME): $(OBJDIR) $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
 	$(CC) $(FLAGS_LINK) out/*.o -o $@
 	rm $(OBJDIR)/model.o
+
+bin_path = $(HOME)/.local/bin
+rootppl_name = rootppl
+install:
+	mkdir -p $(bin_path)
+	cp -f ./$(rootppl_name) $(bin_path)/$(rootppl_name)
+	chmod +x $(bin_path)/$(rootppl_name)
+	
+
+clean:
+	rm -f out/*.o
+
+run:
+	./$(EXEC_NAME) $(N)
+
+openmpflag:
+	$(eval OMP = -fopenmp)
+
+# Compile only framework
+framework:\
+	$(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+ompframework:\
+	openmpflag $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+omp:\
+	openmpflag $(EXEC_NAME)
+
 
 # Compile model, which is always recompiled as it is deleted after the executable is created.
 $(OBJDIR)/model.o: $(model)
@@ -62,18 +95,9 @@ $(OBJDIR)/model.o: $(model)
 $(OBJDIR):
 	mkdir $(OBJDIR)
 
-# Compile only framework
-.PHONY: framework
-framework: $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
 
-.PHONY: ompframework
-ompframework: openmpflag $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
-
-.PHONY: omp openmpflag
-omp: openmpflag $(EXEC_NAME)
-
-openmpflag:
-	$(eval OMP = -fopenmp)
+# $@ is target name
+# $< is dependency list
 
 # $(OBJ_FILES_FRAMEWORK): $(FRAMEWORK_FILES)
 	# $(CC) -c $(FLAGS) $< -o $@
@@ -129,14 +153,3 @@ $(OBJDIR)/systematic_kernels.o: $(FRAMEWORK_FILES)
 
 $(OBJDIR)/file_handler.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(FILE_HANDLER_SRC) -o $@
-
-.PHONY: clean
-clean:
-	rm out/*.o
-
-# rm out/*.o $(EXEC_NAME)
-
-# run: ./$(EXEC_NAME)
-.PHONY: run
-run:
-	./$(EXEC_NAME) $(N)
