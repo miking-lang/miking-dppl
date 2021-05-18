@@ -79,7 +79,7 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
 
   -- ANF
   sem isValue =
-  | TmResample _ -> true
+  | TmResample _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmResample t -> k (TmResample t)
@@ -99,6 +99,7 @@ end
 let resample_ = use Resample in
   TmResample { ty = tyunknown_, info = NoInfo () }
 
+lang SMC = Resample
 
 lang Test =
   Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF + MExprTypeLift

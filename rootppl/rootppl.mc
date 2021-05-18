@@ -27,6 +27,12 @@ lang RootPPL = CAst + CPrettyPrint
   | CESample { dist: CDist }
   | CEWeight { weight: CExpr }
   | CEPState {}
+  | CEPC {} --TODO
+
+  sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
+  | CESample t -> sfold_CDist_CExpr f acc t.dist
+  | CEWeight t -> f acc t.weight
+  | CEPState _ -> acc
 
   syn CDist =
   | CDBern { p: CExpr }
@@ -36,6 +42,15 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet { a: CExpr }
   | CDExp { rate: CExpr }
   | CDEmpirical { samples: CExpr }
+
+  sem sfold_CDist_CExpr (f: a -> CExpr -> a) (acc: a) =
+  | CDBern t -> f acc t.p
+  | CDBeta t -> f (f acc t.a) t.b
+  | CDCategorical t -> f acc t.p
+  | CDMultinomial t -> f (f acc t.n) t.p
+  | CDDirichlet t -> f acc t.a
+  | CDExp t -> f acc t.rate
+  | CDEmpirical t -> f acc t.samples
 
   syn RPProg =
   | RPProg { includes: [String], pStateTy: CType, tops: [CTop] }
@@ -66,6 +81,7 @@ lang RootPPL = CAst + CPrettyPrint
     match printCExpr env weight with (env,weight) then
       (env, _par (join ["WEIGHT(", weight, ")"]))
     else never
+  | CEPState {} -> (env, "PSTATE")
 
   sem printCDist (env: PprintEnv) =
   | CDBern { p = p } ->
@@ -107,7 +123,7 @@ lang RootPPL = CAst + CPrettyPrint
 
 
   sem printRPProg (nameInit: [Name]) =
-  | RPProg { includes = includes, pstate = pstate, tops = tops } ->
+  | RPProg { includes = includes, pStateTy = pStateTy, tops = tops } ->
     let indent = 0 in
     let includes = map (lam inc. join ["#include ", inc]) includes in
     let addName = lam env. lam name.

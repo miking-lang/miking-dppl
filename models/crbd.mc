@@ -8,6 +8,7 @@ include "math.mc"
 -- we can fix this (by, e.g., adding the root of the repo to the path) when the
 -- build procedure gets more mature.
 include "../coreppl/coreppl.mc"
+include "../coreppl/smc.mc"
 
 let crbd = use MExprPPL in
 
@@ -104,7 +105,7 @@ let crbd = use MExprPPL in
              (weight_
                (mulf_ (negf_ (var_ "mu"))
                   (subf_ (var_ "pAge") (var_ "tAge")))),
-           -- ulet_ "TMP" (resample_),
+           ulet_ "TMP" (resample_),
            ulet_ "TMP"
              (appf4_ (var_ "simBranch")
                    (var_ "pAge") (var_ "tAge")
@@ -113,7 +114,7 @@ let crbd = use MExprPPL in
              (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
              (bindall_ [
                ulet_ "TMP" (weight_ (app_ (var_ "log") (var_ "lambda"))),
-               -- ulet_ "TMP" (resample_),
+               ulet_ "TMP" (resample_),
                ulet_ "TMP"
                  (appf4_ (var_ "simTree") (var_ "left")
                     (var_ "tree") (var_ "lambda") (var_ "mu")),

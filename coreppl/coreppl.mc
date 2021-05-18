@@ -15,8 +15,10 @@ include "mexpr/anf.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 
-include "dist.mc"
 include "string.mc"
+
+include "dist.mc"
+include "smc.mc"
 
 -------------
 -- HELPERS --
@@ -419,7 +421,7 @@ let weight_ = use Weight in
 lang CorePPL =
   Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
 
-lang CorePPLInference = CorePPL -- + Importance + SMC
+lang CorePPLInference = CorePPL + SMC -- + Importance
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
