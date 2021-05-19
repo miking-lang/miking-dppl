@@ -1,12 +1,10 @@
 #!/bin/bash
 
 # This file builds the executable by: 
-#   1. Copying the source file to the installed rootppl directory
+#   1. Get the absolute path to the source file
 #   2. Change directory to installed rootppl directory
-#   3. Build the executable with the inference framework
+#   3. Build the executable with the inference framework with the users working directory added to the include paths
 #   4. Copy the executable back to the user's working directory and clean up rootppl directory
-
-# NOTE: Currently only works for relative paths to user source file
 
 
 out_name=program
@@ -75,32 +73,24 @@ cd ~/.local/lib/rootppl/
 
 # "rootppl clean" used for cleaning before changing platform, e.g. cpu to gpu
 if [ "$1" = "clean" ]; then
-make clean
+    make clean
 else
-# Define and create directory for user source files
-USER_SRC_DIR=user_files
-mkdir -p ${USER_SRC_DIR}
+    # Define and create directory for user source files
+    USER_SRC_DIR=temp_user_out
+    mkdir -p $(dirname ${USER_SRC_DIR}/${out_name})
 
-# OLD SOLUTION: Search for all files of relevant file extensions in current directory
-# file_extensions=("c" "cpp" "h" "hpp" "cu" "cuh")
-# find_cmd="find ${cwd} -maxdepth 1 -type f \( -iname \*.c"
-# for ext in ${file_extensions[@]}; do
-    # find_cmd="${find_cmd} -o -iname \*.${ext}"
-# done
-# find_cmd="${find_cmd} \);"
+    # Create absolute path by identifying leading slash
+    if [[ ${1:0:1} == "/" ]] ; then 
+        abs_path_src_file=$1
+    else  
+        abs_path_src_file="${cwd}/$1"
+    fi
 
-# Copy user's source file to installed rootppl directory
-destination_path=$(dirname ./${USER_SRC_DIR}/$1)
-mkdir -p ${destination_path}
-cp -rf ${cwd}/$1 ./${USER_SRC_DIR}/$1
+    # Build executable and copy it to the user's working directory
+    make model=${abs_path_src_file} EXEC_NAME=${USER_SRC_DIR}/${out_name} ${args} EXTRA_FLAGS=-I${cwd}
+    mkdir -p $(dirname ${cwd}/${out_name}) # Create out dir if the user specified out path does not exist
+    cp ${USER_SRC_DIR}/${out_name} ${cwd}/${out_name}
 
-# Build executable and copy it to the user's working directory
-# The user's working directory is included in the path when compiling in case of additional included files
-out_name=${USER_SRC_DIR}/${out_name}
-added_include_path=$(dirname ${cwd}/$1)
-make model=${USER_SRC_DIR}/$1 EXEC_NAME=${out_name} ${args} EXTRA_FLAGS=-I${added_include_path}
-cp ${out_name} ${cwd}/
-
-# Clear user source directory
-rm -rf ${USER_SRC_DIR}
+    # Delete temp user directory
+    rm -rf ${USER_SRC_DIR}
 fi
