@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# This file builds the executable by: 
+#   1. Copying the source file to the installed rootppl directory
+#   2. Change directory to installed rootppl directory
+#   3. Build the executable with the inference framework
+#   4. Copy the executable back to the user's working directory and clean up rootppl directory
+
+# NOTE: Currently only works for relative paths to user source file
+
+
+out_name=program
 
 ##### START PARSE ARGS #####
 args=""
@@ -12,7 +22,8 @@ key="$1"
 case $key in
     -o|--out)
     out_name="$2"
-    args="${args} EXEC_NAME=${out_name}"
+    # This argument is handled separately and hence not added to args string here
+    # args="${args} EXEC_NAME=${USER_SRC_DIR}/${out_name}"
     shift # past argument
     shift # past value
     ;;
@@ -46,11 +57,50 @@ case $key in
 esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
+
+if [[ $# -eq 0 ]] ; then
+    echo 'Error: source file positional argument required'
+    exit 0
+fi
+
+if [[ -n $2 ]] ; then
+    echo 'Error: only one positional argument required, second positional argument passed: ' \"$2\"
+    exit 0
+fi
 ##### END PARSE ARGS #####
 
 
+cwd=$(pwd)
+cd ~/.local/lib/rootppl/
+
+# "rootppl clean" used for cleaning before changing platform, e.g. cpu to gpu
 if [ "$1" = "clean" ]; then
 make clean
 else
-make model=$1 $args
+# Define and create directory for user source files
+USER_SRC_DIR=user_files
+mkdir -p ${USER_SRC_DIR}
+
+# OLD SOLUTION: Search for all files of relevant file extensions in current directory
+# file_extensions=("c" "cpp" "h" "hpp" "cu" "cuh")
+# find_cmd="find ${cwd} -maxdepth 1 -type f \( -iname \*.c"
+# for ext in ${file_extensions[@]}; do
+    # find_cmd="${find_cmd} -o -iname \*.${ext}"
+# done
+# find_cmd="${find_cmd} \);"
+
+# Copy user's source file to installed rootppl directory
+destination_path=$(dirname ./${USER_SRC_DIR}/$1)
+mkdir -p ${destination_path}
+cp -rf ${cwd}/$1 ./${USER_SRC_DIR}/$1
+
+# Build executable and copy it to the user's working directory
+# The user's working directory is included in the path when compiling in case of additional included files
+out_name=${USER_SRC_DIR}/${out_name}
+added_include_path=$(dirname ${cwd}/$1)
+make model=${USER_SRC_DIR}/$1 EXEC_NAME=${out_name} ${args} EXTRA_FLAGS=-I${added_include_path}
+cp ${out_name} ${cwd}/
+
+# Clear user source directory
+rm -rf ${USER_SRC_DIR}
 fi

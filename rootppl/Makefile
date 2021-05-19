@@ -1,26 +1,23 @@
 
-# ifndef model
-# $(error model argument needs to be set with e.g.: $(\n)make model=path/to/model.cu$(\n))
-# endif
-
 ifndef EXEC_NAME
 EXEC_NAME=program
 endif
 
+
+COMMON_FLAGS=$(EXTRA_FLAGS) -I. -std=c++14 -O3
 ifdef arch
 # GPU
 # CC=/usr/local/cuda-11.0/bin/nvcc
 CC=nvcc
-FLAGS=-I. -std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
+FLAGS=$(COMMON_FLAGS) -arch=sm_$(arch) -rdc=true -lcudadevrt
 FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 else
 # CPU
 CC=$(CXX)
-FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP)
+FLAGS=$(COMMON_FLAGS) -xc++ $(OMP)
 FLAGS_LINK=-std=c++14 -O3 $(OMP)
 endif
 
-# EXEC_NAME=program
 
 .PHONY :\
 	install
@@ -59,12 +56,13 @@ $(EXEC_NAME): $(OBJDIR) $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
 	rm $(OBJDIR)/model.o
 
 bin_path = $(HOME)/.local/bin
+lib_path=$(HOME)/.local/lib/rootppl
 rootppl_name = rootppl
 install:
-	mkdir -p $(bin_path)
-	cp -f ./$(rootppl_name) $(bin_path)/$(rootppl_name)
-	chmod +x $(bin_path)/$(rootppl_name)
-	
+	mkdir -p $(bin_path) $(lib_path)
+	cp -f ./$(rootppl_name) $(bin_path)/$(rootppl_name); chmod +x $(bin_path)/$(rootppl_name)
+	cp -rf . $(lib_path)/
+	rm -f $(lib_path)/.gitignore $(lib_path)/rootppl
 
 clean:
 	rm -f out/*.o
