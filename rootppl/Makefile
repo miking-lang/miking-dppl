@@ -88,7 +88,8 @@ omp:\
 # Compile model, which is always recompiled as it is deleted after the executable is created.
 $(OBJDIR)/model.o: $(model)
 	$(CC) -c $(FLAGS) $(model) -o $@
-	
+
+
 # $(CC) -c $(FLAGS) $(model) -o model.o
 
 $(OBJDIR):
@@ -99,7 +100,7 @@ $(OBJDIR):
 # $< is dependency list
 
 # $(OBJ_FILES_FRAMEWORK): $(FRAMEWORK_FILES)
-	# $(CC) -c $(FLAGS) $< -o $@
+# $(CC) -c $(FLAGS) $< -o $@
 
 # Compile smc, depend on all files in smc dir and cuh files in resample dirs
 # $(OBJDIR)/smc_impl.o: $(wildcard inference/*.cuh) $(wildcard macros/*.cuh) dists/dists.cuh $(wildcard utils/*.cuh)
@@ -156,7 +157,6 @@ $(OBJDIR)/systematic_kernels.o: $(FRAMEWORK_FILES)
 
 $(OBJDIR)/file_handler.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(FILE_HANDLER_SRC) -o $@
-<<<<<<< HEAD
 
 .PHONY: clean
 clean:
@@ -167,5 +167,3 @@ clean:
 run:
 	./$(EXEC_NAME) $(N)
 
-=======
->>>>>>> 338a8ef26922338946450209d154a62856d1713f
