@@ -226,7 +226,7 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
     let createBlock: Name -> AccBB -> AccBB =
       lam name: Name. lam acc: AccBB.
         let bb = CTBBlock { id = name, body = acc.block } in
-        {acc with tops = cons bb acc.tops}
+        {acc with tops = snoc acc.tops bb}
     in
 
     let setPC: Name -> CExpr = lam name.
