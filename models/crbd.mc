@@ -7,29 +7,23 @@ include "math.mc"
 -- TODO(dlunde,2020-10-19): I very much dislike using ".." in includes. I guess
 -- we can fix this (by, e.g., adding the root of the repo to the path) when the
 -- build procedure gets more mature.
-include "../coreppl/ast.mc"
-include "../coreppl/ast-builder.mc"
+include "../coreppl/coreppl.mc"
 
--- TODO(dlunde,2020-11-11): Type annotate everything manually. This can later
--- be done by the type checker.
-
-let crbd = use CorePPL in
+let crbd = use MExprPPL in
 
   let tytree_ = tyvar_ "Tree" in
 
   let tyleafrec_ = tyrecord_ [("age", tyfloat_)] in
   let leaf_ = lam age.
-    asc_ tytree_
-      (conapp_ "Leaf" (asc_ tyleafrec_ (record_ [("age", float_ age)])))
+      conapp_ "Leaf" (record_ [("age", float_ age)])
   in
 
   let tynoderec_ =
     tyrecord_ [("age", tyfloat_), ("l", tytree_), ("r", tytree_)] in
   let node_ = lam age. lam left. lam right.
-    asc_ tytree_
-      (conapp_ "Node" (asc_ tynoderec_ (record_ [("age", float_ age),
-                                                 ("l", left),
-                                                 ("r", right)])))
+      conapp_ "Node" (record_ [("age", float_ age),
+                               ("l", left),
+                               ("r", right)])
   in
 
   let tree =
@@ -39,14 +33,14 @@ let crbd = use CorePPL in
   let crbdGoesUndetected =
     lams_ [("startTime", tyfloat_), ("lambda", tyfloat_), ("mu", tyfloat_)]
       (bindall_ [
-        ulet_ "t" (sampleExp_ (addi_ (var_ "lambda") (var_ "mu"))),
+        ulet_ "t" (assume_ (exp_ (addi_ (var_ "lambda") (var_ "mu")))),
         ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
         if_ (ltf_ (var_ "currentTime") (float_ 0.0))
           false_
           (bindall_ [
             ulet_ "speciation"
-              (sampleBern_
-                (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu")))),
+              (assume_ (bern_
+                (divf_ (var_ "lambda") (addf_ (var_ "lambda") (var_ "mu"))))),
             if_ (not_ (var_ "speciation"))
               true_
               (and_
@@ -62,7 +56,7 @@ let crbd = use CorePPL in
   let simBranch =
     ulams_ ["startTime", "stopTime", "lambda", "mu"]
      (bindall_ [
-       ulet_ "t" (sampleExp_ (var_ "lambda")),
+       ulet_ "t" (assume_ (exp_ (var_ "lambda"))),
        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
        if_ (ltf_ (var_ "currentTime") (float_ 0.0))
          unit_
@@ -92,7 +86,7 @@ let crbd = use CorePPL in
            (weight_
              (mulf_ (negf_ (var_ "mu"))
                 (subf_ (var_ "pAge") (var_ "tAge")))),
-         ulet_ "_" (resample_),
+         -- ulet_ "_" (resample_),
          ulet_ "_"
            (appf4_ (var_ "simBranch")
                  (var_ "pAge") (var_ "tAge")
@@ -101,7 +95,7 @@ let crbd = use CorePPL in
            (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
            (bindall_ [
              ulet_ "_" (weight_ (app_ (var_ "log") (var_ "lambda"))),
-             ulet_ "_" (resample_),
+             -- ulet_ "_" (resample_),
              ulet_ "_"
                (appf4_ (var_ "simTree") (var_ "left")
                   (var_ "tree") (var_ "lambda") (var_ "mu")),
@@ -144,4 +138,14 @@ let crbd = use CorePPL in
       ])
       unit_
   ]
+
+mexpr
+
+use MExprPPL in
+
+-- print (expr2str crbd)
+
+utest expr2str crbd with () using (lam. lam. true) in
+
+()
 

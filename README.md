@@ -1,6 +1,6 @@
 # miking-ppl
 
-# PPLCore
+# CorePPL
 
 To be written...
 
@@ -12,7 +12,7 @@ RootPPL can be seen as an intermediate language for representing probabilistic m
 ## Getting Started
 The instructions below are tested on Ubuntu 18.04 but should work for other Linux distributions, Windows, and Mac. 
 
-### Install
+### Prerequisites
 Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++.  In 
 order to build for GPU, CUDA must be installed. See
 CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide Linux"), 
@@ -22,43 +22,54 @@ CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation
 To run the CPU version in parallel, [OpenMP](https://www.openmp.org/resources/openmp-compilers-tools/) must be installed. 
 OpenMP comes with recent gcc versions. However, OpenMP is not necessary if one does not want to execute programs in parallel on the CPU.
 
-### Build
-To build the program, clone this repository and change directory to the rootppl folder. Then to compile the model:
+### Install rootppl
+To install rootppl for the current user, first clone this repository and change directory to the rootppl folder. Then run:
 ```
-make model=path/to/model.cu
+make install
+```
+This will install rootppl to `$HOME/.local/bin` with resources copied to `$HOME/.local/lib/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`. 
+
+### Build
+To compile a model and build an executable:
+```
+rootppl path/to/model.cu
 ```
 This will compile the model along with the inference framework for CPU. To compile it for GPU, add your GPU:s compute capability to the arch variable.
 You can find your GPU:s compute capability in the [Wikipedia table](https://en.wikipedia.org/wiki/CUDA#GPUs_supported).
 Here is an example that will compile the airplane example for a GPU with a minimum compute capability of 7.5
-(simply remove `arch=75` to compile for CPU):
+(simply remove `--arch 75` to compile for CPU):
 ```
-make model=models/airplane/airplane.cu arch=75 -j5
+rootppl models/airplane/airplane.cu --arch 75 -j 5
 ```
-
+The optional argument `-j x` speeds up the compilation process by spawning `x` jobs, allowing for parallel compilation. 
 The corresponding parallel CPU (OpenMP) example is:
 ```
-make model=models/airplane/airplane.cu omp -j5
+rootppl models/airplane/airplane.cu --omp -j 5
+```
+Alternatively, the c++ compiler can be specified with CXX. This is often required on Mac OS to enable OpenMP, by using g++ instead of the default clang. On Mac OS, g++ can be installed with e.g. `brew install gcc`. Then, assuming the version installed was `gcc-10`: 
+```
+rootppl models/airplane/airplane.cu --omp -j 5 --cxx g++-10
 ```
 
-The first `make` will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run make with the `-j numThreads` to use multiple threads and speed up the build). 
+The first build will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run `rootppl` with the `-j num_threads` to use multiple threads and speed up the build). 
 __Note that if the inference framework is compiled for GPU, and then the model is compiled for CPU, 
-there will be errors. So always perform a `make clean` before switching between CPU and GPU. The same goes for switching to/from OpenMP.__
+there will be errors. So always perform a `rootppl clean` before switching between CPU and GPU. The same goes for switching to/from OpenMP.__
 
-This should generate an executable named `program`. Execute it with either `make run N=num_particles` or `./program num_particles`. For example:
+This should generate an executable named `program` (add `-o <exec_name>` to name it differently). Execute it with `./program num_particles`. For example:
 ```
-make run N=1000
+./program 1000
 ```
 
-An example out of this:
+An example output of this:
 ```
 ./program 1000
 Num particles close to target: 96.5%, MinX: 63.1558, MaxX: 84.4023
 log normalization constant = -119.270143
 ```
-First is the command that is executed from the Makefile, it executes the executable `program` with program argument 1000.
+First is the command that is executed, it executes the executable `program` with program argument `1000`.
 The second row comes from a print statement within the model. Lastly, the log normalization constant approximated by the inference is printed. 
 
-### Building a simple model
+### Creating a simple model
 Models are divided into fragments to enable pausing the execution within models. 
 These fragments are functions referred to as basic blocks (`BBLOCK`). 
 To control the program execution flow, a program counter (`PC`) can be modified. 
@@ -145,7 +156,7 @@ This example can be found in
 [rootppl/models/simple-examples/coin_flip_mean.cu](rootppl/models/simple-examples/coin_flip_mean.cu)
 and, being in the rootppl directory, compiled with:
 ```
-make model=models/simple-examples/coin_flip_mean.cu
+rootppl models/simple-examples/coin_flip_mean.cu
 ```
 
 Then it can be executed with the executable followed by the

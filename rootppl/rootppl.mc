@@ -3,42 +3,35 @@
 include "option.mc"
 include "c/ast.mc"
 
-lang SMCCUDAAst = CStmtAst
+lang RootPPL = CTopAst + CStmtAst
 
-  syn Prog =
-    | Prog { tops: [Top] }
-
-  syn Top =
+  syn CTop =
 
     -- Global data declarations
-    | TBBlockData { ty     : Type,
-                    var    : String }
+    | TBBlockData { ty: CType,
+                    id: Name }
 
-    -- Basic block helpers (regular functions?)
-    | TBBlockHelper { ty     : Type,
-                      id     : String,
-                      params : [{ ty: Type, var: String }],
-                      body   : Stmt }
+    -- Basic block helpers (essentially regular functions with special syntax)
+    | TBBlockHelper { ty     : CType,
+                      id     : Name,
+                      params : [(CType,Name)],
+                      body   : [Stmt] }
 
-    -- Basic blocks (no params allowed)
-    | TBBlock { id   : String,
-                body : Stmt }
+    -- Basic blocks
+    | TBBlock { id   : Name,
+                body : [Stmt] }
 
-  syn Expr =
+  -- TODO(dlunde,2021-05-04)
+  syn CExpr =
     | TmWeight  { arg: Expr }
     | TmPush    { arg: Expr }
     | TmPop     { arg: Expr }
     | TmSetPC   { arg: Expr }
     | TmPCCall  { arg: Expr }
 
-  sem codeGen =
-    | Prog tops -> "Hello, World!"
-
 end
 
 mexpr
-use SMCCUDAAst in
+use RootPPL in
 
-let prog = PProg{ tops = [] } in
-
-printLn (codeGen prog)
+()

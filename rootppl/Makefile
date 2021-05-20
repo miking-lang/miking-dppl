@@ -1,31 +1,31 @@
-# define \n
+
+ifndef EXEC_NAME
+EXEC_NAME=program
+endif
 
 
-# endef
-
-# ifndef model
-# $(error model argument needs to be set with e.g.: $(\n)make model=path/to/model.cu$(\n))
-# endif
-
-# ifdef ompthreads
-# OMP = -fopenmp
-# endif
-
-
+COMMON_FLAGS=$(EXTRA_FLAGS) -I. -std=c++14 -O3
 ifdef arch
 # GPU
 # CC=/usr/local/cuda-11.0/bin/nvcc
 CC=nvcc
-FLAGS=-I. -std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
+FLAGS=$(COMMON_FLAGS) -arch=sm_$(arch) -rdc=true -lcudadevrt
 FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 else
 # CPU
-CC=g++
-FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP)
+CC=$(CXX)
+FLAGS=$(COMMON_FLAGS) -xc++ $(OMP)
 FLAGS_LINK=-std=c++14 -O3 $(OMP)
 endif
 
-EXEC_NAME=program
+
+.PHONY :\
+	install
+	clean
+	framework
+	ompframework
+	omp
+	openmpflag
 
 SMC_SRC=inference/smc/smc.cu
 SMC_NESTED_SRC=inference/smc/smc_nested.cu
@@ -51,34 +51,52 @@ OBJ_FILES_FRAMEWORK=$(patsubst %.o, $(OBJDIR)/%.o, $(_OBJ_FILES_FRAMEWORK))
 FRAMEWORK_FILES = $(wildcard inference/*) $(wildcard inference/*/*) $(wildcard inference/*/*/*) $(wildcard inference/*/*/*/*) \
 	$(wildcard dists/*) $(wildcard macros/*) $(wildcard utils/*)
 
-# $@ is target name
-# $< is dependency list
-
 # Link object files to executable
 $(EXEC_NAME): $(OBJDIR) $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
 	$(CC) $(FLAGS_LINK) out/*.o -o $@
 	rm $(OBJDIR)/model.o
 
+bin_path = $(HOME)/.local/bin
+lib_path=$(HOME)/.local/lib/rootppl
+rootppl_name = rootppl
+install:
+	mkdir -p $(bin_path) $(lib_path)
+	cp -f ./$(rootppl_name) $(bin_path)/$(rootppl_name); chmod +x $(bin_path)/$(rootppl_name)
+	cp -rf . $(lib_path)/
+	rm -f $(lib_path)/.gitignore $(lib_path)/rootppl
+
+clean:
+	rm -f out/*.o
+
+run:
+	./$(EXEC_NAME) $(N)
+
+openmpflag:
+	$(eval OMP = -fopenmp)
+
+# Compile only framework
+framework:\
+	$(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+ompframework:\
+	openmpflag $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+omp:\
+	openmpflag $(EXEC_NAME)
+
+
 # Compile model, which is always recompiled as it is deleted after the executable is created.
 $(OBJDIR)/model.o: $(model)
 	$(CC) -c $(FLAGS) $(model) -o $@
+	
 # $(CC) -c $(FLAGS) $(model) -o model.o
 
 $(OBJDIR):
 	mkdir $(OBJDIR)
 
-# Compile only framework
-.PHONY: framework
-framework: $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
 
-.PHONY: ompframework
-ompframework: openmpflag $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
-
-.PHONY: omp openmpflag
-omp: openmpflag $(EXEC_NAME)
-
-openmpflag:
-	$(eval OMP = -fopenmp)
+# $@ is target name
+# $< is dependency list
 
 # $(OBJ_FILES_FRAMEWORK): $(FRAMEWORK_FILES)
 	# $(CC) -c $(FLAGS) $< -o $@
@@ -138,6 +156,7 @@ $(OBJDIR)/systematic_kernels.o: $(FRAMEWORK_FILES)
 
 $(OBJDIR)/file_handler.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(FILE_HANDLER_SRC) -o $@
+<<<<<<< HEAD
 
 .PHONY: clean
 clean:
@@ -148,3 +167,5 @@ clean:
 run:
 	./$(EXEC_NAME) $(N)
 
+=======
+>>>>>>> 338a8ef26922338946450209d154a62856d1713f
