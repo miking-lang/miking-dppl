@@ -1,34 +1,6 @@
 -- CorePPL compiler, targeting the RootPPL framework
 -- TODO(dlunde,2021-05-04): Out of date
 
--- NOTE
---
--- #include <stdio.h>
-
--- struct Ty {
---   int a;
---   char b;
--- };
-
--- int main() {
---   char stack[1000];
-
---   int test = 1;
---   printf("Size: %zu\n", sizeof(struct Ty));
-
---   struct Ty *ptr = (struct Ty *) stack;
---   ptr->a = 32;
---   ptr->b = 'a';
-
---   struct Ty *ptr2 = (struct Ty *) (stack + sizeof(struct Ty));
---   ptr2->a = 31;
---   ptr2->b = 'b';
-
---   printf("ptr->a = %d, ptr->b = %c\n", ptr->a, ptr->b);
---   printf("ptr2->a = %d, ptr2->b = %c\n", ptr2->a, ptr2->b);
-
--- }
-
 include "../coreppl/coreppl.mc"
 
 include "../models/crbd.mc"
@@ -52,9 +24,9 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
 
   -- Compiler internals
   syn CExpr =
-  | CEAlloc {}
-  | CEResample {}
-  | CEBBlockName { name: Name }
+  | CEAlloc {} -- Allocation placeholder
+  | CEResample {} -- Indicates resample locations
+  | CEBBlockName { name: Name } -- Block names
 
   sem printCExpr (env: PprintEnv) =
   | CEAlloc {} -> (env, "<<<CEAlloc>>>")
@@ -78,7 +50,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
       dist
 
-  -- Extension
+  -- Extensions
   sem compileDist =
   | DBern { p = p } -> CDBern { p = compileExpr p }
   | DBeta { a = a, b = b } -> CDBeta { a = compileExpr a, b = compileExpr b }
@@ -90,7 +62,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | DEmpirical { samples = samples } ->
     CDEmpirical { samples = compileExpr samples }
 
-  -- Extension
+  -- Extensions
   sem compileExpr =
   | TmAssume _ -> error "Assume without direct distribution"
   | TmAssume { dist = TmDist { dist = dist }} ->
@@ -98,10 +70,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | TmWeight { weight = weight } -> CEWeight { weight = compileExpr weight }
   | TmResample _ -> CEResample {}
 
-
   -- Allocation
-  -- Type is
-  -- `Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]`
   sem alloc (name: Name) =
   | CTyVar { id = tyName } & ty ->
     let allocName = nameSym "alloc" in
@@ -122,6 +91,7 @@ end
 
 let printCompiledRPProg = use MExprPPLRootPPLCompile in
   lam rpprog: RPProg.
+    -- TODO Should really cCompilerNames be used here?
     printRPProg cCompilerNames rpprog
 
 -- Compiler entry point.
@@ -132,7 +102,8 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
 
     type StackFrame = {
       params: [(Name,CType)],
-      locals: [(Name,CType)]
+      locals: [(Name,CType)],
+      ret: CType
     } in
 
     type AccSF = {
@@ -206,12 +177,12 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
     in
 
     let getStackFrames: AccSF -> [CTop] -> AccSF =
-      lam acc: AccSF. lam tops: [CTop].
+      lam tops: [CTop].
         foldl (lam acc: AccSF. lam top: CTop.
           match top
-          with CTFun { id = id, params = params, body = body } then
+          with CTFun { ret = ret, id = id, params = params, body = body } then
 
-            -- Initialize accumulator for function
+            -- Initialize accumulator for new function
             let acc = {{{{{ acc with params = map (lam t. (t.1,t.0)) params }
                                 with defs = [] }
                                 with prevDefs = [] }
@@ -223,18 +194,23 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
 
             -- Record stack frame
             {acc with sfs =
-               snoc acc.sfs (id, {params = acc.params, locals = acc.locals})}
+               snoc acc.sfs
+                 (id, {params = acc.params, locals = acc.locals, ret = ret})}
 
           else acc) emptyAcc tops
     in
 
-    type Next
-    con Collapse: () -> Next
-    con Block: Option Name -> Next
+    type Next in
+    -- Collapse stack at endpoint
+    con Collapse: () -> Next in
+    -- Jump to block at endpoint (block name can be generated a priori)
+    con Block: Option Name -> Next in
 
     type AccBB = {
-      -- What should happen when we reach an endpoint
+      -- Indicates what to do at an endpoint
       next: Next,
+      -- Indicates if a split has occured at the end of current block
+      hasSplit: Bool,
       -- Accumulated block
       block: [CStmt],
       -- Bindings from names to stack frames
@@ -244,46 +220,133 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
     } in
 
     let emptyAccBB: [(Name,StackFrame)] -> AccBB = lam sfs.
-      { next = Collapse (), name = None ()
-      , nextBlockIndex = 0, block = [], sfs = sfs, tops = [] }
+      { next = Collapse (), hasSplit = false, block = [], sfs = sfs, tops = [] }
     in
 
-    let createBlock Name -> AccBB -> AccBB =
+    let createBlock: Name -> AccBB -> AccBB =
       lam name: Name. lam acc: AccBB.
         let bb = CTBBlock { id = name, body = acc.block } in
         {acc with tops = cons bb acc.tops}
     in
 
+    let setPC: Name -> CExpr = lam name.
+      (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CEPC {}
+                                , rhs = CEBBlockName { name = name }})})
+    in
+
     recursive let splitFunBody: AccBB -> [CStmt] -> AccBB =
       lam acc: AccBB. lam stmts: [CStmt].
         match stmts with [stmt] ++ stmts then
-
-          match stmt with CSDef { init = init } then
-            match init with Some (CIExpr { expr = CEApp _ }) then
-              let blocks = snoc acc.block stmt in
-              match stmts with [] then
-                -- TODO Handle `Next` somehow here
-                {acc with blocks = blocks}
-              else
-                let acc = {acc with block = []} in
-                let acc = splitFunBody acc stmts in
-                let name = nameSym "bblock" in
-                -------- TODO Temporary, should be pushed on stack
-                let blocks = snoc acc.block
-                  (CEBinOp { op = COAssign {}, lhs = CEPC {}
-                           , rhs = CEBBlockName { name = name }})
-                in
-                --------
-                let acc = createBlock name acc in
-                {acc with blocks = blocks}
+          -- Function application or resample
+          match stmt with CSDef { init = Some (CIExpr { expr = CEApp _ }) }
+                        | CSExpr { expr = CEApp _ }
+                        | CSExpr { expr = CEResample _ } then
+            -- print "Split case\n\n";
+            let block = snoc acc.block stmt in
+            let acc = {acc with hasSplit = true} in
+            match stmts with [] then
+              -- CASE: Last statment _and_ end of block
+              -- If next = Collapse () -> Tail call
+              --   1. Build new stack frame with return address from current stack frame
+              --   2. Also collapse previous stack frame in some way (tail-call optimization)
+              -- If next = Block _ -> set return address for call = name
+              match acc.next with Collapse _ then
+                {acc with block = snoc block (setPC (nameSym "rafromcollapsed"))}
+              else match acc.next with Block (Some name) then
+                {acc with block = snoc block (setPC name)}
+              else match acc.next with Block (None ()) then
+                let name = nameSym "bblocklazy" in
+                {{acc with block = snoc block (setPC name)}
+                      with next = Block (Some name)}
+              else never
             else
+              -- CASE: Not last statement, but end of block
+              -- 1. Generate name for and build next block
+              -- 2. Set return address for call = name
+              let accNext = {acc with block = []} in
+              let accNext = splitFunBody accNext stmts in
+              let name = nameSym "bblock" in
+              let accNext = createBlock name accNext in
+              -------- TODO Temporary, return addr should be pushed on stack instead
+              let block = snoc block (setPC name) in
+              --------
+              {accNext with block = block}
 
+          -- Not a function application or resample, just continue recursion
+          else match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then
+            -- print "Easy case\n\n";
+            splitFunBody {acc with block = snoc acc.block stmt} stmts
+
+          -- If statements
           else match stmt with CSIf { cond = cond, thn = thn, els = els } then
-            -- We need to check for splits within branches before going down branches
-            -- sfold_CStmt_CStmt should be useful here
+            -- print "If case\n\n";
+            let next = match stmts with [] then acc.next else Block (None ()) in
+            let accThn = splitFunBody {{{acc with block = []}
+                                             with hasSplit = false}
+                                             with next = next} thn in
+            let accEls = splitFunBody {{accThn with block = []}
+                                               with hasSplit = false} els in
+
+            -- No split in branches, just continue
+            if and (not accThn.hasSplit) (not accEls.hasSplit) then
+              let stmt =
+                CSIf { cond = cond, thn = accThn.block, els = accEls.block }
+              in
+              splitFunBody {acc with block = snoc acc.block stmt} stmts
+
+            -- At least one split in branches
+            else
+              -- print "There is at least one split";
+              let branchFin =
+                match accEls.next with Collapse _ then
+                  setPC (nameSym "rafromcollapse")
+                else match accEls.next with Block (Some name) then
+                  setPC name
+                else error "Impossible Error in splitFunBody"
+              in
+              let accThn =
+                if accThn.hasSplit then accThn
+                else {accThn with block = snoc accThn.block branchFin}
+              in
+              let accEls =
+                if accEls.hasSplit then accEls
+                else {accEls with block = snoc accEls.block branchFin}
+              in
+              let stmt =
+                CSIf { cond = cond, thn = accThn.block, els = accEls.block } in
+              let block = snoc acc.block stmt in
+
+              -- Create new block for stmts if needed
+              let accStmts = {{accEls with hasSplit = true}
+                                      with next = acc.next} in
+              match stmts with [] then {accStmts with block = block}
+              else
+                let accStmts = {accStmts with block = []} in
+                let accStmts = splitFunBody accStmts stmts in
+                let name =
+                  match accEls.next with Block (Some name) then name
+                  else error "Impossible Error in splitFunBody" in
+                let accStmts = createBlock name accStmts in
+                {accStmts with block = block}
+
+          else error "Not supported in splitFunBody"
 
         else match stmts with [] then
-          -- TODO Look at `Next`, take action depending?
+          -- print "End case\n\n";
+          if acc.hasSplit then
+            match acc.next with Collapse _ then
+              -- Collapse stack
+              {acc with block = snoc acc.block (setPC (nameSym "rafromcollapsed"))}
+            else match acc.next with Block (Some name) then
+              -- Call next block here instead (we do not want to resample)
+              {acc with block = snoc acc.block (setPC name)}
+            else match acc.next with Block (None ()) then
+              let name = nameSym "bblocklazy" in
+              {{acc with block = snoc acc.block (setPC name)}
+                    with next = Block (Some name)}
+            else never
+          else acc
+
         else never
     in
 
@@ -293,8 +356,12 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
         match top with CTFun { id = id, body = body } then
           let acc = {{acc with next = Collapse ()} with block = []} in
           let acc = splitFunBody acc body in
+          let acc =
+            if acc.hasSplit then acc else
+              {acc with block = snoc acc.block (setPC (nameSym "rafromcollapsed"))}
+          in
           createBlock id acc
-        else acc -- TODO
+        else {acc with tops = snoc acc.tops top} -- TODO
       ) acc tops
     in
 
@@ -335,7 +402,7 @@ let compile: Expr -> RPProg = lam prog.
   -- Type lift
   match typeLift prog with (env, prog) then
 
-    print (expr2str prog); print "\n\n";
+    -- print (expr2str prog); print "\n\n";
 
     -- Run C compiler
     let rpprog = rootPPLCompile env prog in
