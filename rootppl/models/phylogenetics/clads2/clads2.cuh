@@ -1,7 +1,9 @@
 
 /*
- * Immediate sampling.
+ * ClaDS2 Model with Immediate sampling.
+ * uses 
  * File clads2.cuh defines constants and type definitions used in the template. 
+ * 
  */
 
 const int MAX_DEPTH = tree_t::MAX_DEPTH;

@@ -1,3 +1,8 @@
+/*
+ * ClaDS2 Model with Delayed sampling.
+ */
+
+
 BBLOCK_DATA(tree, tree_t, 1);
 
 /**

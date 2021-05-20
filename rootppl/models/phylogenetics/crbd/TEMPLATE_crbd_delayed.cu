@@ -29,12 +29,12 @@ const floating_t rhoConst = 1.0;
 //floating_t rhoConst      = 0.7142857142857143;
 
 
-#include "../crbd/crbd-d-λμ.cuh"
+#include "../crbd/crbd_delayed.cuh"
 
 MAIN(    
     ADD_BBLOCK(simCRBD)
     ADD_BBLOCK(simTree)
-    //ADD_BBLOCK(survivorshipBias)
+    //ADD_BBLOCK(survivorshipBias) needs to be implemented
     ADD_BBLOCK(sampleFinalLambda)
     
     SMC(saveResults)

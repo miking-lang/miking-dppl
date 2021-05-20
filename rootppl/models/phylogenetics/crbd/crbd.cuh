@@ -1,3 +1,6 @@
+/** CRBD Model with immediate sampling 
+    - must be included from an example */
+
 typedef short treeIdx_t;
 struct progState_t {
     floating_t lambda;
@@ -16,7 +19,7 @@ BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating
 
 BBLOCK_DATA(tree, tree_t, 1)
 
-//BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
+BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
 
 
 BBLOCK_HELPER(M_crbdGoesUndetected, {

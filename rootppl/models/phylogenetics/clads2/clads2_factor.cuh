@@ -1,3 +1,9 @@
+/*
+ * ClaDS2 Model with Immediate sampling, but uses factors.
+   (uses a stack for the factors)
+   TODO change to an array
+ */
+
 typedef short treeIdx_t;
 
 struct progState_t {

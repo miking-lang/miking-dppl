@@ -13,23 +13,23 @@
 #include <fstream>
 
 #include "inference/smc/smc.cuh"
-#include  "../../models/phylogenetics/tree-utils/tree_utils.cuh"
+#include "../tree-utils/tree_utils.cuh"
 #include "utils/math.cuh"
 #include "utils/stack.cuh"
 
-typedef P20b_tree_t tree_t;
+//typedef Accipitridae_tree_t tree_t;
 
-//typedef bisse32_tree_t tree_t;
+typedef bisse32_tree_t tree_t;
 //typedef primate_tree_t tree_t;
 //typedef moth_div_tree_t tree_t;
 
 // Test settings
-floating_t rho      =   0.7668711656441718;
+const floating_t rho      = 1.0;
 
-floating_t k = 1.0;
-floating_t theta = 1.0;
-floating_t epsMin = 0.0;
-floating_t epsMax = 1.0;
+const floating_t k = 1.0;
+const floating_t theta = 1.0;
+const floating_t epsMin = 0.0;
+const floating_t epsMax = 1.0;
 
-#include "../../models/phylogenetics/clads2/clads2-factor.cuh"
+#include "clads2_factor.cuh"
 
