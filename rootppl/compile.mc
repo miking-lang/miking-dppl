@@ -106,7 +106,7 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
       ret: CType
     } in
 
-    type AccSF = {
+    type AccStackFrames = {
       -- Parameters for current function
       params: [(Name,CType)],
       -- Names defined in current block
@@ -122,13 +122,13 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
       sfs: [(Name,StackFrame)]
     } in
 
-    let emptyAcc: AccSF =
+    let emptyAcc: AccStackFrames =
       { params = [], defs = [], prevDefs = []
       , locals = [], hasSplit = false, sfs = [] }
     in
 
-    recursive let addLocals: AccSF -> CExpr -> AccSF =
-      lam acc: AccSF. lam expr: CExpr.
+    recursive let addLocals: AccStackFrames -> CExpr -> AccStackFrames =
+      lam acc: AccStackFrames. lam expr: CExpr.
         let lookup = assocSeqLookup {eq = nameEq} in
         match expr with CEVar { id = id } then
           match lookup id acc.params with Some _ then acc
@@ -139,46 +139,55 @@ let rootPPLCompile: [(Name,Type)] -> Expr -> RPProg =
         else sfold_CExpr_CExpr addLocals acc expr
     in
 
-    let nextBBlock: AccSF -> AccSF = lam acc: AccSF.
+    let nextBBlock: AccStackFrames -> AccStackFrames = lam acc: AccStackFrames.
       {{{ acc with defs = []}
               with prevDefs = concat acc.defs acc.prevDefs}
               with hasSplit = true}
     in
 
-    recursive let getLocals: AccSF -> [CStmt] -> AccSF =
-      lam acc: AccSF. lam stmts: [CStmt].
-      let acc = {acc with hasSplit = false} in
-      foldl (lam acc: AccSF. lam stmt: Stmt.
-        match stmt with CSDef { ty = ty, id = Some name, init = init } then
-          let acc = sfold_CStmt_CExpr addLocals acc stmt in
-          let acc = { acc with defs = cons (name,ty) acc.defs } in
-          match init with Some (CIExpr { expr = CEApp _ }) then
+    recursive let getLocals: AccStackFrames -> [CStmt] -> AccStackFrames =
+      lam acc: AccStackFrames. lam stmts: [CStmt].
+        let acc = {acc with hasSplit = false} in
+        foldl (lam acc: AccStackFrames. lam stmt: Stmt.
+
+          -- Add def, if applicable
+          let acc =
+            match stmt with CSDef { ty = ty, id = Some name }
+            then { acc with defs = cons (name,ty) acc.defs } else acc
+          in
+
+          -- Add locals
+          let acc =
+            match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then
+              sfold_CStmt_CExpr addLocals acc stmt
+            else match stmt with CSIf { cond = cond } then
+              addLocals acc cond
+            else error "Unsupported term when adding locals"
+          in
+
+          -- Block split
+          match stmt with CSDef { init = Some (CIExpr { expr = CEApp _ }) }
+                        | CSExpr { expr = CEApp _ }
+                        | CSExpr { expr = CEResample _ } then
             nextBBlock acc
-          else acc
 
-        else match stmt with CSIf { cond = cond, thn = thn, els = els } then
-          let acc = addLocals acc cond in
-          let thnAcc = getLocals acc thn in
-          let elsAcc = getLocals {acc with locals = thnAcc.locals} els in
-          let acc = {acc with locals = elsAcc.locals} in
-          if or (thnAcc.hasSplit) (elsAcc.hasSplit) then nextBBlock acc
-          else acc
+          else match stmt with CSIf { thn = thn, els = els } then
+            let accThn = getLocals acc thn in
+            let accEls = getLocals {acc with locals = accThn.locals} els in
+            let acc = {acc with locals = accEls.locals} in
+            if or (accThn.hasSplit) (accEls.hasSplit) then nextBBlock acc
+            else acc
 
-        else match stmt with CSExpr { expr = expr } then
-          let acc = sfold_CStmt_CExpr addLocals acc stmt in
-          match expr with CEApp _ | CEResample _ then nextBBlock acc
-          else acc
+          else match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then acc
 
-        else match stmt with CSRet _ then sfold_CStmt_CExpr addLocals acc stmt
-        else match stmt with CSNop _ then acc
-        else error "Not supported in getLocals"
+          else error "Unsupported term in getLocals"
 
-      ) acc stmts
+        ) acc stmts
     in
 
-    let getStackFrames: AccSF -> [CTop] -> AccSF =
+    let getStackFrames: AccStackFrames -> [CTop] -> AccStackFrames =
       lam tops: [CTop].
-        foldl (lam acc: AccSF. lam top: CTop.
+        foldl (lam acc: AccStackFrames. lam top: CTop.
           match top
           with CTFun { ret = ret, id = id, params = params, body = body } then
 
