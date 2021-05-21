@@ -68,7 +68,7 @@ lang RootPPL = CAst + CPrettyPrint
     match pprintEnvGetStr env id with (env,id) then
       match printCStmts ii env body with (env,body) then
         (env, join [
-          "BBLOCK(", id, ", {", pprintNewline ii, body, pprintNewline i, "}"
+          "BBLOCK(", id, ", {", pprintNewline ii, body, pprintNewline i, "})"
         ])
       else never
     else never
