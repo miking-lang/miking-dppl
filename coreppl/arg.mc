@@ -13,7 +13,13 @@ type ArgResult = {
   options : a
 }
 
-type ParseConfig = [([String], [String], String, a -> String -> a)]
+
+type ParseOption = (String, String, String)
+type ParseConfig = [([ParseOption], String, a -> String -> a)]
+
+type ParseResult
+con ParseOK : ArgResult -> ParseResult
+con ParseFailUnknownOption : String -> ParseResult
 
 
 -- argHelpOptions --
@@ -93,23 +99,44 @@ let argParse_defaults = {
 }
 
 
+
+
+--  in
+
+
+
 let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult =
   lam options. lam argParseDefaults. lam argParseConfig.
   recursive
+    -- Match one option
     let matchOption = lam str. lam confLst.
-      match confLst with [(opLst, _, f)] ++ rest then
-        match find (lam x. match x with (s, _, _)
-                           then isPrefix eqChar s str else never) opLst
-        with Some (s, sep, _)
-        then Some (s, sep, f)
-        else matchOption str rest
-      else None ()
+     match confLst with [(opLst, _, f)] ++ rest then
+       match find (lam x. match x with (s, _, _)
+                          then isPrefix eqChar s str else never) opLst
+       with Some (s, sep, _)
+       then Some (s, sep, f)
+       else matchOption str rest
+     else None ()
+    -- Main parsing loop
+    let argMain = lam options. lam strings. lam args.
+      match args with [s] ++ xs then
+        match matchOption s argParseConfig with Some (op, sep, f) then
+          if eqi (length sep) 0 then
+            -- No value to the option
+            if eqString s op then
+              argMain (f options "") strings xs
+            else
+              ParseFailUnknownOption s
+          else
+            -- Option value
+            error "Option value"
+        else
+          -- Not an option, add to strings
+          argMain options (snoc strings s) xs
+      else
+        ParseOK {strings = strings, options = options}
   in
-  match matchOption "--maessage=2" argParseConfig with Some _ then
-    print "TRUE\n"
-  else
-    print "FALSE\n";
-  Some {strings = ["file.mc"], options = argParseDefaults}
+    argMain argParseDefaults [] options.args
 
 
 
@@ -154,7 +181,7 @@ let config = [
 
 let testOptions = {argParse_defaults with args = ["file.mc", "--foo"]} in
 let argParseCustom = argParse_general testOptions in
-let res : ArgResult = match argParseCustom default config with Some r then r else error "Incorrect type" in
+let res : ArgResult = match argParseCustom default config with ParseOK r then r else error "Incorrect type" in
 utest res.strings with ["file.mc"] using eqSeq eqString in
 
 ()

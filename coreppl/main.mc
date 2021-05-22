@@ -37,7 +37,8 @@ let menu = lam. join [
 mexpr
 
 -- Use the arg.mc library to parse arguments
-match argParse default config with Some r then
+let result = argParse default config in
+match result with ParseOK r then
   -- Help the type annotator
   let r : ArgResult = r in
   let options : Options = r.options in
@@ -51,8 +52,5 @@ match argParse default config with Some r then
                  " particles: ", int2string options.particles, "\n"])
 else
   -- Error in Argument parsing
-  --argPrintError default config;
+  argPrintError result;
   exit 1
-
-
-
