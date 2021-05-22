@@ -20,6 +20,8 @@ let default = {
 
 -- Options configuration
 let config = [
+  (["--print-model"], ["="], "Debug print the model after parsing.",
+    lam o:Options. lam v. {o with particles = argInt v})
   (["--particles"], ["="], "Number of particles for importance sampling. Default 5000.",
     lam o:Options. lam v. {o with particles = argInt v})
 ]

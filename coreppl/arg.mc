@@ -5,6 +5,8 @@
 -- argument parsing.
 
 include "string.mc"
+include "seq.mc"
+
 
 type ArgResult = {
   strings : [String],
@@ -19,8 +21,8 @@ type ParseConfig = [([String], [String], String, a -> String -> a)]
 
 
 -- Creates a new string with new lines, and breaks between words.
--- Assumes that the string is currently at indent position, and
--- also adds indent number of spaces before the next line.
+-- Assumes that the string is currently at 'startPos', and
+-- also adds 'indent' number of spaces before the next line.
 let stringLineFormat = lam s. lam width. lam indent. lam startPos.
   recursive
     let next = lam s. lam acc. lam w. lam pos. lam space.
@@ -66,6 +68,19 @@ let argHelpOptions_general =
 
 let argHelpOptions = argHelpOptions_general argHelpOptions_defaults
 
+-- argument value conversion --
+
+let argInt = lam x : String.
+  string2int
+
+-- Pretty printing of argument options --
+
+
+-- Utility functions that can should be moved to string.mc
+
+
+
+
 -- argParse --
 
 type Options_argParse = {
@@ -80,15 +95,26 @@ let argParse_defaults = {
 
 let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult =
   lam options. lam argParseDefaults. lam argParseConfig.
-  Some {strings = ["Test"], options = argParseDefaults}
+  recursive
+    let matchOption = lam str. lam confLst.
+      match confLst with [(opLst, _, f)] ++ rest then
+        match find (lam x. match x with (s, _, _)
+                           then isPrefix eqChar s str else never) opLst
+        with Some (s, sep, _)
+        then Some (s, sep, f)
+        else matchOption str rest
+      else None ()
+  in
+  match matchOption "--maessage=2" argParseConfig with Some _ then
+    print "TRUE\n"
+  else
+    print "FALSE\n";
+  Some {strings = ["file.mc"], options = argParseDefaults}
+
+
 
 let argParse = argParse_general argParse_defaults
 
-
--- argument value conversion --
-
-let argInt = lam x : String.
-  string2int
 
 
 mexpr
@@ -118,12 +144,17 @@ let config = [
   ([("--foo", "", "")],
     "This is a boolean option. ",
     lam o:Options. lam. {o with foo = true}),
-  ([("--len", "=", "<int>")],
+  ([("--len", "=", "<value>")],
     "A number argument followed by equality and then the integer value.",
-    lam o:Options. lam s. {o with len = argInt s})
+    lam o:Options. lam s. {o with len = argInt s}),
   ([("-m", " ", "<msg>"),("--message", "=", "<msg>")],
     "A string argument, with both short and long form arguments, and different separators.",
     lam o:Options. lam s. {o with message = s})
 ] in
+
+let testOptions = {argParse_defaults with args = ["file.mc", "--foo"]} in
+let argParseCustom = argParse_general testOptions in
+let res : ArgResult = match argParseCustom default config with Some r then r else error "Incorrect type" in
+utest res.strings with ["file.mc"] using eqSeq eqString in
 
 ()
