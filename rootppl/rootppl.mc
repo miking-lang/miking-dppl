@@ -42,6 +42,12 @@ lang RootPPL = CAst + CPrettyPrint
   | CEPState _ -> acc
   | CEPC _ -> acc
 
+  sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
+  | CESample t -> CESample { t with dist = smap_CDist_CExpr f t.dist }
+  | CEWeight t -> CEWeight { t with weight = f t.weight }
+  | CEPState _ & t -> t
+  | CEPC _ & t -> t
+
   syn CDist =
   | CDBern { p: CExpr }
   | CDBeta { a: CExpr, b: CExpr }
@@ -59,6 +65,15 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet t -> f acc t.a
   | CDExp t -> f acc t.rate
   | CDEmpirical t -> f acc t.samples
+
+  sem smap_CDist_CExpr (f: CExpr -> CExpr) =
+  | CDBern t -> CDBern { t with p = f t.p }
+  | CDBeta t -> CDBeta {{ t with a = f t.a } with b = f t.b }
+  | CDCategorical t -> CDCategorical { t with p = f t.p }
+  | CDMultinomial t -> CDMultinomial {{ t with n = f t.n } with p = f t.p }
+  | CDDirichlet t -> CDDirichlet { t with a = f t.a }
+  | CDExp t -> CDExp { t with rate = f t.rate }
+  | CDEmpirical t -> CDEmpirical { t with samples = f t.samples }
 
   syn RPProg =
   | RPProg { includes: [String], pStateTy: CType, tops: [CTop] }

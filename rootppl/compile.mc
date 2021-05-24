@@ -37,9 +37,14 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
     else never
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CEAlloc {} -> acc
-  | CEResample {} -> acc
+  | CEAlloc _ -> acc
+  | CEResample _ -> acc
   | CEBBlockName _ -> acc
+
+  sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
+  | CEAlloc _ & t -> t
+  | CEResample _ & t -> t
+  | CEBBlockName _ & t -> t
 
   -- ANF override
   -- Ensures argument to assume is not lifted by ANF (first-class distributions
@@ -520,7 +525,7 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         ) emptyGlobals stmts
     in
 
-    -- Helper for removing defs handled with PSTATE and stack
+    -- Remove def statements handled elsewhere
     let stripDefs: Globals -> StackFrame -> CStmt -> [CStmt] =
       lam globals: Globals.
       lam sf: StackFrame.
@@ -556,6 +561,32 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         in rec stmt
     in
 
+    let replaceGlobalVar: Globals -> StackFrame -> CExpr -> CExpr =
+      lam globals: Globals.
+      lam sf: StackFrame.
+      lam expr: CExpr.
+        recursive let rec = lam expr: CExpr.
+          match expr with CEVar { id = id } then
+
+            -- Stored directly in PSTATE
+            -- TODO Guarantee unique names somehow, rhs of member is string.
+            -- Perhaps just have an array in PSTATE containing all global data?
+            if any (lam g. nameEq id g.0) globals.globals then
+            CEMember { lhs = CEPState {}, id = nameGetStr id }
+
+            -- Stored in PSTATE but must be accessed through pointer
+            -- TODO Guarantee unique names somehow, rhs of member is string.
+            else if any (lam g. nameEq id g.0) globals.globalAllocs then
+            CEUnOp { op = COAddrOf {}
+                   , arg = CEMember { lhs = CEPState {}, id = nameGetStr id } }
+
+            -- Leave other variables
+            else expr
+
+          else smap_CExpr_CExpr rec expr
+        in rec expr
+    in
+
     -----------
     -- START --
     -----------
@@ -568,6 +599,16 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let retTy: CType = compileType env (ty prog) in
     let initSF: StackFrame = getInitStackFrame inits retTy in
 
+    -- Helper function for getting the stackframe of a top. Throw
+    let topStackFrame: CTop -> StackFrame =
+      lam top.
+        let id =
+          match top with CTFun { id = id } then id
+          else error "Invalid top in topStackFrame" in
+        match assocSeqLookup {eq=nameEq} id sfs with Some sf then sf
+        else error "Stack frame not available in topStackFrame"
+    in
+
     -- Compute globally scoped variables
     let globals: Globals = findGlobals globalNames inits in
     let f = lam g:[(Name,CType)].
@@ -577,14 +618,19 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 with locals = f globals.globals initSF.locals } in
 
     -- Replace defs
-    -- let tops: [CTop] = map (lam top.
-    --   let id =
-    --     match top with CTFun { id = id } then id else error "Impossible" in
-    --   let sf = match assocSeqLookup {eq=nameEq} id sfs with Some sf then sf
-    --            else error "Impossible" in
-    --   sreplace_CTop_CStmt (stripDefs globals sf) top
-    -- ) tops in
-    -- let inits: [CStmt] = join (map (stripDefs globals initSF) inits) in
+    let tops: [CTop] = map (lam top.
+      let sf = topStackFrame top in
+      sreplace_CTop_CStmt (stripDefs globals sf) top
+    ) tops in
+    let inits: [CStmt] = join (map (stripDefs globals initSF) inits) in
+
+    -- Replace global variable uses
+    let tops: [CTop] = map (lam top.
+      let sf = topStackFrame top in
+      smap_CTop_CExpr (replaceGlobalVar globals sf) top
+    ) tops in
+    let inits: [CStmt] =
+      map (smap_CStmt_CExpr (replaceGlobalVar globals initSF)) inits in
 
     -- Replace definitions of locals and globals with assignment
 
@@ -596,7 +642,7 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     match splitFunctions accSplit tops with { tops = tops } then
     let tops = concat tops (splitInit accSplit inits) in
 
-    -- TODO: Insert various RootPPL boilerplate
+    -- TODO: Insert various RootPPL boilerplate, including the progstate
 
     -- TODO: Convert BBLOCK names to indices where needed
 
