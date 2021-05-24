@@ -6,22 +6,25 @@
 
 include "string.mc"
 include "seq.mc"
-
+include "char.mc"
 
 type ArgResult = {
   strings : [String],
   options : a
 }
 
-
 type ParseOption = (String, String, String)
 type ParseConfig = [([ParseOption], String, a -> String -> a)]
+
+type ParseType
+con ParseTypeInt : Unit -> ParseType
+con ParseTypeIntMin : Int -> ParseType
 
 type ParseResult
 con ParseOK : ArgResult -> ParseResult
 con ParseFailUnknownOption : String -> ParseResult
 con ParseFailMissingOpArg : String -> ParseResult
-
+con ParseFailConversion : (ParseType, String) -> ParseResult
 
 -- argHelpOptions --
 
@@ -75,16 +78,32 @@ let argHelpOptions_general =
 
 let argHelpOptions = argHelpOptions_general argHelpOptions_defaults
 
--- argument value conversion --
-
-let argInt = lam x : String.
-  string2int x
-
--- Pretty printing of argument options --
-
 
 -- Utility functions that can should be moved to string.mc
+-- TODO(davbr,2021-05-24): should be moved to string.mc
+-- Returns true if the string is an integer
+let stringIsInt = lam s.
+  if eqi (length s) 0 then false else
+  let s = if eqChar (get s 0) '-' then tail s else s in
+    all isDigit s
 
+
+-- argument value conversion --
+
+let argToString = lam p.
+    p.str
+
+let argToInt = lam p.
+  let v = string2int p.str in
+  if stringIsInt p.str then string2int p.str
+  else modref p.fail (Some (ParseTypeInt(), p.str)); 0
+
+let argToIntMin = lam p. lam minVal.
+  let v = argToInt p in
+  if lti v minVal then
+    modref p.fail (Some (ParseTypeIntMin(minVal), p.str)); v
+  else
+    v
 
 
 
@@ -102,10 +121,8 @@ let argParse_defaults = {
 
 
 
---  in
-
-
-let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult =
+-- Main argument parsing function.
+let argParse_general =
   lam options. lam argParseDefaults. lam argParseConfig.
   recursive
     -- Match one option
@@ -117,6 +134,14 @@ let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult 
        then Some (s, sep, f)
        else matchOption str rest
      else None ()
+    -- Handle parsing of options
+    let handleOptionParsing = lam f. lam o. lam s.
+      let failCode = ref (None ()) in
+      let options = f {options = o, str = s, fail = failCode} in
+      match deref failCode with Some (pType, str) then
+        (Some (ParseFailConversion (pType, str)), options)
+      else
+        (None (), options)
     -- Main parsing loop
     let argMain = lam options. lam strings. lam args.
       match args with [s] ++ xs then
@@ -124,7 +149,12 @@ let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult 
           if eqi (length sep) 0 then
             -- No value to the option
             if eqString s op then
-              argMain (f options "") strings xs
+              let parse = handleOptionParsing f options s in
+              match parse with (Some ret, _) then
+                ret
+              else match parse with (None(), options) then
+                argMain options strings xs
+              else never
             else
               ParseFailUnknownOption s
           else
@@ -132,7 +162,15 @@ let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult 
             --                         and other separators than space
             if eqString s op then
               match xs with [s2] ++ xs then
-                 argMain (f options s2) strings xs
+                match matchOption s2 argParseConfig with Some _ then
+                  ParseFailMissingOpArg s
+                else
+                  let parse = handleOptionParsing f options s2 in
+                  match parse with (Some ret, _) then
+                    ret
+                  else match parse with (None(), options) then
+                    argMain options strings xs
+                  else never
               else
                  ParseFailMissingOpArg s
             else
@@ -177,23 +215,39 @@ let default = {
 let config = [
   ([("--foo", "", "")],
     "This is a boolean option. ",
-    lam o:Options. lam. {o with foo = true}),
+    lam p. {p.options with foo = true}),
   ([("--len", "=", "<value>")],
     "A number argument followed by equality and then the integer value.",
-    lam o:Options. lam s. {o with len = argInt s}),
+    lam p. {p.options with len = argToIntMin p 1}),
   ([("-m", " ", "<msg>"),("--message", "=", "<msg>")],
     "A string argument, with both short and long form arguments, and different separators.",
-    lam o:Options. lam s. {o with message = s})
+    lam p. {p.options with message = argToString p})
 ] in
 
-let testOptions = {argParse_defaults
-with args = ["file.mc", "--len", "12", "--foo", "-m", "mymsg"]} in
+let testOptions = {argParse_defaults with args = ["file.mc", "--len", "12", "--foo", "-m", "mymsg", "f2"]} in
 let argParseCustom = argParse_general testOptions in
 let res = match argParseCustom default config with ParseOK r then r else error "Incorrect type" in
-utest res.strings with ["file.mc"] using eqSeq eqString in
+utest res.strings with ["file.mc", "f2"] using eqSeq eqString in
 utest res.options.foo with true in
 utest res.options.message with "mymsg" in
 utest res.options.len with 12 in
+
+let testOptions = {argParse_defaults with args = ["--len", "-2"]} in
+utest (argParse_general testOptions) default config
+with ParseFailConversion ((ParseTypeIntMin 1), "-2") in
+
+let testOptions = {argParse_defaults with args = ["--messageNo", "msg"]} in
+utest (argParse_general testOptions) default config
+with ParseFailUnknownOption "--messageNo" in
+
+let testOptions = {argParse_defaults with args = ["--message"]} in
+utest (argParse_general testOptions) default config
+with ParseFailMissingOpArg "--message" in
+
+let testOptions = {argParse_defaults with args = ["--message", "--len", "78"]} in
+utest (argParse_general testOptions) default config
+with ParseFailMissingOpArg "--message" in
+
+
 ()
 
--- David TODO:
