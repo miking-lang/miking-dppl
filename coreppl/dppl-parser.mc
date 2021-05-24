@@ -1,20 +1,39 @@
 
 
 include "mexpr/boot-parser.mc"
+include "mexpr/keyword-maker.mc"
+include "coreppl.mc"
 
 
 
-lang DPPLParser = BootParser + MExprPrettyPrint
+lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
 
+  -- Keyword maker
+  sem isKeyword =
+  | TmAssume _ -> true
+  | TmObserve _ -> true
+  | TmWeight _ -> true
 
+  sem matchKeywordString (info: Info) =
+  | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
+                                            ty = TyUnknown {info = info},
+                                            info = info})
+  | "observe" -> Some (2, lam lst. TmObserve {value = get lst 0,
+                                              dist = get lst 1,
+                                              ty = TyUnknown {info = info},
+                                              info = info})
+  | "weight" -> Some (1, lam lst. TmWeight {weight = get lst 0,
+                                            ty = TyUnknown {info = info},
+                                            info = info})
 end
 
+let keywords = ["assume", "observe", "weight"]
 
 
 let getAst = lam filename. lam printModel.
   use DPPLParser in
   -- Read and parse the mcore file
-  let ast = parseMCoreFile [] filename in
+  let ast = makeKeywords [] (parseMCoreFile keywords filename) in
   -- Pretty print the model?
   if printModel then
     print (expr2str ast);
