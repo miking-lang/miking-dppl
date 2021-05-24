@@ -23,6 +23,13 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockDecl { id : Name }
   | CTBBlock { id: Name, body: [Stmt] }
 
+  sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
+  | CTBBlockData _ & t -> t
+  | CTBBlockHelperDecl _ & t -> t
+  | CTBBlockHelper t -> CTBBlockHelper { t with body = join (map f t.body) }
+  | CTBBlockDecl _ & t -> t
+  | CTBBlock t -> CTBBlock { t with body = join (map f t.body) }
+
   syn CExpr =
   | CESample { dist: CDist }
   | CEWeight { weight: CExpr }

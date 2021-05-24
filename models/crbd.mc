@@ -68,6 +68,8 @@ let crbd = use MExprPPL in
       ("mu", tyfloat_)
     ]
      (bindall_ [
+       ulet_ "dummy" (leaf_ 1.3),
+       ulet_ "dummy2" (var_ "tree"),
        ulet_ "t" (assume_ (exp_ (var_ "lambda"))),
        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
        if_ (ltf_ (var_ "currentTime") (float_ 0.0))
@@ -152,9 +154,9 @@ let crbd = use MExprPPL in
                      (var_ "tree") (var_ "lambda") (var_ "mu")),
          ulet_ "TMP" (appf4_ (var_ "simTree") (var_ "right")
                      (var_ "tree") (var_ "lambda") (var_ "mu")),
-         tuple_ [(var_ "lambda"), (var_ "mu")]
+         (var_ "lambda")
       ])
-      (tuple_ [(var_ "lambda"), (var_ "mu")])
+      (var_ "lambda")
   ]
 
 mexpr
