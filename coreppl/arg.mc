@@ -127,12 +127,14 @@ let argToIntMin = lam p. lam minVal.
 -- argParse --
 
 type Options_argParse = {
-  args : [String]
+  args : [String],
+  optionsStartWith : [String]
 }
 
 
 let argParse_defaults = {
-  args = tail argv
+  args = tail argv,
+  optionsStartWith = ["-"]
 }
 
 
@@ -154,23 +156,23 @@ let argParse_general =
     -- Handle parsing of options
     let handleOptionParsing = lam f. lam o. lam opstr. lam s.
       let failCode = ref (None ()) in
-      let options = f {options = o, str = s, fail = failCode} in
+      let argOptions = f {options = o, str = s, fail = failCode} in
       match deref failCode with Some pType then
-        (Some (ParseFailConversion (pType, opstr)), options)
+        (Some (ParseFailConversion (pType, opstr)), argOptions)
       else
-        (None (), options)
+        (None (), argOptions)
     -- Main parsing loop
-    let argMain = lam options. lam strings. lam args.
+    let argMain = lam argOptions. lam strings. lam args.
       match args with [s] ++ xs then
         match matchOption s argParseConfig with Some (op, sep, f) then
           if eqi (length sep) 0 then
             -- No value to the option
             if eqString s op then
-              let parse = handleOptionParsing f options "" s in
+              let parse = handleOptionParsing f argOptions "" s in
               match parse with (Some ret, _) then
                 ret
-              else match parse with (None(), options) then
-                argMain options strings xs
+              else match parse with (None(), argOptions) then
+                argMain argOptions strings xs
               else never
             else
               ParseFailUnknownOption s
@@ -182,21 +184,24 @@ let argParse_general =
                 match matchOption s2 argParseConfig with Some _ then
                   ParseFailMissingOpArg s
                 else
-                  let parse = handleOptionParsing f options s s2 in
+                  let parse = handleOptionParsing f argOptions s s2 in
                   match parse with (Some ret, _) then
                     ret
-                  else match parse with (None(), options) then
-                    argMain options strings xs
+                  else match parse with (None(), argOptions) then
+                    argMain argOptions strings xs
                   else never
               else
                  ParseFailMissingOpArg s
             else
               ParseFailUnknownOption s
         else
-          -- Not an option, add to strings
-          argMain options (snoc strings s) xs
+          if any (lam x. isPrefix eqChar x s) options.optionsStartWith then
+            ParseFailUnknownOption s
+          else
+            -- Not an option, add to strings
+            argMain argOptions (snoc strings s) xs
       else
-        ParseOK {strings = strings, options = options}
+        ParseOK {strings = strings, options = argOptions}
   in
     argMain argParseDefaults [] options.args
 
@@ -293,6 +298,11 @@ let testOptions = {argParse_defaults with args = ["--message", "--len", "78"]} i
 let res = argParse_general testOptions default config in
 utest res with ParseFailMissingOpArg "--message" in
 utest argPrintErrorString res with "Option --message is missing an argument value." in
+
+let testOptions = {argParse_defaults with args = ["--unknown"]} in
+let res = argParse_general testOptions default config in
+utest res with ParseFailUnknownOption("--unknown") in
+
 
 let text = argHelpOptions config in
 --print "\n---\n"; print text; print "\n---\n";

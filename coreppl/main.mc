@@ -7,23 +7,39 @@
 include "arg.mc"
 include "option.mc"
 include "string.mc"
+include "dppl-parser.mc"
 
 -- Options type
 type Options = {
-  particles : Int
+  method: String,
+  particles : Int,
+  printModel: Bool,
+  exitBefore: Bool
 }
 
 -- Default values for options
 let default = {
-  particles = 5000
+  method = "",
+  particles = 5000,
+  printModel = false,
+  exitBefore = false
 }
 
 -- Options configuration
 let config = [
-  (["--print-model"], ["="], "Debug print the model after parsing.",
-    lam o:Options. lam v. {o with particles = argInt v})
-  (["--particles"], ["="], "Number of particles for importance sampling. Default 5000.",
-    lam o:Options. lam v. {o with particles = argInt v})
+  ([("-m", " ", "<method>")],
+    "The selected inference method. The supported methods are: importance, rootppl-smc.",
+    lam p. {p.options with method = argToString p}),
+  ([("-p", " ", "<particles>")],
+    join ["The number of particles. The default is 5000. This option is used if one ",
+          "of the following methods are used: importance, rootppl-smc."],
+    lam p. {p.options with particles = argToIntMin p 1}),
+  ([("--print-model", "", "")],
+    "The parsed model is pretty printed before inference.",
+    lam p. {p.options with printModel = true}),
+  ([("--exit-before", "", "")],
+    "Exit before inference takes place. ",
+    lam p. {p.options with exitBefore = true})
 ]
 
 -- Menu
@@ -39,17 +55,15 @@ mexpr
 -- Use the arg.mc library to parse arguments
 let result = argParse default config in
 match result with ParseOK r then
-  -- Help the type annotator
-  let r : ArgResult = r in
-  let options : Options = r.options in
-  -- Print menu if no file arguments
-  if eqi (length r.strings) 0 then
+  -- Print menu if not exactly one file argument
+  if neqi (length r.strings) 1 then
     print (menu ());
     exit 1
   else
-  -- Parsing OK. Run program
-    print (join ["files: ", int2string (length r.strings),
-                 " particles: ", int2string options.particles, "\n"])
+    -- Read and parse the file
+    let filename = head r.strings in
+    let ast = getAst filename r.options.printModel in
+    ()
 else
   -- Error in Argument parsing
   argPrintError result;
