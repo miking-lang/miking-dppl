@@ -20,6 +20,7 @@ type ParseConfig = [([ParseOption], String, a -> String -> a)]
 type ParseResult
 con ParseOK : ArgResult -> ParseResult
 con ParseFailUnknownOption : String -> ParseResult
+con ParseFailMissingOpArg : String -> ParseResult
 
 
 -- argHelpOptions --
@@ -77,7 +78,7 @@ let argHelpOptions = argHelpOptions_general argHelpOptions_defaults
 -- argument value conversion --
 
 let argInt = lam x : String.
-  string2int
+  string2int x
 
 -- Pretty printing of argument options --
 
@@ -104,12 +105,11 @@ let argParse_defaults = {
 --  in
 
 
-
 let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult =
   lam options. lam argParseDefaults. lam argParseConfig.
   recursive
     -- Match one option
-    let matchOption = lam str. lam confLst.
+    let matchOption = lam str. lam confLst : ParseConfig.
      match confLst with [(opLst, _, f)] ++ rest then
        match find (lam x. match x with (s, _, _)
                           then isPrefix eqChar s str else never) opLst
@@ -128,8 +128,15 @@ let argParse_general : Options_argParse -> a -> ParseConfig -> Option ArgResult 
             else
               ParseFailUnknownOption s
           else
-            -- Option value
-            error "Option value"
+            -- TODO(davbr,2021-05-22): Add handling without space, e.g, "--foo=7"
+            --                         and other separators than space
+            if eqString s op then
+              match xs with [s2] ++ xs then
+                 argMain (f options s2) strings xs
+              else
+                 ParseFailMissingOpArg s
+            else
+              ParseFailUnknownOption s
         else
           -- Not an option, add to strings
           argMain options (snoc strings s) xs
@@ -179,9 +186,14 @@ let config = [
     lam o:Options. lam s. {o with message = s})
 ] in
 
-let testOptions = {argParse_defaults with args = ["file.mc", "--foo"]} in
+let testOptions = {argParse_defaults
+with args = ["file.mc", "--len", "12", "--foo", "-m", "mymsg"]} in
 let argParseCustom = argParse_general testOptions in
-let res : ArgResult = match argParseCustom default config with ParseOK r then r else error "Incorrect type" in
+let res = match argParseCustom default config with ParseOK r then r else error "Incorrect type" in
 utest res.strings with ["file.mc"] using eqSeq eqString in
-
+utest res.options.foo with true in
+utest res.options.message with "mymsg" in
+utest res.options.len with 12 in
 ()
+
+-- David TODO:
