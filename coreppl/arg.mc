@@ -7,6 +7,7 @@
 include "string.mc"
 include "seq.mc"
 include "char.mc"
+include "math.mc"
 
 type ArgResult = {
   strings : [String],
@@ -64,13 +65,30 @@ type Options_argHelpOptions = {
 let argHelpOptions_defaults = {
   lineWidth = 80,
   indent = 2,
-  spaceToText = 1
+  spaceToText = 2
 }
 
 let argHelpOptions_general =
   lam options : Options_argHelp.
   lam opConfig : a.
-  "test string options\n"
+  let opStrings = map (lam e.
+    match e with (lst, _, _) then
+      let s2 = map (lam triple. match triple with (s1,s2,s3) then join [s1,s2,s3] else never) lst in
+      strJoin ", " s2
+    else never) opConfig
+  in
+  let maxLen = foldl (lam acc. lam x. maxi (length x) acc) 0 opStrings in
+  let opDesc = map (lam e. match e with (_, s, _) then s else never) opConfig in
+  let f = lam x. lam desc.
+    let start = join [make options.indent ' ', x,
+                      make (addi (subi maxLen (length x)) options.spaceToText) ' '] in
+    let before = addi (addi maxLen options.indent) options.spaceToText in
+     let x = concat start (stringLineFormat desc options.lineWidth before before) in
+     x
+  in
+    strJoin "\n" (zipWith f opStrings opDesc)
+
+
 
 let argHelpOptions = argHelpOptions_general argHelpOptions_defaults
 
@@ -235,10 +253,10 @@ let config = [
   ([("--foo", "", "")],
     "This is a boolean option. ",
     lam p. {p.options with foo = true}),
-  ([("--len", "=", "<value>")],
+  ([("--len", " ", "<value>")],
     "A number argument followed by equality and then the integer value.",
     lam p. {p.options with len = argToIntMin p 1}),
-  ([("-m", " ", "<msg>"),("--message", "=", "<msg>")],
+  ([("-m", " ", "<msg>"),("--message", " ", "<msg>")],
     "A string argument, with both short and long form arguments, and different separators.",
     lam p. {p.options with message = argToString p})
 ] in
@@ -275,6 +293,10 @@ let testOptions = {argParse_defaults with args = ["--message", "--len", "78"]} i
 let res = argParse_general testOptions default config in
 utest res with ParseFailMissingOpArg "--message" in
 utest argPrintErrorString res with "Option --message is missing an argument value." in
+
+let text = argHelpOptions config in
+--print "\n---\n"; print text; print "\n---\n";
+utest length text with 325 in
 
 ()
 
