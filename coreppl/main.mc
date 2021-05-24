@@ -44,7 +44,7 @@ let config = [
 
 -- Menu
 let menu = lam. join [
-  "Usage: midppl file.pmc [<options>]\n\n",
+  "Usage: midppl file.mc [<options>]\n\n",
   "Options:\n",
   argHelpOptions config,
   "\n"
