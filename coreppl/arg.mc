@@ -17,18 +17,14 @@ type ParseOption = (String, String, String)
 type ParseConfig = [([ParseOption], String, a -> String -> a)]
 
 type ParseType
-con ParseTypeInt : Unit -> ParseType
-con ParseTypeIntMin : Int -> ParseType
+con ParseTypeInt : String -> ParseType
+con ParseTypeIntMin : (String, Int) -> ParseType
 
 type ParseResult
 con ParseOK : ArgResult -> ParseResult
 con ParseFailUnknownOption : String -> ParseResult
 con ParseFailMissingOpArg : String -> ParseResult
 con ParseFailConversion : (ParseType, String) -> ParseResult
-
--- argHelpOptions --
-
-
 
 -- Creates a new string with new lines, and breaks between words.
 -- Assumes that the string is currently at 'startPos', and
@@ -96,12 +92,15 @@ let argToString = lam p.
 let argToInt = lam p.
   let v = string2int p.str in
   if stringIsInt p.str then string2int p.str
-  else modref p.fail (Some (ParseTypeInt(), p.str)); 0
+  else modref p.fail (Some (ParseTypeInt p.str)); 0
 
 let argToIntMin = lam p. lam minVal.
   let v = argToInt p in
-  if lti v minVal then
-    modref p.fail (Some (ParseTypeIntMin(minVal), p.str)); v
+  match deref p.fail with None () then
+    if lti v minVal then
+      modref p.fail (Some (ParseTypeIntMin (p.str, minVal))); v
+    else
+      v
   else
     v
 
@@ -135,11 +134,11 @@ let argParse_general =
        else matchOption str rest
      else None ()
     -- Handle parsing of options
-    let handleOptionParsing = lam f. lam o. lam s.
+    let handleOptionParsing = lam f. lam o. lam opstr. lam s.
       let failCode = ref (None ()) in
       let options = f {options = o, str = s, fail = failCode} in
-      match deref failCode with Some (pType, str) then
-        (Some (ParseFailConversion (pType, str)), options)
+      match deref failCode with Some pType then
+        (Some (ParseFailConversion (pType, opstr)), options)
       else
         (None (), options)
     -- Main parsing loop
@@ -149,7 +148,7 @@ let argParse_general =
           if eqi (length sep) 0 then
             -- No value to the option
             if eqString s op then
-              let parse = handleOptionParsing f options s in
+              let parse = handleOptionParsing f options "" s in
               match parse with (Some ret, _) then
                 ret
               else match parse with (None(), options) then
@@ -165,7 +164,7 @@ let argParse_general =
                 match matchOption s2 argParseConfig with Some _ then
                   ParseFailMissingOpArg s
                 else
-                  let parse = handleOptionParsing f options s2 in
+                  let parse = handleOptionParsing f options s s2 in
                   match parse with (Some ret, _) then
                     ret
                   else match parse with (None(), options) then
@@ -187,6 +186,26 @@ let argParse_general =
 
 let argParse = argParse_general argParse_defaults
 
+-- Error feedback --
+
+let argPrintErrorString = lam result.
+  match result with ParseOK _ then
+    "Parse OK."
+  else match result with ParseFailUnknownOption s then
+    join ["Unknown option ", s, "."]
+  else match result with ParseFailMissingOpArg s then
+    join ["Option ", s, " is missing an argument value."]
+  else match result with ParseFailConversion (ptype, s) then
+    match ptype with ParseTypeInt sval then
+      join ["Option ", s, " expects an integer value, but received '", sval, "'."]
+    else match ptype with ParseTypeIntMin (_, minVal) then
+      join ["Option ", s, " expects an integer value of at least ", int2string minVal, "."]
+    else never
+  else never
+
+
+let argPrintError = lam result.
+  print (join [argPrintErrorString result, "\n"])
 
 
 mexpr
@@ -232,22 +251,30 @@ utest res.options.foo with true in
 utest res.options.message with "mymsg" in
 utest res.options.len with 12 in
 
+let testOptions = {argParse_defaults with args = ["--len", "noInt"]} in
+let res = argParse_general testOptions default config in
+utest res with ParseFailConversion (ParseTypeInt ("noInt"), "--len") in
+utest argPrintErrorString res with "Option --len expects an integer value, but received 'noInt'." in
+
 let testOptions = {argParse_defaults with args = ["--len", "-2"]} in
-utest (argParse_general testOptions) default config
-with ParseFailConversion ((ParseTypeIntMin 1), "-2") in
+let res = argParse_general testOptions default config in
+utest res with ParseFailConversion (ParseTypeIntMin ("-2", 1), "--len") in
+utest argPrintErrorString res with "Option --len expects an integer value of at least 1." in
 
 let testOptions = {argParse_defaults with args = ["--messageNo", "msg"]} in
-utest (argParse_general testOptions) default config
-with ParseFailUnknownOption "--messageNo" in
+let res = argParse_general testOptions default config in
+utest res with ParseFailUnknownOption "--messageNo" in
+utest argPrintErrorString res with "Unknown option --messageNo." in
 
 let testOptions = {argParse_defaults with args = ["--message"]} in
-utest (argParse_general testOptions) default config
-with ParseFailMissingOpArg "--message" in
+let res = argParse_general testOptions default config in
+utest res with ParseFailMissingOpArg "--message" in
+utest argPrintErrorString res with "Option --message is missing an argument value." in
 
 let testOptions = {argParse_defaults with args = ["--message", "--len", "78"]} in
-utest (argParse_general testOptions) default config
-with ParseFailMissingOpArg "--message" in
-
+let res = argParse_general testOptions default config in
+utest res with ParseFailMissingOpArg "--message" in
+utest argPrintErrorString res with "Option --message is missing an argument value." in
 
 ()
 
