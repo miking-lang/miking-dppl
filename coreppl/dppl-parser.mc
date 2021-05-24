@@ -13,6 +13,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
   | TmAssume _ -> true
   | TmObserve _ -> true
   | TmWeight _ -> true
+  | TmDist _ -> true
 
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
@@ -25,9 +26,20 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
   | "weight" -> Some (1, lam lst. TmWeight {weight = get lst 0,
                                             ty = TyUnknown {info = info},
                                             info = info})
+  | "Bern" -> Some (1, lam lst. TmDist {dist = DBern {p = get lst 0},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
+
+  | "Beta" -> Some (2, lam lst. TmDist {dist = DBeta {a = get lst 0, b = get lst 1},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
+
+
 end
 
-let keywords = ["assume", "observe", "weight"]
+let keywords =
+["assume", "observe", "weight",
+ "Bern", "Beta"]
 
 
 let getAst = lam filename. lam printModel.
@@ -38,5 +50,6 @@ let getAst = lam filename. lam printModel.
   if printModel then
     print (expr2str ast);
     print "\n"
+
   else ();
   ast
