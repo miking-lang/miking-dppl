@@ -8,6 +8,7 @@ include "arg.mc"
 include "option.mc"
 include "string.mc"
 include "dppl-parser.mc"
+include "inference.mc"
 
 -- Options type
 type Options = {
@@ -63,7 +64,11 @@ match result with ParseOK r then
     -- Read and parse the file
     let filename = head r.strings in
     let ast = getAst filename r.options.printModel in
-    ()
+    -- Exit before inference, it the flag is selected
+    if r.options.exitBefore then exit 0
+    else
+      -- Perform the actual inference
+      performInference r.options ast
 else
   -- Error in Argument parsing
   argPrintError result;

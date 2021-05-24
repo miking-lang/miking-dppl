@@ -1,0 +1,3 @@
+#!/bin/sh
+
+boot eval ~/.local/lib/midppl/main.mc -- "$@"
