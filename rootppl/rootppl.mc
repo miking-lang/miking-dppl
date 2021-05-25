@@ -10,6 +10,22 @@ lang RootPPL = CAst + CPrettyPrint
   -- AST (based on C AST) --
   --------------------------
 
+  syn CStmt =
+  -- TODO(dlunde,2021-05-25): Args as well to support BBLOCK_HELPER
+  | CSBBlockCall { block: Name }
+
+  sem smap_CStmt_CStmt (f: CStmt -> CStmt) =
+  | CSBBlockCall _ & t -> t
+
+  sem sfold_CStmt_CExpr (f: a -> CExpr -> a) (acc: a) =
+  | CSBBlockCall _ & t -> acc
+
+  sem smap_CStmt_CExpr (f: CExpr -> CExpr) =
+  | CSBBlockCall _ & t -> t
+
+  sem sreplace_CStmt_CStmt (f: CStmt -> [CStmt]) =
+  | CSBBlockCall _ & t -> t
+
   syn CTop =
 
   -- Global data declarations
@@ -82,6 +98,12 @@ lang RootPPL = CAst + CPrettyPrint
   ---------------------
   -- PRETTY PRINTING --
   ---------------------
+
+  sem printCStmt (indent: Int) (env: PprintEnv) =
+  | CSBBlockCall { block = block } ->
+    match pprintEnvGetStr env block with (env,block) then
+      (env, join ["BBLOCK_CALL(", block, ")"])
+    else never
 
   sem printCTop (indent : Int) (env: PprintEnv) =
   | CTBBlock { id = id, body = body } ->
