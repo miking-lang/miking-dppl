@@ -161,7 +161,10 @@ utest ty (typeAnnot resample_) with tyunit_ using eqTypeEmptyEnv in
 
 let _anf = compose normalizeTerm symbolize in
 
-utest _anf resample_ with resample_ using eqExpr in
+utest _anf resample_ with bindall_ [
+  ulet_ "t" resample_,
+  var_ "t"
+] using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --
