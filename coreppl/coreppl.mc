@@ -425,7 +425,8 @@ lang CorePPLInference = CorePPL + SMC -- + Importance
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANF + MExprTypeLift + MExprPPLCmpTypeIndex
+  MExprTypeAnnot + MExprANF + MExprTypeLiftUnOrderedRecords +
+  MExprPPLCmpTypeIndex
 
 
 mexpr

@@ -102,7 +102,8 @@ let resample_ = use Resample in
 lang SMC = Resample
 
 lang Test =
-  Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF + MExprTypeLift
+  Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
+  + MExprTypeLiftUnOrderedRecordsCmpClosed
 
 mexpr
 

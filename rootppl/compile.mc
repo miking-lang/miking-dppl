@@ -1,5 +1,4 @@
 -- CorePPL compiler, targeting the RootPPL framework
--- TODO(dlunde,2021-05-04): Out of date
 
 include "../coreppl/coreppl.mc"
 
@@ -259,11 +258,6 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         acc.sf
     in
 
-    -- Allocate data for function
-    -- let updateLocals: StackFrame -> CTop -> CTop =
-    --   lam sf: StackFrame. lam fun: CTop.
-    -- TODO
-
     -- Type used for indicating what action to take at endpoints.
     -- Collapse => Collapse stack
     -- Block => Jump to block. Block name can be either predetermined (Some _)
@@ -296,13 +290,6 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         else "Stack frame does not exist in getStackFrame"
     in
 
-    -- Construct a BBLOCK from the currently accumulated statements
-    let createBlock: Name -> AccSplit -> AccSplit =
-      lam name: Name. lam acc: AccSplit.
-        let bb = CTBBlock { id = name, body = acc.block } in
-        {acc with tops = snoc acc.tops bb}
-    in
-
     -- C statement for setting the PC to a name
     let setPC: Name -> CExpr = lam name.
       (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CEPC {}
@@ -324,13 +311,60 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       else error "Error in getNextName"
     in
 
-    let nameReturn = nameSym "ra" in
+    -- Name for return adress variable
+    let nameRetAddr = nameSym "ra" in
+    -- Name for return value pointer
+    let nameRetLoc = nameSym "retLoc" in
+
+    -- Various compiler names
+    -- TODO(dlunde,2021-05-25): Must be guaranteed unique somehow
+    let nameBblocksArr = nameSym "bblocksArr" in
+    let nameBblockCall = nameSym "BBLOCK_CALL" in
+    let nameDataPointer = nameSym "DATA_POINTER" in
+    let nameNull = nameSym "NULL" in
+
+    let callBBlock = lam name: Name.
+      -- BBLOCK_CALL(name)
+      CSExpr { expr = CEApp {
+        fun = nameBblockCall, args = [CEVar {id = name}]}
+      }
+    in
+
+    let callFromVar = lam expr: CExpr.
+        -- BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC])
+        CSExpr { expr = CEApp {
+          fun = nameBblockCall, args = [
+            CEBinOp {
+              op = COSubScript {},
+              lhs = CEApp {
+                fun = nameDataPointer,
+                args = [ CEVar { id = nameBblocksArr}]
+              },
+              rhs = expr
+            },
+            CEVar { id = nameNull }
+          ] }
+        }
+    in
+
+    -- Stack pointer expression
     let stackPtr = CEMember { lhs = CEPState {}, id = "stackPtr" } in
 
-    let constructBBlockInit = () -- TODO
+    -- Construct a BBLOCK from the currently accumulated statements
+    let createBlock: Name -> AccSplit -> AccSplit =
+      lam name: Name. lam acc: AccSplit.
+        -- TODO Here, we should also insert code binding variables located on
+        -- the stack
+        let bb = CTBBlock { id = name, body = acc.block } in
+        {acc with tops = snoc acc.tops bb}
+    in
+
+    -- Generate code for returning from a BBLOCK
+    let constructReturn = () -- TODO
 
     in
 
+    -- Generate code for calling a BBLOCK
     let constructCall: StackFrame -> CStmt -> Name -> [CStmt] =
       lam sf: StackFrame.
       lam stmt: CStmt.
@@ -372,6 +406,9 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           then app else error "Non-application in constructCall"
         in
 
+        -- *((tyarg1*) (stackPtr + sizeof(tyarg1))) = arg1;
+        -- *((tyarg2*) (stackPtr + sizeof(tyarg1) + sizeof(tyarg2))) = arg2;
+        -- ...
         let args = zipWith (lam p. lam a. (a,p.1)) sf.params app.args in
         let acc = foldl (lam acc. lam a. f acc a.0 a.1) acc args in
 
@@ -383,31 +420,26 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           then Some expr else None ()
         in
 
+        -- *((rettype**) (stackPtr + ... + sizeof(rettype*))) = &retLoc;
         let acc =
           match ret with Some expr then
             f acc (CEUnOp { op = COAddrOf {}, arg = expr})
               (CTyPtr { ty = sf.ret })
           else acc in
 
-        -- *((tyarg1*) (stackPtr + sizeof(tyarg1))) = arg1;
-        -- *((tyarg2*) (stackPtr + sizeof(tyarg1) + sizeof(tyarg2))) = arg2;
-        -- ...
-        -- *((rettype**) (stackPtr + ... + sizeof(rettype*))) = &retLoc;
-        --
+
         -- stackPtr = stackPtr +
         --   sizeof(int) + // RA
         --   sizeof(tyarg1) + sizeof(tyarg2) + ... + // Arguments
         --   sizeof(rettype*) +
         --   sizeof(local1) + sizeof(local2) + ... // Locals
-        --
-        -- BBLOCK_CALL(id);
-
         let incrStackPtr =
           CSExpr { expr = CEBinOp {
             op = COAssign {}, lhs = stackPtr, rhs = acc.pos }
           } in
 
-        let call = CSBBlockCall { block = app.fun } in
+        -- BBLOCK_CALL(.);
+        let call = callBBlock app.fun in
 
         join [acc.stmts, [incrStackPtr, call]]
     in
@@ -425,24 +457,14 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
              | CSExpr { expr = CEApp app }
           then
             let acc = {acc with hasSplit = true} in
-            match stmts with [] then
-              --------- TODO TEMPORARY -------
-              let block = snoc acc.block stmt in
-              --------------------------------
-              -- CASE: Function application as last statment _and_ end of block
-              match acc.next with Collapse _ then
-                -- Tail call, build new and collapse current stack frame
-                -- (tail-call optimization)
-                -- TODO Collapse + build stack frame
-                {acc with block = snoc block (setPC (nameSym "tailcall"))}
-              else match acc.next with Block _ then
-                -- Regular call, build new stack frame with ra given by acc.next
-                let acc = initNextName acc in
-                let name = getNextName acc in
-                -- TODO Build stack frame
-                {acc with block = snoc block (setPC name)}
-                -----------
-              else never
+            let funStackFrame = getStackFrame app.fun acc.sfs in
+            match (stmts, acc.next) with ([], Block _) then
+              -- Special handling of this call avoids an empty BBLOCK
+              let acc = initNextName acc in
+              let ra = getNextName acc in
+              let call = constructCall funStackFrame stmt ra in
+              let block = concat acc.block call in
+              {acc with block = block}
             else
               -- CASE: Not last statement, but end of block
               let accNext = {acc with block = []} in
@@ -450,7 +472,6 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let ra = nameSym "bblock" in
               let accNext = createBlock ra accNext in
 
-              let funStackFrame = getStackFrame app.fun acc.sfs in
               let call = constructCall funStackFrame stmt ra in
               let block = concat acc.block call in
               {accNext with block = block}
@@ -478,8 +499,17 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               -- Simply set PC to next block
               {accNext with block = snoc acc.block (setPC name)}
 
-          -- Not a function application or resample, just accumulate and
-          -- continue
+          -- Write to return value
+          else match stmt with CSRet { val = Some val } then
+            -- *(retLoc) = val
+            let stmt = CSExpr { expr = CEBinOp {
+              op = COAssign {},
+              lhs = CEUnOp { op = CODeref {}, arg = CEVar { id = nameRetLoc } },
+              rhs = val
+            }} in {acc with block = snoc acc.block stmt}
+
+          -- Not a function application, resample, or return. Just accumulate
+          -- and continue
           else match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then
             splitFunBody {acc with block = snoc acc.block stmt} stmts
 
@@ -501,18 +531,11 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
             -- At least one split in branches
             else
-              let branchFin =
-                match accEls.next with Collapse _ then
-                  -- TODO Collapse stack frame
-                  setPC (nameSym "collapse")
-                else match accEls.next with Block (Some name) then
-                  -- Set PC to correct BBLOCK
-                  setPC name
-                else error "Impossible Error in splitFunBody"
-              in
               let update = lam acc: AccSplit.
-                if acc.hasSplit then acc
-                else {acc with block = snoc acc.block branchFin}
+                match accEls.next with Block (Some name) then
+                  if acc.hasSplit then acc
+                  else {acc with block = snoc acc.block (callBBlock name)}
+                else acc
               in
               let accThn = update accThn in
               let accEls = update accEls in
@@ -521,8 +544,8 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let block = snoc acc.block stmt in
 
               -- Create new block for stmts if needed
-              let accStmts = {{accEls with hasSplit = true}
-                                      with next = acc.next} in
+              let accStmts = {{ accEls with hasSplit = true }
+                                       with next = acc.next } in
               match stmts with [] then {accStmts with block = block}
               else
                 let accStmts = {accStmts with block = []} in
@@ -535,18 +558,20 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         -- End of block without split
         else match stmts with [] then
-          if acc.hasSplit then
-            match acc.next with Collapse _ then
-              -- TODO Collapse stack
-              {acc with block = snoc acc.block (setPC (nameSym "collapse"))}
-            else match acc.next with Block _ then
+
+          match acc.next with Collapse _ then
+            -- TODO Retrieve return address from stack frame
+            -- TODO Collapse stack frame
+            -- TODO Call BBLOCK cor. to return addr.
+            {acc with block = snoc acc.block (setPC (nameSym "collapse"))}
+
+          else match acc.next with Block _ then
+            if acc.hasSplit then
               let acc = initNextName acc in
               let name = getNextName acc in
-              -- Call next block here instead (we do not want to resample)
-              {acc with block = snoc acc.block (setPC name)}
-              ------------
-            else never
-          else acc
+              {acc with block = snoc acc.block (callBBlock name)}
+            else acc
+          else never
 
         else never
     in

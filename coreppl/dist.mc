@@ -620,7 +620,7 @@ end
 
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF + MExprTypeLift + MExprPPLCmpTypeIndex
+  + MExprANF + MExprTypeLiftUnOrderedRecords + MExprPPLCmpTypeIndex
 
 mexpr
 
@@ -635,8 +635,8 @@ let tmMultinomial =
   multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmExp = exp_ (float_ 1.0) in
 let tmEmpirical = empirical_ (seq_ [
-    tuple_ [float_ 1.0, float_ 1.5],
-    tuple_ [float_ 3.0, float_ 1.3]
+    utuple_ [float_ 1.0, float_ 1.5],
+    utuple_ [float_ 3.0, float_ 1.3]
   ]) in
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 
@@ -718,13 +718,13 @@ utest eqExpr tmExp (exp_ (float_ 1.1)) with false in
 
 utest tmEmpirical with tmEmpirical using eqExpr in
 utest eqExpr tmEmpirical (empirical_ (seq_ [
-    tuple_ [float_ 2.0, float_ 1.5],
-    tuple_ [float_ 3.0, float_ 1.3]
+    utuple_ [float_ 2.0, float_ 1.5],
+    utuple_ [float_ 3.0, float_ 1.3]
   ]))
 with false in
 utest eqExpr tmEmpirical (empirical_ (seq_ [
-    tuple_ [float_ 2.0, float_ 1.5],
-    tuple_ [float_ 3.0, float_ 1.4]
+    utuple_ [float_ 2.0, float_ 1.5],
+    utuple_ [float_ 3.0, float_ 1.4]
   ]))
 with false in
 
@@ -764,7 +764,7 @@ with [ float_ 1.0 ] using eqSeq eqExpr in
 utest smap_Expr_Expr mapVar tmEmpirical with empirical_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmEmpirical
 with [
-  seq_ [ tuple_ [float_ 1.0, float_ 1.5], tuple_ [float_ 3.0, float_ 1.3] ]
+  seq_ [ utuple_ [float_ 1.0, float_ 1.5], utuple_ [float_ 3.0, float_ 1.3] ]
 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmDirichlet with dirichlet_ tmVar using eqExpr in
@@ -820,8 +820,8 @@ utest _anf tmMultinomial with bindall_ [
 ] using eqExpr in
 utest _anf tmExp with bind_ (ulet_ "t" tmExp) (var_ "t") using eqExpr in
 utest _anf tmEmpirical with bindall_ [
-  ulet_ "t" (tuple_ [float_ 3.0, float_ 1.3]),
-  ulet_ "t1" (tuple_ [float_ 1.0, float_ 1.5]),
+  ulet_ "t" (utuple_ [float_ 3.0, float_ 1.3]),
+  ulet_ "t1" (utuple_ [float_ 1.0, float_ 1.5]),
   ulet_ "t2" (seq_ [(var_ "t1"), (var_ "t")]),
   ulet_ "t3" (empirical_ (var_ "t2")),
   var_ "t3"

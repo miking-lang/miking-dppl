@@ -16,13 +16,13 @@ let crbd = use MExprPPL in
 
   let tyleafrec_ = tyrecord_ [("age", tyfloat_)] in
   let leaf_ = lam age.
-      conapp_ "Leaf" (record_ [("age", float_ age)])
+      conapp_ "Leaf" (urecord_ [("age", float_ age)])
   in
 
   let tynoderec_ =
     tyrecord_ [("age", tyfloat_), ("l", tytree_), ("r", tytree_)] in
   let node_ = lam age. lam left. lam right.
-      conapp_ "Node" (record_ [("age", float_ age),
+      conapp_ "Node" (urecord_ [("age", float_ age),
                                ("l", left),
                                ("r", right)])
   in
@@ -73,7 +73,7 @@ let crbd = use MExprPPL in
        ulet_ "t" (assume_ (exp_ (var_ "lambda"))),
        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
        if_ (ltf_ (var_ "currentTime") (float_ 0.0))
-         unit_
+         uunit_
          (bind_
            (ulet_ "TMP" (weight_ (app_ (var_ "log") (float_ 2.0))))
            (if_ (not_ (appf3_ (var_ "crbdGoesUndetected") (var_ "currentTime")
@@ -123,7 +123,7 @@ let crbd = use MExprPPL in
                (appf4_ (var_ "simTree") (var_ "right")
                   (var_ "tree") (var_ "lambda") (var_ "mu"))
              ])
-             unit_
+             uunit_
          ]))
   in
 
