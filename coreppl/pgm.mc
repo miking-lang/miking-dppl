@@ -91,12 +91,12 @@ lang ProbabilisticGraphicalModel = CorePPL + MExprAst + PlatePrettyPrint
   | t -> Some ("Plate fun check: Not supported expression in plate fun")
 
   -- Distribution can be consists of
-  --  1. DBern
+  --  1. DBernoulli
   --  2. DBeta
   --  3. TmDist t with valid t.dist
   --  4. TmVar with valid value 1. 2. 3.
   sem validateDist (env:Env) =
-  | DBern d -> None ()
+  | DBernoulli d -> None ()
   | DBeta d -> None ()
   | DCategorical d -> None ()
   | DDirichlet d -> None ()

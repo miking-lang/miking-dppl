@@ -210,20 +210,20 @@ end
 
 
 
-lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
+lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
 
   syn Dist =
-  | DBern { p: Expr }
+  | DBernoulli { p: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DBern t -> DBern { t with p = f t.p }
+  | DBernoulli t -> DBernoulli { t with p = f t.p }
 
   sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DBern t -> f acc t.p
+  | DBernoulli t -> f acc t.p
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
-  | DBern t ->
+  | DBernoulli t ->
     let i = pprintIncr indent in
     match printParen i env t.p with (env,p) then
       (env, join ["Bernoulli", pprintNewline i, p])
@@ -231,32 +231,32 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DBern r ->
-    match lhs with DBern l then eqExprH env free l.p r.p else None ()
+  | DBernoulli r ->
+    match lhs with DBernoulli l then eqExprH env free l.p r.p else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
-  | DBern t -> DBern { t with p = symbolizeExpr env t.p }
+  | DBernoulli t -> DBernoulli { t with p = symbolizeExpr env t.p }
 
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
-  | DBern t ->
+  | DBernoulli t ->
     match ty t.p with TyFloat _ then TyBool { info = NoInfo () }
     else infoErrorExit info "Type error bern"
 
   -- ANF
   sem isValueDist =
-  | DBern _ -> false
+  | DBernoulli _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
-  | DBern ({ p = p } & t) ->
-    normalizeName (lam p. k (DBern { t with p = p })) p
+  | DBernoulli ({ p = p } & t) ->
+    normalizeName (lam p. k (DBernoulli { t with p = p })) p
 
   -- Type lift
   sem typeLiftDist (env : TypeLiftEnv) =
-  | DBern ({ p = p } & t) ->
+  | DBernoulli ({ p = p } & t) ->
     match typeLiftExpr env p with (env, p) then
-      (env, DBern {t with p = p})
+      (env, DBernoulli {t with p = p})
     else never
 
 end
@@ -772,8 +772,8 @@ let tydist_ = use Dist in
 let uniform_ = use UniformDist in
   lam a. lam b. dist_ (DUniform {a = a, b = b})
 
-let bern_ = use BernDist in
-  lam p. dist_ (DBern {p = p})
+let bern_ = use BernoulliDist in
+  lam p. dist_ (DBernoulli {p = p})
 
 let poisson_ = use PoissonDist in
   lam lambda. dist_ (DPoisson {lambda = lambda})
@@ -805,7 +805,7 @@ let empirical_ = use EmpiricalDist in
 ---------------------------
 
 lang DistAll =
-  UniformDist + BernDist + PoissonDist + BetaDist + GammaDist +
+  UniformDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist
 
@@ -839,7 +839,7 @@ mexpr
 use Test in
 
 let tmUniform = uniform_ (float_ 1.0) (float_ 2.0) in
-let tmBern = bern_ (float_ 0.5) in
+let tmBernoulli = bern_ (float_ 0.5) in
 let tmPoisson = poisson_ (float_ 0.5) in
 let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
 let tmGamma = gamma_ (float_ 1.0) (float_ 2.0) in
@@ -864,7 +864,7 @@ utest expr2str tmUniform with strJoin "\n" [
   "  2."
 ] in
 
-utest expr2str tmBern with strJoin "\n" [
+utest expr2str tmBernoulli with strJoin "\n" [
   "Bernoulli",
   "  0.5"
 ] in
@@ -927,8 +927,8 @@ utest expr2str tmDirichlet with strJoin "\n" [
 utest tmUniform with tmUniform using eqExpr in
 utest eqExpr tmUniform (uniform_ (float_ 1.0) (float_ 1.0)) with false in
 
-utest tmBern with tmBern using eqExpr in
-utest eqExpr tmBern (bern_ (float_ 0.4)) with false in
+utest tmBernoulli with tmBernoulli using eqExpr in
+utest eqExpr tmBernoulli (bern_ (float_ 0.4)) with false in
 
 utest tmPoisson with tmPoisson using eqExpr in
 utest eqExpr tmPoisson (poisson_ (float_ 0.4)) with false in
@@ -984,8 +984,8 @@ utest smap_Expr_Expr mapVar tmUniform with uniform_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmUniform
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmBern with bern_ tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmBern
+utest smap_Expr_Expr mapVar tmBernoulli with bern_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmBernoulli
 with [ float_ 0.5 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmPoisson with poisson_ tmVar using eqExpr in
@@ -1029,7 +1029,7 @@ with [ seq_ [float_ 1.3, float_ 1.3, float_ 1.5] ] using eqSeq eqExpr in
 ---------------------
 
 utest symbolize tmUniform with tmUniform using eqExpr in
-utest symbolize tmBern with tmBern using eqExpr in
+utest symbolize tmBernoulli with tmBernoulli using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
 utest symbolize tmGamma with tmGamma using eqExpr in
@@ -1047,7 +1047,7 @@ utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
 
 utest ty (typeAnnot tmUniform) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmBern) with tydist_ tybool_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmBernoulli) with tydist_ tybool_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmPoisson) with tydist_ tyint_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmBeta) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmGamma) with tydist_ tyfloat_ using eqTypeEmptyEnv in
@@ -1065,7 +1065,7 @@ using eqTypeEmptyEnv in
 let _anf = compose normalizeTerm symbolize in
 
 utest _anf tmUniform with bind_ (ulet_ "t" tmUniform) (var_ "t") using eqExpr in
-utest _anf tmBern with bind_ (ulet_ "t" tmBern) (var_ "t") using eqExpr in
+utest _anf tmBernoulli with bind_ (ulet_ "t" tmBernoulli) (var_ "t") using eqExpr in
 utest _anf tmPoisson with bind_ (ulet_ "t" tmPoisson) (var_ "t") using eqExpr in
 utest _anf tmBeta with bind_ (ulet_ "t" tmBeta) (var_ "t") using eqExpr in
 utest _anf tmGamma with bind_ (ulet_ "t" tmGamma) (var_ "t") using eqExpr in
@@ -1099,7 +1099,7 @@ utest _anf tmDirichlet with bindall_ [
 ---------------------
 
 utest (typeLift tmUniform).1 with tmUniform using eqExpr in
-utest (typeLift tmBern).1 with tmBern using eqExpr in
+utest (typeLift tmBernoulli).1 with tmBernoulli using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
 utest (typeLift tmBeta).1 with tmBeta using eqExpr in
 utest (typeLift tmGamma).1 with tmGamma using eqExpr in
