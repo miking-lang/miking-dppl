@@ -643,19 +643,19 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
 
 end
 
-lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
+lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
 
   syn Dist =
-  | DExp { rate: Expr }
+  | DExponential { rate: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DExp t -> DExp { t with rate = f t.rate }
+  | DExponential t -> DExponential { t with rate = f t.rate }
 
   sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DExp t -> f acc t.rate
+  | DExponential t -> f acc t.rate
 
   sem pprintDist (indent: Int) (env: PprintEnv) =
-  | DExp t ->
+  | DExponential t ->
     let i = pprintIncr indent in
     match printParen i env t.rate with (env,rate) then
       (env, join ["Exponential", pprintNewline i, rate])
@@ -663,32 +663,32 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
 
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | DExp r ->
-    match lhs with DExp l then eqExprH env free l.rate r.rate else None ()
+  | DExponential r ->
+    match lhs with DExponential l then eqExprH env free l.rate r.rate else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
-  | DExp t -> DExp { t with rate = symbolizeExpr env t.rate }
+  | DExponential t -> DExponential { t with rate = symbolizeExpr env t.rate }
 
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
-  | DExp t ->
+  | DExponential t ->
     match ty t.rate with TyFloat _ then TyFloat { info = NoInfo () }
     else infoErrorExit info "Type error exponential"
 
   -- ANF
   sem isValueDist =
-  | DExp _ -> false
+  | DExponential _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
-  | DExp ({ rate = rate } & t) ->
-    normalizeName (lam rate. k (DExp { t with rate = rate })) rate
+  | DExponential ({ rate = rate } & t) ->
+    normalizeName (lam rate. k (DExponential { t with rate = rate })) rate
 
   -- Type lift
   sem typeLiftDist (env : TypeLiftEnv) =
-  | DExp ({ rate = rate } & t) ->
+  | DExponential ({ rate = rate } & t) ->
     match typeLiftExpr env rate with (env, rate) then
-      (env, DExp {t with rate = rate})
+      (env, DExponential {t with rate = rate})
     else never
 
 end
@@ -793,8 +793,8 @@ let multinomial_ = use MultinomialDist in
 let dirichlet_ = use DirichletDist in
   lam a. dist_ (DDirichlet {a = a})
 
-let exp_ = use ExpDist in
-  lam rate. dist_ (DExp {rate = rate})
+let exp_ = use ExponentialDist in
+  lam rate. dist_ (DExponential {rate = rate})
 
 let empirical_ = use EmpiricalDist in
   lam lst. dist_ (DEmpirical {samples = lst})
@@ -806,7 +806,7 @@ let empirical_ = use EmpiricalDist in
 
 lang DistAll =
   UniformDist + BernDist + PoissonDist + BetaDist + GammaDist +
-  CategoricalDist + MultinomialDist + DirichletDist +  ExpDist +
+  CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist
 
 lang MExprPPLCmpTypeIndex = MExprAst + Dist
@@ -847,7 +847,7 @@ let tmCategorical =
   categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmMultinomial =
   multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
-let tmExp = exp_ (float_ 1.0) in
+let tmExponential = exp_ (float_ 1.0) in
 let tmEmpirical = empirical_ (seq_ [
     utuple_ [float_ 1.0, float_ 1.5],
     utuple_ [float_ 3.0, float_ 1.3]
@@ -863,7 +863,6 @@ utest expr2str tmUniform with strJoin "\n" [
   "  1.",
   "  2."
 ] in
-
 
 utest expr2str tmBern with strJoin "\n" [
   "Bernoulli",
@@ -902,7 +901,7 @@ utest expr2str tmMultinomial with strJoin "\n" [
   "    0.5 ]"
 ] in
 
-utest expr2str tmExp with strJoin "\n" [
+utest expr2str tmExponential with strJoin "\n" [
   "Exponential",
   "  1."
 ] in
@@ -925,11 +924,20 @@ utest expr2str tmDirichlet with strJoin "\n" [
 -- EQUALITY TESTS --
 --------------------
 
+utest tmUniform with tmUniform using eqExpr in
+utest eqExpr tmUniform (uniform_ (float_ 1.0) (float_ 1.0)) with false in
+
 utest tmBern with tmBern using eqExpr in
 utest eqExpr tmBern (bern_ (float_ 0.4)) with false in
 
+utest tmPoisson with tmPoisson using eqExpr in
+utest eqExpr tmPoisson (poisson_ (float_ 0.4)) with false in
+
 utest tmBeta with tmBeta using eqExpr in
 utest eqExpr tmBeta (beta_ (float_ 1.0) (float_ 1.0)) with false in
+
+utest tmGamma with tmGamma using eqExpr in
+utest eqExpr tmGamma (gamma_ (float_ 1.0) (float_ 1.0)) with false in
 
 utest tmCategorical with tmCategorical using eqExpr in
 utest eqExpr tmCategorical
@@ -945,8 +953,8 @@ utest eqExpr tmMultinomial
   (multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.3, float_ 0.5]))
 with false in
 
-utest tmExp with tmExp using eqExpr in
-utest eqExpr tmExp (exp_ (float_ 1.1)) with false in
+utest tmExponential with tmExponential using eqExpr in
+utest eqExpr tmExponential (exp_ (float_ 1.1)) with false in
 
 utest tmEmpirical with tmEmpirical using eqExpr in
 utest eqExpr tmEmpirical (empirical_ (seq_ [
@@ -972,12 +980,24 @@ let tmVar = var_ "x" in
 let mapVar = (lam. tmVar) in
 let foldToSeq = lam a. lam e. cons e a in
 
+utest smap_Expr_Expr mapVar tmUniform with uniform_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmUniform
+with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
+
 utest smap_Expr_Expr mapVar tmBern with bern_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmBern
 with [ float_ 0.5 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmPoisson with poisson_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmPoisson
+with [ float_ 0.5 ] using eqSeq eqExpr in
+
 utest smap_Expr_Expr mapVar tmBeta with beta_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmBeta
+with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
+
+utest smap_Expr_Expr mapVar tmGamma with gamma_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmGamma
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmCategorical with categorical_ tmVar using eqExpr in
@@ -989,8 +1009,8 @@ with multinomial_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmMultinomial
 with [ seq_ [float_ 0.3, float_ 0.2, float_ 0.5], int_ 5 ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmExp with exp_ tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmExp
+utest smap_Expr_Expr mapVar tmExponential with exp_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmExponential
 with [ float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmEmpirical with empirical_ tmVar using eqExpr in
@@ -1008,11 +1028,14 @@ with [ seq_ [float_ 1.3, float_ 1.3, float_ 1.5] ] using eqSeq eqExpr in
 -- SYMBOLIZE TESTS --
 ---------------------
 
+utest symbolize tmUniform with tmUniform using eqExpr in
 utest symbolize tmBern with tmBern using eqExpr in
+utest symbolize tmPoisson with tmPoisson using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
+utest symbolize tmGamma with tmGamma using eqExpr in
 utest symbolize tmCategorical with tmCategorical using eqExpr in
 utest symbolize tmMultinomial with tmMultinomial using eqExpr in
-utest symbolize tmExp with tmExp using eqExpr in
+utest symbolize tmExponential with tmExponential using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 
@@ -1023,11 +1046,14 @@ utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 
 let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
 
+utest ty (typeAnnot tmUniform) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmBern) with tydist_ tybool_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmPoisson) with tydist_ tyint_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmBeta) with tydist_ tyfloat_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmGamma) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmCategorical) with tydist_ tyint_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmMultinomial) with tydist_ (tyseq_ tyint_) using eqTypeEmptyEnv in
-utest ty (typeAnnot tmExp) with tydist_ tyfloat_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmExponential) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_)
 using eqTypeEmptyEnv in
@@ -1038,8 +1064,11 @@ using eqTypeEmptyEnv in
 
 let _anf = compose normalizeTerm symbolize in
 
+utest _anf tmUniform with bind_ (ulet_ "t" tmUniform) (var_ "t") using eqExpr in
 utest _anf tmBern with bind_ (ulet_ "t" tmBern) (var_ "t") using eqExpr in
+utest _anf tmPoisson with bind_ (ulet_ "t" tmPoisson) (var_ "t") using eqExpr in
 utest _anf tmBeta with bind_ (ulet_ "t" tmBeta) (var_ "t") using eqExpr in
+utest _anf tmGamma with bind_ (ulet_ "t" tmGamma) (var_ "t") using eqExpr in
 utest _anf tmCategorical with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
   ulet_ "t1" (categorical_ (var_ "t")),
@@ -1050,7 +1079,7 @@ utest _anf tmMultinomial with bindall_ [
   ulet_ "t1" (multinomial_ (int_ 5) (var_ "t")),
   var_ "t1"
 ] using eqExpr in
-utest _anf tmExp with bind_ (ulet_ "t" tmExp) (var_ "t") using eqExpr in
+utest _anf tmExponential with bind_ (ulet_ "t" tmExponential) (var_ "t") using eqExpr in
 utest _anf tmEmpirical with bindall_ [
   ulet_ "t" (utuple_ [float_ 3.0, float_ 1.3]),
   ulet_ "t1" (utuple_ [float_ 1.0, float_ 1.5]),
@@ -1069,11 +1098,14 @@ utest _anf tmDirichlet with bindall_ [
 -- TYPE-LIFT TESTS --
 ---------------------
 
+utest (typeLift tmUniform).1 with tmUniform using eqExpr in
 utest (typeLift tmBern).1 with tmBern using eqExpr in
+utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
 utest (typeLift tmBeta).1 with tmBeta using eqExpr in
+utest (typeLift tmGamma).1 with tmGamma using eqExpr in
 utest (typeLift tmCategorical).1 with tmCategorical using eqExpr in
 utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
-utest (typeLift tmExp).1 with tmExp using eqExpr in
+utest (typeLift tmExponential).1 with tmExponential using eqExpr in
 utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 

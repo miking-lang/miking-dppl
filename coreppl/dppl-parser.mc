@@ -50,7 +50,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
   | "Dirichlet" -> Some (1, lam lst. TmDist {dist = DDirichlet {a = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
-  | "Exponential" -> Some (1, lam lst. TmDist {dist = DExp {rate = get lst 0},
+  | "Exponential" -> Some (1, lam lst. TmDist {dist = DExponential {rate = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
   | "Empirical" -> Some (1, lam lst. TmDist {dist = DEmpirical {samples = get lst 0},
