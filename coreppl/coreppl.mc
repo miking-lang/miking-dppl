@@ -15,8 +15,10 @@ include "mexpr/anf.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 
-include "dist.mc"
 include "string.mc"
+
+include "dist.mc"
+include "smc.mc"
 
 -------------
 -- HELPERS --
@@ -88,7 +90,7 @@ lang Infer =
   -- Type annotate
   sem typeAnnotExpr (env: TypeEnv) =
   | TmInfer t ->
-    let err = lam. infoErrorExit t.info "Type error" in
+    let err = lam. infoErrorExit t.info "Type error infer" in
     let model = typeAnnotExpr env t.model in
     let ty =
       match ty model with TyArrow { from = from, to = to } then
@@ -170,7 +172,7 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   -- Type annotate
   sem typeAnnotExpr (env: TypeEnv) =
   | TmAssume t ->
-    let err = lam. infoErrorExit t.info "Type error" in
+    let err = lam. infoErrorExit t.info "Type error assume" in
     let dist = typeAnnotExpr env t.dist in
     let ty =
       match ty dist with TyDist { ty = ty } then ty
@@ -255,7 +257,7 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   -- Type annotate
   sem typeAnnotExpr (env: TypeEnv) =
   | TmObserve t ->
-    let err = lam. infoErrorExit t.info "Type error" in
+    let err = lam. infoErrorExit t.info "Type error observe" in
     let value = typeAnnotExpr env t.value in
     let dist = typeAnnotExpr env t.dist in
     let ty =
@@ -349,7 +351,7 @@ lang Weight =
   -- Type annotate
   sem typeAnnotExpr (env: TypeEnv) =
   | TmWeight t ->
-    let err = lam. infoErrorExit t.info "Type error" in
+    let err = lam. infoErrorExit t.info "Type error weight" in
     let weight = typeAnnotExpr env t.weight in
     let ty =
       match ty weight with TyFloat _ then tyunit_
@@ -419,11 +421,12 @@ let weight_ = use Weight in
 lang CorePPL =
   Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
 
-lang CorePPLInference = CorePPL -- + Importance + SMC
+lang CorePPLInference = CorePPL + SMC -- + Importance
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANF + MExprTypeLift
+  MExprTypeAnnot + MExprANF + MExprTypeLiftUnOrderedRecords +
+  MExprPPLCmpTypeIndex
 
 
 mexpr

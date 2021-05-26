@@ -55,6 +55,12 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmDist t -> pprintDist indent env t.dist
 
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyDist t ->
+    match getTypeStringCode indent env t.ty with (env, ty) then
+      (env, join ["Dist(", ty, ")"])
+    else never
+
   -- Equality
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
@@ -125,6 +131,12 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
       else never
     else never
 
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TyDist t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TyDist {t with ty = ty})
+    else never
+
 end
 
 lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
@@ -159,7 +171,7 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBern t ->
     match ty t.p with TyFloat _ then TyBool { info = NoInfo () }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error bern"
 
   -- ANF
   sem isValueDist =
@@ -215,7 +227,7 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBeta t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error beta" in
     match ty t.a with TyFloat _ then
       match ty t.b with TyFloat _ then
         TyFloat { info = NoInfo () }
@@ -282,7 +294,7 @@ lang CategoricalDist =
   sem tyDist (env: TypeEnv) (info: Info) =
   | DCategorical t ->
     match ty t.p with TySeq { ty = TyFloat _ } then TyInt { info = NoInfo () }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error categorical"
 
   -- ANF
   sem isValueDist =
@@ -342,10 +354,10 @@ lang MultinomialDist =
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DMultinomial t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error multinomial" in
     match ty t.n with TyInt _ then
       match ty t.p with TySeq { ty = TyFloat _ } then
-        TyInt { info = NoInfo () }
+        TySeq { ty = TyInt { info = NoInfo () }, info = NoInfo () }
       else err ()
     else err ()
 
@@ -408,7 +420,7 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   | DDirichlet t ->
     match ty t.a with TySeq { ty = TyFloat _ } then
       TySeq { info = NoInfo (), ty = TyFloat { info = NoInfo () } }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error dirichlet"
 
   -- ANF
   sem isValueDist =
@@ -458,7 +470,7 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DExp t ->
     match ty t.rate with TyFloat _ then TyFloat { info = NoInfo () }
-    else infoErrorExit info "Type error"
+    else infoErrorExit info "Type error exponential"
 
   -- ANF
   sem isValueDist =
@@ -513,7 +525,7 @@ lang EmpiricalDist =
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DEmpirical t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error empirical" in
     match ty t.samples
     with TySeq { ty = TyRecord { fields = fields } } then
       if eqi (mapSize fields) 2 then
@@ -583,9 +595,32 @@ lang DistAll =
   BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
   MultinomialDist + DirichletDist
 
+end
+
+lang MExprPPLCmpTypeIndex = MExprAst + Dist
+
+  -- This is required for type comparisons (required in turn for type lifting)
+  sem typeIndex =
+  | TyUnknown _ -> 0
+  | TyBool _ -> 1
+  | TyInt _ -> 2
+  | TyFloat _ -> 3
+  | TyChar _ -> 4
+  | TyArrow _ -> 5
+  | TySeq _ -> 6
+  | TyRecord _ -> 7
+  | TyVariant _ -> 8
+  | TyVar _ -> 9
+  | TyApp _ -> 10
+  | TyTensor _ -> 11
+  -- This is the only addition compared to MExprCmpTypeIndex in mexpr/cmp.mc
+  | TyDist _ -> 12
+
+end
+
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF + MExprTypeLift
+  + MExprANF + MExprTypeLiftUnOrderedRecords + MExprPPLCmpTypeIndex
 
 mexpr
 
@@ -600,8 +635,8 @@ let tmMultinomial =
   multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmExp = exp_ (float_ 1.0) in
 let tmEmpirical = empirical_ (seq_ [
-    tuple_ [float_ 1.0, float_ 1.5],
-    tuple_ [float_ 3.0, float_ 1.3]
+    utuple_ [float_ 1.0, float_ 1.5],
+    utuple_ [float_ 3.0, float_ 1.3]
   ]) in
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 
@@ -683,13 +718,13 @@ utest eqExpr tmExp (exp_ (float_ 1.1)) with false in
 
 utest tmEmpirical with tmEmpirical using eqExpr in
 utest eqExpr tmEmpirical (empirical_ (seq_ [
-    tuple_ [float_ 2.0, float_ 1.5],
-    tuple_ [float_ 3.0, float_ 1.3]
+    utuple_ [float_ 2.0, float_ 1.5],
+    utuple_ [float_ 3.0, float_ 1.3]
   ]))
 with false in
 utest eqExpr tmEmpirical (empirical_ (seq_ [
-    tuple_ [float_ 2.0, float_ 1.5],
-    tuple_ [float_ 3.0, float_ 1.4]
+    utuple_ [float_ 2.0, float_ 1.5],
+    utuple_ [float_ 3.0, float_ 1.4]
   ]))
 with false in
 
@@ -729,7 +764,7 @@ with [ float_ 1.0 ] using eqSeq eqExpr in
 utest smap_Expr_Expr mapVar tmEmpirical with empirical_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmEmpirical
 with [
-  seq_ [ tuple_ [float_ 1.0, float_ 1.5], tuple_ [float_ 3.0, float_ 1.3] ]
+  seq_ [ utuple_ [float_ 1.0, float_ 1.5], utuple_ [float_ 3.0, float_ 1.3] ]
 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmDirichlet with dirichlet_ tmVar using eqExpr in
@@ -759,7 +794,7 @@ let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
 utest ty (typeAnnot tmBern) with tydist_ tybool_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmBeta) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmCategorical) with tydist_ tyint_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmMultinomial) with tydist_ tyint_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmMultinomial) with tydist_ (tyseq_ tyint_) using eqTypeEmptyEnv in
 utest ty (typeAnnot tmExp) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_)
@@ -785,8 +820,8 @@ utest _anf tmMultinomial with bindall_ [
 ] using eqExpr in
 utest _anf tmExp with bind_ (ulet_ "t" tmExp) (var_ "t") using eqExpr in
 utest _anf tmEmpirical with bindall_ [
-  ulet_ "t" (tuple_ [float_ 3.0, float_ 1.3]),
-  ulet_ "t1" (tuple_ [float_ 1.0, float_ 1.5]),
+  ulet_ "t" (utuple_ [float_ 3.0, float_ 1.3]),
+  ulet_ "t1" (utuple_ [float_ 1.0, float_ 1.5]),
   ulet_ "t2" (seq_ [(var_ "t1"), (var_ "t")]),
   ulet_ "t3" (empirical_ (var_ "t2")),
   var_ "t3"

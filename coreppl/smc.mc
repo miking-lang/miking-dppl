@@ -79,7 +79,7 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
 
   -- ANF
   sem isValue =
-  | TmResample _ -> true
+  | TmResample _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmResample t -> k (TmResample t)
@@ -99,9 +99,11 @@ end
 let resample_ = use Resample in
   TmResample { ty = tyunknown_, info = NoInfo () }
 
+lang SMC = Resample
 
 lang Test =
-  Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF + MExprTypeLift
+  Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
+  + MExprTypeLiftUnOrderedRecordsCmpClosed
 
 mexpr
 
@@ -160,7 +162,10 @@ utest ty (typeAnnot resample_) with tyunit_ using eqTypeEmptyEnv in
 
 let _anf = compose normalizeTerm symbolize in
 
-utest _anf resample_ with resample_ using eqExpr in
+utest _anf resample_ with bindall_ [
+  ulet_ "t" resample_,
+  var_ "t"
+] using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --

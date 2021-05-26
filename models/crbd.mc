@@ -8,6 +8,7 @@ include "math.mc"
 -- we can fix this (by, e.g., adding the root of the repo to the path) when the
 -- build procedure gets more mature.
 include "../coreppl/coreppl.mc"
+include "../coreppl/smc.mc"
 
 let crbd = use MExprPPL in
 
@@ -15,13 +16,13 @@ let crbd = use MExprPPL in
 
   let tyleafrec_ = tyrecord_ [("age", tyfloat_)] in
   let leaf_ = lam age.
-      conapp_ "Leaf" (record_ [("age", float_ age)])
+      conapp_ "Leaf" (urecord_ [("age", float_ age)])
   in
 
   let tynoderec_ =
     tyrecord_ [("age", tyfloat_), ("l", tytree_), ("r", tytree_)] in
   let node_ = lam age. lam left. lam right.
-      conapp_ "Node" (record_ [("age", float_ age),
+      conapp_ "Node" (urecord_ [("age", float_ age),
                                ("l", left),
                                ("r", right)])
   in
@@ -30,10 +31,15 @@ let crbd = use MExprPPL in
     node_ 1.0 (leaf_ 0.0) (leaf_ 0.0)
   in
 
-  let crbdGoesUndetected =
-    lams_ [("startTime", tyfloat_), ("lambda", tyfloat_), ("mu", tyfloat_)]
+  let crbdGoesUndetected = reclet_ "crbdGoesUndetected"
+    (tyarrows_ [tyfloat_, tyfloat_, tyfloat_, tybool_])
+    (lams_ [
+      ("startTime", tyfloat_),
+      ("lambda", tyfloat_),
+      ("mu", tyfloat_)
+    ]
       (bindall_ [
-        ulet_ "t" (assume_ (exp_ (addi_ (var_ "lambda") (var_ "mu")))),
+        ulet_ "t" (assume_ (exp_ (addf_ (var_ "lambda") (var_ "mu")))),
         ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
         if_ (ltf_ (var_ "currentTime") (float_ 0.0))
           false_
@@ -50,25 +56,33 @@ let crbd = use MExprPPL in
                     (var_ "currentTime") (var_ "lambda") (var_ "mu"))
               )
           ])
-      ])
+      ]))
   in
 
-  let simBranch =
-    ulams_ ["startTime", "stopTime", "lambda", "mu"]
+  let simBranch = reclet_ "simBranch"
+    (tyarrows_ [tyfloat_, tyfloat_, tyfloat_, tyfloat_, tyunit_])
+    (lams_ [
+      ("startTime", tyfloat_),
+      ("stopTime", tyfloat_),
+      ("lambda", tyfloat_),
+      ("mu", tyfloat_)
+    ]
      (bindall_ [
+       ulet_ "dummy" (leaf_ 1.3),
+       ulet_ "dummy2" (var_ "tree"),
        ulet_ "t" (assume_ (exp_ (var_ "lambda"))),
        ulet_ "currentTime" (subf_ (var_ "startTime") (var_ "t")),
        if_ (ltf_ (var_ "currentTime") (float_ 0.0))
-         unit_
+         uunit_
          (bind_
-           (ulet_ "_" (weight_ (app_ (var_ "log") (float_ 2.0))))
+           (ulet_ "TMP" (weight_ (app_ (var_ "log") (float_ 2.0))))
            (if_ (not_ (appf3_ (var_ "crbdGoesUndetected") (var_ "currentTime")
                          (var_ "lambda") (var_ "mu")))
              (weight_ (app_ (var_ "log") (float_ 0.0)))
              (appf4_ (var_ "simBranch")
                 (var_ "currentTime") (var_ "stopTime")
                 (var_ "lambda") (var_ "mu"))))
-     ])
+     ]))
   in
 
   let simTree =
@@ -78,65 +92,71 @@ let crbd = use MExprPPL in
         (match_ tree (pcon_ "Node" (prec_ [("age",(pvar_ "age"))]))
            (var_ "age") never_)
     in
-    ulams_ ["tree", "parent", "lambda", "mu"]
-      (bindall_ [
-         ulet_ "pAge" (getAge (var_ "parent")),
-         ulet_ "tAge" (getAge (var_ "tree")),
-         ulet_ "_"
-           (weight_
-             (mulf_ (negf_ (var_ "mu"))
-                (subf_ (var_ "pAge") (var_ "tAge")))),
-         -- ulet_ "_" (resample_),
-         ulet_ "_"
-           (appf4_ (var_ "simBranch")
-                 (var_ "pAge") (var_ "tAge")
-                 (var_ "lambda") (var_ "mu")),
-         match_ (var_ "tree")
-           (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
-           (bindall_ [
-             ulet_ "_" (weight_ (app_ (var_ "log") (var_ "lambda"))),
-             -- ulet_ "_" (resample_),
-             ulet_ "_"
-               (appf4_ (var_ "simTree") (var_ "left")
-                  (var_ "tree") (var_ "lambda") (var_ "mu")),
-             (appf4_ (var_ "simTree") (var_ "right")
-                (var_ "tree") (var_ "lambda") (var_ "mu"))
-           ])
-           unit_
-       ])
+    reclet_ "simTree"
+      (tyarrows_ [tyvar_ "Tree", tyvar_ "Tree", tyfloat_, tyfloat_, tyunit_])
+      (lams_ [
+        ("tree", tyvar_ "Tree"),
+        ("parent", tyvar_ "Tree"),
+        ("lambda", tyfloat_ ),
+        ("mu", tyfloat_)
+      ]
+        (bindall_ [
+           ulet_ "pAge" (getAge (var_ "parent")),
+           ulet_ "tAge" (getAge (var_ "tree")),
+           ulet_ "TMP"
+             (weight_
+               (mulf_ (negf_ (var_ "mu"))
+                  (subf_ (var_ "pAge") (var_ "tAge")))),
+           ulet_ "TMP" (resample_),
+           ulet_ "TMP"
+             (appf4_ (var_ "simBranch")
+                   (var_ "pAge") (var_ "tAge")
+                   (var_ "lambda") (var_ "mu")),
+           match_ (var_ "tree")
+             (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
+             (bindall_ [
+               ulet_ "TMP" (weight_ (app_ (var_ "log") (var_ "lambda"))),
+               ulet_ "TMP" (resample_),
+               ulet_ "TMP"
+                 (appf4_ (var_ "simTree") (var_ "left")
+                    (var_ "tree") (var_ "lambda") (var_ "mu")),
+               (appf4_ (var_ "simTree") (var_ "right")
+                  (var_ "tree") (var_ "lambda") (var_ "mu"))
+             ])
+             uunit_
+         ]))
   in
 
   bindall_ [
-    let_ "log" tyunit_ unit_, -- TODO Need log implementation?
+    ulet_ "log" (lam_ "t" tyfloat_ (float_ 0.0)), -- TODO Add actual log implementation
 
-    type_ "Tree" tyunit_, -- TODO Should not be unit
+    type_ "Tree" tyunknown_, -- TODO Should not be unit
 
     condef_ "Leaf" (tyarrow_ tyleafrec_ tytree_),
     condef_ "Node" (tyarrow_ tynoderec_ tytree_),
 
     ulet_ "tree" tree,
 
-    reclet_ "crbdGoesUndetected"
-      (tyarrows_ [tyfloat_, tyfloat_, tyfloat_, tybool_]) crbdGoesUndetected,
+    crbdGoesUndetected,
 
-    ureclet_ "simBranch" simBranch,
-    ureclet_ "simTree" simTree,
+    simBranch,
+    simTree,
 
     ulet_ "lambda" (float_ 0.2),
     ulet_ "mu" (float_ 0.1),
 
-    ulet_ "_" (weight_ (app_ (var_ "log") (float_ 2.0))),
+    ulet_ "TMP" (weight_ (app_ (var_ "log") (float_ 2.0))),
 
     match_ (var_ "tree")
       (pcon_ "Node" (prec_ [("l",(pvar_ "left")),("r",(pvar_ "right"))]))
       (bindall_ [
-         ulet_ "_" (appf4_ (var_ "simTree") (var_ "left")
+         ulet_ "TMP" (appf4_ (var_ "simTree") (var_ "left")
                      (var_ "tree") (var_ "lambda") (var_ "mu")),
-         ulet_ "_" (appf4_ (var_ "simTree") (var_ "right")
+         ulet_ "TMP" (appf4_ (var_ "simTree") (var_ "right")
                      (var_ "tree") (var_ "lambda") (var_ "mu")),
-         tuple_ [(var_ "lambda"), (var_ "mu")]
+         (var_ "lambda")
       ])
-      unit_
+      (var_ "lambda")
   ]
 
 mexpr
