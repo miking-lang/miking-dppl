@@ -252,7 +252,7 @@ end
 
 
 
-lang PoissonDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
+lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
 
   syn Dist =
   | DPoisson { lambda: Expr }
@@ -283,7 +283,7 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DPoisson t ->
-    match ty t.lambda with TyFloat _ then TyBool { info = NoInfo () }
+    match ty t.lambda with TyFloat _ then TyInt { info = NoInfo () }
     else infoErrorExit info "Type error Poisson"
 
   -- ANF
