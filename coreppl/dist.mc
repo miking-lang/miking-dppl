@@ -177,7 +177,7 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DUniform t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error uniform" in
     match ty t.a with TyFloat _ then
       match ty t.b with TyFloat _ then
         TyFloat { info = NoInfo () }

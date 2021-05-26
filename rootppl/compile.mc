@@ -1,8 +1,7 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
-
-include "../models/crbd.mc"
+-- include "../models/crbd.mc"
 
 include "rootppl.mc"
 
@@ -93,7 +92,7 @@ let printCompiledRPProg = use MExprPPLRootPPLCompile in
     printRPProg cCompilerNames rpprog
 
 -- Compiler entry point.
-let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
+let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
   use MExprPPLRootPPLCompile in
   lam typeEnv: [(Name,Type)].
   lam globalNames: [Name].
@@ -934,10 +933,7 @@ let findGlobalNames: Expr -> [Name] = use MExprPPLRootPPLCompile in
       else acc
     in rec [] expr
 
-mexpr
-use MExprPPLRootPPLCompile in
-
-let compile: Expr -> RPProg = lam prog.
+let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- print (expr2str prog); print "\n\n";
 
@@ -961,15 +957,16 @@ let compile: Expr -> RPProg = lam prog.
     -- print (expr2str prog); print "\n\n";
 
     -- Run C compiler
-    let rpprog: RPProg = rootPPLCompile env globals prog in
+    let rpprog: RPProg = rootPPLCompileH env globals prog in
 
-    print (printCompiledRPProg rpprog);
+    -- print (printCompiledRPProg rpprog);
     rpprog
 
   else never
 
-in
+mexpr
+use MExprPPLRootPPLCompile in
 
-compile crbd;
+-- rootPPLCompile crbd;
 
 ()

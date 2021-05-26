@@ -8,8 +8,10 @@ test:
 
 install:
 	@cp -f shell/* ~/.local/bin/.
-	@mkdir -p ~/.local/lib/midppl
-	@cp -f coreppl/* ~/.local/lib/midppl/.
+	@mkdir -p ~/.local/lib/midppl/coreppl
+	@cp -f coreppl/* ~/.local/lib/midppl/coreppl/.
+	@mkdir -p ~/.local/lib/midppl/rootppl
+	@cp -f rootppl/*.mc ~/.local/lib/midppl/rootppl/.
 clean:
 	@rm -f coreppl/*~
 
