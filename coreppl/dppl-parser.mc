@@ -32,6 +32,9 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
   | "Beta" -> Some (2, lam lst. TmDist {dist = DBeta {a = get lst 0, b = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
+  | "Gamma" -> Some (2, lam lst. TmDist {dist = DGamma {k = get lst 0, theta = get lst 1},
+                                         ty = TyUnknown {info = info},
+                                         info = info})
   | "Categorical" -> Some (1, lam lst. TmDist {dist = DCategorical {p = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
@@ -51,7 +54,8 @@ end
 
 let keywords =
 ["assume", "observe", "weight",
- "Bernoulli", "Beta", "Categorical", "Multinomial", "Dirichlet", "Exponential", "Empirical"]
+ "Bernoulli", "Beta", "Gamma", "Categorical", "Multinomial",
+ "Dirichlet", "Exponential", "Empirical"]
 
 
 let getAst = lam filename. lam printModel.

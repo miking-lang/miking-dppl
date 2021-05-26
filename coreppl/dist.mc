@@ -143,7 +143,7 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   | DBern t ->
     let i = pprintIncr indent in
     match printParen i env t.p with (env,p) then
-      (env, join ["Bern", pprintNewline i, p])
+      (env, join ["Bernoulli", pprintNewline i, p])
     else never
 
   -- Equality
@@ -177,6 +177,14 @@ lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
     else never
 
 end
+
+
+
+
+
+
+
+
 
 lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
 
@@ -243,6 +251,81 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
 end
+
+
+
+
+lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
+
+  syn Dist =
+  | DGamma { k: Expr, theta: Expr }
+
+  sem smapDist_Expr_Expr (f: Expr -> a) =
+  | DGamma t -> DGamma {{ t with k = f t.k }
+                            with theta = f t.theta }
+
+  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | DGamma t -> f (f acc t.k) t.theta
+
+  -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DGamma t ->
+    let i = pprintIncr indent in
+    match printArgs i env [t.k, t.theta] with (env,args) then
+      (env, join ["Gamma", pprintNewline i, args])
+    else never
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | DGamma r ->
+    match lhs with DGamma l then
+      match eqExprH env free l.k r.k with Some free then
+        eqExprH env free l.theta r.theta
+      else None ()
+    else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DGamma t -> DGamma {{ t with k = symbolizeExpr env t.k }
+                            with theta = symbolizeExpr env t.theta }
+
+  -- Type Annotate
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DGamma t ->
+    let err = lam. infoErrorExit info "Type error" in
+    match ty t.k with TyFloat _ then
+      match ty t.theta with TyFloat _ then
+        TyFloat { info = NoInfo () }
+      else err ()
+    else err ()
+
+  -- ANF
+  sem isValueDist =
+  | DGamma _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DGamma ({ k = k2, theta = theta } & t) ->
+    normalizeName (lam k2.
+      normalizeName (lam theta.
+       k (DGamma {{ t with k = k2 } with theta = theta})) theta) k2
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DGamma ({ k = k, theta = theta } & t) ->
+    match typeLiftExpr env k with (env, k) then
+      match typeLiftExpr env theta with (env, theta) then
+        (env, DGamma {{ t with k = k }
+                          with theta = theta })
+      else never
+    else never
+
+end
+
+
+
+
+
+
 
 -- DCategorical {p=p} is equivalent to DMultinomial {n=1, p=p}
 lang CategoricalDist =
@@ -583,6 +666,9 @@ lang DistAll =
   BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
   MultinomialDist + DirichletDist
 
+  + GammaDist
+
+
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
   + MExprANF + MExprTypeLift
@@ -610,7 +696,7 @@ let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 ------------------------
 
 utest expr2str tmBern with strJoin "\n" [
-  "Bern",
+  "Bernoulli",
   "  0.5"
 ] in
 
