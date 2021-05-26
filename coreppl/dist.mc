@@ -181,6 +181,56 @@ end
 
 
 
+lang PoissonDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
+
+  syn Dist =
+  | DPoisson { lambda: Expr }
+
+  sem smapDist_Expr_Expr (f: Expr -> a) =
+  | DPoisson t -> DPoisson { t with lambda = f t.lambda }
+
+  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | DPoisson t -> f acc t.lambda
+
+  -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DPoisson t ->
+    let i = pprintIncr indent in
+    match printParen i env t.lambda with (env,lambda) then
+      (env, join ["Poisson", pprintNewline i, lambda])
+    else never
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | DPoisson r ->
+    match lhs with DPoisson l then eqExprH env free l.lambda r.lambda else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DPoisson t -> DPoisson { t with lambda = symbolizeExpr env t.lambda }
+
+  -- Type Annotate
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DPoisson t ->
+    match ty t.lambda with TyFloat _ then TyBool { info = NoInfo () }
+    else infoErrorExit info "Type error Poisson"
+
+  -- ANF
+  sem isValueDist =
+  | DPoisson _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DPoisson ({ lambda = lambda } & t) ->
+    normalizeName (lam lambda. k (DPoisson { t with lambda = lambda })) lambda
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DPoisson ({ lambda = lambda } & t) ->
+    match typeLiftExpr env lambda with (env, lambda) then
+      (env, DPoisson {t with lambda = lambda})
+    else never
+
+end
 
 
 
@@ -292,7 +342,7 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DGamma t ->
-    let err = lam. infoErrorExit info "Type error" in
+    let err = lam. infoErrorExit info "Type error Gamma" in
     match ty t.k with TyFloat _ then
       match ty t.theta with TyFloat _ then
         TyFloat { info = NoInfo () }
@@ -666,7 +716,7 @@ lang DistAll =
   BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
   MultinomialDist + DirichletDist
 
-  + GammaDist
+  + GammaDist + PoissonDist
 
 
 lang Test =
