@@ -525,7 +525,7 @@ lang ExpDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DExp t ->
     let i = pprintIncr indent in
     match printParen i env t.rate with (env,rate) then
-      (env, join ["Exp", pprintNewline i, rate])
+      (env, join ["Exponential", pprintNewline i, rate])
     else never
 
   -- Equality
@@ -722,7 +722,7 @@ utest expr2str tmMultinomial with strJoin "\n" [
 ] in
 
 utest expr2str tmExp with strJoin "\n" [
-  "Exp",
+  "Exponential",
   "  1."
 ] in
 
