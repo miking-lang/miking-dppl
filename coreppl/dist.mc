@@ -757,11 +757,20 @@ let dist_ = use Dist in
 let tydist_ = use Dist in
   lam ty. TyDist {info = NoInfo (), ty = ty}
 
+let uniform_ = use UniformDist in
+  lam a. lam b. dist_ (DUniform {a = a, b = b})
+
 let bern_ = use BernDist in
   lam p. dist_ (DBern {p = p})
 
+let poisson_ = use PoissonDist in
+  lam lambda. dist_ (DPoisson {lambda = lambda})
+
 let beta_ = use BetaDist in
   lam a. lam b. dist_ (DBeta {a = a, b = b})
+
+let gamma_ = use GammaDist in
+  lam k. lam theta. dist_ (DGamma {k = k, theta = theta})
 
 let categorical_ = use CategoricalDist in
   lam p. dist_ (DCategorical {p = p})
@@ -799,8 +808,11 @@ mexpr
 
 use Test in
 
+let tmUniform = uniform_ (float_ 1.0) (float_ 2.0) in
 let tmBern = bern_ (float_ 0.5) in
+let tmPoisson = poisson_ (float_ 0.5) in
 let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
+let tmGamma = gamma_ (float_ 1.0) (float_ 2.0) in
 let tmCategorical =
   categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmMultinomial =
@@ -816,13 +828,31 @@ let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 -- PRETTY-PRINT TESTS --
 ------------------------
 
+utest expr2str tmUniform with strJoin "\n" [
+  "Uniform",
+  "  1.",
+  "  2."
+] in
+
+
 utest expr2str tmBern with strJoin "\n" [
   "Bernoulli",
   "  0.5"
 ] in
 
+utest expr2str tmPoisson with strJoin "\n" [
+  "Poisson",
+  "  0.5"
+] in
+
 utest expr2str tmBeta with strJoin "\n" [
   "Beta",
+  "  1.",
+  "  2."
+] in
+
+utest expr2str tmGamma with strJoin "\n" [
+  "Gamma",
   "  1.",
   "  2."
 ] in
