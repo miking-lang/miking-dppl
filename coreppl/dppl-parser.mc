@@ -26,12 +26,21 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
   | "weight" -> Some (1, lam lst. TmWeight {weight = get lst 0,
                                             ty = TyUnknown {info = info},
                                             info = info})
-  | "Bernoulli" -> Some (1, lam lst. TmDist {dist = DBern {p = get lst 0},
+  | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
+                                           ty = TyUnknown {info = info},
+                                           info = info})
+  | "Bernoulli" -> Some (1, lam lst. TmDist {dist = DBernoulli {p = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
+  | "Poisson" -> Some (1, lam lst. TmDist {dist = DPoisson {lambda = get lst 0},
+                                           ty = TyUnknown {info = info},
+                                           info = info})
   | "Beta" -> Some (2, lam lst. TmDist {dist = DBeta {a = get lst 0, b = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
+  | "Gamma" -> Some (2, lam lst. TmDist {dist = DGamma {k = get lst 0, theta = get lst 1},
+                                         ty = TyUnknown {info = info},
+                                         info = info})
   | "Categorical" -> Some (1, lam lst. TmDist {dist = DCategorical {p = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
@@ -41,7 +50,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
   | "Dirichlet" -> Some (1, lam lst. TmDist {dist = DDirichlet {a = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
-  | "Exponential" -> Some (1, lam lst. TmDist {dist = DExp {rate = get lst 0},
+  | "Exponential" -> Some (1, lam lst. TmDist {dist = DExponential {rate = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
   | "Empirical" -> Some (1, lam lst. TmDist {dist = DEmpirical {samples = get lst 0},
@@ -51,7 +60,8 @@ end
 
 let keywords =
 ["assume", "observe", "weight",
- "Bernoulli", "Beta", "Categorical", "Multinomial", "Dirichlet", "Exponential", "Empirical"]
+ "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
+ "Multinomial", "Dirichlet", "Exponential", "Empirical"]
 
 
 let getAst = lam filename. lam printModel.

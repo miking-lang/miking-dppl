@@ -56,13 +56,13 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
 
   -- Extensions
   sem compileDist =
-  | DBern { p = p } -> CDBern { p = compileExpr p }
+  | DBernoulli { p = p } -> CDBern { p = compileExpr p }
   | DBeta { a = a, b = b } -> CDBeta { a = compileExpr a, b = compileExpr b }
   | DCategorical { p = p } -> CDCategorical { p = compileExpr p }
   | DMultinomial { n = n, p = p } ->
     CDMultinomial { n = compileExpr n, p = compileExpr p }
   | DDirichlet { a = a } -> CDDirichlet { a = compileExpr a }
-  | DExp { rate = rate } -> CDExp { rate = compileExpr rate }
+  | DExponential { rate = rate } -> CDExp { rate = compileExpr rate }
   | DEmpirical { samples = samples } ->
     CDEmpirical { samples = compileExpr samples }
 

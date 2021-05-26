@@ -445,7 +445,7 @@ let tmWeight = weight_ (float_ 1.5) in
 utest expr2str tmAssume
 with strJoin "\n" [
   "assume",
-  "  (Bern",
+  "  (Bernoulli",
   "     0.7)"
 ] in
 
