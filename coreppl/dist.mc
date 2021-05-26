@@ -127,6 +127,77 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
 
 end
 
+
+lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
+
+  syn Dist =
+  | DUniform { a: Expr, b: Expr }
+
+  sem smapDist_Expr_Expr (f: Expr -> a) =
+  | DUniform t -> DUniform {{ t with a = f t.a }
+                                with b = f t.b }
+
+  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | DUniform t -> f (f acc t.a) t.b
+
+  -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DUniform t ->
+    let i = pprintIncr indent in
+    match printArgs i env [t.a, t.b] with (env,args) then
+      (env, join ["Uniform", pprintNewline i, args])
+    else never
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | DUniform r ->
+    match lhs with DUniform l then
+      match eqExprH env free l.a r.a with Some free then
+        eqExprH env free l.b r.b
+      else None ()
+    else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DUniform t -> DUniform {{ t with a = symbolizeExpr env t.a }
+                                with b = symbolizeExpr env t.b }
+
+  -- Type Annotate
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DUniform t ->
+    let err = lam. infoErrorExit info "Type error" in
+    match ty t.a with TyFloat _ then
+      match ty t.b with TyFloat _ then
+        TyFloat { info = NoInfo () }
+      else err ()
+    else err ()
+
+  -- ANF
+  sem isValueDist =
+  | DUniform _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DUniform ({ a = a, b = b } & t) ->
+    normalizeName (lam a.
+      normalizeName (lam b.
+        k (DUniform {{ t with a = a } with b = b})) b) a
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DUniform ({ a = a, b = b } & t) ->
+    match typeLiftExpr env a with (env, a) then
+      match typeLiftExpr env b with (env, b) then
+        (env, DUniform {{ t with a = a }
+                            with b = b })
+      else never
+    else never
+
+end
+
+
+
+
+
 lang BernDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
 
   syn Dist =
@@ -716,7 +787,7 @@ lang DistAll =
   BernDist + BetaDist + ExpDist + EmpiricalDist + CategoricalDist +
   MultinomialDist + DirichletDist
 
-  + GammaDist + PoissonDist
+  + GammaDist + PoissonDist + UniformDist
 
 
 lang Test =
