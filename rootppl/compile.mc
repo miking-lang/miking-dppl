@@ -1,8 +1,7 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
-
-include "../models/crbd.mc"
+-- include "../models/crbd.mc"
 
 include "rootppl.mc"
 
@@ -25,25 +24,18 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   syn CExpr =
   | CEAlloc {} -- Allocation placeholder
   | CEResample {} -- Indicates resample locations
-  | CEBBlockName { name: Name } -- Block names
 
   sem printCExpr (env: PprintEnv) =
   | CEAlloc {} -> (env, "<<<CEAlloc>>>")
   | CEResample {} -> (env, "<<<CEResample>>>")
-  | CEBBlockName { name = name } ->
-    match pprintEnvGetStr env name with (env,name) then
-      (env, join ["###", name, "###"])
-    else never
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CEAlloc _ -> acc
   | CEResample _ -> acc
-  | CEBBlockName _ -> acc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
   | CEAlloc _ & t -> t
   | CEResample _ & t -> t
-  | CEBBlockName _ & t -> t
 
   -- ANF override
   -- Ensures argument to assume is not lifted by ANF (first-class distributions
@@ -100,7 +92,7 @@ let printCompiledRPProg = use MExprPPLRootPPLCompile in
     printRPProg cCompilerNames rpprog
 
 -- Compiler entry point.
-let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
+let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
   use MExprPPLRootPPLCompile in
   lam typeEnv: [(Name,Type)].
   lam globalNames: [Name].
@@ -112,16 +104,17 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     -- Stackframe type, containing relevant names and types
     type StackFrame = {
-      -- Parameters for current function
+      -- * Each stack frame begins with (not explicitly included) a BBLOCk int
+      -- return address.
+      -- * Parameters for current function
       params: [(Name,CType)],
-      -- Locals pointing directly to allocated data.
+      -- * Return type (pointer to return type is passed as last argument if
+      -- function does not return void)
+      ret: CType,
+      -- * Locals pointing directly to allocated data.
       localAllocs: [(Name,CType)],
-      -- Accumulated locals that traverse block boundaries
-      locals: [(Name,CType)],
-      -- Return type
-      ret: CType
-      -- Additional things in a stack frame not explicitly included:
-      -- * A BBLOCK return address (int)
+      -- * Accumulated locals that traverse block boundaries
+      locals: [(Name,CType)]
     } in
 
     let emptySF: CType -> StackFrame =
@@ -274,13 +267,16 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       hasSplit: Bool,
       -- Accumulated block
       block: [CStmt],
+      -- Stack frame for the current function
+      sf: StackFrame,
       -- Bindings from names to stack frames
       sfs: [(Name,StackFrame)],
       -- Accumulated set of top-level definitions
       tops: [CTop]
     } in
-    let emptyAccSplit: [(Name,StackFrame)] -> AccSplit = lam sfs.
-      { next = Collapse (), hasSplit = false, block = [], sfs = sfs, tops = [] }
+    let emptyAccSplit =
+      { next = Collapse (), hasSplit = false, block = [], sf = emptySF
+      , sfs = [], tops = [] }
     in
 
     -- Stackframe lookup
@@ -291,10 +287,16 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     -- C statement for setting the PC to a name
-    let setPC: Name -> CExpr = lam name.
+    let setPCFromExpr: CExpr -> CExpr = lam expr.
       (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CEPC {}
-                                , rhs = CEBBlockName { name = name }})})
+                                , rhs = expr })})
     in
+
+    -- C statement for setting the PC to a name
+    let setPC: Name -> CExpr = lam name.
+      setPCFromExpr (CEBBlockName { name = name })
+    in
+
 
     -- Used when reaching endpoints, ensures the accumulator has a name for the
     -- next block.
@@ -326,11 +328,11 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let callBBlock = lam name: Name.
       -- BBLOCK_CALL(name)
       CSExpr { expr = CEApp {
-        fun = nameBblockCall, args = [CEVar {id = name}]}
-      }
+        fun = nameBblockCall, args = [CEVar {id = name}, CEVar {id = nameNull}]
+      } }
     in
 
-    let callFromVar = lam expr: CExpr.
+    let callFromExpr = lam expr: CExpr.
         -- BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC])
         CSExpr { expr = CEApp {
           fun = nameBblockCall, args = [
@@ -350,25 +352,106 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- Stack pointer expression
     let stackPtr = CEMember { lhs = CEPState {}, id = "stackPtr" } in
 
+    -- Unwraps pointer type one step
+    let tyDeref: CType -> CType = lam ty: CType.
+      match ty with CTyPtr { ty = ty } then ty
+      else error "Non-pointer in tyDeref"
+    in
+
+    let derefExpr: CExpr -> CExpr = lam expr.
+      CEUnOp { op = CODeref {}, arg = expr}
+    in
+
+    -- Fins used variables in a list of statements
+    let usedVars: [CStmt] -> [Name] = lam stmts.
+      recursive let rec = lam acc: [Name]. lam expr: CExpr.
+        match expr with CEVar { id = id } then cons id acc
+        else sfold_CExpr_CExpr rec acc expr
+      in foldl (sfold_CStmt_CExpr rec) [] stmts
+    in
+
     -- Construct a BBLOCK from the currently accumulated statements
-    let createBlock: Name -> AccSplit -> AccSplit =
-      lam name: Name. lam acc: AccSplit.
-        -- TODO Here, we should also insert code binding variables located on
-        -- the stack
-        let bb = CTBBlock { id = name, body = acc.block } in
+    let createBlock: StackFrame -> Name -> AccSplit -> AccSplit =
+      lam sf: StackFrame. lam name: Name. lam acc: AccSplit.
+
+        -- Used for avoiding some unnecessary code
+        let uses = usedVars acc.block in
+
+        type Acc = { stmts: [CStmt], pos: CExpr } in
+
+        let f: Acc -> Name -> CType -> Bool -> Acc =
+          lam lAcc: Acc. lam n: Name. lam ty: Type. lam ptr: Bool.
+            let pos = CEBinOp {
+              op = COSub {},
+              lhs = lAcc.pos,
+              rhs = CESizeOfType { ty = if ptr then ty else tyDeref ty }
+            } in
+            let ty = if ptr then CTyPtr { ty = ty } else ty in
+            if any (nameEq n) uses then
+              let stmt = CSDef {
+                ty = ty,
+                id = Some n,
+                init = Some (CIExpr {
+                  expr =
+                    CECast { ty = ty, rhs = pos }
+                })
+              }
+              in {{ lAcc with stmts = cons stmt lAcc.stmts } with pos = pos }
+            else { lAcc with pos = pos }
+        in
+
+        let lAcc: Acc = { stmts = [], pos = stackPtr } in
+
+        let lAcc =
+          foldr (lam t. lam lAcc. f lAcc t.0 t.1 true) lAcc sf.locals in
+        let lAcc =
+          foldr (lam t. lam lAcc. f lAcc t.0 t.1 false) lAcc sf.localAllocs in
+        let lAcc =
+          match sf.ret with CTyVoid _ then lAcc
+          else f lAcc nameRetLoc (CTyPtr { ty = sf.ret }) true in
+        let lAcc =
+          foldr (lam t. lam lAcc. f lAcc t.0 t.1 true) lAcc sf.params in
+        let lAcc = f lAcc nameRetAddr (CTyInt {}) true in
+
+        let bb = CTBBlock { id = name, body = concat lAcc.stmts acc.block } in
         {acc with tops = snoc acc.tops bb}
     in
 
-    -- Generate code for returning from a BBLOCK
-    let constructReturn = () -- TODO
-
+    let frameTypes: StackFrame -> [CType] = lam sf: StackFrme.
+      join [
+        [CTyInt {}],
+        map (lam t. t.1) sf.params,
+        match sf.ret with ! CTyVoid _ then [CTyPtr { ty = sf.ret }] else [],
+        map (lam t. tyDeref t.1) sf.localAllocs,
+        map (lam t. t.1) sf.locals
+      ]
     in
 
+    -- Generate code for collapsing a stack frame.
+    let modStackPtr: CBinOp -> StackFrame -> CStmt =
+      lam op: CBinOp. lam sf: StackFrame.
+        let f: CExpr -> CType -> CExpr = lam acc. lam ty.
+          CEBinOp {
+            op = op,
+            lhs = acc,
+            rhs = CESizeOfType { ty = ty }
+          }
+        in
+        let rhs = foldl f stackPtr (frameTypes sf) in
+        CSExpr { expr = CEBinOp { op = COAssign {}, lhs = stackPtr, rhs = rhs} }
+    in
+
+    let decrementStackPtr = modStackPtr (COSub {}) in
+    let incrementStackPtr = modStackPtr (COAdd {}) in
+
     -- Generate code for calling a BBLOCK
-    let constructCall: StackFrame -> CStmt -> Name -> [CStmt] =
+    let constructCall:
+        StackFrame -> Name -> [CExpr] -> Option CExpr -> Name -> [CStmt] =
       lam sf: StackFrame.
-      lam stmt: CStmt.
-      lam ra: Name.
+      lam fun: Name.
+      lam args: [CExpr].
+      lam ret: Option CExpr.
+      lam ra: CExpr.
 
         type Acc = { stmts: [CStmt], pos: CExpr } in
 
@@ -397,28 +480,13 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         -- Set return address
         -- *((int*) stackPtr) = ra;
-        let acc = f acc (CEBBlockName { name = ra }) (CTyInt {}) in
-
-        let app: { fun: Name, args: [CExpr] } =
-          match stmt with CSDef { init = Some (CIExpr { expr = CEApp app }) }
-             | CSExpr { expr = CEBinOp { op = COAssign {}, rhs = CEApp app } }
-             | CSExpr { expr = CEApp app }
-          then app else error "Non-application in constructCall"
-        in
+        let acc = f acc ra (CTyInt {}) in
 
         -- *((tyarg1*) (stackPtr + sizeof(tyarg1))) = arg1;
         -- *((tyarg2*) (stackPtr + sizeof(tyarg1) + sizeof(tyarg2))) = arg2;
         -- ...
-        let args = zipWith (lam p. lam a. (a,p.1)) sf.params app.args in
+        let args = zipWith (lam p. lam a. (a,p.1)) sf.params args in
         let acc = foldl (lam acc. lam a. f acc a.0 a.1) acc args in
-
-        let ret: Option CExpr =
-          match stmt with
-            CSExpr { expr = CEBinOp {
-              op = COAssign {}, lhs = expr, rhs = CEApp _ }
-            }
-          then Some expr else None ()
-        in
 
         -- *((rettype**) (stackPtr + ... + sizeof(rettype*))) = &retLoc;
         let acc =
@@ -427,21 +495,40 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               (CTyPtr { ty = sf.ret })
           else acc in
 
-
         -- stackPtr = stackPtr +
         --   sizeof(int) + // RA
         --   sizeof(tyarg1) + sizeof(tyarg2) + ... + // Arguments
         --   sizeof(rettype*) +
         --   sizeof(local1) + sizeof(local2) + ... // Locals
-        let incrStackPtr =
-          CSExpr { expr = CEBinOp {
-            op = COAssign {}, lhs = stackPtr, rhs = acc.pos }
-          } in
+        --
+        let incr = incrementStackPtr sf in
 
         -- BBLOCK_CALL(.);
-        let call = callBBlock app.fun in
+        let call = callBBlock fun in
 
-        join [acc.stmts, [incrStackPtr, call]]
+        join [acc.stmts, [incr, call]]
+    in
+
+    let constructCallFromStmt: StackFrame -> CStmt -> Name -> [Cstmt] =
+      lam sf: StackFrame.
+      lam stmt: CStmt.
+      lam ra: CExpr.
+        let app: { fun: Name, args: [CExpr] } =
+          match stmt with CSDef { init = Some (CIExpr { expr = CEApp app }) }
+             | CSExpr { expr = CEBinOp { op = COAssign {}, rhs = CEApp app } }
+             | CSExpr { expr = CEApp app }
+          then app else error "Non-application in constructCallFromStmt"
+        in
+        let ret: Option CExpr =
+          match stmt with
+            CSExpr { expr = CEBinOp {
+              op = COAssign {}, lhs = expr, rhs = CEApp _ }
+            } then
+            match sf.ret with ! CTyVoid _ then Some expr
+            else error "Error in constructCallFromStmt"
+          else None ()
+        in
+        constructCall sf app.fun app.args ret ra
     in
 
     -- Split a function (= list of statements) into BBLOCKs
@@ -462,7 +549,8 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               -- Special handling of this call avoids an empty BBLOCK
               let acc = initNextName acc in
               let ra = getNextName acc in
-              let call = constructCall funStackFrame stmt ra in
+              let call = constructCallFromStmt funStackFrame stmt
+                           (CEBBlockName { name = ra }) in
               let block = concat acc.block call in
               {acc with block = block}
             else
@@ -470,9 +558,10 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let accNext = {acc with block = []} in
               let accNext = splitFunBody accNext stmts in
               let ra = nameSym "bblock" in
-              let accNext = createBlock ra accNext in
+              let accNext = createBlock acc.sf ra accNext in
 
-              let call = constructCall funStackFrame stmt ra in
+              let call = constructCallFromStmt funStackFrame stmt
+                           (CEBBlockName { name = ra }) in
               let block = concat acc.block call in
               {accNext with block = block}
 
@@ -482,8 +571,11 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             match stmts with [] then
               -- CASE: Resample as last statment _and_ end of block
               match acc.next with Collapse _ then
-                -- TODO Collapse current stack frame and set PC to RA
-                {acc with block = snoc acc.block (setPC (nameSym "collapse"))}
+                let collapse = decrementStackPtr acc.sf in
+                let block = snoc acc.block collapse in
+                {acc with block =
+                   snoc block (setPCFromExpr
+                                 (derefExpr (CEVar { id = nameRetAddr }))) }
               else match acc.next with Block _ then
                 -- Set PC to next block
                 let acc = initNextName acc in
@@ -495,7 +587,7 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let accNext = {acc with block = []} in
               let accNext = splitFunBody accNext stmts in
               let name = nameSym "bblock" in
-              let accNext = createBlock name accNext in
+              let accNext = createBlock acc.sf name accNext in
               -- Simply set PC to next block
               {accNext with block = snoc acc.block (setPC name)}
 
@@ -504,9 +596,10 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             -- *(retLoc) = val
             let stmt = CSExpr { expr = CEBinOp {
               op = COAssign {},
-              lhs = CEUnOp { op = CODeref {}, arg = CEVar { id = nameRetLoc } },
+              lhs = derefExpr (derefExpr (CEVar { id = nameRetLoc })),
               rhs = val
-            }} in {acc with block = snoc acc.block stmt}
+            }}
+            in splitFunBody {acc with block = snoc acc.block stmt} stmts
 
           -- Not a function application, resample, or return. Just accumulate
           -- and continue
@@ -551,7 +644,7 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 let accStmts = {accStmts with block = []} in
                 let accStmts = splitFunBody accStmts stmts in
                 let name = getNextName accEls in
-                let accStmts = createBlock name accStmts in
+                let accStmts = createBlock acc.sf name accStmts in
                 {accStmts with block = block}
 
           else error "Not supported in splitFunBody"
@@ -560,10 +653,11 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         else match stmts with [] then
 
           match acc.next with Collapse _ then
-            -- TODO Retrieve return address from stack frame
-            -- TODO Collapse stack frame
-            -- TODO Call BBLOCK cor. to return addr.
-            {acc with block = snoc acc.block (setPC (nameSym "collapse"))}
+            let collapse = decrementStackPtr acc.sf in
+            let block = snoc acc.block collapse in
+            {acc with block =
+               snoc block
+                 (callFromExpr (derefExpr (CEVar { id = nameRetAddr }))) }
 
           else match acc.next with Block _ then
             if acc.hasSplit then
@@ -580,9 +674,11 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let splitFunction: AccSplit -> CTop -> AccSplit =
       lam acc: AccSplit. lam top: CTop.
         match top with CTFun { id = id, body = body } then
-          let acc = {{acc with next = Collapse ()} with block = []} in
+          let acc = {{{ acc with next = Collapse ()}
+                            with block = []}
+                            with sf = getStackFrame id acc.sfs} in
           let acc = splitFunBody acc body in
-          createBlock id acc
+          createBlock acc.sf id acc
         else error "Non-CTFun in splitFunction"
     in
 
@@ -590,11 +686,14 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let nameInit: Name = nameSym "init" in
 
     -- Split the init function
-    let splitInit: AccSplit -> [CStmt] -> CTop =
-      lam acc: AccSplit. lam stmts: [CStmt].
-        let acc = {{acc with next = Collapse ()} with block = []} in
+    let splitInit: AccSplit -> StackFrame -> [CStmt] -> CTop =
+      lam acc: AccSplit. lam sf: StackFrame. lam stmts: [CStmt].
+        let acc = {{{ acc with next = Collapse ()}
+                          with block = []}
+                          with sf = sf} in
         let acc = splitFunBody acc stmts in
-        match createBlock nameInit acc with { tops = tops } then tops else never
+        match createBlock acc.sf nameInit acc with { tops = tops } then tops
+        else never
     in
 
     -- Iterate over top-level definitions and split functions into BBLOCKs
@@ -688,10 +787,15 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         in rec stmt
     in
 
-    let replaceGlobalVar: Globals -> StackFrame -> CExpr -> CExpr =
+    let replaceVar: Globals -> StackFrame -> CExpr -> CExpr =
       lam globals: Globals.
       lam sf: StackFrame.
       lam expr: CExpr.
+        let isPtr: Name -> Bool = lam id: Name.
+          if any (lam g. nameEq id g.0) sf.params then true
+          else if any (lam g. nameEq id g.0) sf.locals then true
+          else false
+        in
         recursive let rec = lam expr: CExpr.
           match expr with CEVar { id = id } then
 
@@ -706,6 +810,8 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             else if any (lam g. nameEq id g.0) globals.globalAllocs then
             CEUnOp { op = COAddrOf {}
                    , arg = CEMember { lhs = CEPState {}, id = nameGetStr id } }
+
+            else if isPtr id then derefExpr expr
 
             -- Leave other variables
             else expr
@@ -752,25 +858,60 @@ let rootPPLCompile: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- Replace global variable uses
     let tops: [CTop] = map (lam top.
       let sf = topStackFrame top in
-      smap_CTop_CExpr (replaceGlobalVar globals sf) top
+      smap_CTop_CExpr (replaceVar globals sf) top
     ) tops in
     let inits: [CStmt] =
-      map (smap_CStmt_CExpr (replaceGlobalVar globals initSF)) inits in
+      map (smap_CStmt_CExpr (replaceVar globals initSF)) inits in
 
     -- Split functions into BBLOCKs
-    -- (TODO: Handle stack frames on block split, call, and return)
-    let accSplit = emptyAccSplit sfs in
+    let accSplit = { emptyAccSplit with sfs = sfs } in
     match splitFunctions accSplit tops with { tops = tops } then
-    let tops = concat tops (splitInit accSplit inits) in
+    let tops = concat tops (splitInit accSplit initSF inits) in
 
-    -- TODO: Insert various RootPPL boilerplate, including the progstate
+    let stackSize = 1000 in
 
-    -- TODO: Convert BBLOCK names to indices where needed
+    -- PSTATE.stackPtr = PSTATE.stack
+    let initStackPtr = CSExpr { expr = CEBinOp {
+      op = COAssign {},
+      lhs = stackPtr,
+      rhs = CEMember { lhs = CEPState {}, id = "stack" }
+    }} in
+    let initRet =
+      match retTy with ! CTyVoid _ then
+        Some (CEMember { lhs = CEPState {}, id = "ret" })
+      else None () in
+    let nameEnd = nameSym "end" in
+    let initCall =
+      constructCall initSF nameInit
+        [] initRet (CEBBlockName { name = nameEnd }) in
+    let startBBlock = CTBBlock {
+      id = nameSym "start",
+      body = join [
+        [initStackPtr],
+        initCall
+      ]
+    } in
+    let endBBlock = CTBBlock {
+      id = nameEnd,
+      body = [setPCFromExpr (CEInt { i = negi 1 })]
+    } in
+
+    let progStateMem = join [
+      [
+        ( CTyArray { ty = CTyChar {}, size = Some (CEInt { i = stackSize })}
+        , Some "stack" ),
+        ( CTyPtr { ty = CTyChar {} }, Some "stackPtr" ),
+        ( retTy, Some "ret" )
+      ],
+      map (lam t. (tyDeref t.1, Some (nameGetStr t.0))) globals.globalAllocs,
+      map (lam t. (t.1, Some (nameGetStr t.0))) globals.globals
+    ] in
 
     RPProg {
-      includes = _includes,
-      pStateTy = CTyVoid {},
-      tops = join [types, tops]
+      includes = ["\"inference/smc/smc.cuh\""],
+      pStateTy = CTyStruct { id = None (), mem = Some progStateMem },
+      types = types,
+      tops = join [[startBBlock, endBBlock], tops]
     }
 
     else never
@@ -792,26 +933,35 @@ let findGlobalNames: Expr -> [Name] = use MExprPPLRootPPLCompile in
       else acc
     in rec [] expr
 
-mexpr
-use MExprPPLRootPPLCompile in
-
-let compile: Expr -> RPProg = lam prog.
+let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- print (expr2str prog); print "\n\n";
 
   -- Symbolize with empty environment
   let prog: Expr = symbolizeExpr symEnvEmpty prog in
 
+  -- print "--- AFTER SYMBOLIZE ---\n";
+  -- dprint prog; print "\n\n";
+
   -- Find global non-function definitions
   let globals: [Name] = findGlobalNames prog in
+
+  -- print "--- AFTER FIND GLOBALS ---\n";
+  -- dprint prog; print "\n\n";
 
   -- dprint globals; print "\n\n";
 
   -- Type annotate
   let prog: Expr = typeAnnot prog in
 
+  -- print "--- AFTER TYPE ANNOTATE ---\n";
+  -- dprint prog; print "\n\n";
+
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
+
+  -- print "--- AFTER ANF ---\n";
+  -- dprint prog; print "\n\n";
 
   -- Type lift
   match typeLift prog with (env, prog) then
@@ -819,15 +969,16 @@ let compile: Expr -> RPProg = lam prog.
     -- print (expr2str prog); print "\n\n";
 
     -- Run C compiler
-    let rpprog: RPProg = rootPPLCompile env globals prog in
+    let rpprog: RPProg = rootPPLCompileH env globals prog in
 
     -- print (printCompiledRPProg rpprog);
     rpprog
 
   else never
 
-in
+mexpr
+use MExprPPLRootPPLCompile in
 
-compile crbd;
+-- rootPPLCompile crbd;
 
 ()

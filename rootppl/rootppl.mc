@@ -39,6 +39,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockDecl { id : Name }
   | CTBBlock { id: Name, body: [Stmt] }
 
+  sem smap_CTop_CExpr (f: CExpr -> CExpr) =
+  | CTBBlock t -> CTBBlock { t with body = map (smap_CStmt_CExpr f) t.body }
+
   sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
   | CTBBlockData _ & t -> t
   | CTBBlockHelperDecl _ & t -> t
@@ -47,18 +50,21 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlock t -> CTBBlock { t with body = join (map f t.body) }
 
   syn CExpr =
+  | CEBBlockName { name: Name } -- Block names (will be replace by indices when printing)
   | CESample { dist: CDist }
   | CEWeight { weight: CExpr }
   | CEPState {}
   | CEPC {}
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
+  | CEBBlockName _ -> acc
   | CESample t -> sfold_CDist_CExpr f acc t.dist
   | CEWeight t -> f acc t.weight
   | CEPState _ -> acc
   | CEPC _ -> acc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
+  | CEBBlockName _ & t -> t
   | CESample t -> CESample { t with dist = smap_CDist_CExpr f t.dist }
   | CEWeight t -> CEWeight { t with weight = f t.weight }
   | CEPState _ & t -> t
@@ -92,7 +98,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDEmpirical t -> CDEmpirical { t with samples = f t.samples }
 
   syn RPProg =
-  | RPProg { includes: [String], pStateTy: CType, tops: [CTop] }
+  | RPProg { includes: [String], pStateTy: CType, types: [CTop], tops: [CTop] }
 
 
   ---------------------
@@ -116,8 +122,16 @@ lang RootPPL = CAst + CPrettyPrint
         ])
       else never
     else never
+  | CTBBlockDecl { id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      (env, join [ "BBLOCK_DECLARE(", id, ");" ])
+    else never
 
   sem printCExpr (env: PprintEnv) =
+  | CEBBlockName { name = name } ->
+    match pprintEnvGetStr env name with (env,name) then
+      (env, join ["###", name, "###"])
+    else never
   | CESample { dist = dist } ->
     match printCDist env dist with (env,dist) then
       (env, _par (join ["SAMPLE(", dist, ")"]))
@@ -169,16 +183,64 @@ lang RootPPL = CAst + CPrettyPrint
 
 
   sem printRPProg (nameInit: [Name]) =
-  | RPProg { includes = includes, pStateTy = pStateTy, tops = tops } ->
+  | RPProg { includes = includes, pStateTy = pStateTy, types = types, tops = tops } ->
+
+    let blockNames: [Name] = foldl (lam acc. lam top.
+      match top with CTBBlock { id = id } then snoc acc id else acc
+    ) [] tops in
+
+    let blockDecls = map (lam n. CTBBlockDecl { id = n } ) blockNames in
+
+    recursive let replaceBBlockWithIndex = lam expr: CExpr.
+      match expr with CEBBlockName { name = name } then
+        match index (nameEq name) blockNames with Some i then CEInt { i = i }
+        else error "Could not find block in replaceBBlockWithIndex"
+      else smap_CExpr_CExpr replaceBBlockWithIndex expr
+    in
+
+    let tops = map (smap_CTop_CExpr replaceBBlockWithIndex) tops in
+
     let indent = 0 in
     let includes = map (lam inc. join ["#include ", inc]) includes in
     let addName = lam env. lam name.
       match pprintAddStr env name with Some env then env
-      else error (join ["Duplicate name in printCProg: ", nameGetStr name])
+      else error (join ["Duplicate name in printRPProg: ", nameGetStr name])
     in
     let env = foldl addName pprintEnvEmpty nameInit in
-    match mapAccumL (printCTop indent) env tops with (env,tops) then
-      strJoin (pprintNewline indent) (join [includes, tops])
+    let nameProgState = nameSym "progState_t" in
+    let env = foldl addName env [nameProgState] in
+
+    let progState = CTTyDef { ty = pStateTy, id = nameProgState } in
+
+    match printCTop indent env progState with (env,progState) then
+      match mapAccumL (printCTop indent) env types with (env,types) then
+        match mapAccumL (printCTop indent) env blockDecls
+        with (env,blockDecls) then
+          match mapAccumL (printCTop indent) env tops with (env,tops) then
+            match mapAccumL pprintEnvGetStr env blockNames
+            with (env, blockNames) then
+              strJoin (pprintNewline indent) (join [
+                includes,
+                types,
+                [ progState
+                , join [ "INIT_MODEL(progState_t,"
+                       , int2string (length blockNames)
+                       , ")"
+                       ]
+                ],
+                blockDecls,
+                tops,
+                [ "MAIN({"
+                , strJoin "\n"
+                    (map (lam s. join ["  ADD_BBLOCK(", s ,");"]) blockNames)
+                , "  SMC(NULL);"
+                , "})"
+                ]
+              ])
+            else never
+          else never
+        else never
+      else never
     else never
 
 

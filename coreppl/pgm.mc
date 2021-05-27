@@ -15,6 +15,9 @@ lang PlateAst
   sem infoTm =
   | TmPlate t -> t.info
 
+  sem withInfo (info: Info) =
+  | TmPlate t -> TmPlate { t with info = info }
+
   sem withType (ty : Type) =
   | TmPlate t -> TmPlate {t with ty=ty}
 
