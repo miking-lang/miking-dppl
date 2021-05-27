@@ -47,6 +47,9 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
   sem ty =
   | TmResample t -> t.ty
 
+  sem withInfo (info: Info) =
+  | TmResample t -> TmResample { t with info = info }
+
   sem withType (ty: Type) =
   | TmResample t -> TmResample { t with ty = ty }
 
@@ -75,7 +78,7 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
 
   -- Type annotate
   sem typeAnnotExpr (env: TypeEnv) =
-  | TmResample t -> TmResample { t with ty = tyunit_ }
+  | TmResample t -> TmResample { t with ty = tyWithInfo t.info tyunit_ }
 
   -- ANF
   sem isValue =

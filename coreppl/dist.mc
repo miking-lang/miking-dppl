@@ -30,6 +30,9 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem ty =
   | TmDist t -> t.ty
 
+  sem withInfo (info: Info) =
+  | TmDist t -> TmDist { t with info = info }
+
   sem withType (ty: Type) =
   | TmDist t -> TmDist { t with ty = ty }
 
@@ -44,6 +47,12 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
 
   sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
   | TmDist t -> sfoldDist_Expr_Expr f acc t.dist
+
+  sem tyWithInfo (info : Info) =
+  | TyDist t -> TyDist {t with info = info}
+
+  sem smap_Type_Type (f: Type -> a) =
+  | TyDist t -> TyDist { t with ty = f t.ty }
 
   -- Pretty printing
   sem isAtomic =
@@ -180,7 +189,7 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     let err = lam. infoErrorExit info "Type error uniform" in
     match ty t.a with TyFloat _ then
       match ty t.b with TyFloat _ then
-        TyFloat { info = NoInfo () }
+        TyFloat { info = info }
       else err ()
     else err ()
 
@@ -241,7 +250,7 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBernoulli t ->
-    match ty t.p with TyFloat _ then TyBool { info = NoInfo () }
+    match ty t.p with TyFloat _ then TyBool { info = info }
     else infoErrorExit info "Type error bern"
 
   -- ANF
@@ -295,7 +304,7 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DPoisson t ->
-    match ty t.lambda with TyFloat _ then TyInt { info = NoInfo () }
+    match ty t.lambda with TyFloat _ then TyInt { info = info }
     else infoErrorExit info "Type error Poisson"
 
   -- ANF
@@ -359,7 +368,7 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     let err = lam. infoErrorExit info "Type error beta" in
     match ty t.a with TyFloat _ then
       match ty t.b with TyFloat _ then
-        TyFloat { info = NoInfo () }
+        TyFloat { info = info }
       else err ()
     else err ()
 
@@ -428,7 +437,7 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     let err = lam. infoErrorExit info "Type error Gamma" in
     match ty t.k with TyFloat _ then
       match ty t.theta with TyFloat _ then
-        TyFloat { info = NoInfo () }
+        TyFloat { info = info }
       else err ()
     else err ()
 
@@ -497,7 +506,7 @@ lang CategoricalDist =
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DCategorical t ->
-    match ty t.p with TySeq { ty = TyFloat _ } then TyInt { info = NoInfo () }
+    match ty t.p with TySeq { ty = TyFloat _ } then TyInt { info = info }
     else infoErrorExit info "Type error categorical"
 
   -- ANF
@@ -561,7 +570,7 @@ lang MultinomialDist =
     let err = lam. infoErrorExit info "Type error multinomial" in
     match ty t.n with TyInt _ then
       match ty t.p with TySeq { ty = TyFloat _ } then
-        TySeq { ty = TyInt { info = NoInfo () }, info = NoInfo () }
+        TySeq { ty = TyInt { info = info }, info = info }
       else err ()
     else err ()
 
@@ -623,7 +632,7 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DDirichlet t ->
     match ty t.a with TySeq { ty = TyFloat _ } then
-      TySeq { info = NoInfo (), ty = TyFloat { info = NoInfo () } }
+      TySeq { info = info, ty = TyFloat { info = info } }
     else infoErrorExit info "Type error dirichlet"
 
   -- ANF
@@ -673,7 +682,7 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DExponential t ->
-    match ty t.rate with TyFloat _ then TyFloat { info = NoInfo () }
+    match ty t.rate with TyFloat _ then TyFloat { info = info }
     else infoErrorExit info "Type error exponential"
 
   -- ANF

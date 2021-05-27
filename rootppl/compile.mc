@@ -940,16 +940,28 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
   -- Symbolize with empty environment
   let prog: Expr = symbolizeExpr symEnvEmpty prog in
 
+  -- print "--- AFTER SYMBOLIZE ---\n";
+  -- dprint prog; print "\n\n";
+
   -- Find global non-function definitions
   let globals: [Name] = findGlobalNames prog in
+
+  -- print "--- AFTER FIND GLOBALS ---\n";
+  -- dprint prog; print "\n\n";
 
   -- dprint globals; print "\n\n";
 
   -- Type annotate
   let prog: Expr = typeAnnot prog in
 
+  -- print "--- AFTER TYPE ANNOTATE ---\n";
+  -- dprint prog; print "\n\n";
+
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
+
+  -- print "--- AFTER ANF ---\n";
+  -- dprint prog; print "\n\n";
 
   -- Type lift
   match typeLift prog with (env, prog) then
