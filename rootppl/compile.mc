@@ -57,6 +57,11 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | DExponential { rate = rate } -> CDExp { rate = compileExpr rate }
   | DEmpirical { samples = samples } ->
     CDEmpirical { samples = compileExpr samples }
+  | DUniform { a = a, b = b } ->
+    CDUniform { a = compileExpr a, b = compileExpr b }
+  | DPoisson { lambda = lambda } -> CDPoisson { lambda = compileExpr lambda }
+  | DGamma { k = k, theta = theta } ->
+    CDGamma { k = compileExpr k, theta = compileExpr theta}
 
   -- Extensions
   sem compileExpr =
@@ -89,7 +94,13 @@ end
 let printCompiledRPProg = use MExprPPLRootPPLCompile in
   lam rpprog: RPProg.
     -- TODO Should really cCompilerNames be used here?
-    printRPProg cCompilerNames rpprog
+    let keywords = map nameSym [
+      "or",
+      "not",
+      "and",
+      "log"
+    ] in
+    printRPProg (concat keywords cCompilerNames) rpprog
 
 -- Compiler entry point.
 let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
@@ -708,7 +719,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
           -- Remove all function declarations, this is handled separately in any
           -- case.
-          else match top with CTDef { ty = CTyFun _ } then acc
+          else match top with CTDef { ty = CTyFun _ } then
+            error "CTDef should have been removed before splitFunctions"
 
           -- Leave everything else intact
           else {acc with tops = snoc acc.tops top}
@@ -848,6 +860,11 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       {{ initSF with localAllocs = f globals.globalAllocs initSF.localAllocs }
                 with locals = f globals.globals initSF.locals } in
 
+    -- Remove function declarations
+    let tops: [CTop] = foldl (lam acc. lam top.
+      match top with CTDef { ty = CTyFun _ } then acc else snoc acc top
+    ) [] tops in
+
     -- Replace defs
     let tops: [CTop] = map (lam top.
       let sf = topStackFrame top in
@@ -962,6 +979,8 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- print "--- AFTER ANF ---\n";
   -- dprint prog; print "\n\n";
+
+  -- print (expr2str prog); print "\n\n";
 
   -- Type lift
   match typeLift prog with (env, prog) then

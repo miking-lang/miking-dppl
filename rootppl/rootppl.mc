@@ -78,6 +78,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet { a: CExpr }
   | CDExp { rate: CExpr }
   | CDEmpirical { samples: CExpr }
+  | CDUniform { a: CExpr, b: CExpr }
+  | CDPoisson { lambda: CExpr }
+  | CDGamma { k: CExpr, theta: CExpr }
 
   sem sfold_CDist_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CDBern t -> f acc t.p
@@ -87,6 +90,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet t -> f acc t.a
   | CDExp t -> f acc t.rate
   | CDEmpirical t -> f acc t.samples
+  | CDUniform t -> f (f acc t.a) t.b
+  | CDPoisson t -> f acc t.lambda
+  | CDGamma t -> f (f acc t.k) t.theta
 
   sem smap_CDist_CExpr (f: CExpr -> CExpr) =
   | CDBern t -> CDBern { t with p = f t.p }
@@ -96,6 +102,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet t -> CDDirichlet { t with a = f t.a }
   | CDExp t -> CDExp { t with rate = f t.rate }
   | CDEmpirical t -> CDEmpirical { t with samples = f t.samples }
+  | CDUniform t -> CDUniform {{ t with a = f t.a } with b = f t.b }
+  | CDPoisson t -> CDPoisson { t with lambda = f t.lambda }
+  | CDGamma t -> CDGamma {{ t with k = f t.k } with theta = f t.theta }
 
   syn RPProg =
   | RPProg { includes: [String], pStateTy: CType, types: [CTop], tops: [CTop] }
@@ -180,6 +189,25 @@ lang RootPPL = CAst + CPrettyPrint
 
   | CDEmpirical { samples = samples } ->
     error "Empirical distribution cannot be compiled"
+
+  | CDUniform { a = a, b = b } ->
+    match printCExpr env a with (env,a) then
+      match printCExpr env b with (env,b) then
+        (env, strJoin ", " ["uniform", a, b])
+      else never
+    else never
+
+  | CDPoisson { lambda = lambda } ->
+    match printCExpr env lambda with (env,lambda) then
+      (env, strJoin ", " ["poisson", lambda])
+    else never
+
+  | CDGamma { k = k, theta = theta } ->
+    match printCExpr env k with (env,k) then
+      match printCExpr env theta with (env,theta) then
+        (env, strJoin ", " ["gamma", k, theta])
+      else never
+    else never
 
 
   sem printRPProg (nameInit: [Name]) =
