@@ -1,30 +1,33 @@
 -- RootPPL language fragment
 
 include "option.mc"
+include "name.mc"
 include "c/ast.mc"
 include "c/pprint.mc"
+
+--------------
+-- KEYWORDS --
+--------------
+
+-- Explicit handles on certain keywords
+let nameBblocksArr = nameSym "bblocksArr"
+let nameBblockCall = nameSym "BBLOCK_CALL"
+let nameDataPointer = nameSym "DATA_POINTER"
+let nameNull = nameSym "NULL"
+
+let rpKeywords = concat (map nameNoSym [
+  "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "PC", "bernoulli",
+  "beta", "discrete", "multinomial", "dirichlet", "exponential", "uniform",
+  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK"
+]) [
+  nameBblocksArr, nameBblockCall, nameDataPointer, nameNull
+]
 
 lang RootPPL = CAst + CPrettyPrint
 
   --------------------------
   -- AST (based on C AST) --
   --------------------------
-
-  syn CStmt =
-  -- TODO(dlunde,2021-05-25): Args as well to support BBLOCK_HELPER
-  | CSBBlockCall { block: Name }
-
-  sem smap_CStmt_CStmt (f: CStmt -> CStmt) =
-  | CSBBlockCall _ & t -> t
-
-  sem sfold_CStmt_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CSBBlockCall _ & t -> acc
-
-  sem smap_CStmt_CExpr (f: CExpr -> CExpr) =
-  | CSBBlockCall _ & t -> t
-
-  sem sreplace_CStmt_CStmt (f: CStmt -> [CStmt]) =
-  | CSBBlockCall _ & t -> t
 
   syn CTop =
 
@@ -113,12 +116,6 @@ lang RootPPL = CAst + CPrettyPrint
   ---------------------
   -- PRETTY PRINTING --
   ---------------------
-
-  sem printCStmt (indent: Int) (env: PprintEnv) =
-  | CSBBlockCall { block = block } ->
-    match pprintEnvGetStr env block with (env,block) then
-      (env, join ["BBLOCK_CALL(", block, ")"])
-    else never
 
   sem printCTop (indent : Int) (env: PprintEnv) =
   | CTBBlock { id = id, body = body } ->
@@ -234,9 +231,11 @@ lang RootPPL = CAst + CPrettyPrint
       match pprintAddStr env name with Some env then env
       else error (join ["Duplicate name in printRPProg: ", nameGetStr name])
     in
-    let env = foldl addName pprintEnvEmpty nameInit in
+    let env = foldl addName pprintEnvEmpty rpKeywords in
+    let env = foldl addName env (map nameNoSym cKeywords) in
     let nameProgState = nameSym "progState_t" in
-    let env = foldl addName env [nameProgState] in
+    let env = addName env nameProgState in
+    let env = foldl addName env nameInit in
 
     let progState = CTTyDef { ty = pStateTy, id = nameProgState } in
 
