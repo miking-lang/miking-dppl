@@ -14,6 +14,7 @@ let nameBblocksArr = nameSym "bblocksArr"
 let nameBblockCall = nameSym "BBLOCK_CALL"
 let nameDataPointer = nameSym "DATA_POINTER"
 let nameNull = nameSym "NULL"
+let nameUIntPtr = nameSym "uintptr_t"
 
 let rpKeywords = concat (map nameNoSym [
   "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "PC", "bernoulli",
