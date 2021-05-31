@@ -53,6 +53,13 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockDecl _ & t -> t
   | CTBBlock t -> CTBBlock { t with body = join (map f t.body) }
 
+  sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
+  | CTBBlockData _ -> acc
+  | CTBBlockHelperDecl _ -> acc
+  | CTBBlockHelper t -> foldl f acc t.body
+  | CTBBlockDecl _ -> acc
+  | CTBBlock t -> foldl f acc t.body
+
   syn CExpr =
   | CEBBlockName { name: Name } -- Block names (will be replace by indices when printing)
   | CESample { dist: CDist }
