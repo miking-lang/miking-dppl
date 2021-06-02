@@ -15,13 +15,15 @@ let nameBblockCall = nameSym "BBLOCK_CALL"
 let nameDataPointer = nameSym "DATA_POINTER"
 let nameNull = nameSym "NULL"
 let nameUIntPtr = nameSym "uintptr_t"
+let nameProgState = nameSym "progState_t"
 
 let rpKeywords = concat (map nameNoSym [
   "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "PC", "bernoulli",
   "beta", "discrete", "multinomial", "dirichlet", "exponential", "uniform",
-  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK"
+  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK", "particleIdx"
 ]) [
-  nameBblocksArr, nameBblockCall, nameDataPointer, nameNull
+  nameBblocksArr, nameBblockCall, nameDataPointer, nameNull, nameUIntPtr,
+  nameProgState
 ]
 
 lang RootPPL = CAst + CPrettyPrint
@@ -43,8 +45,10 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockDecl { id : Name }
   | CTBBlock { id: Name, body: [Stmt] }
 
+
   sem smap_CTop_CExpr (f: CExpr -> CExpr) =
   | CTBBlock t -> CTBBlock { t with body = map (smap_CStmt_CExpr f) t.body }
+
 
   sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
   | CTBBlockData _ & t -> t
@@ -53,12 +57,14 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockDecl _ & t -> t
   | CTBBlock t -> CTBBlock { t with body = join (map f t.body) }
 
+
   sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
   | CTBBlockData _ -> acc
   | CTBBlockHelperDecl _ -> acc
   | CTBBlockHelper t -> foldl f acc t.body
   | CTBBlockDecl _ -> acc
   | CTBBlock t -> foldl f acc t.body
+
 
   syn CExpr =
   | CEBBlockName { name: Name } -- Block names (will be replace by indices when printing)
@@ -67,6 +73,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CEPState {}
   | CEPC {}
 
+
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CEBBlockName _ -> acc
   | CESample t -> sfold_CDist_CExpr f acc t.dist
@@ -74,12 +81,14 @@ lang RootPPL = CAst + CPrettyPrint
   | CEPState _ -> acc
   | CEPC _ -> acc
 
+
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
   | CEBBlockName _ & t -> t
   | CESample t -> CESample { t with dist = smap_CDist_CExpr f t.dist }
   | CEWeight t -> CEWeight { t with weight = f t.weight }
   | CEPState _ & t -> t
   | CEPC _ & t -> t
+
 
   syn CDist =
   | CDBern { p: CExpr }
@@ -93,6 +102,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDPoisson { lambda: CExpr }
   | CDGamma { k: CExpr, theta: CExpr }
 
+
   sem sfold_CDist_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CDBern t -> f acc t.p
   | CDBeta t -> f (f acc t.a) t.b
@@ -104,6 +114,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDUniform t -> f (f acc t.a) t.b
   | CDPoisson t -> f acc t.lambda
   | CDGamma t -> f (f acc t.k) t.theta
+
 
   sem smap_CDist_CExpr (f: CExpr -> CExpr) =
   | CDBern t -> CDBern { t with p = f t.p }
@@ -117,6 +128,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDPoisson t -> CDPoisson { t with lambda = f t.lambda }
   | CDGamma t -> CDGamma {{ t with k = f t.k } with theta = f t.theta }
 
+
   syn RPProg =
   | RPProg { includes: [String], pStateTy: CType, types: [CTop], tops: [CTop] }
 
@@ -126,6 +138,7 @@ lang RootPPL = CAst + CPrettyPrint
   ---------------------
 
   sem printCTop (indent : Int) (env: PprintEnv) =
+
   | CTBBlock { id = id, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
@@ -136,28 +149,37 @@ lang RootPPL = CAst + CPrettyPrint
         ])
       else never
     else never
+
   | CTBBlockDecl { id = id } ->
     match pprintEnvGetStr env id with (env,id) then
       (env, join [ "BBLOCK_DECLARE(", id, ");" ])
     else never
 
+
   sem printCExpr (env: PprintEnv) =
+
   | CEBBlockName { name = name } ->
     match pprintEnvGetStr env name with (env,name) then
       (env, join ["###", name, "###"])
     else never
+
   | CESample { dist = dist } ->
     match printCDist env dist with (env,dist) then
       (env, _par (join ["SAMPLE(", dist, ")"]))
     else never
+
   | CEWeight { weight = weight } ->
     match printCExpr env weight with (env,weight) then
       (env, _par (join ["WEIGHT(", weight, ")"]))
     else never
+
   | CEPState {} -> (env, "PSTATE")
+
   | CEPC _ -> (env, "PC")
 
+
   sem printCDist (env: PprintEnv) =
+
   | CDBern { p = p } ->
     match printCExpr env p with (env,p) then
       (env, strJoin ", " ["bernoulli", p])
@@ -241,8 +263,6 @@ lang RootPPL = CAst + CPrettyPrint
     in
     let env = foldl addName pprintEnvEmpty rpKeywords in
     let env = foldl addName env (map nameNoSym cKeywords) in
-    let nameProgState = nameSym "progState_t" in
-    let env = addName env nameProgState in
     let env = foldl addName env nameInit in
 
     let progState = CTTyDef { ty = pStateTy, id = nameProgState } in
@@ -277,8 +297,6 @@ lang RootPPL = CAst + CPrettyPrint
         else never
       else never
     else never
-
-
 end
 
 mexpr
