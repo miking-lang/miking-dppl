@@ -6,7 +6,7 @@ include "coreppl.mc"
 
 
 
-lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
+lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + KeywordMaker
 
   -- Keyword maker
   sem isKeyword =
@@ -26,6 +26,8 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
   | "weight" -> Some (1, lam lst. TmWeight {weight = get lst 0,
                                             ty = TyUnknown {info = info},
                                             info = info})
+  | "resample" -> Some (0, lam lst. TmResample {ty = TyUnknown {info = info},
+                                                info = info})
   | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
                                            ty = TyUnknown {info = info},
                                            info = info})
@@ -59,7 +61,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPL + KeywordMaker
 end
 
 let keywords =
-["assume", "observe", "weight",
+["assume", "observe", "weight", "resample",
  "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
  "Multinomial", "Dirichlet", "Exponential", "Empirical"]
 

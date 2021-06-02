@@ -1,30 +1,34 @@
 -- RootPPL language fragment
 
 include "option.mc"
+include "name.mc"
 include "c/ast.mc"
 include "c/pprint.mc"
+
+--------------
+-- KEYWORDS --
+--------------
+
+-- Explicit handles on certain keywords
+let nameBblocksArr = nameSym "bblocksArr"
+let nameBblockCall = nameSym "BBLOCK_CALL"
+let nameDataPointer = nameSym "DATA_POINTER"
+let nameNull = nameSym "NULL"
+let nameUIntPtr = nameSym "uintptr_t"
+
+let rpKeywords = concat (map nameNoSym [
+  "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "PC", "bernoulli",
+  "beta", "discrete", "multinomial", "dirichlet", "exponential", "uniform",
+  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK"
+]) [
+  nameBblocksArr, nameBblockCall, nameDataPointer, nameNull
+]
 
 lang RootPPL = CAst + CPrettyPrint
 
   --------------------------
   -- AST (based on C AST) --
   --------------------------
-
-  syn CStmt =
-  -- TODO(dlunde,2021-05-25): Args as well to support BBLOCK_HELPER
-  | CSBBlockCall { block: Name }
-
-  sem smap_CStmt_CStmt (f: CStmt -> CStmt) =
-  | CSBBlockCall _ & t -> t
-
-  sem sfold_CStmt_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CSBBlockCall _ & t -> acc
-
-  sem smap_CStmt_CExpr (f: CExpr -> CExpr) =
-  | CSBBlockCall _ & t -> t
-
-  sem sreplace_CStmt_CStmt (f: CStmt -> [CStmt]) =
-  | CSBBlockCall _ & t -> t
 
   syn CTop =
 
@@ -48,6 +52,13 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockHelper t -> CTBBlockHelper { t with body = join (map f t.body) }
   | CTBBlockDecl _ & t -> t
   | CTBBlock t -> CTBBlock { t with body = join (map f t.body) }
+
+  sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
+  | CTBBlockData _ -> acc
+  | CTBBlockHelperDecl _ -> acc
+  | CTBBlockHelper t -> foldl f acc t.body
+  | CTBBlockDecl _ -> acc
+  | CTBBlock t -> foldl f acc t.body
 
   syn CExpr =
   | CEBBlockName { name: Name } -- Block names (will be replace by indices when printing)
@@ -78,6 +89,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet { a: CExpr }
   | CDExp { rate: CExpr }
   | CDEmpirical { samples: CExpr }
+  | CDUniform { a: CExpr, b: CExpr }
+  | CDPoisson { lambda: CExpr }
+  | CDGamma { k: CExpr, theta: CExpr }
 
   sem sfold_CDist_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CDBern t -> f acc t.p
@@ -87,6 +101,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet t -> f acc t.a
   | CDExp t -> f acc t.rate
   | CDEmpirical t -> f acc t.samples
+  | CDUniform t -> f (f acc t.a) t.b
+  | CDPoisson t -> f acc t.lambda
+  | CDGamma t -> f (f acc t.k) t.theta
 
   sem smap_CDist_CExpr (f: CExpr -> CExpr) =
   | CDBern t -> CDBern { t with p = f t.p }
@@ -96,6 +113,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CDDirichlet t -> CDDirichlet { t with a = f t.a }
   | CDExp t -> CDExp { t with rate = f t.rate }
   | CDEmpirical t -> CDEmpirical { t with samples = f t.samples }
+  | CDUniform t -> CDUniform {{ t with a = f t.a } with b = f t.b }
+  | CDPoisson t -> CDPoisson { t with lambda = f t.lambda }
+  | CDGamma t -> CDGamma {{ t with k = f t.k } with theta = f t.theta }
 
   syn RPProg =
   | RPProg { includes: [String], pStateTy: CType, types: [CTop], tops: [CTop] }
@@ -104,12 +124,6 @@ lang RootPPL = CAst + CPrettyPrint
   ---------------------
   -- PRETTY PRINTING --
   ---------------------
-
-  sem printCStmt (indent: Int) (env: PprintEnv) =
-  | CSBBlockCall { block = block } ->
-    match pprintEnvGetStr env block with (env,block) then
-      (env, join ["BBLOCK_CALL(", block, ")"])
-    else never
 
   sem printCTop (indent : Int) (env: PprintEnv) =
   | CTBBlock { id = id, body = body } ->
@@ -181,6 +195,25 @@ lang RootPPL = CAst + CPrettyPrint
   | CDEmpirical { samples = samples } ->
     error "Empirical distribution cannot be compiled"
 
+  | CDUniform { a = a, b = b } ->
+    match printCExpr env a with (env,a) then
+      match printCExpr env b with (env,b) then
+        (env, strJoin ", " ["uniform", a, b])
+      else never
+    else never
+
+  | CDPoisson { lambda = lambda } ->
+    match printCExpr env lambda with (env,lambda) then
+      (env, strJoin ", " ["poisson", lambda])
+    else never
+
+  | CDGamma { k = k, theta = theta } ->
+    match printCExpr env k with (env,k) then
+      match printCExpr env theta with (env,theta) then
+        (env, strJoin ", " ["gamma", k, theta])
+      else never
+    else never
+
 
   sem printRPProg (nameInit: [Name]) =
   | RPProg { includes = includes, pStateTy = pStateTy, types = types, tops = tops } ->
@@ -206,9 +239,11 @@ lang RootPPL = CAst + CPrettyPrint
       match pprintAddStr env name with Some env then env
       else error (join ["Duplicate name in printRPProg: ", nameGetStr name])
     in
-    let env = foldl addName pprintEnvEmpty nameInit in
+    let env = foldl addName pprintEnvEmpty rpKeywords in
+    let env = foldl addName env (map nameNoSym cKeywords) in
     let nameProgState = nameSym "progState_t" in
-    let env = foldl addName env [nameProgState] in
+    let env = addName env nameProgState in
+    let env = foldl addName env nameInit in
 
     let progState = CTTyDef { ty = pStateTy, id = nameProgState } in
 
