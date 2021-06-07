@@ -9,6 +9,7 @@ include "mexpr/ast-builder.mc"
 
 include "assoc-seq.mc"
 include "name.mc"
+include "map.mc"
 
 include "c/ast.mc"
 include "c/pprint.mc"
@@ -47,28 +48,30 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
       dist
 
   -- Extensions
-  sem compileDist =
-  | DBernoulli { p = p } -> CDBern { p = compileExpr p }
-  | DBeta { a = a, b = b } -> CDBeta { a = compileExpr a, b = compileExpr b }
-  | DCategorical { p = p } -> CDCategorical { p = compileExpr p }
+  sem compileDist (env: CompileCEnv) =
+  | DBernoulli { p = p } -> CDBern { p = compileExpr env p }
+  | DBeta { a = a, b = b } ->
+    CDBeta { a = compileExpr env a, b = compileExpr env b }
+  | DCategorical { p = p } -> CDCategorical { p = compileExpr env p }
   | DMultinomial { n = n, p = p } ->
-    CDMultinomial { n = compileExpr n, p = compileExpr p }
-  | DDirichlet { a = a } -> CDDirichlet { a = compileExpr a }
-  | DExponential { rate = rate } -> CDExp { rate = compileExpr rate }
+    CDMultinomial { n = compileExpr env n, p = compileExpr env p }
+  | DDirichlet { a = a } -> CDDirichlet { a = compileExpr env a }
+  | DExponential { rate = rate } -> CDExp { rate = compileExpr env rate }
   | DEmpirical { samples = samples } ->
-    CDEmpirical { samples = compileExpr samples }
+    CDEmpirical { samples = compileExpr env samples }
   | DUniform { a = a, b = b } ->
-    CDUniform { a = compileExpr a, b = compileExpr b }
-  | DPoisson { lambda = lambda } -> CDPoisson { lambda = compileExpr lambda }
+    CDUniform { a = compileExpr env a, b = compileExpr env b }
+  | DPoisson { lambda = lambda } ->
+    CDPoisson { lambda = compileExpr env lambda }
   | DGamma { k = k, theta = theta } ->
-    CDGamma { k = compileExpr k, theta = compileExpr theta}
+    CDGamma { k = compileExpr env k, theta = compileExpr env theta}
 
   -- Extensions
-  sem compileExpr =
+  sem compileExpr (env: CompileCEnv) =
   | TmAssume _ -> error "Assume without direct distribution"
   | TmAssume { dist = TmDist { dist = dist }} ->
-    CESample { dist = compileDist dist }
-  | TmWeight { weight = weight } -> CEWeight { weight = compileExpr weight }
+    CESample { dist = compileDist env dist }
+  | TmWeight { weight = weight } -> CEWeight { weight = compileExpr env weight }
   | TmResample _ -> CEResample {}
 
   -- Allocation
@@ -91,7 +94,8 @@ end
 -- ROOTPPL COMPILER --
 ----------------------
 
-let printCompiledRPProg = use MExprPPLRootPPLCompile in
+-- Generate code for compiled RootPPL AST
+let printCompiledRPProg: RPProg -> String = use MExprPPLRootPPLCompile in
   lam rpprog: RPProg.
     printRPProg cCompilerNames rpprog
 
@@ -107,7 +111,7 @@ let nameStackPtr = nameSym "stackPtr"
 let nameRet = nameSym "ret"
 let nameGlobalTy = nameSym "GLOBAL"
 
--- Compiler entry point.
+-- RootPPL compile function
 let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
   use MExprPPLRootPPLCompile in
   lam typeEnv: [(Name,Type)].
@@ -115,8 +119,49 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
   lam prog: Expr.
 
     -------------------------
-    -- COMPONENT FUNCTIONS --
+    -- RUN BASE C COMPILER --
     -------------------------
+
+    match compile typeEnv prog with (env, types, tops, inits) then
+
+    ------------------------
+    -- COMMON DEFINITIONS --
+    ------------------------
+
+    -- Set of externals used in the program
+    let externals = mapValues env.externals in
+
+    -- Function indicating which functions are free of resamples
+    let resampleFree: Name -> Bool = lam n.
+      if any (nameEq n) externals then true
+      else false -- This is too conservative
+    in
+
+
+    -- Extract the name and type from a definition, or recurse further.
+    recursive let extractDef: Map Name Type -> CStmt -> Map Name Type =
+      lam map. lam stmt.
+        match stmt with CSDef { ty = ty, id = Some id } then
+          mapInsert id ty map
+        else sfold_CStmt_CStmt extractDef map stmt
+    in
+
+    -- Map from all names to their C types
+    let defMap: Map Name CType =
+      let m = mapEmpty nameCmp in
+      let m = foldl (lam m. lam top.
+        let m = match top with CTFun { params = params } then
+                    foldl (lam m. lam t. mapInsert t.1 t.0 m) m params
+                  else m in
+        sfold_CTop_CStmt extractDef m top
+      ) m tops in
+      let m = foldl extractDef m inits in
+      m
+    in
+
+    ----------------------------
+    -- DETERMINE STACK FRAMES --
+    ----------------------------
 
     -- Stackframe type, containing relevant names and types
     type StackFrame = {
@@ -132,28 +177,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       mem = [], ret = ret, params = []
     } in
 
-    -- Convert a [(Name,CType)] to [(CType, Option Name)].
-    let convertMem = map (lam t. (t.1, Some t.0)) in
-
-    -- Convert StackFrame to C struct type
-    let stackFrameToTopTy: StackFrame -> CTop = lam sf.
-      let mem = convertMem sf.mem in
-      CTDef {
-        ty = CTyStruct {
-          id = Some sf.id,
-          mem = Some (join [
-            [(CTyInt {}, Some nameRetAddr)],
-            match sf.ret with ! CTyVoid _ then
-              [(CTyPtr { ty = sf.ret }, Some nameRetLoc)]
-            else [],
-            mem
-          ])
-        },
-        id = None (),
-        init = None ()
-      }
-    in
-
     -- Accumulator used when determining stack frames
     type AccStackFrames = {
       -- Current stack frame
@@ -166,6 +189,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       hasSplit: Bool
     } in
 
+    -- Empty accumulator
     let emptyAccSF: StackFrame -> AccStackFrames = lam sf: StackFrame.
       { sf = sf, defs = [], prevDefs = [], hasSplit = false }
     in
@@ -204,9 +228,9 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               with hasSplit = true }
     in
 
-    -- Given an initial accumulator (see above), get the locals used in a
+    -- Given an initial accumulator (see above), find the locals used in a
     -- function (= list of statements)
-    recursive let getLocals: AccStackFrames -> [CStmt] -> AccStackFrames =
+    recursive let findLocals: AccStackFrames -> [CStmt] -> AccStackFrames =
       lam acc: AccStackFrames. lam stmts: [CStmt].
         let acc = {acc with hasSplit = false} in
         foldl (lam acc: AccStackFrames. lam stmt: Stmt.
@@ -237,16 +261,20 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             else error "Unsupported term when adding locals"
           in
 
-          -- Block split
-          match stmt with CSDef  { init = Some (CIExpr { expr = CEApp _ }) }
-                        | CSExpr { expr = CEApp _ }
-                        | CSExpr { expr = CEResample _ } then
+          -- Block split on applications
+          match stmt with CSDef { init = Some (CIExpr { expr = CEApp app }) }
+                        | CSExpr { expr = CEApp app } then
+            if resampleFree app.fun then acc
+            else nextBBlock acc
+
+          -- Block split on resample
+          else match stmt with CSExpr { expr = CEResample _ } then
             nextBBlock acc
 
           -- If statement, requires special handling
           else match stmt with CSIf { thn = thn, els = els } then
-            let accThn = getLocals acc thn in
-            let accEls = getLocals {acc with sf = accThn.sf} els in
+            let accThn = findLocals acc thn in
+            let accEls = findLocals {acc with sf = accThn.sf} els in
             let acc = {acc with sf = accEls.sf} in
             if or (accThn.hasSplit) (accEls.hasSplit) then nextBBlock acc
             else acc
@@ -254,18 +282,19 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           -- Rest
           else match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then acc
 
-          else error "Unsupported term in getLocals"
+          else error "Unsupported term in findLocals"
 
         ) acc stmts
     in
 
     -- Recurse over all top-level definitions and determine stack frames for
     -- functions
-    let buildStackFrames: [CTop] -> [(Name,StackFrame)] =
-      lam tops: [CTop].
+    let sfs: [(Name,StackFrame)] =
         foldl (lam acc: [(Name,StackFrame)]. lam top: CTop.
           match top
           with CTFun { ret = ret, id = id, params = params, body = body } then
+
+            if resampleFree id then acc else
 
             -- Initialize accumulator for new function
             let sf = {{ newStackFrame id ret with
@@ -275,7 +304,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             let lAcc = emptyAccSF sf in
 
             -- Get locals that traverse BBLOCK boundaries in function
-            let lAcc = getLocals lAcc body in
+            let lAcc = findLocals lAcc body in
 
             -- Record stack frame
             snoc acc (id,lAcc.sf)
@@ -283,13 +312,253 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           else acc) [] tops
     in
 
+    -- Top-level return type
+    let retTy: CType = compileType env (ty prog) in
+
     -- Get stack frame for initialization code
-    let buildInitStackFrame: [CStmt] -> CType -> StackFrame =
-      lam stmts: [CStmt]. lam ret: CType.
-        let sf = newStackFrame nameInit ret in
-        let acc = getLocals (emptyAccSF sf) stmts in
+    let initSF: StackFrame =
+        let sf = newStackFrame nameInit retTy in
+        let acc = findLocals (emptyAccSF sf) inits in
         acc.sf
     in
+
+    -------------------------------------------------------
+    -- FILTER OUT GLOBAL VARIABLES FROM INIT STACK FRAME --
+    -------------------------------------------------------
+
+    -- Retrieve global allocations from a list of C statements
+    let globals: [(Name,Ctype)] =
+        foldl (lam acc: [(Name,CType)]. lam stmt: CStmt.
+
+          -- Global struct allocation
+          match stmt with CSDef {
+            ty = ty,
+            id = Some name,
+            init = Some (CIExpr { expr = CEAlloc {} })
+          } then
+            if any (nameEq name) globalNames then snoc acc (name, tyDeref ty)
+            else acc
+
+          -- Global non-struct allocation
+          else match stmt with CSDef { ty = ty, id = Some name } then
+            if any (nameEq name) globalNames then snoc acc (name,ty)
+            else acc
+
+          else acc
+
+        ) [] inits
+    in
+
+    let f = lam g: [(Name,CType)].
+      filter (lam l. not (any (lam r. nameEq l.0 r.0) g)) in
+    let initSF: StackFrame = { initSF with mem =
+      filter (lam l. not (any (lam r. nameEq l.0 r.0) globals)) initSF.mem
+    } in
+
+    ----------------------------------
+    -- REMOVE FUNCTION DECLARATIONS --
+    ----------------------------------
+
+    let tops: [CTop] = foldl (lam acc. lam top.
+      match top with CTDef { ty = CTyFun _ } then acc else snoc acc top
+    ) [] tops in
+
+
+    -------------------------
+    -- REPLACE DEFINITIONS --
+    -------------------------
+
+    -- Used for removing def statements, since allocation for the corresponding
+    -- variables is handled elsewhere.
+    let replaceDefs: [(Name,CType)] -> CStmt -> [CStmt] =
+      lam locals: [(Name,CType)].
+      lam stmt: CStmt.
+
+        recursive let rec = lam stmt: CStmt.
+
+          -- Always remove cealloc
+          match stmt with CSDef { init = Some (CIExpr { expr = CEAlloc {} }) }
+          then []
+
+          -- Replace def if local or global
+          else match stmt with CSDef { id = Some id, init = init } then
+            let g = any (lam g. nameEq id g.0) globals in
+            let l = any (lam l. nameEq id l.0) locals in
+            if or g l then
+              match init with Some init then
+                match init with CIExpr { expr = expr } then
+                  [CSExpr { expr = CEBinOp {
+                    op = COAssign {},
+                    lhs = CEVar { id = id },
+                    rhs = expr
+                  }}]
+                else match init with None () then
+                  error "Non-CIExpr initializer in replaceDefs"
+                else never
+              else []
+            else [stmt]
+
+          -- Recurse
+          else [sreplace_CStmt_CStmt rec stmt]
+
+        in rec stmt
+    in
+
+    -- Stackframe lookup
+    let getStackFrame: Name -> [(Name,StackFrame)] -> StackFrame =
+      lam id: Name. lam sfs: [(Name,StackFrame)].
+        match assocSeqLookup {eq=nameEq} id sfs with Some sf then sf
+        else error "Stack frame does not exist in getStackFrame"
+    in
+
+    -- Helper function for getting the stack frame of a top.
+    let topStackFrame: CTop -> StackFrame =
+      lam top.
+        let id = match top with CTFun { id = id } then id
+                 else error "Invalid top in topStackFrame" in
+        getStackFrame id sfs
+    in
+
+    -- Replace defs
+    let tops: [CTop] = map (lam top.
+      match top with CTFun { id = id } then
+        let locals = if resampleFree id then [] else (topStackFrame top).mem in
+        sreplace_CTop_CStmt (replaceDefs locals) top
+      else error "Not a CTFun when replacing defs"
+    ) tops in
+    let inits: [CStmt] = join (map (replaceDefs initSF.mem) inits) in
+
+
+    --------------------------
+    -- REPLACE DEREFERENCES --
+    --------------------------
+
+    -- Stack and stack pointer expressions
+    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
+    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
+
+    -- Converts an expression representing an absolute address to a relative
+    -- address.
+    let toRelAddr: CExpr -> CType -> CExpr =
+      lam expr: CExpr. lam ty: CType.
+        CECast {
+          ty = ty,
+          rhs = CEBinOp {
+            op = COSub {},
+            lhs = CECast {
+              ty = CTyPtr { ty = CTyChar {} },
+              rhs = expr
+            },
+            rhs = stack
+          }
+        }
+    in
+
+    -- Converts an expression representing a relative address (with given type)
+    -- to an absolute address.
+    let toAbsAddr: CExpr -> CType -> CExpr = lam expr. lam ty.
+      CECast {
+        ty = ty,
+        rhs = CEBinOp {
+          op = COAdd {},
+          lhs = stack,
+          rhs = CECast {
+            ty = CTyVar { id = nameUIntPtr },
+            rhs = expr
+          }
+        }
+      }
+    in
+
+    -- Convert expressions part of dereferencing to absolute addresses.
+    let replaceDeref: CExpr -> CExpr =
+      lam expr: CExpr.
+        recursive let rec = lam expr: CExpr.
+
+          match expr with CEArrow { lhs = lhs, id = id } then
+
+            match lhs with CEVar { id = lhsId } then
+              let err = lam t. error "Type not found in replaceDeref" in
+              CEArrow {
+                lhs = toAbsAddr lhs (mapFindOrElse err lhsId defMap),
+                id = id
+              }
+            else error "Non-var at LHS of arrow deref"
+
+          else match expr with CEUnOp { op = CODeref _, arg = arg } then
+            error "TODO in replaceDeref?"
+
+          else smap_CExpr_CExpr rec expr
+
+        in rec expr
+    in
+
+    let tops: [CTop] = map (lam top.
+      smap_CTop_CExpr replaceDeref top
+    ) tops in
+    let inits: [CStmt] = map (smap_CStmt_CExpr replaceDeref) inits in
+
+
+    ---------------------------
+    -- REPLACE VARIABLE USES --
+    ---------------------------
+
+    -- Replace variables to refer to the correct location (in globals or
+    -- stackframe)
+    let replaceVar: [(Name,CType)] -> StackFrame -> CExpr -> CExpr =
+      lam locals: [(Name,CType)].
+      lam expr: CExpr.
+        recursive let rec = lam expr: CExpr.
+          match expr with CEVar { id = id } then
+
+            match assocSeqLookup {eq=nameEq} id globals with Some cty then
+              match cty with CTyStruct _ then
+                -- Stored in globals as non-pointer but must be converted to
+                -- relative pointer
+                let abs = CEUnOp { op = COAddrOf {},
+                                   arg = CEArrow {
+                                     lhs = CEVar { id = nameGlobal },
+                                     id = id
+                                   } } in
+                toRelAddr abs (CTyPtr { ty = cty })
+              else
+                -- Stored directly in globals
+                CEArrow { lhs = CEVar { id = nameGlobal }, id = id }
+
+            else match assocSeqLookup {eq=nameEq} id locals with Some cty then
+              match cty with CTyStruct _ then
+                -- Stored in stack frame as non-pointer but must be converted
+                -- to relative pointer
+                let abs = CEUnOp { op = COAddrOf {},
+                                   arg = CEArrow {
+                                     lhs = CEVar { id = nameSF },
+                                     id = id
+                                   } } in
+                toRelAddr abs (CTyPtr { ty = cty })
+
+              else
+                -- Stored directly in stack frame
+                CEArrow { lhs = CEVar { id = nameSF }, id = id }
+
+            -- Leave other variables
+            else expr
+
+          else smap_CExpr_CExpr rec expr
+        in rec expr
+    in
+
+    let tops: [CTop] = map (lam top.
+      match top with CTFun { id = id } then
+        let locals = if resampleFree id then [] else (topStackFrame top).mem in
+        smap_CTop_CExpr (replaceVar locals) top
+      else error "Not a CTFun when replacing var uses"
+    ) tops in
+    let inits: [CStmt] = map (smap_CStmt_CExpr (replaceVar initSF.mem)) inits in
+
+
+    ----------------------------------
+    -- SPLIT FUNCTIONS INTO BBLOCKS --
+    ----------------------------------
 
     -- Type used for indicating what action to take at endpoints.
     -- Collapse => Collapse stack
@@ -307,22 +576,13 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       hasSplit: Bool,
       -- Accumulated block
       block: [CStmt],
-      -- Stack frame for the current function
-      sf: StackFrame,
-      -- Bindings from names to stack frames
-      sfs: [(Name,StackFrame)],
       -- Accumulated set of top-level definitions
       tops: [CTop]
     } in
+
+    -- Empty accumulator
     let emptyAccSplit = lam sfs.
       { next = Collapse (), hasSplit = false, block = [], sfs = sfs, tops = [] }
-    in
-
-    -- Stackframe lookup
-    let getStackFrame: Name -> [(Name,StackFrame)] -> StackFrame =
-      lam id: Name. lam sfs: [(Name,StackFrame)].
-        match assocSeqLookup {eq=nameEq} id sfs with Some sf then sf
-        else error "Stack frame does not exist in getStackFrame"
     in
 
     -- C statement for setting the PC to a name
@@ -335,7 +595,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let setPC: Name -> CExpr = lam name.
       setPCFromExpr (CEBBlockName { name = name })
     in
-
 
     -- Used when reaching endpoints, ensures the accumulator has a name for the
     -- next block.
@@ -376,43 +635,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         }
     in
 
-    -- Stack and stack pointer expressions
-    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
-    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
 
-    -- Converts an expression representing an absolute address to a relative
-    -- address.
-    let toRelAddr: CExpr -> CType -> CExpr =
-      lam expr: CExpr. lam ty: CType.
-        CECast {
-          ty = ty,
-          rhs = CEBinOp {
-            op = COSub {},
-            lhs = CECast {
-              ty = CTyPtr { ty = CTyChar {} },
-              rhs = expr
-            },
-            rhs = stack
-          }
-        }
-    in
-
-    -- Converts an expression representing a relative address (with given type)
-    -- to an absolute address.
-    let toAbsAddr: CExpr -> CType -> CExpr = lam expr. lam ty.
-      CECast {
-        ty = ty,
-        rhs = CEBinOp {
-          op = COAdd {},
-          lhs = stack,
-          rhs = CECast {
-            ty = CTyVar { id = nameUIntPtr },
-            rhs = expr
-          }
-        }
-      }
-    in
-
+    -- Deref shorthand
     let derefExpr: CExpr -> CExpr = lam expr.
       CEUnOp { op = CODeref {}, arg = expr}
     in
@@ -542,7 +766,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     -- Split a function (= list of statements) into BBLOCKs
-    recursive let splitFunBody: AccSplit -> StackFrame -> [CStmt] -> AccSplit =
+    recursive let splitStmts: AccSplit -> StackFrame -> [CStmt] -> AccSplit =
       lam acc: AccSplit. lam sf: StackFrame. lam stmts: [CStmt].
 
         match stmts with [stmt] ++ stmts then
@@ -553,33 +777,36 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
              | CSExpr { expr = CEBinOp { op = COAssign {}, rhs = CEApp app } }
              | CSExpr { expr = CEApp app }
           then
-            let acc = {acc with hasSplit = true} in
-            let funStackFrame = getStackFrame app.fun acc.sfs in
-            match (stmts, acc.next) with ([], Block _) then
-              -- Special handling of this call avoids an empty BBLOCK
-              let acc = initNextName acc in
-              let ra = getNextName acc in
-              let call = constructCallFromStmt funStackFrame stmt
-                           (CEBBlockName { name = ra }) in
-              let block = concat acc.block call in
-              {acc with block = block}
+            if resampleFree app.fun then
+              splitStmts {acc with block = snoc acc.block stmt} sf stmts
             else
-              -- CASE: Not last statement, but end of block
-              let accNext = {acc with block = []} in
-              let accNext = splitFunBody accNext sf stmts in
-              let ra = nameSym "bblock" in
-              let accNext = createBlock sf ra accNext in
+              let acc = {acc with hasSplit = true} in
+              let funStackFrame = getStackFrame app.fun sfs in
+              match (stmts, acc.next) with ([], Block _) then
+                -- Special handling of this call avoids an empty BBLOCK
+                let acc = initNextName acc in
+                let ra = getNextName acc in
+                let call = constructCallFromStmt funStackFrame stmt
+                             (CEBBlockName { name = ra }) in
+                let block = concat acc.block call in
+                {acc with block = block}
+              else
+                -- Not last statement, but end of block
+                let accNext = {acc with block = []} in
+                let accNext = splitStmts accNext sf stmts in
+                let ra = nameSym "bblock" in
+                let accNext = createBlock sf ra accNext in
 
-              let call = constructCallFromStmt funStackFrame stmt
-                           (CEBBlockName { name = ra }) in
-              let block = concat acc.block call in
-              {accNext with block = block}
+                let call = constructCallFromStmt funStackFrame stmt
+                             (CEBBlockName { name = ra }) in
+                let block = concat acc.block call in
+                {accNext with block = block}
 
           -- Resample
           else match stmt with CSExpr { expr = CEResample _ } then
             let acc = {acc with hasSplit = true} in
             match stmts with [] then
-              -- CASE: Resample as last statment _and_ end of block
+              -- Resample as last statment _and_ end of block
               match acc.next with Collapse _ then
                 let collapse = decrementStackPtr sf in
                 let block = snoc acc.block collapse in
@@ -598,7 +825,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             else
               -- CASE: Not last statement, but end of block
               let accNext = {acc with block = []} in
-              let accNext = splitFunBody accNext sf stmts in
+              let accNext = splitStmts accNext sf stmts in
               let name = nameSym "bblock" in
               let accNext = createBlock sf name accNext in
               -- Simply set PC to next block
@@ -614,28 +841,28 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 derefExpr (toAbsAddr expr (CTyPtr { ty = sf.ret })),
               rhs = val
             }}
-            in splitFunBody {acc with block = snoc acc.block stmt} sf stmts
+            in splitStmts {acc with block = snoc acc.block stmt} sf stmts
 
           -- Not a function application, resample, or return. Just accumulate
           -- and continue
           else match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then
-            splitFunBody {acc with block = snoc acc.block stmt} sf stmts
+            splitStmts {acc with block = snoc acc.block stmt} sf stmts
 
           -- If statement
           else match stmt with CSIf { cond = cond, thn = thn, els = els } then
             let next = match stmts with [] then acc.next else Block (None ()) in
-            let accThn = splitFunBody {{{acc with block = []}
-                                             with hasSplit = false}
-                                             with next = next} sf thn in
-            let accEls = splitFunBody {{accThn with block = []}
-                                               with hasSplit = false} sf els in
+            let accThn = splitStmts {{{acc with block = []}
+                                           with hasSplit = false}
+                                           with next = next} sf thn in
+            let accEls = splitStmts {{accThn with block = []}
+                                             with hasSplit = false} sf els in
 
             -- No split in branches, just continue
             if and (not accThn.hasSplit) (not accEls.hasSplit) then
               let stmt =
                 CSIf { cond = cond, thn = accThn.block, els = accEls.block }
               in
-              splitFunBody {acc with block = snoc acc.block stmt} sf stmts
+              splitStmts {acc with block = snoc acc.block stmt} sf stmts
 
             -- At least one split in branches
             else
@@ -657,12 +884,12 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               match stmts with [] then {accStmts with block = block}
               else
                 let accStmts = {accStmts with block = []} in
-                let accStmts = splitFunBody accStmts sf stmts in
+                let accStmts = splitStmts accStmts sf stmts in
                 let name = getNextName accEls in
                 let accStmts = createBlock sf name accStmts in
                 {accStmts with block = block}
 
-          else error "Not supported in splitFunBody"
+          else error "Not supported in splitStmts"
 
         -- End of block without split
         else match stmts with [] then
@@ -691,22 +918,12 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let splitFunction: AccSplit -> CTop -> AccSplit =
       lam acc: AccSplit. lam top: CTop.
         match top with CTFun { id = id, body = body } then
-          let sf = (getStackFrame id acc.sfs) in
+          let sf = (getStackFrame id sfs) in
           let acc = {{ acc with next = Collapse ()}
                            with block = []} in
-          let acc = splitFunBody acc sf body in
+          let acc = splitStmts acc sf body in
           createBlock sf id acc
         else error "Non-CTFun in splitFunction"
-    in
-
-    -- Split the init function
-    let splitInit: AccSplit -> StackFrame -> [CStmt] -> [CTop] =
-      lam acc: AccSplit. lam sf: StackFrame. lam stmts: [CStmt].
-        let acc = {{ acc with next = Collapse ()}
-                         with block = []} in
-        let acc = splitFunBody acc sf stmts in
-        match createBlock sf nameInit acc with { tops = tops } then tops
-        else never
     in
 
     -- Iterate over top-level definitions and split functions into BBLOCKs
@@ -717,7 +934,9 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         foldl (lam acc: AccSplit. lam top: CTop.
 
           -- Split functions
-          match top with CTFun _ then splitFunction acc top
+          match top with CTFun { id = id } then
+            if resampleFree id then {acc with tops = snoc acc.tops top}
+            else splitFunction acc top
 
           -- Remove all function declarations, this is handled separately in any
           -- case.
@@ -726,221 +945,35 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
           -- Leave everything else intact
           else {acc with tops = snoc acc.tops top}
+
         ) acc tops
     in
 
-    -- Type for names with global scope
-    type Globals = [(Name,Ctype)] in
-
-    -- Retrieve global allocations from a list of C statements
-    let findGlobals: [Name] -> [CStmt] -> Globals =
-      lam names: [Name].
-      lam stmts: [CStmt].
-        foldl (lam acc: Globals. lam stmt: CStmt.
-
-          -- Global struct allocation
-          match stmt with CSDef {
-            ty = ty,
-            id = Some name,
-            init = Some (CIExpr { expr = CEAlloc {} })
-          } then
-            if any (nameEq name) names then snoc acc (name, tyDeref ty)
-            else acc
-
-          -- Global non-struct allocation
-          else match stmt with CSDef { ty = ty, id = Some name } then
-            if any (nameEq name) names then snoc acc (name,ty)
-            else acc
-
-          else acc
-
-        ) [] stmts
+    -- Split the init function
+    let splitInit: AccSplit -> StackFrame -> [CStmt] -> [CTop] =
+      lam acc: AccSplit. lam sf: StackFrame. lam stmts: [CStmt].
+        let acc = {{ acc with next = Collapse ()}
+                         with block = []} in
+        let acc = splitStmts acc sf stmts in
+        match createBlock sf nameInit acc with { tops = tops } then tops
+        else never
     in
-
-    -- Used for removing def statements, since allocation for the corresponding
-    -- variables is handled elswhere.
-    let stripDefs: Globals -> StackFrame -> CStmt -> [CStmt] =
-      lam globals: Globals.
-      lam sf: StackFrame.
-      lam stmt: CStmt.
-
-        recursive let rec = lam stmt: CStmt.
-
-          -- Always remove cealloc
-          match stmt with CSDef { init = Some (CIExpr { expr = CEAlloc {} }) }
-          then []
-
-          -- Replace def if local or global
-          else match stmt with CSDef { id = Some id, init = init } then
-            let g = any (lam g. nameEq id g.0) globals in
-            let l = any (lam l. nameEq id l.0) sf.mem in
-            if or g l then
-              match init with Some init then
-                match init with CIExpr { expr = expr } then
-                  [CSExpr { expr = CEBinOp {
-                    op = COAssign {},
-                    lhs = CEVar { id = id },
-                    rhs = expr
-                  }}]
-                else match init with None () then
-                  error "Non-CIExpr initializer in stripDefs"
-                else never
-              else []
-            else [stmt]
-
-          -- Recurse
-          else [sreplace_CStmt_CStmt rec stmt]
-
-        in rec stmt
-    in
-
-    let replaceDeref: CExpr -> CExpr =
-      lam tyMap: Map Name CType.
-      lam expr: CExpr.
-        recursive let rec = lam expr: CExpr.
-          match expr with CEArrow { lhs = lhs, id = id } then
-            match lhs with CEVar { id = lhsId } then
-              let err = lam. error "Type not found in replaceDeref" in
-              CEArrow {
-                lhs = toAbsAddr lhs (mapFindOrElse err lhsId tyMap),
-                id = id
-              }
-            else error "Non-var at LHS of arrow deref"
-
-          else match expr with CEUnOp { op = CODeref _, arg = arg } then
-            error "TODO in replaceDeref?"
-
-          else smap_CExpr_CExpr rec expr
-        in rec expr
-    in
-
-    let replaceVar: Globals -> StackFrame -> CExpr -> CExpr =
-      lam globals: Globals.
-      lam sf: StackFrame.
-      lam expr: CExpr.
-        recursive let rec = lam expr: CExpr.
-          match expr with CEVar { id = id } then
-
-            match assocSeqLookup {eq=nameEq} id globals with Some cty then
-              match cty with CTyStruct _ then
-                -- Stored in globals as non-pointer but must be converted to
-                -- relative pointer
-                let abs = CEUnOp { op = COAddrOf {},
-                                   arg = CEArrow {
-                                     lhs = CEVar { id = nameGlobal },
-                                     id = id
-                                   } } in
-                toRelAddr abs (CTyPtr { ty = cty })
-              else
-                -- Stored directly in globals
-                CEArrow { lhs = CEVar { id = nameGlobal }, id = id }
-
-            else match assocSeqLookup {eq=nameEq} id sf.mem with Some cty then
-              match cty with CTyStruct _ then
-                -- Stored in stack frame as non-pointer but must be converted
-                -- to relative pointer
-                let abs = CEUnOp { op = COAddrOf {},
-                                   arg = CEArrow {
-                                     lhs = CEVar { id = nameSF },
-                                     id = id
-                                   } } in
-                toRelAddr abs (CTyPtr { ty = cty })
-
-              else
-                -- Stored directly in stack frame
-                CEArrow { lhs = CEVar { id = nameSF }, id = id }
-
-            -- Leave other variables
-            else expr
-
-          else smap_CExpr_CExpr rec expr
-        in rec expr
-    in
-
-    recursive let extractDef: Map Name Type -> CStmt -> Map Name Type =
-      lam map. lam stmt.
-        match stmt with CSDef { ty = ty, id = Some id } then
-          mapInsert id ty map
-        else sfold_CStmt_CStmt extractDef map stmt
-    in
-
-    -----------
-    -- START --
-    -----------
-
-    -- Run base C compiler
-    match compile typeEnv prog with (env, types, tops, inits) then
-
-    -- Construct map from all names to their C types
-    let defMap: Map Name CType =
-      let m = mapEmpty nameCmp in
-      let m = foldl (lam m. lam top.
-        let m = match top with CTFun { params = params } then
-                    foldl (lam m. lam t. mapInsert t.1 t.0 m) m params
-                  else m in
-        sfold_CTop_CStmt extractDef m top
-      ) m tops in
-      let m = foldl extractDef m inits in
-      m
-    in
-
-    -- Compute stack frames for each function and the init code
-    let sfs = buildStackFrames tops in
-    let retTy: CType = compileType env (ty prog) in
-    let initSF: StackFrame = buildInitStackFrame inits retTy in
-
-    -- Helper function for getting the stack frame of a top.
-    let topStackFrame: CTop -> StackFrame =
-      lam top.
-        let id = match top with CTFun { id = id } then id
-                 else error "Invalid top in topStackFrame" in
-        getStackFrame id sfs
-    in
-
-    -- Compute globally scoped variables
-    let globals: Globals = findGlobals globalNames inits in
-    let f = lam g: [(Name,CType)].
-      filter (lam l. not (any (lam r. nameEq l.0 r.0) g)) in
-    let initSF: StackFrame = { initSF with mem =
-      filter (lam l. not (any (lam r. nameEq l.0 r.0) globals)) initSF.mem
-    } in
-
-    -- Remove function declarations
-    let tops: [CTop] = foldl (lam acc. lam top.
-      match top with CTDef { ty = CTyFun _ } then acc else snoc acc top
-    ) [] tops in
-
-    -- Replace defs
-    let tops: [CTop] = map (lam top.
-      let sf = topStackFrame top in
-      sreplace_CTop_CStmt (stripDefs globals sf) top
-    ) tops in
-    let inits: [CStmt] = join (map (stripDefs globals initSF) inits) in
-
-    -- Replace dereferences
-    let tops: [CTop] = map (lam top.
-      let sf = topStackFrame top in
-      smap_CTop_CExpr (replaceDeref defMap) top
-    ) tops in
-    let inits: [CStmt] =
-      map (smap_CStmt_CExpr (replaceDeref defMap)) inits in
-
-    -- Replace variable uses
-    let tops: [CTop] = map (lam top.
-      let sf = topStackFrame top in
-      smap_CTop_CExpr (replaceVar globals sf) top
-    ) tops in
-    let inits: [CStmt] =
-      map (smap_CStmt_CExpr (replaceVar globals initSF)) inits in
 
     -- Split functions into BBLOCKs
     let accSplit = emptyAccSplit sfs in
-    match splitFunctions accSplit tops with { tops = tops } then
+    let tops = match splitFunctions accSplit tops with { tops = tops }
+               then tops else never in
     let tops = concat tops (splitInit accSplit initSF inits) in
 
+
+    -------------------
+    -- FINAL TOUCHES --
+    -------------------
+
+    -- Stack size (should be determined from command line arg)
     let stackSize = 100000 in
 
-    -- PSTATE.stackPtr = PSTATE.stack
+    -- Initialize PSTATE.stack = sizeof(GLOBAL)
     let initStackPtr = CSExpr { expr = CEBinOp {
       op = COAssign {},
       lhs = stackPtr,
@@ -949,6 +982,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       }
     }} in
 
+    -- Define start and end BBLOCKs
     let initRet =
       match retTy with ! CTyVoid _ then
         Some (CEArrow { lhs = CEVar { id = nameGlobal }, id = nameRet })
@@ -969,13 +1003,17 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       body = [setPCFromExpr (CEInt { i = negi 1 })]
     } in
 
+    -- PSTATE contents
     let progStateMem = [
       ( CTyArray { ty = CTyChar {}, size = Some (CEInt { i = stackSize })}
       , Some nameStack ),
       ( CTyVar { id = nameUIntPtr }, Some nameStackPtr)
     ] in
 
-    -- Global frame type
+    -- Convert a [(Name,CType)] to [(CType, Option Name)].
+    let convertMem = map (lam t. (t.1, Some t.0)) in
+
+    -- Global frame type definition
     let gf = CTDef {
       ty = CTyStruct {
         id = Some nameGlobalTy,
@@ -988,6 +1026,25 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       }, id = None (), init = None ()
     } in
 
+    -- Convert StackFrame to C struct type definition
+    let stackFrameToTopTy: StackFrame -> CTop = lam sf.
+      let mem = convertMem sf.mem in
+      CTDef {
+        ty = CTyStruct {
+          id = Some sf.id,
+          mem = Some (join [
+            [(CTyInt {}, Some nameRetAddr)],
+            match sf.ret with ! CTyVoid _ then
+              [(CTyPtr { ty = sf.ret }, Some nameRetLoc)]
+            else [],
+            mem
+          ])
+        },
+        id = None (),
+        init = None ()
+      }
+    in
+
     -- Stack frame types
     let initSF = stackFrameToTopTy initSF in
     let sfs = map (lam t. stackFrameToTopTy t.1) sfs in
@@ -996,14 +1053,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       includes = join [
         cIncludes,
         [ "\"inference/smc/smc.cuh\""
-        , "<stdint.h>"]
+        , "<stdint.h>"
+        ]
       ],
       pStateTy = CTyStruct { id = None (), mem = Some progStateMem },
       types = types,
       tops = join [[gf, initSF], sfs, [startBBlock, endBBlock], tops]
     }
 
-    else never
     else never
 
 -- Get the names of all globally accessible non-function data.
@@ -1017,10 +1074,12 @@ let findGlobalNames: Expr -> [Name] = use MExprPPLRootPPLCompile in
         | TmRecLets { inexpr = inexpr }
         | TmType { inexpr = inexpr }
         | TmConDef { inexpr = inexpr }
+        | TmExt { inexpr = inexpr }
       then rec acc inexpr
       else acc
     in rec [] expr
 
+-- Entry point for compiler
 let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- print (expr2str prog); print "\n\n";
@@ -1044,6 +1103,8 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- Type lift
   match typeLift prog with (env, prog) then
+
+    -- print (expr2str prog); print "\n\n";
 
     -- Run C compiler
     let rpprog: RPProg = rootPPLCompileH env globals prog in
