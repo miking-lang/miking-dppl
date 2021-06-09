@@ -83,6 +83,24 @@ HOST DEV void destResamplerNested(resampler_t resampler);
  */
 HOST DEV void copyParticle(particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize);
 
+/**
+ * Copies a chunk of memory. Uses memcpy on CPU and manual loops for speedup on GPU.
+ *
+ * @param dst destination address
+ * @param src source address
+ * @param bytes size in bytes of chunk to copy
+ */
+HOST DEV void copyChunk(void* dst, void* src, size_t bytes);
+
+#ifdef STACK_SIZE_PROGSTATE
+/**
+ * Copies a progStateStack_t, by copying the stack pointer, and only the used part of the stack (derived from stack pointer).
+ *
+ * @param dst destination address
+ * @param src source address
+ */
+HOST DEV void copyStack(progStateStack_t* dst, progStateStack_t* src);
+#endif
 
 /**
  * Samples an ancestor from the categorical distribution defined by the weights. 
