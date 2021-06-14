@@ -84,8 +84,4 @@ __device__ floating_t gamma(curandState* randState, floating_t k, floating_t the
 }
 */
 
-
-
-
-
 #endif
