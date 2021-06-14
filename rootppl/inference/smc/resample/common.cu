@@ -90,6 +90,14 @@ HOST DEV void copyParticle(const particles_t particlesDst, const particles_t par
 HOST DEV void copyStack(progStateStack_t* dst, progStateStack_t* src) {
     dst->stackPtr = src->stackPtr;
     size_t stackSpaceUsed = src->stackPtr;
+
+    // Try to round up copy size to nearest multiple of sizeof(long), this can speed up GPU copying
+    #ifdef __NVCC__
+    int remainder = stackSpaceUsed % sizeof(long);
+    if (remainder > 0)
+        stackSpaceUsed = MIN(stackSpaceUsed + sizeof(long) - remainder, STACK_SIZE_PROGSTATE);
+    #endif
+
     copyChunk(dst->stack, src->stack, stackSpaceUsed);
 }
 #endif
