@@ -8,101 +8,68 @@ struct progState_t {
     treeIdx_t treeIdx;
 };
 
-
-// const int MAX_DIV = 5;
-// const int MAX_LAM = 5;
-
 #define NUM_BBLOCKS 3
 INIT_MODEL(progState_t, NUM_BBLOCKS)
-
 BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating_t, floating_t);
-
 BBLOCK_DATA(tree, tree_t, 1)
-
 BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
 
 
 BBLOCK_HELPER(M_crbdGoesUndetected, {
-
     if(maxM == 0) {
         printf("Aborting crbdGoesUndetected simulation, too deep!\n");
         return 1; // What do return instead of NaN?
     }
-
     if(! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu, rho) && ! BBLOCK_CALL(crbdGoesUndetected, startTime, lambda, mu, rho))
         return 1;
     else
         return 1 + BBLOCK_CALL(M_crbdGoesUndetected, startTime, maxM - 1, lambda, mu, rho);
-
 }, int, floating_t startTime, int maxM, floating_t lambda, floating_t mu, floating_t rho)
 
+
+// uses Jan's walk
 BBLOCK_HELPER(crbdGoesUndetected, {
+    floating_t duration = SAMPLE(exponential, mu);
 
-    /*
-    // extreme values patch 1/2
-    if (lambda - mu > MAX_DIV)
-        return false;
-    
-    if (lambda == 0.0) 
-        return ! SAMPLE(bernoulli, rho);
+    if (duration > startTime) {
+      if (SAMPLE(bernoulli, rho)) return false;
+    }
 
-    // end extreme values patch 1/2
-    */
+    floating_t branchLength = MIN(duration, startTime);
 
-    floating_t t = SAMPLE(exponential, lambda + mu);
-    
-    floating_t currentTime = startTime - t;
-    if(currentTime < 0)
-        return ! SAMPLE(bernoulli, rho);
-    
-    bool speciation = SAMPLE(bernoulli, lambda / (lambda + mu));
-    if (! speciation)
-        return true;
-    
-    return BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu, rho) && BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu, rho);
+    floating_t nSpPoints = SAMPLE(poisson, lambda*branchLength);
 
+    for (int n = 0; n < nSpPoints; n++) {
+      floating_t eventTime = SAMPLE(uniform, startTime - branchLength, startTime);
+      if (!BBLOCK_CALL(crbdGoesUndetected, eventTime, lambda, mu, rho)) return false;
+    }
+
+    return true;
 }, bool, floating_t startTime, floating_t lambda, floating_t mu, floating_t rho)
 
 
-BBLOCK_HELPER(simBranch, {
+// uses Jan's walk
+BBLOCK_HELPER(simBranch, { 
+    floating_t nSpPoints = SAMPLE(poisson, lambda*(startTime - stopTime));
 
-    /*
-    // extreme values patch 2/2
-	if (lambda > MAX_LAM) {
-	    return -INFINITY;
-	}
-	
-	if (lambda == 0.0) {
-        return 0.0;
-	}
-    // extreme values patch 2/2
-    */
+    for (int n = 0; n < nSpPoints; n++) {
+      floating_t currentTime = SAMPLE(uniform, stopTime, startTime);
+      if (!BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu, rho)) return -INFINITY;
+    }
 
-    floating_t t = SAMPLE(exponential, lambda);
-
-    floating_t currentTime = startTime - t;
-
-    if(currentTime <= stopTime)
-        return 0.0;
+    return nSpPoints*log(2.0);
     
-    bool sideDetection = BBLOCK_CALL(crbdGoesUndetected, currentTime, lambda, mu, rho);
-    if(! sideDetection)
-        return -INFINITY;
-    
-    return BBLOCK_CALL(simBranch, currentTime, stopTime, lambda, mu, rho) + log(2.0);
-
 }, floating_t, floating_t startTime, floating_t stopTime, floating_t lambda, floating_t mu, floating_t rho)
 
 
 BBLOCK(simTree, {
-
     tree_t* treeP = DATA_POINTER(tree);
     int treeIdx = PSTATE.treeIdx;
 
     floating_t lambdaLocal = PSTATE.lambda;
     floating_t muLocal = PSTATE.mu;
     // floating_t rhoLocal = *DATA_POINTER(rho);
-    //floating_t rhoLocal = DATA_CONST(rho);
+    // floating_t rhoLocal = DATA_CONST(rho);
     floating_t rhoLocal = rho;
 
     int indexParent = treeP->idxParent[treeIdx];
@@ -130,14 +97,7 @@ BBLOCK(simTree, {
 
 
 BBLOCK(simCRBD, {
-
-
     PSTATE.lambda = SAMPLE(gamma, k, theta);
-    // PSTATE.lambda = 0.2;
-    //floating_t epsilon = SAMPLE(uniform, 0.0, 1.0);
-    // floating_t epsilon = 0.5;
-    //PSTATE.mu = epsilon * PSTATE.lambda;
-    // PSTATE.mu = mu;
     PSTATE.mu =  SAMPLE(gamma, kMu, thetaMu);
 
     tree_t* treeP = DATA_POINTER(tree);
@@ -152,29 +112,27 @@ BBLOCK(simCRBD, {
     BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC], NULL);
 })
 
+
 BBLOCK(survivorshipBias, {
     floating_t age = DATA_POINTER(tree)->ages[ROOT_IDX];
     int MAX_M = 10000;
-    //int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, DATA_CONST(rho));
+    // int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, DATA_CONST(rho));
     int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, rho);
     WEIGHT(LOG(M));
     PC++;
 })
 
+
 // Write particle data to file. 
-CALLBACK(saveResults, {
-    
-    std::string fileName = "parameterDataImmediate";
+CALLBACK(saveResults, {    
+    std::string fileName = "crbd-immediate.out";
     std::ofstream resFile (fileName);
     if(resFile.is_open()) {
-
         for(int i = 0; i < N; i++)
-            resFile << PSTATES[i].lambda << " " << PSTATES[i].mu << " " << exp(WEIGHTS[i]) << "\n";
-
+            resFile << PSTATES[i].lambda << " " << PSTATES[i].mu << " " << WEIGHTS[i] << "\n";
         resFile.close();
     } else {
         printf("Could not open file %s\n", fileName.c_str());
     }
-    
 })
 

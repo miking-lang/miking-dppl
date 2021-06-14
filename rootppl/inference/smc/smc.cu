@@ -131,7 +131,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
         
     }
 
-    printf("log normalization constant = %f\n", logNormConstant);
+    printf("%f\n", logNormConstant);
     writeLogNormConstToFile(logNormConstant);
     writeESSToFile(essList);
 
