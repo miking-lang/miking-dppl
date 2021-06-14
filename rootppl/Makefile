@@ -158,12 +158,3 @@ $(OBJDIR)/systematic_kernels.o: $(FRAMEWORK_FILES)
 $(OBJDIR)/file_handler.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(FILE_HANDLER_SRC) -o $@
 
-.PHONY: clean
-clean:
-	rm out/*.o $(EXEC_NAME)
-
-# run: ./$(EXEC_NAME)
-.PHONY: run
-run:
-	./$(EXEC_NAME) $(N)
-
