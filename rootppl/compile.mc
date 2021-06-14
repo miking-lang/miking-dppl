@@ -1,7 +1,7 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
-include "../models/crbd.mc"
+-- include "../models/crbd.mc"
 
 include "rootppl.mc"
 
@@ -1106,7 +1106,7 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
     -- print (expr2str prog); print "\n\n";
 
-    -- Run C compiler
+    -- Run RootPPL compiler
     let rpprog: RPProg = rootPPLCompileH env globals prog in
 
     -- print (printCompiledRPProg rpprog); print "\n\n";
@@ -1116,8 +1116,7 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
   else never
 
 mexpr
-use MExprPPLRootPPLCompile in
-
-rootPPLCompile crbd;
+-- use MExprPPLRootPPLCompile in
+-- rootPPLCompile crbd;
 
 ()

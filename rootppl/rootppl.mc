@@ -194,19 +194,22 @@ lang RootPPL = CAst + CPrettyPrint
 
   | CDCategorical { p = p } ->
     match printCExpr env p with (env,p) then
-      (env, strJoin ", " ["discrete", p, "TODO"])
+      error "CDCategorical not yet implemented"
+      -- (env, strJoin ", " ["discrete", p, "TODO"])
     else never
 
   | CDMultinomial { n = n, p = p } ->
     match printCExpr env n with (env,n) then
       match printCExpr env p with (env,p) then
-        (env, strJoin ", " ["multinomial", p, n, "TODO", "TODO"])
+        error "CDMultinomial not yet implemented"
+        -- (env, strJoin ", " ["multinomial", p, n, "TODO", "TODO"])
       else never
     else never
 
   | CDDirichlet { a = a } ->
     match printCExpr env a with (env,a) then
-      (env, strJoin ", " ["dirichlet", a, "TODO", "TODO"])
+      error "CDDirichlet not yet implemented"
+      -- (env, strJoin ", " ["dirichlet", a, "TODO", "TODO"])
     else never
 
   | CDExp { rate = rate } ->
