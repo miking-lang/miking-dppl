@@ -15,6 +15,9 @@ lang PlateAst
   sem infoTm =
   | TmPlate t -> t.info
 
+  sem withInfo (info: Info) =
+  | TmPlate t -> TmPlate { t with info = info }
+
   sem withType (ty : Type) =
   | TmPlate t -> TmPlate {t with ty=ty}
 
@@ -91,12 +94,12 @@ lang ProbabilisticGraphicalModel = CorePPL + MExprAst + PlatePrettyPrint
   | t -> Some ("Plate fun check: Not supported expression in plate fun")
 
   -- Distribution can be consists of
-  --  1. DBern
+  --  1. DBernoulli
   --  2. DBeta
   --  3. TmDist t with valid t.dist
   --  4. TmVar with valid value 1. 2. 3.
   sem validateDist (env:Env) =
-  | DBern d -> None ()
+  | DBernoulli d -> None ()
   | DBeta d -> None ()
   | DCategorical d -> None ()
   | DDirichlet d -> None ()
@@ -251,7 +254,7 @@ let texample2expanded = use MExprPPL in
 
 let example2plate = use MExprPPL in
   bindall_
-  [ ulet_ "params" (seq_ [(tuple_ [float_ 10.0,float_ 10.0]), (tuple_ [float_ 15.0,float_ 1.0]), (tuple_ [float_ 21.0,float_ 10.0])])
+  [ ulet_ "params" (seq_ [(utuple_ [float_ 10.0,float_ 10.0]), (utuple_ [float_ 15.0,float_ 1.0]), (utuple_ [float_ 21.0,float_ 10.0])])
   , ulet_ "obs" true_
   , ulet_ "rvs" (plate_ (ulam_ "x" (assume_ (beta_ (tupleproj_ 0 (var_ "x")) (tupleproj_ 1 (var_ "x"))))) (var_ "params"))
   , ulet_ "" (plate_ (ulam_ "x" (observe_ (var_ "obs") (bern_ (var_ "x")))) (var_ "rvs"))
@@ -260,7 +263,7 @@ let example2plate = use MExprPPL in
 
 let texample2plate = use MExprPPL in
   bindall_
-  [  ulet_ "params" (seq_ [(tuple_ [float_ 10.0,float_ 10.0]), (tuple_ [float_ 15.0,float_ 1.0]), (tuple_ [float_ 21.0,float_ 10.0])])
+  [  ulet_ "params" (seq_ [(utuple_ [float_ 10.0,float_ 10.0]), (utuple_ [float_ 15.0,float_ 1.0]), (utuple_ [float_ 21.0,float_ 10.0])])
   , ulet_ "rvs" (plate_ (ulam_ "x" (assume_ (beta_ (tupleproj_ 0 (var_ "x")) (tupleproj_ 1 (var_ "x"))))) (var_ "params"))
   , var_ "rvs"
   ] in
