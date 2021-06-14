@@ -289,6 +289,9 @@ a parallel implementation for the GPU, and a sequential and parallel implementat
 - The `utils` directory contains code that RootPPL uses, but can be used by models as well. 
 - The `models` directory contains example models that use the inference. 
 
+### Compile with the built-in stack
+To compile with the `progStateStack_t` program state, the macro `INIT_MODEL_STACK(num_bblocks)` should be used instead of `INIT_MODEL(progState_t, num_bblocks)`.
+Then the stack size is specified in bytes with `--stack_size num_bytes`, e.g. `rootppl my_stack_model.cu --stack_size 10000`.
 
 ### Building a more interesting model
 TODO, stuff not yet demonstrated explicitly in README: 
