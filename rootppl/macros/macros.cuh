@@ -44,6 +44,10 @@ typedef double floating_t;
 BBLOCK_DATA(bblocksArr, pplFunc_t, numBblocks) \
 typedef progStateType progStateTypeTopLevel_t;
 
+#define INIT_MODEL_STACK(numBblocks) \
+BBLOCK_DATA(bblocksArr, pplFunc_t, numBblocks) \
+typedef progStateStack_t progStateTypeTopLevel_t;
+
 
 /***    BBLOCKS    ***/
 
