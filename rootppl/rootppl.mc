@@ -268,20 +268,33 @@ lang RootPPL = CAst + CPrettyPrint
     let env = foldl addName env (map nameNoSym cKeywords) in
     let env = foldl addName env nameInit in
 
-    let progState = CTTyDef { ty = pStateTy, id = nameProgState } in
+    let printProgState = lam indent. lam env. lam pStateTy.
+      match pStateTy with Some pStateTy then
+        let progState = CTTyDef { ty = pStateTy, id = nameProgState } in
+        printCTop indent env progState
+      else (env,"")
+    in
 
-    match printCTop indent env progState with (env,progState) then
+    match printProgState indent env pStateTy with (env,pStateTy) then
       match mapAccumL (printCTop indent) env types with (env,types) then
         match mapAccumL (printCTop indent) env blockDecls
         with (env,blockDecls) then
           match mapAccumL (printCTop indent) env tops with (env,tops) then
             match mapAccumL pprintEnvGetStr env blockNames
             with (env, blockNames) then
+
+              let init =
+                match pStateTy with Some _ then "INIT_MODEL(progState_t,"
+                else "INIT_MODEL_STACK("
+              in
+
+              let pStateTy = match pStateTy with "" then [] else [pStateTy] in
+
               strJoin (pprintNewline indent) (join [
                 includes,
                 types,
-                [ progState
-                , join [ "INIT_MODEL(progState_t,"
+                pStateTy,
+                [ join [ init
                        , int2string (length blockNames)
                        , ")"
                        ]

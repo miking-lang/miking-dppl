@@ -1004,11 +1004,11 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     } in
 
     -- PSTATE contents
-    let progStateMem = [
-      ( CTyArray { ty = CTyChar {}, size = Some (CEInt { i = stackSize })}
-      , Some nameStack ),
-      ( CTyVar { id = nameUIntPtr }, Some nameStackPtr)
-    ] in
+    -- let progStateMem = [
+    --   ( CTyArray { ty = CTyChar {}, size = Some (CEInt { i = stackSize })}
+    --   , Some nameStack ),
+    --   ( CTyVar { id = nameUIntPtr }, Some nameStackPtr)
+    -- ] in
 
     -- Convert a [(Name,CType)] to [(CType, Option Name)].
     let convertMem = map (lam t. (t.1, Some t.0)) in
@@ -1056,7 +1056,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         , "<stdint.h>"
         ]
       ],
-      pStateTy = CTyStruct { id = None (), mem = Some progStateMem },
+      -- pStateTy = Some (CTyStruct { id = None (), mem = Some progStateMem }),
+      pStateTy = None (),
       types = types,
       tops = join [[gf, initSF], sfs, [startBBlock, endBBlock], tops]
     }
