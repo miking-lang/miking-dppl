@@ -13,6 +13,9 @@
 __global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
+    
+    if (isnan(w[idx]))
+        w[idx] = -INFINITY;
 
     w[idx] = exp(w[idx] - maxLogWeight);
 }
