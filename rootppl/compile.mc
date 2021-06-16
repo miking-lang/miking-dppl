@@ -1,7 +1,7 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
-include "../models/crbd.mc"
+-- include "../models/crbd.mc"
 
 include "rootppl.mc"
 
@@ -1004,11 +1004,11 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     } in
 
     -- PSTATE contents
-    let progStateMem = [
-      ( CTyArray { ty = CTyChar {}, size = Some (CEInt { i = stackSize })}
-      , Some nameStack ),
-      ( CTyVar { id = nameUIntPtr }, Some nameStackPtr)
-    ] in
+    -- let progStateMem = [
+    --   ( CTyArray { ty = CTyChar {}, size = Some (CEInt { i = stackSize })}
+    --   , Some nameStack ),
+    --   ( CTyVar { id = nameUIntPtr }, Some nameStackPtr)
+    -- ] in
 
     -- Convert a [(Name,CType)] to [(CType, Option Name)].
     let convertMem = map (lam t. (t.1, Some t.0)) in
@@ -1056,7 +1056,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         , "<stdint.h>"
         ]
       ],
-      pStateTy = CTyStruct { id = None (), mem = Some progStateMem },
+      -- pStateTy = Some (CTyStruct { id = None (), mem = Some progStateMem }),
+      pStateTy = None (),
       types = types,
       tops = join [[gf, initSF], sfs, [startBBlock, endBBlock], tops]
     }
@@ -1106,7 +1107,7 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
     -- print (expr2str prog); print "\n\n";
 
-    -- Run C compiler
+    -- Run RootPPL compiler
     let rpprog: RPProg = rootPPLCompileH env globals prog in
 
     -- print (printCompiledRPProg rpprog); print "\n\n";
@@ -1116,8 +1117,7 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
   else never
 
 mexpr
-use MExprPPLRootPPLCompile in
-
-rootPPLCompile crbd;
+-- use MExprPPLRootPPLCompile in
+-- rootPPLCompile crbd;
 
 ()
