@@ -69,14 +69,19 @@ match result with ParseOK r then
   else
     -- Read and parse the file
     let filename = head r.strings in
+    let ast = getAst filename in
+
     -- Transform the model, if the flag is selected
     let ast =
       if r.options.transform then
-        transform (getAst filename)
-      else (getAst filename) in
+        transform ast
+      else ast in
+
+    -- Optionally print the model
     (if r.options.printModel then
       use DPPLParser in print (expr2str ast)
     else ());
+
     -- Exit before inference, it the flag is selected
     if r.options.exitBefore then exit 0
     else
