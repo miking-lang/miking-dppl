@@ -3,8 +3,11 @@ ifndef EXEC_NAME
 EXEC_NAME=program
 endif
 
+ifdef STACK_SIZE_PROGSTATE
+STACK_FLAG=-D STACK_SIZE_PROGSTATE=$(STACK_SIZE_PROGSTATE)
+endif
 
-COMMON_FLAGS=$(EXTRA_FLAGS) -I. -std=c++14 -O3
+COMMON_FLAGS=$(EXTRA_FLAGS) -I. -std=c++14 -O3 $(STACK_FLAG)
 ifdef arch
 # GPU
 # CC=/usr/local/cuda-11.0/bin/nvcc

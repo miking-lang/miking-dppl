@@ -66,46 +66,84 @@ HOST DEV void destResamplerNested(resampler_t resampler) {
 
 HOST DEV void copyParticle(const particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
     
+    // Program states
+    #ifdef STACK_SIZE_PROGSTATE
+    progStateStack_t* dstProgState = particlesDst.progStates + dstIdx;
+    progStateStack_t* srcProgState = particlesSrc.progStates + srcIdx;
+
+    copyStack(dstProgState, srcProgState);
+    
+    #else
     char* psDstAddress = static_cast<char*>(particlesDst.progStates) + progStateSize * dstIdx;
     char* psSrcAddress = static_cast<char*>(particlesSrc.progStates) + progStateSize * srcIdx;
 
+    copyChunk(psDstAddress, psSrcAddress, progStateSize);
+
+    #endif
+
+    // Generic particle stuff
+    particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
+    particlesDst.weights[dstIdx] = 0;
+}
+
+#ifdef STACK_SIZE_PROGSTATE
+HOST DEV void copyStack(progStateStack_t* dst, progStateStack_t* src) {
+    dst->stackPtr = src->stackPtr;
+    size_t stackSpaceUsed = src->stackPtr;
+
+    // Try to round up copy size to nearest multiple of sizeof(long), this can speed up GPU copying
+    #ifdef __NVCC__
+    int remainder = stackSpaceUsed % sizeof(long);
+    if (remainder > 0)
+        stackSpaceUsed = MIN(stackSpaceUsed + sizeof(long) - remainder, STACK_SIZE_PROGSTATE);
+    #endif
+
+    copyChunk(dst->stack, src->stack, stackSpaceUsed);
+}
+#endif
+
+HOST DEV void copyChunk(void* dst, void* src, size_t bytes) {
+    #ifdef __NVCC__
+    // Manual loop copying can be much faster on GPU than device memcpy
     // If the struct is aligned in the correct way, the loop long copying can give huge speedups compared to memcpy on GPU
-    bool longAligned = progStateSize % sizeof(long) == 0 
-                    && ((std::uintptr_t)psDstAddress) % sizeof(long) == 0
-                    && ((std::uintptr_t)psSrcAddress) % sizeof(long) == 0;
+    bool longAligned = bytes % sizeof(long) == 0 
+                    && ((std::uintptr_t)dst) % sizeof(long) == 0
+                    && ((std::uintptr_t)src) % sizeof(long) == 0;
 
     if(longAligned) {
-        long* psDstLong = (long*)(psDstAddress);
-        long* psSrcLong = (long*)(psSrcAddress);
+        long* dstLong = (long*)(dst);
+        long* srcLong = (long*)(src);
 
-        int numDblWords = progStateSize / sizeof(long);
+        int numDblWords = bytes / sizeof(long);
 
         for(int i = 0; i < numDblWords; i++) {
-            psDstLong[i] = psSrcLong[i];
+            dstLong[i] = srcLong[i];
         }
         
     } else {
-        bool intAligned = progStateSize % sizeof(int) == 0 
-                    && ((std::uintptr_t)psDstAddress) % sizeof(int) == 0
-                    && ((std::uintptr_t)psSrcAddress) % sizeof(int) == 0;
+        bool intAligned = bytes % sizeof(int) == 0 
+                    && ((std::uintptr_t)dst) % sizeof(int) == 0
+                    && ((std::uintptr_t)src) % sizeof(int) == 0;
         if(intAligned) {
 
-            int* psDstInt = (int*)(psDstAddress);
-            int* psSrcInt = (int*)(psSrcAddress);
+            int* dstInt = (int*)(dst);
+            int* srcInt = (int*)(src);
 
-            int numWords = progStateSize / sizeof(int);
+            int numWords = bytes / sizeof(int);
 
             for(int i = 0; i < numWords; i++) {
-                psDstInt[i] = psSrcInt[i];
+                dstInt[i] = srcInt[i];
             }
 
         } else {
-            memcpy(psDstAddress, psSrcAddress, progStateSize);
+            // Not aligned, fall back to memcpy
+            memcpy(dst, src, bytes);
         }
     }
-    
-    particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
-    particlesDst.weights[dstIdx] = 0;
+    #else
+    // On CPU, memcpy seems to perform much better. Seems to be true with OpenMP as well
+    memcpy(dst, src, bytes);
+    #endif
 }
 
 // This could probably be optimized by sorting the particles by descending weights first

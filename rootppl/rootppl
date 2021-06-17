@@ -48,6 +48,12 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    --stack_size)
+    stack_size="$2"
+    args="${args} STACK_SIZE_PROGSTATE=${stack_size}"
+    shift # past argument
+    shift # past value
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument

@@ -19,6 +19,18 @@
 #define NUM_THREADS_PER_BLOCK 128
 #define NUM_THREADS_PER_BLOCK_NESTED 32
 
+/*
+ * Program state used when program data is solely handled by an explicit generic stack. 
+ *
+ * stackPtr: stack pointer for the stack, uses relative addresses. 
+ * stack: the actual stack, implemented with char array and size defined with STACK_SIZE_PROGSTATE bytes
+ */
+#ifdef STACK_SIZE_PROGSTATE
+struct progStateStack_t {
+    uintptr_t stackPtr;
+    char stack[STACK_SIZE_PROGSTATE];
+};
+#endif
 
 /*
  * Particle structure, allocated at start of inference. This SoA (Struct of Arrays) structure is
@@ -26,13 +38,17 @@
  * Large program states will result in worse performance not only due to copying in resampling, but
  * also since it results in strided memory accesses. There are likely better solutions for these cases. 
  * 
- * progStates: These are the model-specific states. 
+ * progStates: These are the model-specific states. These are replaced with a progStateStack_t if specified. 
  * pcs: These are the "program counters" which are used by the particles to define what BBLOCK to execute in each BBLOCK-iteration.
  * weights: These are the weights used in resampling and approximation of the normalization constant. Equivalent to "factor" in WebPPL.
  */
- 
 struct particles_t {
+    #ifdef STACK_SIZE_PROGSTATE
+    progStateStack_t* progStates;
+    #else
     void* progStates;
+    #endif
+
     int* pcs;
     floating_t* weights;
 };
