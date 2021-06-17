@@ -71,8 +71,8 @@ let getAst = lam filename. lam printModel.
   -- Read and parse the mcore file
   let ast = makeKeywords [] (parseMCoreFile keywords filename) in
   -- Pretty print the model?
-  if printModel then
+  (if printModel then
     print (expr2str ast);
     print "\n"
-  else ();
+  else ());
   ast

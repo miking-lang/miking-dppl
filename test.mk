@@ -2,7 +2,6 @@
 
 test-files=
 test-files+=${wildcard coreppl/*.mc}
-test-files+=${wildcard models/*.mc}
 test-files+=${wildcard rootppl/*.mc}
 
 all: ${test-files}
