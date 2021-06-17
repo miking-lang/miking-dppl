@@ -66,13 +66,7 @@ let keywords =
  "Multinomial", "Dirichlet", "Exponential", "Empirical"]
 
 
-let getAst = lam filename. lam printModel.
+let getAst = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let ast = makeKeywords [] (parseMCoreFile keywords filename) in
-  -- Pretty print the model?
-  (if printModel then
-    print (expr2str ast);
-    print "\n"
-  else ());
-  ast
+  makeKeywords [] (parseMCoreFile keywords filename)
