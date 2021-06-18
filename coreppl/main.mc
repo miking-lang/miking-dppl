@@ -9,13 +9,15 @@ include "option.mc"
 include "string.mc"
 include "dppl-parser.mc"
 include "inference.mc"
+include "transformation.mc"
 
 -- Options type
 type Options = {
   method: String,
   particles : Int,
   printModel: Bool,
-  exitBefore: Bool
+  exitBefore: Bool,
+  transform: Bool
 }
 
 -- Default values for options
@@ -23,7 +25,8 @@ let default = {
   method = "",
   particles = 5000,
   printModel = false,
-  exitBefore = false
+  exitBefore = false,
+  transform = false
 }
 
 -- Options configuration
@@ -40,7 +43,10 @@ let config = [
     lam p. {p.options with printModel = true}),
   ([("--exit-before", "", "")],
     "Exit before inference takes place. ",
-    lam p. {p.options with exitBefore = true})
+    lam p. {p.options with exitBefore = true}),
+  ([("--transform", "", "")],
+    "The model is transformed to an efficient representation if possible.",
+    lam p. {p.options with transform = true})
 ]
 
 -- Menu
@@ -63,7 +69,19 @@ match result with ParseOK r then
   else
     -- Read and parse the file
     let filename = head r.strings in
-    let ast = getAst filename r.options.printModel in
+    let ast = getAst filename in
+
+    -- Transform the model, if the flag is selected
+    let ast =
+      if r.options.transform then
+        transform ast
+      else ast in
+
+    -- Optionally print the model
+    (if r.options.printModel then
+      use DPPLParser in print (expr2str ast)
+    else ());
+
     -- Exit before inference, it the flag is selected
     if r.options.exitBefore then exit 0
     else
