@@ -15,6 +15,8 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "c/compile.mc"
 
+include "mexpr/pprint.mc"
+
 -----------------------------------------
 -- BASE LANGUAGE FRAGMENT FOR COMPILER --
 -----------------------------------------
@@ -99,6 +101,36 @@ let printCompiledRPProg: RPProg -> String = use MExprPPLRootPPLCompile in
   lam rpprog: RPProg.
     printRPProg cCompilerNames rpprog
 
+-- Debug function during compilation.
+let debugPrint: [CTop] -> [CTop] -> [CStmt]-> String =
+  use MExprPPLRootPPLCompile in
+  lam types: [CTop].
+  lam tops: [CTop].
+  lam inits: [CStmt].
+    let env = pprintEnvEmpty in
+    let addName = lam env. lam name.
+      match pprintAddStr env name with Some env then env
+      else error (join ["Duplicate name in debugPrint: ", nameGetStr name])
+    in
+    let env = foldl addName pprintEnvEmpty cCompilerNames in
+    match mapAccumL (printCTop 0) env types with (env,types) then
+    match mapAccumL (printCTop 0) env tops with (env,tops) then
+    match printCStmts 0 env inits with (env,inits) then
+      let types = strJoin (pprintNewline 0) types in
+      let tops = strJoin (pprintNewline 0) tops in
+      join [
+        "--- TYPES ---\n",
+        types,"\n\n",
+        "--- TOPS ---\n",
+        tops,"\n\n",
+        "--- INITS ---\n",
+        inits,"\n\n"
+      ]
+
+    else never
+    else never
+    else never
+
 -- Compiler names
 let nameRetAddr = nameSym "ra"
 let nameRetLoc = nameSym "retLoc"
@@ -123,6 +155,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -------------------------
 
     match compile typeEnv prog with (env, types, tops, inits) then
+
+    -- print (debugPrint types tops inits);
 
     ------------------------
     -- COMMON DEFINITIONS --
