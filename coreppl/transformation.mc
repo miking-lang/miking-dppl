@@ -39,6 +39,30 @@ lang Transformation = ProbabilisticGraphicalModel
         else ctx
       else ctx
     in collect updatedCtx t.inexpr
+  | TmLet ({body = TmPlate p} & t) ->
+    match p.fun with TmLam l then
+      match l.body with TmAssume a then
+        let assumeMap =
+          match a.dist with TmDist {dist = DBeta b} then
+            mapInsert t.ident l.body ctx.assumeMap
+          else ctx.assumeMap
+        in
+        collect {ctx with assumeMap=assumeMap} t.inexpr
+      else match l.body with TmObserve o then
+        let updatedCtx =
+          match o.dist with TmDist {dist = DBernoulli b} then
+            match p.lst with TmVar v then
+              match mapLookup v.ident ctx.assumeMap with Some (TmAssume a) then
+                -- make sure that o.value is not part of lambda!
+                {{ctx with assumeMap=(mapInsert v.ident (TmAssume {a with dist=(updateAssume o.value a.dist)}) ctx.assumeMap)} with
+            observeAssumeMap = mapInsert t.ident v.ident ctx.observeAssumeMap}
+              else ctx
+            else ctx
+          else ctx
+        in
+        collect updatedCtx t.inexpr
+      else never -- cannot be sth other than observe or assume
+    else never -- plate should be consist of lambda term
   | TmLet t -> collect {ctx with env = (mapInsert t.ident t.body ctx.env)} t.inexpr
   | t -> sfold_Expr_Expr collect ctx t
 
@@ -47,11 +71,24 @@ lang Transformation = ProbabilisticGraphicalModel
   | t -> t
 
   sem reconstruct (ctx:{assumeMap:Map Name Expr, observeAssumeMap:Map Name Name, env:Env}) =
-  | TmLet t -> match mapLookup t.ident ctx.observeAssumeMap with Some _ then
-                 reconstruct ctx t.inexpr
-               else match mapLookup t.ident ctx.assumeMap with Some a then
-                TmLet {{t with body = a} with inexpr = reconstruct ctx t.inexpr}
-               else TmLet {t with inexpr = reconstruct ctx t.inexpr}
+  | TmLet ({body=TmObserve o}&t) -> match mapLookup t.ident ctx.observeAssumeMap with Some _ then
+                                       reconstruct ctx t.inexpr
+                                     else TmLet {t with inexpr = reconstruct ctx t.inexpr}
+  | TmLet ({body=TmAssume a}&t) -> match mapLookup t.ident ctx.assumeMap with Some a then
+                                     TmLet {{t with body = a} with inexpr = reconstruct ctx t.inexpr}
+                                   else TmLet {t with inexpr = reconstruct ctx t.inexpr}
+  | TmLet ({body=TmPlate p}&t) -> match p.fun with TmLam l then
+                                    match l.body with TmAssume a then
+                                      match mapLookup t.ident ctx.assumeMap with Some a then
+                                        TmLet {{t with body=(TmPlate {p with fun=(TmLam {l with body=a})})} with inexpr= reconstruct ctx t.inexpr}
+                                      else TmLet {t with inexpr = reconstruct ctx t.inexpr}
+                                    else match l.body with TmObserve o then
+                                      match mapLookup t.ident ctx.observeAssumeMap with Some _ then
+                                        reconstruct ctx t.inexpr
+                                      else TmLet {t with inexpr = reconstruct ctx t.inexpr}
+                                    else never
+                                  else never
+  | TmLet ({body=TmSeq s}&t) -> TmLet {t with inexpr = reconstruct ctx t.inexpr}
   | t -> smap_Expr_Expr (reconstruct ctx) t
 
 end
@@ -153,23 +190,24 @@ let texample2expanded =
   let r2 = assume (Beta (if false then (addf 10.0 1.0) else 10.0) (if false then 10.0 else (addf 10.0 1.0))) in
   let r3 = assume (Beta (if true then (addf 21.0 1.0) else 21.0) (if true then 10.0 else (addf 10.0 1.0))) in
   [r1,r2,r3] in
-
+-/
 let example2plate = use MExprPPL in
   bindall_
-  [ ulet_ "params" (seq_ [(tuple_ [float_ 10.0,float_ 10.0]), (tuple_ [float_ 15.0,float_ 1.0]), (tuple_ [float_ 21.0,float_ 10.0])])
-  , ulet_ "obs" true_
+  [ ulet_ "params" (seq_ [(utuple_ [float_ 10.0,float_ 10.0]), (utuple_ [float_ 15.0,float_ 1.0]), (utuple_ [float_ 21.0,float_ 10.0])])
   , ulet_ "rvs" (plate_ (ulam_ "x" (assume_ (beta_ (tupleproj_ 0 (var_ "x")) (tupleproj_ 1 (var_ "x"))))) (var_ "params"))
+ , ulet_ "obs" true_
   , ulet_ "" (plate_ (ulam_ "x" (observe_ (var_ "obs") (bern_ (var_ "x")))) (var_ "rvs"))
   , var_ "rvs"
   ] in
 
 let texample2plate = use MExprPPL in
   bindall_
-  [  ulet_ "params" (seq_ [(tuple_ [float_ 10.0,float_ 10.0]), (tuple_ [float_ 15.0,float_ 1.0]), (tuple_ [float_ 21.0,float_ 10.0])])
-  , ulet_ "rvs" (plate_ (ulam_ "x" (assume_ (beta_ (tupleproj_ 0 (var_ "x")) (tupleproj_ 1 (var_ "x"))))) (var_ "params"))
+  [  ulet_ "params" (seq_ [(utuple_ [float_ 10.0,float_ 10.0]), (utuple_ [float_ 15.0,float_ 1.0]), (utuple_ [float_ 21.0,float_ 10.0])])
+  , ulet_ "obs" true_
+  , ulet_ "rvs" (plate_ (ulam_ "x" (assume_ (beta_ (if_ (var_ "obs") (addf_ (tupleproj_ 0 (var_ "x")) (float_ 1.0)) (tupleproj_ 0 (var_ "x")) ) (if_ (var_ "obs") (tupleproj_ 1 (var_ "x"))(addf_ (tupleproj_ 1 (var_ "x")) (float_ 1.0)))))) (var_ "params"))
   , var_ "rvs"
   ] in
--/
+
 let lda = use MExprPPL in
   bindall_
   [ ulet_ "numtopics" (int_ 2) -- the number of topics
@@ -191,5 +229,5 @@ in
 utest (transform simple1example) with tsimple1example using eqExpr in
 utest (transform simple2example) with tsimple2example using eqExpr in
 utest transform example1expanded with texample1expanded using eqExpr in
-
+utest transform example2plate with texample2plate using eqExpr in
 ()
