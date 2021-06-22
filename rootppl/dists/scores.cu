@@ -9,7 +9,6 @@
 
 #include <math.h>
 #include <stdio.h>
-// V: for assert
 #include <cassert>
 
 #include "macros/macros.cuh"
@@ -202,7 +201,9 @@ HOST DEV floating_t uniformScore(floating_t min, floating_t max, floating_t x) {
 // Returns: the log probability mass.
 HOST DEV floating_t negativeBinomialScore(floating_t x, floating_t k, floating_t p) {
     assert(0 < k);
-    assert(0.0 <= p && p <= 1.0);
+    assert(0.0 <= p);
+    assert(p <= 1.0);
+    //    assert(0.0 <= p && p <= 1.0);
   
     if (x >= 0) {
       return k*log(p) + x*log1p(-p) + lchoose(x + k - 1, x);
@@ -211,3 +212,5 @@ HOST DEV floating_t negativeBinomialScore(floating_t x, floating_t k, floating_t
     }
     
 }
+
+

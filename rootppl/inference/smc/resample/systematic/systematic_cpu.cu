@@ -21,8 +21,11 @@ HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t& resampler, i
 
     // Corresponds to ExpWeightsKernel used in the parallel implementation
     #pragma omp parallel for
-    for(int i = 0; i < numParticles; i++)
+    for(int i = 0; i < numParticles; i++) {
+        if (isnan(w[i]))
+            w[i] = -INFINITY;
         w[i] = exp(w[i] - maxLogWeight);
+    }
 
     // Calculates in the inclusive prefix sum, parallelize?
     resampler.prefixSum[0] = w[0];

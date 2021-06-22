@@ -57,4 +57,8 @@ HOST DEV floating_t uniformScore(floating_t min, floating_t max, floating_t x);
 // V: negative binomial score signature
 HOST DEV floating_t negativeBinomialScore(floating_t x, floating_t k, floating_t p);
 
+// poisson
+
+HOST DEV floating_t poissonScore(floating_t lambda, int x);
+
 #endif

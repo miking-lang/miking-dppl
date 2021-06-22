@@ -9,7 +9,6 @@
 #include <omp.h>
 #endif
 
-
 /**
  * Returns a sample from the Uniform distribution on the interval [min, max)
  * 
