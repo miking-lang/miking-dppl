@@ -3,10 +3,10 @@
 include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
 include "coreppl.mc"
+include "pgm.mc"
 
 
-
-lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + KeywordMaker
+lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + ProbabilisticGraphicalModel + KeywordMaker
 
   -- Keyword maker
   sem isKeyword =
@@ -14,6 +14,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + KeywordMake
   | TmObserve _ -> true
   | TmWeight _ -> true
   | TmDist _ -> true
+  | TmPlate _ -> true
 
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
@@ -28,6 +29,10 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + KeywordMake
                                             info = info})
   | "resample" -> Some (0, lam lst. TmResample {ty = TyUnknown {info = info},
                                                 info = info})
+  | "plate" -> Some (2, lam lst. TmPlate {fun = get lst 0,
+                                          lst = get lst 1,
+                                          ty = TyUnknown {info = info},
+                                          info = info})
   | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
                                            ty = TyUnknown {info = info},
                                            info = info})
@@ -61,7 +66,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + KeywordMake
 end
 
 let keywords =
-["assume", "observe", "weight", "resample",
+["assume", "observe", "weight", "resample", "plate",
  "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
  "Multinomial", "Dirichlet", "Exponential", "Empirical"]
 
