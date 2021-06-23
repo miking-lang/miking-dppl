@@ -58,7 +58,7 @@ DEV double runSMCNested(
         if(parallelExec) {
             #ifdef __NVCC__
             // Use nested randStates
-            execFuncs<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, numParticles, numParticles, arg);
+            execFuncs<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, numParticles, numParticles, numBblocks, arg);
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
             #endif

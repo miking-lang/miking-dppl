@@ -67,7 +67,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     while(true) {
 
         #ifdef __NVCC__
-        execFuncs<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, arg);
+        execFuncs<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, numBblocks, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
         floating_t logWeightSum = calcLogWeightSumGpu(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
@@ -87,11 +87,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
         essList.push_back(ess);
 
-        // if(logWeightSum == -INFINITY || isnan(logWeightSum)) {
-        //     printf("Weight Sum = 0, terminating...\n");
-        //     break;
-        // }
-
         if(logWeightSum == -INFINITY) {
             printf("logWeightSum is -INFINITY, terminating...\n");
             break;
@@ -104,6 +99,18 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
 
         // Assumption: All terminate at the same time
         bool terminate = particles.pcs[0] >= numBblocks || particles.pcs[0] < 0;
+
+        // Break above assumption: Only terminate if all particles have terminated
+        if (terminate) {
+            for(int i = 0; i < numParticles; i++) {
+                bool particleTerminated = particles.pcs[i] >= numBblocks || particles.pcs[i] < 0;
+                if (! particleTerminated) {
+                    terminate = false;
+                    break;
+                }
+            }
+        }
+
         bool resample = ess < RESAMPLE_THRESHOLD * numParticles;
 
         // Only add to log norm constant if resampling should be done (or if we are about to terminate)
