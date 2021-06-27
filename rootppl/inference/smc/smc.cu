@@ -32,8 +32,10 @@
 #include "smc_kernels.cuh"
 #endif
 
-// Resample if relative ESS < RESAMPLE_THRESHOLD * N (default threshold in Birch is 0.7) 
-const floating_t RESAMPLE_THRESHOLD = 0.7;
+// Resample if relative ESS < ESS_THRESHOLD * N (default threshold in Birch is 0.7) 
+#ifndef ESS_THRESHOLD
+const floating_t ESS_THRESHOLD = 0.7;
+#endif
  
 double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int ompThreads, const int particlesPerThread,
                 size_t progStateSize, callbackFunc_t callback, void* arg) {
@@ -111,7 +113,7 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
             }
         }
 
-        bool resample = ess < RESAMPLE_THRESHOLD * numParticles;
+        bool resample = ess < ESS_THRESHOLD * numParticles;
 
         // Only add to log norm constant if resampling should be done (or if we are about to terminate)
         if (resample || terminate)
