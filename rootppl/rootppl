@@ -54,6 +54,12 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    --ess_threshold)
+    ess_threshold="$2"
+    args="${args} ESS_THRESHOLD=${ess_threshold}"
+    shift # past argument
+    shift # past value
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument

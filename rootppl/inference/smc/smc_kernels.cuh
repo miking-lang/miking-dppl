@@ -25,9 +25,10 @@ __global__ void initCurandStates(curandState* randStates, int numThreads, int se
  * @param particles the particles used by SMC.
  * @param funcs the array of bblocks that can be executed.
  * @param numParticles the number of particles used by SMC.
+ * @param numBblocks the size of the bblock array
  * @param arg argument that are passed to the bblocks when invoking them, often not used and set to NULL. 
  */
 __global__ void execFuncs(curandState* randStates, particles_t particles, const pplFunc_t* funcs, 
-                            int numParticles, int numThreads, void* arg);
+                            int numParticles, int numThreads, int numBblocks, void* arg);
 
 #endif
