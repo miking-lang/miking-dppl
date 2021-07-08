@@ -21,7 +21,7 @@ int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
 const int K = 5;
-const int M = 5;
+const int M = 100;
 
 INIT_MODEL(floating_t, 1);
 

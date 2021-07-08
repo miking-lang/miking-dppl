@@ -23,8 +23,9 @@ DEV floating_t betaBernoulli(RAND_STATE_DECLARE beta_t& p) {
   assert(0.0 < p.alpha); 
   assert(0.0 < p.beta);
 
-  floating_t eps = SAMPLE(beta, p.alpha, p.beta);
-  int x = SAMPLE(bernoulli, eps);
+  //floating_t eps = SAMPLE(beta, p.alpha, p.beta);
+  floating_t prob = p.alpha/(p.alpha + p.beta);
+  int x = SAMPLE(bernoulli, prob);
   
   // Updates
   p.alpha = p.alpha + x;

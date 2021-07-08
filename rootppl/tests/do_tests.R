@@ -94,6 +94,6 @@ do_test(left= "testLogAlphaSigmaSquared", right = "testLogAlphaSigmaSquaredDelay
 
 do_test(left= "testWaitingTimeMultipass", right = "testWaitingTimeDelayedMultipass", size = 1000)
 
-renormalize_log_weights_stable(test_file = "testBetaBernoulli")
-renormalize_log_weights_stable(test_file = "testBernoulli")
+renormalize_log_weights_stable(test_file = "testBetaBernoulli", subsample_size = 100)
+renormalize_log_weights_stable(test_file = "testBernoulli", subsample_size = 100)
 do_test(left= "testBernoulli", right = "testBetaBernoulli")

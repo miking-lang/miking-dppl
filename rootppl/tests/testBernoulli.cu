@@ -15,7 +15,7 @@
 const floating_t alpha_p = 3.0; // first shape
 const floating_t beta_p = 3.0;  // second shape
 const int K = 5  ; // number of trials
-const int M = 5;  // subsample size in callback
+const int M = 100;// subsample size in callback
 
 const std::string testName = "testBernoulli";
 
