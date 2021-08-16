@@ -1,7 +1,6 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
--- include "../models/crbd.mc"
 
 include "rootppl.mc"
 
@@ -49,7 +48,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
       dist
 
-  -- Extensions
+  -- Compilation of distributions
   sem compileDist (env: CompileCEnv) =
   | DBernoulli { p = p } -> CDBern { p = compileExpr env p }
   | DBeta { a = a, b = b } ->
@@ -68,7 +67,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | DGamma { k = k, theta = theta } ->
     CDGamma { k = compileExpr env k, theta = compileExpr env theta}
 
-  -- Extensions
+  -- Extensions to C expression compilation
   sem compileExpr (env: CompileCEnv) =
   | TmAssume _ -> error "Assume without direct distribution"
   | TmAssume { dist = TmDist { dist = dist }} ->
@@ -116,6 +115,7 @@ let debugPrint: [CTop] -> [CTop] -> [CStmt]-> String =
     match mapAccumL (printCTop 0) env types with (env,types) then
     match mapAccumL (printCTop 0) env tops with (env,tops) then
     match printCStmts 0 env inits with (env,inits) then
+
       let types = strJoin (pprintNewline 0) types in
       let tops = strJoin (pprintNewline 0) tops in
       join [
@@ -142,6 +142,22 @@ let nameStack = nameSym "stack"
 let nameStackPtr = nameSym "stackPtr"
 let nameRet = nameSym "ret"
 let nameGlobalTy = nameSym "GLOBAL"
+
+-- Get the names of all globally accessible non-function data.
+let findGlobalNames: Expr -> [Name] = use MExprPPLRootPPLCompile in
+  lam expr: Expr.
+    recursive let rec = lam acc: [Name]. lam expr: Expr.
+      match expr with TmLet { ident = ident, body = ! TmLam _, inexpr = inexpr }
+      then rec (cons ident acc) inexpr
+      else match expr with
+        TmLet { inexpr = inexpr }
+        | TmRecLets { inexpr = inexpr }
+        | TmType { inexpr = inexpr }
+        | TmConDef { inexpr = inexpr }
+        | TmExt { inexpr = inexpr }
+      then rec acc inexpr
+      else acc
+    in rec [] expr
 
 -- RootPPL compile function
 let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
@@ -171,7 +187,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       else false -- This is too conservative
     in
 
-
     -- Extract the name and type from a definition, or recurse further.
     recursive let extractDef: Map Name Type -> CStmt -> Map Name Type =
       lam map. lam stmt.
@@ -185,8 +200,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       let m = mapEmpty nameCmp in
       let m = foldl (lam m. lam top.
         let m = match top with CTFun { params = params } then
-                    foldl (lam m. lam t. mapInsert t.1 t.0 m) m params
-                  else m in
+                  foldl (lam m. lam t. mapInsert t.1 t.0 m) m params
+                else m in
         sfold_CTop_CStmt extractDef m top
       ) m tops in
       let m = foldl extractDef m inits in
@@ -347,13 +362,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     -- Top-level return type
+    -- dprint (ty prog); printLn "";
     let retTy: CType = compileType env (ty prog) in
 
     -- Get stack frame for initialization code
     let initSF: StackFrame =
-        let sf = newStackFrame nameInit retTy in
-        let acc = findLocals (emptyAccSF sf) inits in
-        acc.sf
+      let sf = newStackFrame nameInit retTy in
+      let acc = findLocals (emptyAccSF sf) inits in
+      acc.sf
     in
 
     -------------------------------------------------------
@@ -361,7 +377,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -------------------------------------------------------
 
     -- Retrieve global allocations from a list of C statements
-    let globals: [(Name,Ctype)] =
+    let globals: [(Name,CType)] =
         foldl (lam acc: [(Name,CType)]. lam stmt: CStmt.
 
           -- Global struct allocation
@@ -383,8 +399,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         ) [] inits
     in
 
-    let f = lam g: [(Name,CType)].
-      filter (lam l. not (any (lam r. nameEq l.0 r.0) g)) in
     let initSF: StackFrame = { initSF with mem =
       filter (lam l. not (any (lam r. nameEq l.0 r.0) globals)) initSF.mem
     } in
@@ -410,7 +424,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         recursive let rec = lam stmt: CStmt.
 
-          -- Always remove cealloc
+          -- Always remove CEAlloc
+          -- TODO(dlunde,2021-08-16): For resample-free functions, we should not remove this. Instead, we should allocate in the normal way and make the pointer relative to the stackPtr (for compatibility with other pointers). This is fine, as the scope of these allocations will always end before the next resample.
           match stmt with CSDef { init = Some (CIExpr { expr = CEAlloc {} }) }
           then []
 
@@ -422,13 +437,11 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               match init with Some init then
                 match init with CIExpr { expr = expr } then
                   [CSExpr { expr = CEBinOp {
-                    op = COAssign {},
-                    lhs = CEVar { id = id },
-                    rhs = expr
-                  }}]
-                else match init with None () then
-                  error "Non-CIExpr initializer in replaceDefs"
-                else never
+                     op = COAssign {},
+                     lhs = CEVar { id = id },
+                     rhs = expr
+                   }}]
+                else error "Non-CIExpr initializer in replaceDefs"
               else []
             else [stmt]
 
@@ -532,7 +545,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     ) tops in
     let inits: [CStmt] = map (smap_CStmt_CExpr replaceDeref) inits in
 
-
     ---------------------------
     -- REPLACE VARIABLE USES --
     ---------------------------
@@ -575,6 +587,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 CEArrow { lhs = CEVar { id = nameSF }, id = id }
 
             -- Leave other variables
+            -- TODO(dlunde,2021-08-16): I think we need to handle at least the allocated struct in resample-free functions as well.
             else expr
 
           else smap_CExpr_CExpr rec expr
@@ -588,6 +601,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       else error "Not a CTFun when replacing var uses"
     ) tops in
     let inits: [CStmt] = map (smap_CStmt_CExpr (replaceVar initSF.mem)) inits in
+
+    -- print (debugPrint types tops inits);
 
 
     ----------------------------------
@@ -606,7 +621,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     type AccSplit = {
       -- Indicates what to do at an endpoint
       next: Next,
-      -- Indicates if a split has occured at the end of current block
+      -- Indicates if a split has occurred
       hasSplit: Bool,
       -- Accumulated block
       block: [CStmt],
@@ -615,11 +630,11 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     } in
 
     -- Empty accumulator
-    let emptyAccSplit = lam sfs.
-      { next = Collapse (), hasSplit = false, block = [], sfs = sfs, tops = [] }
+    let emptyAccSplit =
+      { next = Collapse (), hasSplit = false, block = [], tops = [] }
     in
 
-    -- C statement for setting the PC to a name
+    -- C statement for setting the PC from an expression
     let setPCFromExpr: CExpr -> CExpr = lam expr.
       (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CEPC {}
                                 , rhs = expr })})
@@ -635,7 +650,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let initNextName: AccSplit -> AccSplit = lam acc: AccSplit.
       match acc.next with Block (Some name) then acc
       else match acc.next with Block (None ()) then
-        {acc with next = Block (Some (nameSym "lazy"))}
+        {acc with next = Block (Some (nameSym "bblock"))}
       else error "Error in initNextName"
     in
 
@@ -652,7 +667,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       } }
     in
 
-    -- BBLOCK_CALL(DATA_POINTER(bblocksArr)[expr])
+    -- BBLOCK_CALL(DATA_POINTER(bblocksArr)[expr], NULL)
     let callFromExpr = lam expr: CExpr.
         CSExpr { expr = CEApp {
           fun = nameBblockCall, args = [
@@ -668,7 +683,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           ] }
         }
     in
-
 
     -- Deref shorthand
     let derefExpr: CExpr -> CExpr = lam expr.
@@ -715,7 +729,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         in {acc with tops = snoc acc.tops bb}
     in
 
-    -- Generate code for collapsing a stack frame.
+    -- Generate code for shifting the stack pointer by a stack frame
     let modStackPtr: CBinOp -> StackFrame -> CStmt =
       lam op: CBinOp. lam sf: StackFrame.
 
@@ -777,7 +791,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         join [[callsf, ra], args, ret, [incr, call]]
     in
 
-    let constructCallFromStmt: StackFrame -> CStmt -> Name -> [Cstmt] =
+    let constructCallFromStmt: StackFrame -> CStmt -> CExpr -> [Cstmt] =
       lam sf: StackFrame.
       lam stmt: CStmt.
       lam ra: CExpr.
@@ -879,7 +893,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
           -- Not a function application, resample, or return. Just accumulate
           -- and continue
-          else match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then
+          else match stmt with CSDef _ | CSExpr _ | CSNop _ then
             splitStmts {acc with block = snoc acc.block stmt} sf stmts
 
           -- If statement
@@ -961,8 +975,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     -- Iterate over top-level definitions and split functions into BBLOCKs
-    -- NOTE(dlunde,2021-05-21): Currently, _all_ functions are split. Later on,
-    -- we only want to split where necessary.
     let splitFunctions: AccSplit -> [CTop] -> AccSplit =
       lam acc: AccSplit. lam tops: [CTop].
         foldl (lam acc: AccSplit. lam top: CTop.
@@ -994,7 +1006,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     -- Split functions into BBLOCKs
-    let accSplit = emptyAccSplit sfs in
+    let accSplit = emptyAccSplit in
     let tops = match splitFunctions accSplit tops with { tops = tops }
                then tops else never in
     let tops = concat tops (splitInit accSplit initSF inits) in
@@ -1003,9 +1015,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -------------------
     -- FINAL TOUCHES --
     -------------------
-
-    -- Stack size (should be determined from command line arg)
-    let stackSize = 100000 in
 
     -- Initialize PSTATE.stack = sizeof(GLOBAL)
     let initStackPtr = CSExpr { expr = CEBinOp {
@@ -1037,7 +1046,9 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       body = [setPCFromExpr (CEInt { i = negi 1 })]
     } in
 
-    -- PSTATE contents
+
+    -- PSTATE contents (directly supported in RootPPL now)
+    -- let stackSize = 100000 in
     -- let progStateMem = [
     --   ( CTyArray { ty = CTyChar {}, size = Some (CEInt { i = stackSize })}
     --   , Some nameStack ),
@@ -1098,22 +1109,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     else never
 
--- Get the names of all globally accessible non-function data.
-let findGlobalNames: Expr -> [Name] = use MExprPPLRootPPLCompile in
-  lam expr: Expr.
-    recursive let rec = lam acc: [Name]. lam expr: Expr.
-      match expr with TmLet { ident = ident, body = ! TmLam _, inexpr = inexpr }
-      then rec (cons ident acc) inexpr
-      else match expr with
-        TmLet { inexpr = inexpr }
-        | TmRecLets { inexpr = inexpr }
-        | TmType { inexpr = inexpr }
-        | TmConDef { inexpr = inexpr }
-        | TmExt { inexpr = inexpr }
-      then rec acc inexpr
-      else acc
-    in rec [] expr
-
 -- Entry point for compiler
 let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
@@ -1132,6 +1127,9 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
 
+  -- dprint prog; print "\n\n";
+  -- print (expr2str prog); print "\n\n";
+
   -- TODO Find resample-free functions
 
   -- TODO Find shared global data
@@ -1139,19 +1137,16 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
   -- Type lift
   match typeLift prog with (env, prog) then
 
-    -- print (expr2str prog); print "\n\n";
+  -- Run RootPPL compiler
+  let rpprog: RPProg = rootPPLCompileH env globals prog in
 
-    -- Run RootPPL compiler
-    let rpprog: RPProg = rootPPLCompileH env globals prog in
+  -- print (printCompiledRPProg rpprog); print "\n\n";
 
-    -- print (printCompiledRPProg rpprog); print "\n\n";
-
-    rpprog
+  rpprog
 
   else never
 
 mexpr
 -- use MExprPPLRootPPLCompile in
--- rootPPLCompile crbd;
 
 ()
