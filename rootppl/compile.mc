@@ -387,13 +387,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       { sf = sf, defs = [], prevDefs = [], hasSplit = false }
     in
 
-    -- Add a local alloc to accumulator
-    let addLocalAlloc: AccStackFrames -> (Name,CType) -> AccStackFrames =
-      lam acc: AccStackFrames. lam e: (Name,CType).
-        -- Guaranteed to not already exist, so no check needed here
-        {acc with sf = {acc.sf with mem = cons (e.0,tyDeref e.1) acc.sf.mem}}
-    in
-
     -- Add all local variables used in an expression that traverse BBLOCK
     -- boundaries to the accumulator
     recursive let addLocals: AccStackFrames -> CExpr -> AccStackFrames =
@@ -436,7 +429,10 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               ty = ty,
               id = Some id,
               init = Some (CIExpr { expr = CEAlloc {} })
-            } then addLocalAlloc acc (id,ty) else acc
+            } then
+              -- Guaranteed to not already exist, so no check needed here
+              {acc with sf = {acc.sf with mem = cons (id,tyDeref ty) acc.sf.mem}}
+            else acc
           in
 
           -- Add used locals from prevDef
@@ -1065,7 +1061,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 -- Only deref if not allocated
                 match ty with ! CTyStruct _ then derefExpr expr
                 else expr
-              else dprint id; error "Unknown type for id"
+              else error "Unknown type for id"
 
             -- Leave other variables
             else expr
@@ -1165,9 +1161,9 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match res with (funDecls, tops) then
 
-    ---------------------------------
-    -- PUTTING EVERYTHING TOGETHER --
-    ---------------------------------
+    -----------------------------
+    -- PUT EVERYTHING TOGETHER --
+    -----------------------------
 
     -- Initialize PSTATE.stack = sizeof(GLOBAL)
     let initStackPtr = CSExpr { expr = CEBinOp {
