@@ -344,17 +344,20 @@ lang RootPPL = CAst + CPrettyPrint
     in
 
     let copyDataGPU: String =
-      let copies = foldl (lam acc. lam top.
+      foldl (lam acc. lam top.
+        match acc with (env,strs) then
         match top with CTBBlockData { ty = ty, id = id } then
           match pprintEnvGetStr env id with (env,id) then
           match printCType "" env ty with (env,ty) then
             let str = join ["  COPY_DATA_GPU(", id, ", ", ty, ", 1);"] in
-            snoc acc str
+            (env,snoc strs str)
           else never
           else never
         else acc
-      ) [] tops in strJoin "\n" copies
-    in
+        else never
+      ) (env,[]) tops in
+    match copyDataGPU with (env,copyDataGPU) then
+    let copyDataGPU = strJoin "\n" copyDataGPU in
 
     match printProgState indent env pStateTy with (env,pStateTy) then
     match mapAccumL (printCTop indent) env types with (env,types) then
@@ -389,6 +392,7 @@ lang RootPPL = CAst + CPrettyPrint
       ]
     ])
 
+    else never
     else never
     else never
     else never
