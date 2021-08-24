@@ -20,7 +20,8 @@ let nameProgState = nameSym "progState_t"
 let rpKeywords = concat (map nameNoSym [
   "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "PC", "bernoulli",
   "beta", "discrete", "multinomial", "dirichlet", "exponential", "uniform",
-  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK", "particleIdx"
+  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK", "particleIdx",
+  "lnFactorial"
 ]) [
   nameBblocksArr, nameBblockCall, nameDataPointer, nameNull, nameUIntPtr,
   nameProgState
@@ -38,15 +39,20 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockData { ty: CType, id: Name }
 
   -- Basic block helpers (essentially regular functions with special syntax)
-  | CTBBlockHelperDecl { ty: CType, id: Name }
-  | CTBBlockHelper { ret: CType, id: Name, params: [(CType,Name)], body: [Stmt] }
+  | CTBBlockHelperDecl { ret: CType, id: Name, params: [CType] }
+  | CTBBlockHelper { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
 
   -- Basic blocks
   | CTBBlockDecl { id : Name }
-  | CTBBlock { id: Name, body: [Stmt] }
+  | CTBBlock { id: Name, body: [CStmt] }
 
 
   sem smap_CTop_CExpr (f: CExpr -> CExpr) =
+  | CTBBlockData _ & t -> t
+  | CTBBlockHelperDecl _ & t -> t
+  | CTBBlockHelper t ->
+    CTBBlockHelper { t with body = map (smap_CStmt_CExpr f) t.body }
+  | CTBBlockDecl _ & t -> t
   | CTBBlock t -> CTBBlock { t with body = map (smap_CStmt_CExpr f) t.body }
 
 
@@ -130,7 +136,24 @@ lang RootPPL = CAst + CPrettyPrint
 
 
   syn RPProg =
-  | RPProg { includes: [String], pStateTy: CType, types: [CTop], tops: [CTop] }
+  | RPProg {
+
+      -- Header files to include
+      includes: [String],
+
+      -- Program state type (None () for the RootPPL stack PSTATE)
+      pStateTy: Option CType,
+
+      -- Type definitions
+      types: [CTop],
+
+      -- Top-level definitions
+      tops: [CTop],
+
+      -- Code that runs prior to inference
+      pre: [CStmt]
+
+    }
 
 
   ---------------------
@@ -138,6 +161,51 @@ lang RootPPL = CAst + CPrettyPrint
   ---------------------
 
   sem printCTop (indent : Int) (env: PprintEnv) =
+
+  | CTBBlockData { ty = ty, id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      match printCType "" env ty with (env,ty) then
+        (env, join ["BBLOCK_DATA(", id, ", ", ty, ", 1)"])
+      else never
+    else never
+
+  | CTBBlockHelperDecl { ret = ret, id = id, params = params } ->
+    let i = indent in
+    let ii = pprintIncr indent in
+    match pprintEnvGetStr env id with (env,id) then
+      let f = printCType "" in
+      match mapAccumL f env params with (env,params) then
+        let params = strJoin ", " params in
+        match printCType "" env ret with (env,ret) then
+          (env, join ["BBLOCK_HELPER_DECLARE(", id, ", ", ret, ", ", params, ");"])
+        else never
+      else never
+    else never
+
+  | CTBBlockHelper { ret = ret, id = id, params = params, body = body } ->
+    let i = indent in
+    let ii = pprintIncr indent in
+    match pprintEnvGetStr env id with (env,id) then
+      let f = lam env. lam t: (CType,Name).
+        match pprintEnvGetStr env t.1 with (env,t1) then
+          printCDef env t.0 t1 (None ())
+        else never in
+      match mapAccumL f env params with (env,params) then
+        let params = strJoin ", " params in
+        match printCType "" env ret with (env,ret) then
+          match printCStmts ii env body with (env,body) then
+            (env, join ["BBLOCK_HELPER(", id, ", {",
+                        pprintNewline ii, body, pprintNewline i,
+                        "}, ", ret, ", ", params, ")"])
+          else never
+        else never
+      else never
+    else never
+
+  | CTBBlockDecl { id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      (env, join [ "BBLOCK_DECLARE(", id, ");" ])
+    else never
 
   | CTBBlock { id = id, body = body } ->
     let i = indent in
@@ -150,10 +218,6 @@ lang RootPPL = CAst + CPrettyPrint
       else never
     else never
 
-  | CTBBlockDecl { id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
-      (env, join [ "BBLOCK_DECLARE(", id, ");" ])
-    else never
 
 
   sem printCExpr (env: PprintEnv) =
@@ -241,13 +305,17 @@ lang RootPPL = CAst + CPrettyPrint
 
 
   sem printRPProg (nameInit: [Name]) =
-  | RPProg { includes = includes, pStateTy = pStateTy, types = types, tops = tops } ->
+  | RPProg {
+      includes = includes,
+      pStateTy = pStateTy,
+      types = types,
+      tops = tops,
+      pre = pre
+    } ->
 
     let blockNames: [Name] = foldl (lam acc. lam top.
       match top with CTBBlock { id = id } then snoc acc id else acc
     ) [] tops in
-
-    let blockDecls = map (lam n. CTBBlockDecl { id = n } ) blockNames in
 
     recursive let replaceBBlockWithIndex = lam expr: CExpr.
       match expr with CEBBlockName { name = name } then
@@ -275,43 +343,60 @@ lang RootPPL = CAst + CPrettyPrint
       else (env,"")
     in
 
-    match printProgState indent env pStateTy with (env,pStateTy) then
-      match mapAccumL (printCTop indent) env types with (env,types) then
-        match mapAccumL (printCTop indent) env blockDecls
-        with (env,blockDecls) then
-          match mapAccumL (printCTop indent) env tops with (env,tops) then
-            match mapAccumL pprintEnvGetStr env blockNames
-            with (env, blockNames) then
-
-              let init =
-                match pStateTy with Some _ then "INIT_MODEL(progState_t,"
-                else "INIT_MODEL_STACK("
-              in
-
-              let pStateTy = match pStateTy with "" then [] else [pStateTy] in
-
-              strJoin (pprintNewline indent) (join [
-                includes,
-                types,
-                pStateTy,
-                [ join [ init
-                       , int2string (length blockNames)
-                       , ")"
-                       ]
-                ],
-                blockDecls,
-                tops,
-                [ "MAIN({"
-                , strJoin "\n"
-                    (map (lam s. join ["  ADD_BBLOCK(", s ,");"]) blockNames)
-                , "  SMC(NULL);"
-                , "})"
-                ]
-              ])
-            else never
+    let copyDataGPU: String =
+      foldl (lam acc. lam top.
+        match acc with (env,strs) then
+        match top with CTBBlockData { ty = ty, id = id } then
+          match pprintEnvGetStr env id with (env,id) then
+          match printCType "" env ty with (env,ty) then
+            let str = join ["  COPY_DATA_GPU(", id, ", ", ty, ", 1);"] in
+            (env,snoc strs str)
           else never
+          else never
+        else acc
         else never
-      else never
+      ) (env,[]) tops in
+    match copyDataGPU with (env,copyDataGPU) then
+    let copyDataGPU = strJoin "\n" copyDataGPU in
+
+    match printProgState indent env pStateTy with (env,pStateTy) then
+    match mapAccumL (printCTop indent) env types with (env,types) then
+    match mapAccumL (printCTop indent) env tops with (env,tops) then
+    match mapAccumL pprintEnvGetStr env blockNames with (env,blockNames) then
+    match printCStmts 2 env pre with (env,pre) then
+
+    let init =
+      match pStateTy with Some _ then "INIT_MODEL(progState_t,"
+      else "INIT_MODEL_STACK("
+    in
+
+    let pStateTy = match pStateTy with "" then [] else [pStateTy] in
+
+    strJoin (pprintNewline indent) (join [
+      includes,
+      types,
+      pStateTy,
+      [ join [ init
+             , int2string (length blockNames)
+             , ")"
+             ]
+      ],
+      tops,
+      [ "MAIN({"
+      , concat "  " pre
+      , copyDataGPU
+      , strJoin "\n"
+          (map (lam s. join ["  ADD_BBLOCK(", s ,");"]) blockNames)
+      , "  SMC(NULL);"
+      , "})"
+      ]
+    ])
+
+    else never
+    else never
+    else never
+    else never
+    else never
     else never
 end
 
