@@ -83,6 +83,9 @@ body
 
 // Call functions that takes the particles as argument (syntactic sugar).
 #define BBLOCK_CALL(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)
+
+// Declares global data with CUDA managed memory to handle transfers between host and device. 
+#define BBLOCK_DATA_MANAGED(pointerName, type, n) MANAGED type pointerName[n];
 /***    *****    ***/
 
 
