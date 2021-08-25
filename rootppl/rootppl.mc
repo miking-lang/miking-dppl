@@ -383,7 +383,7 @@ lang RootPPL = CAst + CPrettyPrint
       ],
       tops,
       [ "MAIN({"
-      , concat "  " pre
+      , if null pre then "" else concat "  " pre
       , copyDataGPU
       , strJoin "\n"
           (map (lam s. join ["  ADD_BBLOCK(", s ,");"]) blockNames)
