@@ -65,7 +65,7 @@ An example output of this:
 Num particles close to target: 98.9%, MinX: 56.2349, MaxX: 91.1572
 ```
 First is the command that is executed, it executes the executable `program` with program argument `1000`.
-The second row is the normalizing constant. The last row is a a print statement within the model. 
+The first row is the normalizing constant. The second row is a print statement within the model. 
 
 You can supply a second argument to `program`, which is the number of sweeps:
 ```
