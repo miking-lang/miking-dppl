@@ -1041,10 +1041,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
             -- Deterministic global
             else match mapLookup id identCats with Some 0 then
-              let expr =
-                if stoch then CEApp { fun = nameDataPointer, args = [expr] }
-                else expr
-              in
               match mapLookup id defMap with Some ty then
                 -- Only deref if not allocated
                 match ty with ! CTyStruct _ then derefExpr expr
@@ -1066,7 +1062,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       else top
     ) tops in
     let detInits = map (smap_CStmt_CExpr (replaceGlobalVar false)) detInits in
-
 
 
     -----------------------------------------------
