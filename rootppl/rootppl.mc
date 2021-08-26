@@ -165,7 +165,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockData { ty = ty, id = id } ->
     match pprintEnvGetStr env id with (env,id) then
       match printCType "" env ty with (env,ty) then
-        (env, join ["BBLOCK_DATA(", id, ", ", ty, ", 1)"])
+        (env, join ["BBLOCK_DATA_MANAGED(", id, ", ", ty, ", 1)"])
       else never
     else never
 
@@ -343,22 +343,6 @@ lang RootPPL = CAst + CPrettyPrint
       else (env,"")
     in
 
-    let copyDataGPU: String =
-      foldl (lam acc. lam top.
-        match acc with (env,strs) then
-        match top with CTBBlockData { ty = ty, id = id } then
-          match pprintEnvGetStr env id with (env,id) then
-          match printCType "" env ty with (env,ty) then
-            let str = join ["  COPY_DATA_GPU(", id, ", ", ty, ", 1);"] in
-            (env,snoc strs str)
-          else never
-          else never
-        else acc
-        else never
-      ) (env,[]) tops in
-    match copyDataGPU with (env,copyDataGPU) then
-    let copyDataGPU = strJoin "\n" copyDataGPU in
-
     match printProgState indent env pStateTy with (env,pStateTy) then
     match mapAccumL (printCTop indent) env types with (env,types) then
     match mapAccumL (printCTop indent) env tops with (env,tops) then
@@ -383,8 +367,7 @@ lang RootPPL = CAst + CPrettyPrint
       ],
       tops,
       [ "MAIN({"
-      , concat "  " pre
-      , copyDataGPU
+      , if null pre then "" else concat "  " pre
       , strJoin "\n"
           (map (lam s. join ["  ADD_BBLOCK(", s ,");"]) blockNames)
       , "  SMC(NULL);"
@@ -392,7 +375,6 @@ lang RootPPL = CAst + CPrettyPrint
       ]
     ])
 
-    else never
     else never
     else never
     else never

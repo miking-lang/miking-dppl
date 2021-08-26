@@ -279,7 +279,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match res with (tops,globals) then
 
-
     ------------------
     -- DIVIDE INITS --
     ------------------
@@ -289,7 +288,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         match acc with false then false
         else match expr with CEResample _ | CESample _ | CEWeight _ then false
         else match expr with CEVar { id = id }
-                           | CEApp { id = id }
+                           | CEApp { fun = id }
                            | CEMember { id = id }
                            | CEArrow { id = id } then
           if isIdentDet id then sfold_CExpr_CExpr rec acc expr else false
@@ -320,6 +319,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     match inits with (detInits, stochInits) then
+
+    -- print (_debugPrint types tops detInits stochInits);
 
     ------------------------
     -- ADD BBLOCK_HELPERS --
@@ -421,20 +422,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             then { acc with defs = cons (name,ty) acc.defs } else acc
           in
 
-          -- Always add pointers to allocated structs to locals, since these
-          -- might implicitly traverse block boundaries through other
-          -- variables.
-          let acc =
-            match stmt with CSDef {
-              ty = ty,
-              id = Some id,
-              init = Some (CIExpr { expr = CEAlloc {} })
-            } then
-              -- Guaranteed to not already exist, so no check needed here
-              {acc with sf = {acc.sf with mem = cons (id,tyDeref ty) acc.sf.mem}}
-            else acc
-          in
-
           -- Add used locals from prevDef
           let acc =
             match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then
@@ -446,7 +433,10 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
           -- Block split on applications
           match stmt with CSDef { init = Some (CIExpr { expr = CEApp app }) }
-                        | CSExpr { expr = CEApp app } then
+                        | CSExpr { expr = CEApp app }
+                        | CSExpr { expr = CEBinOp {
+                            op = COAssign {}, rhs = CEApp app }
+                          } then
             if resampleFree app.fun then acc
             else nextBBlock acc
 
@@ -517,8 +507,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                  else error "Invalid top in topStackFrame" in
         getStackFrame id sfs
     in
-
-    -- print (_debugPrint types tops detInits stochInits);
 
 
     --------------------------------------
@@ -1053,10 +1041,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
             -- Deterministic global
             else match mapLookup id identCats with Some 0 then
-              let expr =
-                if stoch then CEApp { fun = nameDataPointer, args = [expr] }
-                else expr
-              in
               match mapLookup id defMap with Some ty then
                 -- Only deref if not allocated
                 match ty with ! CTyStruct _ then derefExpr expr
@@ -1078,7 +1062,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       else top
     ) tops in
     let detInits = map (smap_CStmt_CExpr (replaceGlobalVar false)) detInits in
-
 
 
     -----------------------------------------------
@@ -1272,6 +1255,8 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- Type annotate
   let prog: Expr = typeAnnot prog in
+
+  -- print (expr2str prog); print "\n\n";
 
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
