@@ -12,6 +12,7 @@ include "c/pprint.mc"
 -- Explicit handles on certain keywords
 let nameBblocksArr = nameSym "bblocksArr"
 let nameBblockCall = nameSym "BBLOCK_CALL"
+let nameBblockJump = nameSym "BBLOCK_JUMP"
 let nameDataPointer = nameSym "DATA_POINTER"
 let nameNull = nameSym "NULL"
 let nameUIntPtr = nameSym "uintptr_t"
@@ -23,8 +24,8 @@ let rpKeywords = concat (map nameNoSym [
   "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK", "particleIdx",
   "lnFactorial"
 ]) [
-  nameBblocksArr, nameBblockCall, nameDataPointer, nameNull, nameUIntPtr,
-  nameProgState
+  nameBblocksArr, nameBblockCall, nameBblockJump, nameDataPointer, nameNull,
+  nameUIntPtr, nameProgState
 ]
 
 lang RootPPL = CAst + CPrettyPrint

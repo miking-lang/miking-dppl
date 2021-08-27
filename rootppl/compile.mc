@@ -145,6 +145,30 @@ let nameStackPtr = nameSym "stackPtr"
 let nameRet = nameSym "ret"
 let nameGlobalTy = nameSym "GLOBAL"
 
+-- Strip unnecessary lets. Leaves lets around TmApps when they are returned from
+-- functions rather than bound in a let, to allow for correct stack handling.
+let removeRedundantLets: Expr -> Expr = use MExprPPLRootPPLCompile in
+  lam expr: Expr.
+    recursive let rec: Bool -> Expr -> Expr = lam inLet. lam expr.
+
+      -- Let
+      match expr
+      with TmLet ({ ident = idLet, body = body, inexpr = inexpr } & t) then
+        let ok = match body with TmApp _ then inLet else true in
+        if ok then
+          let f = lam. TmLet {{ t with body = rec true body }
+                                  with inexpr = rec inLet inexpr } in
+          match inexpr with TmVar {ident = idExpr} then
+            if nameEq idLet idExpr then (rec inLet) body
+            else f ()
+          else f ()
+        else smap_Expr_Expr (rec inLet) expr
+
+      -- Not a let
+      else smap_Expr_Expr (rec inLet) expr
+
+    in rec false expr
+
 -- Find the categories of all identifiers. Assumes there are no first-class
 -- functions (proper CFA required in that case). Possible categories:
 -- * 0: Deterministic
@@ -214,6 +238,9 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -------------------------
 
     match compile typeEnv prog with (env, types, tops, inits, retTy) then
+
+
+    -- print (_debugPrint types tops inits inits);
 
     ------------------------
     -- COMMON DEFINITIONS --
@@ -423,13 +450,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           in
 
           -- Add used locals from prevDef
-          let acc =
-            match stmt with CSDef _ | CSExpr _ | CSRet _ | CSNop _ then
-              sfold_CStmt_CExpr addLocals acc stmt
-            else match stmt with CSIf { cond = cond } then
-              addLocals acc cond
-            else error "Unsupported term when adding locals"
-          in
+          let acc = sfold_CStmt_CExpr addLocals acc stmt in
 
           -- Block split on applications
           match stmt with CSDef { init = Some (CIExpr { expr = CEApp app }) }
@@ -642,16 +663,16 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     -- BBLOCK_CALL(name, NULL)
-    let callBBlock = lam name: Name.
+    let jumpBBlock = lam name: Name.
       CSExpr { expr = CEApp {
-        fun = nameBblockCall, args = [CEVar {id = name}, CEVar {id = nameNull}]
+        fun = nameBblockJump, args = [CEVar {id = name}, CEVar {id = nameNull}]
       } }
     in
 
     -- BBLOCK_CALL(DATA_POINTER(bblocksArr)[expr], NULL)
     let callFromExpr = lam expr: CExpr.
         CSExpr { expr = CEApp {
-          fun = nameBblockCall, args = [
+          fun = nameBblockJump, args = [
             CEBinOp {
               op = COSubScript {},
               lhs = CEApp {
@@ -804,7 +825,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         let incr = incrementStackPtr sf in
 
-        let call = callBBlock fun in
+        let call = jumpBBlock fun in
 
         join [[callsf, ra], args, ret, [incr, call]]
     in
@@ -935,7 +956,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let update = lam acc: AccSplit.
                 match accEls.next with Block (Some name) then
                   if acc.hasSplit then acc
-                  else {acc with block = snoc acc.block (callBBlock name)}
+                  else {acc with block = snoc acc.block (jumpBBlock name)}
                 else acc
               in
               let accThn = update accThn in
@@ -945,15 +966,16 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let block = snoc acc.block stmt in
 
               -- Create new block for stmts if needed
-              let accStmts = {{ accEls with hasSplit = true }
-                                       with next = acc.next } in
-              match stmts with [] then {accStmts with block = block}
+              match stmts with [] then
+                {{accEls with block = block} with hasSplit = true}
               else
-                let accStmts = {accStmts with block = []} in
+                let accStmts = {{accEls with block = []}
+                                        with next = acc.next} in
                 let accStmts = splitStmts accStmts sf stmts in
                 let name = getNextName accEls in
                 let accStmts = createBlock sf name accStmts in
-                {accStmts with block = block}
+                {{accStmts with block = block}
+                           with hasSplit = true}
 
           else error "Not supported in splitStmts"
 
@@ -973,7 +995,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             if acc.hasSplit then
               let acc = initNextName acc in
               let name = getNextName acc in
-              {acc with block = snoc acc.block (callBBlock name)}
+              {acc with block = snoc acc.block (jumpBBlock name)}
             else acc
           else never
 
@@ -1267,10 +1289,13 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
   -- Type lift
   match typeLift prog with (env, prog) then
 
+  -- print (expr2str prog); print "\n\n";
+
+  -- Remove redundant lets
+  let prog: Expr = removeRedundantLets prog in
+
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in
-
-  -- print (expr2str prog); print "\n\n";
 
   -- Run RootPPL compiler
   let rpprog: RPProg = rootPPLCompileH env ci prog in
