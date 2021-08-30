@@ -152,8 +152,9 @@ let removeRedundantLets: Expr -> Expr = use MExprPPLRootPPLCompile in
     recursive let rec: Bool -> Expr -> Expr = lam inLet. lam expr.
 
       -- Let
-      match expr
-      with TmLet ({ ident = idLet, body = body, inexpr = inexpr } & t) then
+      match expr with TmLet ({
+        ident = idLet, body = body, inexpr = inexpr
+      } & t) then
         let ok = match body with TmApp _ then inLet else true in
         if ok then
           let f = lam. TmLet {{ t with body = rec true body }
@@ -163,6 +164,9 @@ let removeRedundantLets: Expr -> Expr = use MExprPPLRootPPLCompile in
             else f ()
           else f ()
         else smap_Expr_Expr (rec inLet) expr
+
+      -- Lambda
+      else match expr with TmLam _ then smap_Expr_Expr (rec false) expr
 
       -- Not a let
       else smap_Expr_Expr (rec inLet) expr
@@ -1293,6 +1297,8 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- Remove redundant lets
   let prog: Expr = removeRedundantLets prog in
+
+  -- print (expr2str prog); print "\n\n";
 
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in
