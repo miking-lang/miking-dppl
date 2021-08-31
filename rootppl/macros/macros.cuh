@@ -84,6 +84,11 @@ body
 // Call functions that takes the particles as argument (syntactic sugar).
 #define BBLOCK_CALL(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)
 
+// Jump directly to a BBLOCK without adding a new stack frame.
+// TODO Current implementation is identical to BBLOCK_CALL, but it would be
+// nice to change this.
+#define BBLOCK_JUMP(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)
+
 // Declares global data with CUDA managed memory to handle transfers between host and device. 
 #define BBLOCK_DATA_MANAGED(pointerName, type, n) MANAGED type pointerName[n];
 /***    *****    ***/
