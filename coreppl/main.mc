@@ -10,6 +10,7 @@ include "string.mc"
 include "dppl-parser.mc"
 include "inference.mc"
 include "transformation.mc"
+include "common.mc"
 
 -- Options type
 type Options = {
@@ -79,7 +80,7 @@ match result with ParseOK r then
 
     -- Optionally print the model
     (if r.options.printModel then
-      use DPPLParser in print (expr2str ast)
+      use DPPLParser in printLn (expr2str ast)
     else ());
 
     -- Exit before inference, it the flag is selected
