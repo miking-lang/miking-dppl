@@ -768,20 +768,20 @@ lang GaussianDist =
   Dist + PrettyPrint + Eq + Sym + FloatTypeAst
 
   syn Dist =
-  | DGaussian { mean: Expr, variance: Expr }
+  | DGaussian { mu: Expr, sigma: Expr }
 
   sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DGaussian t -> DGaussian {{ t with mean = f t.mean }
-                                  with variance = f t.variance }
+  | DGaussian t -> DGaussian {{ t with mu = f t.mu }
+                                  with sigma = f t.sigma }
 
   sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DGaussian t -> f (f acc t.mean) t.variance
+  | DGaussian t -> f (f acc t.mu) t.sigma
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
   | DGaussian t ->
     let i = pprintIncr indent in
-    match printArgs i env [t.mean, t.variance] with (env,args) then
+    match printArgs i env [t.mu, t.sigma] with (env,args) then
       (env, join ["Gaussian", pprintNewline i, args])
     else never
 
@@ -789,22 +789,22 @@ lang GaussianDist =
   sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | DGaussian r ->
     match lhs with DGaussian l then
-      match eqExprH env free l.mean r.mean with Some free then
-        eqExprH env free l.variance r.variance
+      match eqExprH env free l.mu r.mu with Some free then
+        eqExprH env free l.sigma r.sigma
       else None ()
     else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
-  | DGaussian t -> DGaussian {{ t with mean = symbolizeExpr env t.mean }
-                                  with variance = symbolizeExpr env t.variance }
+  | DGaussian t -> DGaussian {{ t with mu = symbolizeExpr env t.mu }
+                                  with sigma = symbolizeExpr env t.sigma }
 
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DGaussian t ->
     let err = lam. infoErrorExit info "Type error Gaussian" in
-    match ty t.mean with TyFloat _ then
-      match ty t.variance with TyFloat _ then
+    match ty t.mu with TyFloat _ then
+      match ty t.sigma with TyFloat _ then
         TyFloat { info = info }
       else err ()
     else err ()
@@ -814,18 +814,18 @@ lang GaussianDist =
   | DGaussian _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
-  | DGaussian ({ mean = mean, variance = variance } & t) ->
-    normalizeName (lam mean.
-      normalizeName (lam variance.
-       k (DGaussian {{ t with mean = mean } with variance = variance})) variance) mean
+  | DGaussian ({ mu = mu, sigma = sigma } & t) ->
+    normalizeName (lam mu.
+      normalizeName (lam sigma.
+       k (DGaussian {{ t with mu = mu } with sigma = sigma})) sigma) mu
 
   -- Type lift
   sem typeLiftDist (env : TypeLiftEnv) =
-  | DGaussian ({ mean = mean, variance = variance } & t) ->
-    match typeLiftExpr env mean with (env, mean) then
-      match typeLiftExpr env variance with (env, variance) then
-        (env, DGaussian {{ t with mean = mean }
-                          with variance = variance })
+  | DGaussian ({ mu = mu, sigma = sigma } & t) ->
+    match typeLiftExpr env mu with (env, mu) then
+      match typeLiftExpr env sigma with (env, sigma) then
+        (env, DGaussian {{ t with mu = mu }
+                          with sigma = sigma })
       else never
     else never
 
@@ -872,7 +872,7 @@ let empirical_ = use EmpiricalDist in
   lam lst. dist_ (DEmpirical {samples = lst})
 
 let gaussian_ = use GaussianDist in
-  lam mean. lam variance. dist_ (DGaussian {mean = mean, variance = variance})
+  lam mu. lam sigma. dist_ (DGaussian {mu = mu, sigma = sigma})
 
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
