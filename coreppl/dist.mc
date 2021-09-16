@@ -327,7 +327,6 @@ end
 
 
 
-
 lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
 
   syn Dist =
@@ -462,9 +461,6 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
 end
-
-
-
 
 
 
@@ -768,6 +764,73 @@ lang EmpiricalDist =
 
 end
 
+lang GaussianDist =
+  Dist + PrettyPrint + Eq + Sym + FloatTypeAst
+
+  syn Dist =
+  | DGaussian { mu: Expr, sigma: Expr }
+
+  sem smapDist_Expr_Expr (f: Expr -> a) =
+  | DGaussian t -> DGaussian {{ t with mu = f t.mu }
+                                  with sigma = f t.sigma }
+
+  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | DGaussian t -> f (f acc t.mu) t.sigma
+
+  -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DGaussian t ->
+    let i = pprintIncr indent in
+    match printArgs i env [t.mu, t.sigma] with (env,args) then
+      (env, join ["Gaussian", pprintNewline i, args])
+    else never
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | DGaussian r ->
+    match lhs with DGaussian l then
+      match eqExprH env free l.mu r.mu with Some free then
+        eqExprH env free l.sigma r.sigma
+      else None ()
+    else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DGaussian t -> DGaussian {{ t with mu = symbolizeExpr env t.mu }
+                                  with sigma = symbolizeExpr env t.sigma }
+
+  -- Type Annotate
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DGaussian t ->
+    let err = lam. infoErrorExit info "Type error Gaussian" in
+    match ty t.mu with TyFloat _ then
+      match ty t.sigma with TyFloat _ then
+        TyFloat { info = info }
+      else err ()
+    else err ()
+
+  -- ANF
+  sem isValueDist =
+  | DGaussian _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DGaussian ({ mu = mu, sigma = sigma } & t) ->
+    normalizeName (lam mu.
+      normalizeName (lam sigma.
+       k (DGaussian {{ t with mu = mu } with sigma = sigma})) sigma) mu
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DGaussian ({ mu = mu, sigma = sigma } & t) ->
+    match typeLiftExpr env mu with (env, mu) then
+      match typeLiftExpr env sigma with (env, sigma) then
+        (env, DGaussian {{ t with mu = mu }
+                          with sigma = sigma })
+      else never
+    else never
+
+end
+
 -----------------
 -- AST BUILDER --
 -----------------
@@ -808,6 +871,8 @@ let exp_ = use ExponentialDist in
 let empirical_ = use EmpiricalDist in
   lam lst. dist_ (DEmpirical {samples = lst})
 
+let gaussian_ = use GaussianDist in
+  lam mu. lam sigma. dist_ (DGaussian {mu = mu, sigma = sigma})
 
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
@@ -816,7 +881,7 @@ let empirical_ = use EmpiricalDist in
 lang DistAll =
   UniformDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
-  EmpiricalDist
+  EmpiricalDist + GaussianDist
 
 lang MExprPPLCmpTypeIndex = MExprAst + Dist
   -- This is required for type comparisons (required in turn for type lifting)
@@ -862,6 +927,7 @@ let tmEmpirical = empirical_ (seq_ [
     utuple_ [float_ 3.0, float_ 1.3]
   ]) in
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
+let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -928,7 +994,11 @@ utest expr2str tmDirichlet with strJoin "\n" [
   "    1.5 ]"
 ] in
 
-
+utest expr2str tmGaussian with strJoin "\n" [
+  "Gaussian",
+  "  0.",
+  "  1."
+] in
 --------------------
 -- EQUALITY TESTS --
 --------------------
@@ -981,6 +1051,10 @@ utest tmDirichlet with tmDirichlet using eqExpr in
 utest eqExpr tmDirichlet
   (dirichlet_ (seq_ [float_ 1.2, float_ 0.5, float_ 1.5])) with false in
 
+utest tmGaussian with tmGaussian using eqExpr in
+utest eqExpr tmGaussian
+  (gaussian_ (float_ 1.0) (float_ 1.0)) with false in
+
 ----------------------
 -- SMAP/SFOLD TESTS --
 ----------------------
@@ -1032,6 +1106,9 @@ utest smap_Expr_Expr mapVar tmDirichlet with dirichlet_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmDirichlet
 with [ seq_ [float_ 1.3, float_ 1.3, float_ 1.5] ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmGaussian with gaussian_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmGaussian
+with [ float_ 1.0, float_ 0.0 ] using eqSeq eqExpr in
 
 ---------------------
 -- SYMBOLIZE TESTS --
@@ -1047,6 +1124,7 @@ utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmExponential with tmExponential using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
+utest symbolize tmGaussian with tmGaussian using eqExpr in
 
 
 -------------------------
@@ -1064,8 +1142,8 @@ utest ty (typeAnnot tmCategorical) with tydist_ tyint_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmMultinomial) with tydist_ (tyseq_ tyint_) using eqTypeEmptyEnv in
 utest ty (typeAnnot tmExponential) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_)
-using eqTypeEmptyEnv in
+utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqTypeEmptyEnv in
+utest ty (typeAnnot tmGaussian) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 
 ---------------
 -- ANF TESTS --
@@ -1102,6 +1180,7 @@ utest _anf tmDirichlet with bindall_ [
   ulet_ "t1" (dirichlet_ (var_ "t")),
   var_ "t1"
 ] using eqExpr in
+utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --
@@ -1117,6 +1196,7 @@ utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
 utest (typeLift tmExponential).1 with tmExponential using eqExpr in
 utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
+utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
 
 ()
 

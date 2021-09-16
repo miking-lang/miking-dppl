@@ -63,12 +63,15 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + Probabilist
   | "Empirical" -> Some (1, lam lst. TmDist {dist = DEmpirical {samples = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
+  | "Gaussian" -> Some (2, lam lst. TmDist {dist = DGaussian {mu = get lst 0, sigma = get lst 1},
+                                         ty = TyUnknown {info = info},
+                                         info = info})
 end
 
 let keywords =
 ["assume", "observe", "weight", "resample", "plate",
  "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
- "Multinomial", "Dirichlet", "Exponential", "Empirical"]
+ "Multinomial", "Dirichlet", "Exponential", "Empirical", "Gaussian"]
 
 
 let getAst = lam filename.
