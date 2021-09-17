@@ -270,6 +270,71 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
 
 end
 
+lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + BoolTypeAst + FloatTypeAst
+
+  syn Dist =
+  | DBinomial { n: Expr, p: Expr }
+
+  sem smapDist_Expr_Expr (f: Expr -> a) =
+  | DBinomial t -> DBinomial { { t with n = f t.n } with p = f t.p }
+
+  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | DBinomial t -> f (f acc t.n) t.p
+
+   -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DBinomial t ->
+    let i = pprintIncr indent in
+    match printArgs i env [t.n, t.p] with (env,args) then
+      (env, join ["Binomial", pprintNewline i, args])
+    else never
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | DBinomial r ->
+    match lhs with DBinomial l then
+      match eqExprH env free l.n r.n with Some free then
+        eqExprH env free l.p r.p
+      else None ()
+    else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DBinomial t -> DBinomial {{ t with n = symbolizeExpr env t.n }
+                                  with p = symbolizeExpr env t.p }
+
+  -- Type Annotate
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DBinomial t ->
+    let err = lam. infoErrorExit info "Type error Binomial" in
+    match ty t.n with TyInt _ then
+      match ty t.p with TyFloat _ then
+        TySeq { ty = TyBool { info = info }, info = info }
+      else err ()
+    else err ()
+
+  -- ANF
+  sem isValueDist =
+  | DBinomial _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DBinomial ({ n = n, p = p } & t) ->
+    normalizeName (lam n.
+      normalizeName (lam p.
+       k (DBinomial {{ t with n = n } with p = p})) p) n
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DBinomial ({ n = n, p = p } & t) ->
+    match typeLiftExpr env n with (env, n) then
+      match typeLiftExpr env p with (env, p) then
+        (env, DBinomial {{ t with n = n }
+                          with p = p })
+      else never
+    else never
+
+end
+
 
 
 
@@ -874,6 +939,9 @@ let empirical_ = use EmpiricalDist in
 let gaussian_ = use GaussianDist in
   lam mu. lam sigma. dist_ (DGaussian {mu = mu, sigma = sigma})
 
+let binomial_ = use BinomialDist in
+  lam n. lam p. dist_ (DBinomial {n = n, p = p})
+
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
 ---------------------------
@@ -881,7 +949,7 @@ let gaussian_ = use GaussianDist in
 lang DistAll =
   UniformDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
-  EmpiricalDist + GaussianDist
+  EmpiricalDist + GaussianDist + BinomialDist
 
 lang MExprPPLCmpTypeIndex = MExprAst + Dist
   -- This is required for type comparisons (required in turn for type lifting)
@@ -928,6 +996,7 @@ let tmEmpirical = empirical_ (seq_ [
   ]) in
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
+let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -999,6 +1068,13 @@ utest expr2str tmGaussian with strJoin "\n" [
   "  0.",
   "  1."
 ] in
+
+utest expr2str tmBinomial with strJoin "\n" [
+  "Binomial",
+  "  5",
+  "  0.5"
+] in
+
 --------------------
 -- EQUALITY TESTS --
 --------------------
@@ -1055,6 +1131,9 @@ utest tmGaussian with tmGaussian using eqExpr in
 utest eqExpr tmGaussian
   (gaussian_ (float_ 1.0) (float_ 1.0)) with false in
 
+utest tmBinomial with tmBinomial using eqExpr in
+utest eqExpr tmBinomial (binomial_ (int_ 4) (float_ 0.5)) with false in
+
 ----------------------
 -- SMAP/SFOLD TESTS --
 ----------------------
@@ -1110,6 +1189,10 @@ utest smap_Expr_Expr mapVar tmGaussian with gaussian_ tmVar tmVar using eqExpr i
 utest sfold_Expr_Expr foldToSeq [] tmGaussian
 with [ float_ 1.0, float_ 0.0 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmBinomial with binomial_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmBinomial
+with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
+
 ---------------------
 -- SYMBOLIZE TESTS --
 ---------------------
@@ -1125,7 +1208,7 @@ utest symbolize tmExponential with tmExponential using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmGaussian with tmGaussian using eqExpr in
-
+utest symbolize tmBinomial with tmBinomial using eqExpr in
 
 -------------------------
 -- TYPE-ANNOTATE TESTS --
@@ -1144,6 +1227,7 @@ utest ty (typeAnnot tmExponential) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqTypeEmptyEnv in
 utest ty (typeAnnot tmGaussian) with tydist_ tyfloat_ using eqTypeEmptyEnv in
+utest ty (typeAnnot tmBinomial) with tydist_ (tyseq_ tybool_) using eqTypeEmptyEnv in
 
 ---------------
 -- ANF TESTS --
@@ -1181,6 +1265,7 @@ utest _anf tmDirichlet with bindall_ [
   var_ "t1"
 ] using eqExpr in
 utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
+utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --
@@ -1197,6 +1282,7 @@ utest (typeLift tmExponential).1 with tmExponential using eqExpr in
 utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
+utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
 
 ()
 
