@@ -76,7 +76,6 @@ let keywords =
  "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
  "Multinomial", "Dirichlet", "Exponential", "Empirical", "Gaussian", "Binomial"]
 
-
 let getAst = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file

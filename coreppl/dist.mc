@@ -896,6 +896,71 @@ lang GaussianDist =
 
 end
 
+lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + BoolTypeAst + FloatTypeAst
+
+  syn Dist =
+  | DBinomial { n: Expr, p: Expr }
+
+  sem smapDist_Expr_Expr (f: Expr -> a) =
+  | DBinomial t -> DBinomial { { t with n = f t.n } with p = f t.p }
+
+  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
+  | DBinomial t -> f (f acc t.n) t.p
+
+   -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DBinomial t ->
+    let i = pprintIncr indent in
+    match printArgs i env [t.n, t.p] with (env,args) then
+      (env, join ["Binomial", pprintNewline i, args])
+    else never
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | DBinomial r ->
+    match lhs with DBinomial l then
+      match eqExprH env free l.n r.n with Some free then
+        eqExprH env free l.p r.p
+      else None ()
+    else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DBinomial t -> DBinomial {{ t with n = symbolizeExpr env t.n }
+                                  with p = symbolizeExpr env t.p }
+
+  -- Type Annotate
+  sem tyDist (env: TypeEnv) (info: Info) =
+  | DBinomial t ->
+    let err = lam. infoErrorExit info "Type error Binomial" in
+    match ty t.n with TyInt _ then
+      match ty t.p with TyFloat _ then
+        TySeq { ty = TyBool { info = info }, info = info }
+      else err ()
+    else err ()
+
+  -- ANF
+  sem isValueDist =
+  | DBinomial _ -> false
+
+  sem normalizeDist (k : Dist -> Expr) =
+  | DBinomial ({ n = n, p = p } & t) ->
+    normalizeName (lam n.
+      normalizeName (lam p.
+       k (DBinomial {{ t with n = n } with p = p})) p) n
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DBinomial ({ n = n, p = p } & t) ->
+    match typeLiftExpr env n with (env, n) then
+      match typeLiftExpr env p with (env, p) then
+        (env, DBinomial {{ t with n = n }
+                          with p = p })
+      else never
+    else never
+
+end
+
 -----------------
 -- AST BUILDER --
 -----------------
@@ -1209,6 +1274,7 @@ utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmGaussian with tmGaussian using eqExpr in
 utest symbolize tmBinomial with tmBinomial using eqExpr in
+
 
 -------------------------
 -- TYPE-ANNOTATE TESTS --
