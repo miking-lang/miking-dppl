@@ -20,17 +20,18 @@ lang MCoreCompile =
   OCamlGenerateExternalNaive
 end
 
-let collectLibraries = lam extNameMap : ExternalNameMap.
-  let f = lam libs. lam lib. setInsert lib libs in
-  let g =
-    lam libs. lam impl :  ExternalImpl. foldl f libs impl.libraries
+let collectLibraries : ExternalNameMap -> ([String], [String])
+= lam extNameMap.
+  let f = lam s. lam str. setInsert str s in
+  let g = lam acc : (Set String, Set String). lam impl :  ExternalImpl.
+    match acc with (libs, clibs) then
+      (foldl f libs impl.libraries, foldl f clibs impl.cLibraries)
+    else never
   in
-  let h = lam libs. lam. lam impls. foldl g libs impls in
-  let libs =
-    mapFoldWithKey h (setEmpty cmpString) extNameMap
-  in
-  setToSeq libs
-
+  let h = lam acc. lam. lam impls. foldl g acc impls in
+  match mapFoldWithKey h (setEmpty cmpString, setEmpty cmpString) extNameMap
+  with (libs, clibs) then (setToSeq libs, setToSeq clibs)
+  else never
 
 let compileRunMCore = lam ast.
   use MCoreCompile in
@@ -47,18 +48,21 @@ let compileRunMCore = lam ast.
         let ast = generate env ast in
 
         -- Collect external library dependencies
-        let libs = collectLibraries env.exts in
+        match collectLibraries env.exts with (libs, clibs) then
 
-        -- Pretty print OCaml program
-        let code = use OCamlPrettyPrint in expr2str ast
-        in
+          -- Pretty print OCaml program
+          let code = use OCamlPrettyPrint in expr2str ast
+          in
 
-        -- Compile and run the OCaml program
-        let options = {optimize = true, libraries = libs} in
-        let cunit = ocamlCompileWithConfig options code in
-        let res = cunit.run "" [] in
-        cunit.cleanup ();
-        print (join [res.stdout, "\n"])
-
-   else never
+          -- Compile and run the OCaml program
+          let options =
+            {optimize = true, libraries = libs, cLibraries = clibs}
+          in
+          let cunit = ocamlCompileWithConfig options code in
+          let res = cunit.run "" [] in
+          cunit.cleanup ();
+          print (join [res.stdout, "\n"])
+      else never
+    else never
   else never
+
