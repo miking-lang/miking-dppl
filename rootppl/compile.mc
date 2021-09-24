@@ -135,7 +135,7 @@ let _debugPrint: [CTop] -> [CTop] -> [CStmt] -> [CStmt] -> String =
 
 -- Compiler names
 let nameRetAddr = nameSym "ra"
-let nameRetLoc = nameSym "retLoc"
+let nameRetValLoc = nameSym "retValLoc"
 let nameInit = nameSym "init"
 let nameSF = nameSym "sf"
 let nameGlobal = nameSym "global"
@@ -821,7 +821,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         let args = zipWith f sf.params args in
         let ret =
           match ret with Some expr then
-            [f nameRetLoc
+            [f nameRetValLoc
                (toRelAddr (CEUnOp { op = COAddrOf {}, arg = expr })
                   (CTyPtr { ty = sf.ret }))]
           else []
@@ -928,7 +928,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               op = COAssign {},
               lhs =
                 let expr =
-                  CEArrow { lhs = CEVar { id = nameSF }, id = nameRetLoc } in
+                  CEArrow { lhs = CEVar { id = nameSF }, id = nameRetValLoc } in
                 derefExpr (toAbsAddr expr (CTyPtr { ty = sf.ret })),
               rhs = val
             }}
@@ -1229,7 +1229,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           mem = Some (join [
             [(CTyInt {}, Some nameRetAddr)],
             match sf.ret with ! CTyVoid _ then
-              [(CTyPtr { ty = sf.ret }, Some nameRetLoc)]
+              [(CTyPtr { ty = sf.ret }, Some nameRetValLoc)]
             else [],
             mem
           ])
