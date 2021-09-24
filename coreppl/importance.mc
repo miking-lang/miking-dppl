@@ -8,8 +8,12 @@ include "coreppl.mc"
 lang MExprPPLImportance = MExprPPL
 
   sem transformImpSeq =
-  | TmAssume r ->
-      (app_ (app_ (var_ "betaSample") (float_ 2.)) (float_ 2.))
+  | TmAssume {dist = TmDist { dist = DBeta {a = a, b = b}}} ->
+      (app_ (app_ (var_ "betaSample") a) b)
+  | TmAssume {dist = TmDist { dist = DBernoulli {p = p}}} ->
+      (app_ (var_ "bernoulliSample") p)
+
+
 
 --app_TmConst {val=CInt {val=7} , ty=r.ty, info=r.info}
   | TmObserve r -> TmConst {val=CInt {val=8} , ty=r.ty, info=r.info}
