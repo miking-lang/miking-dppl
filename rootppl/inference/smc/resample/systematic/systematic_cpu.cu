@@ -3,14 +3,14 @@
  * File systematic_cpu.cu contains the definitions of the CPU implementation of the systematic resampling. 
  */
 
- #include "inference/smc/resample/common.cuh"
+#include "inference/smc/resample/common.cuh"
 #include "utils/misc.cuh"
 #include "systematic_cpu.cuh"
 
 #include <math.h>
 
 
-HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t& resampler, int numParticles) {
+HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSCpu(floating_t* w, resampler_t& resampler, int numParticles) {
     
     floating_t maxLogWeight = -INFINITY;
     #pragma omp parallel for reduction(max:maxLogWeight)
@@ -27,10 +27,13 @@ HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t& resampler, i
         w[i] = exp(w[i] - maxLogWeight);
     }
 
-    // Calculates in the inclusive prefix sum, parallelize?
+    // Calculates the inclusive prefix sum, parallelize?
     resampler.prefixSum[0] = w[0];
     for(int i = 1; i < numParticles; i++)
         resampler.prefixSum[i] = resampler.prefixSum[i-1] + w[i];
+    
+    // At this point: w are scaled weights (not log), prefixSum[numParticles-1] is the scaled sum
+    floating_t ess = calcESSHelperCpu(w, resampler.prefixSum[numParticles - 1], numParticles);
 
     // Corresponds to the renormaliseKernel used in the parallel implementation
     #pragma omp parallel for
@@ -39,25 +42,23 @@ HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t& resampler, i
         w[i] = log(w[i]) + maxLogWeight;
     }
 
-    return resampler.prefixSum[numParticles - 1];
+    // return resampler.prefixSum[numParticles - 1];
+    return std::make_tuple(resampler.prefixSum[numParticles - 1], ess);
 }
 
-
-HOST DEV floating_t calcESSCpu(floating_t* w, floating_t logWeightSum, resampler_t resampler, int numParticles) {
-    floating_t wSumOfSquares = 0;
-    // Parallelize?
+HOST floating_t calcESSHelperCpu(floating_t* scaledW, floating_t scaledWeightSum, int numParticles) {
+    floating_t wScaledSumOfSquares = 0;
+    #pragma omp parallel for reduction (+:wScaledSumOfSquares)
     for(int i = 0; i < numParticles; i++) {
-        // floating_t scaledW = w[i] - resampler.maxLogWeight;
-        floating_t expWSquared = exp(w[i] - resampler.maxLogWeight);
-        if (! isnan(expWSquared))
-            wSumOfSquares += expWSquared * expWSquared;
+        if (! isnan(scaledW[i]))
+            wScaledSumOfSquares += scaledW[i] * scaledW[i];
     }
 
-    floating_t scaledLogSum = logWeightSum - resampler.maxLogWeight;
-    floating_t wSumSquared = exp(scaledLogSum + scaledLogSum);
+    floating_t wSumSquared = scaledWeightSum * scaledWeightSum;
 
-    return wSumSquared / wSumOfSquares;
+    return wSumSquared / wScaledSumOfSquares;
 }
+
 
 HOST DEV void systematicCumulativeOffspringCpu(floating_t* prefixSum, int* cumulativeOffspring, floating_t u, int numParticles) {
 

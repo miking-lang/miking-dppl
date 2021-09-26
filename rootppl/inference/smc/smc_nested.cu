@@ -4,6 +4,8 @@
  * This file is included by smc_impl.cuh and relies on the includes in smc_impl.cuh.
  */
 
+// Nested inference is never used, and this code has become obsolete.
+/*
  #include "macros/macros.cuh"
  #include "smc.cuh"
  #include "dists/dists.cuh"
@@ -118,3 +120,4 @@ DEV double runSMCNested(
 
     return logNormConstant;
 }
+*/

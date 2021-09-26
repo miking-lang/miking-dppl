@@ -57,9 +57,11 @@ struct progState_t {
     treeIdx_t treeIdx;
 };
 
-#define NUM_BBLOCKS 3
-INIT_MODEL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t)
 
+BBLOCK_DECLARE(simTree)
+BBLOCK_DECLARE(simCRBD)
+BBLOCK_DECLARE(survivorshipBias)
 BBLOCK_HELPER_DECLARE(crbdGoesUndetected, bool, floating_t, floating_t, floating_t, floating_t);
 BBLOCK_DATA(tree, tree_t, 1)
 BBLOCK_DATA_CONST(rho, floating_t, rhoConst)
@@ -138,7 +140,7 @@ BBLOCK(simTree, {
     PSTATE.treeIdx = nextIdx;
 
     if(nextIdx == -1)
-        PC++;
+        NEXT = survivorshipBias;
 })
 
 BBLOCK(simCRBD, {
@@ -153,8 +155,8 @@ BBLOCK(simCRBD, {
     floating_t corrFactor = (numLeaves - 1) * log(2.0) - lnFactorial(numLeaves);
     WEIGHT(corrFactor);
 
-    PC++;
-    BBLOCK_CALL(DATA_POINTER(bblocksArr)[PC], NULL);
+    NEXT = simTree;
+    BBLOCK_CALL(NEXT, NULL);
 })
 
 BBLOCK(survivorshipBias, {
@@ -163,7 +165,8 @@ BBLOCK(survivorshipBias, {
     // int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, DATA_CONST(rho));
     int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, rho);
     WEIGHT(LOG(M));
-    PC++;
+    
+    NEXT = NULL;
 })
 
 // Write particle data to file. 
@@ -180,9 +183,7 @@ CALLBACK(saveResults, {
 })
 
 MAIN(
-    ADD_BBLOCK(simCRBD)
-    ADD_BBLOCK(simTree)
-    ADD_BBLOCK(survivorshipBias)
+    FIRST_BBLOCK(simCRBD)
 
     SMC(saveResults)
 )

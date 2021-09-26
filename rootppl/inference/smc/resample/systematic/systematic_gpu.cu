@@ -21,37 +21,41 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
         resampler.prefixSum[i] = resampler.prefixSum[i-1] + w[i];
 }
 
-HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
 
     floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
     resampler.maxLogWeight = maxLogWeight;
     // floating_t maxLogWeight = maxNaive(w, numParticles);
     
-    expWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight);
+    scaleExpWeightsAndSquareWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight, resampler.wSquared);
     cudaDeviceSynchronize();
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
     // prefixSumNaive(w, resampler, numParticles);
 
+    // At this point: w are scaled weights (not log), prefixSum[numParticles-1] is the scaled sum
+    floating_t ess = calcESSHelperGpu(w, resampler.prefixSum[numParticles - 1], resampler.wSquared, numParticles);
+
     renormaliseKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.prefixSum, numParticles, maxLogWeight);
     
     cudaDeviceSynchronize();
-    return resampler.prefixSum[numParticles - 1];
+    // return resampler.prefixSum[numParticles - 1];
+    return std::make_tuple(resampler.prefixSum[numParticles - 1], ess);
 }
 
-HOST DEV floating_t calcESSGpu(floating_t* w, floating_t logWeightSum, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock) {
+HOST floating_t calcESSHelperGpu(floating_t* scaledW, floating_t scaledWeightSum, floating_t* scaledWSquared, int numParticles) {
 
     // Kernel saving new square exp log weights
-    expSquareWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.wSquared, resampler.maxLogWeight, numParticles);
+    // expSquareWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.wSquared, resampler.maxLogWeight, numParticles);
 
     // Thrust for summing squared weights
     cudaDeviceSynchronize();
-    floating_t wSumOfSquares = (thrust::reduce(thrust::device, resampler.wSquared, resampler.wSquared + numParticles));
+    floating_t wSumOfSquares = (thrust::reduce(thrust::device, scaledWSquared, scaledWSquared + numParticles));
 
-    floating_t scaledLogSum = logWeightSum - resampler.maxLogWeight;
-    floating_t wSumSquared = exp(scaledLogSum + scaledLogSum);
+    floating_t wSumSquared = scaledWeightSum * scaledWeightSum;
 
     return wSumSquared / wSumOfSquares;
 }
+
 
 HOST DEV void decideAncestors(resampler_t& resampler, floating_t u, int numParticles, int numBlocks, int numThreadsPerBlock) {
 

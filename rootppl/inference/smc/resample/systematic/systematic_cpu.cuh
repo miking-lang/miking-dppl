@@ -7,25 +7,27 @@
 
  #include "inference/smc/resample/common.cuh"
 
+ #include <tuple>
+
 /**
- * Calculates the log weight prefix sums. 
+ * Calculates the log weight prefix sums and ESS. 
  * 
  * @param w the weight array.
  * @param resampler the resampler struct.
  * @param numParticles the number of particles used in SMC.
- * @return the logarithm of the total weight sum. 
+ * @return tuple(the logarithm of the total weight sum, ESS)
  */
-HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t& resampler, int numParticles);
+HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSCpu(floating_t* w, resampler_t& resampler, int numParticles);
 
 /**
- * Calculates the ESS (effective sample size). 
- *
- * @param w the array of particle weights
- * @param logWeightSum the logarithm of the sum of weights. 
+ * Calculates the ESS. 
+ * 
+ * @param scaledW the max weight scaled weight array.
+ * @param scaledWeightSum the max log weight scaled weight sum.
  * @param numParticles the number of particles used in SMC.
- * @return the effective sample size.
+ * @return effective sample size
  */
-HOST DEV floating_t calcESSCpu(floating_t* w, floating_t logWeightSum, resampler_t resampler, int numParticles);
+HOST floating_t calcESSHelperCpu(floating_t* scaledW, floating_t scaledWeightSum, int numParticles);
 
 /**
  * Calculates the cumulative offspring of each particle. 

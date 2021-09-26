@@ -34,6 +34,19 @@ resampler_t initResampler(int numParticles, size_t progStateSize) {
     return resampler;
 }
 
+void destResampler(resampler_t resampler) {
+
+    freeMemory<int>(resampler.ancestor);
+    freeMemory<int>(resampler.cumulativeOffspring);
+    freeMemory<floating_t>(resampler.prefixSum);
+    #ifdef __NVCC__
+    freeMemory<floating_t>(resampler.wSquared);
+    #endif
+    freeParticles(resampler.auxParticles);
+}
+
+/*
+// Obsolete
 HOST DEV resampler_t initResamplerNested(int numParticles, size_t progStateSize) {
 
     resampler_t resampler;
@@ -46,23 +59,13 @@ HOST DEV resampler_t initResamplerNested(int numParticles, size_t progStateSize)
     return resampler;
 }
 
-void destResampler(resampler_t resampler) {
-
-    freeMemory<int>(resampler.ancestor);
-    freeMemory<int>(resampler.cumulativeOffspring);
-    freeMemory<floating_t>(resampler.prefixSum);
-    #ifdef __NVCC__
-    freeMemory<floating_t>(resampler.wSquared);
-    #endif
-    freeParticles(resampler.auxParticles);
-}
-
 HOST DEV void destResamplerNested(resampler_t resampler) {
     delete[] resampler.ancestor;
     delete[] resampler.cumulativeOffspring;
     delete[] resampler.prefixSum;
     freeParticlesNested(resampler.auxParticles);
 }
+*/
 
 HOST DEV void copyParticle(const particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
     
@@ -82,7 +85,7 @@ HOST DEV void copyParticle(const particles_t particlesDst, const particles_t par
     #endif
 
     // Generic particle stuff
-    particlesDst.pcs[dstIdx] = particlesSrc.pcs[srcIdx];
+    particlesDst.next[dstIdx] = particlesSrc.next[srcIdx];
     particlesDst.weights[dstIdx] = 0;
 }
 

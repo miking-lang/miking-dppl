@@ -7,6 +7,8 @@
 
 #ifdef __NVCC__
 
+#include <tuple>
+
 #include "inference/smc/resample/common.cuh"
 
 HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numParticles);
@@ -19,22 +21,21 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
  * @param numParticles the number of particles used in SMC.
  * @param numBlocks kernel launch setting.
  * @param numThreadsPerBlock kernel launch setting.
- * @return the logarithm of the total weight sum. 
+ * @return tuple (log weight sum, ess)
  */
-HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
+HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
 
 /**
  * Calculates the ESS (effective sample size).  
  * 
- * @param w the weight array.
- * @param logWeightSum the logarithm of the sum of weights. 
- * @param resampler the resampler struct.
+ * @param scaledW the max weight scaled weight array.
+ * @param scaledWeightSum the max weight scaled weight sum. 
+ * @param scaledWSquared the max weight scaled weights squared. 
  * @param numParticles the number of particles used in SMC.
- * @param numBlocks kernel launch setting.
- * @param numThreadsPerBlock kernel launch setting.
  * @return the effective sample size.
  */
-HOST DEV floating_t calcESSGpu(floating_t* w, floating_t logWeightSum, resampler_t resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
+HOST floating_t calcESSHelperGpu(floating_t* scaledW, floating_t scaledWeightSum, floating_t* scaledWSquared, int numParticles);
+
 
 /**
  * Calculates the cumulative offsprings and then uses it to calculate the ancestor indices. 
