@@ -8,21 +8,17 @@ include "coreppl.mc"
 lang MExprPPLImportance = MExprPPL
 
   sem transformImpSeq =
-  | TmAssume {dist = TmDist { dist = DBeta {a = a, b = b}}} ->
-      (app_ (app_ (var_ "betaSample") a) b)
-  | TmAssume {dist = TmDist { dist = DBernoulli {p = p}}} ->
-      (app_ (var_ "bernoulliSample") p)
-
-
-
---app_TmConst {val=CInt {val=7} , ty=r.ty, info=r.info}
-  | TmObserve r -> TmConst {val=CInt {val=8} , ty=r.ty, info=r.info}
-  | TmDist r -> distReplace r.ty r.info r.dist
+  | TmAssume {dist = d} -> sampleDistExpr d
+  | TmObserve {dist = d, value = v} -> logPdfDistExpr v d
   | expr -> smap_Expr_Expr transformImpSeq expr
 
-  sem distReplace (ty:Ty) (info:Info) =
-  | DUniform r -> TmConst {val=CInt {val=7} , ty=ty, info=info}
-  | expr -> TmConst {val=CInt {val=100} , ty=ty, info=info}
+  sem sampleDistExpr =
+  | TmDist { dist = DBeta {a = a, b = b}} -> (app_ (app_ (var_ "betaSample") a) b)
+  | TmDist { dist = DBernoulli {p = p}} -> (app_ (var_ "bernoulliSample") p)
+
+  sem logPdfDistExpr (x:Expr) =
+  | TmDist { dist = DBeta {a = a, b = b}} -> (app_ (app_ (app_ (var_ "betaLogPdf") a) b) x)
+  | TmDist { dist = DBernoulli {p = p}} -> (app_ (app_ (var_ "bernoulliLogPmf") p) x)
 
 end
 
