@@ -40,12 +40,10 @@ typedef double floating_t;
 #define GET_MACRO(_1, _2, _3, NAME,...) NAME
 
 // Sets up globally accessible bblock array, that can be accessed from the bblocks, and defines the type used in the model.
-#define INIT_MODEL(progStateType, numBblocks) \
-BBLOCK_DATA(bblocksArr, pplFunc_t, numBblocks) \
+#define INIT_MODEL(progStateType) \
 typedef progStateType progStateTypeTopLevel_t;
 
-#define INIT_MODEL_STACK(numBblocks) \
-BBLOCK_DATA(bblocksArr, pplFunc_t, numBblocks) \
+#define INIT_MODEL_STACK() \
 typedef progStateStack_t progStateTypeTopLevel_t;
 
 
@@ -100,7 +98,9 @@ body
 #define WEIGHT(w) particles.weights[particleIdx] += w
 
 // Access particle program counter (bblock index).
-#define PC particles.pcs[particleIdx]
+// #define PC particles.pcs[particleIdx]
+// #define NEXT ((pplFunc_t*)particles.next)[particleIdx]
+#define NEXT particles.next[particleIdx]
 
 // Access the particle's program/model specific state. Uses the top-level program state type.
 #define PSTATE static_cast<progStateTypeTopLevel_t*>(particles.progStates)[particleIdx]
@@ -134,22 +134,12 @@ int main(int argc, char** argv) { \
 #define CALLBACK(funcName, body) void funcName(particles_t& particles, int N, void* arg=NULL) body
 #define CALLBACK_NESTED(funcName, progStateType, body, arg) DEV void funcName(particles_t& particles, int N, arg) body
 
-/* 
-Initialize the basic block (add it to the array of bblocks), the order of bblocks matters!
-The first bblock to be initialized will be the first to be executed, then the execution follows the
-index (PC) specified by the model (bblocks).
-*/
-#define ADD_BBLOCK_DEF(funcName, progStateType) \
+// Define the first BBLOCK that should be executed in inference. The model itself then defines the order of BBLOCK execution. 
+#define FIRST_BBLOCK(funcName) \
 pplFunc_t funcName ## Host; \
-FUN_REF(funcName, progStateType) \
-bblocksArr[bbIdx] = funcName ## Host; \
-bbIdx++;
-// Handles parameter overloading
-#define ADD_BBLOCK(...) GET_MACRO(__VA_ARGS__, 0, ADD_BBLOCK_DEF, ADD_BBLOCK_NOTYPE)(__VA_ARGS__)
-#define ADD_BBLOCK_NOTYPE(funcName) ADD_BBLOCK_DEF(funcName, progStateTypeTopLevel_t)
+FUN_REF(funcName, progStateTypeTopLevel_t) \
+pplFunc_t firstBblock = funcName ## Host;
 
-// Same as above, but for nested inference.
-#define ADD_BBLOCK_NESTED(funcName, progStateType) bblocks[bbIdx] = funcName; bbIdx++;
 
 // Samples from distributions, which should all take the curandState as argument first if compiled for GPU.
 #define SAMPLE(distName, ...) distName(RAND_STATE __VA_ARGS__ )
@@ -181,21 +171,10 @@ int particlesPerThread = 1; \
 if(argc > 4) { \
     particlesPerThread = atoi(argv[4]); \
 } \
-int numBblocks = bbIdx; \
 prepareSMC(); \
-COPY_DATA_GPU(bblocksArr, pplFunc_t, numBblocks) \
-pplFunc_t* bblocksArrCudaManaged; \
-ALLOC_TYPE(&bblocksArrCudaManaged, pplFunc_t, numBblocks); \
-for(int i = 0; i < numBblocks; i++) \
-    bblocksArrCudaManaged[i] = bblocksArr[i]; \
 for(int i = 0; i < numRuns; i++) \
-    res = runSMC(bblocksArrCudaManaged, numBblocks, numParticles, ompThreads, particlesPerThread, sizeof(progStateTypeTopLevel_t), callback); \
-finishFilesSMC(); \
-FREE(bblocksArrCudaManaged)
-
-// freeMemory<pplFunc_t>(bblocksArrCudaManaged);
-
-// allocateMemory<pplFunc_t>(&bblocksArrCudaManaged, numBblocks); \
+    res = runSMC(firstBblock, numParticles, ompThreads, particlesPerThread, sizeof(progStateTypeTopLevel_t), callback); \
+finishFilesSMC();
 
 /*** Nested SMC, not as thoroughly developed as top-level SMC ***/
 

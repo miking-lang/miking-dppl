@@ -13,8 +13,9 @@
  * @param w the weight array.
  * @param numParticles the number of particles used in SMC.
  * @param maxLogWeight the log of the maximum weight. 
+ * @param wSquared the output array that should hold the scaled squared weights
  */
-__global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight);
+__global__ void scaleExpWeightsAndSquareWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight, floating_t* wSquared);
 
 /**
  * Takes the logarithm of the prefixSum and weight belonging to the current particle then scales back. 
@@ -26,16 +27,6 @@ __global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t max
  * @param maxLogWeight the log of the maximum weight. 
  */
 __global__ void renormaliseKernel(floating_t* w, floating_t* prefixSum, int numParticles, floating_t maxLogWeight);
-
-/**
- *  Calculate the array of squared weights. 
- * 
- * @param w the input log-weight array.
- * @param w the squared weight array too store the result in.
- * @param maxLogWeight the maximum log weight.
- * @param numParticles the number of particles used in SMC.
- */
-__global__ void expSquareWeightsKernel(floating_t* w, floating_t* wSquared, floating_t maxLogWeight, int numParticles);
 
 /**
  * Calculates the cumulative offspring of each particle. 

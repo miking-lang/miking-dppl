@@ -22,19 +22,17 @@ particles_t allocateParticles(int numParticles, size_t progStateSize, bool print
     allocateMemoryVoid(&particles.progStates, numParticles * progStateSize);
     #endif
 
-    allocateMemory<int>(&particles.pcs, numParticles);
+    allocateMemory<pplFunc_t>(&particles.next, numParticles);
     allocateMemory<floating_t>(&particles.weights, numParticles);
 
     #ifdef __NVCC__
-    cudaMemset(particles.pcs, 0, sizeof(int) * numParticles);
     cudaMemset(particles.weights, 0, sizeof(floating_t) * numParticles);
     #else
-    memset(particles.pcs, 0, sizeof(int) * numParticles);
     memset(particles.weights, 0, sizeof(floating_t) * numParticles);
     #endif
 
     if (printMemSize) {
-        floating_t totalMem = progStateSize * numParticles + sizeof(int) * numParticles + sizeof(floating_t) * numParticles;
+        floating_t totalMem = progStateSize * numParticles + sizeof(pplFunc_t) * numParticles + sizeof(floating_t) * numParticles;
         printf("Particles memory size for N=%d: %fMB\n", numParticles, totalMem * 2 / 1000000.0);
     }
     
@@ -48,10 +46,12 @@ void freeParticles(particles_t particles) {
     freeMemoryVoid(particles.progStates);
     #endif
 
-    freeMemory<int>(particles.pcs);
+    freeMemory<pplFunc_t>(particles.next);
     freeMemory<floating_t>(particles.weights);
 }
 
+/*
+// Obsolete!
 HOST DEV particles_t allocateParticlesNested(int numParticles, size_t progStateSize) {
     particles_t particles;
     #ifdef STACK_SIZE_PROGSTATE
@@ -77,3 +77,4 @@ HOST DEV void freeParticlesNested(particles_t particles) {
     delete[] particles.pcs;
     delete[] particles.weights;
 }
+*/
