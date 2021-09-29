@@ -144,6 +144,7 @@ let nameStack = nameSym "stack"
 let nameStackPtr = nameSym "stackPtr"
 let nameRet = nameSym "ret"
 let nameGlobalTy = nameSym "GLOBAL"
+let nameStartBlock = nameSym "start"
 
 -- Strip unnecessary lets. Leaves lets around TmApps when they are returned from
 -- functions rather than bound in a let, to allow for correct stack handling.
@@ -640,15 +641,15 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       { next = Collapse (), hasSplit = false, block = [], tops = [] }
     in
 
-    -- C statement for setting the PC from an expression
-    let setPCFromExpr: CExpr -> CExpr = lam expr.
-      (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CEPC {}
+    -- C statement for setting the NEXT from an expression
+    let setNextFromExpr: CExpr -> CExpr = lam expr.
+      (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CENext {}
                                 , rhs = expr })})
     in
 
-    -- C statement for setting the PC to a BBLOCK name
-    let setPC: Name -> CExpr = lam name.
-      setPCFromExpr (CEBBlockName { name = name })
+    -- C statement for setting the NEXT to a BBLOCK name
+    let setNext: Name -> CExpr = lam name.
+      setNextFromExpr (CEVar { id = name })
     in
 
     -- Used when reaching endpoints, ensures the accumulator has a name for the
@@ -677,15 +678,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let callFromExpr = lam expr: CExpr.
         CSExpr { expr = CEApp {
           fun = nameBblockJump, args = [
-            CEBinOp {
-              op = COSubScript {},
-              lhs = CEApp {
-                fun = nameDataPointer,
-                args = [ CEVar { id = nameBblocksArr}]
-              },
-              rhs = expr
-            },
-            CEVar { id = nameNull }
+            expr, CEVar { id = nameNull }
           ] }
         }
     in
@@ -878,7 +871,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 let acc = initNextName acc in
                 let ra = getNextName acc in
                 let call = constructCallFromStmt funStackFrame stmt
-                             (CEBBlockName { name = ra }) in
+                             (CEVar { id = ra }) in
                 let block = concat acc.block call in
                 {acc with block = block}
               else
@@ -889,7 +882,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 let accNext = createBlock sf ra accNext in
 
                 let call = constructCallFromStmt funStackFrame stmt
-                             (CEBBlockName { name = ra }) in
+                             (CEVar { id = ra }) in
                 let block = concat acc.block call in
                 {accNext with block = block}
 
@@ -902,16 +895,16 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                 let collapse = decrementStackPtr sf in
                 let block = snoc acc.block collapse in
                 {acc with block =
-                   snoc block (setPCFromExpr
+                   snoc block (setNextFromExpr
                                  (CEArrow {
                                    lhs = CEVar { id = nameSF }, id = nameRetAddr
                                   })
                               ) }
               else match acc.next with Block _ then
-                -- Set PC to next block
+                -- Set NEXT to next block
                 let acc = initNextName acc in
                 let name = getNextName acc in
-                {acc with block = snoc acc.block (setPC name)}
+                {acc with block = snoc acc.block (setNext name)}
               else never
             else
               -- CASE: Not last statement, but end of block
@@ -919,8 +912,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let accNext = splitStmts accNext sf stmts in
               let name = nameSym "bblock" in
               let accNext = createBlock sf name accNext in
-              -- Simply set PC to next block
-              {accNext with block = snoc acc.block (setPC name)}
+              -- Simply set NEXT to next block
+              {accNext with block = snoc acc.block (setNext name)}
 
           -- Write to return value
           else match stmt with CSRet { val = Some val } then
@@ -1188,21 +1181,23 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       match retTy with ! CTyVoid _ then
         Some (CEArrow { lhs = CEVar { id = nameGlobal }, id = nameRet })
       else None () in
-    let nameEnd = nameSym "end" in
+    let nameEndBlock = nameSym "end" in
     let initCall =
       constructCall stochInitSF nameInit
-        [] initRet (CEBBlockName { name = nameEnd }) in
+        [] initRet (CEVar { id = nameEndBlock }) in
     let startBBlock = CTBBlock {
-      id = nameSym "start",
+      id = nameStartBlock,
       body = join [
         [globalDef, initStackPtr],
         initCall
       ]
     } in
     let endBBlock = CTBBlock {
-      id = nameEnd,
-      body = [setPCFromExpr (CEInt { i = negi 1 })]
+      id = nameEndBlock,
+      body = [setNextFromExpr (CEVar { id = nameNull })]
     } in
+    let startBBlockDecl = CTBBlockDecl { id = nameStartBlock } in
+    let endBBlockDecl = CTBBlockDecl { id = nameEndBlock } in
 
     -- Convert a [(Name,CType)] to [(CType, Option Name)].
     let convertMem = map (lam t. (t.1, Some t.0)) in
@@ -1227,7 +1222,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         ty = CTyStruct {
           id = Some sf.id,
           mem = Some (join [
-            [(CTyInt {}, Some nameRetAddr)],
+            [(CTyVar { id = namePplFuncTy }, Some nameRetAddr)],
             match sf.ret with ! CTyVoid _ then
               [(CTyPtr { ty = sf.ret }, Some nameRetValLoc)]
             else [],
@@ -1251,12 +1246,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         , "<stdint.h>"
         ]
       ],
+      startBlock = nameStartBlock,
       -- pStateTy = Some (CTyStruct { id = None (), mem = Some progStateMem }),
       pStateTy = None (),
       types = types,
       tops = join [
         [gf, stochInitSF],
         sfs,
+        [startBBlockDecl, endBBlockDecl],
         funDecls,
         [startBBlock, endBBlock],
         tops
