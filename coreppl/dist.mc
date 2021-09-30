@@ -1227,7 +1227,7 @@ utest ty (typeAnnot tmExponential) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqTypeEmptyEnv in
 utest ty (typeAnnot tmGaussian) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmBinomial) with tydist_ (tyseq_ tybool_) using eqTypeEmptyEnv in
+utest ty (typeAnnot tmBinomial) with tydist_ tyint_ using eqTypeEmptyEnv in
 
 ---------------
 -- ANF TESTS --
