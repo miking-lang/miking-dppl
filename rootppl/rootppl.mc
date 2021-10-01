@@ -16,16 +16,17 @@ let nameBblockJump = nameSym "BBLOCK_JUMP"
 let nameDataPointer = nameSym "DATA_POINTER"
 let nameNull = nameSym "NULL"
 let nameUIntPtr = nameSym "uintptr_t"
-let nameProgState = nameSym "progState_t"
+let nameProgStateTy = nameSym "progState_t"
+let namePplFuncTy = nameSym "pplFunc_t"
 
 let rpKeywords = concat (map nameNoSym [
-  "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "PC", "bernoulli",
+  "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "NEXT", "bernoulli",
   "beta", "discrete", "multinomial", "dirichlet", "exponential", "uniform",
   "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK", "particleIdx",
   "lnFactorial"
 ]) [
   nameBblocksArr, nameBblockCall, nameBblockJump, nameDataPointer, nameNull,
-  nameUIntPtr, nameProgState
+  nameUIntPtr, nameProgStateTy, namePplFuncTy
 ]
 
 lang RootPPL = CAst + CPrettyPrint
@@ -74,27 +75,24 @@ lang RootPPL = CAst + CPrettyPrint
 
 
   syn CExpr =
-  | CEBBlockName { name: Name } -- Block names (will be replace by indices when printing)
   | CESample { dist: CDist }
   | CEWeight { weight: CExpr }
   | CEPState {}
-  | CEPC {}
+  | CENext {}
 
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CEBBlockName _ -> acc
   | CESample t -> sfold_CDist_CExpr f acc t.dist
   | CEWeight t -> f acc t.weight
   | CEPState _ -> acc
-  | CEPC _ -> acc
+  | CENext _ -> acc
 
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
-  | CEBBlockName _ & t -> t
   | CESample t -> CESample { t with dist = smap_CDist_CExpr f t.dist }
   | CEWeight t -> CEWeight { t with weight = f t.weight }
   | CEPState _ & t -> t
-  | CEPC _ & t -> t
+  | CENext _ & t -> t
 
 
   syn CDist =
@@ -141,6 +139,9 @@ lang RootPPL = CAst + CPrettyPrint
 
       -- Header files to include
       includes: [String],
+
+      -- The initial block for the model
+      startBlock: Name,
 
       -- Program state type (None () for the RootPPL stack PSTATE)
       pStateTy: Option CType,
@@ -223,11 +224,6 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem printCExpr (env: PprintEnv) =
 
-  | CEBBlockName { name = name } ->
-    match pprintEnvGetStr env name with (env,name) then
-      (env, join ["###", name, "###"])
-    else never
-
   | CESample { dist = dist } ->
     match printCDist env dist with (env,dist) then
       (env, _par (join ["SAMPLE(", dist, ")"]))
@@ -240,7 +236,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   | CEPState {} -> (env, "PSTATE")
 
-  | CEPC _ -> (env, "PC")
+  | CENext _ -> (env, "NEXT")
 
 
   sem printCDist (env: PprintEnv) =
@@ -308,24 +304,12 @@ lang RootPPL = CAst + CPrettyPrint
   sem printRPProg (nameInit: [Name]) =
   | RPProg {
       includes = includes,
+      startBlock = startBlock,
       pStateTy = pStateTy,
       types = types,
       tops = tops,
       pre = pre
     } ->
-
-    let blockNames: [Name] = foldl (lam acc. lam top.
-      match top with CTBBlock { id = id } then snoc acc id else acc
-    ) [] tops in
-
-    recursive let replaceBBlockWithIndex = lam expr: CExpr.
-      match expr with CEBBlockName { name = name } then
-        match index (nameEq name) blockNames with Some i then CEInt { i = i }
-        else error "Could not find block in replaceBBlockWithIndex"
-      else smap_CExpr_CExpr replaceBBlockWithIndex expr
-    in
-
-    let tops = map (smap_CTop_CExpr replaceBBlockWithIndex) tops in
 
     let indent = 0 in
     let includes = map (lam inc. join ["#include ", inc]) includes in
@@ -339,7 +323,7 @@ lang RootPPL = CAst + CPrettyPrint
 
     let printProgState = lam indent. lam env. lam pStateTy.
       match pStateTy with Some pStateTy then
-        let progState = CTTyDef { ty = pStateTy, id = nameProgState } in
+        let progState = CTTyDef { ty = pStateTy, id = nameProgStateTy } in
         printCTop indent env progState
       else (env,"")
     in
@@ -347,8 +331,8 @@ lang RootPPL = CAst + CPrettyPrint
     match printProgState indent env pStateTy with (env,pStateTy) then
     match mapAccumL (printCTop indent) env types with (env,types) then
     match mapAccumL (printCTop indent) env tops with (env,tops) then
-    match mapAccumL pprintEnvGetStr env blockNames with (env,blockNames) then
     match printCStmts 2 env pre with (env,pre) then
+    match pprintEnvGetStr env startBlock with (env,startBlock) then
 
     let init =
       match pStateTy with Some _ then "INIT_MODEL(progState_t,"
@@ -362,15 +346,13 @@ lang RootPPL = CAst + CPrettyPrint
       types,
       pStateTy,
       [ join [ init
-             , int2string (length blockNames)
              , ")"
              ]
       ],
       tops,
       [ "MAIN({"
       , if null pre then "" else concat "  " pre
-      , strJoin "\n"
-          (map (lam s. join ["  ADD_BBLOCK(", s ,");"]) blockNames)
+      , join ["  FIRST_BBLOCK(", startBlock ,");"]
       , "  SMC(NULL);"
       , "})"
       ]

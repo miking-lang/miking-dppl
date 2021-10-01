@@ -869,9 +869,9 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
     let err = lam. infoErrorExit info "Type error Binomial" in
     match ty t.n with TyInt _ then
       match ty t.p with TyFloat _ then
-        TySeq { ty = TyBool { info = info }, info = info }
-      else err ()
-    else err ()
+        TyInt { info = info }
+      else dprint t.p; err ()
+    else dprint t.n; err ()
 
   -- ANF
   sem isValueDist =
@@ -1227,7 +1227,7 @@ utest ty (typeAnnot tmExponential) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
 utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqTypeEmptyEnv in
 utest ty (typeAnnot tmGaussian) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmBinomial) with tydist_ (tyseq_ tybool_) using eqTypeEmptyEnv in
+utest ty (typeAnnot tmBinomial) with tydist_ tyint_ using eqTypeEmptyEnv in
 
 ---------------
 -- ANF TESTS --

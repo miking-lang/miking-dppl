@@ -72,6 +72,10 @@ install:
 	cp -rf . $(lib_path)/
 	rm -f $(lib_path)/.gitignore $(lib_path)/rootppl
 
+uninstall:
+	rm -rf $(bin_path)/$(rootppl_name)
+	rm -rf $(lib_path)
+
 clean:
 	rm -f out/*.o
 
