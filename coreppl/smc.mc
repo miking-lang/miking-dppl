@@ -106,7 +106,7 @@ lang SMC = Resample
 
 lang Test =
   Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
-  + MExprTypeLiftUnOrderedRecordsCmpClosed
+  + MExprTypeLiftUnOrderedRecords
 
 mexpr
 

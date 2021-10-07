@@ -77,7 +77,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
 
   -- Allocation
   sem alloc (name: Name) =
-  | CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } & ty } ->
+  | CTyPtr { ty = CTyVar { id = ident } & ty } & ptrTy ->
     [
       -- Placeholder allocation
       { ty = ty
@@ -85,6 +85,13 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
       , init = Some (CIExpr { expr = CEAlloc {} })
       }
     ]
+
+  | CTyArray _ & ty ->
+    [
+      -- Placeholder allocation
+      { ty = ty , id = Some name , init = Some (CIExpr { expr = CEAlloc {} }) }
+    ]
+
   | _ -> error "Incorrect type in alloc"
 
 end
@@ -244,7 +251,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match compile typeEnv prog with (env, types, tops, inits, retTy) then
 
-
     -- print (_debugPrint types tops inits inits);
 
     ------------------------
@@ -295,6 +301,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     -- Iterate over tops and replace deterministic definitions with BBLOCK_DATA.
     -- Also remove stochastic definitions and add to globals (Name + Type)
+    -- TODO Keep track of allocated deterministics, since they are accessed through pointers
+    -- ... or, simply add BBLOCK_DATA_SINGLE_MANAGED for non-array types
     let res = foldl (lam acc: ([CTop],[(Name,CType)]). lam top: CTop.
         match top
         with CTDef { ty = ! CTyFun _ & ty, id = Some id, init = init } then
@@ -352,7 +360,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match inits with (detInits, stochInits) then
 
-    -- print (_debugPrint types tops detInits stochInits);
+    print (_debugPrint types tops detInits stochInits);
 
     ------------------------
     -- ADD BBLOCK_HELPERS --
@@ -563,6 +571,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
                      rhs = expr
                    }}]
                 else error "Non-CIExpr initializer in replaceDefs"
+
+              -- Remove definition if it does not initialize anything
               else []
 
             -- Leave other definitions as they are
@@ -1062,6 +1072,9 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             else match mapLookup id identCats with Some 0 then
               match mapLookup id defMap with Some ty then
                 -- Only deref if not allocated
+                -- If pointer-type: do not deref
+                -- Otherwise, deref
+                -- TODO After updates, we should not have to do anything here?
                 match ty with ! CTyStruct _ then derefExpr expr
                 else expr
               else error "Unknown type for id"
