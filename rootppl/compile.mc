@@ -20,23 +20,19 @@ include "mexpr/pprint.mc"
 -- BASE LANGUAGE FRAGMENT FOR COMPILER --
 -----------------------------------------
 
-lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
+lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
 
   -- Compiler internals
   syn CExpr =
-  | CEAlloc {} -- Allocation placeholder
   | CEResample {} -- Indicates resample locations
 
   sem printCExpr (env: PprintEnv) =
-  | CEAlloc {} -> (env, "<<<CEAlloc>>>")
   | CEResample {} -> (env, "<<<CEResample>>>")
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CEAlloc _ -> acc
   | CEResample _ -> acc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
-  | CEAlloc _ & t -> t
   | CEResample _ & t -> t
 
   -- ANF override
@@ -76,21 +72,21 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | TmResample _ -> CEResample {}
 
   -- Allocation
-  sem alloc (name: Name) =
-  | CTyPtr { ty = CTyVar { id = ident } & ty } & ptrTy ->
-    [
-      -- Placeholder allocation
-      { ty = ty
-      , id = Some name
-      , init = Some (CIExpr { expr = CEAlloc {} })
-      }
-    ]
+  -- sem alloc (name: Name) =
+  -- | CTyPtr { ty = CTyVar { id = ident } & ty } & ptrTy ->
+  --   [
+  --     -- Placeholder allocation
+  --     { ty = ty
+  --     , id = Some name
+  --     , init = Some (CIExpr { expr = CEAlloc {} })
+  --     }
+  --   ]
 
-  | CTyArray _ & ty ->
-    [
-      -- Placeholder allocation
-      { ty = ty , id = Some name , init = Some (CIExpr { expr = CEAlloc {} }) }
-    ]
+  -- | CTyArray _ & ty ->
+  --   [
+  --     -- Placeholder allocation
+  --     { ty = ty , id = Some name , init = Some (CIExpr { expr = CEAlloc {} }) }
+  --   ]
 
   | _ -> error "Incorrect type in alloc"
 
@@ -301,17 +297,22 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     -- Iterate over tops and replace deterministic definitions with BBLOCK_DATA.
     -- Also remove stochastic definitions and add to globals (Name + Type)
-    -- TODO Keep track of allocated deterministics, since they are accessed through pointers
-    -- ... or, simply add BBLOCK_DATA_SINGLE_MANAGED for non-array types
     let res = foldl (lam acc: ([CTop],[(Name,CType)]). lam top: CTop.
         match top
         with CTDef { ty = ! CTyFun _ & ty, id = Some id, init = init } then
+          match init with Some _ then error "Can't handle initializers." else
           if isIdentDet id then
-            let def = CTBBlockData { ty = ty, id = id } in
+            let def =
+              match ty
+              with CTyArray { ty = ty, size = Some (CEInt { i = len }) } then
+                CTBBlockData { ty = ty, id = id, len = len }
+              else
+                CTBBlockDataSingle { ty = ty, id = id }
+            in
             (snoc acc.0 def, acc.1)
           else
-            match init with Some (CEAlloc {}) then
-              error "Non-deterministic struct allocation"
+            match ty with CTyArray _ then
+              error "Non-deterministic allocation of pointer-accessed data structure."
             else
               (acc.0, snoc acc.1 (id,ty))
         else (snoc acc.0 top, acc.1)
@@ -360,7 +361,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match inits with (detInits, stochInits) then
 
-    print (_debugPrint types tops detInits stochInits);
+    -- print (_debugPrint types tops detInits stochInits);
 
     ------------------------
     -- ADD BBLOCK_HELPERS --
@@ -553,18 +554,16 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         recursive let rec = lam stmt: CStmt.
 
-          match stmt with CSDef { id = Some id, init = init } then
+          match stmt with CSDef { ty = ty, id = Some id, init = init } then
             let l = any (lam l. nameEq id l.0) locals in
 
             -- Local definition
             if l then
-              match init with Some init then
-                -- Struct allocation is not allowed inside functions
-                match init with CIExpr { expr = CEAlloc {} } then
-                  error "Allocation not allowed in function"
-
-                -- Not an allocation, replace with assignment
-                else match init with CIExpr { expr = expr } then
+              match ty with CTyArray _ then
+                error "Non-deterministic allocation of pointer-accessed data structure."
+              else match init with Some init then
+                -- Replace with assignment
+                match init with CIExpr { expr = expr } then
                   [CSExpr { expr = CEBinOp {
                      op = COAssign {},
                      lhs = CEVar { id = id },
@@ -1069,15 +1068,15 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               CEArrow { lhs = CEVar { id = nameGlobal }, id = id }
 
             -- Deterministic global
-            else match mapLookup id identCats with Some 0 then
-              match mapLookup id defMap with Some ty then
-                -- Only deref if not allocated
-                -- If pointer-type: do not deref
-                -- Otherwise, deref
-                -- TODO After updates, we should not have to do anything here?
-                match ty with ! CTyStruct _ then derefExpr expr
-                else expr
-              else error "Unknown type for id"
+            -- else match mapLookup id identCats with Some 0 then
+            --   match mapLookup id defMap with Some ty then
+            --     -- Only deref if not allocated
+            --     -- If pointer-type: do not deref
+            --     -- Otherwise, deref
+            --     -- TODO After updates, we should not have to do anything here?
+            --     match ty with ! CTyStruct _ then derefExpr expr
+            --     else expr
+            --   else error "Unknown type for id"
 
             -- Leave other variables
             else expr

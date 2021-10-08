@@ -1,6 +1,7 @@
 -- RootPPL language fragment
 
 include "option.mc"
+include "string.mc"
 include "name.mc"
 include "c/ast.mc"
 include "c/pprint.mc"
@@ -19,11 +20,13 @@ let nameUIntPtr = nameSym "uintptr_t"
 let nameProgStateTy = nameSym "progState_t"
 let namePplFuncTy = nameSym "pplFunc_t"
 
+-- NOTE(dlunde,2021-10-08): This list is currently not exhaustive
 let rpKeywords = concat (map nameNoSym [
-  "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "NEXT", "bernoulli",
-  "beta", "discrete", "multinomial", "dirichlet", "exponential", "uniform",
-  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK", "particleIdx",
-  "lnFactorial"
+  "BBLOCK", "BBLOCK_DECLARE", "BBLOCK_DATA_MANAGED",
+  "BBLOCK_DATA_MANAGED_SINGLE", "", "SAMPLE", "WEIGHT", "PSTATE", "NEXT",
+  "bernoulli", "beta", "discrete", "multinomial", "dirichlet", "exponential",
+  "uniform", "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK",
+  "particleIdx", "lnFactorial"
 ]) [
   nameBblocksArr, nameBblockCall, nameBblockJump, nameDataPointer, nameNull,
   nameUIntPtr, nameProgStateTy, namePplFuncTy
@@ -38,7 +41,8 @@ lang RootPPL = CAst + CPrettyPrint
   syn CTop =
 
   -- Global data declarations
-  | CTBBlockData { ty: CType, id: Name }
+  | CTBBlockData { ty: CType, id: Name, len: Int }
+  | CTBBlockDataSingle { ty: CType, id: Name }
 
   -- Basic block helpers (essentially regular functions with special syntax)
   | CTBBlockHelperDecl { ret: CType, id: Name, params: [CType] }
@@ -51,6 +55,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem smap_CTop_CExpr (f: CExpr -> CExpr) =
   | CTBBlockData _ & t -> t
+  | CTBBlockDataSingle _ & t -> t
   | CTBBlockHelperDecl _ & t -> t
   | CTBBlockHelper t ->
     CTBBlockHelper { t with body = map (smap_CStmt_CExpr f) t.body }
@@ -60,6 +65,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
   | CTBBlockData _ & t -> t
+  | CTBBlockDataSingle _ & t -> t
   | CTBBlockHelperDecl _ & t -> t
   | CTBBlockHelper t -> CTBBlockHelper { t with body = join (map f t.body) }
   | CTBBlockDecl _ & t -> t
@@ -68,6 +74,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
   | CTBBlockData _ -> acc
+  | CTBBlockDataSingle _ -> acc
   | CTBBlockHelperDecl _ -> acc
   | CTBBlockHelper t -> foldl f acc t.body
   | CTBBlockDecl _ -> acc
@@ -164,10 +171,18 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem printCTop (indent : Int) (env: PprintEnv) =
 
-  | CTBBlockData { ty = ty, id = id } ->
+  | CTBBlockData { ty = ty, id = id, len = len } ->
     match pprintEnvGetStr env id with (env,id) then
       match printCType "" env ty with (env,ty) then
-        (env, join ["BBLOCK_DATA_MANAGED(", id, ", ", ty, ", 1)"])
+        let len = int2string len in
+        (env, join ["BBLOCK_DATA_MANAGED(", id, ", ", ty, ", ", len, ")"])
+      else never
+    else never
+
+  | CTBBlockDataSingle { ty = ty, id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      match printCType "" env ty with (env,ty) then
+        (env, join ["BBLOCK_DATA_MANAGED_SINGLE(", id, ", ", ty, ")"])
       else never
     else never
 
