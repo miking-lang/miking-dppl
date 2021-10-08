@@ -48,6 +48,9 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
   | TmDist t -> sfoldDist_Expr_Expr f acc t.dist
 
+  sem infoTy =
+  | TyDist t -> t.info
+
   sem tyWithInfo (info : Info) =
   | TyDist t -> TyDist {t with info = info}
 
@@ -950,29 +953,9 @@ lang DistAll =
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist + GaussianDist + BinomialDist
 
-lang MExprPPLCmpTypeIndex = MExprAst + Dist
-  -- This is required for type comparisons (required in turn for type lifting)
-  sem typeIndex =
-  | TyUnknown _ -> 0
-  | TyBool _ -> 1
-  | TyInt _ -> 2
-  | TyFloat _ -> 3
-  | TyChar _ -> 4
-  | TyArrow _ -> 5
-  | TySeq _ -> 6
-  | TyRecord _ -> 7
-  | TyVariant _ -> 8
-  | TyVar _ -> 9
-  | TyApp _ -> 10
-  | TyTensor _ -> 11
-  -- This is the only addition compared to MExprCmpTypeIndex in mexpr/cmp.mc
-  | TyDist _ -> 12
-
-end
-
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF + MExprTypeLiftUnOrderedRecords + MExprPPLCmpTypeIndex
+  + MExprANF + MExprTypeLiftUnOrderedRecords
 
 mexpr
 

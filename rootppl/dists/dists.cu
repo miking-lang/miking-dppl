@@ -152,7 +152,10 @@ DEV floating_t beta(RAND_STATE_DECLARE floating_t alpha, floating_t beta) {
     return x / (x + y);
 }
 
-DEV int binomial(RAND_STATE_DECLARE floating_t p, int n) {
+// NOTE: Currently, we use an efficient stdlib version of this for CPU (see
+// dists_cpu.cuh), but GPU must still use the slow version here.
+#ifdef __NVCC__
+DEV int binomial(RAND_STATE_DECLARE double p, int n) {
     // Could be done more efficiently, see alias methods or webppl source code
     int numSuccesses = 0;
     for(int t = 0; t < n; t++)
@@ -160,6 +163,7 @@ DEV int binomial(RAND_STATE_DECLARE floating_t p, int n) {
 
     return numSuccesses;
 }
+#endif
 
 DEV floating_t cauchy(RAND_STATE_DECLARE floating_t loc, floating_t scale) {
     return loc + scale * tan(PI * (SAMPLE(uniform, 0, 1) - 0.5));

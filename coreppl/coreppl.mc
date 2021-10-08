@@ -294,7 +294,7 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
           (lam dist.
             k (TmObserve {{ t with value = value }
                               with dist = dist }))
-        dist)
+          dist)
       value
 
   -- Type lift
@@ -437,8 +437,7 @@ lang CorePPLInference = CorePPL + SMC -- + Importance
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANF + MExprTypeLiftUnOrderedRecords +
-  MExprPPLCmpTypeIndex
+  MExprTypeAnnot + MExprANF + MExprTypeLiftUnOrderedRecords
 
 
 mexpr

@@ -21,6 +21,7 @@ include "mexpr/pprint.mc"
 -----------------------------------------
 
 lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
+  + SeqTypeNoStringTypeLift
 
   -- Compiler internals
   syn CExpr =
@@ -36,13 +37,22 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
   | CEResample _ & t -> t
 
   -- ANF override
-  -- Ensures argument to assume is not lifted by ANF (first-class distributions
-  -- not supported in RootPPL)
+  -- Ensures distributions are not lifted by ANF (first-class distributions not
+  -- supported in RootPPL)
   sem normalize (k : Expr -> Expr) =
   | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
     normalizeDist
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
       dist
+  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
+    normalizeName
+      (lam value.
+        normalizeDist
+          (lam dist.
+             k (TmObserve {{ t with value = value }
+                               with dist = TmDist { td with dist = dist}}))
+          dist)
+      value
 
   -- Compilation of distributions
   sem compileDist (env: CompileCEnv) =
@@ -50,6 +60,8 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
   | DBeta { a = a, b = b } ->
     CDBeta { a = compileExpr env a, b = compileExpr env b }
   | DCategorical { p = p } -> CDCategorical { p = compileExpr env p }
+  | DBinomial { n = n, p = p } ->
+    CDBinomial { n = compileExpr env n, p = compileExpr env p }
   | DMultinomial { n = n, p = p } ->
     CDMultinomial { n = compileExpr env n, p = compileExpr env p }
   | DDirichlet { a = a } -> CDDirichlet { a = compileExpr env a }
@@ -69,26 +81,18 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
   | TmAssume { dist = TmDist { dist = dist }} ->
     CESample { dist = compileDist env dist }
   | TmWeight { weight = weight } -> CEWeight { weight = compileExpr env weight }
+  | TmObserve { value = value, dist = TmDist { dist = dist }} ->
+    CEObserve { value = compileExpr env value, dist = compileDist env dist }
   | TmResample _ -> CEResample {}
 
-  -- Allocation
-  -- sem alloc (name: Name) =
-  -- | CTyPtr { ty = CTyVar { id = ident } & ty } & ptrTy ->
-  --   [
-  --     -- Placeholder allocation
-  --     { ty = ty
-  --     , id = Some name
-  --     , init = Some (CIExpr { expr = CEAlloc {} })
-  --     }
-  --   ]
+  -- Add error reporting for dist type
+  sem compileType (env: CompileCEnv) =
+  | TyDist _ & ty -> infoErrorExit (infoTy ty) "TyDist in compileType"
 
-  -- | CTyArray _ & ty ->
-  --   [
-  --     -- Placeholder allocation
-  --     { ty = ty , id = Some name , init = Some (CIExpr { expr = CEAlloc {} }) }
-  --   ]
-
-  | _ -> error "Incorrect type in alloc"
+  -- Do not lift polymorphic types. NOTE(dlunde,2021-10-08): This allows for
+  -- some simple cases, like using `get` for lists.
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TySeq {info = _, ty = TyUnknown _} & ty -> (env,ty)
 
 end
 

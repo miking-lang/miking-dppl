@@ -83,6 +83,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   syn CExpr =
   | CESample { dist: CDist }
+  | CEObserve { value: CExpr, dist: CDist }
   | CEWeight { weight: CExpr }
   | CEPState {}
   | CENext {}
@@ -90,6 +91,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CESample t -> sfold_CDist_CExpr f acc t.dist
+  | CEObserve t -> sfold_CDist_CExpr f (f acc t.value) t.dist
   | CEWeight t -> f acc t.weight
   | CEPState _ -> acc
   | CENext _ -> acc
@@ -97,6 +99,8 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
   | CESample t -> CESample { t with dist = smap_CDist_CExpr f t.dist }
+  | CEObserve t -> CEObserve {{ t with value = f t.value }
+                                  with dist = smap_CDist_CExpr f t.dist }
   | CEWeight t -> CEWeight { t with weight = f t.weight }
   | CEPState _ & t -> t
   | CENext _ & t -> t
@@ -106,6 +110,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDBern { p: CExpr }
   | CDBeta { a: CExpr, b: CExpr }
   | CDCategorical { p: CExpr }
+  | CDBinomial { n: CExpr, p: CExpr }
   | CDMultinomial { n: CExpr, p: CExpr }
   | CDDirichlet { a: CExpr }
   | CDExp { rate: CExpr }
@@ -119,6 +124,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDBern t -> f acc t.p
   | CDBeta t -> f (f acc t.a) t.b
   | CDCategorical t -> f acc t.p
+  | CDBinomial t -> f (f acc t.n) t.p
   | CDMultinomial t -> f (f acc t.n) t.p
   | CDDirichlet t -> f acc t.a
   | CDExp t -> f acc t.rate
@@ -132,6 +138,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDBern t -> CDBern { t with p = f t.p }
   | CDBeta t -> CDBeta {{ t with a = f t.a } with b = f t.b }
   | CDCategorical t -> CDCategorical { t with p = f t.p }
+  | CDBinomial t -> CDBinomial {{ t with n = f t.n } with p = f t.p }
   | CDMultinomial t -> CDMultinomial {{ t with n = f t.n } with p = f t.p }
   | CDDirichlet t -> CDDirichlet { t with a = f t.a }
   | CDExp t -> CDExp { t with rate = f t.rate }
@@ -244,6 +251,13 @@ lang RootPPL = CAst + CPrettyPrint
       (env, _par (join ["SAMPLE(", dist, ")"]))
     else never
 
+  | CEObserve { value = value, dist = dist } ->
+    match printCExpr env value with (env,value) then
+      match printCDist env dist with (env,dist) then
+        (env, _par (join ["OBSERVE(", dist, ", ", value, ")"]))
+      else never
+    else never
+
   | CEWeight { weight = weight } ->
     match printCExpr env weight with (env,weight) then
       (env, _par (join ["WEIGHT(", weight, ")"]))
@@ -272,6 +286,13 @@ lang RootPPL = CAst + CPrettyPrint
     match printCExpr env p with (env,p) then
       error "CDCategorical not yet implemented"
       -- (env, strJoin ", " ["discrete", p, "TODO"])
+    else never
+
+  | CDBinomial { n = n, p = p } ->
+    match printCExpr env n with (env,n) then
+      match printCExpr env p with (env,p) then
+        (env, strJoin ", " ["binomial", p, n])
+      else never
     else never
 
   | CDMultinomial { n = n, p = p } ->
