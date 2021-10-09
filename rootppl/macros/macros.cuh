@@ -123,7 +123,6 @@ body
 #define MAIN(body) \
 int main(int argc, char** argv) { \
     initGen(); \
-    int bbIdx = 0; \
     double res = 0; \
     body \
     freeGen(); \

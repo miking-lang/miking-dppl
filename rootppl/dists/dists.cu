@@ -153,12 +153,35 @@ DEV floating_t beta(RAND_STATE_DECLARE floating_t alpha, floating_t beta) {
 }
 
 DEV int binomial(RAND_STATE_DECLARE floating_t p, int n) {
-    // Could be done more efficiently, see alias methods or webppl source code
-    int numSuccesses = 0;
-    for(int t = 0; t < n; t++)
-        numSuccesses += SAMPLE(bernoulli, p);
+    // WebPPL Source code, uses lemma 6.1 from Ahrens & Dieter's article:
+    // Computer Methods for Sampling from Gamma, Beta, Poisson and Binomial Distributions
+    int k = 0;
+    floating_t N = 10;
+    floating_t a, b;
+    while(n > N) {
+        a = floor(1 + n / 2.0);
+        b = 1 + n - a;
+        floating_t x = SAMPLE(beta, a, b);
+        if(x >= p) {
+            n = a - 1;
+            p /= x;
 
-    return numSuccesses;
+        } else {
+            k += a;
+            n = b - 1;
+            p = (p - x) / (1 - x);
+        }
+    }
+    floating_t u;
+    for (int i = 0; i < n; i++) {
+        u = SAMPLE(uniform, 0.0, 1.0);
+        if (u < p)
+            k++;
+    }
+
+    // WebPPL returns "k || 0", we simply return k. 
+    // If bugs related to this distribution arises this could be a good place to start debugging.
+    return k;
 }
 
 DEV floating_t cauchy(RAND_STATE_DECLARE floating_t loc, floating_t scale) {
