@@ -371,6 +371,25 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- ADD BBLOCK_HELPERS --
     ------------------------
 
+    -- Stack and stack pointer expressions
+    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
+    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
+
+    -- Global frame
+    let globalDef =
+      let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
+      CSDef {
+        ty = CTyPtr { ty = ty },
+        id = Some nameGlobal,
+        init = Some (CIExpr {
+          expr = CECast {
+            ty = CTyPtr { ty = ty },
+            rhs = stack
+          }
+        })
+      }
+    in
+
     let res = foldl (lam acc: ([CTop], Map Name Name). lam top: CTop.
         match top with CTFun ({ id = id } & r) then
           match mapLookup id identCats with Some cat then
@@ -380,13 +399,16 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let det = top in
               let n = nameSym (concat "STOCH_" (nameGetStr id)) in
               let detFunMap = mapInsert id n acc.1 in
-              let stoch = CTBBlockHelper {r with id = n} in
+              let stoch =
+                CTBBlockHelper {{r with id = n}
+                                   with body = cons globalDef r.body } in
               let tops = concat acc.0 [det, stoch] in
               (tops,detFunMap)
 
             -- Stochastic function, replace with BBLOCK_HELPER
             else match cat with 1 then
-              (snoc acc.0 (CTBBlockHelper r), acc.1)
+              let bbh = CTBBlockHelper {r with body = cons globalDef r.body} in
+              (snoc acc.0 bbh, acc.1)
 
             -- Function with resample, handled elsewhere
             else (snoc acc.0 top, acc.1)
@@ -699,25 +721,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- Deref shorthand
     let derefExpr: CExpr -> CExpr = lam expr.
       CEUnOp { op = CODeref {}, arg = expr}
-    in
-
-    -- Stack and stack pointer expressions
-    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
-    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
-
-    -- Global frame
-    let globalDef =
-      let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
-      CSDef {
-        ty = CTyPtr { ty = ty },
-        id = Some nameGlobal,
-        init = Some (CIExpr {
-          expr = CECast {
-            ty = CTyPtr { ty = ty },
-            rhs = stack
-          }
-        })
-      }
     in
 
     -- Converts an expression representing an absolute address to a relative
@@ -1130,18 +1133,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         smap_CTop_CExpr replaceCall top
       else top
     ) tops in
-
-    -- let replaceCall: CExpr -> CExpr =
-    --   lam expr: CExpr.
-
-    -- in
-
-    -- let tops: [CTop] = map (lam top.
-    --   match top with CTFun { id = id } then
-    --     smap_CTop_CExpr replaceCall top
-    --   else error "Not a CTFun when replacing function calls"
-    -- ) tops in
-    -- let inits: [CStmt] = map (smap_CStmt_CExpr replaceCall) inits in
 
     ------------------------------------------------------------
     -- COLLECT/ADD FUNCTION/BBLOCK/BBLOCK_HELPER DECLARATIONS --
