@@ -49,7 +49,7 @@ lang Infer =
   sem infoTm =
   | TmInfer t -> t.info
 
-  sem ty =
+  sem tyTm =
   | TmInfer t -> t.ty
 
   sem withInfo (info: Info) =
@@ -96,7 +96,7 @@ lang Infer =
     let err = lam. infoErrorExit t.info "Type error infer" in
     let model = typeAnnotExpr env t.model in
     let ty =
-      match ty model with TyArrow { from = from, to = to } then
+      match tyTm model with TyArrow { from = from, to = to } then
         if _isUnitTy from then to
         else err ()
       else err ()
@@ -136,7 +136,7 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem infoTm =
   | TmAssume t -> t.info
 
-  sem ty =
+  sem tyTm =
   | TmAssume t -> t.ty
 
   sem withInfo (info: Info) =
@@ -181,7 +181,7 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     let err = lam. infoErrorExit t.info "Type error assume" in
     let dist = typeAnnotExpr env t.dist in
     let ty =
-      match ty dist with TyDist { ty = ty } then ty
+      match tyTm dist with TyDist { ty = ty } then ty
       else err ()
     in
     TmAssume {{ t with dist = dist }
@@ -220,7 +220,7 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem infoTm =
   | TmObserve t -> t.info
 
-  sem ty =
+  sem tyTm =
   | TmObserve t -> t.ty
 
   sem withInfo (info: Info) =
@@ -270,8 +270,8 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     let value = typeAnnotExpr env t.value in
     let dist = typeAnnotExpr env t.dist in
     let ty =
-      match ty value with ty1 then
-        match ty dist with TyDist { ty = ty2 } then
+      match tyTm value with ty1 then
+        match tyTm dist with TyDist { ty = ty2 } then
           match compatibleType env ty1 ty2 with Some _ then
             tyWithInfo t.info tyunit_
           else err ()
@@ -321,7 +321,7 @@ lang Weight =
   sem infoTm =
   | TmWeight t -> t.info
 
-  sem ty =
+  sem tyTm =
   | TmWeight t -> t.ty
 
   sem withInfo (info: Info) =
@@ -366,7 +366,7 @@ lang Weight =
     let err = lam. infoErrorExit t.info "Type error weight" in
     let weight = typeAnnotExpr env t.weight in
     let ty =
-      match ty weight with TyFloat _ then tyWithInfo t.info tyunit_
+      match tyTm weight with TyFloat _ then tyWithInfo t.info tyunit_
       else err ()
     in
     TmWeight {{ t with weight = weight }
@@ -458,7 +458,7 @@ with strJoin "\n" [
   "assume",
   "  (Bernoulli",
   "     0.7)"
-] in
+] using eqString in
 
 utest expr2str tmObserve
 with strJoin "\n" [
@@ -467,13 +467,13 @@ with strJoin "\n" [
   "  (Beta",
   "     1.",
   "     2.)"
-] in
+] using eqString in
 
 utest expr2str tmWeight
 with strJoin "\n" [
   "weight",
   "  1.5"
-] in
+] using eqString in
 
 --------------------
 -- EQUALITY TESTS --
@@ -531,11 +531,9 @@ utest symbolize tmWeight with tmWeight using eqExpr in
 -------------------------
 -- TODO(dlunde,2021-04-28): TmInfer test
 
-let _eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
-
-utest ty (typeAnnot tmAssume) with tybool_ using _eqTypeEmptyEnv in
-utest ty (typeAnnot tmObserve) with tyunit_ using _eqTypeEmptyEnv in
-utest ty (typeAnnot tmWeight) with tyunit_ using _eqTypeEmptyEnv in
+utest tyTm (typeAnnot tmAssume) with tybool_ using eqType in
+utest tyTm (typeAnnot tmObserve) with tyunit_ using eqType in
+utest tyTm (typeAnnot tmWeight) with tyunit_ using eqType in
 
 ---------------
 -- ANF TESTS --

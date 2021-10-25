@@ -44,7 +44,7 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
   sem infoTm =
   | TmResample t -> t.info
 
-  sem ty =
+  sem tyTm =
   | TmResample t -> t.ty
 
   sem withInfo (info: Info) =
@@ -120,7 +120,7 @@ use Test in
 utest expr2str resample_
 with strJoin "\n" [
   "resample"
-] in
+] using eqString in
 
 
 ----------------------
@@ -155,9 +155,7 @@ utest symbolize resample_ with resample_ using eqExpr in
 -- TYPE-ANNOTATE TESTS --
 -------------------------
 
-let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
-
-utest ty (typeAnnot resample_) with tyunit_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot resample_) with tyunit_ using eqType in
 
 ---------------
 -- ANF TESTS --

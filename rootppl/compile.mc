@@ -433,7 +433,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     } in
 
     -- Initialize a new stack frame
-    let newStackFrame: StackFrame = lam name. lam ret. {
+    let newStackFrame: Name -> CType -> StackFrame = lam name. lam ret. {
       id = nameSym (concat "STACK_" (nameGetStr name)),
       mem = [], ret = ret, params = []
     } in

@@ -99,7 +99,7 @@ let argHelpOptions = argHelpOptions_general argHelpOptions_defaults
 let stringIsInt = lam s.
   if eqi (length s) 0 then false else
   let s = if eqChar (get s 0) '-' then tail s else s in
-    all isDigit s
+    forAll isDigit s
 
 
 -- argument value conversion --
