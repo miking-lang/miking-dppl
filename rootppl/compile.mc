@@ -1074,17 +1074,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             match assocSeqLookup {eq=nameEq} id globals with Some cty then
               CEArrow { lhs = CEVar { id = nameGlobal }, id = id }
 
-            -- Deterministic global
-            -- else match mapLookup id identCats with Some 0 then
-            --   match mapLookup id defMap with Some ty then
-            --     -- Only deref if not allocated
-            --     -- If pointer-type: do not deref
-            --     -- Otherwise, deref
-            --     -- TODO After updates, we should not have to do anything here?
-            --     match ty with ! CTyStruct _ then derefExpr expr
-            --     else expr
-            --   else error "Unknown type for id"
-
             -- Leave other variables
             else expr
 
