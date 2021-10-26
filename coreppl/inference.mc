@@ -2,10 +2,11 @@
 include "string.mc"
 include "../rootppl/rootppl.mc"
 include "../rootppl/compile.mc"
+include "importance.mc"
 
 let performInference = lam options. lam ast.
   match options.method with "importance" then
-    print "TODO: perform importance sampling!"
+    importanceSamplingInference options ast
   else match options.method with "rootppl-smc" then
     -- dprint ast
     writeFile "out.cu" (printCompiledRPProg (rootPPLCompile ast))
