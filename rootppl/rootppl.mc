@@ -1,4 +1,4 @@
--- RootPPL language fragment
+-- RootPPL language fragment, including pretty printing
 
 include "option.mc"
 include "string.mc"
@@ -364,16 +364,16 @@ lang RootPPL = CAst + CPrettyPrint
       else (env,"")
     in
 
+    let init =
+      match pStateTy with Some _ then "INIT_MODEL(progState_t)"
+      else "INIT_MODEL_STACK()"
+    in
+
     match printProgState indent env pStateTy with (env,pStateTy) then
     match mapAccumL (printCTop indent) env types with (env,types) then
     match mapAccumL (printCTop indent) env tops with (env,tops) then
     match printCStmts 2 env pre with (env,pre) then
     match pprintEnvGetStr env startBlock with (env,startBlock) then
-
-    let init =
-      match pStateTy with Some _ then "INIT_MODEL(progState_t,"
-      else "INIT_MODEL_STACK("
-    in
 
     let pStateTy = match pStateTy with "" then [] else [pStateTy] in
 
@@ -381,16 +381,14 @@ lang RootPPL = CAst + CPrettyPrint
       includes,
       types,
       pStateTy,
-      [ join [ init
-             , ")"
-             ]
-      ],
+      [ init ],
       tops,
-      [ "MAIN({"
-      , if null pre then "" else concat "  " pre
-      , join ["  FIRST_BBLOCK(", startBlock ,");"]
-      , "  SMC(NULL);"
-      , "})"
+      [ "MAIN({" ],
+      if null pre then [] else [concat "  " pre],
+      [
+        join ["  FIRST_BBLOCK(", startBlock ,");"],
+        "  SMC(NULL);",
+        "})"
       ]
     ])
 
@@ -403,5 +401,172 @@ end
 
 mexpr
 use RootPPL in
+
+let test = printRPProg [] in
+
+let vardef = lam s.
+  CSDef { ty = CTyInt {}, id = Some (nameSym s), init = None () } in
+
+let startBlock = nameSym "startBlock" in
+let basic = RPProg {
+  includes = ["test.h"],
+  startBlock = startBlock,
+  pStateTy = Some (CTyInt {}),
+  types = [ CTTyDef { ty = CTyInt {}, id = nameSym "newint" } ],
+  tops = [
+    CTBBlockDecl { id = startBlock },
+    CTBBlock { id = startBlock, body = [ vardef "bvar" ] }
+    ],
+  pre = [ CSDef { ty = CTyInt {}, id = Some (nameSym "pvar"), init = None () } ]
+} in
+
+utest test basic with strJoin "\n" [
+  "#include test.h",
+  "typedef int newint;",
+  "typedef int progState_t;",
+  "INIT_MODEL(progState_t)",
+  "BBLOCK_DECLARE(startBlock);",
+  "BBLOCK(startBlock, {",
+  "  int bvar;",
+  "})",
+  "MAIN({",
+  "  int pvar;",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let wrapTops = lam tops. RPProg {
+  includes = [],
+  startBlock = startBlock,
+  pStateTy = None (),
+  types = [],
+  tops = tops,
+  pre = []
+} in
+
+let data = wrapTops [
+  CTBBlockData { ty = CTyInt {}, id = nameSym "data", len = 3 },
+  CTBBlockDataSingle { ty = CTyInt {}, id = nameSym "data" },
+  CTBBlock { id = startBlock, body = [] }
+] in
+
+utest test data with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK_DATA_MANAGED(data, int, 3)",
+  "BBLOCK_DATA_MANAGED_SINGLE(data1, int)",
+  "BBLOCK(startBlock, {",
+  "  ",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let helperName = nameSym "helper" in
+let helper = wrapTops [
+  CTBBlockHelperDecl {
+    ret = CTyVoid {},
+    id = helperName,
+    params = [CTyInt {}, CTyDouble {}]
+  },
+  CTBBlockHelper {
+    ret = CTyVoid {},
+    id = helperName,
+    params = [ (CTyInt {}, nameSym "p"), (CTyDouble {}, nameSym "p") ],
+    body = [ vardef "MAIN", vardef "DATA_POINTER" ] -- Check keyword name handling
+  },
+  CTBBlock { id = startBlock, body = [] }
+] in
+
+utest test helper with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK_HELPER_DECLARE(helper, void, int, double);",
+  "BBLOCK_HELPER(helper, {",
+  "  int MAIN1;",
+  "  int DATA_POINTER1;",
+  "}, void, int p, double p1)",
+  "BBLOCK(startBlock, {",
+  "  ",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let wrapExprs = lam exprs.
+  wrapTops [ CTBBlock {
+    id = startBlock, body = map (lam e. CSExpr { expr = e }) exprs
+  } ]
+in
+
+let f = lam f. CEFloat { f = f } in
+let i = lam i. CEInt { i = i } in
+let dists = wrapExprs (join [
+  map (lam dist. CESample { dist = dist }) [
+    CDBern { p = f 1.0 },
+    CDBeta { a = f 1.0, b = f 2.0 },
+    CDBinomial { n = i 1, p = f 1.0 },
+    CDExp { rate = f 1.0 },
+    CDUniform { a = f 0.0, b = f 1.0 },
+    CDPoisson { lambda = f 1.0 },
+    CDGamma { k = f 1.0, theta = f 2.0 }
+  ],
+
+  map (lam t: (CExpr, CDist). CEObserve { value = t.0, dist = t.1 }) [
+    (i 1, CDBern { p = f 1.0 }),
+    (f 1.0, CDBeta { a = f 1.0, b = f 2.0 }),
+    (i 1, CDBinomial { n = i 1, p = f 1.0 }),
+    (f 1.0, CDExp { rate = f 1.0 }),
+    (f 1.0, CDUniform { a = f 0.0, b = f 1.0 }),
+    (i 1, CDPoisson { lambda = f 1.0 }),
+    (f 1.0, CDGamma { k = f 1.0, theta = f 2.0 })
+  ]
+]) in
+
+utest test dists with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK(startBlock, {",
+  "  (SAMPLE(bernoulli, 1.));",
+  "  (SAMPLE(beta, 1., 2.));",
+  "  (SAMPLE(binomial, 1., 1));",
+  "  (SAMPLE(exponential, 1.));",
+  "  (SAMPLE(uniform, 0., 1.));",
+  "  (SAMPLE(poisson, 1.));",
+  "  (SAMPLE(gamma, 1., 2.));",
+  "  (OBSERVE(bernoulli, 1., 1));",
+  "  (OBSERVE(beta, 1., 2., 1.));",
+  "  (OBSERVE(binomial, 1., 1, 1));",
+  "  (OBSERVE(exponential, 1., 1.));",
+  "  (OBSERVE(uniform, 0., 1., 1.));",
+  "  (OBSERVE(poisson, 1., 1));",
+  "  (OBSERVE(gamma, 1., 2., 1.));",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let exprs = wrapExprs [
+  CEWeight { weight = CEFloat { f = 2.0 } },
+  CEPState {},
+  CENext {}
+] in
+
+utest test exprs with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK(startBlock, {",
+  "  (WEIGHT(2.));",
+  "  PSTATE;",
+  "  NEXT;",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
 
 ()
