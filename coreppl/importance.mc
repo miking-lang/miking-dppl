@@ -25,9 +25,10 @@ end
 
 let importanceSamplingInference = lam options. lam ast.
   use MExprPPLImportance in
-  let ast = transformImpSeq ast in
+  let ast = symbolize (transformImpSeq ast) in
   -- Print (optional) the transformed MCore program
   (if options.printMCore then
     printLn (expr2str ast)
   else ());
-  compileRunMCore "" [] ast
+  let res = compileRunMCore "" [] ast in
+  print res.stdout
