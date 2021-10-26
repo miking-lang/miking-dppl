@@ -1,7 +1,6 @@
 
 
--- include "ocaml/compile.mc"
-include "compile-mcore.mc"
+include "ocaml/mcore.mc"
 include "seq.mc"
 include "coreppl.mc"
 
@@ -31,5 +30,4 @@ let importanceSamplingInference = lam options. lam ast.
   (if options.printMCore then
     printLn (expr2str ast)
   else ());
-  -- Compile and run the code
-  compileRunMCore ast
+  compileRunMCore "" [] ast

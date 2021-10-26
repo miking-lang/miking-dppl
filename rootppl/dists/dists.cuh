@@ -57,7 +57,7 @@ DEV floating_t beta(RAND_STATE_DECLARE floating_t alpha, floating_t beta);
  * @param n the number of trials.
  * @return the number of successes over n independent trials with success probability p. 
  */
-DEV int binomial(RAND_STATE_DECLARE floating_t p, int n);
+DEV int binomial(RAND_STATE_DECLARE double p, int n);
 
 /**
  * Returns a sample from the Cauchy distribution.

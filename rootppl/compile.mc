@@ -20,33 +20,39 @@ include "mexpr/pprint.mc"
 -- BASE LANGUAGE FRAGMENT FOR COMPILER --
 -----------------------------------------
 
-lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
+lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
+  + SeqTypeNoStringTypeLift
 
   -- Compiler internals
   syn CExpr =
-  | CEAlloc {} -- Allocation placeholder
   | CEResample {} -- Indicates resample locations
 
   sem printCExpr (env: PprintEnv) =
-  | CEAlloc {} -> (env, "<<<CEAlloc>>>")
   | CEResample {} -> (env, "<<<CEResample>>>")
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CEAlloc _ -> acc
   | CEResample _ -> acc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
-  | CEAlloc _ & t -> t
   | CEResample _ & t -> t
 
   -- ANF override
-  -- Ensures argument to assume is not lifted by ANF (first-class distributions
-  -- not supported in RootPPL)
+  -- Ensures distributions are not lifted by ANF (first-class distributions not
+  -- supported in RootPPL)
   sem normalize (k : Expr -> Expr) =
   | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
     normalizeDist
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
       dist
+  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
+    normalizeName
+      (lam value.
+        normalizeDist
+          (lam dist.
+             k (TmObserve {{ t with value = value }
+                               with dist = TmDist { td with dist = dist}}))
+          dist)
+      value
 
   -- Compilation of distributions
   sem compileDist (env: CompileCEnv) =
@@ -54,6 +60,8 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | DBeta { a = a, b = b } ->
     CDBeta { a = compileExpr env a, b = compileExpr env b }
   | DCategorical { p = p } -> CDCategorical { p = compileExpr env p }
+  | DBinomial { n = n, p = p } ->
+    CDBinomial { n = compileExpr env n, p = compileExpr env p }
   | DMultinomial { n = n, p = p } ->
     CDMultinomial { n = compileExpr env n, p = compileExpr env p }
   | DDirichlet { a = a } -> CDDirichlet { a = compileExpr env a }
@@ -73,19 +81,18 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | TmAssume { dist = TmDist { dist = dist }} ->
     CESample { dist = compileDist env dist }
   | TmWeight { weight = weight } -> CEWeight { weight = compileExpr env weight }
+  | TmObserve { value = value, dist = TmDist { dist = dist }} ->
+    CEObserve { value = compileExpr env value, dist = compileDist env dist }
   | TmResample _ -> CEResample {}
 
-  -- Allocation
-  sem alloc (name: Name) =
-  | CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } & ty } ->
-    [
-      -- Placeholder allocation
-      { ty = ty
-      , id = Some name
-      , init = Some (CIExpr { expr = CEAlloc {} })
-      }
-    ]
-  | _ -> error "Incorrect type in alloc"
+  -- Add error reporting for dist type
+  sem compileType (env: CompileCEnv) =
+  | TyDist _ & ty -> infoErrorExit (infoTy ty) "TyDist in compileType"
+
+  -- Do not lift polymorphic types. NOTE(dlunde,2021-10-08): This allows for
+  -- some simple cases, like using `get` for lists.
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TySeq {info = _, ty = TyUnknown _} & ty -> (env,ty)
 
 end
 
@@ -244,7 +251,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match compile typeEnv prog with (env, types, tops, inits, retTy) then
 
-
     -- print (_debugPrint types tops inits inits);
 
     ------------------------
@@ -298,12 +304,19 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let res = foldl (lam acc: ([CTop],[(Name,CType)]). lam top: CTop.
         match top
         with CTDef { ty = ! CTyFun _ & ty, id = Some id, init = init } then
+          match init with Some _ then error "Can't handle initializers." else
           if isIdentDet id then
-            let def = CTBBlockData { ty = ty, id = id } in
+            let def =
+              match ty
+              with CTyArray { ty = ty, size = Some (CEInt { i = len }) } then
+                CTBBlockData { ty = ty, id = id, len = len }
+              else
+                CTBBlockDataSingle { ty = ty, id = id }
+            in
             (snoc acc.0 def, acc.1)
           else
-            match init with Some (CEAlloc {}) then
-              error "Non-deterministic struct allocation"
+            match ty with CTyArray _ then
+              error "Non-deterministic allocation of pointer-accessed data structure."
             else
               (acc.0, snoc acc.1 (id,ty))
         else (snoc acc.0 top, acc.1)
@@ -358,6 +371,25 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- ADD BBLOCK_HELPERS --
     ------------------------
 
+    -- Stack and stack pointer expressions
+    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
+    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
+
+    -- Global frame
+    let globalDef =
+      let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
+      CSDef {
+        ty = CTyPtr { ty = ty },
+        id = Some nameGlobal,
+        init = Some (CIExpr {
+          expr = CECast {
+            ty = CTyPtr { ty = ty },
+            rhs = stack
+          }
+        })
+      }
+    in
+
     let res = foldl (lam acc: ([CTop], Map Name Name). lam top: CTop.
         match top with CTFun ({ id = id } & r) then
           match mapLookup id identCats with Some cat then
@@ -367,13 +399,16 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let det = top in
               let n = nameSym (concat "STOCH_" (nameGetStr id)) in
               let detFunMap = mapInsert id n acc.1 in
-              let stoch = CTBBlockHelper {r with id = n} in
+              let stoch =
+                CTBBlockHelper {{r with id = n}
+                                   with body = cons globalDef r.body } in
               let tops = concat acc.0 [det, stoch] in
               (tops,detFunMap)
 
             -- Stochastic function, replace with BBLOCK_HELPER
             else match cat with 1 then
-              (snoc acc.0 (CTBBlockHelper r), acc.1)
+              let bbh = CTBBlockHelper {r with body = cons globalDef r.body} in
+              (snoc acc.0 bbh, acc.1)
 
             -- Function with resample, handled elsewhere
             else (snoc acc.0 top, acc.1)
@@ -398,7 +433,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     } in
 
     -- Initialize a new stack frame
-    let newStackFrame: StackFrame = lam name. lam ret. {
+    let newStackFrame: Name -> CType -> StackFrame = lam name. lam ret. {
       id = nameSym (concat "STACK_" (nameGetStr name)),
       mem = [], ret = ret, params = []
     } in
@@ -545,24 +580,24 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         recursive let rec = lam stmt: CStmt.
 
-          match stmt with CSDef { id = Some id, init = init } then
+          match stmt with CSDef { ty = ty, id = Some id, init = init } then
             let l = any (lam l. nameEq id l.0) locals in
 
             -- Local definition
             if l then
-              match init with Some init then
-                -- Struct allocation is not allowed inside functions
-                match init with CIExpr { expr = CEAlloc {} } then
-                  error "Allocation not allowed in function"
-
-                -- Not an allocation, replace with assignment
-                else match init with CIExpr { expr = expr } then
+              match ty with CTyArray _ then
+                error "Non-deterministic allocation of pointer-accessed data structure."
+              else match init with Some init then
+                -- Replace with assignment
+                match init with CIExpr { expr = expr } then
                   [CSExpr { expr = CEBinOp {
                      op = COAssign {},
                      lhs = CEVar { id = id },
                      rhs = expr
                    }}]
                 else error "Non-CIExpr initializer in replaceDefs"
+
+              -- Remove definition if it does not initialize anything
               else []
 
             -- Leave other definitions as they are
@@ -686,25 +721,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- Deref shorthand
     let derefExpr: CExpr -> CExpr = lam expr.
       CEUnOp { op = CODeref {}, arg = expr}
-    in
-
-    -- Stack and stack pointer expressions
-    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
-    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
-
-    -- Global frame
-    let globalDef =
-      let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
-      CSDef {
-        ty = CTyPtr { ty = ty },
-        id = Some nameGlobal,
-        init = Some (CIExpr {
-          expr = CECast {
-            ty = CTyPtr { ty = ty },
-            rhs = stack
-          }
-        })
-      }
     in
 
     -- Converts an expression representing an absolute address to a relative
@@ -1058,14 +1074,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             match assocSeqLookup {eq=nameEq} id globals with Some cty then
               CEArrow { lhs = CEVar { id = nameGlobal }, id = id }
 
-            -- Deterministic global
-            else match mapLookup id identCats with Some 0 then
-              match mapLookup id defMap with Some ty then
-                -- Only deref if not allocated
-                match ty with ! CTyStruct _ then derefExpr expr
-                else expr
-              else error "Unknown type for id"
-
             -- Leave other variables
             else expr
 
@@ -1114,18 +1122,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         smap_CTop_CExpr replaceCall top
       else top
     ) tops in
-
-    -- let replaceCall: CExpr -> CExpr =
-    --   lam expr: CExpr.
-
-    -- in
-
-    -- let tops: [CTop] = map (lam top.
-    --   match top with CTFun { id = id } then
-    --     smap_CTop_CExpr replaceCall top
-    --   else error "Not a CTFun when replacing function calls"
-    -- ) tops in
-    -- let inits: [CStmt] = map (smap_CStmt_CExpr replaceCall) inits in
 
     ------------------------------------------------------------
     -- COLLECT/ADD FUNCTION/BBLOCK/BBLOCK_HELPER DECLARATIONS --

@@ -59,4 +59,20 @@ unsigned int poisson(double lambda) {
     #endif
 }
 
+/**
+ * Returns a sample from the Binomial distribution.
+ *
+ * @param n number of trials
+ * @param p success probability for each trial
+ * @return Binomial(n, p)
+ */
+int binomial(double p, int n) {
+    std::binomial_distribution<int> dist(n,p);
+    #ifdef _OPENMP
+    return dist(genWrappers[omp_get_thread_num()].gen);
+    #else
+    return dist(gen);
+    #endif
+}
+
 #endif
