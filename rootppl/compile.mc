@@ -1,6 +1,7 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
+include "../coreppl/dppl-parser.mc"
 
 include "rootppl.mc"
 
@@ -20,33 +21,39 @@ include "mexpr/pprint.mc"
 -- BASE LANGUAGE FRAGMENT FOR COMPILER --
 -----------------------------------------
 
-lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
+lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
+  + SeqTypeNoStringTypeLift
 
   -- Compiler internals
   syn CExpr =
-  | CEAlloc {} -- Allocation placeholder
   | CEResample {} -- Indicates resample locations
 
   sem printCExpr (env: PprintEnv) =
-  | CEAlloc {} -> (env, "<<<CEAlloc>>>")
   | CEResample {} -> (env, "<<<CEResample>>>")
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CEAlloc _ -> acc
   | CEResample _ -> acc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
-  | CEAlloc _ & t -> t
   | CEResample _ & t -> t
 
   -- ANF override
-  -- Ensures argument to assume is not lifted by ANF (first-class distributions
-  -- not supported in RootPPL)
+  -- Ensures distributions are not lifted by ANF (first-class distributions not
+  -- supported in RootPPL)
   sem normalize (k : Expr -> Expr) =
   | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
     normalizeDist
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
       dist
+  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
+    normalizeName
+      (lam value.
+        normalizeDist
+          (lam dist.
+             k (TmObserve {{ t with value = value }
+                               with dist = TmDist { td with dist = dist}}))
+          dist)
+      value
 
   -- Compilation of distributions
   sem compileDist (env: CompileCEnv) =
@@ -54,6 +61,8 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | DBeta { a = a, b = b } ->
     CDBeta { a = compileExpr env a, b = compileExpr env b }
   | DCategorical { p = p } -> CDCategorical { p = compileExpr env p }
+  | DBinomial { n = n, p = p } ->
+    CDBinomial { n = compileExpr env n, p = compileExpr env p }
   | DMultinomial { n = n, p = p } ->
     CDMultinomial { n = compileExpr env n, p = compileExpr env p }
   | DDirichlet { a = a } -> CDDirichlet { a = compileExpr env a }
@@ -73,19 +82,18 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompile
   | TmAssume { dist = TmDist { dist = dist }} ->
     CESample { dist = compileDist env dist }
   | TmWeight { weight = weight } -> CEWeight { weight = compileExpr env weight }
+  | TmObserve { value = value, dist = TmDist { dist = dist }} ->
+    CEObserve { value = compileExpr env value, dist = compileDist env dist }
   | TmResample _ -> CEResample {}
 
-  -- Allocation
-  sem alloc (name: Name) =
-  | CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } & ty } ->
-    [
-      -- Placeholder allocation
-      { ty = ty
-      , id = Some name
-      , init = Some (CIExpr { expr = CEAlloc {} })
-      }
-    ]
-  | _ -> error "Incorrect type in alloc"
+  -- Add error reporting for dist type
+  sem compileType (env: CompileCEnv) =
+  | TyDist _ & ty -> infoErrorExit (infoTy ty) "TyDist in compileType"
+
+  -- Do not lift polymorphic types. NOTE(dlunde,2021-10-08): This allows for
+  -- some simple cases, like using `get` for lists.
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TySeq {info = _, ty = TyUnknown _} & ty -> (env,ty)
 
 end
 
@@ -244,7 +252,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match compile typeEnv prog with (env, types, tops, inits, retTy) then
 
-
     -- print (_debugPrint types tops inits inits);
 
     ------------------------
@@ -255,28 +262,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- indirectly)
     let resampleFree: Name -> Bool = lam n.
       match mapLookup n identCats with Some 2 then false else true
-    in
-
-    -- Map from all names to their C types
-    let defMap: Map Name CType =
-      recursive let extractDef: Map Name Type -> CStmt -> Map Name Type =
-        lam map. lam stmt.
-          match stmt with CSDef { ty = ty, id = Some id } then
-            mapInsert id ty map
-          else sfold_CStmt_CStmt extractDef map stmt
-      in
-      let m = mapEmpty nameCmp in
-      let m = foldl (lam m. lam top.
-        match top with CTFun { params = params } then
-          let m = foldl (lam m. lam t. mapInsert t.1 t.0 m) m params in
-          sfold_CTop_CStmt extractDef m top
-        else match top with CTDef { ty = ty, id = Some id } then
-          mapInsert id ty m
-        else
-          sfold_CTop_CStmt extractDef m top
-      ) m tops in
-      let m = foldl extractDef m inits in
-      m
     in
 
     -- Unwraps pointer type one step
@@ -298,12 +283,19 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let res = foldl (lam acc: ([CTop],[(Name,CType)]). lam top: CTop.
         match top
         with CTDef { ty = ! CTyFun _ & ty, id = Some id, init = init } then
+          match init with Some _ then error "Can't handle initializers." else
           if isIdentDet id then
-            let def = CTBBlockData { ty = ty, id = id } in
+            let def =
+              match ty
+              with CTyArray { ty = ty, size = Some (CEInt { i = len }) } then
+                CTBBlockData { ty = ty, id = id, len = len }
+              else
+                CTBBlockDataSingle { ty = ty, id = id }
+            in
             (snoc acc.0 def, acc.1)
           else
-            match init with Some (CEAlloc {}) then
-              error "Non-deterministic struct allocation"
+            match ty with CTyArray _ then
+              error "Non-deterministic allocation of pointer-accessed data structure."
             else
               (acc.0, snoc acc.1 (id,ty))
         else (snoc acc.0 top, acc.1)
@@ -358,6 +350,25 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- ADD BBLOCK_HELPERS --
     ------------------------
 
+    -- Stack and stack pointer expressions
+    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
+    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
+
+    -- Global frame
+    let globalDef =
+      let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
+      CSDef {
+        ty = CTyPtr { ty = ty },
+        id = Some nameGlobal,
+        init = Some (CIExpr {
+          expr = CECast {
+            ty = CTyPtr { ty = ty },
+            rhs = stack
+          }
+        })
+      }
+    in
+
     let res = foldl (lam acc: ([CTop], Map Name Name). lam top: CTop.
         match top with CTFun ({ id = id } & r) then
           match mapLookup id identCats with Some cat then
@@ -367,13 +378,16 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let det = top in
               let n = nameSym (concat "STOCH_" (nameGetStr id)) in
               let detFunMap = mapInsert id n acc.1 in
-              let stoch = CTBBlockHelper {r with id = n} in
+              let stoch =
+                CTBBlockHelper {{r with id = n}
+                                   with body = cons globalDef r.body } in
               let tops = concat acc.0 [det, stoch] in
               (tops,detFunMap)
 
             -- Stochastic function, replace with BBLOCK_HELPER
             else match cat with 1 then
-              (snoc acc.0 (CTBBlockHelper r), acc.1)
+              let bbh = CTBBlockHelper {r with body = cons globalDef r.body} in
+              (snoc acc.0 bbh, acc.1)
 
             -- Function with resample, handled elsewhere
             else (snoc acc.0 top, acc.1)
@@ -398,7 +412,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     } in
 
     -- Initialize a new stack frame
-    let newStackFrame: StackFrame = lam name. lam ret. {
+    let newStackFrame: Name -> CType -> StackFrame = lam name. lam ret. {
       id = nameSym (concat "STACK_" (nameGetStr name)),
       mem = [], ret = ret, params = []
     } in
@@ -455,7 +469,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           in
 
           -- Add used locals from prevDef
-          let acc = sfold_CStmt_CExpr addLocals acc stmt in
+          let acc: AccStackFrames = sfold_CStmt_CExpr addLocals acc stmt in
 
           -- Block split on applications
           match stmt with CSDef { init = Some (CIExpr { expr = CEApp app }) }
@@ -498,8 +512,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
             -- Initialize accumulator for new function
             let sf = {{ newStackFrame id ret with
-              mem = map (lam t. (t.1,t.0)) params} with
-              params = map (lam t. t.1) params
+              mem = map (lam t: (CType,Name). (t.1,t.0)) params} with
+              params = map (lam t: (CType,Name). t.1) params
             } in
             let lAcc = emptyAccSF sf in
 
@@ -545,24 +559,24 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         recursive let rec = lam stmt: CStmt.
 
-          match stmt with CSDef { id = Some id, init = init } then
-            let l = any (lam l. nameEq id l.0) locals in
+          match stmt with CSDef { ty = ty, id = Some id, init = init } then
+            let l = any (lam l: (Name,CType). nameEq id l.0) locals in
 
             -- Local definition
             if l then
-              match init with Some init then
-                -- Struct allocation is not allowed inside functions
-                match init with CIExpr { expr = CEAlloc {} } then
-                  error "Allocation not allowed in function"
-
-                -- Not an allocation, replace with assignment
-                else match init with CIExpr { expr = expr } then
+              match ty with CTyArray _ then
+                error "Non-deterministic allocation of pointer-accessed data structure."
+              else match init with Some init then
+                -- Replace with assignment
+                match init with CIExpr { expr = expr } then
                   [CSExpr { expr = CEBinOp {
                      op = COAssign {},
                      lhs = CEVar { id = id },
                      rhs = expr
                    }}]
                 else error "Non-CIExpr initializer in replaceDefs"
+
+              -- Remove definition if it does not initialize anything
               else []
 
             -- Leave other definitions as they are
@@ -686,25 +700,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- Deref shorthand
     let derefExpr: CExpr -> CExpr = lam expr.
       CEUnOp { op = CODeref {}, arg = expr}
-    in
-
-    -- Stack and stack pointer expressions
-    let stack = CEMember { lhs = CEPState {}, id = nameStack } in
-    let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
-
-    -- Global frame
-    let globalDef =
-      let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
-      CSDef {
-        ty = CTyPtr { ty = ty },
-        id = Some nameGlobal,
-        init = Some (CIExpr {
-          expr = CECast {
-            ty = CTyPtr { ty = ty },
-            rhs = stack
-          }
-        })
-      }
     in
 
     -- Converts an expression representing an absolute address to a relative
@@ -1058,14 +1053,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
             match assocSeqLookup {eq=nameEq} id globals with Some cty then
               CEArrow { lhs = CEVar { id = nameGlobal }, id = id }
 
-            -- Deterministic global
-            else match mapLookup id identCats with Some 0 then
-              match mapLookup id defMap with Some ty then
-                -- Only deref if not allocated
-                match ty with ! CTyStruct _ then derefExpr expr
-                else expr
-              else error "Unknown type for id"
-
             -- Leave other variables
             else expr
 
@@ -1115,23 +1102,11 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       else top
     ) tops in
 
-    -- let replaceCall: CExpr -> CExpr =
-    --   lam expr: CExpr.
-
-    -- in
-
-    -- let tops: [CTop] = map (lam top.
-    --   match top with CTFun { id = id } then
-    --     smap_CTop_CExpr replaceCall top
-    --   else error "Not a CTFun when replacing function calls"
-    -- ) tops in
-    -- let inits: [CStmt] = map (smap_CStmt_CExpr replaceCall) inits in
-
     ------------------------------------------------------------
     -- COLLECT/ADD FUNCTION/BBLOCK/BBLOCK_HELPER DECLARATIONS --
     ------------------------------------------------------------
 
-    let res = foldl (lam acc. lam top.
+    let res = foldl (lam acc: ([CTop],[CTop]). lam top.
 
         -- Remove all preexisting declarations
         match top with CTDef { ty = CTyFun _ }
@@ -1144,14 +1119,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         else match top
         with CTBBlockHelper { ret = ret, id = id, params = params } then
-          let params = map (lam p. p.0) params in
+          let params = map (lam p: (CType, Name). p.0) params in
           ( snoc acc.0
               (CTBBlockHelperDecl { ret = ret, id = id, params = params }),
             snoc acc.1 top )
 
         else match top
         with CTFun { ret = ret, id = id, params = params } then
-          let params = map (lam p. p.0) params in
+          let params = map (lam p: (CType, Name). p.0) params in
           let funTy = CTyFun { ret = ret, params = params } in
           let decl = CTDef { ty = funTy, id = Some id, init = None () } in
           (snoc acc.0 decl, snoc acc.1 top)
@@ -1200,7 +1175,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let endBBlockDecl = CTBBlockDecl { id = nameEndBlock } in
 
     -- Convert a [(Name,CType)] to [(CType, Option Name)].
-    let convertMem = map (lam t. (t.1, Some t.0)) in
+    let convertMem = map (lam t: (Name,CType). (t.1, Some t.0)) in
 
     -- Global frame type definition
     let gf = CTDef {
@@ -1236,7 +1211,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     -- Stack frame types
     let stochInitSF = stackFrameToTopTy stochInitSF in
-    let sfs = map (lam t. stackFrameToTopTy t.1) sfs in
+    let sfs = map (lam t: (Name,StackFrame). stackFrameToTopTy t.1) sfs in
 
 
     RPProg {
@@ -1309,7 +1284,193 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   else never
 
+-------------
+--- TESTS ---
+-------------
+-- NOTE(dlunde,2021-10-26): These tests are not that good. Optimally, we
+-- should decompose the compiler components (now just one big function), and
+-- then run unit tests in some way on each decomposed part in isolation. For
+-- now, they are at least better than nothing
+
+lang Test = MExprPPLRootPPLCompile
+
 mexpr
--- use MExprPPLRootPPLCompile in
+use Test in
+
+let test = lam cpplstr.
+  let cppl = parseMExprPPLString cpplstr in
+  let rppl = rootPPLCompile cppl in
+  printCompiledRPProg rppl
+in
+
+let simple = "
+let x = assume (Beta 1.0 1.0) in
+observe true (Bernoulli x);
+x
+------------------------" in
+
+utest test simple with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "#include \"inference/smc/smc.cuh\"",
+  "#include <stdint.h>",
+  "INIT_MODEL_STACK()",
+  "struct GLOBAL {double ret; double x;};",
+  "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
+  "BBLOCK_DECLARE(start);",
+  "BBLOCK_DECLARE(end);",
+  "BBLOCK_DECLARE(init);",
+  "BBLOCK(start, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  ((PSTATE.stackPtr) = (sizeof(struct GLOBAL)));",
+  "  struct STACK_init (*callsf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = end);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->ret))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP(init, NULL);",
+  "})",
+  "BBLOCK(end, {",
+  "  (NEXT = NULL);",
+  "})",
+  "BBLOCK(init, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  ((global->x) = (SAMPLE(beta, 1., 1.)));",
+  "  (OBSERVE(bernoulli, (global->x), 1));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = (global->x));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(start);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let nestedIfs = "
+recursive let f: Float -> Float =
+ lam p.
+  let s1 = assume (Gamma p p) in
+  resample;
+  let s2 =
+    if geqf s1 1. then 2.
+    else 3. in
+  let s3 =
+    if leqf s2 4. then
+      let s4 =
+        if eqf s2 5. then 6.
+        else f 7. in
+      addf s4 s4
+    else 8. in
+  mulf s3 s3
+in
+
+f 1.0; 1.0
+----------------------" in
+
+utest test nestedIfs with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "#include \"inference/smc/smc.cuh\"",
+  "#include <stdint.h>",
+  "INIT_MODEL_STACK()",
+  "struct GLOBAL {double ret; double _;};",
+  "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
+  "struct STACK_f {pplFunc_t ra; double (*retValLoc); double s4; double s3; double s1; double p;};",
+  "BBLOCK_DECLARE(start);",
+  "BBLOCK_DECLARE(end);",
+  "BBLOCK_DECLARE(bblock);",
+  "BBLOCK_DECLARE(bblock1);",
+  "BBLOCK_DECLARE(bblock2);",
+  "BBLOCK_DECLARE(f);",
+  "BBLOCK_DECLARE(bblock3);",
+  "BBLOCK_DECLARE(init);",
+  "BBLOCK(start, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  ((PSTATE.stackPtr) = (sizeof(struct GLOBAL)));",
+  "  struct STACK_init (*callsf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = end);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->ret))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP(init, NULL);",
+  "})",
+  "BBLOCK(end, {",
+  "  (NEXT = NULL);",
+  "})",
+  "BBLOCK(bblock, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  ((sf->s3) = ((sf->s4) + (sf->s4)));",
+  "  BBLOCK_JUMP(bblock1, NULL);",
+  "})",
+  "BBLOCK(bblock1, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  double t;",
+  "  (t = ((sf->s3) * (sf->s3)));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = t);",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_f))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "BBLOCK(bblock2, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  char t1;",
+  "  (t1 = ((sf->s1) >= 1.));",
+  "  double s2;",
+  "  if ((t1 == 1)) {",
+  "    (s2 = 2.);",
+  "  } else {",
+  "    (s2 = 3.);",
+  "  }",
+  "  char t2;",
+  "  (t2 = (s2 <= 4.));",
+  "  if ((t2 == 1)) {",
+  "    char t3;",
+  "    (t3 = (s2 == 5.));",
+  "    if ((t3 == 1)) {",
+  "      ((sf->s4) = 6.);",
+  "      BBLOCK_JUMP(bblock, NULL);",
+  "    } else {",
+  "      struct STACK_f (*callsf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "      ((callsf->ra) = bblock);",
+  "      ((callsf->p) = 7.);",
+  "      ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(sf->s4))) - (PSTATE.stack))));",
+  "      ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_f))));",
+  "      BBLOCK_JUMP(f, NULL);",
+  "    }",
+  "  } else {",
+  "    ((sf->s3) = 8.);",
+  "    BBLOCK_JUMP(bblock1, NULL);",
+  "  }",
+  "})",
+  "BBLOCK(f, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  ((sf->s1) = (SAMPLE(gamma, (sf->p), (sf->p))));",
+  "  (NEXT = bblock2);",
+  "})",
+  "BBLOCK(bblock3, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = 1.);",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "BBLOCK(init, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  struct STACK_f (*callsf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = bblock3);",
+  "  ((callsf->p) = 1.);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->_))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_f))));",
+  "  BBLOCK_JUMP(f, NULL);",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(start);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
 
 ()

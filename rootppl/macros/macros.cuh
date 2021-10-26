@@ -87,8 +87,13 @@ body
 // nice to change this.
 #define BBLOCK_JUMP(funcName, ...) funcName(BBLOCK_ARGS, ##__VA_ARGS__)
 
-// Declares global data with CUDA managed memory to handle transfers between host and device. 
+// Declares array global data with CUDA managed memory to handle transfers between host and device. 
 #define BBLOCK_DATA_MANAGED(pointerName, type, n) MANAGED type pointerName[n];
+
+// Declares global data with CUDA managed memory to handle transfers between host and device.
+#define BBLOCK_DATA_MANAGED_SINGLE(name, type) MANAGED type name;
+
+
 /***    *****    ***/
 
 
@@ -123,7 +128,6 @@ body
 #define MAIN(body) \
 int main(int argc, char** argv) { \
     initGen(); \
-    int bbIdx = 0; \
     double res = 0; \
     body \
     freeGen(); \

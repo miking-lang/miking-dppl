@@ -27,7 +27,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem infoTm =
   | TmDist t -> t.info
 
-  sem ty =
+  sem tyTm =
   | TmDist t -> t.ty
 
   sem withInfo (info: Info) =
@@ -47,6 +47,9 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
 
   sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
   | TmDist t -> sfoldDist_Expr_Expr f acc t.dist
+
+  sem infoTy =
+  | TyDist t -> t.info
 
   sem tyWithInfo (info : Info) =
   | TyDist t -> TyDist {t with info = info}
@@ -78,11 +81,12 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   | TmDist r ->
     match lhs with TmDist l then eqExprHDist env free l.dist r.dist else None ()
 
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyDist r ->
     match unwrapType typeEnv lhs with Some (TyDist l) then
-      eqType typeEnv l.ty r.ty
-    else false
+      eqTypeH typeEnv free l.ty r.ty
+    else None ()
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
@@ -187,8 +191,8 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DUniform t ->
     let err = lam. infoErrorExit info "Type error uniform" in
-    match ty t.a with TyFloat _ then
-      match ty t.b with TyFloat _ then
+    match tyTm t.a with TyFloat _ then
+      match tyTm t.b with TyFloat _ then
         TyFloat { info = info }
       else err ()
     else err ()
@@ -250,7 +254,7 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBernoulli t ->
-    match ty t.p with TyFloat _ then TyBool { info = info }
+    match tyTm t.p with TyFloat _ then TyBool { info = info }
     else infoErrorExit info "Type error bern"
 
   -- ANF
@@ -303,7 +307,7 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DPoisson t ->
-    match ty t.lambda with TyFloat _ then TyInt { info = info }
+    match tyTm t.lambda with TyFloat _ then TyInt { info = info }
     else infoErrorExit info "Type error Poisson"
 
   -- ANF
@@ -364,8 +368,8 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBeta t ->
     let err = lam. infoErrorExit info "Type error beta" in
-    match ty t.a with TyFloat _ then
-      match ty t.b with TyFloat _ then
+    match tyTm t.a with TyFloat _ then
+      match tyTm t.b with TyFloat _ then
         TyFloat { info = info }
       else err ()
     else err ()
@@ -433,8 +437,8 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem tyDist (env: TypeEnv) (info: Info) =
   | DGamma t ->
     let err = lam. infoErrorExit info "Type error Gamma" in
-    match ty t.k with TyFloat _ then
-      match ty t.theta with TyFloat _ then
+    match tyTm t.k with TyFloat _ then
+      match tyTm t.theta with TyFloat _ then
         TyFloat { info = info }
       else err ()
     else err ()
@@ -501,7 +505,7 @@ lang CategoricalDist =
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DCategorical t ->
-    match ty t.p with TySeq { ty = TyFloat _ } then TyInt { info = info }
+    match tyTm t.p with TySeq { ty = TyFloat _ } then TyInt { info = info }
     else infoErrorExit info "Type error categorical"
 
   -- ANF
@@ -563,8 +567,8 @@ lang MultinomialDist =
   sem tyDist (env: TypeEnv) (info: Info) =
   | DMultinomial t ->
     let err = lam. infoErrorExit info "Type error multinomial" in
-    match ty t.n with TyInt _ then
-      match ty t.p with TySeq { ty = TyFloat _ } then
+    match tyTm t.n with TyInt _ then
+      match tyTm t.p with TySeq { ty = TyFloat _ } then
         TySeq { ty = TyInt { info = info }, info = info }
       else err ()
     else err ()
@@ -626,7 +630,7 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DDirichlet t ->
-    match ty t.a with TySeq { ty = TyFloat _ } then
+    match tyTm t.a with TySeq { ty = TyFloat _ } then
       TySeq { info = info, ty = TyFloat { info = info } }
     else infoErrorExit info "Type error dirichlet"
 
@@ -677,7 +681,7 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   -- Type Annotate
   sem tyDist (env: TypeEnv) (info: Info) =
   | DExponential t ->
-    match ty t.rate with TyFloat _ then TyFloat { info = info }
+    match tyTm t.rate with TyFloat _ then TyFloat { info = info }
     else infoErrorExit info "Type error exponential"
 
   -- ANF
@@ -734,7 +738,7 @@ lang EmpiricalDist =
   sem tyDist (env: TypeEnv) (info: Info) =
   | DEmpirical t ->
     let err = lam. infoErrorExit info "Type error empirical" in
-    match ty t.samples
+    match tyTm t.samples
     with TySeq { ty = TyRecord { fields = fields } } then
       if eqi (mapSize fields) 2 then
         match mapLookup (stringToSid "0") fields with Some TyFloat _ then
@@ -802,8 +806,8 @@ lang GaussianDist =
   sem tyDist (env: TypeEnv) (info: Info) =
   | DGaussian t ->
     let err = lam. infoErrorExit info "Type error Gaussian" in
-    match ty t.mu with TyFloat _ then
-      match ty t.sigma with TyFloat _ then
+    match tyTm t.mu with TyFloat _ then
+      match tyTm t.sigma with TyFloat _ then
         TyFloat { info = info }
       else err ()
     else err ()
@@ -867,8 +871,8 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
   sem tyDist (env: TypeEnv) (info: Info) =
   | DBinomial t ->
     let err = lam. infoErrorExit info "Type error Binomial" in
-    match ty t.n with TyInt _ then
-      match ty t.p with TyFloat _ then
+    match tyTm t.n with TyInt _ then
+      match tyTm t.p with TyFloat _ then
         TyInt { info = info }
       else dprint t.p; err ()
     else dprint t.n; err ()
@@ -950,29 +954,9 @@ lang DistAll =
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist + GaussianDist + BinomialDist
 
-lang MExprPPLCmpTypeIndex = MExprAst + Dist
-  -- This is required for type comparisons (required in turn for type lifting)
-  sem typeIndex =
-  | TyUnknown _ -> 0
-  | TyBool _ -> 1
-  | TyInt _ -> 2
-  | TyFloat _ -> 3
-  | TyChar _ -> 4
-  | TyArrow _ -> 5
-  | TySeq _ -> 6
-  | TyRecord _ -> 7
-  | TyVariant _ -> 8
-  | TyVar _ -> 9
-  | TyApp _ -> 10
-  | TyTensor _ -> 11
-  -- This is the only addition compared to MExprCmpTypeIndex in mexpr/cmp.mc
-  | TyDist _ -> 12
-
-end
-
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF + MExprTypeLiftUnOrderedRecords + MExprPPLCmpTypeIndex
+  + MExprANF + MExprTypeLiftUnOrderedRecords
 
 mexpr
 
@@ -1005,36 +989,36 @@ utest expr2str tmUniform with strJoin "\n" [
   "Uniform",
   "  1.",
   "  2."
-] in
+] using eqString in
 
 utest expr2str tmBernoulli with strJoin "\n" [
   "Bernoulli",
   "  0.5"
-] in
+] using eqString in
 
 utest expr2str tmPoisson with strJoin "\n" [
   "Poisson",
   "  0.5"
-] in
+] using eqString in
 
 utest expr2str tmBeta with strJoin "\n" [
   "Beta",
   "  1.",
   "  2."
-] in
+] using eqString in
 
 utest expr2str tmGamma with strJoin "\n" [
   "Gamma",
   "  1.",
   "  2."
-] in
+] using eqString in
 
 utest expr2str tmCategorical with strJoin "\n" [
   "Categorical",
   "  [ 0.3,",
   "    0.2,",
   "    0.5 ]"
-] in
+] using eqString in
 
 utest expr2str tmMultinomial with strJoin "\n" [
   "Multinomial",
@@ -1042,37 +1026,37 @@ utest expr2str tmMultinomial with strJoin "\n" [
   "  [ 0.3,",
   "    0.2,",
   "    0.5 ]"
-] in
+] using eqString in
 
 utest expr2str tmExponential with strJoin "\n" [
   "Exponential",
   "  1."
-] in
+] using eqString in
 
 utest expr2str tmEmpirical with strJoin "\n" [
   "Empirical",
   "  [ (1., 1.5),",
   "    (3., 1.3) ]"
-] in
+] using eqString in
 
 utest expr2str tmDirichlet with strJoin "\n" [
   "Dirichlet",
   "  [ 1.3,",
   "    1.3,",
   "    1.5 ]"
-] in
+] using eqString in
 
 utest expr2str tmGaussian with strJoin "\n" [
   "Gaussian",
   "  0.",
   "  1."
-] in
+] using eqString in
 
 utest expr2str tmBinomial with strJoin "\n" [
   "Binomial",
   "  5",
   "  0.5"
-] in
+] using eqString in
 
 --------------------
 -- EQUALITY TESTS --
@@ -1214,20 +1198,18 @@ utest symbolize tmBinomial with tmBinomial using eqExpr in
 -- TYPE-ANNOTATE TESTS --
 -------------------------
 
-let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
-
-utest ty (typeAnnot tmUniform) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmBernoulli) with tydist_ tybool_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmPoisson) with tydist_ tyint_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmBeta) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmGamma) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmCategorical) with tydist_ tyint_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmMultinomial) with tydist_ (tyseq_ tyint_) using eqTypeEmptyEnv in
-utest ty (typeAnnot tmExponential) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqTypeEmptyEnv in
-utest ty (typeAnnot tmGaussian) with tydist_ tyfloat_ using eqTypeEmptyEnv in
-utest ty (typeAnnot tmBinomial) with tydist_ tyint_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot tmUniform) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeAnnot tmBernoulli) with tydist_ tybool_ using eqType in
+utest tyTm (typeAnnot tmPoisson) with tydist_ tyint_ using eqType in
+utest tyTm (typeAnnot tmBeta) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeAnnot tmGamma) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeAnnot tmCategorical) with tydist_ tyint_ using eqType in
+utest tyTm (typeAnnot tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
+utest tyTm (typeAnnot tmExponential) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
+utest tyTm (typeAnnot tmGaussian) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeAnnot tmBinomial) with tydist_ tyint_ using eqType in
 
 ---------------
 -- ANF TESTS --

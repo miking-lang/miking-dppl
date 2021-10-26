@@ -1,6 +1,7 @@
--- RootPPL language fragment
+-- RootPPL language fragment, including pretty printing
 
 include "option.mc"
+include "string.mc"
 include "name.mc"
 include "c/ast.mc"
 include "c/pprint.mc"
@@ -19,11 +20,13 @@ let nameUIntPtr = nameSym "uintptr_t"
 let nameProgStateTy = nameSym "progState_t"
 let namePplFuncTy = nameSym "pplFunc_t"
 
+-- NOTE(dlunde,2021-10-08): This list is currently not exhaustive
 let rpKeywords = concat (map nameNoSym [
-  "BBLOCK", "BBLOCK_DECLARE", "SAMPLE", "WEIGHT", "PSTATE", "NEXT", "bernoulli",
-  "beta", "discrete", "multinomial", "dirichlet", "exponential", "uniform",
-  "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK", "particleIdx",
-  "lnFactorial"
+  "BBLOCK", "BBLOCK_DECLARE", "BBLOCK_DATA_MANAGED",
+  "BBLOCK_DATA_MANAGED_SINGLE", "", "SAMPLE", "WEIGHT", "PSTATE", "NEXT",
+  "bernoulli", "beta", "discrete", "multinomial", "dirichlet", "exponential",
+  "uniform", "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK",
+  "particleIdx", "lnFactorial"
 ]) [
   nameBblocksArr, nameBblockCall, nameBblockJump, nameDataPointer, nameNull,
   nameUIntPtr, nameProgStateTy, namePplFuncTy
@@ -38,7 +41,8 @@ lang RootPPL = CAst + CPrettyPrint
   syn CTop =
 
   -- Global data declarations
-  | CTBBlockData { ty: CType, id: Name }
+  | CTBBlockData { ty: CType, id: Name, len: Int }
+  | CTBBlockDataSingle { ty: CType, id: Name }
 
   -- Basic block helpers (essentially regular functions with special syntax)
   | CTBBlockHelperDecl { ret: CType, id: Name, params: [CType] }
@@ -51,6 +55,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem smap_CTop_CExpr (f: CExpr -> CExpr) =
   | CTBBlockData _ & t -> t
+  | CTBBlockDataSingle _ & t -> t
   | CTBBlockHelperDecl _ & t -> t
   | CTBBlockHelper t ->
     CTBBlockHelper { t with body = map (smap_CStmt_CExpr f) t.body }
@@ -60,6 +65,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
   | CTBBlockData _ & t -> t
+  | CTBBlockDataSingle _ & t -> t
   | CTBBlockHelperDecl _ & t -> t
   | CTBBlockHelper t -> CTBBlockHelper { t with body = join (map f t.body) }
   | CTBBlockDecl _ & t -> t
@@ -68,6 +74,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
   | CTBBlockData _ -> acc
+  | CTBBlockDataSingle _ -> acc
   | CTBBlockHelperDecl _ -> acc
   | CTBBlockHelper t -> foldl f acc t.body
   | CTBBlockDecl _ -> acc
@@ -76,6 +83,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   syn CExpr =
   | CESample { dist: CDist }
+  | CEObserve { value: CExpr, dist: CDist }
   | CEWeight { weight: CExpr }
   | CEPState {}
   | CENext {}
@@ -83,6 +91,7 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CESample t -> sfold_CDist_CExpr f acc t.dist
+  | CEObserve t -> sfold_CDist_CExpr f (f acc t.value) t.dist
   | CEWeight t -> f acc t.weight
   | CEPState _ -> acc
   | CENext _ -> acc
@@ -90,6 +99,8 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
   | CESample t -> CESample { t with dist = smap_CDist_CExpr f t.dist }
+  | CEObserve t -> CEObserve {{ t with value = f t.value }
+                                  with dist = smap_CDist_CExpr f t.dist }
   | CEWeight t -> CEWeight { t with weight = f t.weight }
   | CEPState _ & t -> t
   | CENext _ & t -> t
@@ -99,6 +110,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDBern { p: CExpr }
   | CDBeta { a: CExpr, b: CExpr }
   | CDCategorical { p: CExpr }
+  | CDBinomial { n: CExpr, p: CExpr }
   | CDMultinomial { n: CExpr, p: CExpr }
   | CDDirichlet { a: CExpr }
   | CDExp { rate: CExpr }
@@ -112,6 +124,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDBern t -> f acc t.p
   | CDBeta t -> f (f acc t.a) t.b
   | CDCategorical t -> f acc t.p
+  | CDBinomial t -> f (f acc t.n) t.p
   | CDMultinomial t -> f (f acc t.n) t.p
   | CDDirichlet t -> f acc t.a
   | CDExp t -> f acc t.rate
@@ -125,6 +138,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDBern t -> CDBern { t with p = f t.p }
   | CDBeta t -> CDBeta {{ t with a = f t.a } with b = f t.b }
   | CDCategorical t -> CDCategorical { t with p = f t.p }
+  | CDBinomial t -> CDBinomial {{ t with n = f t.n } with p = f t.p }
   | CDMultinomial t -> CDMultinomial {{ t with n = f t.n } with p = f t.p }
   | CDDirichlet t -> CDDirichlet { t with a = f t.a }
   | CDExp t -> CDExp { t with rate = f t.rate }
@@ -164,10 +178,18 @@ lang RootPPL = CAst + CPrettyPrint
 
   sem printCTop (indent : Int) (env: PprintEnv) =
 
-  | CTBBlockData { ty = ty, id = id } ->
+  | CTBBlockData { ty = ty, id = id, len = len } ->
     match pprintEnvGetStr env id with (env,id) then
       match printCType "" env ty with (env,ty) then
-        (env, join ["BBLOCK_DATA_MANAGED(", id, ", ", ty, ", 1)"])
+        let len = int2string len in
+        (env, join ["BBLOCK_DATA_MANAGED(", id, ", ", ty, ", ", len, ")"])
+      else never
+    else never
+
+  | CTBBlockDataSingle { ty = ty, id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      match printCType "" env ty with (env,ty) then
+        (env, join ["BBLOCK_DATA_MANAGED_SINGLE(", id, ", ", ty, ")"])
       else never
     else never
 
@@ -229,6 +251,13 @@ lang RootPPL = CAst + CPrettyPrint
       (env, _par (join ["SAMPLE(", dist, ")"]))
     else never
 
+  | CEObserve { value = value, dist = dist } ->
+    match printCExpr env value with (env,value) then
+      match printCDist env dist with (env,dist) then
+        (env, _par (join ["OBSERVE(", dist, ", ", value, ")"]))
+      else never
+    else never
+
   | CEWeight { weight = weight } ->
     match printCExpr env weight with (env,weight) then
       (env, _par (join ["WEIGHT(", weight, ")"]))
@@ -257,6 +286,13 @@ lang RootPPL = CAst + CPrettyPrint
     match printCExpr env p with (env,p) then
       error "CDCategorical not yet implemented"
       -- (env, strJoin ", " ["discrete", p, "TODO"])
+    else never
+
+  | CDBinomial { n = n, p = p } ->
+    match printCExpr env n with (env,n) then
+      match printCExpr env p with (env,p) then
+        (env, strJoin ", " ["binomial", p, n])
+      else never
     else never
 
   | CDMultinomial { n = n, p = p } ->
@@ -328,16 +364,16 @@ lang RootPPL = CAst + CPrettyPrint
       else (env,"")
     in
 
+    let init =
+      match pStateTy with Some _ then "INIT_MODEL(progState_t)"
+      else "INIT_MODEL_STACK()"
+    in
+
     match printProgState indent env pStateTy with (env,pStateTy) then
     match mapAccumL (printCTop indent) env types with (env,types) then
     match mapAccumL (printCTop indent) env tops with (env,tops) then
     match printCStmts 2 env pre with (env,pre) then
     match pprintEnvGetStr env startBlock with (env,startBlock) then
-
-    let init =
-      match pStateTy with Some _ then "INIT_MODEL(progState_t,"
-      else "INIT_MODEL_STACK("
-    in
 
     let pStateTy = match pStateTy with "" then [] else [pStateTy] in
 
@@ -345,16 +381,14 @@ lang RootPPL = CAst + CPrettyPrint
       includes,
       types,
       pStateTy,
-      [ join [ init
-             , ")"
-             ]
-      ],
+      [ init ],
       tops,
-      [ "MAIN({"
-      , if null pre then "" else concat "  " pre
-      , join ["  FIRST_BBLOCK(", startBlock ,");"]
-      , "  SMC(NULL);"
-      , "})"
+      [ "MAIN({" ],
+      if null pre then [] else [concat "  " pre],
+      [
+        join ["  FIRST_BBLOCK(", startBlock ,");"],
+        "  SMC(NULL);",
+        "})"
       ]
     ])
 
@@ -365,7 +399,178 @@ lang RootPPL = CAst + CPrettyPrint
     else never
 end
 
+-------------
+--- TESTS ---
+-------------
+
 mexpr
 use RootPPL in
+
+let test = printRPProg [] in
+
+let vardef = lam s.
+  CSDef { ty = CTyInt {}, id = Some (nameSym s), init = None () } in
+
+let startBlock = nameSym "startBlock" in
+let basic = RPProg {
+  includes = ["test.h"],
+  startBlock = startBlock,
+  pStateTy = Some (CTyInt {}),
+  types = [ CTTyDef { ty = CTyInt {}, id = nameSym "newint" } ],
+  tops = [
+    CTBBlockDecl { id = startBlock },
+    CTBBlock { id = startBlock, body = [ vardef "bvar" ] }
+    ],
+  pre = [ CSDef { ty = CTyInt {}, id = Some (nameSym "pvar"), init = None () } ]
+} in
+
+utest test basic with strJoin "\n" [
+  "#include test.h",
+  "typedef int newint;",
+  "typedef int progState_t;",
+  "INIT_MODEL(progState_t)",
+  "BBLOCK_DECLARE(startBlock);",
+  "BBLOCK(startBlock, {",
+  "  int bvar;",
+  "})",
+  "MAIN({",
+  "  int pvar;",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let wrapTops = lam tops. RPProg {
+  includes = [],
+  startBlock = startBlock,
+  pStateTy = None (),
+  types = [],
+  tops = tops,
+  pre = []
+} in
+
+let data = wrapTops [
+  CTBBlockData { ty = CTyInt {}, id = nameSym "data", len = 3 },
+  CTBBlockDataSingle { ty = CTyInt {}, id = nameSym "data" },
+  CTBBlock { id = startBlock, body = [] }
+] in
+
+utest test data with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK_DATA_MANAGED(data, int, 3)",
+  "BBLOCK_DATA_MANAGED_SINGLE(data1, int)",
+  "BBLOCK(startBlock, {",
+  "  ",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let helperName = nameSym "helper" in
+let helper = wrapTops [
+  CTBBlockHelperDecl {
+    ret = CTyVoid {},
+    id = helperName,
+    params = [CTyInt {}, CTyDouble {}]
+  },
+  CTBBlockHelper {
+    ret = CTyVoid {},
+    id = helperName,
+    params = [ (CTyInt {}, nameSym "p"), (CTyDouble {}, nameSym "p") ],
+    body = [ vardef "MAIN", vardef "DATA_POINTER" ] -- Check keyword name handling
+  },
+  CTBBlock { id = startBlock, body = [] }
+] in
+
+utest test helper with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK_HELPER_DECLARE(helper, void, int, double);",
+  "BBLOCK_HELPER(helper, {",
+  "  int MAIN1;",
+  "  int DATA_POINTER1;",
+  "}, void, int p, double p1)",
+  "BBLOCK(startBlock, {",
+  "  ",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let wrapExprs = lam exprs.
+  wrapTops [ CTBBlock {
+    id = startBlock, body = map (lam e. CSExpr { expr = e }) exprs
+  } ]
+in
+
+let f = lam f. CEFloat { f = f } in
+let i = lam i. CEInt { i = i } in
+let dists = wrapExprs (join [
+  map (lam dist. CESample { dist = dist }) [
+    CDBern { p = f 1.0 },
+    CDBeta { a = f 1.0, b = f 2.0 },
+    CDBinomial { n = i 1, p = f 1.0 },
+    CDExp { rate = f 1.0 },
+    CDUniform { a = f 0.0, b = f 1.0 },
+    CDPoisson { lambda = f 1.0 },
+    CDGamma { k = f 1.0, theta = f 2.0 }
+  ],
+
+  map (lam t: (CExpr, CDist). CEObserve { value = t.0, dist = t.1 }) [
+    (i 1, CDBern { p = f 1.0 }),
+    (f 1.0, CDBeta { a = f 1.0, b = f 2.0 }),
+    (i 1, CDBinomial { n = i 1, p = f 1.0 }),
+    (f 1.0, CDExp { rate = f 1.0 }),
+    (f 1.0, CDUniform { a = f 0.0, b = f 1.0 }),
+    (i 1, CDPoisson { lambda = f 1.0 }),
+    (f 1.0, CDGamma { k = f 1.0, theta = f 2.0 })
+  ]
+]) in
+
+utest test dists with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK(startBlock, {",
+  "  (SAMPLE(bernoulli, 1.));",
+  "  (SAMPLE(beta, 1., 2.));",
+  "  (SAMPLE(binomial, 1., 1));",
+  "  (SAMPLE(exponential, 1.));",
+  "  (SAMPLE(uniform, 0., 1.));",
+  "  (SAMPLE(poisson, 1.));",
+  "  (SAMPLE(gamma, 1., 2.));",
+  "  (OBSERVE(bernoulli, 1., 1));",
+  "  (OBSERVE(beta, 1., 2., 1.));",
+  "  (OBSERVE(binomial, 1., 1, 1));",
+  "  (OBSERVE(exponential, 1., 1.));",
+  "  (OBSERVE(uniform, 0., 1., 1.));",
+  "  (OBSERVE(poisson, 1., 1));",
+  "  (OBSERVE(gamma, 1., 2., 1.));",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let exprs = wrapExprs [
+  CEWeight { weight = CEFloat { f = 2.0 } },
+  CEPState {},
+  CENext {}
+] in
+
+utest test exprs with strJoin "\n" [
+  "INIT_MODEL_STACK()",
+  "BBLOCK(startBlock, {",
+  "  (WEIGHT(2.));",
+  "  PSTATE;",
+  "  NEXT;",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(startBlock);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
 
 ()

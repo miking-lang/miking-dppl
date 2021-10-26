@@ -80,3 +80,8 @@ let getAst = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   makeKeywords [] (parseMCoreFile keywords filename)
+
+-- Similar to getAst, but calls parseMExprString instead
+let parseMExprPPLString = lam cpplstr.
+  use DPPLParser in
+  makeKeywords [] (parseMExprString keywords cpplstr)

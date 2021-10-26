@@ -1,10 +1,13 @@
 
-.PHONY : all test clean install
+.PHONY : all test test-boot clean install
 
 all:
 
 test:
 	@$(MAKE) -s -f test.mk all
+
+test-boot:
+	@$(MAKE) -s -f test-boot.mk all
 
 install:
 	@cp -f shell/midppl ~/.local/bin/.
