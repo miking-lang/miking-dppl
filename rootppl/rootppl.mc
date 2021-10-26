@@ -399,6 +399,10 @@ lang RootPPL = CAst + CPrettyPrint
     else never
 end
 
+-------------
+--- TESTS ---
+-------------
+
 mexpr
 use RootPPL in
 

@@ -1,6 +1,7 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
+include "../coreppl/dppl-parser.mc"
 
 include "rootppl.mc"
 
@@ -263,28 +264,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       match mapLookup n identCats with Some 2 then false else true
     in
 
-    -- Map from all names to their C types
-    let defMap: Map Name CType =
-      recursive let extractDef: Map Name Type -> CStmt -> Map Name Type =
-        lam map. lam stmt.
-          match stmt with CSDef { ty = ty, id = Some id } then
-            mapInsert id ty map
-          else sfold_CStmt_CStmt extractDef map stmt
-      in
-      let m = mapEmpty nameCmp in
-      let m = foldl (lam m. lam top.
-        match top with CTFun { params = params } then
-          let m = foldl (lam m. lam t. mapInsert t.1 t.0 m) m params in
-          sfold_CTop_CStmt extractDef m top
-        else match top with CTDef { ty = ty, id = Some id } then
-          mapInsert id ty m
-        else
-          sfold_CTop_CStmt extractDef m top
-      ) m tops in
-      let m = foldl extractDef m inits in
-      m
-    in
-
     -- Unwraps pointer type one step
     let tyDeref: CType -> CType = lam ty: CType.
       match ty with CTyPtr { ty = ty } then ty
@@ -490,7 +469,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
           in
 
           -- Add used locals from prevDef
-          let acc = sfold_CStmt_CExpr addLocals acc stmt in
+          let acc: AccStackFrames = sfold_CStmt_CExpr addLocals acc stmt in
 
           -- Block split on applications
           match stmt with CSDef { init = Some (CIExpr { expr = CEApp app }) }
@@ -533,8 +512,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
             -- Initialize accumulator for new function
             let sf = {{ newStackFrame id ret with
-              mem = map (lam t. (t.1,t.0)) params} with
-              params = map (lam t. t.1) params
+              mem = map (lam t: (CType,Name). (t.1,t.0)) params} with
+              params = map (lam t: (CType,Name). t.1) params
             } in
             let lAcc = emptyAccSF sf in
 
@@ -581,7 +560,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         recursive let rec = lam stmt: CStmt.
 
           match stmt with CSDef { ty = ty, id = Some id, init = init } then
-            let l = any (lam l. nameEq id l.0) locals in
+            let l = any (lam l: (Name,CType). nameEq id l.0) locals in
 
             -- Local definition
             if l then
@@ -1127,7 +1106,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- COLLECT/ADD FUNCTION/BBLOCK/BBLOCK_HELPER DECLARATIONS --
     ------------------------------------------------------------
 
-    let res = foldl (lam acc. lam top.
+    let res = foldl (lam acc: ([CTop],[CTop]). lam top.
 
         -- Remove all preexisting declarations
         match top with CTDef { ty = CTyFun _ }
@@ -1140,14 +1119,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
         else match top
         with CTBBlockHelper { ret = ret, id = id, params = params } then
-          let params = map (lam p. p.0) params in
+          let params = map (lam p: (CType, Name). p.0) params in
           ( snoc acc.0
               (CTBBlockHelperDecl { ret = ret, id = id, params = params }),
             snoc acc.1 top )
 
         else match top
         with CTFun { ret = ret, id = id, params = params } then
-          let params = map (lam p. p.0) params in
+          let params = map (lam p: (CType, Name). p.0) params in
           let funTy = CTyFun { ret = ret, params = params } in
           let decl = CTDef { ty = funTy, id = Some id, init = None () } in
           (snoc acc.0 decl, snoc acc.1 top)
@@ -1196,7 +1175,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let endBBlockDecl = CTBBlockDecl { id = nameEndBlock } in
 
     -- Convert a [(Name,CType)] to [(CType, Option Name)].
-    let convertMem = map (lam t. (t.1, Some t.0)) in
+    let convertMem = map (lam t: (Name,CType). (t.1, Some t.0)) in
 
     -- Global frame type definition
     let gf = CTDef {
@@ -1232,7 +1211,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     -- Stack frame types
     let stochInitSF = stackFrameToTopTy stochInitSF in
-    let sfs = map (lam t. stackFrameToTopTy t.1) sfs in
+    let sfs = map (lam t: (Name,StackFrame). stackFrameToTopTy t.1) sfs in
 
 
     RPProg {
@@ -1305,7 +1284,193 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   else never
 
+-------------
+--- TESTS ---
+-------------
+-- NOTE(dlunde,2021-10-26): These tests are not that good. Optimally, we
+-- should decompose the compiler components (now just one big function), and
+-- then run unit tests in some way on each decomposed part in isolation. For
+-- now, they are at least better than nothing
+
+lang Test = MExprPPLRootPPLCompile
+
 mexpr
--- use MExprPPLRootPPLCompile in
+use Test in
+
+let test = lam cpplstr.
+  let cppl = parseMExprPPLString cpplstr in
+  let rppl = rootPPLCompile cppl in
+  printCompiledRPProg rppl
+in
+
+let simple = "
+let x = assume (Beta 1.0 1.0) in
+observe true (Bernoulli x);
+x
+------------------------" in
+
+utest test simple with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "#include \"inference/smc/smc.cuh\"",
+  "#include <stdint.h>",
+  "INIT_MODEL_STACK()",
+  "struct GLOBAL {double ret; double x;};",
+  "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
+  "BBLOCK_DECLARE(start);",
+  "BBLOCK_DECLARE(end);",
+  "BBLOCK_DECLARE(init);",
+  "BBLOCK(start, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  ((PSTATE.stackPtr) = (sizeof(struct GLOBAL)));",
+  "  struct STACK_init (*callsf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = end);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->ret))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP(init, NULL);",
+  "})",
+  "BBLOCK(end, {",
+  "  (NEXT = NULL);",
+  "})",
+  "BBLOCK(init, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  ((global->x) = (SAMPLE(beta, 1., 1.)));",
+  "  (OBSERVE(bernoulli, (global->x), 1));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = (global->x));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(start);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let nestedIfs = "
+recursive let f: Float -> Float =
+ lam p.
+  let s1 = assume (Gamma p p) in
+  resample;
+  let s2 =
+    if geqf s1 1. then 2.
+    else 3. in
+  let s3 =
+    if leqf s2 4. then
+      let s4 =
+        if eqf s2 5. then 6.
+        else f 7. in
+      addf s4 s4
+    else 8. in
+  mulf s3 s3
+in
+
+f 1.0; 1.0
+----------------------" in
+
+utest test nestedIfs with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "#include \"inference/smc/smc.cuh\"",
+  "#include <stdint.h>",
+  "INIT_MODEL_STACK()",
+  "struct GLOBAL {double ret; double _;};",
+  "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
+  "struct STACK_f {pplFunc_t ra; double (*retValLoc); double s4; double s3; double s1; double p;};",
+  "BBLOCK_DECLARE(start);",
+  "BBLOCK_DECLARE(end);",
+  "BBLOCK_DECLARE(bblock);",
+  "BBLOCK_DECLARE(bblock1);",
+  "BBLOCK_DECLARE(bblock2);",
+  "BBLOCK_DECLARE(f);",
+  "BBLOCK_DECLARE(bblock3);",
+  "BBLOCK_DECLARE(init);",
+  "BBLOCK(start, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  ((PSTATE.stackPtr) = (sizeof(struct GLOBAL)));",
+  "  struct STACK_init (*callsf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = end);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->ret))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP(init, NULL);",
+  "})",
+  "BBLOCK(end, {",
+  "  (NEXT = NULL);",
+  "})",
+  "BBLOCK(bblock, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  ((sf->s3) = ((sf->s4) + (sf->s4)));",
+  "  BBLOCK_JUMP(bblock1, NULL);",
+  "})",
+  "BBLOCK(bblock1, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  double t;",
+  "  (t = ((sf->s3) * (sf->s3)));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = t);",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_f))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "BBLOCK(bblock2, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  char t1;",
+  "  (t1 = ((sf->s1) >= 1.));",
+  "  double s2;",
+  "  if ((t1 == 1)) {",
+  "    (s2 = 2.);",
+  "  } else {",
+  "    (s2 = 3.);",
+  "  }",
+  "  char t2;",
+  "  (t2 = (s2 <= 4.));",
+  "  if ((t2 == 1)) {",
+  "    char t3;",
+  "    (t3 = (s2 == 5.));",
+  "    if ((t3 == 1)) {",
+  "      ((sf->s4) = 6.);",
+  "      BBLOCK_JUMP(bblock, NULL);",
+  "    } else {",
+  "      struct STACK_f (*callsf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "      ((callsf->ra) = bblock);",
+  "      ((callsf->p) = 7.);",
+  "      ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(sf->s4))) - (PSTATE.stack))));",
+  "      ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_f))));",
+  "      BBLOCK_JUMP(f, NULL);",
+  "    }",
+  "  } else {",
+  "    ((sf->s3) = 8.);",
+  "    BBLOCK_JUMP(bblock1, NULL);",
+  "  }",
+  "})",
+  "BBLOCK(f, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_f (*sf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_f))))));",
+  "  ((sf->s1) = (SAMPLE(gamma, (sf->p), (sf->p))));",
+  "  (NEXT = bblock2);",
+  "})",
+  "BBLOCK(bblock3, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = 1.);",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "BBLOCK(init, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  struct STACK_f (*callsf) = (( struct STACK_f (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = bblock3);",
+  "  ((callsf->p) = 1.);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->_))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_f))));",
+  "  BBLOCK_JUMP(f, NULL);",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(start);",
+  "  SMC(NULL);",
+  "})"
+] using eqString in
 
 ()
