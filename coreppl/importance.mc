@@ -1,8 +1,8 @@
 
-
 include "ocaml/mcore.mc"
 include "seq.mc"
 include "coreppl.mc"
+include "dppl-arg.mc"
 
 lang MExprPPLImportance = MExprPPL
 
@@ -23,7 +23,7 @@ end
 
 
 
-let importanceSamplingInference = lam options. lam ast.
+let importanceSamplingInference = lam options: Options. lam ast.
   use MExprPPLImportance in
   let ast = symbolize (transformImpSeq ast) in
   -- Print (optional) the transformed MCore program

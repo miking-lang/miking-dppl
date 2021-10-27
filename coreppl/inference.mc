@@ -3,8 +3,9 @@ include "string.mc"
 include "../rootppl/rootppl.mc"
 include "../rootppl/compile.mc"
 include "importance.mc"
+include "dppl-arg.mc"
 
-let performInference = lam options. lam ast.
+let performInference = lam options: Options. lam ast.
   match options.method with "importance" then
     importanceSamplingInference options ast
   else match options.method with "rootppl-smc" then

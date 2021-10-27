@@ -7,4 +7,4 @@ test-files+=${wildcard rootppl/*.mc}
 all: ${test-files}
 
 ${test-files}::
-	-@boot eval --test $@
+	@boot eval --test $@
