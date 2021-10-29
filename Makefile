@@ -1,25 +1,28 @@
 
-.PHONY : all test test-boot clean install
+.PHONY : all test test-boot clean install uninstall
+
+main_name=main
+exec_name=midppl
+bin_path=${HOME}/.local/bin
 
 all:
+	@time mi compile coreppl/${main_name}.mc
+	@mkdir -p build
+	@cp ${main_name} build/${main_name}
+	@rm ${main_name}
+
+install: build/${main_name}
+	@cp build/${main_name} ${bin_path}/${exec_name}
+
+uninstall:
+	@rm -f ${bin_path}/${exec_name}
+
+clean:
+	@rm -rf build
+	@rm -f coreppl/*~
 
 test:
 	@$(MAKE) -s -f test.mk all
 
 test-boot:
 	@$(MAKE) -s -f test-boot.mk all
-
-install:
-	@cp -f shell/midppl ~/.local/bin/.
-	@mkdir -p ~/.local/lib/midppl/coreppl
-	@cp -f coreppl/* ~/.local/lib/midppl/coreppl/.
-	@mkdir -p ~/.local/lib/midppl/rootppl
-	@cp -f rootppl/*.mc ~/.local/lib/midppl/rootppl/.
-
-uninstall:
-	@rm -rf ~/.local/bin/midppl
-	@rm -rf ~/.local/lib/midppl
-
-clean:
-	@rm -f coreppl/*~
-
