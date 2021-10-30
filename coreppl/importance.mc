@@ -4,18 +4,24 @@ include "seq.mc"
 include "coreppl.mc"
 include "dppl-arg.mc"
 
---let binomialSample = lam p:Float. lam n:Int. externalBinomialSample p n
-
 let betaSampleName = nameSym "externalBetaSample"
 let betaSample = lam a. lam b. app_ (app_ (nvar_ betaSampleName) a) b
 
-let externalNames = [betaSampleName]
+let binomialSampleName = nameSym "externalBinomialSample"
+let binomialSample = lam p. lam b. app_ (app_ (nvar_ binomialSampleName) p) b
+let bernoulliSample = lam p. app_ (app_ (nvar_ binomialSampleName) p) (int_ 1)
+
+
+let externalNames =[
+  betaSampleName,
+  binomialSampleName
+]
 
 lang MExprExternalDists = MExprAst
    sem addExternalDists =
   | e ->
-      let f = lam a. lam n. TmExt {ident = n, tyIdent = tyunknown_,
-                     effect = true, ty = tyunknown_, inexpr = e, info = NoInfo ()} in
+      let f = lam acc. lam n. TmExt {ident = n, tyIdent = tyunknown_,
+                       effect = true, ty = tyunknown_, inexpr = acc, info = NoInfo ()} in
       foldl f e externalNames
 end
 
@@ -28,7 +34,8 @@ lang MExprPPLImportance = MExprPPL + MExprExternalDists
 
   sem sampleDistExpr (stateName:Name) =
   | TmDist { dist = DBeta {a = a, b = b}} -> betaSample a b
-  | TmDist { dist = DBernoulli {p = p}} -> (app_ (var_ "bernoulliSample") p)
+  | TmDist { dist = DBernoulli {p = p}} -> bernoulliSample p
+--  | TmDist { dist = DBernoulli {p = p}} -> (app_ (var_ "bernoulliSample") p)
 
   sem logPdfDistExpr (x:Expr) (stateName:Name) =
   | TmDist { dist = DBeta {a = a, b = b}} -> (app_ (app_ (app_ (var_ "betaLogPdf") a) b) x)
