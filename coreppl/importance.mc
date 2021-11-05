@@ -38,7 +38,8 @@ lang MExprPPLImportance = MExprPPL + MExprExternalDists
          ulet_ "" (print_ (str_ "Result = ")),
          ulet_ "" (print_ (float2string_ (var_ "res"))),
          ulet_ "" (print_ (str_ "\nAccumulated weight = ")),
-         ulet_ "" (print_ (float2string_ (float_ 0.88))),
+--         ulet_ "" (print_ (float2string_ (deref_ (nvar_ accWeight)))),
+         ulet_ "" (print_ (float2string_ (float_ 0.72))),
          ulet_ "" (print_ (str_ "\n"))
       ]
 end
