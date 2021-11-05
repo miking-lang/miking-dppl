@@ -6,23 +6,13 @@ include "dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 include "external-dists.mc"
 
-let symlet_ = use MExprAst in
-  lam sym_x. lam body. lam rest. bind_ (nulet_ sym_x body) rest
-
-let strlet_ = use MExprAst in
-  lam str_x. lam body. lam rest. bind_ (let_ str_x body) rest
-
-
 
 lang MExprPPLImportance = MExprPPL + MExprExternalDists
 
   sem transformImpSeq (accWeight:Name) =
   | TmAssume {dist = d} -> sampleDistExpr accWeight d
   | TmObserve {dist = d, value = v} ->
---     (modref_ accWeight (logPdfDistExpr v accWeight d))
--- strlet_ "bla" (modref_ accWeight (logPdfDistExpr v accWeight d)) (float_ 0.)
-     --modref_ accWeight (logPdfDistExpr v accWeight d)
-     (logPdfDistExpr v accWeight d)
+     modref_ (nvar_ accWeight) (logPdfDistExpr v accWeight d)
   | expr -> smap_Expr_Expr (transformImpSeq accWeight) expr
 
   sem sampleDistExpr (accWeight:Name) =
@@ -40,10 +30,10 @@ lang MExprPPLImportance = MExprPPL + MExprExternalDists
       -- Transform the AST, rewrite with importance sampling
       let e = transformImpSeq accWeight e in
       -- Add the state on top
---      let e = bind_ (nulet_ accWeight (ref_ (float_ 0.))) e in
       let e = symlet_ accWeight (ref_ (float_ 0.)) e in
       -- Add imports of external distributions
       addExternalDists e
+      -- Add printing of accumulated weight
 end
 
 
@@ -64,8 +54,10 @@ mexpr
 
 utest
   use MExprPPLImportance in
-  let x = transform (int_ 888) in
+  let x = transform (observe_ (float_ 0.1) (beta_ (float_ 2.) (float_ 2.))) in
+  print "\n------\n";
   print (expr2str x);
+  print "\n------\n";
   int_ 0
 with int_ 0 in
 
