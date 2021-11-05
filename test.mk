@@ -9,9 +9,6 @@ test-files := $(filter-out coreppl/pgm.mc,$(test-files))
 
 all: ${test-files}
 
-# TODO(dlunde,2021-10-25): We are getting lots of name collisions with `mi`, hence the temp dir. Could be solved by having an `-o` flag for `mi`
 ${test-files}::
-	@mkdir test-$(subst /,-,$@)
-	@cd test-$(subst /,-,$@) && ../make test ../$@
-	@rmdir test-$(subst /,-,$@)
+	@./make test $@
 

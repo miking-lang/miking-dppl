@@ -2,13 +2,13 @@
 
 test () {
   set +e
-  compile_cmd="mi compile --test --disable-optimizations"
+  binary=tmp_test
+  compile_cmd="mi compile --test --disable-optimizations --output $binary"
   output=$1
   output="$output\n$($compile_cmd $1 2>&1)"
   exit_code=$?
   if [ $exit_code -eq 0 ]
   then
-    binary=$(basename "$1" .mc)
     output="$output$(./$binary)"
     exit_code=$?
     if [ $exit_code -eq 0 ]
