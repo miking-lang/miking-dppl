@@ -31,7 +31,9 @@ let externalNames =[
 lang MExprExternalDists = MExprAst
    sem addExternalDists =
   | e ->
-      let f = lam acc. lam n. TmExt {ident = n, tyIdent = tyunknown_,
-                       effect = true, ty = tyunknown_, inexpr = acc, info = NoInfo ()} in
+      let f = lam acc. lam n.
+          TmExt {ident = n, tyIdent = tyunknown_,
+                 effect = true, ty = tyunknown_,
+                 inexpr = acc, info = NoInfo ()} in
       foldl f e externalNames
 end
