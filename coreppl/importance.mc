@@ -6,7 +6,6 @@ include "dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 include "external-dists.mc"
 
-
 lang MExprPPLImportance = MExprPPL + MExprExternalDists
 
   sem transformImpSeq (accWeight:Name) =
@@ -30,17 +29,25 @@ lang MExprPPLImportance = MExprPPL + MExprExternalDists
       -- Transform the AST, rewrite with importance sampling
       let e = transformImpSeq accWeight e in
       -- Add the state on top
-      let e = symlet_ accWeight (ref_ (float_ 0.)) e in
+      let e = bindall_ [nulet_ accWeight (ref_ (float_ 0.)), e] in
       -- Add imports of external distributions
-      addExternalDists e
-      -- Add printing of accumulated weight
+      let e = addExternalDists e in
+      -- Add printing of accumulated weight and the result (one float)
+      bindall_ [
+         ulet_ "res" e,
+         ulet_ "" (print_ (str_ "Result = ")),
+         ulet_ "" (print_ (float2string_ (var_ "res"))),
+         ulet_ "" (print_ (str_ "\nAccumulated weight = ")),
+         ulet_ "" (print_ (float2string_ (float_ 0.88))),
+         ulet_ "" (print_ (str_ "\n"))
+      ]
 end
 
 
 
 let importanceSamplingInference = lam options: Options. lam ast.
   use MExprPPLImportance in
-  let ast =  (transform ast) in
+  let ast = symbolize (transform ast) in
   -- Print (optional) the transformed MCore program
   if options.printMCore then
     printLn (expr2str ast);
@@ -50,15 +57,3 @@ let importanceSamplingInference = lam options: Options. lam ast.
     let res = compileRunMCore "" [] ast in
     print res.stdout
 
-mexpr
-
-utest
-  use MExprPPLImportance in
-  let x = transform (observe_ (float_ 0.1) (beta_ (float_ 2.) (float_ 2.))) in
-  print "\n------\n";
-  print (expr2str x);
-  print "\n------\n";
-  int_ 0
-with int_ 0 in
-
-()

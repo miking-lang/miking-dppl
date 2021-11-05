@@ -38,9 +38,3 @@ lang MExprExternalDists = MExprAst
                  inexpr = acc, info = NoInfo ()} in
       foldl f e externalNames
 end
-
-let symlet_ = use MExprAst in
-  lam sym_x. lam body. lam rest. bind_ (nulet_ sym_x body) rest
-
-let strlet_ = use MExprAst in
-  lam str_x. lam body. lam rest. bind_ (let_ str_x body) rest
