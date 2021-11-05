@@ -1,5 +1,5 @@
 # Miking DPPL
-Miking DPPL is a framework for developing probabilistic programming languages (PPL) using [Miking](https://github.com/miking-lang/miking).
+Miking DPPL is a framework for developing probabilistic programming languages (PPLs) using [Miking](https://github.com/miking-lang/miking).
 Currently, the framework includes the PPLs [CorePPL](#coreppl) and [RootPPL](#rootppl).
 
 ## Installation and Usage
@@ -20,7 +20,7 @@ Defining random variables in CorePPL is done by providing a probability distribu
 Currently, there is no generated documentation for available distributions.
 
 Likelihood updating is done through the `weight` and `observe` constructs.
-With `weight`, the logarithm of likelihood is updated directly (e.g., `weight (log 2)` multiplies the likelihood with 2).
+With `weight`, the logarithm of the likelihood is updated directly (e.g., `weight (log 2)` multiplies the likelihood with 2).
 With `observe`, the likelihood is instead updated with the value of the pmf or pdf for the given distribution at the given observation.
 For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
 
