@@ -1,5 +1,5 @@
 /*
- * File lgss.cu defines the lgss model. 
+ * File lgss.cu defines the lgss model.
  */
 
 #include <stdio.h>
@@ -15,8 +15,7 @@ struct progState_t {
     int t;
 };
 
-#define NUM_BBLOCKS 2
-INIT_MODEL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t)
 
 BBLOCK_DATA(data, floating_t, NUM_OBS);
 
@@ -27,29 +26,29 @@ BBLOCK(init, progState_t, {
     PSTATE.x = SAMPLE(normal, 0.0, 100);
     PSTATE.t = 0;
 
-    PC++;
+    NEXT = lgss;
     BBLOCK_CALL(lgss, NULL);
 })
 
 BBLOCK(lgss, progState_t, {
 
     floating_t* dataP = DATA_POINTER(data);
-    
+
     PSTATE.x = SAMPLE(normal, PSTATE.x + 2.0, 1);
     // WEIGHT(normalScore(dataP[PSTATE.t], PSTATE.x, 1.0));
     OBSERVE(normal, PSTATE.x, 1.0, dataP[PSTATE.t]);
 
     if(++PSTATE.t == NUM_OBS)
-        PC++;
+        NEXT = NULL;
 
 })
 
 CALLBACK(callback, {
-    
+
     floating_t weightedSum = 0;
     for (int i = 0; i < N; i++)
         weightedSum += PSTATES[i].x * exp(WEIGHTS[i]);
-        
+
     printf("Estimated Mean x: %f\n", weightedSum);
 })
 
@@ -65,8 +64,7 @@ MAIN({
 
     COPY_DATA_GPU(data, floating_t, NUM_OBS);
 
-    ADD_BBLOCK(init);
-    ADD_BBLOCK(lgss);
+    FIRST_BBLOCK(init);
 
     SMC(callback);
 })
