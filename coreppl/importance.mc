@@ -10,7 +10,7 @@ lang MExprPPLImportance = MExprPPL + MExprExternalDists
 
   sem transformImpSeq (accWeight:Name) =
   | TmAssume {dist = d} -> sampleDistExpr accWeight d
-  | TmObserve {dist = d, value = v} ->
+  | TmObserve {dist = d, value = v} ->  -- TODO: update log weight
      modref_ (nvar_ accWeight) (logPdfDistExpr v accWeight d)
   | expr -> smap_Expr_Expr (transformImpSeq accWeight) expr
 
@@ -28,20 +28,18 @@ lang MExprPPLImportance = MExprPPL + MExprExternalDists
       let accWeight = nameSym "accWeight" in
       -- Transform the AST, rewrite with importance sampling
       let e = transformImpSeq accWeight e in
-      -- Add the state on top
-      let e = bindall_ [nulet_ accWeight (ref_ (float_ 0.)), e] in
-      -- Add imports of external distributions
-      let e = addExternalDists e in
       -- Add printing of accumulated weight and the result (one float)
-      bindall_ [
+      let e = bindall_ [
+         nulet_ accWeight (ref_ (float_ 0.)),
          ulet_ "res" e,
          ulet_ "" (print_ (str_ "Result = ")),
          ulet_ "" (print_ (float2string_ (var_ "res"))),
          ulet_ "" (print_ (str_ "\nAccumulated weight = ")),
---         ulet_ "" (print_ (float2string_ (deref_ (nvar_ accWeight)))),
-         ulet_ "" (print_ (float2string_ (float_ 0.72))),
+         ulet_ "" (print_ (float2string_ (deref_ (nvar_ accWeight)))),
          ulet_ "" (print_ (str_ "\n"))
-      ]
+      ] in
+      -- Add imports of external distributions
+      addExternalDists e
 end
 
 
