@@ -20,9 +20,9 @@ lang MExprPPLImportance = MExprPPL + MExprExternalDists
   | TmAssume {dist = d} -> sampleDistExpr accWeight d
   | TmObserve {dist = d, value = v} ->
 --     (modref_ accWeight (logPdfDistExpr v accWeight d))
-     strlet_ "bla" (modref_ accWeight (logPdfDistExpr v accWeight d)) (float_ 0.)
+-- strlet_ "bla" (modref_ accWeight (logPdfDistExpr v accWeight d)) (float_ 0.)
      --modref_ accWeight (logPdfDistExpr v accWeight d)
-     --(logPdfDistExpr v accWeight d)
+     (logPdfDistExpr v accWeight d)
   | expr -> smap_Expr_Expr (transformImpSeq accWeight) expr
 
   sem sampleDistExpr (accWeight:Name) =
@@ -59,3 +59,14 @@ let importanceSamplingInference = lam options: Options. lam ast.
   else
     let res = compileRunMCore "" [] ast in
     print res.stdout
+
+mexpr
+
+utest
+  use MExprPPLImportance in
+  let x = transform (int_ 888) in
+  print (expr2str x);
+  int_ 0
+with int_ 0 in
+
+()

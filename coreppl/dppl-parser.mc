@@ -79,8 +79,9 @@ let keywords =
 let getAst = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {keepUtests = false, pruneExternalUtests = false,
-                externalsExclude = [], keywords = keywords} in
+  let config = {{defaultBootParserParseMCoreFileArg
+                 with keepUtests = false}
+                 with keywords = keywords} in
   makeKeywords [] (parseMCoreFile config filename)
 
 -- Similar to getAst, but calls parseMExprString instead
