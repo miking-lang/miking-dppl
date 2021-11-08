@@ -17,9 +17,11 @@ test () {
     else
       echo "ERROR: command ./$binary exited with $exit_code"
       rm $binary
+      exit 1
     fi
   else
     echo "ERROR: command '$compile_cmd $1 2>&1' exited with $exit_code"
+    exit 1
   fi
   echo "$output\n"
   set -e
