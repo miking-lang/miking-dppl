@@ -2,7 +2,7 @@
 Miking DPPL is a framework for developing probabilistic programming languages (PPLs) using [Miking](https://github.com/miking-lang/miking).
 Currently, the framework includes the PPLs [CorePPL](#coreppl) and [RootPPL](#rootppl).
 
-## Installation and Usage
+## Building and Installing
 The main binary for Miking DPPL is called `midppl`. Currently, this binary is built by running `make` in the project root, and installed to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) for building `midppl`.
 The command `make test` executes a set of tests for various components in the Miking DPPL framework.
 
