@@ -6,6 +6,10 @@ include "string.mc"
 -- In importance sampling, the state is simply the accumulate weight.
 type State = Float
 
+
+let mapReverse = lam f. lam lst.
+  foldl (lam acc. lam x. cons (f x) acc) [] lst
+
 -- Updates the weight in the state
 let updateWeight = lam v. lam state.
   modref state (addf (deref state) v)
@@ -28,12 +32,12 @@ type Result = {
 }
 
 let inferImportance = lam particles. lam model.
-  let states = create particles (lam. ref 0.) in
-  let vals = map model states in
-   {weights = map (lam x. deref x) states, values = vals}
+  let states = createList particles (lam. ref 0.) in
+  let vals = mapReverse model states in
+   {weights = mapReverse (lam x. deref x) states, values = vals}
 
 
-let infer = inferImportance 100000
+let infer = inferImportance 10000
 
 let model = lam state:State.
   let x = assumeBeta 10.0 8.0 state in
@@ -59,6 +63,11 @@ let print_csv = lam res:Result.
 
 
 mexpr
+
+--let xs = mapRev2 (lam x. x) [1, 5, 10, 100] in
+--iter (lam x. print (join [int2string x, "\n"])) xs;
+
+
 let s = ref 0. in
 match model s with [x] in
 
