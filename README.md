@@ -1,13 +1,43 @@
-# CorePPL
-To be written...
+# Miking DPPL
+Miking DPPL is a framework for developing probabilistic programming languages (PPLs) using [Miking](https://github.com/miking-lang/miking).
+Currently, the framework includes the PPLs [CorePPL](#coreppl) and [RootPPL](#rootppl).
 
-# RootPPL
-RootPPL can be seen as an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. These models are currently hard-coded, see examples in the folder rootppl/models. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language. 
+## Building and Installing
+The main binary for Miking DPPL is called `midppl`. Currently, this binary is built by running `make` in the project root, and installed to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) for building `midppl`.
+The command `make test` executes a set of tests for various components in the Miking DPPL framework.
 
-## Getting Started
+## CorePPL
+CorePPL extends MExpr (see [Miking](https://github.com/miking-lang/miking)) with probabilistic constructs for defining random variables and for likelihood updating. For example, the program
+```
+mexpr
+let x = assume (Beta 10.0 5.0) in
+observe true (Bernoulli x);
+x
+```
+encodes a simple distribution for the bias of a coin, by setting a Beta prior for the probability of observing heads (i.e., `true`) for a single flip of the coin.
+
+Defining random variables in CorePPL is done by providing a probability distribution to the `assume` construct.
+Currently, there is no generated documentation for available distributions.
+
+Likelihood updating is done through the `weight` and `observe` constructs.
+With `weight`, the logarithm of the likelihood is updated directly (e.g., `weight (log 2)` multiplies the likelihood with 2).
+With `observe`, the likelihood is instead updated with the value of the pmf or pdf for the given distribution at the given observation.
+For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
+
+### Compiling CorePPL to RootPPL
+One option to run inference over a CorePPL program is to compile it to RootPPL.
+A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `midppl -m rootppl-smc cpplprog.mc`.
+The file `out.cu` can then be compiled using, e.g., `rootppl out.cu --stack_size 10000`.
+The stack size option is mandatory for compiling RootPPL programs compiled from CorePPL.
+More information about RootPPL can be found at [RootPPL](#rootppl).
+
+## RootPPL
+RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. These models are currently hard-coded, see examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language. 
+
+### Getting Started
 The instructions below are tested on Ubuntu 18.04 but should work for other Linux distributions, Windows, and Mac. 
 
-### Prerequisites
+#### Prerequisites
 Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++.  In 
 order to build for GPU, CUDA must be installed. See
 CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide Linux"), 
@@ -17,14 +47,14 @@ CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation
 To run the CPU version in parallel, [OpenMP](https://www.openmp.org/resources/openmp-compilers-tools/) must be installed. 
 OpenMP comes with recent gcc versions. However, OpenMP is not necessary if one does not want to execute programs in parallel on the CPU.
 
-### Install rootppl
-To install rootppl for the current user, first clone this repository and change directory to the rootppl folder. Then run:
+#### Install `rootppl`
+To install `rootppl` for the current user, first clone this repository and change directory to the `rootppl` folder. Then run:
 ```
 make install
 ```
-This will install rootppl to `$HOME/.local/bin` with resources copied to `$HOME/.local/lib/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`. 
+This will install `rootppl` to `$HOME/.local/bin` with resources copied to `$HOME/.local/lib/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`. 
 
-### Build
+#### Build
 Note: before building and after installation, especially if you are re-installing,
 execute a `rootppl clean`, first.
 
@@ -78,7 +108,7 @@ Num particles close to target: 90.5%, MinX: 53.0577, MaxX: 90.0298
 Num particles close to target: 88.7%, MinX: 48.1773, MaxX: 89.0957
 ```
 
-### Creating a simple model
+#### Creating a simple model
 Models are divided into fragments to enable pausing the execution within models. 
 These fragments are functions referred to as basic blocks (`BBLOCK`). 
 To control the program execution flow, a program counter (`PC`) can be modified. 
@@ -162,8 +192,8 @@ For this to be used, the `SMC` macro call in main must be
 changed to: `SMC(sampleMean);`
 
 This example can be found in
-[rootppl/models/simple-examples/coin_flip_mean.cu](rootppl/models/simple-examples/coin_flip_mean.cu)
-and, being in the rootppl directory, compiled with:
+[`rootppl/models/simple-examples/coin_flip_mean.cu`](rootppl/models/simple-examples/coin_flip_mean.cu)
+and, being in the `rootppl` directory, compiled with:
 ```
 rootppl models/simple-examples/coin_flip_mean.cu
 ```
@@ -181,12 +211,12 @@ First we see our callback function's output. Then on the next line, is the logar
 normalization constant approximated by the inference. This is simply 0 here, since the model contains
 no statements that alter the weights of the particles. 
 
-### Supplementary Examples
+#### Supplementary Examples
 
 Below follows some examples, these are all models that are defined within one single block. 
 
-#### Coin Flip Posterior
-Full example: [rootppl/models/simple-examples/coin_flip.cu](rootppl/models/simple-examples/coin_flip.cu)
+##### Coin Flip Posterior
+Full example: [`rootppl/models/simple-examples/coin_flip.cu`](rootppl/models/simple-examples/coin_flip.cu)
 
 In this model, a bias for a coin is sampled from the prior beta distribution. Then we observe that the coin flip is true. This model thus infers the
 posterior distribution of the bias, conditioned on the observation. 
@@ -200,8 +230,8 @@ BBLOCK(coinFlip, {
 })
 ```
 
-#### Gaussian Mixture Model
-Full example: [rootppl/models/simple-examples/mixture.cu](rootppl/models/simple-examples/mixture.cu)
+##### Gaussian Mixture Model
+Full example: [`rootppl/models/simple-examples/mixture.cu`](rootppl/models/simple-examples/mixture.cu)
 
 This model demonstrates an example of *stochastic branching*, meaning that different code is executed depending on the outcome of the sample. 
 ```CUDA
@@ -217,8 +247,8 @@ BBLOCK(mixture, {
 })
 ```
 
-#### Geometric Distribution (Recursive)
-Full example: [rootppl/models/simple-examples/geometric_recursive.cu](rootppl/models/simple-examples/geometric_recursive.cu)
+##### Geometric Distribution (Recursive)
+Full example: [`rootppl/models/simple-examples/geometric_recursive.cu`](rootppl/models/simple-examples/geometric_recursive.cu)
 
 This model combines stochastic branching with recursion. Basic blocks do not fully support recursion themselves, as they take no custom arguments or return values. Instead, a helper function is used to express the recursive model:
 
@@ -241,8 +271,8 @@ BBLOCK(geometric, {
 Note that the helper function takes its return value and parameters comma-separated after the function body. 
 
 While recursive functions is supported by CUDA, iterative solutions are encouraged. Below is the same model, implemented with a loop instead.
-#### Geometric Distribution (Iterative)
-Full example: [rootppl/models/simple-examples/geometric_iterative.cu](rootppl/models/simple-examples/geometric_iterative.cu)
+##### Geometric Distribution (Iterative)
+Full example: [`rootppl/models/simple-examples/geometric_iterative.cu`](rootppl/models/simple-examples/geometric_iterative.cu)
 ```CUDA
 BBLOCK(geometric, {
     int numFlips = 1;
@@ -253,7 +283,7 @@ BBLOCK(geometric, {
 })
 ```
 
-### Phylogenetic Models
+#### Phylogenetic Models
 
 More sophisticated models can be found in the [phylogenetics directory](rootppl/models/phylogenetics). These probabilistic
 models to inference on observed phylogenetic trees. These observed trees can be found in [phylogenetics/tree-utils/trees.cuh](rootppl/models/phylogenetics/tree-utils/trees.cuh).
@@ -265,16 +295,16 @@ These models contain a number of new things, e.g.:
 - Global data used by the model
 - Resampling throughout the traversal of the observed tree
 
-#### Constant-rate birth-death
+##### Constant-rate birth-death
 In [phylogenetics/crbd](rootppl/models/phylogenetics/crbd), the constant-rate birth-death models can be found. 
 The most interesting file here is [crbd.cu](rootppl/models/phylogenetics/crbd/crbd.cu) as it is a correct model
 used by evolutionary biologists. This model uses a pre-processed DFS traversal path over the observed tree, rather than using a call stack. 
 
-#### Further phylogenetic models
+##### Further phylogenetic models
 Further phylogenetic models are found in the package
 [`phyrppl`](https://github.com/vsenderov/phyrppl).
 
-### The RootPPL Architecture
+#### The RootPPL Architecture
 
 The architecture's main goal is to decouple the inference from the probabilistic models, this is the case for probabilistic
 programming languages. In the `inference` directory, the code for inference methods can be found. Currently, only SMC is supported. 
@@ -286,16 +316,16 @@ a parallel implementation for the GPU, and a sequential and parallel implementat
 - The `utils` directory contains code that RootPPL uses, but can be used by models as well. 
 - The `models` directory contains example models that use the inference. 
 
-### Compile with the built-in stack
+#### Compile with the built-in stack
 To compile with the `progStateStack_t` program state, the macro `INIT_MODEL_STACK(num_bblocks)` should be used instead of `INIT_MODEL(progState_t, num_bblocks)`.
 Then the stack size is specified in bytes with `--stack_size num_bytes`, e.g. `rootppl my_stack_model.cu --stack_size 10000`.
 
-### Building a more interesting model
+#### Building a more interesting model
 TODO, stuff not yet demonstrated explicitly in README: 
 - WEIGHT macro
 - Multiple BBLOCK models
 - Global data accessible by bblocks on GPU
 - Program States containing more than a primitive datatype, e.g. structs. 
 
-### RootPPL ChangeLog
+#### RootPPL ChangeLog
 7/7/2021: added BetaBernoulli distribution
