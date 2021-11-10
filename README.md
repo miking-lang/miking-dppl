@@ -14,7 +14,7 @@ let x = assume (Beta 10.0 5.0) in
 observe true (Bernoulli x);
 x
 ```
-encodes a simple distribution for the bias of a coin, by setting a Beta prior for the bias and observing a single flip of the coin (resulting in `true`, i.e. heads).
+encodes a simple distribution for the bias of a coin, by setting a Beta prior for the probability of observing heads (i.e., `true`) for a single flip of the coin.
 
 Defining random variables in CorePPL is done by providing a probability distribution to the `assume` construct.
 Currently, there is no generated documentation for available distributions.
