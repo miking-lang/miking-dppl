@@ -13,6 +13,7 @@ all:
 
 install: build/${main_name}
 	@cp build/${main_name} ${bin_path}/${exec_name}
+	@chmod +x ${bin_path}/${exec_name}
 
 uninstall:
 	@rm -f ${bin_path}/${exec_name}

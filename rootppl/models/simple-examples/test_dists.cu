@@ -1,6 +1,7 @@
 /*
- * This model tests most distributions. 
+ * This model tests most distributions.
  * NOTE: This model seems to be broken, fix the comma separator problem again? Related to new way of compiling or new c++ version?
+ * TODO(dlunde,2021-11-05): Yes, I cannot compile and run this either.
  */
 
 #include <stdio.h>
@@ -13,8 +14,7 @@ struct progState_t {
     // floating_t x[n];
 };
 
-#define NUM_BBLOCKS 1
-INIT_MODEL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t)
 
 
 BBLOCK(test, progState_t, {
@@ -26,19 +26,19 @@ BBLOCK(test, progState_t, {
     //for(int t = 0; t < intSample; t++) {
     //    xLcl += SAMPLE(uniform, 0, 1);
     //}
-    
-    
+
+
     printf("uniform: %f\n", SAMPLE(uniform, 0, 1));
     printf("normal: %f\n", SAMPLE(normal, 0, 1));
     printf("exponential: %f\n", SAMPLE(exponential, 3));
-    
+
     for(int t = 0; t < 1; t++) {
         // PSTATE.x += gamma(randState, 0.1, 2);
         xLcl += SAMPLE(normal, 0.1, 2);
         // xLcl += normal(randState, 0.1, 2);
         // xLcl += uniformRef(randStateLcl, 0.3, 7.6);
     }
-    
+
     printf("gamma: %f\n", SAMPLE(gamma, 1, 2));
     printf("bernoulli: %d\n", SAMPLE(bernoulli, 0.3));
     printf("poisson: %d\n", SAMPLE(poisson, 5.3));
@@ -51,7 +51,7 @@ BBLOCK(test, progState_t, {
     floating_t dist[2] = {0.3 CMA 0.7};
     int idx = SAMPLE(discrete, dist, 2);
     printf("discrete: %d\n", idx);
-    
+
     floating_t vals[2] = {3.2 CMA 77};
     floating_t val = SAMPLE(categorical<floating_t>, dist, 2, vals);
     printf("categorical: %f\n", val);
@@ -90,11 +90,11 @@ BBLOCK(test, progState_t, {
     printArrayF(resF, 3);
 
     // PSTATE.x = xLcl;
-    PC = 1;
+    NEXT = NULL;
 })
 
 CALLBACK(resFunc, {
-    
+
     //floating_t sum = 0;
     //for(int i = 0; i < NUM_PARTICLES; i++) {
         //sum += PSTATE.x;
@@ -103,13 +103,13 @@ CALLBACK(resFunc, {
         //printf("x: %d\n", PSTATE.x);
     //}
     //printf("avg: %f\n", sum / NUM_PARTICLES);
-    
-    
+
+
 })
 
 
 MAIN(
-    ADD_BBLOCK(test)
+    FIRST_BBLOCK(test)
 
     SMC(resFunc)
 )
