@@ -32,7 +32,7 @@ The stack size option is mandatory for compiling RootPPL programs compiled from 
 More information about RootPPL can be found at [RootPPL](#rootppl).
 
 ## RootPPL
-RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. These models are currently hard-coded, see examples in the folder rootppl/models. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language. 
+RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. These models are currently hard-coded, see examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language. 
 
 ### Getting Started
 The instructions below are tested on Ubuntu 18.04 but should work for other Linux distributions, Windows, and Mac. 
@@ -47,12 +47,12 @@ CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation
 To run the CPU version in parallel, [OpenMP](https://www.openmp.org/resources/openmp-compilers-tools/) must be installed. 
 OpenMP comes with recent gcc versions. However, OpenMP is not necessary if one does not want to execute programs in parallel on the CPU.
 
-#### Install rootppl
-To install rootppl for the current user, first clone this repository and change directory to the rootppl folder. Then run:
+#### Install `rootppl`
+To install `rootppl` for the current user, first clone this repository and change directory to the `rootppl` folder. Then run:
 ```
 make install
 ```
-This will install rootppl to `$HOME/.local/bin` with resources copied to `$HOME/.local/lib/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`. 
+This will install `rootppl` to `$HOME/.local/bin` with resources copied to `$HOME/.local/lib/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`. 
 
 #### Build
 Note: before building and after installation, especially if you are re-installing,
@@ -192,8 +192,8 @@ For this to be used, the `SMC` macro call in main must be
 changed to: `SMC(sampleMean);`
 
 This example can be found in
-[rootppl/models/simple-examples/coin_flip_mean.cu](rootppl/models/simple-examples/coin_flip_mean.cu)
-and, being in the rootppl directory, compiled with:
+[`rootppl/models/simple-examples/coin_flip_mean.cu`](rootppl/models/simple-examples/coin_flip_mean.cu)
+and, being in the `rootppl` directory, compiled with:
 ```
 rootppl models/simple-examples/coin_flip_mean.cu
 ```
@@ -216,7 +216,7 @@ no statements that alter the weights of the particles.
 Below follows some examples, these are all models that are defined within one single block. 
 
 ##### Coin Flip Posterior
-Full example: [rootppl/models/simple-examples/coin_flip.cu](rootppl/models/simple-examples/coin_flip.cu)
+Full example: [`rootppl/models/simple-examples/coin_flip.cu`](rootppl/models/simple-examples/coin_flip.cu)
 
 In this model, a bias for a coin is sampled from the prior beta distribution. Then we observe that the coin flip is true. This model thus infers the
 posterior distribution of the bias, conditioned on the observation. 
@@ -231,7 +231,7 @@ BBLOCK(coinFlip, {
 ```
 
 ##### Gaussian Mixture Model
-Full example: [rootppl/models/simple-examples/mixture.cu](rootppl/models/simple-examples/mixture.cu)
+Full example: [`rootppl/models/simple-examples/mixture.cu`](rootppl/models/simple-examples/mixture.cu)
 
 This model demonstrates an example of *stochastic branching*, meaning that different code is executed depending on the outcome of the sample. 
 ```CUDA
@@ -248,7 +248,7 @@ BBLOCK(mixture, {
 ```
 
 ##### Geometric Distribution (Recursive)
-Full example: [rootppl/models/simple-examples/geometric_recursive.cu](rootppl/models/simple-examples/geometric_recursive.cu)
+Full example: [`rootppl/models/simple-examples/geometric_recursive.cu`](rootppl/models/simple-examples/geometric_recursive.cu)
 
 This model combines stochastic branching with recursion. Basic blocks do not fully support recursion themselves, as they take no custom arguments or return values. Instead, a helper function is used to express the recursive model:
 
@@ -272,7 +272,7 @@ Note that the helper function takes its return value and parameters comma-separa
 
 While recursive functions is supported by CUDA, iterative solutions are encouraged. Below is the same model, implemented with a loop instead.
 ##### Geometric Distribution (Iterative)
-Full example: [rootppl/models/simple-examples/geometric_iterative.cu](rootppl/models/simple-examples/geometric_iterative.cu)
+Full example: [`rootppl/models/simple-examples/geometric_iterative.cu`](rootppl/models/simple-examples/geometric_iterative.cu)
 ```CUDA
 BBLOCK(geometric, {
     int numFlips = 1;
