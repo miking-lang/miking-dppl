@@ -23,7 +23,7 @@ int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
 
-INIT_MODEL(floating_t, 1);
+INIT_MODEL(floating_t);
 
 BBLOCK(testNormalInverseGammaNormal, {
   /* We will sample two waiting times (so that we have an update on the rate),
@@ -35,7 +35,7 @@ BBLOCK(testNormalInverseGammaNormal, {
     // TODO do it with SAMPLE, instead of invoking the function directly
        
     PSTATE = statistic;
-    PC++;
+    NEXT = NULL;
 });
 
 
@@ -64,7 +64,7 @@ MAIN({
       numRuns = 1;
     }
     
-    ADD_BBLOCK(testNormalInverseGammaNormal);
+    FIRST_BBLOCK(testNormalInverseGammaNormal);
   
     SMC(stats);
   })

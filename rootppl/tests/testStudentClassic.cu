@@ -19,7 +19,7 @@ int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
 
-INIT_MODEL(floating_t, 1);
+INIT_MODEL(floating_t);
 
 BBLOCK(testStudentClassic, {
   /* We will sample two waiting times (so that we have an update on the rate),
@@ -27,7 +27,7 @@ BBLOCK(testStudentClassic, {
   floating_t statistic = SAMPLE(student_t, k, 0, 1);
        
   PSTATE = statistic;
-  PC++;
+  NEXT = NULL;
 });
 
 
@@ -56,7 +56,7 @@ MAIN({
       numRuns = 1;
     }
     
-    ADD_BBLOCK(testStudentClassic);
+    FIRST_BBLOCK(testStudentClassic);
   
     SMC(stats);
   })
