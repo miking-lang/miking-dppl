@@ -8,5 +8,5 @@ import seaborn as sns
 
 d = pd.read_csv("data.csv")
 #print(d)
-sns.histplot(data=d, x="x", weights="#", kde=True, bins=100)
+sns.histplot(data=d, x="x2", weights="#", kde=True, bins=100)
 plt.show()
