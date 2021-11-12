@@ -3,7 +3,10 @@
 
 main_name=main
 exec_name=midppl
+plot_name=mplot
 bin_path=${HOME}/.local/bin
+lib_path=${HOME}/.local/lib
+lib_path_coreppl=${lib_path}/mcore/stdlib/coreppl
 
 all: build/${main_name}
 
@@ -16,9 +19,15 @@ build/${main_name}: $(shell find . -name "*.mc")
 install: build/${main_name}
 	cp build/${main_name} ${bin_path}/${exec_name}
 	chmod +x ${bin_path}/${exec_name}
+	mkdir -p ${lib_path_coreppl}
+	cp -f coreppl/* ${lib_path_coreppl}/.
+	cp -f scripts/${plot_name} ${bin_path}/.
+	chmod +x ${bin_path}/${plot_name}
 
 uninstall:
 	rm -f ${bin_path}/${exec_name}
+	rm -f ${bin_path}/${plot_name}
+	rm -rf ${lib_path_coreppl}
 
 clean:
 	rm -rf build
