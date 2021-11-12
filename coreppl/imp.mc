@@ -52,14 +52,12 @@ let print_test = lam res:Result.
   print "\nValues: \n";
   iter (lam v. match v with [x] in print (float2string x); print "\n") res.values
 
-
 let print_csv = lam res:Result.
   print "x,w\n";
   iter (lam x.
         match x with ([v],w) in
         print (join [float2string v, ",", float2string (exp w), "\n"]))
       (zip res.values res.weights)
-
 
 
 mexpr
