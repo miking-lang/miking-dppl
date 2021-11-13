@@ -3,7 +3,7 @@
 
 main_name=main
 exec_name=midppl
-plot_name=mplot
+plot_name=dplot
 bin_path=${HOME}/.local/bin
 lib_path=${HOME}/.local/lib
 lib_path_coreppl=${lib_path}/mcore/stdlib/coreppl

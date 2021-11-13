@@ -1,0 +1,36 @@
+#!python3
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import argparse
+import sys
+from os.path import exists
+
+parser = argparse.ArgumentParser(description=
+ "Plots the density functions for one or many variables in separate windows.")
+
+parser.add_argument('variables', nargs='+', type=str,
+                    help = "The names of the variables to plot.")
+parser.add_argument('--input', type=str, default='data.csv',
+                    help="Input CSV file. The default is 'data.csv'.")
+parser.add_argument('--kde', action='store_true',
+                    help="Displays a kernel density estimate.")
+parser.add_argument('--bins', type=int, default=100,
+                    help="Number of bins. The default is 100 bins.")
+
+args = parser.parse_args()
+
+# Check if file exists
+if not exists(args.input):
+   sys.exit("Input file '" + args.input + "' does not exist. Type 'mplot -h' to get help.")
+
+# Read in the CSV file
+d = pd.read_csv(args.input)
+
+# Plot all variables in separate windows
+for v in args.variables:
+    plot1 = plt.figure(v)
+    sns.histplot(data=d, x=v, weights="#", kde=args.kde, bins=args.bins, stat = 'density')
+
+plt.show()
