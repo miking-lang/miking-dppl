@@ -56,14 +56,32 @@ let expectedValues = lam res. lam normConst.
      in
        work acc ys) (create (subi (length (head res)) 1) (lam. 0.)) res
 
+-- Computes the variances for the list of variables
+let variance = lam res. lam expVals.
+  let sum = foldl (lam acc. lam t.
+    recursive let work = lam acc. lam xs. lam expv.
+      match (acc,xs,expv) with ([a]++as, [x]++xs, [e]++es) then
+        let v = subf x e in
+        cons (addf a (mulf v v)) (work as xs es)
+      else []
+    in
+      work acc (tail t) expVals) (create (subi (length (head res)) 1) (lam. 0.)) res
+  in
+    let dval = int2float (length res) in
+    map (lam x. divf x dval) sum
+
 
 
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
 let output = lam res. lam names.
   let nc = normConstant res in
+  let expVals = expectedValues res nc in
+  let varianceVals = variance res expVals in
   print (join ["Normalization constant: ", float2string nc, "\n"]);
-  print (strJoin ", " (map float2string (expectedValues res nc)));
+  print (strJoin ", " (map float2string expVals));
+  print "\n";
+  print (strJoin ", " (map float2string varianceVals));
   print "\n"
 
 let printCSV = lam res. lam names.
