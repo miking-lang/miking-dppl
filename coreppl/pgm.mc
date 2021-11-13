@@ -40,9 +40,6 @@ lang Plate = Eq + Sym + TypeAnnot + ANF + PrettyPrint
     TmPlate {{{ t with fun = symbolizeExpr env t.fun }
                   with lst = symbolizeExpr env t.lst }
                   with ty = symbolizeType env t.ty }
-  sem isValue =
-  | TmPlate _ -> false
-
   sem isAtomic =
   | TmPlate _ -> false
 

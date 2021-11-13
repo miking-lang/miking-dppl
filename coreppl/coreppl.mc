@@ -104,10 +104,6 @@ lang Infer =
     TmInfer {{ t with model = model }
                  with ty = TyDist { info = t.info, ty = ty } }
 
-  -- ANF
-  sem isValue =
-  | TmInfer _ -> false
-
   sem normalize (k : Expr -> Expr) =
   | TmInfer ({ model = model } & t) ->
     normalizeName (lam model. k (TmInfer { t with model = model })) model
@@ -186,10 +182,6 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     in
     TmAssume {{ t with dist = dist }
                   with ty = ty }
-
-  -- ANF
-  sem isValue =
-  | TmAssume _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmAssume ({ dist = dist } & t) ->
@@ -282,10 +274,6 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
                     with dist = dist }
                     with ty = ty }
 
-  -- ANF
-  sem isValue =
-  | TmObserve _ -> false
-
   sem normalize (k : Expr -> Expr) =
   | TmObserve ({ value = value, dist = dist } & t) ->
     normalizeName
@@ -372,10 +360,6 @@ lang Weight =
     TmWeight {{ t with weight = weight }
                   with ty = ty }
 
-  -- ANF
-  sem isValue =
-  | TmWeight _ -> false
-
   sem normalize (k : Expr -> Expr) =
   | TmWeight ({ weight = weight } & t) ->
     normalizeName (lam weight. k (TmWeight { t with weight = weight })) weight
@@ -437,7 +421,7 @@ lang CorePPLInference = CorePPL + SMC -- + Importance
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANF + MExprTypeLiftUnOrderedRecords
+  MExprTypeAnnot + MExprANFAll + MExprTypeLiftUnOrderedRecords
 
 
 mexpr

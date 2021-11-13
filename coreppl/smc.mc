@@ -80,10 +80,6 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
   sem typeAnnotExpr (env: TypeEnv) =
   | TmResample t -> TmResample { t with ty = tyWithInfo t.info tyunit_ }
 
-  -- ANF
-  sem isValue =
-  | TmResample _ -> false
-
   sem normalize (k : Expr -> Expr) =
   | TmResample t -> k (TmResample t)
 
