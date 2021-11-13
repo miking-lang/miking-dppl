@@ -1,5 +1,6 @@
 
 include "ext/dist-ext.mc"
+include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
 
@@ -71,6 +72,32 @@ let variance = lam res. lam expVals.
     map (lam x. divf x dval) sum
 
 
+let printSave = lam res. lam names. lam normConst. lam expVals. lam varianceVals.
+  let pad = 18 in
+  let padPrint = lam s. lam n.
+    if geqi n (length s) then
+      print s; print (create (subi n (length s)) (lam. ' '))
+    else print s in
+  padPrint "Variable" 14;
+  padPrint "Expected Value" pad;
+  padPrint "Variance" pad;
+  padPrint "Standard Deviation" pad;
+  print "\n";
+  recursive let work = lam names. lam ev. lam vv.
+    match (names, ev, vv) with ([n]++ns, [e]++es, [v]++vs) then
+      if isPrefix eqChar "#" n then work ns ev vv
+      else
+        padPrint n 14;
+        padPrint (float2string e) pad;
+        padPrint (float2string v) pad;
+        padPrint (float2string (sqrt v)) pad;
+        print "\n";
+        work ns es vs
+    else ()
+  in
+    work names expVals varianceVals;
+    print "\n";
+    print (join ["Normalization constant: ", float2string normConst, "\n"])
 
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
@@ -78,11 +105,7 @@ let output = lam res. lam names.
   let nc = normConstant res in
   let expVals = expectedValues res nc in
   let varianceVals = variance res expVals in
-  print (join ["Normalization constant: ", float2string nc, "\n"]);
-  print (strJoin ", " (map float2string expVals));
-  print "\n";
-  print (strJoin ", " (map float2string varianceVals));
-  print "\n"
+  printSave res names nc expVals varianceVals
 
 let printCSV = lam res. lam names.
   print (strJoin "," names); print "\n";
