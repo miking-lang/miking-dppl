@@ -31,14 +31,19 @@ let inferImp = lam particles. lam model.
 let expOnLogWeights = lam res.
   mapReverse (lam t. match t with [x]++xs in cons (exp x) xs) res
 
--- Straightforward (inefficient) computation of the normalizing constant
-let normConstantInefficient = lam res.
-  log (foldl (lam acc. lam x. addf (exp (head x)) acc) 0. res)
+-- Computing the normalization constant using the log-sum-exp trick
+let normConstant = lam res.
+  let negInf = (divf (negf 1.) 0.) in
+  let max = foldl (lam acc. lam x.
+                     let h = head x in
+                     if geqf h acc then h else acc) negInf res in
+  let sum = foldl (lam acc. lam x. addf (exp (subf (head x) max)) acc) 0. res in
+  addf max (log sum)
 
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
 let output = lam res. lam names.
-  let nc = normConstantInefficient res in
+  let nc = normConstant res in
   print (join ["Normalization constant: ", float2string nc, "\n"])
 
 let printCSV = lam res. lam names.
