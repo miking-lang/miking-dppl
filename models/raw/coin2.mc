@@ -10,4 +10,4 @@ let model = lam state:State.
   observeBernoulli true x2 state;
   ([x1, x2], state)
 
-let main = printCSV (inferImp 20000 model) ["x1", "x2", "#"]
+let main = printCSV (inferImp 20000 model) ["#", "x1", "x2"]

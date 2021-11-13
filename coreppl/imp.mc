@@ -28,11 +28,8 @@ let assumeBeta = lam a. lam b. lam state.
 let inferImp = lam particles. lam model.
   let states = createList particles (lam. ref 0.) in
   let res = mapReverse model states in
-  mapReverse (lam t. match t with (xs, w) in concat xs [exp (deref w)]) res
-
+  mapReverse (lam t. match t with (xs, w) in cons (exp (deref w)) xs) res
 
 let printCSV = lam res. lam names.
   print (strJoin "," names); print "\n";
   iter (lam lst. print (strJoin "," (map float2string lst)); print "\n") res
-
-
