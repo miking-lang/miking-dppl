@@ -40,11 +40,31 @@ let normConstant = lam res.
   let sum = foldl (lam acc. lam x. addf (exp (subf (head x) max)) acc) 0. res in
   addf max (log sum)
 
+
+
+-- Computes the expected value for all variables. Returns
+-- a list that excludes the weight component and only contains
+-- the expected values for the given variables
+let expectedValues = lam res. lam normConst.
+  foldl (lam acc. lam t.
+     let w = exp (subf (head t) normConst) in
+     let ys = tail t in
+     recursive let work = lam acc. lam xs.
+       match (acc,xs) with ([a]++as, [x]++xs) then
+         cons (addf (mulf x w) a) (work as xs)
+       else []
+     in
+       work acc ys) (create (subi (length (head res)) 1) (lam. 0.)) res
+
+
+
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
 let output = lam res. lam names.
   let nc = normConstant res in
-  print (join ["Normalization constant: ", float2string nc, "\n"])
+  print (join ["Normalization constant: ", float2string nc, "\n"]);
+  print (strJoin ", " (map float2string (expectedValues res nc)));
+  print "\n"
 
 let printCSV = lam res. lam names.
   print (strJoin "," names); print "\n";
