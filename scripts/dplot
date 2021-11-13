@@ -28,6 +28,13 @@ if not exists(args.input):
 # Read in the CSV file
 d = pd.read_csv(args.input)
 
+# Check that selected variables are available in the data set
+names = list(filter(lambda x: x != "#", d.columns))
+for x in args.variables:
+   if not (x in names):
+      vlist = ", ".join(names)
+      sys.exit("Variable {} is not available in the data set. Available variables: {}".format(x, vlist))
+
 # Plot all variables in separate windows
 for v in args.variables:
     plot1 = plt.figure(v)
