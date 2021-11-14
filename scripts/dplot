@@ -10,12 +10,14 @@ from os.path import exists
 parser = argparse.ArgumentParser(description=
  "Plots the density functions for one or many variables in separate windows.")
 
-parser.add_argument('variables', nargs='+', type=str,
+parser.add_argument('variables', nargs='*', type=str,
                     help = "The names of the variables to plot.")
 parser.add_argument('--input', type=str, default='data.csv',
                     help="Input CSV file. The default is 'data.csv'.")
 parser.add_argument('--kde', action='store_true',
                     help="Displays a kernel density estimate.")
+parser.add_argument('--all', action='store_true',
+                    help="Plot all possible variables in different windows.")
 parser.add_argument('--bins', type=int, default=100,
                     help="Number of bins. The default is 100 bins.")
 
@@ -28,15 +30,24 @@ if not exists(args.input):
 # Read in the CSV file
 d = pd.read_csv(args.input)
 
-# Check that selected variables are available in the data set
+# Extract variables
+vars = args.variables
 names = list(filter(lambda x: x != "#", d.columns))
-for x in args.variables:
+vlist = ", ".join(names)
+
+# Check if flag all or no variables selected
+if args.all:
+   vars = names
+elif len(vars) == 0:
+   sys.exit("Missing variables out the following alternatives: {}. Type 'dplot -h' to get help.".format(vlist))
+
+# Check that selected variables are available in the data set
+for x in vars:
    if not (x in names):
-      vlist = ", ".join(names)
-      sys.exit("Variable {} is not available in the data set. Available variables: {}".format(x, vlist))
+      sys.exit("Variable '{}' is not available in the data set. Available variables: {}".format(x, vlist))
 
 # Plot all variables in separate windows
-for v in args.variables:
+for v in vars:
     plot1 = plt.figure(v)
     sns.histplot(data=d, x=v, weights="#", kde=args.kde, bins=args.bins, stat = 'density')
 
