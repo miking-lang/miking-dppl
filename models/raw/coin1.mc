@@ -5,4 +5,4 @@ let model = lam state:State.
   observeBernoulli true x state;
   ([x], state)
 
-let main = output (infer (numarg()) model) ["#", "x"]
+let main = output (infer (numarg ()) model) ["x"]
