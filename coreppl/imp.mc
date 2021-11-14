@@ -117,7 +117,12 @@ let printSave = lam res. lam names. lam normConst. lam expVals. lam varianceVals
     print (join ["Normalization constant: ", float2string normConst, "\n"]);
     saveCSV res names filename
 
-
+-- Returns the number of particles/points from the program argument
+let numarg = lam.
+  if neqi (length argv) 2 then
+    writeString stderr "The number of particles/points need to be given as a program argument.\n";
+    exit 1
+  else string2int (get argv 1)
 
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
@@ -126,3 +131,5 @@ let output = lam res. lam names.
   let expVals = expectedValues res nc in
   let varianceVals = variance res expVals in
   printSave res names nc expVals varianceVals "data.csv"
+
+let infer = inferImp
