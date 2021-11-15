@@ -24,6 +24,13 @@ include "mexpr/pprint.mc"
 lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
   + SeqTypeNoStringTypeLift
 
+  -- TODO(dlunde,2021-11-15): This needs to be changed after adding alignment
+  -- analysis
+  sem liftANF =
+  | TmLam _ -> false
+  | TmConst _ -> false
+  | TmNever _ -> false
+
   -- Compiler internals
   syn CExpr =
   | CEResample {} -- Indicates resample locations

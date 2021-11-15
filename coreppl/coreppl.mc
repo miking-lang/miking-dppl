@@ -423,10 +423,16 @@ lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
   MExprTypeAnnot + MExprANFAll + MExprTypeLiftUnOrderedRecords
 
+lang Test = MExprPPL
+  sem liftANF =
+  | TmLam _ -> false
+  | TmConst _ -> false
+  | TmNever _ -> false
+end
 
 mexpr
 
-use MExprPPL in
+use Test in
 
 let tmAssume = assume_ (bern_ (float_ 0.7)) in
 let tmObserve = observe_ (float_ 1.5) (beta_ (float_ 1.0) (float_ 2.0)) in
