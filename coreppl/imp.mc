@@ -1,9 +1,9 @@
 
 include "ext/dist-ext.mc"
 include "ext/math-ext.mc"
-include "ext/file-ext.mc"
 include "seq.mc"
 include "string.mc"
+include "inference-common.mc"
 
 -- In importance sampling, the state is simply the accumulate weight.
 type State = Float
@@ -24,7 +24,8 @@ let assumeBernoulli = lam p. lam state.
 let assumeBeta = lam a. lam b. lam state.
   betaSample a b
 
-let inferImp = lam particles. lam model.
+-- General inference algorithm for importance sampling
+let infer = lam particles. lam model.
   let states = createList particles (lam. ref (log (divf 1. (int2float particles)))) in
   let res = mapReverse model states in
   mapReverse (lam t. match t with (xs, w) in cons (deref w) xs) res
@@ -41,7 +42,6 @@ let normConstant = lam res.
                      if geqf h acc then h else acc) negInf res in
   let sum = foldl (lam acc. lam x. addf (exp (subf (head x) max)) acc) 0. res in
   addf max (log sum)
-
 
 
 -- Computes the expected value for all variables. Returns
@@ -74,56 +74,6 @@ let variance = lam res. lam expVals.
 
 
 
--- Save the data to a CSV file
-let saveCSV = lam res. lam names. lam filename.
-  match writeOpen filename with Some ch then
-    writeString ch (strJoin "," names);
-    writeString ch "\n";
-    iter (lam lst. writeString ch (strJoin "," (map float2string lst));
-                   writeString ch  "\n") (expOnLogWeights res);
-    writeClose ch
-  else
-    writeString stderr (join ["Cannot write to file ", filename, "\n"])
-
-
-
-
--- Saves the CSV file and pretty prints expected values, variance, etc.
-let printSave = lam res. lam names. lam normConst. lam expVals. lam varianceVals. lam filename.
-  let pad = 18 in
-  let padPrint = lam s. lam n.
-    if geqi n (length s) then
-      print s; print (create (subi n (length s)) (lam. ' '))
-    else print s in
-  padPrint "Variable" 14;
-  padPrint "Expected Value" pad;
-  padPrint "Variance" pad;
-  padPrint "Standard Deviation" pad;
-  print "\n";
-  recursive let work = lam names. lam ev. lam vv.
-    match (names, ev, vv) with ([n]++ns, [e]++es, [v]++vs) then
-      if isPrefix eqChar "#" n then work ns ev vv
-      else
-        padPrint n 14;
-        padPrint (float2string e) pad;
-        padPrint (float2string v) pad;
-        padPrint (float2string (sqrt v)) pad;
-        print "\n";
-        work ns es vs
-    else ()
-  in
-    work names expVals varianceVals;
-    print "\n";
-    print (join ["Normalization constant: ", float2string normConst, "\n"]);
-    saveCSV res names filename
-
--- Returns the number of particles/points from the program argument
-let numarg = lam.
-  if neqi (length argv) 2 then
-    writeString stderr "The number of particles/points need to be given as a program argument.\n";
-    exit 1
-  else string2int (get argv 1)
-
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
 let output = lam res. lam names.
@@ -131,6 +81,5 @@ let output = lam res. lam names.
   let nc = normConstant res in
   let expVals = expectedValues res nc in
   let varianceVals = variance res expVals in
-  printSave res names nc expVals varianceVals "data.csv"
-
-let infer = inferImp
+  printStatistics res names nc expVals varianceVals;
+  saveCSV res names "data.csv" expOnLogWeights
