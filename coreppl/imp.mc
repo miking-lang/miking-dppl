@@ -6,22 +6,22 @@ include "string.mc"
 include "inference-common.mc"
 
 -- In importance sampling, the state is simply the accumulate weight.
-type State = Float
+type State = Ref Float
 
 -- Updates the weight in the state
 let updateWeight = lam v. lam state.
   modref state (addf (deref state) v)
 
-let observeBernoulli = lam v. lam p. lam state.
+let observeBernoulli = lam v. lam p. lam state:State.
   updateWeight (bernoulliLogPmf p (if v then 1 else 0)) state
 
-let observeBeta = lam v. lam a. lam b. lam state.
+let observeBeta = lam v. lam a. lam b. lam state:State.
   updateWeight (betaLogPdf a b v) state
 
-let assumeBernoulli = lam p. lam state.
+let assumeBernoulli = lam p. lam state:State.
   bernoulliSample p
 
-let assumeBeta = lam a. lam b. lam state.
+let assumeBeta = lam a. lam b. lam state:State.
   betaSample a b
 
 -- General inference algorithm for importance sampling
