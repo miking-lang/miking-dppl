@@ -117,15 +117,8 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     TmDist {{ t with dist = dist }
                 with ty = ty }
 
-  -- ANF
-  sem isValueDist =
-  -- Intentionally left blank
-
   sem normalizeDist (k : Dist -> Expr) =
   -- Intentionally left blank
-
-  sem isValue =
-  | TmDist t -> isValueDist t.dist
 
   sem normalize (k : Expr -> Expr) =
   | TmDist ({ dist = dist } & t) ->
@@ -197,10 +190,6 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
       else err ()
     else err ()
 
-  -- ANF
-  sem isValueDist =
-  | DUniform _ -> false
-
   sem normalizeDist (k : Dist -> Expr) =
   | DUniform ({ a = a, b = b } & t) ->
     normalizeName (lam a.
@@ -257,10 +246,6 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
     match tyTm t.p with TyFloat _ then TyBool { info = info }
     else infoErrorExit info "Type error bern"
 
-  -- ANF
-  sem isValueDist =
-  | DBernoulli _ -> false
-
   sem normalizeDist (k : Dist -> Expr) =
   | DBernoulli ({ p = p } & t) ->
     normalizeName (lam p. k (DBernoulli { t with p = p })) p
@@ -309,10 +294,6 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
   | DPoisson t ->
     match tyTm t.lambda with TyFloat _ then TyInt { info = info }
     else infoErrorExit info "Type error Poisson"
-
-  -- ANF
-  sem isValueDist =
-  | DPoisson _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
   | DPoisson ({ lambda = lambda } & t) ->
@@ -373,10 +354,6 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
         TyFloat { info = info }
       else err ()
     else err ()
-
-  -- ANF
-  sem isValueDist =
-  | DBeta _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
   | DBeta ({ a = a, b = b } & t) ->
@@ -443,10 +420,6 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
       else err ()
     else err ()
 
-  -- ANF
-  sem isValueDist =
-  | DGamma _ -> false
-
   sem normalizeDist (k : Dist -> Expr) =
   | DGamma ({ k = k2, theta = theta } & t) ->
     normalizeName (lam k2.
@@ -507,10 +480,6 @@ lang CategoricalDist =
   | DCategorical t ->
     match tyTm t.p with TySeq { ty = TyFloat _ } then TyInt { info = info }
     else infoErrorExit info "Type error categorical"
-
-  -- ANF
-  sem isValueDist =
-  | DCategorical _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
   | DCategorical ({ p = p } & t) ->
@@ -573,10 +542,6 @@ lang MultinomialDist =
       else err ()
     else err ()
 
-  -- ANF
-  sem isValueDist =
-  | DMultinomial _ -> false
-
   sem normalizeDist (k : Dist -> Expr) =
   | DMultinomial ({ n = n, p = p } & t) ->
     normalizeName (lam n.
@@ -634,10 +599,6 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
       TySeq { info = info, ty = TyFloat { info = info } }
     else infoErrorExit info "Type error dirichlet"
 
-  -- ANF
-  sem isValueDist =
-  | DDirichlet _ -> false
-
   sem normalizeDist (k : Dist -> Expr) =
   | DDirichlet ({ a = a } & t) ->
     normalizeName (lam a. k (DDirichlet { t with a = a })) a
@@ -683,10 +644,6 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DExponential t ->
     match tyTm t.rate with TyFloat _ then TyFloat { info = info }
     else infoErrorExit info "Type error exponential"
-
-  -- ANF
-  sem isValueDist =
-  | DExponential _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
   | DExponential ({ rate = rate } & t) ->
@@ -749,10 +706,6 @@ lang EmpiricalDist =
       else err ()
     else err ()
 
-  -- ANF
-  sem isValueDist =
-  | DEmpirical _ -> false
-
   sem normalizeDist (k : Dist -> Expr) =
   | DEmpirical ({ samples = samples } & t) ->
       normalizeName
@@ -811,10 +764,6 @@ lang GaussianDist =
         TyFloat { info = info }
       else err ()
     else err ()
-
-  -- ANF
-  sem isValueDist =
-  | DGaussian _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
   | DGaussian ({ mu = mu, sigma = sigma } & t) ->
@@ -876,10 +825,6 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
         TyInt { info = info }
       else dprint t.p; err ()
     else dprint t.n; err ()
-
-  -- ANF
-  sem isValueDist =
-  | DBinomial _ -> false
 
   sem normalizeDist (k : Dist -> Expr) =
   | DBinomial ({ n = n, p = p } & t) ->
