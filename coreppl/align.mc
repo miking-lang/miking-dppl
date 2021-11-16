@@ -282,4 +282,27 @@ utest test false t ["v1","m1","b1","v2","m2","b2"] with [
   ("b2", true)
 ] using eqTestStoch in
 
+-- Stochastic composite data
+-- TODO(dlunde,2021-11-16): "a" should be stochastic in the below. How do we
+-- propagate this?
+--let t = parse "
+--  let d =
+--    match assume (Bernoulli 0.5) with true then
+--      [1,2,3]
+--    else
+--      [4,5,6]
+--  in
+--  let res =
+--    match d with [a] ++ rest ++ [] then false
+--    else true
+--  in
+--  res
+--------------------------" in
+--utest test false t ["d", "res", "rest","a"] with [
+--  ("d", true),
+--  ("res", true),
+--  ("rest",true),
+--  ("a",true)
+--] using eqTestStoch in
+
 ()
