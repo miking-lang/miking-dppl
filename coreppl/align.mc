@@ -42,8 +42,8 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
   -- {const with arity > 0} ⊆ lhs ⇒ {const with arity-1} ⊆ res
   | CstrConstApp { lhs: Name, res: Name }
-  -- pat and target stochastic branch ⇒ {stoch} ⊆ res
-  | CstrStochMatch { id: Name, pat: Pat, target: Name }
+  -- {stoch} ⊆ lhs ⇒ {stoch} ⊆ rhs
+  | CstrStochDirect { lhs: Name, rhs: Name }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrStochApp r & cstr -> initConstraintName r.lhs graph cstr
@@ -51,7 +51,7 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     let graph = initConstraintName r.lhs graph cstr in
     initConstraintName r.rhs graph cstr
   | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrStochMatch r & cstr -> initConstraintName r.target graph cstr
+  | CstrStochDirect r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrStochApp { lhs = lhs, res = res } ->
@@ -78,8 +78,8 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
         addData graph (AVConst { r with arity = subi r.arity 1 }) res
       else graph
     else graph
-  | CstrStochMatch { id = id, pat = pat, target = target } ->
-    match update.1 with AVStoch _ & av then addData graph av id else graph
+  | CstrStochDirect { lhs = lhs, rhs = rhs } ->
+    match update.1 with AVStoch _ & av then addData graph av rhs else graph
 
   sem constraintToString (env: PprintEnv) =
   | CstrStochApp { lhs = lhs, res = res } ->
@@ -98,13 +98,10 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     match pprintVarName env res with (env,res) in
     (env, join [
       "{const with arity > 0} ⊆ ", lhs, " ⇒ {const with arity-1} ⊆ ", res ])
-  | CstrStochMatch { id = id, pat = pat, target = target } ->
-    match pprintVarName env id with (env,id) in
-    match getPatStringCode 0 env pat with (env, pat) in
-    match pprintVarName env target with (env,target) in
-    (env, join [
-      pat, " and ", target, " causing a stochastic branch ⇒ {stoch} ⊆ ", id
-    ])
+  | CstrStochDirect { lhs = lhs, rhs = rhs } ->
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env lhs with (env,lhs) in
+    (env, join [ "{stoch} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs ])
 
   sem generateStochAppConstraints (lhs: Name) (rhs: Name) =
   | res /- : Name -/ -> [
@@ -113,21 +110,36 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       CstrConstApp { lhs = lhs, res = res}
     ]
 
-  sem generateStochMatchConstraints (id: Name) (target: Name) =
-  -- We only generate this constraint where a match can fail, causing a
-  -- stochastic branch if the failed value is stochastic.
+  sem generateStochMatchResConstraints (res: Name) (target: Name) =
   | ( PatSeqTot _
     | PatSeqEdge _
     | PatCon _
     | PatInt _
     | PatChar _
     | PatBool _
-    ) & pat -> [ CstrStochMatch { id = id, pat = pat, target = target } ]
+    ) & pat -> [
+      -- We only generate this constraint where a match can fail, causing a
+      -- stochastic branch if the failed value is stochastic.
+      CstrStochDirect { lhs = target, rhs = res }
+    ]
   | ( PatAnd p
     | PatOr p
     | PatNot p
     ) -> infoErrorExit p.info "Pattern currently not supported"
   | _ -> []
+
+  sem generateStochMatchConstraints (res: Name) (target: Name) =
+  | pat ->
+    recursive let f = lam acc. lam pat.
+      let acc = match pat with PatNamed { ident = PName name }
+                             | PatSeqEdge { middle = PName name }
+                then cons name acc else acc in
+      sfold_Pat_Pat f acc pat
+    in
+    let pnames = f [] pat in
+    foldl (lam acc. lam name.
+      cons (CstrStochDirect { lhs = target, rhs = name}) acc
+    ) [] pnames
 
   sem constraintGenFuns =
   | _ -> [generateConstraints, generateStochConstraints]
@@ -136,7 +148,11 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
   | _ -> [generateLamAppConstraints, generateStochAppConstraints]
 
   sem matchConstraintGenFuns =
-  | _ -> [generateMatchConstraints, generateStochMatchConstraints]
+  | _ -> [
+      generateMatchConstraints,
+      generateStochMatchResConstraints,
+      generateStochMatchConstraints
+    ]
 
 end
 
@@ -283,26 +299,42 @@ utest test false t ["v1","m1","b1","v2","m2","b2"] with [
 ] using eqTestStoch in
 
 -- Stochastic composite data
--- TODO(dlunde,2021-11-16): "a" should be stochastic in the below. How do we
--- propagate this?
---let t = parse "
---  let d =
---    match assume (Bernoulli 0.5) with true then
---      [1,2,3]
---    else
---      [4,5,6]
---  in
---  let res =
---    match d with [a] ++ rest ++ [] then false
---    else true
---  in
---  res
---------------------------" in
---utest test false t ["d", "res", "rest","a"] with [
---  ("d", true),
---  ("res", true),
---  ("rest",true),
---  ("a",true)
---] using eqTestStoch in
+let t = parse "
+  let d =
+    match assume (Bernoulli 0.5) with true then
+      let t1 = 1 in
+      [t1,2,3]
+    else
+      [4,5,6]
+  in
+  let res =
+    match d with [a] ++ rest ++ [] then false
+    else true
+  in
+  res
+------------------------" in
+utest test false t ["d", "res", "rest","a","t1"] with [
+  ("d", true),
+  ("res", true),
+  ("rest",true),
+  ("a",true),
+  ("t1",false)
+] using eqTestStoch in
+
+-- Stochastic flow over names
+let t = parse "
+  let res =
+    match assume (Bernoulli 0.5) with true then
+      let t = 1 in
+      t
+    else
+      2
+  in
+  res
+------------------------" in
+utest test false t ["t", "res"] with [
+  ("t", false),
+  ("res",true)
+] using eqTestStoch in
 
 ()
