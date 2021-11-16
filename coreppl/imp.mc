@@ -34,45 +34,6 @@ let infer = lam particles. lam model.
 let expOnLogWeights = lam res.
   mapReverse (lam t. match t with [x]++xs in cons (exp x) xs) res
 
--- Computing the normalization constant using the log-sum-exp trick
-let normConstant = lam res.
-  let negInf = (divf (negf 1.) 0.) in
-  let max = foldl (lam acc. lam x.
-                     let h = head x in
-                     if geqf h acc then h else acc) negInf res in
-  let sum = foldl (lam acc. lam x. addf (exp (subf (head x) max)) acc) 0. res in
-  addf max (log sum)
-
-
--- Computes the expected value for all variables. Returns
--- a list that excludes the weight component and only contains
--- the expected values for the given variables
-let expectedValues = lam res. lam normConst.
-  foldl (lam acc. lam t.
-     let w = exp (subf (head t) normConst) in
-     let ys = tail t in
-     recursive let work = lam acc. lam xs.
-       match (acc,xs) with ([a]++as, [x]++xs) then
-         cons (addf (mulf x w) a) (work as xs)
-       else []
-     in
-       work acc ys) (create (subi (length (head res)) 1) (lam. 0.)) res
-
--- Computes the variances for the list of variables
-let variance = lam res. lam expVals.
-  let sum = foldl (lam acc. lam t.
-    recursive let work = lam acc. lam xs. lam expv.
-      match (acc,xs,expv) with ([a]++as, [x]++xs, [e]++es) then
-        let v = subf x e in
-        cons (addf a (mulf v v)) (work as xs es)
-      else []
-    in
-      work acc (tail t) expVals) (create (subi (length (head res)) 1) (lam. 0.)) res
-  in
-    let dval = int2float (length res) in
-    map (lam x. divf x dval) sum
-
-
 
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
