@@ -1,13 +1,13 @@
 -- Alignment analysis for CorePPL.
+--
+-- TODO(dlunde,2021-11-16): Compute dynamic control flow
 
 include "coreppl.mc"
 include "dppl-parser.mc"
 
 include "mexpr/cfa.mc"
 
-
-
-lang StochCFA = CFA + InitConstraint + Assume
+lang MExprPPLAlign = MExprCFA + MExprPPL
 
   syn AbsVal =
   | AVStoch {}
@@ -23,11 +23,9 @@ lang StochCFA = CFA + InitConstraint + Assume
 
   sem generateStochConstraints =
   | _ -> []
-
   -- Stochastic values
   | TmLet { ident = ident, body = TmAssume _ } ->
     [ CstrInit { lhs = AVStoch {}, rhs = ident } ]
-
   -- Constants. NOTE(dlunde,2021-11-15): We probably want to handle various
   -- constants differently as well, but for now this should be enough. Handling
   -- of constants could potentially also be generalized as part of the default
@@ -38,50 +36,50 @@ lang StochCFA = CFA + InitConstraint + Assume
     else [ CstrInit { lhs = AVConst { arity = arity }, rhs = ident } ]
 
   syn Constraint =
-
   -- {stoch} ⊆ lhs ⇒ (stoch ⊆ res)
   | CstrStochApp { lhs: Name, res: Name }
-
   -- {const} ⊆ lhs AND {stoch ⊆ rhs} ⇒ {stoch} ⊆ res
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
-
   -- {const with arity > 0} ⊆ lhs ⇒ {const with arity-1} ⊆ res
   | CstrConstApp { lhs: Name, res: Name }
+  -- pat and target stochastic branch ⇒ {stoch} ⊆ res
+  | CstrStochMatch { id: Name, pat: Pat, target: Name }
 
   sem initConstraint (graph: CFAGraph) =
-  | CstrStochApp r & cstr -> _initConstraintName r.lhs graph cstr
+  | CstrStochApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrConstStochApp r & cstr ->
-    let graph = _initConstraintName r.lhs graph cstr in
-    _initConstraintName r.rhs graph cstr
-  | CstrConstApp r & cstr -> _initConstraintName r.lhs graph cstr
+    let graph = initConstraintName r.lhs graph cstr in
+    initConstraintName r.rhs graph cstr
+  | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrStochMatch r & cstr -> initConstraintName r.target graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrStochApp { lhs = lhs, res = res } ->
-    match update.1 with AVStoch _ & av then _addData graph av res else graph
+    match update.1 with AVStoch _ & av then addData graph av res else graph
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
-    -- NOTE(dlunde,2021-11-15): We could split the constraint into two to avoid
-    -- the below.
     if nameEq update.0 lhs then
       match update.1 with AVConst _ then
-        let s = _dataLookup rhs graph in
+        let s = dataLookup rhs graph in
         if setMem (AVStoch {}) s then
-          _addData graph (AVStoch {}) res
+          addData graph (AVStoch {}) res
         else graph
       else graph
     else if nameEq update.0 rhs then
       match update.1 with AVStoch _ then
-        let s = _dataLookup rhs graph in
+        let s = dataLookup rhs graph in
         if setAny (lam av. match av with AVConst _ then true else false) s then
-          _addData graph (AVStoch {}) res
+          addData graph (AVStoch {}) res
         else graph
       else graph
     else graph
   | CstrConstApp { lhs = lhs, res = res } ->
     match update.1 with AVConst r then
       if gti r.arity 1 then
-        _addData graph (AVConst { r with arity = subi r.arity 1 }) res
+        addData graph (AVConst { r with arity = subi r.arity 1 }) res
       else graph
     else graph
+  | CstrStochMatch { id = id, pat = pat, target = target } ->
+    match update.1 with AVStoch _ & av then addData graph av id else graph
 
   sem constraintToString (env: PprintEnv) =
   | CstrStochApp { lhs = lhs, res = res } ->
@@ -100,31 +98,49 @@ lang StochCFA = CFA + InitConstraint + Assume
     match pprintVarName env res with (env,res) in
     (env, join [
       "{const with arity > 0} ⊆ ", lhs, " ⇒ {const with arity-1} ⊆ ", res ])
+  | CstrStochMatch { id = id, pat = pat, target = target } ->
+    match pprintVarName env id with (env,id) in
+    match getPatStringCode 0 env pat with (env, pat) in
+    match pprintVarName env target with (env,target) in
+    (env, join [
+      pat, " and ", target, " causing a stochastic branch ⇒ {stoch} ⊆ ", id
+    ])
 
-  sem genereateStochAppConstraints (lhs: Name) (rhs: Name) =
+  sem generateStochAppConstraints (lhs: Name) (rhs: Name) =
   | res /- : Name -/ -> [
       CstrStochApp { lhs = lhs, res = res},
       CstrConstStochApp { lhs = lhs, rhs = rhs, res = res},
       CstrConstApp { lhs = lhs, res = res}
     ]
 
+  sem generateStochMatchConstraints (id: Name) (target: Name) =
+  -- We only generate this constraint where a match can fail, causing a
+  -- stochastic branch if the failed value is stochastic.
+  | ( PatSeqTot _
+    | PatSeqEdge _
+    | PatCon _
+    | PatInt _
+    | PatChar _
+    | PatBool _
+    ) & pat -> [ CstrStochMatch { id = id, pat = pat, target = target } ]
+  | ( PatAnd p
+    | PatOr p
+    | PatNot p
+    ) -> infoErrorExit p.info "Pattern currently not supported"
+  | _ -> []
 
-  -- TODO(dlunde,2021-11-15): How do we detect if the condition is stochastic
-  -- in a match?
-
-end
-
-lang MExprPPLCFA = MExprCFA + StochCFA
-
-  sem _constraintGenFuns =
+  sem constraintGenFuns =
   | _ -> [generateConstraints, generateStochConstraints]
 
-  sem _appConstraintGenFuns =
-  | _ -> [generateLamAppConstraints, genereateStochAppConstraints]
+  sem appConstraintGenFuns =
+  | _ -> [generateLamAppConstraints, generateStochAppConstraints]
+
+  sem matchConstraintGenFuns =
+  | _ -> [generateMatchConstraints, generateStochMatchConstraints]
 
 end
 
-lang Test = MExprPPLCFA + MExprPPL + DPPLParser
+lang Test = MExprPPLAlign + DPPLParser
 end
 
 mexpr
@@ -148,7 +164,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
       map (lam var: String.
-        (var, _dataLookup (nameNoSym var) cfaRes)
+        (var, dataLookup (nameNoSym var) cfaRes)
       ) vars
 
     else
@@ -156,7 +172,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       let tANF = normalizeTerm t in
       let cfaRes = cfa tANF in
       map (lam var: String.
-        (var, _dataLookup (nameNoSym var) cfaRes)
+        (var, dataLookup (nameNoSym var) cfaRes)
       ) vars
 in
 
@@ -225,22 +241,45 @@ utest test false t ["x","d","res","a","b"] with [
   ("b", false)
 ] using eqTestStoch in
 
--- Random function TODO(dlunde,2021-11-15): This does not yet work
---let t = parse "
---  let f =
---    if assume (Bernoulli 0.5) then
---      (lam x. addi x 1)
---    else
---      (lam y. addi y 2)
---  in
---  let res = f 5 in
---  res
---------------------------" in
---utest test true t ["f","x","y","res"] with [
---  ("f", true),
---  ("x", false),
---  ("y", false),
---  ("res", true)
---] using eqTestStoch in
+-- Random function
+let t = parse "
+  let f =
+    if assume (Bernoulli 0.5) then
+      (lam x. addi x 1)
+    else
+      (lam y. addi y 2)
+  in
+  let res = f 5 in
+  res
+------------------------" in
+utest test false t ["f","x","y","res"] with [
+  ("f", true),
+  ("x", false),
+  ("y", false),
+  ("res", true)
+] using eqTestStoch in
+
+-- Complicated stochastic match
+let t = parse "
+  let v1 = { a = [assume (Bernoulli 0.5)], b = 2} in
+  let m1 =
+    match v1 with { a = [true], b = b1 } then false
+    else true
+  in
+  let v2 = { a = [false], b = assume (Beta 1.0 1.0) } in
+  let m2 =
+    match v2 with { a = [true], b = b2 } then false
+    else true
+  in
+  ()
+------------------------" in
+utest test false t ["v1","m1","b1","v2","m2","b2"] with [
+  ("v1", false),
+  ("m1", true),
+  ("b1", false),
+  ("v2", false),
+  ("m2", false),
+  ("b2", true)
+] using eqTestStoch in
 
 ()

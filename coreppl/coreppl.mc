@@ -14,6 +14,7 @@ include "mexpr/eq.mc"
 include "mexpr/anf.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
+include "mexpr/const-arity.mc"
 
 include "string.mc"
 
@@ -421,7 +422,8 @@ lang CorePPLInference = CorePPL + SMC -- + Importance
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANFAll + MExprTypeLiftUnOrderedRecords
+  MExprTypeAnnot + MExprANFAll + MExprTypeLiftUnOrderedRecords +
+  MExprArity
 
 lang Test = MExprPPL
   sem liftANF =
