@@ -112,7 +112,8 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
     else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
 
-  sem generateStochMatchResConstraints (id: Name) (target: Name) =
+  sem generateStochMatchResConstraints
+    (matchUnalignedNames: Map Name (Set Name)) (id: Name) (target: Name) =
   | ( PatSeqTot _
     | PatSeqEdge _
     | PatCon _
@@ -124,13 +125,6 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       -- stochastic branch if the failed value is stochastic.
       CstrStochDirect { lhs = target, rhs = id }
       -- Add alignment constraint TODO
-      -- let f = lam acc. lam expr.
-      --   match expr with
-        -- TmLet -> lhs name is unaligned
-        -- TmApp -> lh
-        -- TmVar -> do nothing
-      -- in
-      -- CstrUnaligned { lhs = target, names = }
     ]
   | ( PatAnd p
     | PatOr p
@@ -152,12 +146,58 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     ) [] pnames
 
   sem constraintGenFuns (mcgfs: [MatchGenFun]) =
-  | t -> [generateConstraints mcgfs, generateStochConstraints]
+  | t -> [
+      generateConstraints mcgfs,
+      generateStochConstraints
+      -- TODO Propagate unalignment for unaligned applications
+    ]
+
+
+  -- Two mutually recursive functions
+  -- * One for recursing outside of match (acc: Map Name [Name])
+  -- * One for recursing inside match (acc: above + current name + collected names)
+  --
+  -- sfold over program, accumulator is
+  --
+  -- When let x = match ... encountered => set up entry in acc
+  -- let f = lam acc. lam expr.
+  --   match expr with
+    -- TmLet -> lhs name is unaligned
+    -- TmApp -> lh
+    -- TmVar -> do nothing
+  -- in
+  -- CstrUnaligned { lhs = target, names = }
+
+  sem f (acc: Map Name [Name]) =
+  | TmLet { ident = ident, body = TmMatch m } ->
+    -- m.target is a TmVar due to ANF, can safely be ignored here
+    match g (g (acc, ident, []) m.thn) m.els with (acc, ident, names) in
+    mapInsert ident names acc
+  | t -> sfold_Expr_Expr f acc t
+
+  sem g (Map Name [Name], Name, [Name]) =
+  | TmLet { ident = ident, body = TmMatch m } ->
+    -- Set up new accumulator
+    -- Recursive call
+    -- Add new binding to map
+    -- Attach names in internal match to this accumulator as well
+    -- Return
+  | TmLet { ident = ident, body = TmApp m } ->
+    -- ident is affected
+    -- lhs of app can contain other program code and is affected
+    -- rhs is a variable due to ANF, no need to recurse
+  | TmLet { ident = ident, body = body } ->
+    -- ident is affected
+    -- recurse on body with f
 
   sem matchConstraintGenFuns =
-  | t -> [
+  | t ->
+    -- Determine names whose alignment are affected by stochastic matches.
+    let matchUnalignedNames = f (mapEmpty nameCmp) t in
+    in
+    [
       generateMatchConstraints,
-      generateStochMatchResConstraints,
+      generateStochMatchResConstraints matchUnalignedNames,
       generateStochMatchConstraints
     ]
 
@@ -182,7 +222,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug env tANF with (env,cfaRes) in
+      match cfaDebug (Some env) tANF with (env,cfaRes) in
       match cfaGraphToString env cfaRes with (_, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
