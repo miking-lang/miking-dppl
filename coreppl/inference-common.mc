@@ -1,5 +1,8 @@
 
 include "ext/file-ext.mc"
+include "ext/math-ext.mc"
+include "seq.mc"
+include "string.mc"
 
 
 -- Returns the number of particles/points from the program argument
