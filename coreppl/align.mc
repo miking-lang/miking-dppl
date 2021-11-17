@@ -151,11 +151,11 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       cons (CstrStochDirect { lhs = target, rhs = name }) acc
     ) [] pnames
 
-  sem constraintGenFuns =
-  | _ -> [generateConstraints, generateStochConstraints]
+  sem constraintGenFuns (mcgfs: [MatchGenFun]) =
+  | t -> [generateConstraints mcgfs, generateStochConstraints]
 
   sem matchConstraintGenFuns =
-  | _ -> [
+  | t -> [
       generateMatchConstraints,
       generateStochMatchResConstraints,
       generateStochMatchConstraints
