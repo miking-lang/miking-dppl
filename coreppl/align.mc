@@ -21,20 +21,6 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
   | (AVStoch _, AVStoch _) -> 0
   | (AVConst lhs, AVConst rhs) -> subi lhs.arity rhs.arity
 
-  sem generateStochConstraints =
-  | _ -> []
-  -- Stochastic values
-  | TmLet { ident = ident, body = TmAssume _ } ->
-    [ CstrInit { lhs = AVStoch {}, rhs = ident } ]
-  -- Constants. NOTE(dlunde,2021-11-15): We probably want to handle various
-  -- constants differently as well, but for now this should be enough. Handling
-  -- of constants could potentially also be generalized as part of the default
-  -- cfa framework in Miking.
-  | TmLet { ident = ident, body = TmConst { val = c } } ->
-    let arity = constArity c in
-    if eqi arity 0 then []
-    else [ CstrInit { lhs = AVConst { arity = arity }, rhs = ident } ]
-
   syn Constraint =
   -- {stoch} ⊆ lhs ⇒ (stoch ⊆ res)
   | CstrStochApp { lhs: Name, res: Name }
@@ -103,14 +89,30 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     match pprintVarName env lhs with (env,lhs) in
     (env, join [ "{stoch} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs ])
 
-  sem generateStochAppConstraints (lhs: Name) (rhs: Name) =
-  | res /- : Name -/ -> [
-      CstrStochApp { lhs = lhs, res = res},
-      CstrConstStochApp { lhs = lhs, rhs = rhs, res = res},
-      CstrConstApp { lhs = lhs, res = res}
-    ]
+  sem generateStochConstraints =
+  | _ -> []
+  -- Stochastic values
+  | TmLet { ident = ident, body = TmAssume _ } ->
+    [ CstrInit { lhs = AVStoch {}, rhs = ident } ]
+  -- Constants. NOTE(dlunde,2021-11-15): We probably want to handle various
+  -- constants differently as well, but for now this should be enough. Handling
+  -- of constants could potentially also be generalized as part of the default
+  -- cfa framework in Miking.
+  | TmLet { ident = ident, body = TmConst { val = c } } ->
+    let arity = constArity c in
+    if eqi arity 0 then []
+    else [ CstrInit { lhs = AVConst { arity = arity }, rhs = ident } ]
+  | TmLet { ident = ident, body = TmApp app} ->
+    match app.lhs with TmVar l then
+      match app.rhs with TmVar r then [
+        CstrStochApp { lhs = l.ident, res = ident},
+        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident},
+        CstrConstApp { lhs = l.ident, res = ident}
+      ]
+      else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
+    else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
 
-  sem generateStochMatchResConstraints (res: Name) (target: Name) =
+  sem generateStochMatchResConstraints (id: Name) (target: Name) =
   | ( PatSeqTot _
     | PatSeqEdge _
     | PatCon _
@@ -120,7 +122,15 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     ) & pat -> [
       -- We only generate this constraint where a match can fail, causing a
       -- stochastic branch if the failed value is stochastic.
-      CstrStochDirect { lhs = target, rhs = res }
+      CstrStochDirect { lhs = target, rhs = id }
+      -- Add alignment constraint TODO
+      -- let f = lam acc. lam expr.
+      --   match expr with
+        -- TmLet -> lhs name is unaligned
+        -- TmApp -> lh
+        -- TmVar -> do nothing
+      -- in
+      -- CstrUnaligned { lhs = target, names = }
     ]
   | ( PatAnd p
     | PatOr p
@@ -128,7 +138,7 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     ) -> infoErrorExit p.info "Pattern currently not supported"
   | _ -> []
 
-  sem generateStochMatchConstraints (res: Name) (target: Name) =
+  sem generateStochMatchConstraints (id: Name) (target: Name) =
   | pat ->
     recursive let f = lam acc. lam pat.
       let acc = match pat with PatNamed { ident = PName name }
@@ -138,14 +148,11 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     in
     let pnames = f [] pat in
     foldl (lam acc. lam name.
-      cons (CstrStochDirect { lhs = target, rhs = name}) acc
+      cons (CstrStochDirect { lhs = target, rhs = name }) acc
     ) [] pnames
 
   sem constraintGenFuns =
   | _ -> [generateConstraints, generateStochConstraints]
-
-  sem appConstraintGenFuns =
-  | _ -> [generateLamAppConstraints, generateStochAppConstraints]
 
   sem matchConstraintGenFuns =
   | _ -> [
@@ -156,7 +163,7 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
 
 end
 
-lang Test = MExprPPLAlign + DPPLParser
+lang Test = MExprPPLAlign + MExprANFAll + DPPLParser
 end
 
 mexpr
@@ -192,7 +199,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       ) vars
 in
 
--- Custom equality function for testing lambda control flow only
+-- Custom equality function for testing stochastic value flow only
 let eqTestStoch = eqSeq (lam t1:(String,Set AbsVal). lam t2:(String,Bool).
   if eqString t1.0 t2.0 then
     let t11 = setFold
@@ -203,8 +210,6 @@ let eqTestStoch = eqSeq (lam t1:(String,Set AbsVal). lam t2:(String,Bool).
   else false
 ) in
 --------------------
-
--- Tests stochastic value flow
 
 let t = parse "
   let x = assume (Beta 1.0 1.0) in
