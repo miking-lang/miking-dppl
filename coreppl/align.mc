@@ -145,14 +145,6 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       cons (CstrStochDirect { lhs = target, rhs = name }) acc
     ) [] pnames
 
-  sem constraintGenFuns (mcgfs: [MatchGenFun]) =
-  | t -> [
-      generateConstraints mcgfs,
-      generateStochConstraints
-      -- TODO Propagate unalignment for unaligned applications
-    ]
-
-
   -- Two mutually recursive functions
   -- * One for recursing outside of match (acc: Map Name [Name])
   -- * One for recursing inside match (acc: above + current name + collected names)
@@ -175,31 +167,57 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     mapInsert ident names acc
   | t -> sfold_Expr_Expr f acc t
 
-  sem g (Map Name [Name], Name, [Name]) =
+  sem g (acc: (Map Name [Name], Name, [Name])) =
+  | _ -> acc
   | TmLet { ident = ident, body = TmMatch m } ->
+    acc
     -- Set up new accumulator
     -- Recursive call
     -- Add new binding to map
     -- Attach names in internal match to this accumulator as well
     -- Return
   | TmLet { ident = ident, body = TmApp m } ->
+    acc
     -- ident is affected
     -- lhs of app can contain other program code and is affected
     -- rhs is a variable due to ANF, no need to recurse
   | TmLet { ident = ident, body = body } ->
+    acc
     -- ident is affected
     -- recurse on body with f
 
-  sem matchConstraintGenFuns =
+  -- Type: Expr -> CFAGraph
+  sem initGraph =
   | t ->
-    -- Determine names whose alignment are affected by stochastic matches.
+
+    -- Initial graph
+    let graph = emptyCFAGraph in
+
+    -- Construct unaligned name map (for matches and lambdas)
     let matchUnalignedNames = f (mapEmpty nameCmp) t in
-    in
-    [
+
+    -- Initialize match constraint generating functions
+    let graph = { graph with mcgfs = [
       generateMatchConstraints,
       generateStochMatchResConstraints matchUnalignedNames,
       generateStochMatchConstraints
-    ]
+    ] } in
+
+    -- Initialize constraint generating functions
+    let cgfs = [
+      generateConstraints,
+      generateConstraintsMatch graph.mcgfs,
+      generateStochConstraints
+    ] in
+
+    -- Recurse over program and generate constraints
+    let cstrs: [Constraint] = collectConstraints cgfs [] t in
+
+    -- Initialize all collected constraints
+    let graph = foldl initConstraint graph cstrs in
+
+    -- Return graph
+    graph
 
 end
 
