@@ -7,6 +7,8 @@ include "dppl-parser.mc"
 include "mexpr/cfa.mc"
 
 type UnalignedMap = Map Name [Name]
+type UnalignedAccOutside = { mMap: UnalignedMap, lMap: UnalignedMap }
+type UnalignedAccInside = { mMap: UnalignedMap, lMap: UnalignedMap, ns: [Name] }
 
 lang MExprPPLAlign = MExprCFA + MExprPPL
 
@@ -185,89 +187,80 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       cons (cstrStochDirect target name) acc
     ) [] pnames
 
-  -- Two mutually recursive functions
-  -- * One for recursing outside of match (acc: Map Name [Name])
-  -- * One for recursing inside match (acc: above + current name + collected names)
-  --
-  -- sfold over program, accumulator is
-  --
-  -- When let x = match ... encountered => set up entry in acc
-  -- let f = lam acc. lam expr.
-  --   match expr with
-    -- TmLet -> lhs name is unaligned
-    -- TmApp -> lh
-    -- TmVar -> do nothing
-  -- in
-  -- CstrUnaligned { lhs = target, names = }
-
-  sem f (acc: { mMap: UnalignedMap, lMap: UnalignedMap }) =
+  sem unalignedOutside (acc: UnalignedAccOutside) =
   | TmLet { ident = ident, body = TmMatch m, inexpr = inexpr } ->
     -- m.target is a TmVar due to ANF, can safely be ignored here
     let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
-    match g acc m.thn with acc in
-    match g acc m.els with acc in
-    let acc = { acc with mMap = mapInsert ident acc.ns acc.mMap } in
-    f acc inexpr
+    match unalignedInside acc m.thn with acc in
+    match unalignedInside acc m.els with acc in
+    let acc: UnalignedAccInside = acc in
+    let acc = { mMap = mapInsert ident acc.ns acc.mMap, lMap = acc.lMap } in
+    unalignedOutside acc inexpr
   | TmLet { ident = ident, body = TmLam b, inexpr = inexpr } ->
     let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
-    match g acc b.body with acc in
-    let acc = { acc with lMap = mapInsert b.ident acc.ns acc.lMap } in
-    f acc inexpr
+    match unalignedInside acc b.body with acc in
+    let acc: UnalignedAccInside = acc in
+    let acc = { mMap = acc.mMap, lMap = mapInsert b.ident acc.ns acc.lMap } in
+    unalignedOutside acc inexpr
   | TmRecLets { bindings = bindings, inexpr = inexpr } ->
-     let acc = foldl (lam acc. lam b: RecLetBinding.
-         match b.body with TmLam t then
-           let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
-           match g acc t.body with acc in
-           { acc with lMap = mapInsert t.ident acc.ns acc.lMap }
-         else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
-       ) acc bindings
-     in f acc inexpr
-  | t -> sfold_Expr_Expr f acc t
+    let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
+    let acc = foldl (lam acc: UnalignedAccInside. lam b: RecLetBinding.
+        match b.body with TmLam t then
+          let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
+          match unalignedInside acc t.body with acc in
+          let acc: UnalignedAccInside = acc in
+          { acc with lMap = mapInsert t.ident acc.ns acc.lMap }
+        else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
+      ) acc bindings in
+    let acc: UnalignedAccInside = acc in
+    let acc = { mMap = acc.mMap, lMap = acc.lMap } in
+    unalignedOutside acc inexpr
+  | t -> sfold_Expr_Expr unalignedOutside acc t
 
-  sem g (acc: {mMap: UnalignedMap, lMap: UnalignedMap, ns: [Names] }) =
+  sem unalignedInside (acc: UnalignedAccInside) =
   | TmLet { ident = ident, body = TmApp a, inexpr = inexpr } ->
     let acc = { acc with ns = cons ident acc.ns } in
     let lhs = match a.lhs with TmVar t then t.ident
               else infoErrorExit (infoTm a.lhs) "Not a TmVar in application" in
     let acc = { acc with ns = cons lhs acc.ns } in
     -- a.rhs is a variable due to ANF, no need to recurse
-    g acc inexpr
+    unalignedInside acc inexpr
   | TmLet { ident = ident, body = TmMatch m, inexpr = inexpr } ->
     -- Set up new accumulator
     let accI = { acc with ns = [] } in
     -- Recursive calls
-    match g accI m.thn with accI in
-    match g accI m.els with accI in
+    match unalignedInside accI m.thn with accI in
+    match unalignedInside accI m.els with accI in
+    let accI: UnalignedAccInside = accI in
     -- Add new binding to map
-    let accI = { accI with mMap =
-      mapInsert ident accI.ns accI.mMap
-    } in
+    let accI = { accI with mMap = mapInsert ident accI.ns accI.mMap } in
     -- Attach names in internal match to this accumulator as well
     let acc = { accI with ns = concat acc.ns accI.ns } in
-    g acc inexpr
+    unalignedInside acc inexpr
   | TmLet { ident = ident, body = TmLam b, inexpr = inexpr } ->
     let accI = { acc with ns = [] } in
-    match g accI b.body with accI in
-    let accI = { accI with lMap =
-      mapInsert b.ident accI.ns accI.lMap
-    } in
+    match unalignedInside accI b.body with accI in
+    let accI: UnalignedAccInside = accI in
+    let accI = { accI with lMap = mapInsert b.ident accI.ns accI.lMap } in
     -- Restore original ns
     let acc = { accI with ns = acc.ns } in
-    g acc inexpr
+    unalignedInside acc inexpr
   | TmRecLets { bindings = bindings, inexpr = inexpr } ->
-    let accI = foldl (lam accI. lam b: RecLetBinding.
+    let accI: UnalignedAccInside =
+      foldl (lam accI: UnalignedAccInside. lam b: RecLetBinding.
         match b.body with TmLam t then
           let accI = { accI with ns = [] } in
-          match g accI t.body with accI in
+          match unalignedInside accI t.body with accI in
+          let accI: UnalignedAccInside = accI in
           { accI with lMap = mapInsert t.ident accI.ns accI.lMap }
         else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
       ) acc bindings in
     let acc = { accI with ns = acc.ns } in
-    g acc inexpr
+    unalignedInside acc inexpr
   | TmLet { ident = ident, body = body, inexpr = inexpr } ->
     let acc = { acc with ns = cons ident acc.ns } in
-    g acc inexpr
-  | t -> sfold_Expr_Expr g acc t
+    unalignedInside acc inexpr
+  | t -> sfold_Expr_Expr unalignedInside acc t
 
   -- Type: Expr -> CFAGraph
   sem initGraph =
@@ -279,7 +272,10 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     -- Construct unaligned name map (for matches and lambdas)
     let m = mapEmpty nameCmp in
     let acc = { mMap = m, lMap = m } in
-    match f acc t with { mMap = uMatch, lMap = uLam } in
+    match unalignedOutside acc t with acc in
+    let acc: UnalignedAccOutside = acc in
+    let uMatch = acc.mMap in
+    let uLam = acc.lMap in
 
     -- Initialize match constraint generating functions
     let graph = { graph with mcgfs = [
