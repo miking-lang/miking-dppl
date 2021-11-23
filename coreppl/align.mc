@@ -215,7 +215,7 @@ lang Align = MExprPPLCFA
   -- Type: Expr -> CFAGraph -> Set Name
   -- Returns a list of unaligned names for a program.
   sem alignment (cfaRes: CFAGraph) =
-  | t -> match alignmentDebug (None ()) t with (_,res) in res
+  | t -> match alignmentDebug (None ()) cfaRes t with (_,res) in res
 
   sem alignmentDebug (env: Option PprintEnv) (cfaRes: CFAGraph) =
   | t ->

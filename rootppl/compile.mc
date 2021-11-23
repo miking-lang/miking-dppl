@@ -126,10 +126,10 @@ let _debugPrint: [CTop] -> [CTop] -> [CStmt] -> [CStmt] -> String =
       else error (join ["Duplicate name in _debugPrint: ", nameGetStr name])
     in
     let env = foldl addName pprintEnvEmpty cCompilerNames in
-    match mapAccumL (printCTop 0) env types with (env,types) then
-    match mapAccumL (printCTop 0) env tops with (env,tops) then
-    match printCStmts 0 env detInits with (env,detInits) then
-    match printCStmts 0 env stochInits with (env,stochInits) then
+    match mapAccumL (printCTop 0) env types with (env,types) in
+    match mapAccumL (printCTop 0) env tops with (env,tops) in
+    match printCStmts 0 env detInits with (env,detInits) in
+    match printCStmts 0 env stochInits with (env,stochInits) in
 
       let types = strJoin (pprintNewline 0) types in
       let tops = strJoin (pprintNewline 0) tops in
@@ -143,11 +143,6 @@ let _debugPrint: [CTop] -> [CTop] -> [CStmt] -> [CStmt] -> String =
         "--- STOCH INITS ---\n",
         stochInits,"\n\n"
       ]
-
-    else never
-    else never
-    else never
-    else never
 
 -- Compiler names
 let nameRetAddr = nameSym "ra"
@@ -231,9 +226,8 @@ let catIdents: Expr -> Map Name Int =
         -- If recursive functions, make two passes through them
         let f = lam acc.
           foldl (lam acc. lam b: RecLetBinding.
-            match b with { ident = ident, body = body } then
-              updateAcc acc ident body
-            else never
+            match b with { ident = ident, body = body } in
+            updateAcc acc ident body
           ) acc bindings in
         rec (f (f acc)) inexpr
 
@@ -258,7 +252,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- RUN BASE C COMPILER --
     -------------------------
 
-    match compile typeEnv prog with (env, types, tops, inits, retTy) then
+    match compile typeEnv prog with (env, types, tops, inits, retTy) in
 
     -- print (_debugPrint types tops inits inits);
 
@@ -309,7 +303,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         else (snoc acc.0 top, acc.1)
       ) ([],[]) tops in
 
-    match res with (tops,globals) then
+    match res with (tops,globals) in
 
     ------------------
     -- DIVIDE INITS --
@@ -350,7 +344,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       ) ([],[]) inits
     in
 
-    match inits with (detInits, stochInits) then
+    match inits with (detInits, stochInits) in
 
     -- print (_debugPrint types tops detInits stochInits);
 
@@ -404,7 +398,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         else (snoc acc.0 top, acc.1)
       ) ([], mapEmpty nameCmp) tops in
 
-    match res with (tops, detFunMap) then
+    match res with (tops, detFunMap) in
 
 
     ----------------------------
@@ -1037,14 +1031,13 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         let acc = {{ acc with next = Collapse ()}
                          with block = []} in
         let acc = splitStmts acc sf stmts in
-        match createBlock sf nameInit acc with { tops = tops } then tops
-        else never
+        match createBlock sf nameInit acc with { tops = tops } in tops
     in
 
     -- Split functions into BBLOCKs
     let accSplit = emptyAccSplit in
     let tops = match splitFunctions accSplit tops with { tops = tops }
-               then tops else never in
+               in tops in
     let tops = concat tops (splitInit accSplit stochInitSF stochInits) in
 
     ------------------------------------
@@ -1144,7 +1137,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       ) ([],[]) tops
     in
 
-    match res with (funDecls, tops) then
+    match res with (funDecls, tops) in
 
     -----------------------------
     -- PUT EVERYTHING TOGETHER --
@@ -1244,11 +1237,6 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       pre = detInits
     }
 
-    else never
-    else never
-    else never
-    else never
-    else never
 
 -- Entry point for compiler
 let rootPPLCompile: Bool -> Expr -> RPProg =
@@ -1270,30 +1258,43 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
 
-  -- TODO
-  -- let tmp =
-  --   if align then
-  --     use MExprPPLRootPPLCompileANFAll in
-  --     let progANFAll: Expr = normalizeTerm prog in
-  --     match pprintCode 0 pprintEnvEmpty prog with (env,str) in
-  --     -- printLn "*** PROGRAM ***";
-  --     -- printLn str;
-  --     printLn "Starting CFA";
-  --     match cfaDebug (None ()) progANFAll with (_,cfaRes) in
-  --     printLn "Starting Align";
-  --     match alignmentDebug (None ()) cfaRes progANFAll with (_, aRes) in
-  --     printLn "***UNALIGNED NAMES***";
-  --     match mapAccumL pprintVarName env (setToSeq aRes) with (_,aRes) in
-  --     printLn (strJoin ", " aRes);
-  --     printLn "Done!"
-  --   else ()
-  -- in
+  -- Resample at aligned weight if enabled
+  let prog =
+    if align then
+      -- Do a _full_ ANF transformation (required by CFA and alignment)
+      use MExprPPLRootPPLCompileANFAll in
+      let progANFAll: Expr = normalizeTerm prog in
+
+      -- Do static analysis for stochastic value flow
+      let cfaRes = cfa progANFAll in
+
+      -- Propagate alignment information
+      let unaligned: Set Name = alignment cfaRes progANFAll in
+      let isAligned: Name -> Bool = lam n. not (setMem n unaligned) in
+
+      -- Add resample after all aligned weights
+      recursive let rec: Expr -> Expr = lam t.
+        let t = smap_Expr_Expr rec t in
+        match t
+        with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
+        then
+          if isAligned ident then
+            let resample = withInfo r.info resample_ in
+            let l = withInfo r.info (nulet_ (nameNoSym "") resample) in
+            let inexpr = bind_ l inexpr in
+            TmLet { r with inexpr = inexpr }
+          else t
+        else t
+      in rec prog
+
+    else prog
+  in
 
   -- dprint prog; print "\n\n";
   -- print (expr2str prog); print "\n\n";
 
   -- Type lift
-  match typeLift prog with (env, prog) then
+  match typeLift prog with (env, prog) in
 
   -- print (expr2str prog); print "\n\n";
 
@@ -1311,8 +1312,6 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
   -- print (printCompiledRPProg rpprog); print "\n\n";
 
   rpprog
-
-  else never
 
 -------------
 --- TESTS ---
