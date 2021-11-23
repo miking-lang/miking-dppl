@@ -422,15 +422,9 @@ lang CorePPLInference = CorePPL + SMC -- + Importance
 
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprANFAll + MExprTypeLiftUnOrderedRecords +
-  MExprArity
+  MExprTypeAnnot + MExprTypeLiftUnOrderedRecords + MExprArity
 
-lang Test = MExprPPL
-  sem liftANF =
-  | TmLam _ -> false
-  | TmConst _ -> false
-  | TmNever _ -> false
-end
+lang Test = MExprPPL + MExprANF
 
 mexpr
 
