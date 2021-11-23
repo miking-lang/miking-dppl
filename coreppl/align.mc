@@ -1,30 +1,22 @@
 -- Alignment analysis for CorePPL.
---
 
 include "coreppl.mc"
 include "dppl-parser.mc"
 
 include "mexpr/cfa.mc"
 
-type UnalignedMap = Map Name [Name]
-type UnalignedAccOutside = { mMap: UnalignedMap, lMap: UnalignedMap }
-type UnalignedAccInside = { mMap: UnalignedMap, lMap: UnalignedMap, ns: [Name] }
-
-lang MExprPPLAlign = MExprCFA + MExprPPL
+lang MExprPPLCFA = MExprCFA + MExprPPL
 
   syn AbsVal =
   | AVStoch {}
-  | AVUnaligned {}
   | AVConst { arity: Int }
 
   sem absValToString (env: PprintEnv) =
   | AVStoch {} -> (env, "stoch")
-  | AVUnaligned {} -> (env, "unaligned")
   | AVConst { arity = arity } -> (env, join ["const", int2string arity])
 
   sem cmpAbsValH =
   | (AVStoch _, AVStoch _) -> 0
-  | (AVUnaligned _, AVUnaligned _) -> 0
   | (AVConst lhs, AVConst rhs) -> subi lhs.arity rhs.arity
 
   syn Constraint =
@@ -34,11 +26,8 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
   -- {const with arity > 0} ⊆ lhs ⇒ {const with arity-1} ⊆ res
   | CstrConstApp { lhs: Name, res: Name }
-  -- {lam >x<. >b<} ⊆ lhs
-  --   ⇒ forall n in unaligned(>x>).
-  --        (({unaligned} ⊆ lhs ⇒ {unaligned} ⊆ n) AND
-  --             ({stoch} ⊆ lhs ⇒ {unaligned} ⊆ n))
-  | CstrUnalignedApp { lhs: Name, nameMap: Map Name [Name] }
+  -- {stoch} ⊆ target ⇒ match condition is stochastic for match id
+  | CstrStochMatchCond { target: Name, id: Name }
 
 
   sem initConstraint (graph: CFAGraph) =
@@ -47,7 +36,7 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     let graph = initConstraintName r.lhs graph cstr in
     initConstraintName r.rhs graph cstr
   | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrUnalignedApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrStochMatchCond r & cstr -> initConstraintName r.target graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrStochApp { lhs = lhs, res = res } ->
@@ -74,20 +63,9 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
         addData graph (AVConst { r with arity = subi r.arity 1 }) res
       else graph
     else graph
-  | CstrUnalignedApp { lhs = lhs, nameMap = nameMap } ->
-    match update.1 with AVLam { ident = x, body = b } then
-      let names = mapFindExn x nameMap in
-      -- let names = mapLookupOrElse (lam. []) x nameMap in
-
-      foldl (lam graph. lam n.
-        let graph =
-           initConstraint graph (CstrDirectAv {
-             lhs = lhs, lhsav = AVUnaligned {}, rhs = n, rhsav = AVUnaligned {}
-           })
-        in initConstraint graph (CstrDirectAv {
-             lhs = lhs, lhsav = AVStoch {}, rhs = n, rhsav = AVUnaligned {}
-           })
-      ) graph names
+  | CstrStochMatchCond { target = target, id = id } ->
+    match update.1 with AVStoch _ then
+      { graph with stochMatches = setInsert id graph.stochMatches }
     else graph
 
   sem constraintToString (env: PprintEnv) =
@@ -107,15 +85,14 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     match pprintVarName env res with (env,res) in
     (env, join [
       "{const with arity > 0} ⊆ ", lhs, " ⇒ {const with arity-1} ⊆ ", res ])
-  | CstrUnalignedApp { lhs = lhs, nameMap = nameMap } ->
-    match pprintVarName env lhs with (env,lhs) in
+  | CstrStochMatchCond { target = target, id = id } ->
+    match pprintVarName env target with (env,target) in
+    match pprintVarName env id with (env,id) in
     (env, join [
-      "{lam >x<. >b<} ⊆ ", lhs, " ⇒ forall n in unaligned(>x>). (",
-      "({unaligned} ⊆ ", lhs, " ⇒ {unaligned} ⊆ n) AND",
-      "({stoch} ⊆ ", lhs, " ⇒ {unaligned} ⊆ n))"
+      "{stoch} ⊆ ", target, " ⇒ match condition is stochastic for match ", id
     ])
 
-  sem generateStochConstraints (unaligned: UnalignedMap) =
+  sem generateStochConstraints =
   | _ -> []
   -- Stochastic values
   | TmLet { ident = ident, body = TmAssume _ } ->
@@ -133,8 +110,7 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       match app.rhs with TmVar r then [
         CstrStochApp { lhs = l.ident, res = ident},
         CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident},
-        CstrConstApp { lhs = l.ident, res = ident},
-        CstrUnalignedApp { lhs = l.ident, nameMap = unaligned }
+        CstrConstApp { lhs = l.ident, res = ident}
       ]
       else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
     else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
@@ -144,8 +120,7 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       lhs = lhs, lhsav = AVStoch {}, rhs = rhs, rhsav = AVStoch {}
     }
 
-  sem generateStochMatchResConstraints
-    (unaligned: Map Name (Set Name)) (id: Name) (target: Name) =
+  sem generateStochMatchResConstraints (id: Name) (target: Name) =
   | ( PatSeqTot _
     | PatSeqEdge _
     | PatCon _
@@ -155,18 +130,14 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     ) & pat ->
     -- We only generate these constraint where a match can fail, causing a
     -- stochastic branch if the failed value is stochastic.
-    join [
+    [
 
-      -- Result of match is stochastic if match is stochastic
-      [cstrStochDirect target id],
+      -- Result of match is stochastic if match can fail stochastically
+      cstrStochDirect target id,
 
-      -- Contents of match is unaligned if match is stochastic
-      -- forall n in unaligned(id). {stoch} ⊆ target ⇒ {unaligned} ⊆ n
-      map (lam n.
-        (CstrDirectAv {
-          lhs = target, lhsav = AVStoch {}, rhs = n, rhsav = AVUnaligned {}
-        })
-      ) (mapFindExn id unaligned)
+      -- match is unaligned if it can fail stochastically
+      CstrStochMatchCond { target = target, id = id }
+
     ]
   | ( PatAnd p
     | PatOr p
@@ -174,6 +145,8 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     ) -> infoErrorExit p.info "Pattern currently not supported"
   | _ -> []
 
+  -- Ensures all extracted pattern components of a stochastic value are also
+  -- stochastic. For example, all elements of a stochastic list are stochastic.
   sem generateStochMatchConstraints (id: Name) (target: Name) =
   | pat ->
     recursive let f = lam acc. lam pat.
@@ -187,81 +160,6 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
       cons (cstrStochDirect target name) acc
     ) [] pnames
 
-  sem unalignedOutside (acc: UnalignedAccOutside) =
-  | TmLet { ident = ident, body = TmMatch m, inexpr = inexpr } ->
-    -- m.target is a TmVar due to ANF, can safely be ignored here
-    let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
-    match unalignedInside acc m.thn with acc in
-    match unalignedInside acc m.els with acc in
-    let acc: UnalignedAccInside = acc in
-    let acc = { mMap = mapInsert ident acc.ns acc.mMap, lMap = acc.lMap } in
-    unalignedOutside acc inexpr
-  | TmLet { ident = ident, body = TmLam b, inexpr = inexpr } ->
-    let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
-    match unalignedInside acc b.body with acc in
-    let acc: UnalignedAccInside = acc in
-    let acc = { mMap = acc.mMap, lMap = mapInsert b.ident acc.ns acc.lMap } in
-    unalignedOutside acc inexpr
-  | TmRecLets { bindings = bindings, inexpr = inexpr } ->
-    let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
-    let acc = foldl (lam acc: UnalignedAccInside. lam b: RecLetBinding.
-        match b.body with TmLam t then
-          let acc = { mMap = acc.mMap, lMap = acc.lMap, ns = [] } in
-          match unalignedInside acc t.body with acc in
-          let acc: UnalignedAccInside = acc in
-          { acc with lMap = mapInsert t.ident acc.ns acc.lMap }
-        else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
-      ) acc bindings in
-    let acc: UnalignedAccInside = acc in
-    let acc = { mMap = acc.mMap, lMap = acc.lMap } in
-    unalignedOutside acc inexpr
-  | t -> sfold_Expr_Expr unalignedOutside acc t
-
-  sem unalignedInside (acc: UnalignedAccInside) =
-  | TmLet { ident = ident, body = TmApp a, inexpr = inexpr } ->
-    let acc = { acc with ns = cons ident acc.ns } in
-    let lhs = match a.lhs with TmVar t then t.ident
-              else infoErrorExit (infoTm a.lhs) "Not a TmVar in application" in
-    let acc = { acc with ns = cons lhs acc.ns } in
-    -- a.rhs is a variable due to ANF, no need to recurse
-    unalignedInside acc inexpr
-  | TmLet { ident = ident, body = TmMatch m, inexpr = inexpr } ->
-    -- Set up new accumulator
-    let accI = { acc with ns = [] } in
-    -- Recursive calls
-    match unalignedInside accI m.thn with accI in
-    match unalignedInside accI m.els with accI in
-    let accI: UnalignedAccInside = accI in
-    -- Add new binding to map
-    let accI = { accI with mMap = mapInsert ident accI.ns accI.mMap } in
-    -- Attach names in internal match to this accumulator as well
-    let acc = { accI with ns = concat acc.ns accI.ns } in
-    unalignedInside acc inexpr
-  | TmLet { ident = ident, body = TmLam b, inexpr = inexpr } ->
-    let accI = { acc with ns = [] } in
-    match unalignedInside accI b.body with accI in
-    let accI: UnalignedAccInside = accI in
-    let accI = { accI with lMap = mapInsert b.ident accI.ns accI.lMap } in
-    -- Restore original ns
-    let acc = { accI with ns = acc.ns } in
-    unalignedInside acc inexpr
-  | TmRecLets { bindings = bindings, inexpr = inexpr } ->
-    let accI: UnalignedAccInside =
-      foldl (lam accI: UnalignedAccInside. lam b: RecLetBinding.
-        match b.body with TmLam t then
-          let accI = { accI with ns = [] } in
-          match unalignedInside accI t.body with accI in
-          let accI: UnalignedAccInside = accI in
-          { accI with lMap = mapInsert t.ident accI.ns accI.lMap }
-        else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
-      ) acc bindings in
-    let acc = { accI with ns = acc.ns } in
-    unalignedInside acc inexpr
-  | TmLet { ident = ident, body = body, inexpr = inexpr } ->
-    let acc = { acc with ns = cons ident acc.ns } in
-    unalignedInside acc inexpr
-  | t -> sfold_Expr_Expr unalignedInside acc t
-
   -- Type: Expr -> CFAGraph
   sem initGraph =
   | t ->
@@ -269,18 +167,10 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     -- Initial graph
     let graph = emptyCFAGraph in
 
-    -- Construct unaligned name map (for matches and lambdas)
-    let m = mapEmpty nameCmp in
-    let acc = { mMap = m, lMap = m } in
-    match unalignedOutside acc t with acc in
-    let acc: UnalignedAccOutside = acc in
-    let uMatch = acc.mMap in
-    let uLam = acc.lMap in
-
     -- Initialize match constraint generating functions
     let graph = { graph with mcgfs = [
       generateMatchConstraints,
-      generateStochMatchResConstraints uMatch,
+      generateStochMatchResConstraints,
       generateStochMatchConstraints
     ] } in
 
@@ -288,7 +178,7 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
     let cgfs = [
       generateConstraints,
       generateConstraintsMatch graph.mcgfs,
-      generateStochConstraints uLam
+      generateStochConstraints
     ] in
 
     -- Recurse over program and generate constraints
@@ -302,8 +192,230 @@ lang MExprPPLAlign = MExprCFA + MExprPPL
 
 end
 
-lang Test = MExprPPLAlign + MExprANFAll + DPPLParser
+-- Types for keeping track of alignment flow
+-- TODO(dlunde,2021-11-23): Should be part of the Align fragment when possible.
+type AlignFlow = {
+  -- Unaligned names
+  unaligned: [Name],
+  -- LHS names of applications
+  lhss: [Name]
+}
+type AlignAcc = {
+  -- Map for matches (let key = match ...)
+  mMap: Map Name AlignFlow,
+  -- Map for lambdas (lam key. ...)
+  lMap: Map Name AlignFlow,
+  -- Current flow accumulator
+  current: AlignFlow
+}
+let emptyAlignFlow = { unaligned = [], lhss = [] }
+
+lang Align = MExprPPLCFA
+
+  -- Type: Expr -> CFAGraph -> Set Name
+  -- Returns a list of unaligned names for a program.
+  sem alignment (cfaRes: CFAGraph) =
+  | t -> match alignmentDebug (None ()) t with (_,res) in res
+
+  sem alignmentDebug (env: Option PprintEnv) (cfaRes: CFAGraph) =
+  | t ->
+
+    -- Construct unaligned name map (for matches and lambdas)
+    let m = mapEmpty nameCmp in
+    let acc = { mMap = m, lMap = m, current = emptyAlignFlow } in
+    match alignMap acc t with acc in
+    let acc: AlignAcc = acc in
+    let uMatch = acc.mMap in
+    let uLam = acc.lMap in
+
+    let env = match env with Some env then
+        match mapAccumL pprintVarName env (setToSeq cfaRes.stochMatches)
+        with (env,stochMatches) in
+        match alignFlowMapToString env uMatch with (env,uMatch) in
+        match alignFlowMapToString env uLam with (env,uLam) in
+        print "*** Stochastic matches ***\n";
+        printLn (strJoin ", " stochMatches);
+        print "*** Unaligned match map ***\n";
+        printLn uMatch;
+        print "*** Unaligned lambda map ***\n";
+        printLn uLam;
+        Some env
+      else None ()
+    in
+
+    type AccIter = {
+      unaligned: Set Name,
+      processedLams: Set Name,
+      processedLhss: Set Name,
+      newLhss: [Name]
+    } in
+
+    let emptyAccIter = {
+      unaligned = setEmpty nameCmp,
+      processedLams = setEmpty nameCmp,
+      processedLhss = setEmpty nameCmp,
+      newLhss = []
+    } in
+
+    -- Main alignment propagation
+    recursive let iter = lam acc: AccIter.
+      match acc.newLhss with [h] ++ newLhss then
+        let acc = { acc with newLhss = newLhss } in
+        if setMem h acc.processedLhss then iter acc
+        else
+          let acc = { acc with processedLhss = setInsert h acc.processedLhss } in
+          let avs = dataLookup h cfaRes in
+          let acc = setFold (lam acc: AccIter. lam av.
+              match av with AVLam { ident = ident } then
+                if setMem ident acc.processedLams then acc
+                else
+                  let v: AlignFlow = mapFindExn ident uLam in
+                  {{{ acc
+                    with unaligned =
+                      foldl (lam ua. lam n. setInsert n ua)
+                        acc.unaligned v.unaligned }
+                    with processedLams =
+                      setInsert ident acc.processedLams }
+                    with newLhss =
+                      concat v.lhss acc.newLhss }
+              else acc
+            ) acc avs
+          in
+          iter acc
+      else match acc.newLhss with [] then acc.unaligned
+      else never
+    in
+
+    -- Initial recursion over stochastic applications
+    recursive let recapp = lam acc: AccIter. lam t: Expr.
+      match t with TmApp { lhs = TmVar { ident = ident } } then
+        let avs = dataLookup ident cfaRes in
+        if setMem (AVStoch {}) avs then
+          let acc =
+            { acc with processedLhss = setInsert ident acc.processedLhss } in
+          setFold (lam acc: AccIter. lam av.
+            match av with AVLam { ident = ident } then
+              let v: AlignFlow = mapFindExn ident uLam in
+              {{{ acc
+                with unaligned =
+                  foldl (lam ua. lam n. setInsert n ua)
+                    acc.unaligned v.unaligned }
+                with processedLams =
+                  setInsert ident acc.processedLams }
+                with newLhss =
+                  concat v.lhss acc.newLhss }
+            else acc
+          ) acc avs
+        else acc
+      else sfold_Expr_Expr recapp acc t
+    in
+
+    -- Initial stochastic matches (provided by CFA analysis)
+    let acc = setFold (lam acc: AccIter. lam matchId.
+      let v: AlignFlow = mapFindExn matchId uMatch in
+      {{ acc
+        with unaligned =
+          foldl (lam ua. lam n. setInsert n ua) acc.unaligned v.unaligned }
+        with newLhss = concat v.lhss acc.newLhss }
+    ) emptyAccIter cfaRes.stochMatches
+    in
+
+    let acc = recapp acc t in
+
+    let res = iter acc in
+
+    let env = match env with Some env then
+        printLn "***UNALIGNED NAMES***";
+        match mapAccumL pprintVarName env (setToSeq res) with (_,res) in
+        printLn (strJoin ", " res)
+      else None ()
+    in
+
+    (env, res)
+
+  sem alignFlowMapToString (env: PprintEnv) =
+  | m ->
+    let f = lam env. lam k. lam v: AlignFlow.
+      match pprintVarName env k with (env, k) in
+      match mapAccumL pprintVarName env v.unaligned with (env, unaligned) in
+      match mapAccumL pprintVarName env v.lhss with (env, lhss) in
+      let unaligned = strJoin ", " unaligned in
+      let lhss = strJoin ", " lhss in
+      (env, join [k, " ->\n  unaligned: ", unaligned, "\n  lhss: ", lhss])
+    in
+    match mapMapAccum f env m with (env, m) in
+    (env, strJoin "\n" (mapValues m))
+
+  sem alignMap (acc: AlignAcc) =
+  | TmLet { ident = ident, body = TmApp a, inexpr = inexpr } ->
+    -- a.rhs is a variable due to ANF, no need to recurse
+    -- Add new values
+    let current = {{ acc.current
+      with unaligned = cons ident acc.current.unaligned }
+      with lhss =
+        let lhs = match a.lhs with TmVar t then t.ident
+          else infoErrorExit (infoTm a.lhs) "Not a TmVar in application" in
+        cons lhs acc.current.lhss }
+    in
+    let acc = { acc with current = current } in
+    alignMap acc inexpr
+  | TmLet { ident = ident, body = TmMatch m, inexpr = inexpr } ->
+    -- m.target is a TmVar due to ANF, can safely be ignored here
+    let current = {
+      acc.current with unaligned = cons ident acc.current.unaligned
+    } in
+    let acc = { acc with current = current } in
+    -- Recursion
+    let accI = { acc with current = emptyAlignFlow } in
+    match alignMap accI m.thn with accI in
+    match alignMap accI m.els with accI in
+    let accI: AlignAcc = accI in
+    -- Record inner map and define next current
+    let mMap = mapInsert ident accI.current accI.mMap in
+    let current = {
+      -- Flow in inner match is also part of outer lam/match
+      unaligned = concat acc.current.unaligned accI.current.unaligned,
+      lhss = concat acc.current.lhss accI.current.lhss
+    } in
+    let acc = {{ accI with mMap = mMap } with current = current } in
+    alignMap acc inexpr
+  | TmLet { ident = ident, body = TmLam b, inexpr = inexpr } ->
+    let current = {
+      acc.current with unaligned = cons ident acc.current.unaligned
+    } in
+    let acc = { acc with current = current } in
+    let accI = { acc with current = emptyAlignFlow } in
+    match alignMap accI b.body with accI in
+    let accI: AlignAcc = accI in
+    let lMap = mapInsert b.ident accI.current accI.lMap in
+    let acc = {{ accI with lMap = lMap } with current = current } in
+    alignMap acc inexpr
+  | TmRecLets { bindings = bindings, inexpr = inexpr } ->
+    let acc = foldl (lam acc: AlignAcc. lam b: RecLetBinding.
+        match b.body with TmLam t then
+          let current = {
+            acc.current with unaligned = cons b.ident acc.current.unaligned
+          } in
+          let acc = { acc with current = current } in
+          let accI = { acc with current = emptyAlignFlow } in
+          match alignMap accI t.body with accI in
+          let accI: AlignAcc = accI in
+          let lMap = mapInsert t.ident accI.current accI.lMap in
+          {{ accI with lMap = lMap } with current = current }
+        else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
+      ) acc bindings in
+    alignMap acc inexpr
+  | TmLet { ident = ident, body = body, inexpr = inexpr } ->
+    let current = {
+      acc.current with unaligned = cons ident acc.current.unaligned
+    } in
+    let acc = { acc with current = current } in
+    alignMap acc inexpr
+  | t -> sfold_Expr_Expr alignMap acc t
+
 end
+
+lang Test = Align + MExprANFAll + DPPLParser
 
 -----------
 -- TESTS --
@@ -313,33 +425,29 @@ mexpr
 use Test in
 
 -- Test functions --
-let parse = parseMExprPPLString in
-let test: Bool -> Expr -> [String] -> [[AbsVal]] =
-  lam debug: Bool. lam t: Expr. lam vars: [String].
-    if debug then
+let _parse = parseMExprPPLString in
+let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
+  lam env: Option PprintEnv. lam t: Expr.
+    match env with Some env then
       -- Version with debug printouts
       let tANF = normalizeTerm t in
-      match pprintCode 0 pprintEnvEmpty t with (_,tStr) in
+      match pprintCode 0 env t with (env,tStr) in
       printLn "\n--- ORIGINAL PROGRAM ---";
       printLn tStr;
-      match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
+      match pprintCode 0 env tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
       match cfaDebug (Some env) tANF with (Some env,cfaRes) in
-      match cfaGraphToString env cfaRes with (_, resStr) in
+      match cfaGraphToString env cfaRes with (env, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
-      map (lam var: String.
-        (var, dataLookup (nameNoSym var) cfaRes)
-      ) vars
+      (Some env,cfaRes)
 
     else
       -- Version without debug printouts
       let tANF = normalizeTerm t in
       let cfaRes = cfa tANF in
-      map (lam var: String.
-        (var, dataLookup (nameNoSym var) cfaRes)
-      ) vars
+      (None (), cfaRes)
 in
 
 
@@ -347,19 +455,26 @@ in
 -- STOCHASTIC VALUE FLOW TESTS --
 ---------------------------------
 
+let _test: Bool -> Expr -> [String] -> [(String,Bool)] =
+  lam debug. lam t. lam vars.
+    let env = if debug then Some pprintEnvEmpty else None () in
+    match _testBase env t with (_, cfaRes) in
+    map (lam var: String.
+      let avs = dataLookup (nameNoSym var) cfaRes in
+      let val = setFold
+        (lam acc. lam av. match av with AVStoch _ then true else acc) false avs
+      in (var, val)
+    ) vars
+in
+
 -- Custom equality function for testing stochastic value flow only
-let eqTestStoch = eqSeq (lam t1:(String,Set AbsVal). lam t2:(String,Bool).
-  if eqString t1.0 t2.0 then
-    let t11 = setFold
-      (lam acc. lam av. match av with AVStoch _ then true else acc)
-      false t1.1
-    in
-    eqBool t11 t2.1
+let eqTest = eqSeq (lam t1:(String,Bool). lam t2:(String,Bool).
+  if eqString t1.0 t2.0 then eqBool t1.1 t2.1
   else false
 ) in
 --------------------
 
-let t = parse "
+let t = _parse "
   let x = assume (Beta 1.0 1.0) in
   let f = addf in
   let sum1 = addf 1.0 1.0 in
@@ -367,32 +482,32 @@ let t = parse "
   let res = addf sum1 sum2 in
   res
 ------------------------" in
-utest test false t ["x","f","sum1","sum2","res"] with [
+utest _test false t ["x","f","sum1","sum2","res"] with [
   ("x", true),
   ("f", false),
   ("sum1", false),
   ("sum2", true),
   ("res", true)
-] using eqTestStoch in
+] using eqTest in
 
-let t = parse "
+let t = _parse "
   let f = (lam x. addf x 1) in
   let g = (lam y. addf y 2) in
   let s = assume (Beta 1.0 1.0) in
   let res = addf (f s) (g 1) in
   res
 ------------------------" in
-utest test false t ["f","g","s","res","x","y"] with [
+utest _test false t ["f","g","s","res","x","y"] with [
   ("f", false),
   ("g", false),
   ("s", true),
   ("res", true),
   ("x", true),
   ("y", false)
-] using eqTestStoch in
+] using eqTest in
 
 
-let t = parse "
+let t = _parse "
   type T in
   con C: Float -> T in
   let x = assume (Beta 1.0 1.0) in
@@ -403,16 +518,16 @@ let t = parse "
       1.0
   in res
 ------------------------" in
-utest test false t ["x","d","res","a","b"] with [
+utest _test false t ["x","d","res","a","b"] with [
   ("x", true),
   ("d", false),
   ("res", true),
   ("a", true),
   ("b", false)
-] using eqTestStoch in
+] using eqTest in
 
 -- Random function
-let t = parse "
+let t = _parse "
   let f =
     if assume (Bernoulli 0.5) then
       (lam x. addi x 1)
@@ -422,15 +537,15 @@ let t = parse "
   let res = f 5 in
   res
 ------------------------" in
-utest test false t ["f","x","y","res"] with [
+utest _test false t ["f","x","y","res"] with [
   ("f", true),
   ("x", false),
   ("y", false),
   ("res", true)
-] using eqTestStoch in
+] using eqTest in
 
 -- Complicated stochastic match
-let t = parse "
+let t = _parse "
   let v1 = { a = [assume (Bernoulli 0.5)], b = 2} in
   let m1 =
     match v1 with { a = [true], b = b1 } then false
@@ -443,17 +558,17 @@ let t = parse "
   in
   ()
 ------------------------" in
-utest test false t ["v1","m1","b1","v2","m2","b2"] with [
+utest _test false t ["v1","m1","b1","v2","m2","b2"] with [
   ("v1", false),
   ("m1", true),
   ("b1", false),
   ("v2", false),
   ("m2", false),
   ("b2", true)
-] using eqTestStoch in
+] using eqTest in
 
 -- Stochastic composite data
-let t = parse "
+let t = _parse "
   let d =
     match assume (Bernoulli 0.5) with true then
       let t1 = 1 in
@@ -467,16 +582,16 @@ let t = parse "
   in
   res
 ------------------------" in
-utest test false t ["d", "res", "rest","a","t1"] with [
+utest _test false t ["d", "res", "rest","a","t1"] with [
   ("d", true),
   ("res", true),
   ("rest",true),
   ("a",true),
   ("t1",false)
-] using eqTestStoch in
+] using eqTest in
 
 -- Stochastic flow over names
-let t = parse "
+let t = _parse "
   let res =
     match assume (Bernoulli 0.5) with true then
       let t = 1 in
@@ -486,45 +601,110 @@ let t = parse "
   in
   res
 ------------------------" in
-utest test false t ["t", "res"] with [
+utest _test false t ["t", "res"] with [
   ("t", false),
   ("res",true)
-] using eqTestStoch in
+] using eqTest in
 
 ---------------------
 -- ALIGNMENT TESTS --
 ---------------------
--- Custom equality function for testing alignment only
-let eqTestAlign = eqSeq (lam t1:(String,Set AbsVal). lam t2:(String,Bool).
-  if eqString t1.0 t2.0 then
-    let t11 = setFold
-      (lam acc. lam av. match av with AVUnaligned _ then false else acc)
-      true t1.1
-    in
-    eqBool t11 t2.1
-  else false
-) in
---------------------
 
-let t = parse "
-  let x = assume (Beta 1.0 1.0) in
-  let res = if x then
-    let p1 = addf 1.0 1.0 in
-    p1
-  else
-    let p2 = addf 2.0 2.0 in
-    p2
+let _test: Bool -> Expr -> [String] -> [Bool] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    match _testBase env tANF with (env, cfaRes) in
+    match alignmentDebug env cfaRes tANF with (_, aRes) in
+    let sSet = setFold
+      (lam acc. lam n. setInsert (nameGetStr n) acc)
+      (setEmpty cmpString) aRes in
+    map (lam var: String. (var, not (setMem var sSet))) vars
+in
+
+
+let t = _parse "
+  let x = assume (Bernoulli 0.5) in
+  let res =
+    if x then
+      let p1 = addf 1.0 1.0 in
+      p1
+    else
+      let p2 = addf 2.0 2.0 in
+      p2
   in res
 ------------------------" in
-utest test false t ["x","res","p1","p2"] with [
+utest _test false t ["x","res","p1","p2"] with [
   ("x", true),
-  ("res", false),
-  -- TODO(dlunde,2021-11-18): Intuitively, res should be aligned here. The
-  -- problem is that the "unaligned" from p1 flows directly to res. It could
-  -- be that this does not actually result in any problems, but I'm not sure.
-  -- Could probably be fixed without too much effort.
+  ("res", true),
   ("p1", false),
   ("p2", false)
-] using eqTestAlign in
+] using eqTest in
+
+let t = _parse "
+  let f1 = (lam x1. let w1 = weight 1.0 in w1) in
+  let f2 = (lam x2. let w2 = weight 2.0 in w2) in
+  let f3 = (lam x3. let w3 = weight 3.0 in w3) in
+  recursive let top = lam i1.
+    let m1 =
+      match assume (Bernoulli 0.5) with true
+      then f2 2
+      else f3 3
+    in
+    let f4 =
+      if eqi 0 i1
+      then f1
+      else f2
+    in
+    let res = f4 4 in
+    if eqi 0 i1 then res else top (subi i1 1)
+  in
+  top 10
+------------------------" in
+utest _test false t ["f1","f2","f3","w1","w2","w3"] with [
+  ("f1", true),
+  ("f2", true),
+  ("f3", true),
+  ("w1", true),
+  ("w2", false),
+  ("w3", false)
+] using eqTest in
+
+let t = _parse "
+  let f =
+    match assume (Bernoulli 0.5) with true then
+      (lam x. let w1 = 1 in w1)
+    else
+      (lam y. let w2 = 2 in w2)
+  in
+  let res = f 1 in
+  res
+------------------------" in
+utest _test false t ["f","x","w1","y","w2","res"] with [
+  ("f", true),
+  ("x", true),
+  ("w1", false),
+  ("y", true),
+  ("w2", false),
+  ("res", true)
+] using eqTest in
+
+let t = _parse "
+  recursive let f = lam x. lam y. x in
+  f 1 2
+------------------------" in
+utest _test false t ["f"] with [
+  ("f", true)
+] using eqTest in
+
+-- Test in `models/crbd/crbd-unaligned.mc`
+let t = symbolizeExpr symEnvEmpty (getAst "models/crbd/crbd-unaligned.mc") in
+utest _test false t ["w1","w2","w3"] with [
+  ("w1", false),
+  ("w2", false),
+  ("w3", true)
+]
+using eqTest in
 
 ()
+

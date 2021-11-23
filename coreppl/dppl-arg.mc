@@ -4,6 +4,7 @@ include "arg.mc"
 type Options = {
   method: String,
   particles : Int,
+  align: Bool,
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
@@ -14,6 +15,7 @@ type Options = {
 let default = {
   method = "",
   particles = 5000,
+  align = false,
   printModel = false,
   printMCore = false,
   exitBefore = false,
@@ -31,6 +33,10 @@ let config = [
           "of the following methods are used: importance, rootppl-smc."],
     lam p: ArgPart.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
+  ([("--align", "", "")],
+    "Apply alignment for inference algorithms, when applicable.",
+    lam p: ArgPart.
+      let o: Options = p.options in {o with align = true}),
   ([("--print-model", "", "")],
     "The parsed model is pretty printed before inference.",
     lam p: ArgPart.

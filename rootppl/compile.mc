@@ -2,6 +2,7 @@
 
 include "../coreppl/coreppl.mc"
 include "../coreppl/dppl-parser.mc"
+include "../coreppl/align.mc"
 
 include "rootppl.mc"
 
@@ -22,7 +23,7 @@ include "mexpr/pprint.mc"
 -----------------------------------------
 
 lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
-  + SeqTypeNoStringTypeLift + MExprANF
+  + SeqTypeNoStringTypeLift + Align
 
   -- Compiler internals
   syn CExpr =
@@ -36,24 +37,6 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
   | CEResample _ & t -> t
-
-  -- ANF override
-  -- Ensures distributions are not lifted by ANF (first-class distributions not
-  -- supported in RootPPL)
-  sem normalize (k : Expr -> Expr) =
-  | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
-    normalizeDist
-      (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
-      dist
-  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
-    normalizeName
-      (lam value.
-        normalizeDist
-          (lam dist.
-             k (TmObserve {{ t with value = value }
-                               with dist = TmDist { td with dist = dist}}))
-          dist)
-      value
 
   -- Compilation of distributions
   sem compileDist (env: CompileCEnv) =
@@ -96,6 +79,31 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
   | TySeq {info = _, ty = TyUnknown _} & ty -> (env,ty)
 
 end
+
+lang MExprPPLRootPPLCompileANF = MExprPPLRootPPLCompile + MExprANF
+
+  -- ANF override
+  -- Ensures distributions are not lifted by ANF (first-class distributions not
+  -- supported in RootPPL)
+  sem normalize (k : Expr -> Expr) =
+  | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
+    normalizeDist
+      (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
+      dist
+  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
+    normalizeName
+      (lam value.
+        normalizeDist
+          (lam dist.
+             k (TmObserve {{ t with value = value }
+                               with dist = TmDist { td with dist = dist}}))
+          dist)
+      value
+
+end
+
+lang MExprPPLRootPPLCompileANFAll = MExprPPLRootPPLCompile + MExprANFAll
+
 
 ----------------------
 -- ROOTPPL COMPILER --
@@ -1243,7 +1251,10 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     else never
 
 -- Entry point for compiler
-let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
+let rootPPLCompile: Bool -> Expr -> RPProg =
+  lam align. lam prog.
+
+  use MExprPPLRootPPLCompileANF in
 
   -- print (expr2str prog); print "\n\n";
   -- dprint prog; print "\n\n";
@@ -1258,6 +1269,25 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
+
+  -- TODO
+  -- let tmp =
+  --   if align then
+  --     use MExprPPLRootPPLCompileANFAll in
+  --     let progANFAll: Expr = normalizeTerm prog in
+  --     match pprintCode 0 pprintEnvEmpty prog with (env,str) in
+  --     -- printLn "*** PROGRAM ***";
+  --     -- printLn str;
+  --     printLn "Starting CFA";
+  --     match cfaDebug (None ()) progANFAll with (_,cfaRes) in
+  --     printLn "Starting Align";
+  --     match alignmentDebug (None ()) cfaRes progANFAll with (_, aRes) in
+  --     printLn "***UNALIGNED NAMES***";
+  --     match mapAccumL pprintVarName env (setToSeq aRes) with (_,aRes) in
+  --     printLn (strJoin ", " aRes);
+  --     printLn "Done!"
+  --   else ()
+  -- in
 
   -- dprint prog; print "\n\n";
   -- print (expr2str prog); print "\n\n";
@@ -1292,14 +1322,14 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 -- then run unit tests in some way on each decomposed part in isolation. For
 -- now, they are at least better than nothing
 
-lang Test = MExprPPLRootPPLCompile
+lang Test = MExprPPLRootPPLCompileANF
 
 mexpr
 use Test in
 
 let test = lam cpplstr.
   let cppl = parseMExprPPLString cpplstr in
-  let rppl = rootPPLCompile cppl in
+  let rppl = rootPPLCompile false cppl in
   printCompiledRPProg rppl
 in
 
