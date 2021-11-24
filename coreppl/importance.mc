@@ -49,7 +49,7 @@ let importanceSamplingInference = lam options: Options. lam ast.
   let ast = symbolize (transform ast) in
   -- Print (optional) the transformed MCore program
   if options.printMCore then
-    printLn (expr2str ast);
+    printLn (mexprPPLToString ast);
     exit 0
   -- Execute the inference
   else

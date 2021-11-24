@@ -1244,7 +1244,7 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
 
   use MExprPPLRootPPLCompileANF in
 
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
   -- dprint prog; print "\n\n";
 
   -- Symbolize with empty environment
@@ -1253,7 +1253,7 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
   -- Type annotate
   let prog: Expr = typeAnnot prog in
 
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
@@ -1280,7 +1280,8 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
         then
           if isAligned ident then
             let resample = withInfo r.info resample_ in
-            let l = withInfo r.info (nulet_ (nameNoSym "") resample) in
+            let l = nlet_ (nameSym "resample") tyunit_ resample in
+            let l = withInfo r.info l in
             let inexpr = bind_ l inexpr in
             TmLet { r with inexpr = inexpr }
           else t
@@ -1291,17 +1292,17 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
   in
 
   -- dprint prog; print "\n\n";
-  -- print (expr2str prog); print "\n\n";
+  print (mexprPPLToString prog); print "\n\n";
 
   -- Type lift
   match typeLift prog with (env, prog) in
 
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- Remove redundant lets
   let prog: Expr = removeRedundantLets prog in
 
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in

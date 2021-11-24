@@ -54,14 +54,14 @@ in
 
 -- Simulation of branch
 recursive
-let simBranch: Int -> Float -> Float -> Float -> Float -> Float -> Float =
+let simBranch: Int -> Float -> Float -> Float -> Float -> Float -> () =
   lam n: Int.
   lam startTime: Float.
   lam stopTime: Float.
   lam lambda: Float.
   lam mu: Float.
   lam rho: Float.
-    if eqi n 0 then 0.
+    if eqi n 0 then ()
     else
       let currentTime = assume (Uniform stopTime startTime) in
       if crbdGoesUndetected currentTime lambda mu rho then
@@ -69,7 +69,7 @@ let simBranch: Int -> Float -> Float -> Float -> Float -> Float -> Float =
         simBranch (subi n 1) startTime stopTime lambda mu rho
       else
         let w2 = weight (negf inf) in
-        w2
+        ()
 in
 
 -- Simulating along the tree structure
@@ -86,7 +86,7 @@ let simTree: Tree -> Tree -> Float -> Float -> Float -> () =
     let startTime = getAge parent in
     let stopTime = getAge tree in
     let n = assume (Poisson (mulf lambda (subf startTime stopTime))) in
-    let lnProb3 = simBranch n startTime stopTime lambda mu rho in
+    simBranch n startTime stopTime lambda mu rho;
 
     let w3 = weight (addf lnProb1 lnProb2) in
     -- resample; -- This should be added automatically by alignment analysis

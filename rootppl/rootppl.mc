@@ -21,7 +21,7 @@ let nameProgStateTy = nameSym "progState_t"
 let namePplFuncTy = nameSym "pplFunc_t"
 
 -- NOTE(dlunde,2021-10-08): This list is currently not exhaustive
-let rpKeywords = concat (map nameNoSym [
+let rpKeywords = concat (map nameSym [
   "BBLOCK", "BBLOCK_DECLARE", "BBLOCK_DATA_MANAGED",
   "BBLOCK_DATA_MANAGED_SINGLE", "", "SAMPLE", "WEIGHT", "PSTATE", "NEXT",
   "bernoulli", "beta", "discrete", "multinomial", "dirichlet", "exponential",

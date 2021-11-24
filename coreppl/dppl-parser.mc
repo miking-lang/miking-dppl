@@ -6,7 +6,7 @@ include "coreppl.mc"
 include "pgm.mc"
 
 
-lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + ProbabilisticGraphicalModel + KeywordMaker
+lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + ProbabilisticGraphicalModel + KeywordMaker
 
   -- Keyword maker
   sem isKeyword =
@@ -71,22 +71,17 @@ lang DPPLParser = BootParser + MExprPrettyPrint + CorePPLInference + Probabilist
                                         info = info})
 end
 
-let keywords =
-["assume", "observe", "weight", "resample", "plate",
- "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
- "Multinomial", "Dirichlet", "Exponential", "Empirical", "Gaussian", "Binomial"]
-
 let getAst = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config = {{defaultBootParserParseMCoreFileArg
                  with keepUtests = false}
-                 with keywords = keywords} in
+                 with keywords = pplKeywords} in
   makeKeywords [] (parseMCoreFile config filename)
 
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
-  makeKeywords [] (parseMExprString keywords cpplstr)
+  makeKeywords [] (parseMExprString pplKeywords cpplstr)
 
 

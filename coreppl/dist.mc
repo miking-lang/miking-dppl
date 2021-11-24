@@ -930,42 +930,42 @@ let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 -- PRETTY-PRINT TESTS --
 ------------------------
 
-utest expr2str tmUniform with strJoin "\n" [
+utest mexprToString tmUniform with strJoin "\n" [
   "Uniform",
   "  1.",
   "  2."
 ] using eqString in
 
-utest expr2str tmBernoulli with strJoin "\n" [
+utest mexprToString tmBernoulli with strJoin "\n" [
   "Bernoulli",
   "  0.5"
 ] using eqString in
 
-utest expr2str tmPoisson with strJoin "\n" [
+utest mexprToString tmPoisson with strJoin "\n" [
   "Poisson",
   "  0.5"
 ] using eqString in
 
-utest expr2str tmBeta with strJoin "\n" [
+utest mexprToString tmBeta with strJoin "\n" [
   "Beta",
   "  1.",
   "  2."
 ] using eqString in
 
-utest expr2str tmGamma with strJoin "\n" [
+utest mexprToString tmGamma with strJoin "\n" [
   "Gamma",
   "  1.",
   "  2."
 ] using eqString in
 
-utest expr2str tmCategorical with strJoin "\n" [
+utest mexprToString tmCategorical with strJoin "\n" [
   "Categorical",
   "  [ 0.3,",
   "    0.2,",
   "    0.5 ]"
 ] using eqString in
 
-utest expr2str tmMultinomial with strJoin "\n" [
+utest mexprToString tmMultinomial with strJoin "\n" [
   "Multinomial",
   "  5",
   "  [ 0.3,",
@@ -973,31 +973,31 @@ utest expr2str tmMultinomial with strJoin "\n" [
   "    0.5 ]"
 ] using eqString in
 
-utest expr2str tmExponential with strJoin "\n" [
+utest mexprToString tmExponential with strJoin "\n" [
   "Exponential",
   "  1."
 ] using eqString in
 
-utest expr2str tmEmpirical with strJoin "\n" [
+utest mexprToString tmEmpirical with strJoin "\n" [
   "Empirical",
   "  [ (1., 1.5),",
   "    (3., 1.3) ]"
 ] using eqString in
 
-utest expr2str tmDirichlet with strJoin "\n" [
+utest mexprToString tmDirichlet with strJoin "\n" [
   "Dirichlet",
   "  [ 1.3,",
   "    1.3,",
   "    1.5 ]"
 ] using eqString in
 
-utest expr2str tmGaussian with strJoin "\n" [
+utest mexprToString tmGaussian with strJoin "\n" [
   "Gaussian",
   "  0.",
   "  1."
 ] using eqString in
 
-utest expr2str tmBinomial with strJoin "\n" [
+utest mexprToString tmBinomial with strJoin "\n" [
   "Binomial",
   "  5",
   "  0.5"
@@ -1185,7 +1185,7 @@ utest _anf tmEmpirical with bindall_ [
   ulet_ "t3" (empirical_ (var_ "t2")),
   var_ "t3"
 ] using eqExpr in
--- print (expr2str (_anf tmEmpirical)); print "\n";
+-- print (mexprToString (_anf tmEmpirical)); print "\n";
 utest _anf tmDirichlet with bindall_ [
   ulet_ "t" (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]),
   ulet_ "t1" (dirichlet_ (var_ "t")),

@@ -35,7 +35,7 @@ match result with ParseOK r then
 
     -- Optionally print the model
     (if options.printModel then
-      use DPPLParser in printLn (expr2str ast)
+      use DPPLParser in printLn (mexprPPLToString ast)
     else ());
 
     -- Exit before inference, it the flag is selected
