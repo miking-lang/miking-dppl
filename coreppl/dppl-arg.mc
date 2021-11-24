@@ -4,7 +4,7 @@ include "arg.mc"
 type Options = {
   method: String,
   particles : Int,
-  align: Bool,
+  resample: String,
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
@@ -15,7 +15,7 @@ type Options = {
 let default = {
   method = "",
   particles = 5000,
-  align = false,
+  resample = "manual",
   printModel = false,
   printMCore = false,
   exitBefore = false,
@@ -33,10 +33,10 @@ let config = [
           "of the following methods are used: importance, rootppl-smc."],
     lam p: ArgPart.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
-  ([("--align", "", "")],
-    "Apply alignment for inference algorithms, when applicable.",
+  ([("--resample", " ", "<method>")],
+    "The selected resampling method, for inference algorithms where applicable. The supported methods are: weight, align, manual.",
     lam p: ArgPart.
-      let o: Options = p.options in {o with align = true}),
+      let o: Options = p.options in {o with resample = argToString p}),
   ([("--print-model", "", "")],
     "The parsed model is pretty printed before inference.",
     lam p: ArgPart.

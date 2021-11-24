@@ -1239,8 +1239,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
 
 -- Entry point for compiler
-let rootPPLCompile: Bool -> Expr -> RPProg =
-  lam align. lam prog.
+let rootPPLCompile: String -> Expr -> RPProg =
+  lam resample: String. lam prog.
 
   use MExprPPLRootPPLCompileANF in
 
@@ -1260,7 +1260,26 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
 
   -- Resample at aligned weight if enabled
   let prog =
-    if align then
+    -- Add resample after weights (given a predicate)
+    recursive let addResample: (Name -> Bool) -> Expr -> Expr =
+      lam pred. lam t.
+        let t = smap_Expr_Expr (addResample pred) t in
+        match t
+        with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
+        then
+          if pred ident then
+            let resample = withInfo r.info resample_ in
+            let l = nlet_ (nameSym "resample") tyunit_ resample in
+            let l = withInfo r.info l in
+            let inexpr = bind_ l inexpr in
+            TmLet { r with inexpr = inexpr }
+          else t
+        else t
+    in
+    match      resample with "weight" then addResample (lam. true) prog
+    else match resample with "manual" then prog
+    else match resample with "align"  then
+
       -- Do a _full_ ANF transformation (required by CFA and alignment)
       use MExprPPLRootPPLCompileANFAll in
       let progANFAll: Expr = normalizeTerm prog in
@@ -1272,27 +1291,13 @@ let rootPPLCompile: Bool -> Expr -> RPProg =
       let unaligned: Set Name = alignment cfaRes progANFAll in
       let isAligned: Name -> Bool = lam n. not (setMem n unaligned) in
 
-      -- Add resample after all aligned weights
-      recursive let rec: Expr -> Expr = lam t.
-        let t = smap_Expr_Expr rec t in
-        match t
-        with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
-        then
-          if isAligned ident then
-            let resample = withInfo r.info resample_ in
-            let l = nlet_ (nameSym "resample") tyunit_ resample in
-            let l = withInfo r.info l in
-            let inexpr = bind_ l inexpr in
-            TmLet { r with inexpr = inexpr }
-          else t
-        else t
-      in rec prog
+      addResample isAligned prog
 
-    else prog
+    else error "Invalid resample option"
   in
 
   -- dprint prog; print "\n\n";
-  print (mexprPPLToString prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- Type lift
   match typeLift prog with (env, prog) in
@@ -1329,7 +1334,7 @@ use Test in
 
 let test = lam cpplstr.
   let cppl = parseMExprPPLString cpplstr in
-  let rppl = rootPPLCompile false cppl in
+  let rppl = rootPPLCompile "manual" cppl in
   printCompiledRPProg rppl
 in
 
