@@ -1266,6 +1266,7 @@ let rootPPLCompile: String -> Expr -> RPProg =
         let t = smap_Expr_Expr (addResample pred) t in
         match t
         with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
+           | TmLet ({ ident = ident, body = TmObserve _, inexpr = inexpr } & r)
         then
           if pred ident then
             let resample = withInfo r.info resample_ in
@@ -1276,7 +1277,7 @@ let rootPPLCompile: String -> Expr -> RPProg =
           else t
         else t
     in
-    match      resample with "weight" then addResample (lam. true) prog
+    match      resample with "likelihood" then addResample (lam. true) prog
     else match resample with "manual" then prog
     else match resample with "align"  then
 
