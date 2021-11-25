@@ -20,8 +20,6 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
   | (AVConst lhs, AVConst rhs) -> subi lhs.arity rhs.arity
 
   syn Constraint =
-  -- {stoch} ⊆ lhs ⇒ {stoch} ⊆ res
-  | CstrStochApp { lhs: Name, res: Name }
   -- {const} ⊆ lhs AND {stoch} ⊆ rhs ⇒ {stoch} ⊆ res
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
   -- {const with arity > 0} ⊆ lhs ⇒ {const with arity-1} ⊆ res
@@ -31,7 +29,6 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
 
 
   sem initConstraint (graph: CFAGraph) =
-  | CstrStochApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrConstStochApp r & cstr ->
     let graph = initConstraintName r.lhs graph cstr in
     initConstraintName r.rhs graph cstr
@@ -39,8 +36,6 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
   | CstrStochMatchCond r & cstr -> initConstraintName r.target graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrStochApp { lhs = lhs, res = res } ->
-    match update.1 with AVStoch _ & av then addData graph av res else graph
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
     if nameEq update.0 lhs then
       match update.1 with AVConst _ then
@@ -69,11 +64,6 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
     else graph
 
   sem constraintToString (env: PprintEnv) =
-  | CstrStochApp { lhs = lhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env res with (env,res) in
-    (env, join [
-      "{stoch} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", res ])
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
     match pprintVarName env lhs with (env,lhs) in
     match pprintVarName env rhs with (env,rhs) in
@@ -108,7 +98,7 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
   | TmLet { ident = ident, body = TmApp app} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then [
-        CstrStochApp { lhs = l.ident, res = ident},
+        cstrStochDirect l.ident ident,
         CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident},
         CstrConstApp { lhs = l.ident, res = ident}
       ]
