@@ -34,7 +34,7 @@ let config = [
     lam p: ArgPart.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],
-    "The selected resampling method, for inference algorithms where applicable. The supported methods are: weight, align, manual.",
+    "The selected resample placement method, for inference algorithms where applicable. The supported methods are: weight, align, manual.",
     lam p: ArgPart.
       let o: Options = p.options in {o with resample = argToString p}),
   ([("--print-model", "", "")],
