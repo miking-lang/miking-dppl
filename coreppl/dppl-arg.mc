@@ -4,6 +4,7 @@ include "arg.mc"
 type Options = {
   method: String,
   particles : Int,
+  resample: String,
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
@@ -14,6 +15,7 @@ type Options = {
 let default = {
   method = "",
   particles = 5000,
+  resample = "manual",
   printModel = false,
   printMCore = false,
   exitBefore = false,
@@ -31,6 +33,10 @@ let config = [
           "of the following methods are used: importance, rootppl-smc."],
     lam p: ArgPart.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
+  ([("--resample", " ", "<method>")],
+    "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (sample only at manually defined resampling locations).",
+    lam p: ArgPart.
+      let o: Options = p.options in {o with resample = argToString p}),
   ([("--print-model", "", "")],
     "The parsed model is pretty printed before inference.",
     lam p: ArgPart.

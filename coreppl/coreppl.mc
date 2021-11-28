@@ -420,9 +420,22 @@ lang CorePPL =
 
 lang CorePPLInference = CorePPL + SMC -- + Importance
 
+let pplKeywords = [
+  "assume", "observe", "weight", "resample", "plate", "Uniform", "Bernoulli",
+  "Poisson", "Beta", "Gamma", "Categorical", "Multinomial", "Dirichlet",
+  "Exponential", "Empirical", "Gaussian", "Binomial"
+]
+
+let mexprPPLKeywords = concat mexprKeywords pplKeywords
+
 lang MExprPPL =
   CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
   MExprTypeAnnot + MExprTypeLiftUnOrderedRecords + MExprArity
+
+  sem mexprPPLToString =
+  | expr -> exprToStringKeywords mexprPPLKeywords expr
+
+end
 
 lang Test = MExprPPL + MExprANF
 
@@ -439,14 +452,14 @@ let tmWeight = weight_ (float_ 1.5) in
 ------------------------
 -- TODO(dlunde,2021-04-28): TmInfer test
 
-utest expr2str tmAssume
+utest mexprPPLToString tmAssume
 with strJoin "\n" [
   "assume",
   "  (Bernoulli",
   "     0.7)"
 ] using eqString in
 
-utest expr2str tmObserve
+utest mexprPPLToString tmObserve
 with strJoin "\n" [
   "observe",
   "  1.5",
@@ -455,7 +468,7 @@ with strJoin "\n" [
   "     2.)"
 ] using eqString in
 
-utest expr2str tmWeight
+utest mexprPPLToString tmWeight
 with strJoin "\n" [
   "weight",
   "  1.5"

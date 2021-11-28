@@ -96,13 +96,13 @@ end
 -----------------
 
 let resample_ = use Resample in
-  TmResample { ty = tyunknown_, info = NoInfo () }
+  TmResample { ty = tyunit_, info = NoInfo () }
 
 lang SMC = Resample
 
 lang Test =
   Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
-  + MExprTypeLiftUnOrderedRecords
+  + MExprTypeLiftUnOrderedRecords + MExprPrettyPrint
 
 mexpr
 
@@ -113,7 +113,7 @@ use Test in
 -- PRETTY-PRINT TESTS --
 ------------------------
 
-utest expr2str resample_
+utest mexprToString resample_
 with strJoin "\n" [
   "resample"
 ] using eqString in

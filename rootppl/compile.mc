@@ -2,6 +2,7 @@
 
 include "../coreppl/coreppl.mc"
 include "../coreppl/dppl-parser.mc"
+include "../coreppl/align.mc"
 
 include "rootppl.mc"
 
@@ -22,7 +23,7 @@ include "mexpr/pprint.mc"
 -----------------------------------------
 
 lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
-  + SeqTypeNoStringTypeLift + MExprANF
+  + SeqTypeNoStringTypeLift + Align
 
   -- Compiler internals
   syn CExpr =
@@ -36,24 +37,6 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
   | CEResample _ & t -> t
-
-  -- ANF override
-  -- Ensures distributions are not lifted by ANF (first-class distributions not
-  -- supported in RootPPL)
-  sem normalize (k : Expr -> Expr) =
-  | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
-    normalizeDist
-      (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
-      dist
-  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
-    normalizeName
-      (lam value.
-        normalizeDist
-          (lam dist.
-             k (TmObserve {{ t with value = value }
-                               with dist = TmDist { td with dist = dist}}))
-          dist)
-      value
 
   -- Compilation of distributions
   sem compileDist (env: CompileCEnv) =
@@ -97,6 +80,31 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
 
 end
 
+lang MExprPPLRootPPLCompileANF = MExprPPLRootPPLCompile + MExprANF
+
+  -- ANF override
+  -- Ensures distributions are not lifted by ANF (first-class distributions not
+  -- supported in RootPPL)
+  sem normalize (k : Expr -> Expr) =
+  | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
+    normalizeDist
+      (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
+      dist
+  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
+    normalizeName
+      (lam value.
+        normalizeDist
+          (lam dist.
+             k (TmObserve {{ t with value = value }
+                               with dist = TmDist { td with dist = dist}}))
+          dist)
+      value
+
+end
+
+lang MExprPPLRootPPLCompileANFAll = MExprPPLRootPPLCompile + MExprANFAll
+
+
 ----------------------
 -- ROOTPPL COMPILER --
 ----------------------
@@ -118,10 +126,10 @@ let _debugPrint: [CTop] -> [CTop] -> [CStmt] -> [CStmt] -> String =
       else error (join ["Duplicate name in _debugPrint: ", nameGetStr name])
     in
     let env = foldl addName pprintEnvEmpty cCompilerNames in
-    match mapAccumL (printCTop 0) env types with (env,types) then
-    match mapAccumL (printCTop 0) env tops with (env,tops) then
-    match printCStmts 0 env detInits with (env,detInits) then
-    match printCStmts 0 env stochInits with (env,stochInits) then
+    match mapAccumL (printCTop 0) env types with (env,types) in
+    match mapAccumL (printCTop 0) env tops with (env,tops) in
+    match printCStmts 0 env detInits with (env,detInits) in
+    match printCStmts 0 env stochInits with (env,stochInits) in
 
       let types = strJoin (pprintNewline 0) types in
       let tops = strJoin (pprintNewline 0) tops in
@@ -135,11 +143,6 @@ let _debugPrint: [CTop] -> [CTop] -> [CStmt] -> [CStmt] -> String =
         "--- STOCH INITS ---\n",
         stochInits,"\n\n"
       ]
-
-    else never
-    else never
-    else never
-    else never
 
 -- Compiler names
 let nameRetAddr = nameSym "ra"
@@ -223,9 +226,8 @@ let catIdents: Expr -> Map Name Int =
         -- If recursive functions, make two passes through them
         let f = lam acc.
           foldl (lam acc. lam b: RecLetBinding.
-            match b with { ident = ident, body = body } then
-              updateAcc acc ident body
-            else never
+            match b with { ident = ident, body = body } in
+            updateAcc acc ident body
           ) acc bindings in
         rec (f (f acc)) inexpr
 
@@ -250,7 +252,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- RUN BASE C COMPILER --
     -------------------------
 
-    match compile typeEnv prog with (env, types, tops, inits, retTy) then
+    match compile typeEnv prog with (env, types, tops, inits, retTy) in
 
     -- print (_debugPrint types tops inits inits);
 
@@ -301,7 +303,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         else (snoc acc.0 top, acc.1)
       ) ([],[]) tops in
 
-    match res with (tops,globals) then
+    match res with (tops,globals) in
 
     ------------------
     -- DIVIDE INITS --
@@ -342,7 +344,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       ) ([],[]) inits
     in
 
-    match inits with (detInits, stochInits) then
+    match inits with (detInits, stochInits) in
 
     -- print (_debugPrint types tops detInits stochInits);
 
@@ -396,7 +398,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         else (snoc acc.0 top, acc.1)
       ) ([], mapEmpty nameCmp) tops in
 
-    match res with (tops, detFunMap) then
+    match res with (tops, detFunMap) in
 
 
     ----------------------------
@@ -1029,14 +1031,13 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         let acc = {{ acc with next = Collapse ()}
                          with block = []} in
         let acc = splitStmts acc sf stmts in
-        match createBlock sf nameInit acc with { tops = tops } then tops
-        else never
+        match createBlock sf nameInit acc with { tops = tops } in tops
     in
 
     -- Split functions into BBLOCKs
     let accSplit = emptyAccSplit in
     let tops = match splitFunctions accSplit tops with { tops = tops }
-               then tops else never in
+               in tops in
     let tops = concat tops (splitInit accSplit stochInitSF stochInits) in
 
     ------------------------------------
@@ -1136,7 +1137,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       ) ([],[]) tops
     in
 
-    match res with (funDecls, tops) then
+    match res with (funDecls, tops) in
 
     -----------------------------
     -- PUT EVERYTHING TOGETHER --
@@ -1236,16 +1237,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
       pre = detInits
     }
 
-    else never
-    else never
-    else never
-    else never
-    else never
 
 -- Entry point for compiler
-let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
+let rootPPLCompile: String -> Expr -> RPProg =
+  lam resample: String. lam prog.
 
-  -- print (expr2str prog); print "\n\n";
+  use MExprPPLRootPPLCompileANF in
+
+  -- print (mexprPPLToString prog); print "\n\n";
   -- dprint prog; print "\n\n";
 
   -- Symbolize with empty environment
@@ -1254,23 +1253,62 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
   -- Type annotate
   let prog: Expr = typeAnnot prog in
 
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
 
+  -- Resample at aligned weight if enabled
+  let prog =
+    -- Add resample after weights (given a predicate)
+    recursive let addResample: (Name -> Bool) -> Expr -> Expr =
+      lam pred. lam t.
+        let t = smap_Expr_Expr (addResample pred) t in
+        match t
+        with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
+           | TmLet ({ ident = ident, body = TmObserve _, inexpr = inexpr } & r)
+        then
+          if pred ident then
+            let resample = withInfo r.info resample_ in
+            let l = nlet_ (nameSym "resample") tyunit_ resample in
+            let l = withInfo r.info l in
+            let inexpr = bind_ l inexpr in
+            TmLet { r with inexpr = inexpr }
+          else t
+        else t
+    in
+    match      resample with "likelihood" then addResample (lam. true) prog
+    else match resample with "manual" then prog
+    else match resample with "align"  then
+
+      -- Do a _full_ ANF transformation (required by CFA and alignment)
+      use MExprPPLRootPPLCompileANFAll in
+      let progANFAll: Expr = normalizeTerm prog in
+
+      -- Do static analysis for stochastic value flow
+      let cfaRes = cfa progANFAll in
+
+      -- Propagate alignment information
+      let unaligned: Set Name = alignment cfaRes progANFAll in
+      let isAligned: Name -> Bool = lam n. not (setMem n unaligned) in
+
+      addResample isAligned prog
+
+    else error "Invalid resample option"
+  in
+
   -- dprint prog; print "\n\n";
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- Type lift
-  match typeLift prog with (env, prog) then
+  match typeLift prog with (env, prog) in
 
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- Remove redundant lets
   let prog: Expr = removeRedundantLets prog in
 
-  -- print (expr2str prog); print "\n\n";
+  -- print (mexprPPLToString prog); print "\n\n";
 
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in
@@ -1282,8 +1320,6 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 
   rpprog
 
-  else never
-
 -------------
 --- TESTS ---
 -------------
@@ -1292,14 +1328,14 @@ let rootPPLCompile: Expr -> RPProg = use MExprPPLRootPPLCompile in lam prog.
 -- then run unit tests in some way on each decomposed part in isolation. For
 -- now, they are at least better than nothing
 
-lang Test = MExprPPLRootPPLCompile
+lang Test = MExprPPLRootPPLCompileANF
 
 mexpr
 use Test in
 
 let test = lam cpplstr.
   let cppl = parseMExprPPLString cpplstr in
-  let rppl = rootPPLCompile cppl in
+  let rppl = rootPPLCompile "manual" cppl in
   printCompiledRPProg rppl
 in
 

@@ -10,7 +10,7 @@ let performInference = lam options: Options. lam ast.
     importanceSamplingInference options ast
   else match options.method with "rootppl-smc" then
     -- dprint ast
-    writeFile "out.cu" (printCompiledRPProg (rootPPLCompile ast))
+    writeFile "out.cu" (printCompiledRPProg (rootPPLCompile options.resample ast))
     -- print (join ["TODO: perform SMC using RootPPL with ",
     --              int2string options.particles, " particles."])
   else
