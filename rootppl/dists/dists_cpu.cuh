@@ -75,4 +75,18 @@ int binomial(double p, int n) {
     #endif
 }
 
+/**
+ * Returns a sample from Student's t-distribution. Parametrization 2021.
+ *
+ * @param k > 0 real, degrees of freedom.
+ */
+DEV floating_t student_t_classic(RAND_STATE_DECLARE floating_t k) {
+  std::student_t_distribution<double> dist(k);
+  #ifdef _OPENMP
+  return dist(genWrappers[omp_get_thread_num()].gen);
+  #else
+  return dist(gen);
+  #endif
+}
+
 #endif
