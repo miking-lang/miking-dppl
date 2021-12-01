@@ -81,6 +81,7 @@ args <- commandArgs(trailingOnly = TRUE)
 renormalize_weights(test_file = "testStudentClassic", numparts = args[[1]])
 renormalize_weights(test_file = "testStudent", numparts = args[[1]])
 do_test(left= "testStudentClassic", right = "testStudentClassicBirch", size = 1000)
+do_test(left= "testStudentClassic", right = "testStudentClassicR", size = 1000)
 do_test(left= "testStudent", right = "testStudentBirch", size = 1000)
 
 renormalize_weights(test_file = "testNormalInverseGammaNormal", numparts = args[[1]])
