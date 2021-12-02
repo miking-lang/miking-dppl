@@ -5,14 +5,15 @@ NUMPART=10000
 NUMRUN=10
 CORES=32
 GPUARCH=75
-# test var needs to be set
-#
-#
-#for test in testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTimeDelayed  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed  testWaitingTimeMultipass testWaitingTimeDelayedMultipass testBernoulli testBetaBernoulli
-for test in testChiSquared testStudentClassic testStudent testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testWaitingTime testWaitingTimeDelayed 
+
+
+
+# GPU
+echo "=============GPU TESTS============="
+for test in testStudentClassic testWaitingTime testWaitingTimeDelayed
 do
     rootppl clean
-    rootppl -j $CORES $TESTDIR/$test.cu
+    rootppl $TESTDIR/$test.cu --arch $GPUARCH -j $CORES
     ./program $NUMPART $NUMRUN
     mv $TESTDIR/$test.csv $TESTDIR/$DATADIR
     cp log_norm_const.txt $TESTDIR/$DATADIR/$test.logz
@@ -20,11 +21,16 @@ done
 echo
 echo
 cd $TESTDIR
-Rscript ./do_tests.R $NUMPART
+
+for test in testStudentClassic testWaitingTime
+do
+    Rscript ./do_$test.R $NUMPART
+done
+
 
 
 echo "Removing data..."
-for test in testChiSquared testStudentClassic testStudent testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testWaitingTime testWaitingTimeDelayed
+for test in testStudentClassic testWaitingTime testWaitingTimeDelayed
 ##for test in testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTimeDelayed  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed testWaitingTimeMultipass testWaitingTimeDelayedMultipass testBernoulli testBetaBernoulli
 #for test in  testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass 
 do
