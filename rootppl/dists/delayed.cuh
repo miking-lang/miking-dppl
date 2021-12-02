@@ -133,6 +133,8 @@ DEV floating_t gammaPoissonScore(floating_t x, floating_t t, gamma_t& rate, floa
  * m, σ^2 ~ NIG(m0, v, a, b)
  * f ~ N(m, σ^2)
  *
- * @param prior parameters (will be updated).
+ * @param prior parameters (mutable, will be updated).
+ *
+ * @retun a sample from normal distribution, with NIG-prior.
  */
-DEV floating_t sample_NormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior);
+DEV floating_t normalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior);

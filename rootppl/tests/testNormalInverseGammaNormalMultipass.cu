@@ -23,7 +23,6 @@ const std::string testName = "testNormalInverseGammaNormalMultipass";
 int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
-
 INIT_MODEL(floating_t);
 
 BBLOCK(testNormalInverseGammaNormal, {
@@ -31,11 +30,11 @@ BBLOCK(testNormalInverseGammaNormal, {
      and then check the distribution of the second waiting time against WebPPL.*/
     normalInverseGamma_t prior(m0, v, a, b);
     
-    floating_t statistic = sample_NormalInverseGammaNormal(prior);
-    floating_t statistic2 = sample_NormalInverseGammaNormal(prior);
-    floating_t statistic3 = sample_NormalInverseGammaNormal(prior);
+    floating_t statistic = SAMPLE(normalInverseGammaNormal, prior);
+    floating_t statistic2 = SAMPLE(normalInverseGammaNormal, prior);
+    floating_t statistic3 = SAMPLE(normalInverseGammaNormal, prior);
     for (int i = 0; i < passes; i++) {
-      statistic3 = sample_NormalInverseGammaNormal(prior);
+      statistic3 = SAMPLE(normalInverseGammaNormal, prior);
     }
     
     // TODO do it with SAMPLE, instead of invoking the function directly
@@ -43,9 +42,6 @@ BBLOCK(testNormalInverseGammaNormal, {
     PSTATE = statistic3;
     NEXT=NULL;
 });
-
-
-
 
 CALLBACK(stats, {
     std::string fileName = "tests/" + testName + ".csv";
@@ -59,8 +55,6 @@ CALLBACK(stats, {
       printf("Couldnot open file %s\n", fileName.c_str());
     }
 })
-
-
 
 MAIN({
     if(argc > 2) { 

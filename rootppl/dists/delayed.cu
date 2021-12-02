@@ -76,7 +76,7 @@ DEV floating_t gammaPoissonScore(floating_t x, floating_t t, gamma_t& rate, floa
   return score;
 }
 
-DEV floating_t sample_NormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior) {
+DEV floating_t normalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior) {
   floating_t m0 = prior.m0;
   floating_t v = prior.v;
   floating_t a = prior.a;
