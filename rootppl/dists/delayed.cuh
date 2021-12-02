@@ -88,11 +88,12 @@ HOST DEV floating_t betaBernoulliScore(beta_t& p, int x);
  *
  * E.g. to sample a waiting time.
  *
- * t - returns waiting time
- * rate - a reference to the prior (will modify)
- * f - factor by which the scale may be multiplied
+ * @param rate a reference to the prior struct (mutable, side-effect)
+ * @param f factor (multiplier) by which the scale will be multiplied
+ *
+ * @return waiting time until an exponentially distributed event with a gamma prior
  */
-DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f);
+DEV floating_t gammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f);
 
 
 /**

@@ -46,7 +46,7 @@ HOST DEV floating_t betaBernoulliScore(beta_t& p, int x) {
 }
 
 
-DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f) {
+DEV floating_t gammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f) {
   floating_t t = SAMPLE(lomax, 1/(f*rate.theta), rate.k);
 
   assert(0.0 < rate.theta/(1 + t*f*rate.theta));					  
