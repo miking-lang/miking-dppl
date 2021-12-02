@@ -64,9 +64,9 @@ do_test_logz = function(left, right, dir = "test-data//") {
 
 args <- commandArgs(trailingOnly = TRUE)
 
-#renormalize_weights(test_file = "testWaitingTime", numparts = args[[1]])
-#renormalize_weights(test_file = "testWaitingTimeDelayed", numparts = args[[1]])
-#do_test(left= "testWaitingTime", right = "testWaitingTimeDelayed", size = 1000)
+renormalize_weights(test_file = "testWaitingTime", numparts = args[[1]])
+renormalize_weights(test_file = "testWaitingTimeDelayed", numparts = args[[1]])
+do_test(left= "testWaitingTime", right = "testWaitingTimeDelayed", size = 1000)
 
 #renormalize_weights(test_file = "testObserveWaitingTime", numparts = args[[1]])
 #renormalize_weights(test_file = "testObserveWaitingTimeDelayed", numparts = args[[1]])
