@@ -23,25 +23,19 @@ const std::string testName = "testObserveWaitingTimeDelayed";
 int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
-
-INIT_MODEL(floating_t, 1);
-
+INIT_MODEL(floating_t);
 
 BBLOCK(testObserveWaitingTimeDelayedRef, {
     gamma_t lambda(k, theta);
-    floating_t ret0 = score_GammaExponential(observedTime, lambda, factor);
-    WEIGHT(ret0);
 
-    floating_t ret1 = sample_GammaExponential(lambda, factor);
+    //floating_t ret0 = score_GammaExponential(observedTime, lambda, factor);
+    //WEIGHT(ret0);
+    OBSERVE(gammaExponential, observedTime, lambda, factor);
+
+    floating_t ret1 = SAMPLE(gammaExponential, lambda, factor);
     PSTATE = ret1;
-    PC++;
+    NEXT = NULL;
   });
-
-
-
-
-
-
 
 CALLBACK(stats, {
     std::string fileName = "tests/" + testName + ".csv";
@@ -56,8 +50,6 @@ CALLBACK(stats, {
     }
 })
 
-
-
 MAIN({
     if(argc > 2) { 
       numRuns = atoi(argv[2]);			
@@ -65,10 +57,8 @@ MAIN({
     else {
       numRuns = 1;
     }
-    
-   
-    ADD_BBLOCK(testObserveWaitingTimeDelayedRef);
+     
+    FIRST_BBLOCK(testObserveWaitingTimeDelayedRef);
 
-   
     SMC(stats);
   })

@@ -9,7 +9,7 @@ GPUARCH=75
 #
 #
 #for test in testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTimeDelayed  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed  testWaitingTimeMultipass testWaitingTimeDelayedMultipass testBernoulli testBetaBernoulli
-for test in testChiSquared testStudentClassic testStudent testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testWaitingTime testWaitingTimeDelayed 
+for test in testChiSquared testStudentClassic testStudent testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed
 do
     rootppl clean
     rootppl -j $CORES $TESTDIR/$test.cu

@@ -23,10 +23,7 @@ const std::string testName = "testObserveWaitingTime";
 int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
-
-INIT_MODEL(floating_t, 1);
-
-
+INIT_MODEL(floating_t);
 
 BBLOCK(testObserveWaitingTime, {
     floating_t lambda = SAMPLE(gamma, k, theta);
@@ -34,11 +31,8 @@ BBLOCK(testObserveWaitingTime, {
     
     floating_t t0 = SAMPLE(exponential, lambda*factor);
     PSTATE = t0;
-    PC++;
+    NEXT = NULL;
   });
-
-
-
 
 CALLBACK(stats, {
     std::string fileName = "tests/" + testName + ".csv";
@@ -53,8 +47,6 @@ CALLBACK(stats, {
     }
 })
 
-
-
 MAIN({
     if(argc > 2) { 
       numRuns = atoi(argv[2]);			
@@ -63,8 +55,7 @@ MAIN({
       numRuns = 1;
     }
     
-   
-    ADD_BBLOCK(testObserveWaitingTime);
+    FIRST_BBLOCK(testObserveWaitingTime);
     
     SMC(stats);
   })

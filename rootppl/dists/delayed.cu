@@ -35,7 +35,6 @@ DEV floating_t betaBernoulli(RAND_STATE_DECLARE beta_t& p) {
   return x;
 }
 
-
 HOST DEV floating_t betaBernoulliScore(beta_t& p, int x) {
   floating_t s0 = log(p.beta);
   if (x) {
@@ -44,7 +43,6 @@ HOST DEV floating_t betaBernoulliScore(beta_t& p, int x) {
   
   return s0 - log(p.alpha + p.beta);
 }
-
 
 DEV floating_t gammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f) {
   floating_t t = SAMPLE(lomax, 1/(f*rate.theta), rate.k);
@@ -55,10 +53,7 @@ DEV floating_t gammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f) 
   return t;
 }
 
-
-
-DEV floating_t score_GammaExponential( floating_t x, gamma_t& rate,  floating_t f) {
-  
+DEV floating_t gammaExponentialScore( floating_t x, gamma_t& rate,  floating_t f) {
   floating_t score = lomaxScore(x, 1/(f*rate.theta), rate.k);
 
   assert(0.0 < rate.theta/(1 + x*f*rate.theta));
@@ -67,7 +62,6 @@ DEV floating_t score_GammaExponential( floating_t x, gamma_t& rate,  floating_t 
   rate.theta =  rate.theta/(1 + x*f*rate.theta);
   return score;
 }
-
 
 DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, floating_t f)
 {
