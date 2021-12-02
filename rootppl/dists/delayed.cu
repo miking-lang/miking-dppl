@@ -89,3 +89,25 @@ DEV floating_t normalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t&
   prior.b  = b + 0.5*(v/(v + 1)*(f - m0)*(f - m0));
   return f;
 }
+
+DEV floating_t linearNormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior, floating_t aleph, floating_t c, floating_t s2) {
+  floating_t m0 = prior.m0;
+  floating_t v = prior.v;
+  floating_t a = prior.a;
+  floating_t b = prior.b;
+  //floating_t f = SAMPLE(student_t, 2.0*a, m0, (1.0 + 1.0/v)*2.0*b);
+  floating_t f = SAMPLE(student_t, 2.0*a, aleph*m0 + c, (s2 + aleph*aleph/v)*b/a);
+  
+  floating_t l = 1.0/s2;
+  floating_t y = f - c;
+  floating_t z = l*y;
+  floating_t nu_prime = (v*m0 + aleph*z);
+
+  prior.v  = v + aleph*l*aleph;
+
+  prior.m0 = nu_prime/prior.v;
+  prior.a  = a + 0.5;
+  prior.b  = b + 0.5*(y*z + v*m0*m0 - nu_prime*nu_prime/prior.v);
+
+  return f;
+}

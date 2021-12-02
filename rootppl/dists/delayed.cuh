@@ -138,3 +138,20 @@ DEV floating_t gammaPoissonScore(floating_t x, floating_t t, gamma_t& rate, floa
  * @retun a sample from normal distribution, with NIG-prior.
  */
 DEV floating_t normalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior);
+
+/**
+ * Returns a Sample from LinearNormalInverseGammaNormal (delayed)
+ *
+ * E.g. to sample a factor by which the speciation rate is multiplied.
+ *
+ * m, σ^2 ~ NIG(m0, v, a, b)
+ * f ~ N(aleph*m + c, s2*σ^2)
+ *
+ * @param prior struct of m0, v, a, b prior parameters (mutable, will be updated).
+ * @param aleph scale of mean
+ * @param c offset of mean
+ * @param s2 scale of variance
+ *
+ * @retun a sample from normal distribution, with NIG-prior.
+ */
+DEV floating_t linearNormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior, floating_t aleph, floating_t c, floating_t s2);
