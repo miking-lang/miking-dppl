@@ -63,7 +63,7 @@ DEV floating_t gammaExponentialScore( floating_t x, gamma_t& rate,  floating_t f
   return score;
 }
 
-DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, floating_t f)
+DEV floating_t gammaPoissonScore(floating_t x, floating_t t, gamma_t& rate, floating_t f)
 {
   assert(0.0 <= f);
   assert(0.0 <= t);
@@ -75,8 +75,6 @@ DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, flo
   rate.theta = rate.theta / (1 + t*f*rate.theta);
   return score;
 }
-
-
 
 DEV floating_t sample_NormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior) {
   floating_t m0 = prior.m0;

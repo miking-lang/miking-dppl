@@ -23,25 +23,20 @@ const std::string testName = "testObserveXEventsDelayed";
 int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
-
-INIT_MODEL(floating_t, 1);
-
-
+INIT_MODEL(floating_t);
 
 BBLOCK(testObserveXEventsDelayedRef, {
     gamma_t lambda(k, theta);
     
-    floating_t ret0 = score_GammaPoisson(nEvents, elapsedTime, lambda, factor);
+    //    floating_t ret0 = score_GammaPoisson(nEvents, elapsedTime, lambda, factor);
+    //    WEIGHT(ret0);
+    OBSERVE(gammaPoisson, nEvents, elapsedTime, lambda, factor);
     
-    WEIGHT(ret0);
-    
-    floating_t ret1 = sample_GammaExponential(lambda, factor);
+    floating_t ret1 = SAMPLE(gammaExponential,lambda, factor);
     
     PSTATE = ret1;
-    PC++;
+    NEXT = NULL;
   });
-
-
 
 CALLBACK(stats, {
     std::string fileName = "tests/" + testName + ".csv";
@@ -56,8 +51,6 @@ CALLBACK(stats, {
     }
 })
 
-
-
 MAIN({
     if(argc > 2) { 
       numRuns = atoi(argv[2]);			
@@ -66,7 +59,7 @@ MAIN({
       numRuns = 1;
     }
     
-    ADD_BBLOCK(testObserveXEventsDelayedRef);
+    FIRST_BBLOCK(testObserveXEventsDelayedRef);
     
     SMC(stats);
   })

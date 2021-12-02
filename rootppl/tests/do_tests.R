@@ -73,10 +73,10 @@ renormalize_weights(test_file = "testObserveWaitingTimeDelayed", numparts = args
 do_test(left= "testObserveWaitingTime", right = "testObserveWaitingTimeDelayed", size = 1000)
 do_test_logz(left = "testObserveWaitingTime", right = "testObserveWaitingTimeDelayed")
 
-#renormalize_weights(test_file = "testObserveXEvents", numparts = args[[1]])
-#renormalize_weights(test_file = "testObserveXEventsDelayed", numparts = args[[1]])
-#do_test(left= "testObserveXEvents", right = "testObserveXEventsDelayed", size = 1000)
-#do_test_logz(left = "testObserveXEvents", right = "testObserveXEvents")
+renormalize_weights(test_file = "testObserveXEvents", numparts = args[[1]])
+renormalize_weights(test_file = "testObserveXEventsDelayed", numparts = args[[1]])
+do_test(left= "testObserveXEvents", right = "testObserveXEventsDelayed", size = 1000)
+do_test_logz(left = "testObserveXEvents", right = "testObserveXEvents")
 
 renormalize_weights(test_file = "testStudentClassic", numparts = args[[1]])
 renormalize_weights(test_file = "testStudent", numparts = args[[1]])

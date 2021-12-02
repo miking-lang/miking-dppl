@@ -116,12 +116,13 @@ DEV floating_t gammaExponentialScore(floating_t x, gamma_t& rate,  floating_t f)
  * 
  * E.g. to observe a number of speciation points.
  * 
- * score - returns the log score
- * x - observation
- * rate - reference to rate (will modify)
- * f - factor by which the scale may be multiplied
+ * @param x  observation.
+ * @param rate prior gamma rate as a reference (mutable, side effect)
+ * @param f factor (multiplier) by which the scale will be multiplied
+ *
+ * @return returns the log score.
  */
-DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, floating_t f);
+DEV floating_t gammaPoissonScore(floating_t x, floating_t t, gamma_t& rate, floating_t f);
 
 
 /**
