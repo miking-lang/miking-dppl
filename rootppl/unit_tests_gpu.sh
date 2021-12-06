@@ -10,7 +10,7 @@ GPUARCH=75
 
 # GPU
 echo "=============GPU TESTS============="
-for test in testStudentClassic testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed
+for test in testStudentClassic testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testLinearNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalComplicated
 do
     rootppl clean
     rootppl $TESTDIR/$test.cu --arch $GPUARCH -j $CORES
@@ -22,7 +22,7 @@ echo
 echo
 cd $TESTDIR
 
-for test in testStudentClassic testWaitingTime testObserveWaitingTime testObserveXEvents
+for test in testStudentClassic testWaitingTime testObserveWaitingTime testObserveXEvents testLinearNormalInverseGammaNormal testLinearNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalComplicated
 do
     Rscript ./do_$test.R $NUMPART
 done
@@ -30,7 +30,7 @@ done
 
 
 echo "Removing data..."
-for test in testStudentClassic testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed
+for test in testStudentClassic testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testLinearNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalComplicated
 ##for test in testChiSquared testStudentClassic testStudent testWaitingTime testWaitingTimeDelayed  testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLogAlphaSigmaSquared testLogAlphaSigmaSquaredDelayed testWaitingTimeMultipass testWaitingTimeDelayedMultipass testBernoulli testBetaBernoulli
 #for test in  testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass 
 do

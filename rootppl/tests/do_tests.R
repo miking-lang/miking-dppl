@@ -85,10 +85,20 @@ do_test(left= "testStudentClassic", right = "testStudentClassicR", size = 1000)
 do_test(left= "testStudent", right = "testStudentBirch", size = 1000)
 
 renormalize_weights(test_file = "testNormalInverseGammaNormal", numparts = args[[1]])
+renormalize_weights(test_file = "testLinearNormalInverseGammaNormal", numparts = args[[1]])
 do_test(left= "testNormalInverseGammaNormal", right = "testNormalInverseGammaNormalBirch", size = 1000)
+do_test(left= "testNormalInverseGammaNormal", right = "testLinearNormalInverseGammaNormal", size = 1000)
+
+
 
 renormalize_weights(test_file = "testNormalInverseGammaNormalMultipass", numparts = args[[1]])
+renormalize_weights(test_file = "testLinearNormalInverseGammaNormalMultipass", numparts = args[[1]])
 do_test(left= "testNormalInverseGammaNormalMultipass", right = "testNormalInverseGammaNormalBirchMultipass", size = 1000)
+do_test(left= "testNormalInverseGammaNormalMultipass", right = "testLinearNormalInverseGammaNormalMultipass", size = 1000)
+
+
+renormalize_log_weights_stable(test_file = "testLinearNormalInverseGammaNormalComplicated", subsample_size = args[[1]])
+do_test(left= "testLinearNormalInverseGammaNormalComplicated", right = "testLinearNormalInverseGammaNormalComplicatedBirch", size = 1000)
 
 #renormalize_weights(test_file = "testLogAlphaSigmaSquared", numparts = args[[1]])
 #do_test(left= "testLogAlphaSigmaSquared", right = "testLogAlphaSigmaSquaredDelayed", size = 1000)
