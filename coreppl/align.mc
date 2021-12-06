@@ -117,6 +117,7 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
     | PatInt _
     | PatChar _
     | PatBool _
+    | PatRecord _
     ) & pat ->
     -- We only generate these constraint where a match can fail, causing a
     -- stochastic branch if the failed value is stochastic.
@@ -686,6 +687,31 @@ let t = _parse "
 utest _test false t ["f"] with [
   ("f", true)
 ] using eqTest in
+
+-- Matching on stochastic record
+let t = _parse "
+  let r =
+    if assume (Bernoulli 0.5) then
+      { a = 1, b = 2 }
+    else
+      { a = 2, b = 1 }
+  in
+  let res =
+    match r with { a = 1, b = 2 } then
+      let t1 = 1 in
+      t1
+    else
+      let t2 = 1 in
+      t2
+  in
+  res
+------------------------" in
+utest _test false t ["t1", "t2", "res"] with [
+  ("t1", false),
+  ("t2", false),
+  ("res", true)
+] using eqTest in
+
 
 -- Test in `models/crbd/crbd-unaligned.mc`
 let t = symbolizeExpr symEnvEmpty (getAst "models/crbd/crbd-unaligned.mc") in
