@@ -116,6 +116,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDExp { rate: CExpr }
   | CDEmpirical { samples: CExpr }
   | CDUniform { a: CExpr, b: CExpr }
+  | CDNormal { mu: CExpr, sigma: CExpr }
   | CDPoisson { lambda: CExpr }
   | CDGamma { k: CExpr, theta: CExpr }
 
@@ -130,6 +131,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDExp t -> f acc t.rate
   | CDEmpirical t -> f acc t.samples
   | CDUniform t -> f (f acc t.a) t.b
+  | CDNormal t -> f (f acc t.mu) t.sigma
   | CDPoisson t -> f acc t.lambda
   | CDGamma t -> f (f acc t.k) t.theta
 
@@ -144,6 +146,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CDExp t -> CDExp { t with rate = f t.rate }
   | CDEmpirical t -> CDEmpirical { t with samples = f t.samples }
   | CDUniform t -> CDUniform {{ t with a = f t.a } with b = f t.b }
+  | CDNormal t -> CDNormal {{ t with mu = f t.mu } with sigma = f t.sigma }
   | CDPoisson t -> CDPoisson { t with lambda = f t.lambda }
   | CDGamma t -> CDGamma {{ t with k = f t.k } with theta = f t.theta }
 
@@ -321,6 +324,13 @@ lang RootPPL = CAst + CPrettyPrint
     match printCExpr env a with (env,a) then
       match printCExpr env b with (env,b) then
         (env, strJoin ", " ["uniform", a, b])
+      else never
+    else never
+
+  | CDNormal { mu = mu, sigma = sigma } ->
+    match printCExpr env mu with (env,mu) then
+      match printCExpr env sigma with (env,sigma) then
+        (env, strJoin ", " ["normal", mu, sigma])
       else never
     else never
 
