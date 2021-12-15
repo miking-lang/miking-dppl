@@ -229,7 +229,7 @@ DEV void multivariateNormal(RAND_STATE_DECLARE floating_t mu[n], floating_t (&co
  *
  * @param k > 0 real, degrees of freedom.
  */
-DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k);
+DEV floating_t chiSquared(RAND_STATE_DECLARE floating_t k);
 
 /**
  * Returns a sample from the 3-parameter-Student t distribution.
@@ -238,13 +238,13 @@ DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k);
  * @param mu location.
  * @param v scale.
  */
-DEV floating_t student_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v);
+DEV floating_t linearStudent_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v);
 
 /**
  * Returns a sample from Student's t-distribution. Parametrization 2021.
  *
  * @param k > 0 real, degrees of freedom.
  */
-DEV floating_t student_t_classic(RAND_STATE_DECLARE floating_t k);
+DEV floating_t student_t(RAND_STATE_DECLARE floating_t k);
 
 #endif

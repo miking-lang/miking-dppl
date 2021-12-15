@@ -22,9 +22,7 @@ int numRuns; // number of runs supplied by the command line
 INIT_MODEL(floating_t);
 
 BBLOCK(testChiSquared, {
-  /* We will sample two waiting times (so that we have an update on the rate),
-     and then check the distribution of the second waiting time against WebPPL.*/
-  floating_t statistic = SAMPLE(chi_squared, k);
+  floating_t statistic = SAMPLE(chiSquared, k);
        
   PSTATE = statistic;
   NEXT=NULL;

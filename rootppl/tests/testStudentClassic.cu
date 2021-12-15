@@ -24,7 +24,7 @@ INIT_MODEL(floating_t);
 BBLOCK(testStudentClassic, {
   /* We will sample two waiting times (so that we have an update on the rate),
      and then check the distribution of the second waiting time against WebPPL.*/
-  floating_t statistic = SAMPLE(student_t_classic, k);
+  floating_t statistic = SAMPLE(student_t, k);
        
   PSTATE = statistic;
   NEXT = NULL;
