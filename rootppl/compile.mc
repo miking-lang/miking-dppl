@@ -54,6 +54,8 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
     CDEmpirical { samples = compileExpr env samples }
   | DUniform { a = a, b = b } ->
     CDUniform { a = compileExpr env a, b = compileExpr env b }
+  | DGaussian { mu = mu, sigma = sigma } ->
+    CDNormal { mu = compileExpr env mu, sigma = compileExpr env sigma }
   | DPoisson { lambda = lambda } ->
     CDPoisson { lambda = compileExpr env lambda }
   | DGamma { k = k, theta = theta } ->
@@ -76,7 +78,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
   -- Do not lift polymorphic types. NOTE(dlunde,2021-10-08): This allows for
   -- some simple cases, like using `get` for lists.
   sem typeLiftType (env : TypeLiftEnv) =
-  | TySeq {info = _, ty = TyUnknown _} & ty -> (env,ty)
+  | TySeq {info = _, ty = TyVar _ | TyUnknown _} & ty -> (env,ty)
 
 end
 
