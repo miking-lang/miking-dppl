@@ -35,7 +35,6 @@ DEV floating_t betaBernoulli(RAND_STATE_DECLARE beta_t& p) {
   return x;
 }
 
-
 HOST DEV floating_t betaBernoulliScore(beta_t& p, int x) {
   floating_t s0 = log(p.beta);
   if (x) {
@@ -45,8 +44,7 @@ HOST DEV floating_t betaBernoulliScore(beta_t& p, int x) {
   return s0 - log(p.alpha + p.beta);
 }
 
-
-DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f) {
+DEV floating_t gammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f) {
   floating_t t = SAMPLE(lomax, 1/(f*rate.theta), rate.k);
 
   assert(0.0 < rate.theta/(1 + t*f*rate.theta));					  
@@ -55,10 +53,7 @@ DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floatin
   return t;
 }
 
-
-
-DEV floating_t score_GammaExponential( floating_t x, gamma_t& rate,  floating_t f) {
-  
+DEV floating_t gammaExponentialScore( floating_t x, gamma_t& rate,  floating_t f) {
   floating_t score = lomaxScore(x, 1/(f*rate.theta), rate.k);
 
   assert(0.0 < rate.theta/(1 + x*f*rate.theta));
@@ -68,8 +63,7 @@ DEV floating_t score_GammaExponential( floating_t x, gamma_t& rate,  floating_t 
   return score;
 }
 
-
-DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, floating_t f)
+DEV floating_t gammaPoissonScore(floating_t x, floating_t t, gamma_t& rate, floating_t f)
 {
   assert(0.0 <= f);
   assert(0.0 <= t);
@@ -82,17 +76,36 @@ DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, flo
   return score;
 }
 
-
-
-DEV floating_t sample_NormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior) {
+DEV floating_t normalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior) {
   floating_t m0 = prior.m0;
   floating_t v = prior.v;
   floating_t a = prior.a;
   floating_t b = prior.b;
-  floating_t f = SAMPLE(student_t, 2.0*a, m0, (1.0 + 1.0/v)*2.0*b);
+  floating_t f = SAMPLE(linearStudent_t, 2.0*a, m0, (1.0 + 1.0/v)*b/a);
   prior.m0 = (v*m0 + f)/(v + 1);
   prior.v  = v + 1;
   prior.a  = a + 0.5;
   prior.b  = b + 0.5*(v/(v + 1)*(f - m0)*(f - m0));
+  return f;
+}
+
+DEV floating_t linearNormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior, floating_t aleph, floating_t c, floating_t s2) {
+  floating_t m0 = prior.m0;
+  floating_t v = prior.v;
+  floating_t a = prior.a;
+  floating_t b = prior.b;
+  floating_t f = SAMPLE(linearStudent_t, 2.0*a, aleph*m0 + c, (s2 + aleph*aleph/v)*b/a);
+  
+  floating_t l = 1.0/s2;
+  floating_t y = f - c;
+  floating_t z = l*y;
+  floating_t nu_prime = (v*m0 + aleph*z);
+
+  prior.v  = v + aleph*l*aleph;
+
+  prior.m0 = nu_prime/prior.v;
+  prior.a  = a + 0.5;
+  prior.b  = b + 0.5*(y*z + v*m0*m0 - nu_prime*nu_prime/prior.v);
+
   return f;
 }

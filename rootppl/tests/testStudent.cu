@@ -21,15 +21,15 @@ int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
 
-INIT_MODEL(floating_t, 1);
+INIT_MODEL(floating_t);
 
 BBLOCK(testStudent, {
   /* We will sample two waiting times (so that we have an update on the rate),
      and then check the distribution of the second waiting time against WebPPL.*/
-  floating_t statistic = SAMPLE(student_t, k, mu, scale);
+  floating_t statistic = SAMPLE(linearStudent_t, k, mu, scale);
        
   PSTATE = statistic;
-  PC++;
+  NEXT=NULL;
 });
 
 
@@ -58,7 +58,7 @@ MAIN({
       numRuns = 1;
     }
     
-    ADD_BBLOCK(testStudent);
+    FIRST_BBLOCK(testStudent);
   
     SMC(stats);
   })

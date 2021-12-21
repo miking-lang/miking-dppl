@@ -12,7 +12,6 @@
 #include "utils/math.cuh"
 #include "dists/delayed.cuh"
 
-
 const floating_t k = 1000;
 const floating_t theta = 0.0001;
 const floating_t factor = 2;
@@ -24,8 +23,7 @@ const std::string testName = "testObserveXEvents";
 int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
-
-INIT_MODEL(floating_t, 1);
+INIT_MODEL(floating_t);
 
 
 BBLOCK(testObserveXEvents, {
@@ -36,7 +34,7 @@ BBLOCK(testObserveXEvents, {
      floating_t t0 = SAMPLE(exponential, lambda*factor);
     
      PSTATE = t0;
-     PC++;
+     NEXT=NULL;
   });
 
 
@@ -64,7 +62,7 @@ MAIN({
     }
     
 
-    ADD_BBLOCK(testObserveXEvents);
+    FIRST_BBLOCK(testObserveXEvents);
   
     SMC(stats);
   })

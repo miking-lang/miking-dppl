@@ -22,24 +22,20 @@ const std::string testName = "testNormalInverseGammaNormal";
 int numParts; // number of particles, supplied by first argument
 int numRuns; // number of runs supplied by the command line
 
-
-INIT_MODEL(floating_t, 1);
+INIT_MODEL(floating_t);
 
 BBLOCK(testNormalInverseGammaNormal, {
   /* We will sample two waiting times (so that we have an update on the rate),
      and then check the distribution of the second waiting time against WebPPL.*/
     normalInverseGamma_t prior(m0, v, a, b);
     
-    floating_t statistic = sample_NormalInverseGammaNormal(prior);
+    floating_t statistic = SAMPLE(normalInverseGammaNormal, prior);
   
     // TODO do it with SAMPLE, instead of invoking the function directly
        
     PSTATE = statistic;
-    PC++;
+    NEXT = NULL;
 });
-
-
-
 
 CALLBACK(stats, {
     std::string fileName = "tests/" + testName + ".csv";
@@ -54,8 +50,6 @@ CALLBACK(stats, {
     }
 })
 
-
-
 MAIN({
     if(argc > 2) { 
       numRuns = atoi(argv[2]);			
@@ -64,7 +58,7 @@ MAIN({
       numRuns = 1;
     }
     
-    ADD_BBLOCK(testNormalInverseGammaNormal);
+    FIRST_BBLOCK(testNormalInverseGammaNormal);
   
     SMC(stats);
   })

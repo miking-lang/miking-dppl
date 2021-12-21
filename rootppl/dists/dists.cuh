@@ -224,25 +224,27 @@ DEV void multivariateNormal(RAND_STATE_DECLARE floating_t mu[n], floating_t (&co
     transformColumn<n, n>(A, z, mu, ret);
 }*/
 
-
 /**
  * Returns a sample from the Chi-squared distribution.
  *
  * @param k > 0 real, degrees of freedom.
  */
-// Moved this to dists_cpu.cuh
-DEV floating_t chi_squared(RAND_STATE_DECLARE floating_t k);
-
+DEV floating_t chiSquared(RAND_STATE_DECLARE floating_t k);
 
 /**
- * Returns a sample from Student's t-distribution.
+ * Returns a sample from the 3-parameter-Student t distribution.
+ *
+ * @param k > 0 degrees of freedom.
+ * @param mu location.
+ * @param v scale.
+ */
+DEV floating_t linearStudent_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v);
+
+/**
+ * Returns a sample from Student's t-distribution. Parametrization 2021.
  *
  * @param k > 0 real, degrees of freedom.
- * @param mu location parameter.
- * @param v scale parameter.
  */
-DEV floating_t student_t(RAND_STATE_DECLARE floating_t k, floating_t mu, floating_t v);
-
-
+DEV floating_t student_t(RAND_STATE_DECLARE floating_t k);
 
 #endif

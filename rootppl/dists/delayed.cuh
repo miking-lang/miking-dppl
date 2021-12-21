@@ -88,11 +88,12 @@ HOST DEV floating_t betaBernoulliScore(beta_t& p, int x);
  *
  * E.g. to sample a waiting time.
  *
- * t - returns waiting time
- * rate - a reference to the prior (will modify)
- * f - factor by which the scale may be multiplied
+ * @param rate  the prior gamma rate as reference (mutable, side-effect)
+ * @param f factor (multiplier) by which the scale will be multiplied
+ *
+ * @return waiting time until an exponentially distributed event with a gamma prior
  */
-DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f);
+DEV floating_t gammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f);
 
 
 /**
@@ -100,12 +101,13 @@ DEV floating_t sample_GammaExponential(RAND_STATE_DECLARE gamma_t& rate, floatin
  * 
  * E.g. to observe a waiting time.
  * 
- * score - returns the log score
- * x - observation
- * rate - reference to rate (will modify)
- * f - factor by which the scale may be multiplied
+ * @param x  observation.
+ * @param rate the prior gamma rate as reference (mutable, side effect)
+ * @param f factor (multiplier) by which the scale will be multiplied
+ *
+ * @return the log score.
  */
-DEV floating_t score_GammaExponential(floating_t x, gamma_t& rate,  floating_t f);
+DEV floating_t gammaExponentialScore(floating_t x, gamma_t& rate,  floating_t f);
 
 
 
@@ -114,12 +116,13 @@ DEV floating_t score_GammaExponential(floating_t x, gamma_t& rate,  floating_t f
  * 
  * E.g. to observe a number of speciation points.
  * 
- * score - returns the log score
- * x - observation
- * rate - reference to rate (will modify)
- * f - factor by which the scale may be multiplied
+ * @param x  observation.
+ * @param rate prior gamma rate as a reference (mutable, side effect)
+ * @param f factor (multiplier) by which the scale will be multiplied
+ *
+ * @return returns the log score.
  */
-DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, floating_t f);
+DEV floating_t gammaPoissonScore(floating_t x, floating_t t, gamma_t& rate, floating_t f);
 
 
 /**
@@ -130,6 +133,25 @@ DEV floating_t score_GammaPoisson(floating_t x, floating_t t, gamma_t& rate, flo
  * m, σ^2 ~ NIG(m0, v, a, b)
  * f ~ N(m, σ^2)
  *
- * @param prior parameters (will be updated).
+ * @param prior parameters (mutable, will be updated).
+ *
+ * @retun a sample from normal distribution, with NIG-prior.
  */
-DEV floating_t sample_NormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior);
+DEV floating_t normalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior);
+
+/**
+ * Returns a Sample from LinearNormalInverseGammaNormal (delayed)
+ *
+ * E.g. to sample a factor by which the speciation rate is multiplied.
+ *
+ * m, σ^2 ~ NIG(m0, v, a, b)
+ * f ~ N(aleph*m + c, s2*σ^2)
+ *
+ * @param prior struct of m0, v, a, b prior parameters (mutable, will be updated).
+ * @param aleph scale of mean
+ * @param c offset of mean
+ * @param s2 scale of variance
+ *
+ * @retun a sample from normal distribution, with NIG-prior.
+ */
+DEV floating_t linearNormalInverseGammaNormal(RAND_STATE_DECLARE normalInverseGamma_t& prior, floating_t aleph, floating_t c, floating_t s2);
