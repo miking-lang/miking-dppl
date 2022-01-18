@@ -21,7 +21,7 @@ match result with ParseOK r then
   -- Print menu if not exactly one file argument
   if neqi (length r.strings) 1 then
     print (menu ());
-    exit 1
+    exit 0
   else
     -- Read and parse the file
     let filename = head r.strings in
