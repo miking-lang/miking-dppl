@@ -152,7 +152,7 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
     ) [] pnames
 
   -- Type: Expr -> CFAGraph
-  sem initGraph =
+  sem initGraph (graphData: Option GraphData) =
   | t ->
 
     -- Initial graph
