@@ -1,6 +1,6 @@
 
 /*
- * File common.cu contains definitions used by both sequential and parallel systematic resampling. 
+ * File common.cu contains definitions used by both sequential and parallel systematic resampling.
  */
 
 #include <random>
@@ -20,14 +20,14 @@ resampler_t initResampler(int numParticles, size_t progStateSize) {
     resampler_t resampler;
 
     #ifdef __NVCC__
-    generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions. 
+    generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions.
     allocateMemory<floating_t>(&resampler.wSquared, numParticles);
     #endif
 
     allocateMemory<int>(&resampler.ancestor, numParticles);
     allocateMemory<int>(&resampler.cumulativeOffspring, numParticles);
     allocateMemory<floating_t>(&resampler.prefixSum, numParticles);
-    
+
     resampler.auxParticles = allocateParticles(numParticles, progStateSize);
     resampler.progStateSize = progStateSize;
 
@@ -68,14 +68,14 @@ HOST DEV void destResamplerNested(resampler_t resampler) {
 */
 
 HOST DEV void copyParticle(const particles_t particlesDst, const particles_t particlesSrc, int dstIdx, int srcIdx, size_t progStateSize) {
-    
+
     // Program states
     #ifdef STACK_SIZE_PROGSTATE
     progStateStack_t* dstProgState = particlesDst.progStates + dstIdx;
     progStateStack_t* srcProgState = particlesSrc.progStates + srcIdx;
 
     copyStack(dstProgState, srcProgState);
-    
+
     #else
     char* psDstAddress = static_cast<char*>(particlesDst.progStates) + progStateSize * dstIdx;
     char* psSrcAddress = static_cast<char*>(particlesSrc.progStates) + progStateSize * srcIdx;
@@ -109,7 +109,7 @@ HOST DEV void copyChunk(void* dst, void* src, size_t bytes) {
     #ifdef __NVCC__
     // Manual loop copying can be much faster on GPU than device memcpy
     // If the struct is aligned in the correct way, the loop long copying can give huge speedups compared to memcpy on GPU
-    bool longAligned = bytes % sizeof(long) == 0 
+    bool longAligned = bytes % sizeof(long) == 0
                     && ((std::uintptr_t)dst) % sizeof(long) == 0
                     && ((std::uintptr_t)src) % sizeof(long) == 0;
 
@@ -122,9 +122,9 @@ HOST DEV void copyChunk(void* dst, void* src, size_t bytes) {
         for(int i = 0; i < numDblWords; i++) {
             dstLong[i] = srcLong[i];
         }
-        
+
     } else {
-        bool intAligned = bytes % sizeof(int) == 0 
+        bool intAligned = bytes % sizeof(int) == 0
                     && ((std::uintptr_t)dst) % sizeof(int) == 0
                     && ((std::uintptr_t)src) % sizeof(int) == 0;
         if(intAligned) {

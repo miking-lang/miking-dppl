@@ -1,7 +1,7 @@
 
 /*
- * File systematic_gpu.cuh contains the GPU implementation of the systematic resampling. 
- * This implementation is inspired by the paper by L. M. Murray et. al.: 
+ * File systematic_gpu.cuh contains the GPU implementation of the systematic resampling.
+ * This implementation is inspired by the paper by L. M. Murray et. al.:
  * Parallel resampling in the particle filter https://arxiv.org/abs/1301.4019
  */
 
@@ -26,7 +26,7 @@ HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSGpu(floating_t* w,
     floating_t maxLogWeight = *(thrust::max_element(thrust::device, w, w + numParticles));
     resampler.maxLogWeight = maxLogWeight;
     // floating_t maxLogWeight = maxNaive(w, numParticles);
-    
+
     scaleExpWeightsAndSquareWeightsKernel<<<numBlocks, numThreadsPerBlock>>>(w, numParticles, maxLogWeight, resampler.wSquared);
     cudaDeviceSynchronize();
     thrust::inclusive_scan(thrust::device, w, w + numParticles, resampler.prefixSum); // prefix sum
@@ -36,7 +36,7 @@ HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSGpu(floating_t* w,
     floating_t ess = calcESSHelperGpu(w, resampler.prefixSum[numParticles - 1], resampler.wSquared, numParticles);
 
     renormaliseKernel<<<numBlocks, numThreadsPerBlock>>>(w, resampler.prefixSum, numParticles, maxLogWeight);
-    
+
     cudaDeviceSynchronize();
     // return resampler.prefixSum[numParticles - 1];
     return std::make_tuple(resampler.prefixSum[numParticles - 1], ess);
@@ -80,9 +80,9 @@ HOST DEV void postUniform(particles_t& particles, resampler_t& resampler, floati
 }
 
 DEV void resampleSystematicGpuNested(curandState* randState, particles_t& particles, resampler_t& resampler, int numParticles, int numBlocks) {
-    
+
     floating_t u = uniform(randState, 0.0f, 1.0f);
-    
+
     postUniform(particles, resampler, u, numParticles, numBlocks, NUM_THREADS_PER_BLOCK_NESTED);
 }
 

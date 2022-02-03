@@ -1,6 +1,6 @@
 
 /*
- * File math.cuh contains mathematical helper functions. 
+ * File math.cuh contains mathematical helper functions.
  */
 
 
@@ -39,7 +39,7 @@ HOST DEV floating_t lchoose(const int x, const int y) {
     assert(0 <= x);
     assert(0 <= y);
     assert(x >= y);
-    
+
     if (y == 0) {
         return 0.0;
     } else {

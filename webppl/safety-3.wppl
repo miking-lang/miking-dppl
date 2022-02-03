@@ -13,7 +13,7 @@ var model = function()
     var a = a_sampler(0,1, 0.001)
 
     console.log(a)
-    
+
     var t = exponential(
 	{
 	    a: a

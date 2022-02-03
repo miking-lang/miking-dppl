@@ -1,12 +1,12 @@
 /*
- * File misc.cuh contains helper functions of various kinds. 
+ * File misc.cuh contains helper functions of various kinds.
  */
 
 #include <iostream>
 #include <vector>
 #include <cstring>
 #include <math.h>
-#include <limits> 
+#include <limits>
 #include <sstream>
 
 #include "misc.cuh"

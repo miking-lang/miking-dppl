@@ -31,12 +31,12 @@ BBLOCK(testWaitingTimeDelayedRef, {
     /* We will sample two waiting times (so that we have an update on the rate),
        and then check the distribution of the second waiting time against WebPPL.*/
     gamma_t lambda(k, theta);
-   
+
     floating_t t0 = SAMPLE(gammaExponential, lambda, factor);
     floating_t t1 = SAMPLE(gammaExponential, lambda, factor);
-    
+
     PSTATE = t0 + t1;
-    
+
     NEXT = NULL;
   });
 
@@ -54,14 +54,14 @@ CALLBACK(stats, {
 })
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     FIRST_BBLOCK(testWaitingTimeDelayedRef);
-     
+
     SMC(stats);
   })

@@ -32,7 +32,7 @@ done
 echo "Removing data..."
 for test in testStudentClassic testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testLinearNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalComplicated
 do
-   rm $DATADIR/$test.csv 
+   rm $DATADIR/$test.csv
    rm $DATADIR/$test.logz
 done
 

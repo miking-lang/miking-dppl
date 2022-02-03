@@ -1,6 +1,6 @@
 
 /*
- * File smc_kernels.cu contains definitions of kernels used by SMC. 
+ * File smc_kernels.cu contains definitions of kernels used by SMC.
  */
 
  #ifdef __NVCC__
@@ -13,7 +13,7 @@ __global__ void initCurandStates(curandState* randStates, int numThreads, int se
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if(i >= numThreads || i < 0) return;
 
-    // Double check this seed, need only to be unique over one inference, as time should vary between inferences. 
+    // Double check this seed, need only to be unique over one inference, as time should vary between inferences.
     // curand_init(1234 + clock64(), seed * numThreads + i, 0, &particles->randStates[i]);
     curandState randStateLocal = randStates[i];
     curand_init(1234 + clock64(), seed * numThreads + i, 0, &randStateLocal);
@@ -36,7 +36,7 @@ __global__ void execFuncs(curandState* randStates, particles_t particles, int nu
     if(i >= numThreads || i < 0) return;
 
     curandState randStateLocal = randStates[i];
-    
+
     for(int j = i; j < numParticles; j += numThreads) {
         // funcs[particles.pcs[i]](&randStateLocal, particles, i, arg);
         // int pc = particles.pcs[j];

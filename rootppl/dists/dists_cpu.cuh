@@ -2,7 +2,7 @@
 #define DISTS_CPU
 
 /*
- * File dists_cpu.cuh contains primitive distributions specific for the CPU. 
+ * File dists_cpu.cuh contains primitive distributions specific for the CPU.
  */
 
 #ifdef _OPENMP
@@ -11,7 +11,7 @@
 
 /**
  * Returns a sample from the Uniform distribution on the interval [min, max)
- * 
+ *
  * @param min the inclusive minimum value
  * @param max the exclusive maximum value
  * @return U[min, max)
@@ -27,8 +27,8 @@ floating_t uniform(floating_t min, floating_t max) {
 }
 
 /**
- * Returns a sample from the Normal/Gaussian distribution. 
- * 
+ * Returns a sample from the Normal/Gaussian distribution.
+ *
  * @param mean the mean/location of the gaussian distribution
  * @param std the standard deviation/scale of the gaussian destribution
  * @return N(mean, std^2)
@@ -44,8 +44,8 @@ floating_t normal(floating_t mean, floating_t std) {
 }
 
 /**
- * Returns a sample from the Poisson distribution. 
- * 
+ * Returns a sample from the Poisson distribution.
+ *
  * @param lambda the rate parameter
  * @return Po(lambda)
  */

@@ -32,9 +32,9 @@ BBLOCK(testLogAlphaSigmaSquared, {
     floating_t sigmaSquared = 1.0 / SAMPLE(gamma, 1.0, a / b);
     floating_t sigma = sqrt(sigmaSquared);
     floating_t alpha = exp(SAMPLE(normal, m0, sigma));
-       
+
     floating_t f1 = SAMPLE(normal, log(alpha), sigma);
-    
+
     PSTATE = f1;
     PC++;
 });
@@ -58,14 +58,14 @@ CALLBACK(stats, {
 
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     ADD_BBLOCK(testLogAlphaSigmaSquared);
-  
+
     SMC(stats);
   })

@@ -98,7 +98,7 @@ BBLOCK_HELPER(crbdGoesUndetected, {
 }, bool, floating_t startTime, floating_t lambda, floating_t mu, floating_t rho)
 
 // uses Jan's walk
-BBLOCK_HELPER(simBranch, { 
+BBLOCK_HELPER(simBranch, {
     floating_t nSpPoints = SAMPLE(poisson, lambda*(startTime - stopTime));
 
     for (int n = 0; n < nSpPoints; n++) {
@@ -107,7 +107,7 @@ BBLOCK_HELPER(simBranch, {
     }
 
     return nSpPoints*log(2.0);
-    
+
 }, floating_t, floating_t startTime, floating_t stopTime, floating_t lambda, floating_t mu, floating_t rho)
 
 BBLOCK(simTree, {
@@ -121,7 +121,7 @@ BBLOCK(simTree, {
     floating_t rhoLocal = rho;
 
     int indexParent = treeP->idxParent[treeIdx];
-    
+
     floating_t parentAge = treeP->ages[indexParent];
     floating_t age = treeP->ages[treeIdx];
 
@@ -165,12 +165,12 @@ BBLOCK(survivorshipBias, {
     // int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, DATA_CONST(rho));
     int M = BBLOCK_CALL(M_crbdGoesUndetected, age, MAX_M, PSTATE.lambda, PSTATE.mu, rho);
     WEIGHT(LOG(M));
-    
+
     NEXT = NULL;
 })
 
-// Write particle data to file. 
-CALLBACK(saveResults, {    
+// Write particle data to file.
+CALLBACK(saveResults, {
     std::string fileName = "crbd-immediate.out";
     std::ofstream resFile (fileName);
     if(resFile.is_open()) {

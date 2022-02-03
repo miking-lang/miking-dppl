@@ -1,6 +1,6 @@
 
 /*
- * File kernels.cu contains definitions of kernels used by systematic resampling. 
+ * File kernels.cu contains definitions of kernels used by systematic resampling.
  */
 
 #ifdef __NVCC__
@@ -16,7 +16,7 @@ __global__ void scaleExpWeightsAndSquareWeightsKernel(floating_t* w, int numPart
     if(idx >= numParticles || idx < 0) return;
 
     floating_t localW = w[idx];
-    
+
     if (isnan(localW))
         localW = -INFINITY;
 
@@ -28,7 +28,7 @@ __global__ void scaleExpWeightsAndSquareWeightsKernel(floating_t* w, int numPart
         wSquared[idx] = 0;
     else
         wSquared[idx] = localW * localW;
-    
+
 }
 
 __global__ void renormaliseKernel(floating_t* w, floating_t* prefixSum, int numParticles, floating_t maxLogWeight) {

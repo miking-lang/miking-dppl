@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <string>
-#include <list> 
+#include <list>
 #include <tuple>
 
 #ifdef _OPENMP
@@ -32,11 +32,11 @@
 #include "smc_kernels.cuh"
 #endif
 
-// Resample if relative ESS < ESS_THRESHOLD * N (default threshold in Birch is 0.7) 
+// Resample if relative ESS < ESS_THRESHOLD * N (default threshold in Birch is 0.7)
 #ifndef ESS_THRESHOLD
 const floating_t ESS_THRESHOLD = 0.7;
 #endif
- 
+
 double runSMC(const pplFunc_t firstBblock, const int numParticles, const int ompThreads, const int particlesPerThread,
                 size_t progStateSize, callbackFunc_t callback, void* arg) {
 
@@ -47,7 +47,7 @@ double runSMC(const pplFunc_t firstBblock, const int numParticles, const int omp
     floating_t logNormConstant = 0;
 
     particles_t particles = allocateParticles(numParticles, progStateSize, false);
-    
+
     #ifdef __NVCC__
     // Rather add an extra thread than add iterations for a few threads
     const int numThreads = (numParticles + particlesPerThread - 1) / particlesPerThread;
@@ -84,7 +84,7 @@ double runSMC(const pplFunc_t firstBblock, const int numParticles, const int omp
         cudaCheckError();
         floating_t logWeightSum, ess;
         std::tie(logWeightSum, ess) = calcLogWeightSumAndESSGpu(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
-        
+
         cudaDeviceSynchronize();
         #else
 
@@ -105,7 +105,7 @@ double runSMC(const pplFunc_t firstBblock, const int numParticles, const int omp
             printf("logWeightSum is -INFINITY, terminating...\n");
             break;
         }
-        
+
         if (isnan(logWeightSum)) {
             printf("Weight Sum is NaN, terminating...\n");
             break;
@@ -141,7 +141,7 @@ double runSMC(const pplFunc_t firstBblock, const int numParticles, const int omp
 
             break;
         }
-        
+
         if (resample) {
             #ifdef __NVCC__
             resampleSystematicGpu(particles, resampler, numParticles, NUM_BLOCKS);
@@ -149,7 +149,7 @@ double runSMC(const pplFunc_t firstBblock, const int numParticles, const int omp
             resampleSystematicCpu(particles, resampler, numParticles);
             #endif
         }
-        
+
     }
 
     printf("%f\n", logNormConstant);
@@ -194,7 +194,7 @@ void configureMemSizeGPU() {
     size_t MAX_LOCAL_MEM_PER_THREAD = 512000; // 512 KB on all compute capabilities according to CUDA docs
     size_t MAX_STACK_SIZE = min(MAX_LOCAL_MEM_PER_THREAD, GPU_MEM_STACK / MAX_THREADS_RESIDENT);
     MAX_STACK_SIZE *= 1.0; // For some reason, with nested inference, this limit must be lower. Also, lower can give better performance.
-    
+
     // Set limits and read the resulting set limits
     size_t heapSize, stackSize;
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, GPU_MEM_HEAP);

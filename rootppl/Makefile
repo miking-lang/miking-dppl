@@ -154,11 +154,11 @@ $(OBJDIR)/smc_kernels.o: $(FRAMEWORK_FILES)
 $(OBJDIR)/systematic_common.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(SYSTEMATIC_COMMON_SRC) -o $@
 
-# $(OBJDIR)/systematic_seq.o: $(SYSTEMATIC_SEQ_SRC) inference/smc/resample/systematic/common.cuh inference/smc/resample/systematic/kernels.cuh inference/smc/smc.cuh utils/misc.cuh 
+# $(OBJDIR)/systematic_seq.o: $(SYSTEMATIC_SEQ_SRC) inference/smc/resample/systematic/common.cuh inference/smc/resample/systematic/kernels.cuh inference/smc/smc.cuh utils/misc.cuh
 $(OBJDIR)/systematic_seq.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(SYSTEMATIC_SEQ_SRC) -o $@
 
-# $(OBJDIR)/systematic_parallel.o: $(SYSTEMATIC_PARALLEL_SRC) inference/smc/resample/systematic/common.cuh inference/smc/resample/systematic/kernels.cuh inference/smc/smc.cuh utils/misc.cuh 
+# $(OBJDIR)/systematic_parallel.o: $(SYSTEMATIC_PARALLEL_SRC) inference/smc/resample/systematic/common.cuh inference/smc/resample/systematic/kernels.cuh inference/smc/smc.cuh utils/misc.cuh
 $(OBJDIR)/systematic_parallel.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(SYSTEMATIC_PARALLEL_SRC) -o $@
 

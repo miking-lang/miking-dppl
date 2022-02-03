@@ -28,7 +28,7 @@ INIT_MODEL(floating_t);
 BBLOCK(testObserveWaitingTime, {
     floating_t lambda = SAMPLE(gamma, k, theta);
     OBSERVE(exponential, lambda*factor, observedTime);
-    
+
     floating_t t0 = SAMPLE(exponential, lambda*factor);
     PSTATE = t0;
     NEXT = NULL;
@@ -48,14 +48,14 @@ CALLBACK(stats, {
 })
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     FIRST_BBLOCK(testObserveWaitingTime);
-    
+
     SMC(stats);
   })

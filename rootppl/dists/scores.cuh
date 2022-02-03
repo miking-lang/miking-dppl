@@ -2,7 +2,7 @@
 #define SCORES_INCLUDED
 
 /*
- * File scores.cuh contains the log probability/density functions of distributions. 
+ * File scores.cuh contains the log probability/density functions of distributions.
  * Most of these implementations are inspired from the implementation of WebPPL.
  *
  * NOTE: some of the multi-variate distribution scores are yet to be implemented!

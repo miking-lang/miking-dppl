@@ -6,15 +6,15 @@ type tree =
     | Leaf(age: float, index: int)
     | Node(age: float, left: tree, right: tree)
 
-  
+
 /**  Simulates side branches under the CRBD model
- *  
+ *
  * The following is a function that simulates the hidden
  * (extinct or undetected) evolutionary side-branches under
  * the CRBD model.
- * 
+ *
  * functions, see Section 0.2
- * 
+ *
  * In particular, it is clear that the return type of this
  * function is unit, as no explicit return specified and
  * it is a sequence of statements rather than a simple expression.
@@ -27,10 +27,10 @@ simulate_side_branch = (start_time: float, λ: float, μ: float): () => {
     } else {
         s ~ Bernoulli(λ/(λ + μ)) // positional invocation
         if (s) {
-            simulate_side_branch(current_time, λ, μ) 
+            simulate_side_branch(current_time, λ, μ)
             simulate_side_branch(current_time, λ, μ)
         }
-    }   
+    }
 }
 
 
@@ -62,14 +62,14 @@ simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
             simulate_tree(child.right, child, λ, μ)
         }
     }
-    
+
     return ()
 }
 
-/** Model 
- * 
+/** Model
+ *
  * Every program has a model function, see Section 1.4.
- * */ 
+ * */
 model = (k_λ = 1, θ_λ = 0.2, k_μ = 1, θ_μ = 0.1, data: json) => {
     observation: tree = Node(13.016,
         Node(10.626,Node(8.352,Node(7.679,Node(5.187,Leaf(0,7),Leaf(0,22)),Node(5.196,Leaf(0,2),Node(4.871,Node(2.601,Leaf(0,31),Leaf(0,14)),Leaf(0,26)))),Node(7.361,Node(3.818,Node(1.143,Node(0.829,Leaf(0,6),Leaf(0,9)),Leaf(0,16)),Node(1.813,Node(0.452,Node(0.203,Leaf(0,15),Leaf(0,12)),Leaf(0,8)),Leaf(0,32))),Node(1.868,Node(0.866,Leaf(0,23),Node(0.001,Leaf(0,17),Leaf(0,24))),Node(1.06,Leaf(0,18),Leaf(0,4))))),Node(10.536,Node(8.291,Node(1.396,Node(0.215,Leaf(0,10),Leaf(0,29)),Leaf(0,21)),Leaf(0,27)),Node(8.192,Node(0.56,Leaf(0,11),Leaf(0,19)),Leaf(0,3)))),

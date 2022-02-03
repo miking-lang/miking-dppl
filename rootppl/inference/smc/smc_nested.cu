@@ -11,7 +11,7 @@
  #include "dists/dists.cuh"
  #include "particles_memory_handler.cuh"
  #include "resample/systematic/systematic_cpu.cuh"
- 
+
  #ifdef __NVCC__
  #include <curand_kernel.h>
  #include "utils/cuda_error_utils.cuh"
@@ -24,7 +24,7 @@ DEV double runSMCNested(
     #ifdef __NVCC__
     curandState* randState,
     #endif
-    pplFunc_t* bblocks, int numBblocks, int numParticles, size_t progStateSize, bool parallelExec, bool parallelResampling, int parentIdx, 
+    pplFunc_t* bblocks, int numBblocks, int numParticles, size_t progStateSize, bool parallelExec, bool parallelResampling, int parentIdx,
     callbackFunc_t callback, void* ret, void* arg) {
 
     if(parallelExec || parallelResampling) {
@@ -37,9 +37,9 @@ DEV double runSMCNested(
     bool requireRandStates = parallelExec;
 
     floating_t logNormConstant = 0;
-    
+
     particles_t particles = allocateParticlesNested(numParticles, progStateSize);
-    
+
     #ifdef __NVCC__
     const int NUM_BLOCKS = (numParticles + NUM_THREADS_PER_BLOCK_NESTED - 1) / NUM_THREADS_PER_BLOCK_NESTED;
 
@@ -64,9 +64,9 @@ DEV double runSMCNested(
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
             #endif
-        
+
         } else {
-            
+
             for(int i = 0; i < numParticles; i++) {
                 int pc = particles.pcs[i];
                 if(pc < numBblocks) {
@@ -74,11 +74,11 @@ DEV double runSMCNested(
                         #ifdef __NVCC__
                         randState,
                         #endif
-                        particles, i, arg); 
+                        particles, i, arg);
                 }
             }
         }
-        
+
         floating_t logWeightSum;
         if(parallelResampling) {
             #ifdef __NVCC__
@@ -89,7 +89,7 @@ DEV double runSMCNested(
         }
 
         logNormConstant += logWeightSum - log(static_cast<floating_t>(numParticles));
-        
+
         if(particles.pcs[0] >= numBblocks) // Assumption: All terminate at the same time
             break;
 
@@ -101,15 +101,15 @@ DEV double runSMCNested(
             resampleSystematicCpu(
                 #ifdef __NVCC__
                 randState,
-                #endif 
+                #endif
                 particles, resampler, numParticles);
         }
-        
-        
+
+
     }
 
     callback(particles, numParticles, ret);
-        
+
     // Clean up
     destResamplerNested(resampler);
     freeParticlesNested(particles);

@@ -7,8 +7,8 @@
 struct beta_t {
   floating_t alpha;
   floating_t beta;
-  
-  DEV beta_t(){}; 
+
+  DEV beta_t(){};
   DEV beta_t(floating_t alpha_, floating_t beta_) {
     alpha = alpha_;
     beta = beta_;
@@ -25,8 +25,8 @@ struct beta_t {
 struct gamma_t {
   floating_t k;
   floating_t theta;
-  
-  DEV gamma_t(){}; 
+
+  DEV gamma_t(){};
   DEV gamma_t(floating_t k_, floating_t theta_) {
     k = k_;
     theta = theta_;
@@ -39,8 +39,8 @@ struct gamma_t {
  *
  * σ^2 | a,b ~ InverseGamma(a, b)
  * m ~ N(m0, v σ^2)
- * 
- * <=> σ^2, m ~ NormalInverseGamma(m0, v, a, b) 
+ *
+ * <=> σ^2, m ~ NormalInverseGamma(m0, v, a, b)
  *
  * @param m0 initial mean.
  * @param v scale by which the variance is multiplied.
@@ -65,7 +65,7 @@ struct normalInverseGamma_t {
 
 /**
  * Returns a sample from the Bernoulli distribution with a Beta prior (BetaBernoulli).
- * 
+ *
  * @param p beta_t distribution of the success probability.
  * @return 1 with probability sampled from p, 0 otherwise.
  */
@@ -74,7 +74,7 @@ DEV floating_t betaBernoulli(RAND_STATE_DECLARE beta_t& p);
 
 /**
  * Score of betaBernoulli
- * 
+ *
  * @param p beta_t distribution of the success probability.
  * @param x variate.
  *
@@ -98,9 +98,9 @@ DEV floating_t gammaExponential(RAND_STATE_DECLARE gamma_t& rate, floating_t f);
 
 /**
  * Log-score (delayed) of observation from a GammaExponential
- * 
+ *
  * E.g. to observe a waiting time.
- * 
+ *
  * @param x  observation.
  * @param rate the prior gamma rate as reference (mutable, side effect)
  * @param f factor (multiplier) by which the scale will be multiplied
@@ -113,9 +113,9 @@ DEV floating_t gammaExponentialScore(floating_t x, gamma_t& rate,  floating_t f)
 
 /**
  * Log-score (delayed) of observation from a GammaPoisson
- * 
+ *
  * E.g. to observe a number of speciation points.
- * 
+ *
  * @param x  observation.
  * @param rate prior gamma rate as a reference (mutable, side effect)
  * @param f factor (multiplier) by which the scale will be multiplied

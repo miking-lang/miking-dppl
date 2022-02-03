@@ -1,10 +1,10 @@
 
 /*
- * File particles_memory_handler.cuh contains helper functions used by the smc implementation files. 
- * Functions for allocating and deleting particles belongs here. The memory management differs in 
- * top-level SMC and nested SMC, since the top-level will differ depending whether its compiled for CPU 
- * or GPU. While nested inference is done either on the device or CPU and both have 
- * the same API (as opposed to the host functions for handling memory on the device). 
+ * File particles_memory_handler.cuh contains helper functions used by the smc implementation files.
+ * Functions for allocating and deleting particles belongs here. The memory management differs in
+ * top-level SMC and nested SMC, since the top-level will differ depending whether its compiled for CPU
+ * or GPU. While nested inference is done either on the device or CPU and both have
+ * the same API (as opposed to the host functions for handling memory on the device).
  */
 
 #include <cstring>
@@ -15,7 +15,7 @@
 particles_t allocateParticles(int numParticles, size_t progStateSize, bool printMemSize) {
 
     particles_t particles;
-    
+
     #ifdef STACK_SIZE_PROGSTATE
     allocateMemory<progStateStack_t>(&particles.progStates, numParticles);
     #else
@@ -35,7 +35,7 @@ particles_t allocateParticles(int numParticles, size_t progStateSize, bool print
         floating_t totalMem = progStateSize * numParticles + sizeof(pplFunc_t) * numParticles + sizeof(floating_t) * numParticles;
         printf("Particles memory size for N=%d: %fMB\n", numParticles, totalMem * 2 / 1000000.0);
     }
-    
+
     return particles;
 }
 

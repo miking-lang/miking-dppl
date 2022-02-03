@@ -1,8 +1,8 @@
 #include <string>
 #include <fstream>
 #include <sstream>
-#include <list> 
-#include <iterator> 
+#include <list>
+#include <iterator>
 
 #include "file_handler.cuh"
 
@@ -46,7 +46,7 @@ void writeESSToFile(std::list<double> essList) {
     if(resFile.is_open()) {
         resFile << "[";
         std::list <double> :: iterator it;
-        for(it = essList.begin(); it != essList.end(); ++it) 
+        for(it = essList.begin(); it != essList.end(); ++it)
             resFile << *it << " ";
         resFile << "],\n";
         resFile.close();

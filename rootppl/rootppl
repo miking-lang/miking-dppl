@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This file builds the executable by: 
+# This file builds the executable by:
 #   1. Get the absolute path to the source file
 #   2. Change directory to installed rootppl directory
 #   3. Build the executable with the inference framework with the users working directory added to the include paths
@@ -92,9 +92,9 @@ else
     mkdir -p $(dirname ${USER_SRC_DIR}/${out_name})
 
     # Create absolute path by identifying leading slash
-    if [[ ${1:0:1} == "/" ]] ; then 
+    if [[ ${1:0:1} == "/" ]] ; then
         abs_path_src_file=$1
-    else  
+    else
         abs_path_src_file="${cwd}/$1"
     fi
 

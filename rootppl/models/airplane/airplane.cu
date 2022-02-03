@@ -1,5 +1,5 @@
 /*
- * File airplane.cu defines the airplane model which is a common example to demonstrate SMC. 
+ * File airplane.cu defines the airplane model which is a common example to demonstrate SMC.
  */
 
 #include <stdio.h>

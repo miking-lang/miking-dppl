@@ -15,21 +15,21 @@ The aim of the TreePPL project is to develop a probabilistic programming languag
 	- We support _vectorized_ operations in terms of data structures and in terms of language constructs such as map-reduce.
 
 	- Last but not least, the syntax is based on the _familiar_ C/C++/JavaScript languages, drawing particular inspiration form [ReasonML](https://reasonml.github.io/).
-	
+
 2. **TreePPL is especially well-suited for phylogenetics and evolutionary biology.**
 
 	- It has a phylogenetic library of standard phylogenetic data structures (trees) and algorithms (diversification, biography, phylogeney inference, etc.).
-	
+
 	- Has optimized inference to work with phylogenetic data structures and is able to handle big phylogenetic datasets (> 10,000 species).
-	
+
 3. **TreePPL should support advanced users that want to experiment with inference algorithms or develop entirely new inference strategies for phylogenetic models.**
-	
+
 4. **TreePPL is a fast language.**
 
 	- For fast prototyping a line-by-line (interpreted) execution is possible.
-	
+
 	- Thanks to type safety, it is find and remove bugs.
-	
+
 	- Programs can be compiled to efficient low-level code.
 
 In a [recent paper](https://www.biorxiv.org/content/10.1101/2020.06.16.154443v3), we introduce probabilistic programming and develop efficient PPL approaches to advanced models of biological diversification, such as the BAMM model and the ClaDS models, using [WebPPL](http://webppl.org/) and another recent PPL, [Birch](http://webppl.org/). The paper demonstrates some of the potential power of probabilistic programming in statistical phylogenetics, and discusses the main hurdles that remain to be tackled before these techniques can be applied to the entire range of phylogenetic models.

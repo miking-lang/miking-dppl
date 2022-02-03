@@ -30,13 +30,13 @@ whose support is partly outside of the range of allowable values. The
 execution is sometimes successful, sometimes not.
 
 ```
-$ webppl safety-2.wppl 
+$ webppl safety-2.wppl
 0.36604904245520853
 0
 
 17:19 viktsend@stealth
 ~/Dropbox/Work/miking-dppl/webppl
-$ webppl safety-2.wppl 
+$ webppl safety-2.wppl
 -0.896078823733028
 
 Error: Parameter "a" should be of type "real (0, Infinity)".
@@ -49,7 +49,7 @@ Error: Parameter "a" should be of type "real (0, Infinity)".
 
     at safety-2.wppl:12
 
-11|     
+11|
 12|     var t = exponential(
     ------------^
 13|     {
@@ -66,7 +66,7 @@ Technically, the distribution from which `a` is sampled has support on
 effectively 0 after rounding.
 
 ```
-$ webppl safety-3.wppl 
+$ webppl safety-3.wppl
 4.078315292499078e-56
 4.727285052306297e-125
 1.4164235936814247e-219
@@ -83,7 +83,7 @@ Error: Parameter "a" should be of type "real (0, Infinity)".
 
     at safety-3.wppl:17
 
-16|     
+16|
 17|     var t = exponential(
     ------------^
 18|     {

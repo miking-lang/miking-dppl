@@ -2,14 +2,14 @@
 #define MISC_INCLUDED
 
 /*
- * File misc.cuh contains helper functions of various kinds. 
+ * File misc.cuh contains helper functions of various kinds.
  */
 
 #include <iostream>
 #include <vector>
 #include <cstring>
 #include <math.h>
-#include <limits> 
+#include <limits>
 #include <sstream>
 
 #include "macros/macros.cuh"
@@ -18,10 +18,10 @@
 // using namespace std;
 
 /**
- * Allocates memory on host or device depending on compiler. 
- * 
- * @param pointer address of the pointer which should point to the allocated memory. 
- * @param n the number of elements of type T to be allocated. 
+ * Allocates memory on host or device depending on compiler.
+ *
+ * @param pointer address of the pointer which should point to the allocated memory.
+ * @param n the number of elements of type T to be allocated.
  */
 template <typename T>
 void allocateMemory(T** pointer, size_t n) {
@@ -33,17 +33,17 @@ void allocateMemory(T** pointer, size_t n) {
 }
 
 /**
- * Allocates memory on host or device depending on compiler. 
- * 
- * @param pointer address of the pointer which should point to the allocated memory. 
- * @param allocSize the size of memory to allocate. 
+ * Allocates memory on host or device depending on compiler.
+ *
+ * @param pointer address of the pointer which should point to the allocated memory.
+ * @param allocSize the size of memory to allocate.
  */
  void allocateMemoryVoid(void** pointer, size_t allocSize);
 
  /**
- * Frees memory on host or device depending on compiler. 
- * 
- * @param pointer address of the allocated memory. 
+ * Frees memory on host or device depending on compiler.
+ *
+ * @param pointer address of the allocated memory.
  */
 template <typename T>
 void freeMemory(T* pointer) {
@@ -55,18 +55,18 @@ void freeMemory(T* pointer) {
 }
 
 /**
- * Frees memory on host or device depending on compiler. 
- * 
- * @param pointer address of the allocated memory. 
+ * Frees memory on host or device depending on compiler.
+ *
+ * @param pointer address of the allocated memory.
  */
 void freeMemoryVoid(void* pointer);
 
 /**
- * Prints the array of type T. Works only on the CPU. 
- * 
+ * Prints the array of type T. Works only on the CPU.
+ *
  * @param arr array of type T.
  * @param n number of elements in arr.
- * @param optional title of the array to be printed. 
+ * @param optional title of the array to be printed.
  */
 template <typename T>
 void printArray(T* arr, int n, std::string title="") {
@@ -80,7 +80,7 @@ void printArray(T* arr, int n, std::string title="") {
 
 /**
  * Prints the floating point array.
- * 
+ *
  * @param arr floating point array.
  * @param n number of elements in arr.
  */
@@ -88,7 +88,7 @@ DEV void printArrayF(floating_t* arr, int n);
 
 /**
  * Prints the integer array.
- * 
+ *
  * @param arr integer array.
  * @param n number of elements in arr.
  */
@@ -102,7 +102,7 @@ DEV void printArrayI(int* arr, int n);
  * @param n the number of elements in arr.
  * @param numBins the number of groups to divide the data into and calculate frequencies for.
  * @param minVal the minimum value to consider.
- * @param maxVal the maximum value to consider. 
+ * @param maxVal the maximum value to consider.
  */
 
 #endif

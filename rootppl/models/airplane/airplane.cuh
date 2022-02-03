@@ -2,7 +2,7 @@
 #define AIRPLANE_INCLUDED
 
 /*
- * File airplane.cuh contains type definitions and constants used by the airplane model. 
+ * File airplane.cuh contains type definitions and constants used by the airplane model.
  */
 
 #include "inference/smc/smc.cuh"

@@ -37,7 +37,7 @@ BBLOCK(testWaitingTimeDelayedRef, {
     //ret_delayed_t ret1 = BBLOCK_CALL(waitingTimeDelayed, ret0.k, ret0.theta, lambda.factor);
 
     floating_t t0 = 1;
-    
+
     for (int i = 0; i < passes; i++) {
       t0 = sample_GammaExponential(lambda, factor);
       // if (i%100000 == 0) {
@@ -45,10 +45,10 @@ BBLOCK(testWaitingTimeDelayedRef, {
       // }
     }
     //std::cout << "k: " << lambda.k << "theta: " << lambda.theta << "\n";
-  
-    
+
+
     PSTATE = t0 ;
-    
+
     PC++;
   });
 
@@ -72,16 +72,16 @@ CALLBACK(stats, {
 
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
-    
+
+
     ADD_BBLOCK(testWaitingTimeDelayedRef);
-    
-  
+
+
     SMC(stats);
   })

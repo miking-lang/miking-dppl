@@ -1,6 +1,6 @@
 
 /*
- * File scores.cu contains the log probability/density functions of distributions. 
+ * File scores.cu contains the log probability/density functions of distributions.
  * Most of these implementations are inspired from the implementation of WebPPL.
  *
  * NOTE: some of the multi-variate distribution scores are yet to be implemented!
@@ -38,7 +38,7 @@ HOST DEV floating_t logGamma(floating_t xx) {
 HOST DEV floating_t lnfactExact(int x) {
     if (x < 0)
       printf("lnfactExact called with negative value!\n");
-      
+
     if (x < 1)
       x = 1;
 
@@ -113,13 +113,13 @@ HOST DEV floating_t binomialScore(floating_t p, int n, int x) {
         o = x;
     }
 
-    for (int i = o + 1; i <= n; i++) 
+    for (int i = o + 1; i <= n; i++)
         logNumPermutations += log(static_cast<floating_t>(i));
 
     logNumPermutations -= lnfactExact(m);
 
-    return (logNumPermutations + 
-        (x == 0 ? 0 : x * log(p)) + 
+    return (logNumPermutations +
+        (x == 0 ? 0 : x * log(p)) +
         (n - x == 0 ? 0 : (n - x) * log(1 - p))
     );
 }
@@ -194,7 +194,7 @@ HOST DEV floating_t uniformScore(floating_t min, floating_t max, floating_t x) {
 // Implementation inspired by Birch
 // see https://github.com/lawmurray/Birch/blob/master/libraries/Standard/src/math/logpdf.birch
 // It makes use of log() and log1p() which should be in <math.h>
-// and lchoose, which I have implemented in 
+// and lchoose, which I have implemented in
 // - x: The variate (number of failures).
 // - k: Number of successes before the experiment is stopped. must be > 0
 // - p: Probability of success. must be in [0, 1]
@@ -204,13 +204,13 @@ HOST DEV floating_t negativeBinomialScore(floating_t x, floating_t k, floating_t
     assert(0.0 <= p);
     assert(p <= 1.0);
     //    assert(0.0 <= p && p <= 1.0);
-  
+
     if (x >= 0) {
       return k*log(p) + x*log1p(-p) + lchoose(x + k - 1, x);
     } else {
       return -INFINITY;
     }
-    
+
 }
 
 

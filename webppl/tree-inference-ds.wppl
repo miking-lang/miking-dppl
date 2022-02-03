@@ -88,7 +88,7 @@ var sum_product_n = function( probs, p00, p01, p10, p11, n )
 
     if ( n == 1 )
         return [ p0, p1 ];
-    
+
     return sum_product_n( probs, p00, p01, p10, p11, n-2).concat( p0, p1 );
 }
 
@@ -156,7 +156,7 @@ var cluster = function( trees, max_age )
 //    var t = 0.05;
     var node_age = max_age + t;
 //    console.log( "node_age=" + node_age );
-    
+
     // Combine into a new node; propose t from a suitable distribution
     // Use delayed sampling to compute probs and log prob
     var state_probs = compute_state_probs( trees[i], trees[j], node_age );
@@ -164,7 +164,7 @@ var cluster = function( trees, max_age )
     var new_node    = node( trees[i], trees[j], node_age, state_probs, log_prob );
 //    console.log( "state_probs=" + state_probs );
 //    console.log( "log_prob=" + log_prob );
-    
+
     // Factor probability - remove previous factors relating to partial trees
     factor( log_prob - trees[i].log_prob - trees[j].log_prob );
 //    console.log( "left_log_prob  = " + trees[i].log_prob );

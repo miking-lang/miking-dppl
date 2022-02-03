@@ -21,11 +21,11 @@
 #define DEV_POINTER(funcName, progStateType) __device__ pplFunc_t funcName ## Dev = funcName;
 
 // Copies a reference to a device function to a host pointer, necessary to handle GPU function pointers on CPU
-#define FUN_REF(funcName, progStateType) cudaSafeCall(cudaMemcpyFromSymbol(&funcName ## Host, funcName ## Dev, sizeof(pplFunc_t))); 
+#define FUN_REF(funcName, progStateType) cudaSafeCall(cudaMemcpyFromSymbol(&funcName ## Host, funcName ## Dev, sizeof(pplFunc_t)));
 
 /* Allocate data on host and device, should be followed by a COPY_DATA_GPU call before inference if values are not initialized automatically
  * If the memory should be modifiable from device code, it must be declared as __device__ and not __constant__.
- * This does not seem to have a remarkable impact on performance. 
+ * This does not seem to have a remarkable impact on performance.
  */
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];\
 __constant__ type pointerName ## Dev[n];

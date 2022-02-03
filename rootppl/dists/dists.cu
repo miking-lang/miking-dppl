@@ -1,15 +1,15 @@
 
 /*
- * File dists.cuh contains distributions that builds upon the hardware specific distributions. 
+ * File dists.cuh contains distributions that builds upon the hardware specific distributions.
  * These implementations will be the same regardless of the hardware. Most of these distributions
  * are inspired by the WebPPL language (i.e. names and format).
- * 
- * The distribution functions uses a macro for the first parameter which specifies that a 
- * curandState pointer should be passed to the function if it is compiled for GPU. 
+ *
+ * The distribution functions uses a macro for the first parameter which specifies that a
+ * curandState pointer should be passed to the function if it is compiled for GPU.
 
  * Sampling from these distributions (calling these functions), should be done
  * by using the macro SAMPLE(distName, args...). This will pass a curandState as argument.
- * This curandState will be present in the BBLOCK and BBLOCK_HELPER functions. 
+ * This curandState will be present in the BBLOCK and BBLOCK_HELPER functions.
  */
 
 
@@ -33,7 +33,7 @@
 
 #include "dists.cuh"
 
-// Define the CPU generator and primitives, and initializes the generator state. 
+// Define the CPU generator and primitives, and initializes the generator state.
 #ifdef _OPENMP
 // Unable to simply create an array of default_random_engine, so wrapped in a struct
 struct generator_wrapper {
@@ -79,7 +79,7 @@ DEV int bernoulli(RAND_STATE_DECLARE floating_t p) {
 }
 
 DEV floating_t exponential(RAND_STATE_DECLARE floating_t lambda) {
-    
+
     return -log(1 - SAMPLE(uniform, 0, 1)) / lambda;
 }
 
@@ -89,42 +89,42 @@ DEV floating_t gamma(RAND_STATE_DECLARE floating_t k, floating_t theta) {
         double u = SAMPLE(uniform, 0, 1);
         return SAMPLE(gamma, 1.0 + k, theta) * pow(u, 1.0 / k);
     }
-    
+
     {
         double x, v, u;
         double d = k - 1.0 / 3.0;
         double c = (1.0 / 3.0) / sqrt(d);
-    
+
         while (true) {
             do {
                 x = SAMPLE(normal, 0, 1);
                 v = 1.0 + c * x;
             } while (v <= 0);
-    
+
             v = v * v * v;
             u = SAMPLE(uniform, 0, 1);
-    
-            if (u < 1 - 0.0331 * x * x * x * x) 
+
+            if (u < 1 - 0.0331 * x * x * x * x)
                 break;
-    
+
             if (log(u) < 0.5 * x * x + d * (1 - v + log(v)))
                 break;
         }
-    
+
         return theta * d * v;
     }
-    
+
 }
 
 DEV void dirichlet(RAND_STATE_DECLARE const floating_t* alpha, const int n, floating_t* ret) {
-    
+
     floating_t sum = 0;
     for (int k = 0; k < n; k++) {
         ret[k] = SAMPLE(gamma, alpha[k], 1);
         sum += ret[k];
     }
 
-    for (int k = 0; k < n; k++) 
+    for (int k = 0; k < n; k++)
         ret[k] /= sum;
 }
 
@@ -202,7 +202,7 @@ DEV void multinomial(RAND_STATE_DECLARE floating_t* ps, int n, int numCategories
 
     // Can be much more efficient for large n, using host API on GPU (alias methods)
     // Just sorting probabilities in descending order should give performance increase for many samples
-    
+
     for(int k = 0; k < numCategories; k++)
         returnArr[k] = 0;
 
@@ -235,8 +235,8 @@ DEV int negativeBinomial(RAND_STATE_DECLARE floating_t p, int n) {
     return n - SAMPLE(binomial, p, n);
 }
 
-/* Mathematically the Chi Square 
-   distribution with n degrees of freedom is equivalent to a Gamma        
+/* Mathematically the Chi Square
+   distribution with n degrees of freedom is equivalent to a Gamma
    distribution with shape parameter n/2 and scale parameter 2. */
 DEV floating_t chiSquared(RAND_STATE_DECLARE floating_t k) {
   floating_t result = SAMPLE(gamma, k/2.0, 2.0);
