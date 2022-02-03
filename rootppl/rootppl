@@ -3,8 +3,10 @@
 # This file builds the executable by:
 #   1. Get the absolute path to the source file
 #   2. Change directory to installed rootppl directory
-#   3. Build the executable with the inference framework with the users working directory added to the include paths
-#   4. Copy the executable back to the user's working directory and clean up rootppl directory
+#   3. Build the executable with the inference framework with the users working
+#      directory added to the include paths
+#   4. Copy the executable back to the user's working directory and clean up
+#      rootppl directory
 
 
 out_name=program
@@ -15,67 +17,68 @@ args=""
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
-key="$1"
+  key="$1"
 
-case $key in
+  case $key in
     -o|--out)
-    out_name="$2"
-    # This argument is handled separately and hence not added to args string here
-    # args="${args} EXEC_NAME=${USER_SRC_DIR}/${out_name}"
-    shift # past argument
-    shift # past value
-    ;;
+      out_name="$2"
+      # This argument is handled separately and hence not added to args string
+      # here
+      # args="${args} EXEC_NAME=${USER_SRC_DIR}/${out_name}"
+      shift # past argument
+      shift # past value
+      ;;
     -j|--jobs)
-    num_compile_threads="$2"
-    args="${args} -j${num_compile_threads}"
-    shift # past argument
-    shift # past value
-    ;;
+      num_compile_threads="$2"
+      args="${args} -j${num_compile_threads}"
+      shift # past argument
+      shift # past value
+      ;;
     -a|--arch)
-    arch="$2"
-    args="${args} arch=${arch}"
-    shift # past argument
-    shift # past value
-    ;;
+      arch="$2"
+      args="${args} arch=${arch}"
+      shift # past argument
+      shift # past value
+      ;;
     --omp)
-    # LIBPATH="$2"
-    args="${args} omp"
-    shift # past argument
-    ;;
+      # LIBPATH="$2"
+      args="${args} omp"
+      shift # past argument
+      ;;
     --cxx)
-    cxx="$2"
-    args="${args} CXX=${cxx}"
-    shift # past argument
-    shift # past value
-    ;;
-    --stack_size)
-    stack_size="$2"
-    args="${args} STACK_SIZE_PROGSTATE=${stack_size}"
-    shift # past argument
-    shift # past value
-    ;;
-    --ess_threshold)
-    ess_threshold="$2"
-    args="${args} ESS_THRESHOLD=${ess_threshold}"
-    shift # past argument
-    shift # past value
-    ;;
+      cxx="$2"
+      args="${args} CXX=${cxx}"
+      shift # past argument
+      shift # past value
+      ;;
+    --stack-size)
+      stack_size="$2"
+      args="${args} STACK_SIZE_PROGSTATE=${stack_size}"
+      shift # past argument
+      shift # past value
+      ;;
+    --ess-threshold)
+      ess_threshold="$2"
+      args="${args} ESS_THRESHOLD=${ess_threshold}"
+      shift # past argument
+      shift # past value
+      ;;
     *)    # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
-    shift # past argument
-    ;;
-esac
+      POSITIONAL+=("$1") # save it in an array for later
+      shift # past argument
+      ;;
+  esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 if [[ $# -eq 0 ]] ; then
-    echo 'Error: source file positional argument required'
-    exit 0
+  echo 'Error: source file positional argument required'
+  exit 0
 fi
 
 if [[ -n $2 ]] ; then
-    echo 'Error: only one positional argument required, second positional argument passed: ' \"$2\"
-    exit 0
+  echo 'Error: only one positional argument required, second positional argument passed: ' \"$2\"
+  exit 0
 fi
 ##### END PARSE ARGS #####
 
@@ -85,22 +88,27 @@ cd ~/.local/lib/rootppl/
 
 # "rootppl clean" used for cleaning before changing platform, e.g. cpu to gpu
 if [ "$1" = "clean" ]; then
-    make clean
+  make clean
 else
-    # Define and create directory for user source files
-    USER_SRC_DIR=temp_user_out
-    mkdir -p $(dirname ${USER_SRC_DIR}/${out_name})
+  # Define and create directory for user source files
+  USER_SRC_DIR=temp_user_out
+  mkdir -p $(dirname ${USER_SRC_DIR}/${out_name})
 
     # Create absolute path by identifying leading slash
     if [[ ${1:0:1} == "/" ]] ; then
-        abs_path_src_file=$1
+      abs_path_src_file=$1
     else
-        abs_path_src_file="${cwd}/$1"
+      abs_path_src_file="${cwd}/$1"
     fi
 
     # Build executable and copy it to the user's working directory
-    make model=${abs_path_src_file} EXEC_NAME=${USER_SRC_DIR}/${out_name} ${args} EXTRA_FLAGS=-I${cwd}
-    mkdir -p $(dirname ${cwd}/${out_name}) # Create out dir if the user specified out path does not exist
+    make \
+      model=${abs_path_src_file} \
+      EXEC_NAME=${USER_SRC_DIR}/${out_name} ${args} \
+      EXTRA_FLAGS=-I${cwd}
+
+    # Create out dir if the user specified out path does not exist
+    mkdir -p $(dirname ${cwd}/${out_name})
     cp ${USER_SRC_DIR}/${out_name} ${cwd}/${out_name}
 
     # Delete temp user directory
