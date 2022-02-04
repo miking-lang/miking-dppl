@@ -32,16 +32,15 @@ The stack size option is mandatory for compiling RootPPL programs compiled from 
 More information about RootPPL can be found at [RootPPL](#rootppl).
 
 ## RootPPL
-RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. These models are currently hard-coded, see examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language.
+RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. See examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language.
 
 ### Getting Started
-The instructions below are tested on Ubuntu 18.04 but should work for other Linux distributions, Windows, and Mac.
+The instructions below are tested on Ubuntu 18.04 but should work for other Unix-like systems.
 
 #### Prerequisites
 Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++.  In
 order to build for GPU, CUDA must be installed. See
 CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide Linux"),
-[Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html "CUDA Installation Guide Windows"),
 [Mac](https://docs.nvidia.com/cuda/cuda-installation-guide-mac-os-x/index.html "CUDA Installation Guide Mac").
 
 To run the CPU version in parallel, [OpenMP](https://www.openmp.org/resources/openmp-compilers-tools/) must be installed.
@@ -52,54 +51,55 @@ To install `rootppl` for the current user, first clone this repository and chang
 ```
 make install
 ```
-This will install `rootppl` to `$HOME/.local/bin` with resources copied to `$HOME/.local/lib/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`.
+This will install `rootppl` to `$HOME/.local/bin` and inference engine sources to `$HOME/.local/src/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`.
 
 #### Build
-Note: before building and after installation, especially if you are re-installing,
-execute a `rootppl clean`, first.
-
 To compile a model and build an executable:
 ```
 rootppl path/to/model.cu
 ```
-This will compile the model along with the inference framework for CPU. To compile it for GPU, add your GPU:s compute capability to the arch variable.
+This will compile the model along with the inference framework for CPU. The inference framework build products are placed under `build/`.
+The `rootppl` command wraps `g++`/`nvcc`, and you may supply options used for `g++` and/or `nvcc` to `rootppl`.
+These options will be used when compiling the supplied models, but not when compiling the inference framework.
+One limitation is that it is currently only possible to supply source file(s) to `rootppl`.
+Object/library files are not supported (for this, you must write your own custom build script).
+
+To compile for GPU, add your GPU:s compute capability to the `--target` option.
 You can find your GPU:s compute capability in the [Wikipedia table](https://en.wikipedia.org/wiki/CUDA#GPUs_supported).
 Here is an example that will compile the airplane example for a GPU with a minimum compute capability of 7.5
-(simply remove `--arch 75` to compile for CPU):
+(simply remove `--target sm_75` to compile for CPU):
 ```
-rootppl models/airplane/airplane.cu --arch 75 -j 5
+rootppl models/airplane/airplane.cu --target sm_75 -j 5
 ```
 The optional argument `-j x` speeds up the compilation process by spawning `x` jobs, allowing for parallel compilation.
 The corresponding parallel CPU (OpenMP) example is:
 ```
-rootppl models/airplane/airplane.cu --omp -j 5
+rootppl models/airplane/airplane.cu --target omp -j 5
 ```
 Alternatively, the c++ compiler can be specified with CXX. This is often required on Mac OS to enable OpenMP, by using g++ instead of the default clang. On Mac OS, g++ can be installed with e.g. `brew install gcc`. Then, assuming the version installed was `gcc-10`:
 ```
-rootppl models/airplane/airplane.cu --omp -j 5 --cxx g++-10
+rootppl models/airplane/airplane.cu --target omp -j 5 --cxx g++-10
 ```
 
-The first build will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run `rootppl` with the `-j num_threads` to use multiple threads and speed up the build).
-__Note that if the inference framework is compiled for GPU, and then the model is compiled for CPU,
-there will be errors. So always perform a `rootppl clean` before switching between CPU and GPU. The same goes for switching to/from OpenMP.__
+The first build will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run `rootppl` with the `-j num_threads` to use multiple threads and speed up the build). The inference framework is recompiled whenever options such as `--target` are modified between runs of `rootppl`.
 
-This should generate an executable named `program` (add `-o <exec_name>` to name it differently). Execute it with `./program num_particles`. For example:
+Any of the above commands should generate an executable named `a.out` (add `-o <exec_name>` to name it differently). Execute it with `./a.out num_particles`. For example:
 ```
-./program 1000
+./a.out 1000
 ```
 
 An example output of this:
 ```
-./program 1000
+./a.out 1000
 -119.422143
 Num particles close to target: 98.9%, MinX: 56.2349, MaxX: 91.1572
 ```
-First is the command that is executed, it executes the executable `program` with program argument `1000`.
+First is the command that is executed, it executes the executable `a.out` with argument `1000`.
 The first row is the normalizing constant. The second row is a print statement within the model.
 
-You can supply a second argument to `program`, which is the number of sweeps:
+You can supply a second argument to `a.out`, which is the number of sweeps:
 ```
-./program 1000 3
+./a.out 1000 3
 -115.482724
 Num particles close to target: 89.7%, MinX: 51.5005, MaxX: 88.2039
 -115.472101
@@ -199,7 +199,7 @@ rootppl models/simple-examples/coin_flip_mean.cu
 ```
 
 Then it can be executed with the executable followed by the
-number of particles, for example: `./program 1000`.
+number of particles, for example: `./a.out 1000`.
 
 An example output is then:
 ```
@@ -307,7 +307,9 @@ Further phylogenetic models are found in the package
 #### The RootPPL Architecture
 
 The architecture's main goal is to decouple the inference from the probabilistic models, this is the case for probabilistic
-programming languages. In the `inference` directory, the code for inference methods can be found. Currently, only SMC is supported.
+programming languages.
+All inference engine code is located under `src/`.
+In the `inference` directory, the code for inference methods can be found. Currently, only SMC is supported.
 Within the `smc` directory, the `resampling` directory contain resampling strategies. Currently only Systematic Resampling is supported. The resampling has
 a parallel implementation for the GPU, and a sequential and parallel implementation for the CPU.
 
@@ -326,6 +328,3 @@ TODO, stuff not yet demonstrated explicitly in README:
 - Multiple BBLOCK models
 - Global data accessible by bblocks on GPU
 - Program States containing more than a primitive datatype, e.g. structs.
-
-#### RootPPL ChangeLog
-7/7/2021: added BetaBernoulli distribution
