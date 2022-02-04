@@ -46,7 +46,7 @@ done
 flags="-I$engine_src -std=c++14 -O3"
 case $target in
   sm_*)
-    cxx=${cxx:-nvcc}
+    cxx=nvcc
     flags+=" -arch=$target -rdc=true -lcudadevrt"
     ;;
   cpu|*)
