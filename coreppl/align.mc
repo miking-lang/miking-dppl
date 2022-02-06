@@ -407,6 +407,7 @@ lang Align = MExprPPLCFA
 end
 
 lang Test = Align + MExprANFAll + DPPLParser
+end
 
 -----------
 -- TESTS --

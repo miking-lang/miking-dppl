@@ -898,10 +898,12 @@ lang DistAll =
   UniformDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist + GaussianDist + BinomialDist
+end
 
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
   + MExprANF + MExprTypeLiftUnOrderedRecords
+end
 
 mexpr
 
