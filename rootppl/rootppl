@@ -9,32 +9,37 @@ engine_build=build/
 
 # Argument parsing
 args=()
+flags="-I$engine_src -std=c++14 -O3"
 while [[ $# -gt 0 ]]; do
   case $1 in
     -j|--jobs)
       flag_jobs="$1 $2"
-      shift # past argument
-      shift # past value
+      shift
+      shift
       ;;
-    --target) # Alternatives: cpu, omp, sm_75, sm_x, ...
+    --target) # Alternatives: cpu, omp, sm_* (e.g., sm_75)
       target="$2"
-      shift # past argument
-      shift # past value
+      shift
+      shift
       ;;
     --cxx)
       cxx="$2"
-      shift # past argument
-      shift # past value
+      shift
+      shift
       ;;
     --stack-size)
-      stack_size=" -D STACK_SIZE_PROGSTATE=$2"
-      shift # past argument
-      shift # past value
+      flags+=" -D STACK_SIZE_PROGSTATE=$2"
+      shift
+      shift
       ;;
     --ess-threshold)
-      ess_threshold=" -D ESS_THRESHOLD=$2"
-      shift # past argument
-      shift # past value
+      flags+=" -D ESS_THRESHOLD=$2"
+      shift
+      shift
+      ;;
+    -w)
+      flags+=" $1"
+      shift
       ;;
     *) # unknown option
       args+=("$1") # save it in an array for later
@@ -43,7 +48,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-flags="-I$engine_src -std=c++14 -O3"
 case $target in
   sm_*)
     cxx=nvcc
@@ -67,7 +71,7 @@ old=${engine_build}config.mk
 new=${engine_build}tmp
 cat <<EOT >> $new
 CXX=$cxx
-FLAGS=$flags$stack_size$ess_threshold
+FLAGS=$flags
 EOT
 if ! ([ -f $old ] && cmp $old $new &> /dev/null); then
   cp -f $new $old
@@ -82,7 +86,11 @@ ${engine_src}build.mk \
   || exit 1
 
 # Build project and link it with RootPPL engine
+read -r -d '' cmd << EOM
 $cxx \
   $flags \
   ${args[@]} \
   $link $(find $engine_build -name *.o)
+EOM
+echo $cmd
+$cmd
