@@ -153,8 +153,10 @@ double runSMC(const pplFunc_t firstBblock, const int numParticles, const int omp
     }
 
     printf("%f\n", logNormConstant);
+#ifdef EXTRA_FILE_OUTPUT
     writeLogNormConstToFile(logNormConstant);
     writeESSToFile(essList);
+#endif
 
     if(callback != NULL)
         callback(particles, numParticles, NULL);
@@ -171,13 +173,17 @@ double runSMC(const pplFunc_t firstBblock, const int numParticles, const int omp
 
 void prepareSMC() {
     configureMemSizeGPU();
+#ifdef EXTRA_FILE_OUTPUT
     prepareFile(Z_FILE_NAME, true);
     prepareFile(ESS_FILE_NAME, true);
+#endif
 }
 
 void finishFilesSMC() {
+#ifdef EXTRA_FILE_OUTPUT
     finishFile(Z_FILE_NAME, true);
     finishFile(ESS_FILE_NAME, false);
+#endif
 }
 
 

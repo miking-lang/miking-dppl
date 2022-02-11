@@ -38,3 +38,17 @@ test:
 
 test-boot:
 	@$(MAKE) -s -f test-boot.mk all
+
+rootppl_bin_path = $(HOME)/.local/bin/rootppl
+rootppl_src_path=$(HOME)/.local/src/rootppl/
+rootppl_bin = rootppl/rootppl
+rootppl_src = rootppl/src/
+
+install-rootppl:
+	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
+	cp -f $(rootppl_bin) $(rootppl_bin_path)
+	cp -rfT $(rootppl_src) $(rootppl_src_path)
+
+uninstall-rootppl:
+	rm -rf $(rootppl_bin_path)
+	rm -rf $(rootppl_src_path)
