@@ -254,7 +254,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     -- RUN BASE C COMPILER --
     -------------------------
 
-    match compile typeEnv prog with (env, types, tops, inits, retTy) in
+    match compile typeEnv (defaultCompileCOptions ()) prog
+    with (env, types, tops, inits, retTy) in
 
     -- print (_debugPrint types tops inits inits);
 
@@ -1349,6 +1350,7 @@ x
 ------------------------" in
 
 utest test simple with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "#include \"inference/smc/smc.cuh\"",
@@ -1408,6 +1410,7 @@ f 1.0; 1.0
 ----------------------" in
 
 utest test nestedIfs with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "#include \"inference/smc/smc.cuh\"",
