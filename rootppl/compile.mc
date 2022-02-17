@@ -403,6 +403,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match res with (tops, detFunMap) in
 
+    -- print (_debugPrint types tops detInits stochInits);
 
     ----------------------------
     -- DETERMINE STACK FRAMES --
@@ -602,6 +603,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     ) tops in
     let stochInits: [CStmt] =
       join (map (replaceDefs stochInitSF.mem) stochInits) in
+
+    -- print (_debugPrint types tops detInits stochInits);
 
     -----------------------------------
     -- TRANSLATE LOCAL VARIABLE USES --
@@ -946,7 +949,10 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let stmt =
                 CSIf { cond = cond, thn = accThn.block, els = accEls.block }
               in
-              splitStmts {acc with block = snoc acc.block stmt} sf stmts
+              match stmts with [] then
+                {acc with block = snoc acc.block stmt}
+              else
+                splitStmts {acc with block = snoc acc.block stmt} sf stmts
 
             -- At least one split in branches
             else
@@ -1042,6 +1048,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let tops = match splitFunctions accSplit tops with { tops = tops }
                in tops in
     let tops = concat tops (splitInit accSplit stochInitSF stochInits) in
+
+    -- print (_debugPrint types tops detInits stochInits);
 
     ------------------------------------
     -- TRANSLATE GLOBAL VARIABLE REFS --
