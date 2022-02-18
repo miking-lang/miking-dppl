@@ -41,7 +41,7 @@ while [[ $# -gt 0 ]]; do
       flags+=" -D EXTRA_FILE_OUTPUT"
       shift
       ;;
-    -w)
+    -w|-g|-O)
       flags+=" $1"
       shift
       ;;
