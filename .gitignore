@@ -1,2 +1,12 @@
+_*
+build/
 _build/
 .merlin
+.vscode
+rootppl/.gb.data
+rootppl/log_norm_const.txt
+data.csv
+\#*
+*~
+out.cu
+a.out

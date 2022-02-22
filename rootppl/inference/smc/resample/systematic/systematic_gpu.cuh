@@ -7,7 +7,9 @@
 
 #ifdef __NVCC__
 
-#include "common.cuh"
+#include <tuple>
+
+#include "inference/smc/resample/common.cuh"
 
 HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numParticles);
 /**
@@ -19,9 +21,21 @@ HOST DEV void prefixSumNaive(floating_t* w, resampler_t resampler, int numPartic
  * @param numParticles the number of particles used in SMC.
  * @param numBlocks kernel launch setting.
  * @param numThreadsPerBlock kernel launch setting.
- * @return the logarithm of the total weight sum. 
+ * @return tuple (log weight sum, ess)
  */
-HOST DEV floating_t calcLogWeightSumGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
+HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSGpu(floating_t* w, resampler_t& resampler, int numParticles, int numBlocks, int numThreadsPerBlock);
+
+/**
+ * Calculates the ESS (effective sample size).  
+ * 
+ * @param scaledW the max weight scaled weight array.
+ * @param scaledWeightSum the max weight scaled weight sum. 
+ * @param scaledWSquared the max weight scaled weights squared. 
+ * @param numParticles the number of particles used in SMC.
+ * @return the effective sample size.
+ */
+HOST floating_t calcESSHelperGpu(floating_t* scaledW, floating_t scaledWeightSum, floating_t* scaledWSquared, int numParticles);
+
 
 /**
  * Calculates the cumulative offsprings and then uses it to calculate the ancestor indices. 
@@ -69,16 +83,15 @@ void resampleSystematicGpu(particles_t& particles, resampler_t& resampler, int n
 
 
 /**
- * Takes the log of the exponentiated log weight, scales back with the maximum log weight and subtracts with the logarithm of the sum of weights. 
+ * Takes the log-weights and subtracts the logarithm of the sum of weights. 
  *
  * @param w the array of scaled particle weights
- * @param resampler the resampler struct.
  * @param logWeightSum the logarithm of the sum of weights. 
  * @param numParticles the number of particles used in SMC.
  * @param numBlocks kernel launch setting.
  * @param numThreadsPerBlock kernel launch setting.
  */
-void logAndRenormaliseWeightsGpu(floating_t* w, resampler_t resampler, floating_t logWeightSum, int numParticles, int numBlocks, int numThreadsPerBlock);
+void normaliseWeightsGpu(floating_t* w, floating_t logWeightSum, int numParticles, int numBlocks, int numThreadsPerBlock);
 
 #endif
 

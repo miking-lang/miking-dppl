@@ -4,6 +4,8 @@
  * This file is included by smc_impl.cuh and relies on the includes in smc_impl.cuh.
  */
 
+// Nested inference is never used, and this code has become obsolete.
+/*
  #include "macros/macros.cuh"
  #include "smc.cuh"
  #include "dists/dists.cuh"
@@ -58,7 +60,7 @@ DEV double runSMCNested(
         if(parallelExec) {
             #ifdef __NVCC__
             // Use nested randStates
-            execFuncs<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, numParticles, numParticles, arg);
+            execFuncs<<<NUM_BLOCKS, NUM_THREADS_PER_BLOCK_NESTED>>>(randStates, particles, bblocks, numParticles, numParticles, numBblocks, arg);
             cudaDeviceSynchronize();
             cudaCheckErrorDev();
             #endif
@@ -118,3 +120,4 @@ DEV double runSMCNested(
 
     return logNormConstant;
 }
+*/

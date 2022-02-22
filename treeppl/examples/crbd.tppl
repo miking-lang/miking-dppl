@@ -1,5 +1,6 @@
 /**  Constant-rate birth-death model */
 
+
 // compiler hints, see Section 1.3
 //~PARTICLES: 10000
 //~METHOD: "SMC"
@@ -16,6 +17,7 @@ type Tree =
 
 /**  Simulates side branches under the CRBD model
  * 
+
  * The following is a function that simulates the hidden
  * (extinct or undetected) evolutionary side-branches under
  * the CRBD model.
@@ -26,7 +28,9 @@ type Tree =
  * function is unit, as no explicit return specified and
  * it is a sequence of statements rather than a simple expression.
  */
-simulate_side_branch = (start_time: float, λ: float, μ: float) => {
+
+simulate_side_branch = (start_time: float, λ: float, μ: float): () => {
+
     t ~ Exponential(rate=λ + μ) // sampling, section 1.2
     current_time = start_time - t // expressions, Section 0.1
     if (current_time < 0) { // conditionals, Section 0.5
@@ -43,6 +47,7 @@ simulate_side_branch = (start_time: float, λ: float, μ: float) => {
 
 
 simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
+
     //~RESAMPLE 
 
     // k is the number of hidden speciation events
@@ -64,7 +69,8 @@ simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
     // pattern matching, Section 0.6
     switch (child) {
         | Node => {
-            observe 0 ~ Exponetial(λ)
+            observe 0 ~ Exponential(λ)
+
             simulate_tree(child.left, child, λ, μ)
             simulate_tree(child.right, child, λ, μ)
         }

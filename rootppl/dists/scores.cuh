@@ -43,6 +43,8 @@ HOST DEV floating_t gammaScore(floating_t k, floating_t theta, floating_t x);
 
 HOST DEV floating_t laplaceScore(floating_t loc, floating_t scale, floating_t x);
 
+HOST DEV floating_t lomaxScore(floating_t x, floating_t lambda, floating_t alpha);
+
 // multinomial
 
 // multiVariateNormal
@@ -51,5 +53,12 @@ HOST DEV floating_t normalScore(floating_t mean, floating_t std, floating_t x);
 
 // The range differs on CPU and GPU unfortunately, should that affect this? Is it negligible?
 HOST DEV floating_t uniformScore(floating_t min, floating_t max, floating_t x);
+
+// V: negative binomial score signature
+HOST DEV floating_t negativeBinomialScore(floating_t x, floating_t k, floating_t p);
+
+// poisson
+
+HOST DEV floating_t poissonScore(floating_t lambda, int x);
 
 #endif

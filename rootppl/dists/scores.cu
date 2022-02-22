@@ -9,6 +9,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <cassert>
 
 #include "macros/macros.cuh"
 #include "utils/math.cuh"
@@ -157,6 +158,10 @@ HOST DEV floating_t laplaceScore(floating_t loc, floating_t scale, floating_t x)
     return -1 * (log(2 * scale) + abs(x - loc) / scale);
 }
 
+HOST DEV floating_t lomaxScore(floating_t x, floating_t lambda, floating_t alpha) {
+    return log(alpha) - log(lambda) - (alpha + 1) * log(1 + x / lambda);
+}
+
 // multinomial
 
 // multiVariateNormal
@@ -184,3 +189,28 @@ HOST DEV floating_t uniformScore(floating_t min, floating_t max, floating_t x) {
     else
         return -log(max - min);
 }
+
+// V: Score function for the negative binomial distribution
+// Implementation inspired by Birch
+// see https://github.com/lawmurray/Birch/blob/master/libraries/Standard/src/math/logpdf.birch
+// It makes use of log() and log1p() which should be in <math.h>
+// and lchoose, which I have implemented in 
+// - x: The variate (number of failures).
+// - k: Number of successes before the experiment is stopped. must be > 0
+// - p: Probability of success. must be in [0, 1]
+// Returns: the log probability mass.
+HOST DEV floating_t negativeBinomialScore(floating_t x, floating_t k, floating_t p) {
+    assert(0 < k);
+    assert(0.0 <= p);
+    assert(p <= 1.0);
+    //    assert(0.0 <= p && p <= 1.0);
+  
+    if (x >= 0) {
+      return k*log(p) + x*log1p(-p) + lchoose(x + k - 1, x);
+    } else {
+      return -INFINITY;
+    }
+    
+}
+
+

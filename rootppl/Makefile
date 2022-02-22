@@ -1,85 +1,117 @@
-# define \n
 
+ifndef EXEC_NAME
+EXEC_NAME=program
+endif
 
-# endef
+ifdef STACK_SIZE_PROGSTATE
+STACK_FLAG=-D STACK_SIZE_PROGSTATE=$(STACK_SIZE_PROGSTATE)
+endif
 
-# ifndef model
-# $(error model argument needs to be set with e.g.: $(\n)make model=path/to/model.cu$(\n))
-# endif
+ifdef ESS_THRESHOLD
+ESS_FLAG=-D ESS_THRESHOLD=$(ESS_THRESHOLD)
+endif
 
-# ifdef ompthreads
-# OMP = -fopenmp
-# endif
-
-
+COMMON_FLAGS=$(EXTRA_FLAGS) -I. -std=c++14 -O3 $(STACK_FLAG) $(ESS_FLAG)
 ifdef arch
 # GPU
 # CC=/usr/local/cuda-11.0/bin/nvcc
 CC=nvcc
-FLAGS=-I. -std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
+FLAGS=$(COMMON_FLAGS) -arch=sm_$(arch) -rdc=true -lcudadevrt
 FLAGS_LINK=-std=c++14 -arch=sm_$(arch) -rdc=true -lcudadevrt -O3
 else
 # CPU
-CC=g++
-FLAGS=-I. -xc++ -std=c++14 -O3 $(OMP)
+CC=$(CXX)
+FLAGS=$(COMMON_FLAGS) -xc++ $(OMP)
 FLAGS_LINK=-std=c++14 -O3 $(OMP)
 endif
 
-EXEC_NAME=program
+
+.PHONY :\
+	install
+	clean
+	framework
+	ompframework
+	omp
+	openmpflag
 
 SMC_SRC=inference/smc/smc.cu
 SMC_NESTED_SRC=inference/smc/smc_nested.cu
 DISTS_SRC=dists/dists.cu
 SCORES_SRC=dists/scores.cu
+DELAYED_SRC = dists/delayed.cu
 PARTICLES_MEMORY_HANDLER_SRC=inference/smc/particles_memory_handler.cu
 MISC_SRC=utils/misc.cu
 MATH_SRC=utils/math.cu
 SMC_KERNELS_SRC=inference/smc/smc_kernels.cu
-SYSTEMATIC_COMMON_SRC=inference/smc/resample/systematic/common.cu
+SYSTEMATIC_COMMON_SRC=inference/smc/resample/common.cu
 SYSTEMATIC_SEQ_SRC=inference/smc/resample/systematic/systematic_cpu.cu
 SYSTEMATIC_PARALLEL_SRC=inference/smc/resample/systematic/systematic_gpu.cu
 SYSTEMATIC_KERNELS_SRC=inference/smc/resample/systematic/kernels.cu
+FILE_HANDLER_SRC=inference/smc/file_handler.cu
 
 OBJDIR=out
-_OBJ_FILES_FRAMEWORK=smc.o smc_nested.o dists.o scores.o particles_memory_handler.o misc.o math.o \
-	smc_kernels.o systematic_common.o systematic_seq.o systematic_parallel.o systematic_kernels.o
+_OBJ_FILES_FRAMEWORK=smc.o smc_nested.o dists.o scores.o delayed.o particles_memory_handler.o misc.o math.o \
+	smc_kernels.o systematic_common.o systematic_seq.o systematic_parallel.o systematic_kernels.o file_handler.o
 OBJ_FILES_FRAMEWORK=$(patsubst %.o, $(OBJDIR)/%.o, $(_OBJ_FILES_FRAMEWORK))
 
-# SMC_DEPS = $(wildcard inference/smc/*.cuh) $(wildcard inference/smc/resample/*/*.cuh) $(wildcard macros/*.cuh) dists/dists.cuh utils/cuda_error_utils.cuh utils/misc.cuh utils/math.cuh
+# SMC_DEPS = $(wildcard inference/smc/*.cuh) $(wildcard inference/smc/resample/*/*.cuh) $(wildcard macros/*.cuh) dists/dists.cuh utils/cuda_error_utils.cuh utils/misc.cuh utils/math.cuh dists/delayed.cuh
 FRAMEWORK_FILES = $(wildcard inference/*) $(wildcard inference/*/*) $(wildcard inference/*/*/*) $(wildcard inference/*/*/*/*) \
 	$(wildcard dists/*) $(wildcard macros/*) $(wildcard utils/*)
-
-# $@ is target name
-# $< is dependency list
 
 # Link object files to executable
 $(EXEC_NAME): $(OBJDIR) $(OBJDIR)/model.o $(OBJ_FILES_FRAMEWORK)
 	$(CC) $(FLAGS_LINK) out/*.o -o $@
 	rm $(OBJDIR)/model.o
 
+bin_path = $(HOME)/.local/bin
+lib_path=$(HOME)/.local/lib/rootppl
+rootppl_name = rootppl
+install:
+	mkdir -p $(bin_path) $(lib_path)
+	cp -f ./$(rootppl_name) $(bin_path)/$(rootppl_name); chmod +x $(bin_path)/$(rootppl_name)
+	cp -rf . $(lib_path)/
+	rm -f $(lib_path)/.gitignore $(lib_path)/rootppl
+
+uninstall:
+	rm -rf $(bin_path)/$(rootppl_name)
+	rm -rf $(lib_path)
+
+clean:
+	rm -f out/*.o
+
+run:
+	./$(EXEC_NAME) $(N)
+
+openmpflag:
+	$(eval OMP = -fopenmp)
+
+# Compile only framework
+framework:\
+	$(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+ompframework:\
+	openmpflag $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
+
+omp:\
+	openmpflag $(EXEC_NAME)
+
+
 # Compile model, which is always recompiled as it is deleted after the executable is created.
 $(OBJDIR)/model.o: $(model)
 	$(CC) -c $(FLAGS) $(model) -o $@
+
+
 # $(CC) -c $(FLAGS) $(model) -o model.o
 
 $(OBJDIR):
 	mkdir $(OBJDIR)
 
-# Compile only framework
-.PHONY: framework
-framework: $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
 
-.PHONY: ompframework
-ompframework: openmpflag $(OBJDIR) $(OBJ_FILES_FRAMEWORK)
-
-.PHONY: omp openmpflag
-omp: openmpflag $(EXEC_NAME)
-
-openmpflag:
-	$(eval OMP = -fopenmp)
+# $@ is target name
+# $< is dependency list
 
 # $(OBJ_FILES_FRAMEWORK): $(FRAMEWORK_FILES)
-	# $(CC) -c $(FLAGS) $< -o $@
+# $(CC) -c $(FLAGS) $< -o $@
 
 # Compile smc, depend on all files in smc dir and cuh files in resample dirs
 # $(OBJDIR)/smc_impl.o: $(wildcard inference/*.cuh) $(wildcard macros/*.cuh) dists/dists.cuh $(wildcard utils/*.cuh)
@@ -98,6 +130,10 @@ $(OBJDIR)/dists.o: $(FRAMEWORK_FILES)
 
 $(OBJDIR)/scores.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(SCORES_SRC) -o $@
+
+$(OBJDIR)/delayed.o: $(FRAMEWORK_FILES)
+	$(CC) -c $(FLAGS) $(DELAYED_SRC) -o $@
+
 
 # $(OBJDIR)/particles_memory_handler.o: $(PARTICLES_MEMORY_HANDLER_SRC) inference/smc/smc.cuh utils/misc.cuh
 $(OBJDIR)/particles_memory_handler.o: $(FRAMEWORK_FILES)
@@ -130,11 +166,6 @@ $(OBJDIR)/systematic_parallel.o: $(FRAMEWORK_FILES)
 $(OBJDIR)/systematic_kernels.o: $(FRAMEWORK_FILES)
 	$(CC) -c $(FLAGS) $(SYSTEMATIC_KERNELS_SRC) -o $@
 
-.PHONY: clean
-clean:
-	rm out/*.o $(EXEC_NAME)
+$(OBJDIR)/file_handler.o: $(FRAMEWORK_FILES)
+	$(CC) -c $(FLAGS) $(FILE_HANDLER_SRC) -o $@
 
-# run: ./$(EXEC_NAME)
-.PHONY: run
-run:
-	./$(EXEC_NAME) $(N)

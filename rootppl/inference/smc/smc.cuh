@@ -19,23 +19,20 @@
 #define NUM_THREADS_PER_BLOCK 128
 #define NUM_THREADS_PER_BLOCK_NESTED 32
 
-
 /*
- * Particle structure, allocated at start of inference. This SoA (Struct of Arrays) structure is
- * important for the performance on GPU:s as it results in coalesced memory handling. 
- * Large program states will result in worse performance not only due to copying in resampling, but
- * also since it results in strided memory accesses. There are likely better solutions for these cases. 
- * 
- * progStates: These are the model-specific states. 
- * pcs: These are the "program counters" which are used by the particles to define what BBLOCK to execute in each BBLOCK-iteration.
- * weights: These are the weights used in resampling and approximation of the normalization constant. Equivalent to "factor" in WebPPL.
+ * Program state used when program data is solely handled by an explicit generic stack. 
+ *
+ * stackPtr: stack pointer for the stack, uses relative addresses. 
+ * stack: the actual stack, implemented with char array and size defined with STACK_SIZE_PROGSTATE bytes
  */
- 
-struct particles_t {
-    void* progStates;
-    int* pcs;
-    floating_t* weights;
+#ifdef STACK_SIZE_PROGSTATE
+struct progStateStack_t {
+    uintptr_t stackPtr;
+    char stack[STACK_SIZE_PROGSTATE];
 };
+#endif
+
+struct particles_t;
 
 /*
  * This corresponds to the BBLOCK functions, which are passed to SMC and executed during inference. 
@@ -56,6 +53,27 @@ using pplFunc_t = void (*)(
     int,
     void*);
 
+/*
+ * Particle structure, allocated at start of inference. This SoA (Struct of Arrays) structure is
+ * important for the performance on GPU:s as it results in coalesced memory handling. 
+ * Large program states will result in worse performance not only due to copying in resampling, but
+ * also since it results in strided memory accesses. There are likely better solutions for these cases. 
+ * 
+ * progStates: These are the model-specific states. These are replaced with a progStateStack_t if specified. 
+ * next: The next bblock function pointer. This replaced the old program counters. 
+ * weights: These are the weights used in resampling and approximation of the normalization constant. Equivalent to "factor" in WebPPL.
+ */
+struct particles_t {
+    #ifdef STACK_SIZE_PROGSTATE
+    progStateStack_t* progStates;
+    #else
+    void* progStates;
+    #endif
+
+    pplFunc_t* next;
+    floating_t* weights;
+};
+
 
 // Callback function, like bblock function but without index. As all particles are usually used here.
 
@@ -74,8 +92,7 @@ using callbackFunc_t = void (*)(particles_t&, int, void*);
  * Runs Sequential Monte Carlo inference on the given bblock functions, then calls 
  * optional callback that can use resulting particles before memory is cleaned up.
  * 
- * @param bblocks the array of functions that will be executed by SMC.
- * @param numBblocks the size of the bblocks array.
+ * @param firstBblock the first bblock that should be executed.
  * @param numParticles number of particles to be used in SMC.
  * @param ompThreads controls the maximum number of threads used by Open MP on the CPU variant. 
  * @param particlesPerThread indirectly determines how many CUDA threads will be necessary. Not used in CPU variant.
@@ -84,8 +101,20 @@ using callbackFunc_t = void (*)(particles_t&, int, void*);
  * @param arg optional argument to be passed to the bblocks (global data is often used instead for top-level SMC).
  * @return the logged normalization constant.
  */
-double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int ompThreads, const int particlesPerThread,
+double runSMC(const pplFunc_t firstBblock, const int numParticles, const int ompThreads, const int particlesPerThread,
     size_t progStateSize, callbackFunc_t callback = NULL, void* arg = NULL);
+
+
+/**
+ * Called on program start, before inference starts. Called once per program, even if SMC is executed many times. 
+ * This will call configureMemSizeGPU and set up result files. 
+ */
+void prepareSMC();
+
+/*
+ * Called before terminating the program. 
+ */
+void finishFilesSMC();
 
     
 /**
@@ -95,8 +124,6 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
  * be tweaked to prioritize the memory type required by the program
  */
 void configureMemSizeGPU();
-
-
 
 
 /**

@@ -5,17 +5,29 @@
  * File systematic_cpu.cuh contains the CPU implementation of the systematic resampling. 
  */
 
-#include "common.cuh"
+ #include "inference/smc/resample/common.cuh"
+
+ #include <tuple>
 
 /**
- * Calculates the log weight prefix sums. 
+ * Calculates the log weight prefix sums and ESS. 
  * 
  * @param w the weight array.
  * @param resampler the resampler struct.
  * @param numParticles the number of particles used in SMC.
- * @return the logarithm of the total weight sum. 
+ * @return tuple(the logarithm of the total weight sum, ESS)
  */
-HOST DEV floating_t calcLogWeightSumCpu(floating_t* w, resampler_t resampler, int numParticles);
+HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSCpu(floating_t* w, resampler_t& resampler, int numParticles);
+
+/**
+ * Calculates the ESS. 
+ * 
+ * @param scaledW the max weight scaled weight array.
+ * @param scaledWeightSum the max log weight scaled weight sum.
+ * @param numParticles the number of particles used in SMC.
+ * @return effective sample size
+ */
+HOST floating_t calcESSHelperCpu(floating_t* scaledW, floating_t scaledWeightSum, int numParticles);
 
 /**
  * Calculates the cumulative offspring of each particle. 
@@ -56,13 +68,13 @@ HOST DEV void copyStatesCpu(particles_t& particles, resampler_t& resampler, int 
 DEV void resampleSystematicCpu(RAND_STATE_DECLARE particles_t& particles, resampler_t& resampler, int numParticles);
 
 /**
- * Takes the log of the exponentiated log weight, scales back with the maximum log weight and subtracts with the logarithm of the sum of weights. 
+ * Takes the log-weights and subtracts the logarithm of the sum of weights. 
  *
  * @param w the array of scaled particle weights
- * @param resampler the resampler struct.
  * @param logWeightSum the logarithm of the sum of weights. 
  * @param numParticles the number of particles used in SMC.
  */
- DEV void logAndRenormaliseWeightsCpu(floating_t* w, resampler_t resampler, floating_t logWeightSum, int numParticles);
+ DEV void normaliseWeightsCpu(floating_t* w, floating_t logWeightSum, int numParticles);
+
 
 #endif

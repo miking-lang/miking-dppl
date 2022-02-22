@@ -87,6 +87,13 @@ HOST DEV int sgn(T val) {
  */
 HOST DEV floating_t maxNaive(const floating_t* arr, const int n);
 
+// V: added signature
+/**
+ * Logarithm of the binomial coefficient.
+ * Based on: https://github.com/lawmurray/Birch/blob/master/libraries/Standard/src/math/special.birch
+ */
+HOST DEV floating_t lchoose(const int x, const int y);
+
 /**
  * Finds the maximum value, sequential implementation. 
  * General template version but for CPU only. 

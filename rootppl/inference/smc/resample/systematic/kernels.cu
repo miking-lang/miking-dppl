@@ -7,20 +7,35 @@
 
 #include <curand_kernel.h>
 #include "inference/smc/smc.cuh"
-#include "common.cuh"
+#include "inference/smc/resample/common.cuh"
 #include "kernels.cuh"
 
-__global__ void expWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight) {
+
+__global__ void scaleExpWeightsAndSquareWeightsKernel(floating_t* w, int numParticles, floating_t maxLogWeight, floating_t* wSquared) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    w[idx] = exp(w[idx] - maxLogWeight);
+    floating_t localW = w[idx];
+    
+    if (isnan(localW))
+        localW = -INFINITY;
+
+    localW = exp(localW - maxLogWeight);
+
+    w[idx] = localW;
+
+    if (isnan(localW))
+        wSquared[idx] = 0;
+    else
+        wSquared[idx] = localW * localW;
+    
 }
 
-__global__ void renormaliseSumsKernel(floating_t* prefixSum, int numParticles, floating_t maxLogWeight) {
+__global__ void renormaliseKernel(floating_t* w, floating_t* prefixSum, int numParticles, floating_t maxLogWeight) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
+    w[idx] = log(w[idx]) + maxLogWeight;
     prefixSum[idx] = log(prefixSum[idx]) + maxLogWeight;
 }
 
@@ -49,11 +64,11 @@ __global__ void copyStatesKernel(particles_t particlesDst, const particles_t par
     copyParticle(particlesDst, particlesSrc, idx, ancestor[idx], progStateSize);
 }
 
-__global__ void logAndRenormaliseWeightsKernel(floating_t* w, floating_t maxLogWeight, floating_t logWeightSum, int numParticles) {
+__global__ void normaliseWeightsKernel(floating_t* w, floating_t logWeightSum, int numParticles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= numParticles || idx < 0) return;
 
-    w[idx] = log(w[idx]) + maxLogWeight - logWeightSum;
+    w[idx] -= logWeightSum;
 }
 
 

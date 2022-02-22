@@ -18,7 +18,7 @@ using namespace std;
 
 
 #define NUM_BBLOCKS 2
-INIT_MODEL(progState_t, NUM_BBLOCKS)
+INIT_MODEL(progState_t)
 
 floating_t planeX[TIME_STEPS];
 
@@ -48,7 +48,7 @@ BBLOCK(propagateAndWeight, {
     PSTATE.t++;
 
     if(PSTATE.t >= TIME_STEPS - 1)
-        PC = 2;
+        NEXT = NULL;
 
 })
 
@@ -57,7 +57,7 @@ BBLOCK(particleInit, {
     PSTATE.x = SAMPLE(uniform, 0, MAP_SIZE);
     PSTATE.t = 0;
 
-    PC = 1;
+    NEXT = propagateAndWeight;
     BBLOCK_CALL(propagateAndWeight);
 })
 
@@ -82,8 +82,7 @@ CALLBACK(callback, {
 MAIN(
     initAirplane();
 
-    ADD_BBLOCK(particleInit)
-    ADD_BBLOCK(propagateAndWeight)
+    FIRST_BBLOCK(particleInit)
 
     SMC(callback)
 )

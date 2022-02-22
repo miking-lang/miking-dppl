@@ -20,8 +20,16 @@ __global__ void initCurandStates(curandState* randStates, int numThreads, int se
     randStates[i] = randStateLocal;
 }
 
-__global__ void execFuncs(curandState* randStates, particles_t particles, const pplFunc_t* funcs, 
-                            int numParticles, int numThreads, void* arg) {
+__global__ void initParticlesNext(particles_t particles, int numParticles, pplFunc_t firstBblock) {
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if(i >= numParticles || i < 0) return;
+
+    particles.next[i] = firstBblock;
+
+}
+
+__global__ void execFuncs(curandState* randStates, particles_t particles, int numParticles, int numThreads, void* arg) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     // if(i >= numParticles || i < 0) return;
@@ -30,11 +38,14 @@ __global__ void execFuncs(curandState* randStates, particles_t particles, const 
     curandState randStateLocal = randStates[i];
     
     for(int j = i; j < numParticles; j += numThreads) {
-        // printf("j: %d\n", j);
         // funcs[particles.pcs[i]](&randStateLocal, particles, i, arg);
-        funcs[particles.pcs[j]](&randStateLocal, particles, j, arg);
+        // int pc = particles.pcs[j];
+        pplFunc_t next = particles.next[j];
+        if(next != NULL)
+            next(&randStateLocal, particles, j, arg);
+        // if(pc < numBblocks && pc >= 0)
+            // funcs[pc](&randStateLocal, particles, j, arg);
     }
-
 
     randStates[i] = randStateLocal;
 }

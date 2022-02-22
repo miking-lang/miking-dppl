@@ -9,7 +9,6 @@
 #include <omp.h>
 #endif
 
-
 /**
  * Returns a sample from the Uniform distribution on the interval [min, max)
  * 
@@ -58,6 +57,36 @@ unsigned int poisson(double lambda) {
     #else
     return poissonDist(gen);
     #endif
+}
+
+/**
+ * Returns a sample from the Binomial distribution.
+ *
+ * @param n number of trials
+ * @param p success probability for each trial
+ * @return Binomial(n, p)
+ */
+int binomial(double p, int n) {
+    std::binomial_distribution<int> dist(n,p);
+    #ifdef _OPENMP
+    return dist(genWrappers[omp_get_thread_num()].gen);
+    #else
+    return dist(gen);
+    #endif
+}
+
+/**
+ * Returns a sample from Student's t-distribution. Parametrization 2021.
+ *
+ * @param k > 0 real, degrees of freedom.
+ */
+DEV floating_t student_t(RAND_STATE_DECLARE floating_t k) {
+  std::student_t_distribution<double> dist(k);
+  #ifdef _OPENMP
+  return dist(genWrappers[omp_get_thread_num()].gen);
+  #else
+  return dist(gen);
+  #endif
 }
 
 #endif

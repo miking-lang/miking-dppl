@@ -10,6 +10,7 @@
 
 #define HOST __host__
 #define DEV __device__
+#define MANAGED __managed__
 
 #define LOG(x) log(static_cast<floating_t>(x))
 
@@ -22,7 +23,10 @@
 // Copies a reference to a device function to a host pointer, necessary to handle GPU function pointers on CPU
 #define FUN_REF(funcName, progStateType) cudaSafeCall(cudaMemcpyFromSymbol(&funcName ## Host, funcName ## Dev, sizeof(pplFunc_t))); 
 
-// Allocate data on host and device, should be followed by a COPY_DATA_GPU call before inference if values are not initialized automatically
+/* Allocate data on host and device, should be followed by a COPY_DATA_GPU call before inference if values are not initialized automatically
+ * If the memory should be modifiable from device code, it must be declared as __device__ and not __constant__.
+ * This does not seem to have a remarkable impact on performance. 
+ */
 #define BBLOCK_DATA(pointerName, type, n) type pointerName[n];\
 __constant__ type pointerName ## Dev[n];
 
@@ -66,6 +70,7 @@ __constant__ type constName ## Dev = value;
 // The macros below are equivalent to the GPU variants above, but for CPU
 #define HOST
 #define DEV
+#define MANAGED
 #define LOG(x) log(x)
 #define ALLOC_TYPE(pointerAddress, type, n) *pointerAddress = new type[n];
 #define FREE(pointer) delete[] pointer;

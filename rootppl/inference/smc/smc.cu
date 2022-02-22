@@ -5,17 +5,24 @@
  * File smc_impl.cuh contains the implementation of the top-level SMC.
  */
 
+#include <stdlib.h>
 #include <iostream>
+#include <stdio.h>
+#include <math.h>
+#include <string>
+#include <list> 
+#include <tuple>
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
+#include "file_handler.cuh"
 #include "macros/macros.cuh"
 #include "smc.cuh"
 #include "dists/dists.cuh"
 #include "particles_memory_handler.cuh"
 #include "resample/systematic/systematic_cpu.cuh"
-// #include "smc_include.cuh"
 
 #ifdef __NVCC__
 #include <curand_kernel.h>
@@ -25,8 +32,12 @@
 #include "smc_kernels.cuh"
 #endif
 
+// Resample if relative ESS < ESS_THRESHOLD * N (default threshold in Birch is 0.7) 
+#ifndef ESS_THRESHOLD
+const floating_t ESS_THRESHOLD = 0.7;
+#endif
  
-double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, const int ompThreads, const int particlesPerThread,
+double runSMC(const pplFunc_t firstBblock, const int numParticles, const int ompThreads, const int particlesPerThread,
                 size_t progStateSize, callbackFunc_t callback, void* arg) {
 
     #ifdef _OPENMP
@@ -52,45 +63,98 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     #endif
 
     resampler_t resampler = initResampler(numParticles, progStateSize);
+    std::list<double> essList;
+
+    // Set all next pointers to first bblock
+    #ifdef __NVCC__
+    initParticlesNext<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(particles, numParticles, firstBblock);
+    #else
+    #pragma omp parallel for
+    for(int i = 0; i < numParticles; i++) {
+        particles.next[i] = firstBblock;
+    }
+    #endif
 
     // Run program/inference
     while(true) {
 
         #ifdef __NVCC__
-        execFuncs<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, bblocks, numParticles, numThreads, arg);
+        execFuncs<<<NUM_BLOCKS_EXEC, NUM_THREADS_PER_BLOCK>>>(randStates, particles, numParticles, numThreads, arg);
         cudaDeviceSynchronize();
         cudaCheckError();
-        floating_t logWeightSum = calcLogWeightSumGpu(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        floating_t logWeightSum, ess;
+        std::tie(logWeightSum, ess) = calcLogWeightSumAndESSGpu(particles.weights, resampler, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+        
+        cudaDeviceSynchronize();
         #else
 
         #pragma omp parallel for
         for(int i = 0; i < numParticles; i++) {
-            int pc = particles.pcs[i];
-            if(pc < numBblocks && pc >= 0)
-                bblocks[pc](particles, i, arg);
+            pplFunc_t next = particles.next[i];
+            if(next != NULL)
+                next(particles, i, arg);
         }
-        floating_t logWeightSum = calcLogWeightSumCpu(particles.weights, resampler, numParticles);
+        floating_t logWeightSum, ess;
+        std::tie(logWeightSum, ess) = calcLogWeightSumAndESSCpu(particles.weights, resampler, numParticles);
+
         #endif
 
-        logNormConstant += logWeightSum - log(numParticles);
+        essList.push_back(ess);
 
-        // Resampling will be skipped the last SMC iteration. Instead, weights will be renormalised and logged so the represent log-probabilities.
-        if(particles.pcs[0] >= numBblocks) { // Assumption: All terminate at the same time
-            #ifdef __NVCC__
-            logAndRenormaliseWeightsGpu(particles.weights, resampler, logWeightSum, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
-            #else
-            logAndRenormaliseWeightsCpu(particles.weights, resampler, logWeightSum, numParticles);
-            #endif
+        if(logWeightSum == -INFINITY) {
+            printf("logWeightSum is -INFINITY, terminating...\n");
             break;
         }
         
-        #ifdef __NVCC__
-        resampleSystematicGpu(particles, resampler, numParticles, NUM_BLOCKS);
-        #else
-        resampleSystematicCpu(particles, resampler, numParticles);
-        #endif
+        if (isnan(logWeightSum)) {
+            printf("Weight Sum is NaN, terminating...\n");
+            break;
+        }
+
+        // Assumption: All terminate at the same time
+        bool terminate = particles.next[0] == NULL;
+
+        // Break above assumption: Only terminate if all particles have terminated
+        if (terminate) {
+            for(int i = 0; i < numParticles; i++) {
+                bool particleTerminated = particles.next[i] == NULL;
+                if (! particleTerminated) {
+                    terminate = false;
+                    break;
+                }
+            }
+        }
+
+        bool resample = ess < ESS_THRESHOLD * numParticles;
+
+        // Only add to log norm constant if resampling should be done (or if we are about to terminate)
+        if (resample || terminate)
+            logNormConstant += logWeightSum - log(numParticles);
+
+        // Resampling will be skipped the last SMC iteration. Instead, weights will be renormalised and logged so they represent log-probabilities.
+        if(terminate) {
+            #ifdef __NVCC__
+            normaliseWeightsGpu(particles.weights, logWeightSum, numParticles, NUM_BLOCKS, NUM_THREADS_PER_BLOCK);
+            #else
+            normaliseWeightsCpu(particles.weights, logWeightSum, numParticles);
+            #endif
+
+            break;
+        }
+        
+        if (resample) {
+            #ifdef __NVCC__
+            resampleSystematicGpu(particles, resampler, numParticles, NUM_BLOCKS);
+            #else
+            resampleSystematicCpu(particles, resampler, numParticles);
+            #endif
+        }
         
     }
+
+    printf("%f\n", logNormConstant);
+    writeLogNormConstToFile(logNormConstant);
+    writeESSToFile(essList);
 
     if(callback != NULL)
         callback(particles, numParticles, NULL);
@@ -103,6 +167,17 @@ double runSMC(const pplFunc_t* bblocks, int numBblocks, const int numParticles, 
     #endif
 
     return logNormConstant;
+}
+
+void prepareSMC() {
+    configureMemSizeGPU();
+    prepareFile(Z_FILE_NAME, true);
+    prepareFile(ESS_FILE_NAME, true);
+}
+
+void finishFilesSMC() {
+    finishFile(Z_FILE_NAME, true);
+    finishFile(ESS_FILE_NAME, false);
 }
 
 
