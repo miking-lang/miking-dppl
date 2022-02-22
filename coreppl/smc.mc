@@ -99,10 +99,12 @@ let resample_ = use Resample in
   TmResample { ty = tyunit_, info = NoInfo () }
 
 lang SMC = Resample
+end
 
 lang Test =
   Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
   + MExprTypeLiftUnOrderedRecords + MExprPrettyPrint
+end
 
 mexpr
 

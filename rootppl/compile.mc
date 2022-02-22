@@ -105,7 +105,7 @@ lang MExprPPLRootPPLCompileANF = MExprPPLRootPPLCompile + MExprANF
 end
 
 lang MExprPPLRootPPLCompileANFAll = MExprPPLRootPPLCompile + MExprANFAll
-
+end
 
 ----------------------
 -- ROOTPPL COMPILER --
@@ -1331,6 +1331,7 @@ let rootPPLCompile: String -> Expr -> RPProg =
 -- now, they are at least better than nothing
 
 lang Test = MExprPPLRootPPLCompileANF
+end
 
 mexpr
 use Test in

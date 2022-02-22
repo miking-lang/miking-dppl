@@ -105,6 +105,7 @@ let transform = lam model.
   reconstruct (collect {assumeMap=_emptyEnv, observeAssumeMap=_emptyEnv, env=_emptyEnv} movedModel) movedModel
 
 lang TestLang = Transformation + MExprPPL
+end
 
 mexpr
 

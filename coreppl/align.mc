@@ -152,7 +152,7 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
     ) [] pnames
 
   -- Type: Expr -> CFAGraph
-  sem initGraph =
+  sem initGraph (graphData: Option GraphData) =
   | t ->
 
     -- Initial graph
@@ -407,6 +407,7 @@ lang Align = MExprPPLCFA
 end
 
 lang Test = Align + MExprANFAll + DPPLParser
+end
 
 -----------
 -- TESTS --

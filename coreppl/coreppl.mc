@@ -417,8 +417,10 @@ let weight_ = use Weight in
 
 lang CorePPL =
   Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
+end
 
 lang CorePPLInference = CorePPL + SMC -- + Importance
+end
 
 let pplKeywords = [
   "assume", "observe", "weight", "resample", "plate", "Uniform", "Bernoulli",
@@ -434,10 +436,10 @@ lang MExprPPL =
 
   sem mexprPPLToString =
   | expr -> exprToStringKeywords mexprPPLKeywords expr
-
 end
 
 lang Test = MExprPPL + MExprANF
+end
 
 mexpr
 

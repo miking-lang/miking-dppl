@@ -126,6 +126,7 @@ let plate_ = use Plate in
   lam f. lam lst. TmPlate {fun=f, lst=lst, ty=tyunknown_, info=NoInfo()}
 
 lang TestLang = ProbabilisticGraphicalModel
+end
 
 mexpr
 
