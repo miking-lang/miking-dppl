@@ -44,55 +44,89 @@ simulate_side_branch = (start_time: float, λ: float, μ: float): () => {
     }   
 }
 
-
-
-simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
-
-    //~RESAMPLE 
-
+/**
+* Jan's walk over the tree
+*/
+function simulate_tree (child: Tree, parent: Tree, lambda: Real, mu: Real) {
+    //~RESAMPLE // hint
     // k is the number of hidden speciation events
-    k ~ Poisson(λ*(parent.age - child.age))
+    k ~ Poisson(lambda*(parent.age - child.age)) // assume construct, .age without if is
 
     // loops, Section 0.6
+    // 0 indexing of arrays
     // here, we don't have an index i
-    // <=> for (i in 1 to k)
-    for (1 to k) {
-        t ~ Uniform(l=child.age, u=parent.age)
-        simulate_side_branch(t, λ, μ)
-        factor(log(2))
+    // e.g.: for i in 1 to k
+    // lst = 1 to 3
+    // for x in lst
+    // 1 to k == [1, 2, 3, ..., k]
+    for 1 to k {
+        t ~ Uniform(child.age, parent.age)        // positional arguments (now v1.0, names later)
+        simulate_side_branch(t, lambda, mu)       // side effect on the weight
+        factor(log(2))                            // side effect
     }
 
     // Observe Section 1.2
     // 0 extinctions events along the branch
-    observe 0 ~ Poisson(μ*(parent.age - child.age))
+    observe 0 ~ Poisson(mu*(parent.age - child.age))
 
-    // pattern matching, Section 0.6
-    switch (child) {
-        | Node => {
-            observe 0 ~ Exponential(λ)
-
-            simulate_tree(child.left, child, λ, μ)
-            simulate_tree(child.right, child, λ, μ)
-        }
+    // pattern matching, Section 0.6 ("constructor matching")
+    if child is Node {
+        observe 0 ~ Exponential(lambda)
+        simulate_tree(child.left, child, lambda, mu)
+        simulate_tree(child.right, child, lambda, mu)
     }
     
-    return ()
+    // Questions
+    /********************************
+    // child.age // defined 
+    // child.left // undefined
+    // if (child is Node) and (t < 0) // we think
+    *********************************/
+    // Boolean operators:
+    // instead of
+    //     &&, ||, !
+    // we use 
+    //   and, or, not
+    // and we have
+    //   xor
+    // bitwise, vectorized TBD    
+        
+    // Explicit returns if we want the function to return a value.
+    // 0.2 // error!
+    // snake_case_function()
+    // CamelCaseType
+    // identifier_name
+    // some_function() // returns a nuisance parameter, also error
+    // If the end of the function has been reached without an explicit return,
+    // the return type is unit, ()
 }
 
-/** Model 
+/** 
+ * Model 
  * 
  * Every program has a model function, see Section 1.4.
  *
- * - The function signature contains type annotations for input and return
+ * - The function signature contains type annotations (postfix) for input (required) and return (not required unless recursive) 
+ * - Default arguments (later, not in 1.0)
  * - Types are Capitalized
- * - Unicode is supported for identifiers within the model
- * - Interface is ascii
- * */ 
-model function CRBD(k_l: Int = 1, t_l: Real = 0.2, k_m: Int = 1, t_m: Real = 0.1, observation: Tree): {lambda: Real, mu: Real} {
-    λ ~ Gamma(k_l, t_l)
-    μ ~ Gamma(k_m, t_m)
-    // assert that observation is Node
-    simulate_tree(observation.left, observation, λ, μ)
-    simulate_tree(observation.right, observation, λ, μ)
-    return {lambda = λ, mu = μ}   
+ * - Unicode is supported for identifiers within the model, but the interface to the world is ASCII
+ *  
+ * @param k_l shape of Gamma distribution for prior λ
+ * @param t_l scale of Gamma distribution for prior λ
+ * @param k_m shape of Gamma distribution for prior μ
+ * @param t_m scale of Gamma distribution for prior μ
+ *
+ * @return {lambda: Real, mu: Real}
+ *
+ */ 
+model function CRBD(k_l: Int, t_l: Real, k_m: Int, t_m: Real, observation: Tree) {
+    lambda ~ Gamma(k_l, t_l)
+    mu ~ Gamma(k_m, t_m)
+    if observation is Node {
+        simulate_tree(observation.left, observation, lambda, mu)
+        simulate_tree(observation.right, observation, lambda, mu)
+    } 
+    return {lambda, mu} 
+    //return {lambda = lambda, mu = mu} // long-winded way 
+    // return {mu, lambda} // still correct!
 }
