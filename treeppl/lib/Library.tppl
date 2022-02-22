@@ -1,0 +1,131 @@
+/*  Standard Library for TreePPL */
+
+/*  Types */
+
+/*  Uses the variant syntax of Reason 
+    https://reasonml.github.io/docs/en/variant */
+/*
+ dna stuff
+*/
+
+type nucleotide = A | C | G | T
+type dna = array(nucleotide)
+
+
+
+
+/*  Probabilities and rates */
+
+/*  Following types for now must alias but can be 
+    TODO implmented as opaque types
+    https://reasonml.github.io/docs/en/module */ 
+    
+type probability = float  // between 0 and 1
+type rate = float  // between -1 and 1
+type age = float // gr eq to 0 x where x: Real, x >= 0
+
+/*  TODO also opaque type with typechecking that rows sum up to 1 
+    TODO implement as a matrix type */
+type irmatrix = array(array(rate))
+
+
+/*  Nucleotide models */
+
+/** 
+ *  Generalized Time-Reversible Model
+ *
+ *  The rates frequency vector encodes the transitions as follows
+ *    r[0] : A -> C (alpha) 0 -> 1
+ *    r[1] : A -> G (beta)  0 -> 2
+ *    r[2] : A -> T (gamma) 0 -> 3
+ *    r[3] : C -> G (delta) 1 -> 2
+ *    r[4] : C -> T (eta)   1 -> 3
+ *    r[5] : G -> T (nu)    2 -> 3
+ *
+ *  @param p base frequency vectoir
+ *  @param r rates vector, see details
+ *
+ *  @return the transition matrix for GTR
+ */
+let gtr = (p: array(probability), r: array(rate)) => irmatrix
+{
+   q = [| [| -(r[0]*p[1] + r[1]*p[2] + r[2]*p[3]), r[0]*p[1], r[1]*p[2], r[2]*p[3] |],
+          [| r[0]*p[0], -(r[0]*p[0] + r[3]*p[2] + r[4]*p[3]), r[3]*p[2], r[4]*p[3] |],
+          [| r[1]*p[0], r[3]*p[1], -(r[1]*p[0] + r[3]*p[1] + r[5]*p[3]), r[5]*p[3] |],
+          [| r[2]*p[0], r[4]*p[1], r[5]*p[2], -(r[2]*p[0] + r[4]*p[1] + r[5]*p[2]) |] |]
+
+   f = -1/( p[0]*q[0][0] + p[1]*q[1][1] * p[2]*q[2][2] + p[3]*q[3][3] )
+
+    [| [| f*q[0][0], f*q[0][1], f*q[0][2], f*q[0][3] |],
+       [| f*q[1][0], f*q[1][1], f*q[1][2], f*q[1][3] |],
+       [| f*q[2][0], f*q[2][1], f*q[2][2], f*q[2][3] |],
+       [| f*q[3][0], f*q[3][1], f*q[3][2], f*q[3][3] |] |] 
+}
+
+
+/** 
+ * Calculate instantaneous transition probabilities
+ *
+ * Conditioned that there is a transition to a different state.
+ * 
+ * @param q instantenous rate matrix
+ * 
+ * @return a matrix encoding the transition probabilities
+ *         from one state to another;
+ *         only probabilities to go to a different state are given.
+ *
+ */
+let instantaneous_transition_probabilities = (q: irmatrix) => array(array(probability))
+{
+    [| [| -Q[0][1]/Q[0][0], -Q[0][2]/Q[0][0], -Q[0][3]/Q[0][0] |],
+       [| -Q[1][0]/Q[1][1], -Q[1][2]/Q[1][1], -Q[1][3]/Q[1][1] |],
+       [| -Q[2][0]/Q[2][2], -Q[2][1]/Q[2][2], -Q[2][3]/Q[2][2] |],
+       [| -Q[3][0]/Q[3][3], -Q[3][1]/Q[3][3], -Q[3][2]/Q[3][3] |] |]
+    
+}
+
+/** 
+ * Stationary distribution of the transition matrix Q
+ *  Amounts to calculating the left eigenvector of the matrix
+ *  Hint:  https://brilliant.org/wiki/stationary-distributions/
+ */
+let stationary_distribution = (q: irmatrix) => array(probability)
+{
+    // TODO implement stationary distribution
+}
+
+
+
+
+/**
+ * CTMC Process, Analytical Solution
+ */
+let ctmc_analytical =
+    (parental_state: nucleotide, evolution_time: age, q: irmatrix) => nucleotide
+{
+    // Matrix exponentian to do as a module
+    // 
+    let p = Math.exp()// TODO e^(Q*t) )
+    
+    sample(
+	Categorical(~prob = p[starting_state], ~support = [A, C, G, T])
+    )
+}
+
+
+
+
+/* Phylogenetic tree */
+
+type tree =
+    | Leaf(age, dna)
+    | Node(age, dna, tree, tree);
+
+// TODO implement the Leaf and Node constructors
+
+
+/* Convert tree to Newick */
+let top_to_newick = (t: tree) => string
+{
+    // TODO not implemented
+}

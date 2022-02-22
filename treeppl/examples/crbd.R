@@ -1,20 +1,31 @@
 # Imaginary R syntax to read to invoke TreePPL form R
 
-tree = phyjson.read(filename="some PhyJSON file")
+library(treeppl)
+
+# INPUT
+tree = treeppl.readphyjson(filename="some phyjson file")
 k_lambda = 1
 theta_lambda = 0.2
 
-k_mu = 1
-theta_mu = 0.1
-
 ppl = readLines(file = "crbd.tppl")
+result = treeppl(ppl, input = list(k_lambda, k_theta, k_mu, theta_mu, tree))
 
-result = treeppl(ppl, input = list(k_lambda, theta_lambda, k_mu, theta_mu, tree), method = "SMC", particles = "10000" )
-
-result$lambda
-result$mu
+# OUTPUT
+# result is a list
+# lambda and mu are data.frames
+# normconst is a numeric
+result$lambda$values 
+result$lambda$weights
+result$mu$values
+result$mu$weights
 result$normconst
 
-plot(result$lambda)
+# delayed sampling
+result$lambda_k$values
+result$lambda_theta$weights
+result$mu_k$values
+result$mu_theta$weights
+result$normconst
 
-
+# importance sampling
+# plotting

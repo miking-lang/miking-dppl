@@ -1,14 +1,23 @@
 /**  Constant-rate birth-death model */
 
-/**  Phylogenetic tree */
-// types, Section 0.4
-type tree =
-    | Leaf(age: float, index: int)
-    | Node(age: float, left: tree, right: tree)
 
-  
+// compiler hints, see Section 1.3
+//~PARTICLES: 10000
+//~METHOD: "SMC"
+
+/**  Phylogenetic tree 
+ * types, Section 0.4
+ * Should go in library
+ */
+type Tree =
+    | Leaf(age: Real, index: Int)
+    | Node(age: Real, left: Tree, right: Tree)
+// type DecoratedTree TODO
+    
+
 /**  Simulates side branches under the CRBD model
- *  
+ * 
+
  * The following is a function that simulates the hidden
  * (extinct or undetected) evolutionary side-branches under
  * the CRBD model.
@@ -19,7 +28,9 @@ type tree =
  * function is unit, as no explicit return specified and
  * it is a sequence of statements rather than a simple expression.
  */
+
 simulate_side_branch = (start_time: float, λ: float, μ: float): () => {
+
     t ~ Exponential(rate=λ + μ) // sampling, section 1.2
     current_time = start_time - t // expressions, Section 0.1
     if (current_time < 0) { // conditionals, Section 0.5
@@ -36,7 +47,8 @@ simulate_side_branch = (start_time: float, λ: float, μ: float): () => {
 
 
 simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
-    #resample
+
+    //~RESAMPLE 
 
     // k is the number of hidden speciation events
     k ~ Poisson(λ*(parent.age - child.age))
@@ -58,6 +70,7 @@ simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
     switch (child) {
         | Node => {
             observe 0 ~ Exponential(λ)
+
             simulate_tree(child.left, child, λ, μ)
             simulate_tree(child.right, child, λ, μ)
         }
@@ -69,20 +82,17 @@ simulate_tree = (child: tree, parent: tree, λ: float, μ: float) => {
 /** Model 
  * 
  * Every program has a model function, see Section 1.4.
+ *
+ * - The function signature contains type annotations for input and return
+ * - Types are Capitalized
+ * - Unicode is supported for identifiers within the model
+ * - Interface is ascii
  * */ 
-model = (k_λ = 1, θ_λ = 0.2, k_μ = 1, θ_μ = 0.1, data: json) => {
-    observation: tree = Node(13.016,
-        Node(10.626,Node(8.352,Node(7.679,Node(5.187,Leaf(0,7),Leaf(0,22)),Node(5.196,Leaf(0,2),Node(4.871,Node(2.601,Leaf(0,31),Leaf(0,14)),Leaf(0,26)))),Node(7.361,Node(3.818,Node(1.143,Node(0.829,Leaf(0,6),Leaf(0,9)),Leaf(0,16)),Node(1.813,Node(0.452,Node(0.203,Leaf(0,15),Leaf(0,12)),Leaf(0,8)),Leaf(0,32))),Node(1.868,Node(0.866,Leaf(0,23),Node(0.001,Leaf(0,17),Leaf(0,24))),Node(1.06,Leaf(0,18),Leaf(0,4))))),Node(10.536,Node(8.291,Node(1.396,Node(0.215,Leaf(0,10),Leaf(0,29)),Leaf(0,21)),Leaf(0,27)),Node(8.192,Node(0.56,Leaf(0,11),Leaf(0,19)),Leaf(0,3)))),
-        Node(8.958,Node(3.748,Leaf(0,5),Node(0.033,Leaf(0,20),Leaf(0,1))),Node(7.775,Node(0.584,Leaf(0,28),Leaf(0,13)),Node(1.589,Leaf(0,25),Leaf(0,30))))
-    )
-
-    // TODO implement phyjson2tree
-    // observation = phyjson2tree(data)
-
-    λ ~ Gamma(k_λ, θ_λ)
-    μ ~ Gamma(k_μ, θ_μ)
-
+model function CRBD(k_l: Int = 1, t_l: Real = 0.2, k_m: Int = 1, t_m: Real = 0.1, observation: Tree): {lambda: Real, mu: Real} {
+    λ ~ Gamma(k_l, t_l)
+    μ ~ Gamma(k_m, t_m)
+    // assert that observation is Node
     simulate_tree(observation.left, observation, λ, μ)
     simulate_tree(observation.right, observation, λ, μ)
-    return (λ, μ)
+    return {lambda = λ, mu = μ}   
 }
