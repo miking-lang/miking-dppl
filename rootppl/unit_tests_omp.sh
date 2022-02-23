@@ -23,7 +23,7 @@ Rscript ./do_tests.R $NUMPART
 echo "Removing data..."
 for test in testChiSquared testStudentClassic testStudent testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testLinearNormalInverseGammaNormal testLinearNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalComplicated
 do
-   rm $DATADIR/$test.csv 
+   rm $DATADIR/$test.csv
    rm $DATADIR/$test.logz
 done
 

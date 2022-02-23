@@ -28,11 +28,11 @@ INIT_MODEL(floating_t);
 
 BBLOCK(testObserveXEvents, {
      floating_t lambda = SAMPLE(gamma, k, theta);
-    
+
      OBSERVE(poisson, lambda*factor*elapsedTime, nEvents);
 
      floating_t t0 = SAMPLE(exponential, lambda*factor);
-    
+
      PSTATE = t0;
      NEXT=NULL;
   });
@@ -54,15 +54,15 @@ CALLBACK(stats, {
 
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
 
     FIRST_BBLOCK(testObserveXEvents);
-  
+
     SMC(stats);
   })

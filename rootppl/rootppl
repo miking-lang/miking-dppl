@@ -1,108 +1,100 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# This file builds the executable by: 
-#   1. Get the absolute path to the source file
-#   2. Change directory to installed rootppl directory
-#   3. Build the executable with the inference framework with the users working directory added to the include paths
-#   4. Copy the executable back to the user's working directory and clean up rootppl directory
+# TODO Hard-coded location, not that elegant. Solutions? Maybe replace with sed
+# or add in install script?
+engine_src=~/.local/src/rootppl/
 
+# Runtime
+engine_build=build/
 
-out_name=program
-
-##### START PARSE ARGS #####
-args=""
-
-POSITIONAL=()
-while [[ $# -gt 0 ]]
-do
-key="$1"
-
-case $key in
-    -o|--out)
-    out_name="$2"
-    # This argument is handled separately and hence not added to args string here
-    # args="${args} EXEC_NAME=${USER_SRC_DIR}/${out_name}"
-    shift # past argument
-    shift # past value
-    ;;
+# Argument parsing
+args=()
+flags="-I$engine_src -std=c++14 -O3"
+while [[ $# -gt 0 ]]; do
+  case $1 in
     -j|--jobs)
-    num_compile_threads="$2"
-    args="${args} -j${num_compile_threads}"
-    shift # past argument
-    shift # past value
-    ;;
-    -a|--arch)
-    arch="$2"
-    args="${args} arch=${arch}"
-    shift # past argument
-    shift # past value
-    ;;
-    --omp)
-    # LIBPATH="$2"
-    args="${args} omp"
-    shift # past argument
-    ;;
+      flag_jobs="$1 $2"
+      shift
+      shift
+      ;;
+    --target) # Alternatives: cpu, omp, sm_* (e.g., sm_75)
+      target="$2"
+      shift
+      shift
+      ;;
     --cxx)
-    cxx="$2"
-    args="${args} CXX=${cxx}"
-    shift # past argument
-    shift # past value
+      cxx="$2"
+      shift
+      shift
+      ;;
+    --stack-size)
+      flags+=" -D STACK_SIZE_PROGSTATE=$2"
+      shift
+      shift
+      ;;
+    --ess-threshold)
+      flags+=" -D ESS_THRESHOLD=$2"
+      shift
+      shift
+      ;;
+    --extra-file-output)
+      flags+=" -D EXTRA_FILE_OUTPUT"
+      shift
+      ;;
+    -w|-g|-O)
+      flags+=" $1"
+      shift
+      ;;
+    *) # unknown option
+      args+=("$1") # save it in an array for later
+      shift # past argument
+      ;;
+  esac
+done
+
+case $target in
+  sm_*)
+    cxx=nvcc
+    flags+=" -arch=$target -rdc=true -lcudadevrt"
     ;;
-    --stack_size)
-    stack_size="$2"
-    args="${args} STACK_SIZE_PROGSTATE=${stack_size}"
-    shift # past argument
-    shift # past value
-    ;;
-    --ess_threshold)
-    ess_threshold="$2"
-    args="${args} ESS_THRESHOLD=${ess_threshold}"
-    shift # past argument
-    shift # past value
-    ;;
-    *)    # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
-    shift # past argument
+  cpu|*)
+    cxx=${cxx:-g++}
+    flags+=" -xc++"
+    link="-x none"
+    ;;&
+  omp)
+    flags+=" -fopenmp"
     ;;
 esac
-done
-set -- "${POSITIONAL[@]}" # restore positional parameters
 
-if [[ $# -eq 0 ]] ; then
-    echo 'Error: source file positional argument required'
-    exit 0
+# Write makefile variables to build/config.mk, unless it already exists and is
+# equal. This config.mk file is used as a dependency for building the RootPPL
+# engine.
+mkdir -p ${engine_build}
+old=${engine_build}config.mk
+new=${engine_build}tmp
+cat <<EOT >> $new
+CXX=$cxx
+FLAGS=$flags
+EOT
+if ! ([ -f $old ] && cmp $old $new &> /dev/null); then
+  cp -f $new $old
 fi
+rm -f $new
 
-if [[ -n $2 ]] ; then
-    echo 'Error: only one positional argument required, second positional argument passed: ' \"$2\"
-    exit 0
-fi
-##### END PARSE ARGS #####
+# Build RootPPL engine
+${engine_src}build.mk \
+  $flag_jobs\
+  SRC="$engine_src"\
+  BUILD="$engine_build"\
+  || exit 1
 
-
-cwd=$(pwd)
-cd ~/.local/lib/rootppl/
-
-# "rootppl clean" used for cleaning before changing platform, e.g. cpu to gpu
-if [ "$1" = "clean" ]; then
-    make clean
-else
-    # Define and create directory for user source files
-    USER_SRC_DIR=temp_user_out
-    mkdir -p $(dirname ${USER_SRC_DIR}/${out_name})
-
-    # Create absolute path by identifying leading slash
-    if [[ ${1:0:1} == "/" ]] ; then 
-        abs_path_src_file=$1
-    else  
-        abs_path_src_file="${cwd}/$1"
-    fi
-
-    # Build executable and copy it to the user's working directory
-    make model=${abs_path_src_file} EXEC_NAME=${USER_SRC_DIR}/${out_name} ${args} EXTRA_FLAGS=-I${cwd}
-    mkdir -p $(dirname ${cwd}/${out_name}) # Create out dir if the user specified out path does not exist
-    cp ${USER_SRC_DIR}/${out_name} ${cwd}/${out_name}
-
-    # Delete temp user directory
-    rm -rf ${USER_SRC_DIR}
-fi
+# Build project and link it with RootPPL engine
+read -r -d '' cmd << EOM
+$cxx \
+  $flags \
+  ${args[@]} \
+  $link $(find $engine_build -name *.o)
+EOM
+echo $cmd
+$cmd

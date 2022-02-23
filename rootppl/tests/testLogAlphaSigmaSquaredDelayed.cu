@@ -34,9 +34,9 @@ BBLOCK(testLogAlphaSigmaSquaredDelayed, {
     //floating_t alpha = exp(SAMPLE(normal, m0, sigma));
 
     normalInverseGamma_t prior(m0, v, a, b);
-       
+
     floating_t f1 = sample_NormalInverseGammaNormal(prior);
-    
+
     PSTATE = f1;
     PC++;
 });
@@ -60,14 +60,14 @@ CALLBACK(stats, {
 
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     ADD_BBLOCK(testLogAlphaSigmaSquaredDelayed);
-  
+
     SMC(stats);
   })

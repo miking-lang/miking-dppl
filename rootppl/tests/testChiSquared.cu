@@ -23,7 +23,7 @@ INIT_MODEL(floating_t);
 
 BBLOCK(testChiSquared, {
   floating_t statistic = SAMPLE(chiSquared, k);
-       
+
   PSTATE = statistic;
   NEXT=NULL;
 });
@@ -45,13 +45,13 @@ CALLBACK(stats, {
 
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     FIRST_BBLOCK(testChiSquared);
     SMC(stats);
   })

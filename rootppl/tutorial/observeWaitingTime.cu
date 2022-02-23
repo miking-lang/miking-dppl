@@ -31,7 +31,7 @@ BBLOCK(testObserveWaitingTime, {
 
 CALLBACK(stats, {
     floating_t wmean = 0.0;
-    for(int i = 0; i < N; i++) {  
+    for(int i = 0; i < N; i++) {
       wmean += PSTATES[i]*exp(WEIGHTS[i]);
     }
     std::cout << "Weighted mean is " << wmean;

@@ -29,16 +29,16 @@ BBLOCK(testNormalInverseGammaNormal, {
   /* We will sample two waiting times (so that we have an update on the rate),
      and then check the distribution of the second waiting time against WebPPL.*/
     normalInverseGamma_t prior(m0, v, a, b);
-    
+
     floating_t statistic = SAMPLE(linearNormalInverseGammaNormal, prior, 1.0, 0.0, 1.0);
     floating_t statistic2 = SAMPLE(linearNormalInverseGammaNormal, prior, 1.0, 0.0, 1.0);
     floating_t statistic3 = SAMPLE(linearNormalInverseGammaNormal, prior, 1.0, 0.0, 1.0);
     for (int i = 0; i < passes; i++) {
       statistic3 = SAMPLE(normalInverseGammaNormal, prior);
     }
-    
+
     // TODO do it with SAMPLE, instead of invoking the function directly
-       
+
     PSTATE = statistic3;
     NEXT=NULL;
 });
@@ -57,14 +57,14 @@ CALLBACK(stats, {
 })
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     FIRST_BBLOCK(testNormalInverseGammaNormal);
-  
+
     SMC(stats);
   })

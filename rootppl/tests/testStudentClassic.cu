@@ -25,7 +25,7 @@ BBLOCK(testStudentClassic, {
   /* We will sample two waiting times (so that we have an update on the rate),
      and then check the distribution of the second waiting time against WebPPL.*/
   floating_t statistic = SAMPLE(student_t, k);
-       
+
   PSTATE = statistic;
   NEXT = NULL;
 });
@@ -49,14 +49,14 @@ CALLBACK(stats, {
 
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     FIRST_BBLOCK(testStudentClassic);
-  
+
     SMC(stats);
   })

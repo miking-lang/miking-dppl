@@ -39,7 +39,7 @@ A = 1
 
 transition_probability: float = 1
 // - : float = 1.;
-```		
+```
 
 ## 0.2 Functions
 
@@ -47,15 +47,15 @@ transition_probability: float = 1
 - A function can be defined as a single expression (no curly braces needed).
 - If a function is defined as a sequence of statements (with curly braces), an explicit return is needed. There is no need to put parenthesis around `return`. If no `return` is provided, the function is considered to have the unit type.
 - No currying.
-- Parameters can be named. 
+- Parameters can be named.
 - Mixing of positional and named arguments: you can begin with positional arguments and then add some named arguments, but certain "inconvenient" cases are disallowed.
 - Default arguments supported.
 - No need to type `rec` to indicate that the function is recursive.
 - Parameter and return types can be annotated.
-  
+
 Examples:
 ```
-x = (p: int) => p + 1 
+x = (p: int) => p + 1
 
 x(2)
 // - int: 3
@@ -63,7 +63,7 @@ x(2)
 x = (p: int): int => {
 	d = 2  // binding 2 to d
 
-	if (p == 0)	-1 
+	if (p == 0)	-1
   else p*d
 }
 
@@ -73,7 +73,7 @@ x(2)
 x(0)
 // - int: -1
 
-/** 
+/**
  * Illustrate default values and named parameters
  *
  * Returns the area. Default is a square with side x.
@@ -152,7 +152,7 @@ x + y
 Example of array:
 
 ```
-data: array(array(dna)) = 
+data: array(array(dna)) =
     [ [ C, C, A, A, C, A, A, A, A, A, A, A, A, A, A ],
       [ C, C, A, A, A, C, A, A, A, A, A, A, A, A, A ],
       [ A, A, C, C, A, A, C, A, A, A, A, A, A, A, A ],
@@ -256,7 +256,7 @@ switch (child) {
 
 - We allow for named arguments/parameters, i.e. `child.left`.
 
-## 0.7 Loops 
+## 0.7 Loops
 
 Loops are discouraged in most cases. Instead functional programming patterns like map, filter, (see Section 2) or reduce can usually be used in their place.
 

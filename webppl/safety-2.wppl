@@ -8,7 +8,7 @@ var model = function()
     )
 
     console.log(a)
-    
+
     var t = exponential(
 	{
 	    a: a

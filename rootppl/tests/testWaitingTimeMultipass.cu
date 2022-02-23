@@ -31,11 +31,11 @@ BBLOCK(testWaitingTime, {
   floating_t lambda = SAMPLE(gamma, k, theta);
 
   floating_t t0 = 1;
-  
+
   for (int i = 0; i < passes; i++) {
     t0 = SAMPLE(exponential, lambda*factor);
   }
-    
+
   PSTATE = t0;
   PC++;
 });
@@ -62,14 +62,14 @@ CALLBACK(stats, {
 
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     ADD_BBLOCK(testWaitingTime);
-   
+
     SMC(stats);
   })

@@ -27,13 +27,13 @@ INIT_MODEL(floating_t);
 
 BBLOCK(testObserveXEventsDelayedRef, {
     gamma_t lambda(k, theta);
-    
+
     //    floating_t ret0 = score_GammaPoisson(nEvents, elapsedTime, lambda, factor);
     //    WEIGHT(ret0);
     OBSERVE(gammaPoisson, nEvents, elapsedTime, lambda, factor);
-    
+
     floating_t ret1 = SAMPLE(gammaExponential,lambda, factor);
-    
+
     PSTATE = ret1;
     NEXT = NULL;
   });
@@ -52,14 +52,14 @@ CALLBACK(stats, {
 })
 
 MAIN({
-    if(argc > 2) { 
-      numRuns = atoi(argv[2]);			
+    if(argc > 2) {
+      numRuns = atoi(argv[2]);
     }
     else {
       numRuns = 1;
     }
-    
+
     FIRST_BBLOCK(testObserveXEventsDelayedRef);
-    
+
     SMC(stats);
   })
