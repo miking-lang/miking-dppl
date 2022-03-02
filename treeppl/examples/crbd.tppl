@@ -13,7 +13,12 @@ type Tree =
     | Leaf(age: Real, index: Int)
     | Node(age: Real, left: Tree, right: Tree)
 // type DecoratedTree TODO
-    
+        
+function flip(p: Real): Boolean {
+    // assert(0 <= p <= 1)    later version
+    e ~ Bernoulli(p)
+    return e
+}    
 
 /**  Simulates side branches under the CRBD model
  * 
@@ -27,19 +32,16 @@ type Tree =
  * In particular, it is clear that the return type of this
  * function is unit, as no explicit return specified and
  * it is a sequence of statements rather than a simple expression.
- */
-
-simulate_side_branch = (start_time: float, λ: float, μ: float): () => {
-
-    t ~ Exponential(rate=λ + μ) // sampling, section 1.2
-    current_time = start_time - t // expressions, Section 0.1
-    if (current_time < 0) { // conditionals, Section 0.5
-        factor(-∞)
+ */ 
+function simulate_side_branch(start_time: Real, lambda: Real, mu: Real) {
+    waiting_time ~ Exponential(lambda + mu)
+    current_time = start_time - waiting_time // expressions, Section 0.1
+    if current_time < 0 { // conditionals, Section 0.5
+        weight(0) // <=> log_weight(-inf)
     } else {
-        s ~ Bernoulli(λ/(λ + μ)) // positional invocation
-        if (s) {
-            simulate_side_branch(current_time, λ, μ) 
-            simulate_side_branch(current_time, λ, μ)
+        if flip(lambda/(lambda + mu)) {
+            simulate_side_branch(current_time, lambda, mu) 
+            simulate_side_branch(current_time, lambda, mu)
         }
     }   
 }
@@ -62,7 +64,7 @@ function simulate_tree (child: Tree, parent: Tree, lambda: Real, mu: Real) {
     for 1 to k {
         t ~ Uniform(child.age, parent.age)        // positional arguments (now v1.0, names later)
         simulate_side_branch(t, lambda, mu)       // side effect on the weight
-        factor(log(2))                            // side effect
+        weight(2) //  <=> log_weight(log(2)) 
     }
 
     // Observe Section 1.2
