@@ -1,14 +1,14 @@
 # Imaginary R syntax to read to invoke TreePPL form R
 
-library(treeppl)
+//library(treeppl)
 
 # INPUT
-tree = treeppl.readphyjson(filename="some phyjson file")
+tree = treeppl::readphyjson(filename="some phyjson file")
 k_lambda = 1
 theta_lambda = 0.2
 
 ppl = readLines(file = "crbd.tppl")
-result = treeppl(ppl, input = list(k_lambda, k_theta, k_mu, theta_mu, tree))
+result = treeppl::treeppl(ppl, input = list(k_lambda, k_theta, k_mu, theta_mu, tree), inference = list(samples=5000, inference='mcmc'))
 
 # OUTPUT
 # result is a list
