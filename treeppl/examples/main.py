@@ -20,7 +20,7 @@ inference_result = treeppl.infer(crbd.crbd, 1, 1, 1, 0.5, "somefile.nex")  # thi
 # or maybe just: inference_result = crbd.crbd(1, 1, 1, 0.5, "somefile.nex")  # think here!
 
 # Overriding inference hints:
-# inference_result = treeppl.infer(crbd.model, observation, samples=5000, inference='mcmc')
+# inference_result = treeppl.infer(crbd.crbd, 1, 1, 1, 0.5, "somefile.nex", samples=5000, inference='mcmc')
 
 # inference_result.store("...")
 
