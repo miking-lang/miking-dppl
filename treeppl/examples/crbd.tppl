@@ -121,7 +121,7 @@ function simulate_tree (child: Tree, parent: Tree, lambda: Real, mu: Real) {
  * @return {lambda: Real, mu: Real}
  *
  */ 
-model function CRBD(k_l: Int, t_l: Real, k_m: Int, t_m: Real, observation: Tree) {
+model function crbd(k_l: Int, t_l: Real, k_m: Int, t_m: Real, observation: Tree) {
     lambda ~ Gamma(k_l, t_l)
     mu ~ Gamma(k_m, t_m)
     if observation is Node {
