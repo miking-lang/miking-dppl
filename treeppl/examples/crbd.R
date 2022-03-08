@@ -1,31 +1,25 @@
-# Imaginary R syntax to read to invoke TreePPL form R
+#library(treeppl)
+source("libtreeppl.R")
 
-//library(treeppl)
+#tree = treeppl::readphyjson(file = "some phyjson file")
+program = "crbd-demo"
+tree = "Anatinae"
+rho = 0.8709677419354839
+k_lambda = 1.0
+theta_lambda = 1.0
+k_mu = 1.0
+theta_mu = 0.5
 
-# INPUT
-tree = treeppl::readphyjson(filename="some phyjson file")
-k_lambda = 1
-theta_lambda = 0.2
+result = treeppl(program = program,
+                 tree = tree,
+                 rho = rho,
+                 k_lambda = k_lambda,
+                 theta_lambda = theta_lambda,
+                 k_mu = k_mu,
+                 theta_mu = theta_mu,
+                 particles = 50000,
+                 sweeps = 100,
+                 run = FALSE)
 
-ppl = readLines(file = "crbd.tppl")
-result = treeppl::treeppl(ppl, input = list(k_lambda, k_theta, k_mu, theta_mu, tree), inference = list(samples=5000, inference='mcmc'))
-
-# OUTPUT
-# result is a list
-# lambda and mu are data.frames
-# normconst is a numeric
-result$lambda$values 
-result$lambda$weights
-result$mu$values
-result$mu$weights
-result$normconst
-
-# delayed sampling
-result$lambda_k$values
-result$lambda_theta$weights
-result$mu_k$values
-result$mu_theta$weights
-result$normconst
-
-# importance sampling
-# plotting
+library(ggplot2)
+ggplot(data = result, aes(x = value, col = var)) + geom_density()
