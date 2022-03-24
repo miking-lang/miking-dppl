@@ -7,9 +7,9 @@ token Integer
 Try to give shorthand names to types, long names to production rules.
 -/
 type File
-type TypeDecl
-type FunDecl
-type ModelFunDecl
+-- type TypeDecl
+-- type FunDecl
+-- type ModelFunDecl
 type Cons
 type Stmnt
 type Expr
@@ -20,9 +20,11 @@ start File
 A file needs to have exactly one model function,
 zero or more functions, and zero or more type declarations.
 -/
-prod File: File = model:ModelFunDecl
-		  func:FunDecl*
-		  type:TypeDecl*
+prod File: File = decl:Decl+
+
+-- model:ModelFunDecl
+--		  func:FunDecl*
+--		  type:TypeDecl*
 
 /-
 A regular (non-model) function is declared with the keyword function,
@@ -51,12 +53,23 @@ prod Constructor: Cons =
 /-
 You can declare a type either via a simple constructor...
 -/
-prod SimpleTypeDeclaration: TypeDecl = "type" name:UName "=" Cons
+-- prod SimpleTypeDeclaration: TypeDecl = "type" name:UName "=" Cons
 
 /-
 ... or, via several alternative constructors preceeded by "|"
 -/
-prod TypeDeclaration: TypeDecl = "type" name:UName "=" ("|" Cons)+
+prod TypeDeclaration: TypeDecl = "type" name:UName "=" ("|"? cons:Cons) ("|" cons:Cons)*
+
+
+
+/-
+return statement
+-/
+prod ReturnStatement: Stmnt = "return" someExpr:Expr
+prod IfStatement ...
+prod AssumeStatement ...
+
+
 
 
 /-
@@ -67,6 +80,9 @@ prod Int: Expr = val:Integer
 prod String: Expr = val:String
 prod Variable: Expr = ident:LName
 prod left Add: Expr = left:Expr "+" right:Expr
+-- coming soon
+-- infix left Add: Expr = "+"
+
 prod left Sub: Expr = left:Expr "-" right:Expr
 prod left Mul: Expr = left:Expr "*" right:Expr
 prod left Div: Expr = left:Expr "/" right:Expr
