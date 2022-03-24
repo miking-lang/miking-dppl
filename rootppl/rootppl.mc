@@ -441,6 +441,7 @@ let basic = RPProg {
   includes = ["test.h"],
   startBlock = startBlock,
   pStateTy = Some (CTyInt {}),
+  callback = None (),
   types = [ CTTyDef { ty = CTyInt {}, id = nameSym "newint" } ],
   tops = [
     CTBBlockDecl { id = startBlock },
@@ -469,6 +470,7 @@ let wrapTops = lam tops. RPProg {
   includes = [],
   startBlock = startBlock,
   pStateTy = None (),
+  callback = None (),
   types = [],
   tops = tops,
   pre = []

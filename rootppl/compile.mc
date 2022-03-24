@@ -1396,9 +1396,9 @@ end
 mexpr
 use Test in
 
-let test = lam cpplstr.
+let test = lam options. lam cpplstr.
   let cppl = parseMExprPPLString cpplstr in
-  let rppl = rootPPLCompile default "manual" cppl in
+  let rppl = rootPPLCompile options cppl in
   printCompiledRPProg rppl
 in
 
@@ -1408,12 +1408,13 @@ observe true (Bernoulli x);
 x
 ------------------------" in
 
-utest test simple with strJoin "\n" [
+utest test default simple with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "#include \"inference/smc/smc.cuh\"",
   "#include <stdint.h>",
+  "#include <stdio.h>",
   "INIT_MODEL_STACK()",
   "struct GLOBAL {double ret; double x;};",
   "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
@@ -1441,9 +1442,17 @@ utest test simple with strJoin "\n" [
   "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
   "  BBLOCK_JUMP((sf->ra), NULL);",
   "})",
+  "CALLBACK(callback, {",
+  "  int i = 0;",
+  "  while ((i < N)) {",
+  "    struct GLOBAL (*global) = (( struct GLOBAL (*) ) ((PSTATES[i]).stack));",
+  "    printf(\"%f %f\\n\", (global->ret), (WEIGHTS[i]));",
+  "    (i = (i + 1));",
+  "  }",
+  "})",
   "MAIN({",
   "  FIRST_BBLOCK(start);",
-  "  SMC(NULL);",
+  "  SMC(callback);",
   "})"
 ] using eqString in
 
@@ -1468,12 +1477,13 @@ in
 f 1.0; 1.0
 ----------------------" in
 
-utest test nestedIfs with strJoin "\n" [
+utest test { default with printSamples = false } nestedIfs with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "#include \"inference/smc/smc.cuh\"",
   "#include <stdint.h>",
+  "#include <stdio.h>",
   "INIT_MODEL_STACK()",
   "struct GLOBAL {double ret; double _;};",
   "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
