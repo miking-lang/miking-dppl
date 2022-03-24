@@ -19,6 +19,9 @@ let nameNull = nameSym "NULL"
 let nameUIntPtr = nameSym "uintptr_t"
 let nameProgStateTy = nameSym "progState_t"
 let namePplFuncTy = nameSym "pplFunc_t"
+let nameCallbackParticles = nameSym "N"
+let namePStates = nameSym "PSTATES"
+let nameWeights = nameSym "WEIGHTS"
 
 -- NOTE(dlunde,2021-10-08): This list is currently not exhaustive
 let rpKeywords = concat (map nameSym [
@@ -26,10 +29,11 @@ let rpKeywords = concat (map nameSym [
   "BBLOCK_DATA_MANAGED_SINGLE", "", "SAMPLE", "WEIGHT", "PSTATE", "NEXT",
   "bernoulli", "beta", "discrete", "multinomial", "dirichlet", "exponential",
   "uniform", "poisson", "gamma", "INIT_MODEL", "MAIN", "SMC", "ADD_BBLOCK",
-  "particleIdx", "lnFactorial"
+  "particleIdx", "lnFactorial", "callback", "CALLBACK"
 ]) [
   nameBblocksArr, nameBblockCall, nameBblockJump, nameDataPointer, nameNull,
-  nameUIntPtr, nameProgStateTy, namePplFuncTy
+  nameUIntPtr, nameProgStateTy, namePplFuncTy, nameCallbackParticles,
+  namePStates, nameWeights
 ]
 
 lang RootPPL = CAst + CPrettyPrint
@@ -51,7 +55,6 @@ lang RootPPL = CAst + CPrettyPrint
   -- Basic blocks
   | CTBBlockDecl { id : Name }
   | CTBBlock { id: Name, body: [CStmt] }
-
 
   sem smap_CTop_CExpr (f: CExpr -> CExpr) =
   | CTBBlockData _ & t -> t
@@ -162,6 +165,9 @@ lang RootPPL = CAst + CPrettyPrint
 
       -- Program state type (None () for the RootPPL stack PSTATE)
       pStateTy: Option CType,
+
+      -- Callback code (Put within the CALLBACK RootPPL macro)
+      callback: Option [CStmt],
 
       -- Type definitions
       types: [CTop],
@@ -352,6 +358,7 @@ lang RootPPL = CAst + CPrettyPrint
       includes = includes,
       startBlock = startBlock,
       pStateTy = pStateTy,
+      callback = callback,
       types = types,
       tops = tops,
       pre = pre
@@ -379,11 +386,16 @@ lang RootPPL = CAst + CPrettyPrint
       else "INIT_MODEL_STACK()"
     in
 
-    match printProgState indent env pStateTy with (env,pStateTy) then
-    match mapAccumL (printCTop indent) env types with (env,types) then
-    match mapAccumL (printCTop indent) env tops with (env,tops) then
-    match printCStmts 2 env pre with (env,pre) then
-    match pprintEnvGetStr env startBlock with (env,startBlock) then
+    match printProgState indent env pStateTy with (env,pStateTy) in
+    match mapAccumL (printCTop indent) env types with (env,types) in
+    match mapAccumL (printCTop indent) env tops with (env,tops) in
+    match printCStmts 2 env pre with (env,pre) in
+    match
+      match callback with Some callback then
+        printCStmts 2 env callback
+      else (env,"")
+    with (env,callback) in
+    match pprintEnvGetStr env startBlock with (env,startBlock) in
 
     let pStateTy = match pStateTy with "" then [] else [pStateTy] in
 
@@ -393,20 +405,23 @@ lang RootPPL = CAst + CPrettyPrint
       pStateTy,
       [ init ],
       tops,
+      if null callback then [] else [
+        "CALLBACK(callback, {",
+        concat "  " callback,
+        "})"
+      ],
       [ "MAIN({" ],
       if null pre then [] else [concat "  " pre],
       [
         join ["  FIRST_BBLOCK(", startBlock ,");"],
-        "  SMC(NULL);",
+        if null callback then
+          "  SMC(NULL);"
+        else
+          "  SMC(callback);"
+        ,
         "})"
       ]
     ])
-
-    else never
-    else never
-    else never
-    else never
-    else never
 end
 
 -------------

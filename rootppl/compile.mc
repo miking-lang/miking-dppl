@@ -2,6 +2,7 @@
 
 include "../coreppl/coreppl.mc"
 include "../coreppl/dppl-parser.mc"
+include "../coreppl/dppl-arg.mc"
 include "../coreppl/align.mc"
 
 include "rootppl.mc"
@@ -244,8 +245,9 @@ let catIdents: Expr -> Map Name Int =
     in rec (mapEmpty nameCmp) expr
 
 -- RootPPL compile function
-let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
+let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
   use MExprPPLRootPPLCompile in
+  lam options: Options.
   lam typeEnv: [(Name,Type)].
   lam identCats: Map Name Int.
   lam prog: Expr.
@@ -359,8 +361,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let stack = CEMember { lhs = CEPState {}, id = nameStack } in
     let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
 
-    -- Global frame
-    let globalDef =
+    let globalDefBase = lam pstate: CExpr.
       let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
       CSDef {
         ty = CTyPtr { ty = ty },
@@ -368,11 +369,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         init = Some (CIExpr {
           expr = CECast {
             ty = CTyPtr { ty = ty },
-            rhs = stack
+            rhs = pstate
           }
         })
       }
     in
+
+    -- Global frame
+    let globalDef = globalDefBase stack in
 
     let res = foldl (lam acc: ([CTop], Map Name Name). lam top: CTop.
         match top with CTFun ({ id = id } & r) then
@@ -1225,17 +1229,63 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let stochInitSF = stackFrameToTopTy stochInitSF in
     let sfs = map (lam t: (Name,StackFrame). stackFrameToTopTy t.1) sfs in
 
+    -- Callback handling for supported types
+    let callback =
+      if options.printSamples then
+        let i = nameSym "i" in
+        let specifier =
+          switch retTy
+          case CTyInt _ | CTyInt32 _ | CTyInt64 _ then "%d"
+          case CTyFloat _ | CTyDouble _ then "%f"
+          case _ then error "Printing of return type is currently not supported. Please use the --no-print-samples option."
+          end
+        in Some [
+          -- int i = 0;
+          CSDef { ty = CTyInt {}, id = Some i, init = Some (CIExpr { expr = CEInt { i = 0 }}) },
+          -- while (i < N) {
+          CSWhile { cond = CEBinOp { op = COLt {}, lhs = CEVar { id = i }, rhs = CEVar { id = nameCallbackParticles }}, body = [
+
+            -- struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATES[i].stack));
+            let pstatesExpr = CEBinOp { op = COSubScript {}, lhs = CEVar { id = namePStates }, rhs = CEVar { id = i } }
+            in globalDefBase (CEMember { lhs = pstatesExpr, id = nameStack }),
+
+            -- printf("%<specifier> %f\n", global.ret, WEIGHTS[i])
+            CSExpr { expr = CEApp { fun = _printf, args = [
+              CEString { s = join [specifier, " %f\n"] },
+              CEArrow { lhs = CEVar { id = nameGlobal}, id = nameRet },
+              CEBinOp { op = COSubScript {},
+                lhs = CEVar { id = nameWeights },
+                rhs = CEVar { id = i }
+              }
+            ] } },
+
+            -- i++;
+            CSExpr { expr = CEBinOp { op = COAssign {},
+              lhs = CEVar{ id = i },
+              rhs = CEBinOp {
+                op = COAdd {},
+                lhs = CEVar { id = i },
+                rhs = CEInt { i = 1 }
+              }
+            } }
+          ] }
+        ]
+      else
+        None ()
+    in
 
     RPProg {
       includes = join [
         cIncludes,
         [ "\"inference/smc/smc.cuh\""
         , "<stdint.h>"
+        , "<stdio.h>"
         ]
       ],
       startBlock = nameStartBlock,
       -- pStateTy = Some (CTyStruct { id = None (), mem = Some progStateMem }),
       pStateTy = None (),
+      callback = callback,
       types = types,
       tops = join [
         [gf, stochInitSF],
@@ -1250,8 +1300,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
 
 -- Entry point for compiler
-let rootPPLCompile: String -> Expr -> RPProg =
-  lam resample: String. lam prog.
+let rootPPLCompile: Options -> Expr -> RPProg =
+  lam options. lam prog.
 
   use MExprPPLRootPPLCompileANF in
 
@@ -1288,9 +1338,9 @@ let rootPPLCompile: String -> Expr -> RPProg =
           else t
         else t
     in
-    match      resample with "likelihood" then addResample (lam. true) prog
-    else match resample with "manual" then prog
-    else match resample with "align"  then
+    match      options.resample with "likelihood" then addResample (lam. true) prog
+    else match options.resample with "manual" then prog
+    else match options.resample with "align"  then
 
       -- Do a _full_ ANF transformation (required by CFA and alignment)
       use MExprPPLRootPPLCompileANFAll in
@@ -1324,8 +1374,9 @@ let rootPPLCompile: String -> Expr -> RPProg =
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in
 
+
   -- Run RootPPL compiler
-  let rpprog: RPProg = rootPPLCompileH env ci prog in
+  let rpprog: RPProg = rootPPLCompileH options env ci prog in
 
   -- print (printCompiledRPProg rpprog); print "\n\n";
 
@@ -1347,7 +1398,7 @@ use Test in
 
 let test = lam cpplstr.
   let cppl = parseMExprPPLString cpplstr in
-  let rppl = rootPPLCompile "manual" cppl in
+  let rppl = rootPPLCompile default "manual" cppl in
   printCompiledRPProg rppl
 in
 
