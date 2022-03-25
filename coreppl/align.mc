@@ -156,7 +156,7 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
   | t ->
 
     -- Initial graph
-    let graph = emptyCFAGraph in
+    let graph: CFAGraph = emptyCFAGraph in
 
     -- Initialize match constraint generating functions
     let graph = { graph with mcgfs = [

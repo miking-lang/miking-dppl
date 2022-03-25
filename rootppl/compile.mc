@@ -2,6 +2,7 @@
 
 include "../coreppl/coreppl.mc"
 include "../coreppl/dppl-parser.mc"
+include "../coreppl/dppl-arg.mc"
 include "../coreppl/align.mc"
 
 include "rootppl.mc"
@@ -244,8 +245,9 @@ let catIdents: Expr -> Map Name Int =
     in rec (mapEmpty nameCmp) expr
 
 -- RootPPL compile function
-let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
+let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
   use MExprPPLRootPPLCompile in
+  lam options: Options.
   lam typeEnv: [(Name,Type)].
   lam identCats: Map Name Int.
   lam prog: Expr.
@@ -359,8 +361,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let stack = CEMember { lhs = CEPState {}, id = nameStack } in
     let stackPtr = CEMember { lhs = CEPState {}, id = nameStackPtr } in
 
-    -- Global frame
-    let globalDef =
+    let globalDefBase = lam pstate: CExpr.
       let ty = CTyStruct { id = Some nameGlobalTy, mem = None () } in
       CSDef {
         ty = CTyPtr { ty = ty },
@@ -368,11 +369,14 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
         init = Some (CIExpr {
           expr = CECast {
             ty = CTyPtr { ty = ty },
-            rhs = stack
+            rhs = pstate
           }
         })
       }
     in
+
+    -- Global frame
+    let globalDef = globalDefBase stack in
 
     let res = foldl (lam acc: ([CTop], Map Name Name). lam top: CTop.
         match top with CTFun ({ id = id } & r) then
@@ -403,6 +407,7 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     match res with (tops, detFunMap) in
 
+    -- print (_debugPrint types tops detInits stochInits);
 
     ----------------------------
     -- DETERMINE STACK FRAMES --
@@ -602,6 +607,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     ) tops in
     let stochInits: [CStmt] =
       join (map (replaceDefs stochInitSF.mem) stochInits) in
+
+    -- print (_debugPrint types tops detInits stochInits);
 
     -----------------------------------
     -- TRANSLATE LOCAL VARIABLE USES --
@@ -946,7 +953,10 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
               let stmt =
                 CSIf { cond = cond, thn = accThn.block, els = accEls.block }
               in
-              splitStmts {acc with block = snoc acc.block stmt} sf stmts
+              match stmts with [] then
+                {acc with block = snoc acc.block stmt}
+              else
+                splitStmts {acc with block = snoc acc.block stmt} sf stmts
 
             -- At least one split in branches
             else
@@ -1042,6 +1052,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let tops = match splitFunctions accSplit tops with { tops = tops }
                in tops in
     let tops = concat tops (splitInit accSplit stochInitSF stochInits) in
+
+    -- print (_debugPrint types tops detInits stochInits);
 
     ------------------------------------
     -- TRANSLATE GLOBAL VARIABLE REFS --
@@ -1217,17 +1229,63 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
     let stochInitSF = stackFrameToTopTy stochInitSF in
     let sfs = map (lam t: (Name,StackFrame). stackFrameToTopTy t.1) sfs in
 
+    -- Callback handling for supported types
+    let callback =
+      if options.printSamples then
+        let i = nameSym "i" in
+        let specifier =
+          switch retTy
+          case CTyInt _ | CTyInt32 _ | CTyInt64 _ then "%d"
+          case CTyFloat _ | CTyDouble _ then "%f"
+          case _ then error "Printing of return type is currently not supported. Please use the --no-print-samples option."
+          end
+        in Some [
+          -- int i = 0;
+          CSDef { ty = CTyInt {}, id = Some i, init = Some (CIExpr { expr = CEInt { i = 0 }}) },
+          -- while (i < N) {
+          CSWhile { cond = CEBinOp { op = COLt {}, lhs = CEVar { id = i }, rhs = CEVar { id = nameCallbackParticles }}, body = [
+
+            -- struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATES[i].stack));
+            let pstatesExpr = CEBinOp { op = COSubScript {}, lhs = CEVar { id = namePStates }, rhs = CEVar { id = i } }
+            in globalDefBase (CEMember { lhs = pstatesExpr, id = nameStack }),
+
+            -- printf("%<specifier> %f\n", global.ret, WEIGHTS[i])
+            CSExpr { expr = CEApp { fun = _printf, args = [
+              CEString { s = join [specifier, " %f\n"] },
+              CEArrow { lhs = CEVar { id = nameGlobal}, id = nameRet },
+              CEBinOp { op = COSubScript {},
+                lhs = CEVar { id = nameWeights },
+                rhs = CEVar { id = i }
+              }
+            ] } },
+
+            -- i++;
+            CSExpr { expr = CEBinOp { op = COAssign {},
+              lhs = CEVar{ id = i },
+              rhs = CEBinOp {
+                op = COAdd {},
+                lhs = CEVar { id = i },
+                rhs = CEInt { i = 1 }
+              }
+            } }
+          ] }
+        ]
+      else
+        None ()
+    in
 
     RPProg {
       includes = join [
         cIncludes,
         [ "\"inference/smc/smc.cuh\""
         , "<stdint.h>"
+        , "<stdio.h>"
         ]
       ],
       startBlock = nameStartBlock,
       -- pStateTy = Some (CTyStruct { id = None (), mem = Some progStateMem }),
       pStateTy = None (),
+      callback = callback,
       types = types,
       tops = join [
         [gf, stochInitSF],
@@ -1242,8 +1300,8 @@ let rootPPLCompileH: [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
 
 -- Entry point for compiler
-let rootPPLCompile: String -> Expr -> RPProg =
-  lam resample: String. lam prog.
+let rootPPLCompile: Options -> Expr -> RPProg =
+  lam options. lam prog.
 
   use MExprPPLRootPPLCompileANF in
 
@@ -1280,9 +1338,9 @@ let rootPPLCompile: String -> Expr -> RPProg =
           else t
         else t
     in
-    match      resample with "likelihood" then addResample (lam. true) prog
-    else match resample with "manual" then prog
-    else match resample with "align"  then
+    match      options.resample with "likelihood" then addResample (lam. true) prog
+    else match options.resample with "manual" then prog
+    else match options.resample with "align"  then
 
       -- Do a _full_ ANF transformation (required by CFA and alignment)
       use MExprPPLRootPPLCompileANFAll in
@@ -1316,8 +1374,9 @@ let rootPPLCompile: String -> Expr -> RPProg =
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in
 
+
   -- Run RootPPL compiler
-  let rpprog: RPProg = rootPPLCompileH env ci prog in
+  let rpprog: RPProg = rootPPLCompileH options env ci prog in
 
   -- print (printCompiledRPProg rpprog); print "\n\n";
 
@@ -1337,9 +1396,9 @@ end
 mexpr
 use Test in
 
-let test = lam cpplstr.
+let test = lam options. lam cpplstr.
   let cppl = parseMExprPPLString cpplstr in
-  let rppl = rootPPLCompile "manual" cppl in
+  let rppl = rootPPLCompile options cppl in
   printCompiledRPProg rppl
 in
 
@@ -1349,12 +1408,13 @@ observe true (Bernoulli x);
 x
 ------------------------" in
 
-utest test simple with strJoin "\n" [
+utest test default simple with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "#include \"inference/smc/smc.cuh\"",
   "#include <stdint.h>",
+  "#include <stdio.h>",
   "INIT_MODEL_STACK()",
   "struct GLOBAL {double ret; double x;};",
   "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
@@ -1382,9 +1442,17 @@ utest test simple with strJoin "\n" [
   "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
   "  BBLOCK_JUMP((sf->ra), NULL);",
   "})",
+  "CALLBACK(callback, {",
+  "  int i = 0;",
+  "  while ((i < N)) {",
+  "    struct GLOBAL (*global) = (( struct GLOBAL (*) ) ((PSTATES[i]).stack));",
+  "    printf(\"%f %f\\n\", (global->ret), (WEIGHTS[i]));",
+  "    (i = (i + 1));",
+  "  }",
+  "})",
   "MAIN({",
   "  FIRST_BBLOCK(start);",
-  "  SMC(NULL);",
+  "  SMC(callback);",
   "})"
 ] using eqString in
 
@@ -1409,12 +1477,13 @@ in
 f 1.0; 1.0
 ----------------------" in
 
-utest test nestedIfs with strJoin "\n" [
+utest test { default with printSamples = false } nestedIfs with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "#include \"inference/smc/smc.cuh\"",
   "#include <stdint.h>",
+  "#include <stdio.h>",
   "INIT_MODEL_STACK()",
   "struct GLOBAL {double ret; double _;};",
   "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",

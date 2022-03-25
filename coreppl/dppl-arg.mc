@@ -8,7 +8,10 @@ type Options = {
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
-  transform: Bool
+  transform: Bool,
+
+  -- Options for the `rootppl-smc` method. TODO(dlunde,2022-03-24): Should maybe be defined somewhere else eventually?
+  printSamples: Bool
 }
 
 -- Default values for options
@@ -19,7 +22,8 @@ let default = {
   printModel = false,
   printMCore = false,
   exitBefore = false,
-  transform = false
+  transform = false,
+  printSamples = true
 }
 
 -- Options configuration
@@ -52,7 +56,13 @@ let config = [
   ([("--transform", "", "")],
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart.
-      let o: Options = p.options in {o with transform = true})
+      let o: Options = p.options in {o with transform = true}),
+
+  -- Options for method `rootppl-smc`
+  ([("--no-print-samples", "", "")],
+    "Do not print the final samples when compiling with the rootppl-smc method.",
+    lam p: ArgPart.
+      let o: Options = p.options in {o with printSamples = false})
 ]
 
 -- Menu
