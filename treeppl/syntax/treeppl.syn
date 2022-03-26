@@ -2,14 +2,13 @@ token String
 token LName -- lower case identifier, also LIdent
 token UName -- upper case identifier, also UIdent
 token Integer
+token Real
 
 /-
 Try to give shorthand names to types, long names to production rules.
 -/
 type File
--- type TypeDecl
--- type FunDecl
--- type ModelFunDecl
+type Decl
 type Cons
 type Stmnt
 type Expr
@@ -19,77 +18,84 @@ start File
 /-
 A file needs to have exactly one model function,
 zero or more functions, and zero or more type declarations.
+We will make sure at least (or ==) one model function 
+exists during in analysis.
 -/
 prod File: File = decl:Decl+
 
--- model:ModelFunDecl
---		  func:FunDecl*
---		  type:TypeDecl*
-
 /-
-A regular (non-model) function is declared with the keyword function,
+A function is declared with the keyword function, optionally preceeded by "model"
 it has zero or more arguments, all of which are type-annotated, it has an
 optional return type, and the body is given in { }. It consists of staments.
 -/
-prod Function: FunDecl =
-  "function" name:LName
-  "(" (args:LName ":" argsType:UName)? ("," args:LName ":" argsType:UName)*)? ")"
+prod Function: Decl =
+  "model"? "function" name:LName
+  "(" (args:LName ":" argsType:UName)? (("," args:LName ":" argsType:UName)*)? ")"
   (":" returnType:UName)?
-  "{" body:Statement+ "}"
-
-/-
-A model function is a function preceeded by the keyword model
--/
-prod ModelFunction: ModelFunDecl =
-  "model" FunDecl
+  "{" body:Stmnt+ "}"
 
 /-
 A (type) constructor is similar to a function but needs to have at least one
 argument, and does not have the optional postfix :SomeType
 -/
 prod Constructor: Cons =
-  name:UName "(" args:LName ":" argsType ("," args:LName ":" argsType:UName)*)? ")"
+  name:UName "(" args:LName ":" argsType:UName (("," args:LName ":" argsType:UName)*)? ")"
 
 /-
-You can declare a type either via a simple constructor...
+Here is how you declare a type
 -/
--- prod SimpleTypeDeclaration: TypeDecl = "type" name:UName "=" Cons
+prod TypeDeclaration: Decl = "type" name:UName "=" ("|"? cons:Cons) ("|" cons:Cons)*
 
 /-
-... or, via several alternative constructors preceeded by "|"
+Expressions
 -/
-prod TypeDeclaration: TypeDecl = "type" name:UName "=" ("|"? cons:Cons) ("|" cons:Cons)*
-
-
-
-/-
-return statement
--/
-prod ReturnStatement: Stmnt = "return" someExpr:Expr
-prod IfStatement ...
-prod AssumeStatement ...
-
-
-
-
-/-
-TO BE CONTINUED...
--/
-
-prod Int: Expr = val:Integer
+prod Integer: Expr = val:Integer
 prod String: Expr = val:String
+prod Real: Expr = val:Real
 prod Variable: Expr = ident:LName
-prod left Add: Expr = left:Expr "+" right:Expr
--- coming soon
--- infix left Add: Expr = "+"
 
-prod left Sub: Expr = left:Expr "-" right:Expr
-prod left Mul: Expr = left:Expr "*" right:Expr
-prod left Div: Expr = left:Expr "/" right:Expr
+-- infix left Addition: Expr = "+"
+prod left Addition: Expr = left:Expr "+" right:Expr
+-- infix Multiplication: Expr = "*"
+prod left Multiplication: Expr = left:Expr "*" right:Expr
+-- inflix Subtraction: Expr = "-"
+prod left Subtraction: Expr = left:Expr "-" right:Expr
+-- infix Division: Expr = "/"
+prod left Division: Expr = left:Expr "/" right:Expr
+
+-- Function call
 prod FunctionCall: Expr = f:Expr "(" (args:Expr ("," args:Expr)*)? ")"
 
 precedence {
   FunctionCall;
-  Mul Div;
-  Add Sub;
+  Multiplication Division;
+  Addition Subtraction;
 }
+
+-- List expression
+prod List: Expr = "{" ((key:LName "=")? value:LName)+ "}"
+
+/----- Statements -----/
+-- Assume statement
+prod Assume: Stmnt = randomVar:LName "~" distribution:UName "(" (args:Expr ("," args:Expr)*)? ")"
+-- Observe statement
+prod Observe: Stmnt = "observe" value:Expr "~" distribution:UName "(" (args:Expr ("," args:Expr)*)? ")"
+-- If ... is statement
+prod IfIs: Stmnt = "if" observation:Expr "is" constructor:UName "{"
+  Stmnt+
+"}"
+-- For loop
+prod ForLoop: Stmnt = "for" begin:Expr "to" end:Expr "{" some:Stmnt+ "}"
+-- If statement
+prod If: Stmnt = "if" condition:Expr "{" some:Stmnt+ "}" ("else" "{" some:Stmnt+ "}")?
+-- Return statement
+prod ReturnStatement: Stmnt = "return" some:Expr
+
+-- Comments
+-- Don't know how to do comments
+-- prod Comment: Decl = "//" 
+-- prod Comment2: Decl = "/*" .* "/*"
+-- hints TODO
+
+
+
