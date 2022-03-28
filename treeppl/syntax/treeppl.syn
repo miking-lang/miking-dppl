@@ -9,6 +9,7 @@ Try to give shorthand names to types, long names to production rules.
 -/
 type File
 type Decl
+type Type
 type Cons
 type Stmnt
 type Expr
@@ -30,8 +31,8 @@ optional return type, and the body is given in { }. It consists of staments.
 -/
 prod Function: Decl =
   model:"model"? "function" name:LName
-  "(" (args:{name:LName ":" ty:UName} args:{"," name:LName ":" ty:UName}*)? ")"
-  (":" returnTy:UName)?
+  "(" (args:{name:LName ":" ty:Type} args:{"," name:LName ":" ty:Type}*)? ")"
+  (":" returnTy:Type)?
   "{" body:Stmnt+ "}"
 
 /-
@@ -41,10 +42,17 @@ argument, and does not have the optional postfix :SomeType
 prod Constructor: Cons =
   name:UName "(" args:LName ":" argsType:UName (("," args:LName ":" argsType:UName)*)? ")"
 
-/-
-Here is how you declare a type
--/
+/- Here is how you declare a type -/
 prod TypeDeclaration: Decl = "type" name:UName "=" ("|"? cons:Cons) ("|" cons:Cons)*
+
+/- 
+Type usage 
+
+For now the type is only an Uppercase identifier, but in may
+be something else in the future (like with type parameters, etc.)
+-/
+prod TypeUsage: Type = tyUsage:UName
+
 
 /-
 Expressions
