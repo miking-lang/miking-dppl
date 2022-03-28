@@ -29,9 +29,9 @@ it has zero or more arguments, all of which are type-annotated, it has an
 optional return type, and the body is given in { }. It consists of staments.
 -/
 prod Function: Decl =
-  "model"? "function" name:LName
-  "(" (args:LName ":" argsType:UName)? (("," args:LName ":" argsType:UName)*)? ")"
-  (":" returnType:UName)?
+  model:"model"? "function" name:LName
+  "(" (args:{name:LName ":" ty:UName} args:{"," name:LName ":" ty:UName}*)? ")"
+  (":" returnTy:UName)?
   "{" body:Stmnt+ "}"
 
 /-
