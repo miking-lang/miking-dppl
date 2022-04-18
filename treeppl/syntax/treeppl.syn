@@ -40,18 +40,17 @@ A (type) constructor is similar to a function but needs to have at least one
 argument, and does not have the optional postfix :SomeType
 -/
 prod Constructor: Cons =
-  name:UName "(" args:LName ":" argsType:UName (("," args:LName ":" argsType:UName)*)? ")"
+  name:UName "("( {args:LName ":" argsType:UName} ("," {args:LName ":" argsType:UName})*)? ")"
 
 /- Here is how you declare a type -/
 prod TypeDeclaration: Decl = "type" name:UName "=" ("|"? cons:Cons) ("|" cons:Cons)*
 
 /- 
 Type usage 
-
 For now the type is only an Uppercase identifier, but in may
 be something else in the future (like with type parameters, etc.)
 -/
-prod TypeUsage: Type = tyUsage:UName
+prod TypeConstructor: Type = name:UName
 
 
 /-
@@ -85,7 +84,9 @@ prod List: Expr = "{" ((key:LName "=")? value:LName)+ "}"
 
 /----- Statements -----/
 -- Assume statement
-prod Assume: Stmnt = randomVar:LName "~" distribution:UName "(" (args:Expr ("," args:Expr)*)? ")"
+-- prod Assume: Stmnt = randomVar:LName "~" distribution:UName "(" (args:Expr ("," args:Expr)*)? ")"
+prod Assume: Stmnt = randomVar:LName "~" distribution:Expr
+prod Bernoulli: Expr = "Bernoulli" "(" prob:Expr ")"
 -- Observe statement
 prod Observe: Stmnt = "observe" value:Expr "~" distribution:UName "(" (args:Expr ("," args:Expr)*)? ")"
 -- If ... is statement
