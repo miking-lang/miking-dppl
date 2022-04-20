@@ -56,8 +56,8 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
   sem smap_Expr_Expr (f: Expr -> a) =
   | TmResample t -> TmResample t
 
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | TmResample t -> acc
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmResample t -> (acc,TmResample t)
 
   -- Pretty printing
   sem isAtomic =

@@ -36,17 +36,25 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem withType (ty: Type) =
   | TmDist t -> TmDist { t with ty = ty }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   -- Intentionally left blank
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  -- Intentionally left blank
+  sem smapDist_Expr_Expr : (Expr -> Expr) -> Dist -> Dist
+  sem smapDist_Expr_Expr f =
+  | p ->
+    let res: ((), Dist) = smapAccumLDist_Expr_Expr (lam. lam a. ((), f a)) () p in
+    res.1
 
-  sem smap_Expr_Expr (f: Expr -> a) =
-  | TmDist t -> TmDist { t with dist = smapDist_Expr_Expr f t.dist }
+  sem sfoldDist_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem sfoldDist_Expr_Expr f acc =
+  | p ->
+    let res: (acc, Expr) = smapAccumLDist_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
 
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | TmDist t -> sfoldDist_Expr_Expr f acc t.dist
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmDist t ->
+    match smapAccumLDist_Expr_Expr f acc t.dist with (acc,dist) in
+    (acc, TmDist { t with dist = dist })
 
   sem infoTy =
   | TyDist t -> t.info
@@ -155,8 +163,12 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DUniform t -> DUniform {{ t with a = f t.a }
                                 with b = f t.b }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DUniform t -> f (f acc t.a) t.b
+
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DUniform t ->
+    match f acc t.a with (acc,a) in
+    match f acc t.b with (acc,b) in
+    (acc, DUniform {{t with a = a} with b = b})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -220,8 +232,10 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DBernoulli t -> DBernoulli { t with p = f t.p }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DBernoulli t -> f acc t.p
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DBernoulli t ->
+    match f acc t.p with (acc,p) in
+    (acc, DBernoulli {t with p = p})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -269,8 +283,10 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DPoisson t -> DPoisson { t with lambda = f t.lambda }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DPoisson t -> f acc t.lambda
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DPoisson t ->
+    match f acc t.lambda with (acc,lambda) in
+    (acc, DPoisson {t with lambda = lambda})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -320,8 +336,11 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DBeta t -> DBeta {{ t with a = f t.a }
                           with b = f t.b }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DBeta t -> f (f acc t.a) t.b
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DBeta t ->
+    match f acc t.a with (acc,a) in
+    match f acc t.b with (acc,b) in
+    (acc, DBeta {{t with a = a} with b = b})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -385,8 +404,11 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DGamma t -> DGamma {{ t with k = f t.k }
                             with theta = f t.theta }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DGamma t -> f (f acc t.k) t.theta
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DGamma t ->
+    match f acc t.k with (acc,k) in
+    match f acc t.theta with (acc,theta) in
+    (acc, DGamma {{t with k = k} with theta = theta})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -452,8 +474,10 @@ lang CategoricalDist =
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DCategorical t -> DCategorical { t with p = f t.p }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DCategorical t -> f acc t.p
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DCategorical t ->
+    match f acc t.p with (acc,p) in
+    (acc, DCategorical {t with p = p})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -506,8 +530,11 @@ lang MultinomialDist =
   | DMultinomial t -> DMultinomial {{ t with n = f t.n }
                                         with p = f t.p }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DMultinomial t -> f (f acc t.n) t.p
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DMultinomial t ->
+    match f acc t.n with (acc,n) in
+    match f acc t.p with (acc,p) in
+    (acc, DMultinomial {{t with n = n} with p = p})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -569,8 +596,10 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DDirichlet t -> DDirichlet { t with a = f t.a }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DDirichlet t -> f acc t.a
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DDirichlet t ->
+    match f acc t.a with (acc,a) in
+    (acc, DDirichlet {t with a = a})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -620,8 +649,10 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DExponential t -> DExponential { t with rate = f t.rate }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DExponential t -> f acc t.rate
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DExponential t ->
+    match f acc t.rate with (acc,rate) in
+    (acc, DExponential {t with rate = rate})
 
   sem pprintDist (indent: Int) (env: PprintEnv) =
   | DExponential t ->
@@ -668,8 +699,10 @@ lang EmpiricalDist =
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DEmpirical t -> DEmpirical { t with samples = f t.samples }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DEmpirical t -> f acc t.samples
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DEmpirical t ->
+    match f acc t.samples with (acc,samples) in
+    (acc, DEmpirical {t with samples = samples})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -730,8 +763,11 @@ lang GaussianDist =
   | DGaussian t -> DGaussian {{ t with mu = f t.mu }
                                   with sigma = f t.sigma }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DGaussian t -> f (f acc t.mu) t.sigma
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DGaussian t ->
+    match f acc t.mu with (acc,mu) in
+    match f acc t.sigma with (acc,sigma) in
+    (acc, DGaussian {{t with mu = mu} with sigma = sigma})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -791,8 +827,11 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
   sem smapDist_Expr_Expr (f: Expr -> a) =
   | DBinomial t -> DBinomial { { t with n = f t.n } with p = f t.p }
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DBinomial t -> f (f acc t.n) t.p
+  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | DBinomial t ->
+    match f acc t.n with (acc,n) in
+    match f acc t.p with (acc,p) in
+    (acc, DBinomial {{t with n = n} with p = p})
 
    -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =

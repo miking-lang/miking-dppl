@@ -1,5 +1,5 @@
 -- CorePPL
--- Note that we should NOT implement eval or compile functions
+-- Note that we should NOT implement eval or compile functions for
 -- CorePPL. Instead, we implement function 'toMExpr' which translates
 -- the core terms into an MExpr term. By doing so, we can use the
 -- standard eval and compile functions when running the inference.
@@ -59,11 +59,10 @@ lang Infer =
   sem withType (ty: Type) =
   | TmInfer t -> TmInfer { t with ty = ty }
 
-  sem smap_Expr_Expr (f: Expr -> a) =
-  | TmInfer t -> TmInfer { t with model = f t.model }
-
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | TmInfer t -> f acc t.model
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmInfer t ->
+    match f acc t.model with (acc,model) in
+    (acc, TmInfer { t with model = model })
 
   -- Pretty printing
   sem isAtomic =
@@ -142,11 +141,10 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem withType (ty: Type) =
   | TmAssume t -> TmAssume { t with ty = ty }
 
-  sem smap_Expr_Expr (f: Expr -> a) =
-  | TmAssume t -> TmAssume { t with dist = f t.dist }
-
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | TmAssume t -> f acc t.dist
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmAssume t ->
+    match f acc t.dist with (acc,dist) in
+    (acc, TmAssume { t with dist = dist })
 
   -- Pretty printing
   sem isAtomic =
@@ -222,12 +220,11 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem withType (ty: Type) =
   | TmObserve t -> TmObserve { t with ty = ty }
 
-  sem smap_Expr_Expr (f: Expr -> a) =
-  | TmObserve t -> TmObserve {{ t with value = f t.value }
-                                  with dist = f t.dist }
-
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | TmObserve t -> f (f acc t.value) t.dist
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmObserve t ->
+    match f acc t.value with (acc,value) in
+    match f acc t.dist with (acc,dist) in
+    (acc, TmObserve {{ t with value = value } with dist = dist})
 
   -- Pretty printing
   sem isAtomic =
@@ -319,11 +316,10 @@ lang Weight =
   sem withType (ty: Type) =
   | TmWeight t -> TmWeight { t with ty = ty }
 
-  sem smap_Expr_Expr (f: Expr -> a) =
-  | TmWeight t -> TmWeight { t with weight = f t.weight }
-
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | TmWeight t -> f acc t.weight
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmWeight t ->
+    match f acc t.weight with (acc,weight) in
+    (acc, TmWeight { t with weight = weight })
 
   -- Pretty printing
   sem isAtomic =

@@ -21,11 +21,11 @@ lang Plate = Eq + Sym + TypeAnnot + ANF + PrettyPrint
   sem withType (ty : Type) =
   | TmPlate t -> TmPlate {t with ty=ty}
 
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmPlate t -> TmPlate {{ t with fun = f t.fun} with lst = f t.lst}
-
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc : a) =
-  | TmPlate t -> f (f acc t.fun) t.lst
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmPlate t ->
+    match f acc t.fun with (acc,fun) in
+    match f acc t.lst with (acc,lst) in
+    (acc, TmPlate {{ t with fun = fun } with lst = lst})
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmPlate r ->

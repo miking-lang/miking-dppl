@@ -30,7 +30,7 @@ let externalNames =[
 
 
 lang MExprExternalDists = MExprAst
-   sem addExternalDists =
+  sem addExternalDists =
   | e ->
       let f = lam acc. lam n.
           TmExt {ident = n, tyIdent = tyunknown_,
