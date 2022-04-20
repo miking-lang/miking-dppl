@@ -183,25 +183,27 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
 
 end
 
--- Types for keeping track of alignment flow
--- TODO(dlunde,2021-11-23): Should be part of the Align fragment when possible.
-type AlignFlow = {
-  -- Unaligned names
-  unaligned: [Name],
-  -- LHS names of applications
-  lhss: [Name]
-}
-type AlignAcc = {
-  -- Map for matches (let key = match ...)
-  mMap: Map Name AlignFlow,
-  -- Map for lambdas (lam key. ...)
-  lMap: Map Name AlignFlow,
-  -- Current flow accumulator
-  current: AlignFlow
-}
-let emptyAlignFlow = { unaligned = [], lhss = [] }
 
 lang Align = MExprPPLCFA
+
+  -- Types for keeping track of alignment flow
+  type AlignFlow = {
+    -- Unaligned names
+    unaligned: [Name],
+    -- LHS names of applications
+    lhss: [Name]
+  }
+  type AlignAcc = {
+    -- Map for matches (let key = match ...)
+    mMap: Map Name AlignFlow,
+    -- Map for lambdas (lam key. ...)
+    lMap: Map Name AlignFlow,
+    -- Current flow accumulator
+    current: AlignFlow
+  }
+  sem emptyAlignFlow : () -> AlignFlow
+  sem emptyAlignFlow =
+  | _ -> { unaligned = [], lhss = [] }
 
   -- Type: Expr -> CFAGraph -> Set Name
   -- Returns a list of unaligned names for a program.
@@ -213,7 +215,7 @@ lang Align = MExprPPLCFA
 
     -- Construct unaligned name map (for matches and lambdas)
     let m = mapEmpty nameCmp in
-    let acc = { mMap = m, lMap = m, current = emptyAlignFlow } in
+    let acc: AlignAcc = { mMap = m, lMap = m, current = emptyAlignFlow () } in
     match alignMap acc t with acc in
     let acc: AlignAcc = acc in
     let uMatch = acc.mMap in
@@ -341,41 +343,46 @@ lang Align = MExprPPLCFA
   | TmLet { ident = ident, body = TmApp a, inexpr = inexpr } ->
     -- a.rhs is a variable due to ANF, no need to recurse
     -- Add new values
-    let current = {{ acc.current
-      with unaligned = cons ident acc.current.unaligned }
+    let c: AlignFlow = acc.current in
+    let current = {{ c
+      with unaligned = cons ident c.unaligned }
       with lhss =
         let lhs = match a.lhs with TmVar t then t.ident
           else infoErrorExit (infoTm a.lhs) "Not a TmVar in application" in
-        cons lhs acc.current.lhss }
+        cons lhs c.lhss }
     in
     let acc = { acc with current = current } in
     alignMap acc inexpr
   | TmLet { ident = ident, body = TmMatch m, inexpr = inexpr } ->
     -- m.target is a TmVar due to ANF, can safely be ignored here
+    let c: AlignFlow = acc.current in
     let current = {
-      acc.current with unaligned = cons ident acc.current.unaligned
+      c with unaligned = cons ident c.unaligned
     } in
     let acc = { acc with current = current } in
     -- Recursion
-    let accI = { acc with current = emptyAlignFlow } in
+    let accI: AlignAcc = { acc with current = emptyAlignFlow () } in
     match alignMap accI m.thn with accI in
     match alignMap accI m.els with accI in
     let accI: AlignAcc = accI in
     -- Record inner map and define next current
     let mMap = mapInsert ident accI.current accI.mMap in
+    let c: AlignFlow = acc.current in
+    let ci: AlignFlow = accI.current in
     let current = {
       -- Flow in inner match is also part of outer lam/match
-      unaligned = concat acc.current.unaligned accI.current.unaligned,
-      lhss = concat acc.current.lhss accI.current.lhss
+      unaligned = concat c.unaligned ci.unaligned,
+      lhss = concat c.lhss ci.lhss
     } in
     let acc = {{ accI with mMap = mMap } with current = current } in
     alignMap acc inexpr
   | TmLet { ident = ident, body = TmLam b, inexpr = inexpr } ->
+    let c: AlignFlow = acc.current in
     let current = {
-      acc.current with unaligned = cons ident acc.current.unaligned
+      c with unaligned = cons ident c.unaligned
     } in
     let acc = { acc with current = current } in
-    let accI = { acc with current = emptyAlignFlow } in
+    let accI: AlignAcc = { acc with current = emptyAlignFlow () } in
     match alignMap accI b.body with accI in
     let accI: AlignAcc = accI in
     let lMap = mapInsert b.ident accI.current accI.lMap in
@@ -384,11 +391,12 @@ lang Align = MExprPPLCFA
   | TmRecLets { bindings = bindings, inexpr = inexpr } ->
     let acc = foldl (lam acc: AlignAcc. lam b: RecLetBinding.
         match b.body with TmLam t then
+          let c: AlignFlow = acc.current in
           let current = {
-            acc.current with unaligned = cons b.ident acc.current.unaligned
+            c with unaligned = cons b.ident c.unaligned
           } in
           let acc = { acc with current = current } in
-          let accI = { acc with current = emptyAlignFlow } in
+          let accI: AlignAcc = { acc with current = emptyAlignFlow () } in
           match alignMap accI t.body with accI in
           let accI: AlignAcc = accI in
           let lMap = mapInsert t.ident accI.current accI.lMap in
@@ -397,8 +405,9 @@ lang Align = MExprPPLCFA
       ) acc bindings in
     alignMap acc inexpr
   | TmLet { ident = ident, body = body, inexpr = inexpr } ->
+    let c: AlignFlow = acc.current in
     let current = {
-      acc.current with unaligned = cons ident acc.current.unaligned
+      c with unaligned = cons ident c.unaligned
     } in
     let acc = { acc with current = current } in
     alignMap acc inexpr

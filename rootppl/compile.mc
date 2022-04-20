@@ -245,7 +245,7 @@ let catIdents: Expr -> Map Name Int =
     in rec (mapEmpty nameCmp) expr
 
 -- RootPPL compile function
-let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
+let rootPPLCompileH: Options -> [(Name,Type)] -> Map Name Int -> Expr -> RPProg =
   use MExprPPLRootPPLCompile in
   lam options: Options.
   lam typeEnv: [(Name,Type)].
@@ -794,7 +794,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     -- Generate code for calling a BBLOCK
     let constructCall:
-        StackFrame -> Name -> [CExpr] -> Option CExpr -> Name -> [CStmt] =
+        StackFrame -> Name -> [CExpr] -> Option CExpr -> CExpr -> [CStmt] =
       lam sf: StackFrame.
       lam fun: Name.
       lam args: [CExpr].
