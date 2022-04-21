@@ -30,38 +30,38 @@ let default = {
 let config = [
   ([("-m", " ", "<method>")],
     "The selected inference method. The supported methods are: importance, rootppl-smc.",
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
     join ["The number of particles. The default is 5000. This option is used if one ",
           "of the following methods are used: importance, rootppl-smc."],
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],
     "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (sample only at manually defined resampling locations).",
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with resample = argToString p}),
   ([("--print-model", "", "")],
     "The parsed model is pretty printed before inference.",
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with printModel = true}),
   ([("--print-mcore", "", "")],
     "Print the generated MCore program before execution.",
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with printMCore = true}),
   ([("--exit-before", "", "")],
     "Exit before inference takes place. ",
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with exitBefore = true}),
   ([("--transform", "", "")],
     "The model is transformed to an efficient representation if possible.",
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with transform = true}),
 
   -- Options for method `rootppl-smc`
   ([("--no-print-samples", "", "")],
     "Do not print the final samples when compiling with the rootppl-smc method.",
-    lam p: ArgPart.
+    lam p: ArgPart Options.
       let o: Options = p.options in {o with printSamples = false})
 ]
 

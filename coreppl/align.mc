@@ -183,16 +183,18 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
 
 end
 
+-- TODO(dlunde,2022-04-21): I want to move this inside Align fragment as well,
+-- but it doesn't seem to work yet.
+type AlignFlow = {
+  -- Unaligned names
+  unaligned: [Name],
+  -- LHS names of applications
+  lhss: [Name]
+}
 
 lang Align = MExprPPLCFA
 
-  -- Types for keeping track of alignment flow
-  type AlignFlow = {
-    -- Unaligned names
-    unaligned: [Name],
-    -- LHS names of applications
-    lhss: [Name]
-  }
+-- Types for keeping track of alignment flow
   type AlignAcc = {
     -- Map for matches (let key = match ...)
     mMap: Map Name AlignFlow,
@@ -320,7 +322,8 @@ lang Align = MExprPPLCFA
     let env = match env with Some env then
         printLn "***UNALIGNED NAMES***";
         match mapAccumL pprintVarName env (setToSeq res) with (_,res) in
-        printLn (strJoin ", " res)
+        printLn (strJoin ", " res);
+        Some env
       else None ()
     in
 
@@ -438,7 +441,7 @@ let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
       match pprintCode 0 env tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some env) tANF with (Some env,cfaRes) in
+      match cfaDebug (None ()) (Some env) tANF with (Some env,cfaRes) in
       match cfaGraphToString env cfaRes with (env, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
@@ -611,13 +614,13 @@ utest _test false t ["t", "res"] with [
 -- ALIGNMENT TESTS --
 ---------------------
 
-let _test: Bool -> Expr -> [String] -> [Bool] =
+let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
   lam debug. lam t. lam vars.
     let tANF = normalizeTerm t in
     let env = if debug then Some pprintEnvEmpty else None () in
     match _testBase env tANF with (env, cfaRes) in
     match alignmentDebug env cfaRes tANF with (_, aRes) in
-    let sSet = setFold
+    let sSet: Set String = setFold
       (lam acc. lam n. setInsert (nameGetStr n) acc)
       (setEmpty cmpString) aRes in
     map (lam var: String. (var, not (setMem var sSet))) vars

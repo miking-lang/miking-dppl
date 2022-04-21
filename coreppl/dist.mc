@@ -36,7 +36,8 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem withType (ty: Type) =
   | TmDist t -> TmDist { t with ty = ty }
 
-  sem smapAccumLDist_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumLDist_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Dist -> (acc, Dist)
+  sem smapAccumLDist_Expr_Expr f acc =
   -- Intentionally left blank
 
   sem smapDist_Expr_Expr : (Expr -> Expr) -> Dist -> Dist
@@ -62,8 +63,10 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem tyWithInfo (info : Info) =
   | TyDist t -> TyDist {t with info = info}
 
-  sem smap_Type_Type (f: Type -> a) =
-  | TyDist t -> TyDist { t with ty = f t.ty }
+  sem smapAccumL_Type_Type f acc =
+  | TyDist t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, TyDist {t with ty = ty})
 
   -- Pretty printing
   sem isAtomic =
@@ -82,7 +85,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   -- Intentionally left blank
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -179,7 +182,7 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DUniform r ->
     match lhs with DUniform l then
       match eqExprH env free l.a r.a with Some free then
@@ -246,7 +249,7 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DBernoulli r ->
     match lhs with DBernoulli l then eqExprH env free l.p r.p else None ()
 
@@ -297,7 +300,7 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DPoisson r ->
     match lhs with DPoisson l then eqExprH env free l.lambda r.lambda else None ()
 
@@ -351,7 +354,7 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DBeta r ->
     match lhs with DBeta l then
       match eqExprH env free l.a r.a with Some free then
@@ -419,7 +422,7 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DGamma r ->
     match lhs with DGamma l then
       match eqExprH env free l.k r.k with Some free then
@@ -488,7 +491,7 @@ lang CategoricalDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DCategorical { p = p2 } ->
     match lhs with DCategorical { p = p1 } then
       eqExprH env free p1 p2
@@ -545,7 +548,7 @@ lang MultinomialDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DMultinomial { n = n2, p = p2 } ->
     match lhs with DMultinomial { n = n1, p = p1 } then
       match eqExprH env free n1 n2 with Some free then
@@ -610,7 +613,7 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DDirichlet { a = a2 } ->
     match lhs with DDirichlet { a = a1 } then
       eqExprH env free a1 a2
@@ -662,7 +665,7 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DExponential r ->
     match lhs with DExponential l then eqExprH env free l.rate r.rate else None ()
 
@@ -713,7 +716,7 @@ lang EmpiricalDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DEmpirical { samples = s2 } ->
     match lhs with DEmpirical { samples = s1 } then
       eqExprH env free s1 s2
@@ -778,7 +781,7 @@ lang GaussianDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DGaussian r ->
     match lhs with DGaussian l then
       match eqExprH env free l.mu r.mu with Some free then
@@ -842,7 +845,7 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DBinomial r ->
     match lhs with DBinomial l then
       match eqExprH env free l.n r.n with Some free then
