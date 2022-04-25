@@ -1235,9 +1235,9 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> Map Name Int -> Expr -> RPProg 
         let i = nameSym "i" in
         let specifier =
           switch retTy
-          case CTyInt _ | CTyInt32 _ | CTyInt64 _ then "%d"
+          case CTyInt _ | CTyInt32 _ | CTyInt64 _ | CTyChar _ then "%d"
           case CTyFloat _ | CTyDouble _ then "%f"
-          case _ then error "Printing of return type is currently not supported. Please use the --no-print-samples option."
+          case _ then error "Printing of values of the returned type is currently not supported. Please use the --no-print-samples option."
           end
         in Some [
           -- int i = 0;
