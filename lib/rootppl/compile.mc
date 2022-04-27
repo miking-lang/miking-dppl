@@ -5,6 +5,8 @@ include "../coreppl/dppl-parser.mc"
 include "../coreppl/dppl-arg.mc"
 include "../coreppl/align.mc"
 
+include "../mexpr/smc.mc"
+
 include "rootppl.mc"
 
 include "mexpr/ast-builder.mc"
@@ -23,7 +25,7 @@ include "mexpr/pprint.mc"
 -- BASE LANGUAGE FRAGMENT FOR COMPILER --
 -----------------------------------------
 
-lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
+lang MExprPPLRootPPLCompile = MExprPPL + Resample + RootPPL + MExprCCompileAlloc
   + SeqTypeNoStringTypeLift + Align
 
   -- Compiler internals

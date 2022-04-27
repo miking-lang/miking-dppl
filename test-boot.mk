@@ -1,8 +1,8 @@
 .PHONY: all
 
 test-files=
-test-files+=${wildcard coreppl/*.mc}
-test-files+=${wildcard rootppl/*.mc}
+test-files+=${wildcard lib/coreppl/*.mc}
+test-files+=${wildcard lib/rootppl/*.mc}
 
 all: ${test-files}
 

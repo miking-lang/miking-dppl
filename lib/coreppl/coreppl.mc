@@ -19,7 +19,6 @@ include "mexpr/const-arity.mc"
 include "string.mc"
 
 include "dist.mc"
-include "smc.mc"
 
 -------------
 -- HELPERS --
@@ -415,9 +414,6 @@ lang CorePPL =
   Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
 end
 
-lang CorePPLInference = CorePPL + SMC -- + Importance
-end
-
 let pplKeywords = [
   "assume", "observe", "weight", "resample", "plate", "Uniform", "Bernoulli",
   "Poisson", "Beta", "Gamma", "Categorical", "Multinomial", "Dirichlet",
@@ -427,7 +423,7 @@ let pplKeywords = [
 let mexprPPLKeywords = concat mexprKeywords pplKeywords
 
 lang MExprPPL =
-  CorePPLInference + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
+  CorePPL + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
   MExprTypeAnnot + MExprTypeLiftUnOrderedRecords + MExprArity
 
   sem mexprPPLToString =
