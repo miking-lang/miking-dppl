@@ -1,7 +1,7 @@
 -- Alignment analysis for CorePPL.
 
 include "coreppl.mc"
-include "dppl-parser.mc"
+include "parser.mc"
 
 include "mexpr/cfa.mc"
 

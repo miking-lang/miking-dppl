@@ -1,8 +1,8 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
 include "../coreppl/coreppl.mc"
-include "../coreppl/dppl-parser.mc"
-include "../coreppl/dppl-arg.mc"
+include "../coreppl/parser.mc"
+include "../dppl-arg.mc"
 include "../coreppl/align.mc"
 
 include "../mexpr/smc.mc"

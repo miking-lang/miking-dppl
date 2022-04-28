@@ -2,7 +2,7 @@
 include "ocaml/mcore.mc"
 include "seq.mc"
 include "../coreppl/coreppl.mc"
-include "../coreppl/dppl-arg.mc"
+include "../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 include "external-dists.mc"
 
