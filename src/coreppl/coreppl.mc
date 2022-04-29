@@ -58,7 +58,7 @@ lang Infer =
   sem withType (ty: Type) =
   | TmInfer t -> TmInfer { t with ty = ty }
 
-  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Expr_Expr f acc =
   | TmInfer t ->
     match f acc t.model with (acc,model) in
     (acc, TmInfer { t with model = model })
@@ -140,7 +140,7 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem withType (ty: Type) =
   | TmAssume t -> TmAssume { t with ty = ty }
 
-  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Expr_Expr f acc =
   | TmAssume t ->
     match f acc t.dist with (acc,dist) in
     (acc, TmAssume { t with dist = dist })
@@ -219,7 +219,7 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem withType (ty: Type) =
   | TmObserve t -> TmObserve { t with ty = ty }
 
-  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Expr_Expr f acc =
   | TmObserve t ->
     match f acc t.value with (acc,value) in
     match f acc t.dist with (acc,dist) in
@@ -261,7 +261,7 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     let ty =
       match tyTm value with ty1 then
         match tyTm dist with TyDist { ty = ty2 } then
-          match compatibleType env ty1 ty2 with Some _ then
+          match compatibleType env.tyEnv ty1 ty2 with Some _ then
             tyWithInfo t.info tyunit_
           else err ()
         else err ()
@@ -315,7 +315,7 @@ lang Weight =
   sem withType (ty: Type) =
   | TmWeight t -> TmWeight { t with ty = ty }
 
-  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Expr_Expr f acc =
   | TmWeight t ->
     match f acc t.weight with (acc,weight) in
     (acc, TmWeight { t with weight = weight })

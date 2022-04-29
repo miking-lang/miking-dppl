@@ -35,7 +35,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + Resample + RootPPL + MExprCCompileAlloc
   sem printCExpr (env: PprintEnv) =
   | CEResample {} -> (env, "<<<CEResample>>>")
 
-  sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
+  sem sfold_CExpr_CExpr f acc =
   | CEResample _ -> acc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
@@ -337,7 +337,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> Map Name Int -> Expr -> RPProg 
       recursive let rec: Bool -> CStmt -> Bool = lam acc. lam stmt.
         match acc with false then false
         else match stmt with CSDef { id = Some id } then
-          if isIdentDet id then sfold_CStmt_CStmt rec acc else false
+          if isIdentDet id then sfold_CStmt_CStmt rec acc stmt else false
         else sfold_CStmt_CStmt rec acc stmt
       in
       if exprsDet then rec true stmt else false
@@ -472,7 +472,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> Map Name Int -> Expr -> RPProg 
     recursive let findLocals: AccStackFrames -> [CStmt] -> AccStackFrames =
       lam acc: AccStackFrames. lam stmts: [CStmt].
         let acc = {acc with hasSplit = false} in
-        foldl (lam acc: AccStackFrames. lam stmt: Stmt.
+        foldl (lam acc: AccStackFrames. lam stmt: CStmt.
 
           -- Add def, if applicable
           let acc =
@@ -670,13 +670,13 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> Map Name Int -> Expr -> RPProg 
     in
 
     -- C statement for setting the NEXT from an expression
-    let setNextFromExpr: CExpr -> CExpr = lam expr.
+    let setNextFromExpr: CExpr -> CStmt = lam expr.
       (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CENext {}
                                 , rhs = expr })})
     in
 
     -- C statement for setting the NEXT to a BBLOCK name
-    let setNext: Name -> CExpr = lam name.
+    let setNext: Name -> CStmt = lam name.
       setNextFromExpr (CEVar { id = name })
     in
 
@@ -836,7 +836,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> Map Name Int -> Expr -> RPProg 
         join [[callsf, ra], args, ret, [incr, call]]
     in
 
-    let constructCallFromStmt: StackFrame -> CStmt -> CExpr -> [Cstmt] =
+    let constructCallFromStmt: StackFrame -> CStmt -> CExpr -> [CStmt] =
       lam sf: StackFrame.
       lam stmt: CStmt.
       lam ra: CExpr.

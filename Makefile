@@ -5,8 +5,8 @@ main_name=main
 exec_name=midppl
 plot_name=dplot
 bin_path=${HOME}/.local/bin
-lib_path=${HOME}/.local/lib
-lib_path_coreppl=${lib_path}/mcore/stdlib/coreppl
+# lib_path=${HOME}/.local/lib
+# lib_path_coreppl=${lib_path}/mcore/stdlib/coreppl
 
 all: build/${main_name}
 
@@ -19,7 +19,7 @@ build/${main_name}: $(shell find . -name "*.mc")
 install: build/${main_name}
 	cp build/${main_name} ${bin_path}/${exec_name}
 	chmod +x ${bin_path}/${exec_name}
-	#### Why do we need to install the below? ######
+	#### Why do we need to install the below? Seems strange to merge it with the installed miking stdlib ######
 	# mkdir -p ${lib_path_coreppl}
 	# cp -f coreppl/* ${lib_path_coreppl}/.
 	################################################

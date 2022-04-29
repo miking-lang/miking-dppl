@@ -53,7 +53,7 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
   sem withType (ty: Type) =
   | TmResample t -> TmResample { t with ty = ty }
 
-  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Expr_Expr f acc =
   | TmResample t -> (acc,TmResample t)
 
   -- Pretty printing
