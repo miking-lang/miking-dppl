@@ -902,7 +902,7 @@ end
 
 lang Test =
   DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF + MExprTypeLiftUnOrderedRecords
+  + MExprANF + MExprTypeLift
 end
 
 mexpr

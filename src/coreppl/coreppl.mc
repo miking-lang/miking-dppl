@@ -424,7 +424,7 @@ let mexprPPLKeywords = concat mexprKeywords pplKeywords
 
 lang MExprPPL =
   CorePPL + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprTypeLiftUnOrderedRecords + MExprArity
+  MExprTypeAnnot + MExprTypeLift + MExprArity
 
   sem mexprPPLToString =
   | expr -> exprToStringKeywords mexprPPLKeywords expr

@@ -100,7 +100,7 @@ end
 
 lang Test =
   Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
-  + MExprTypeLiftUnOrderedRecords + MExprPrettyPrint
+  + MExprTypeLift + MExprPrettyPrint
 end
 
 mexpr
