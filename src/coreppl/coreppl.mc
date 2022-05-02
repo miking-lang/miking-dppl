@@ -12,7 +12,7 @@ include "mexpr/mexpr.mc"
 include "mexpr/info.mc"
 include "mexpr/eq.mc"
 include "mexpr/anf.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/const-arity.mc"
 
@@ -34,7 +34,7 @@ let _isUnitTy = use RecordTypeAst in lam ty.
 -----------
 
 lang Infer =
-  Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeAnnot + ANF + TypeLift
+  Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeCheck + ANF + TypeLift
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
@@ -89,20 +89,16 @@ lang Infer =
     TmInfer {{ t with model = symbolizeExpr env t.model }
                  with ty = symbolizeType env t.ty }
 
-  -- Type annotate
-  sem typeAnnotExpr (env: TypeEnv) =
+  -- Type check
+  sem typeCheckBase (env : TCEnv) =
   | TmInfer t ->
-    let err = lam. infoErrorExit t.info "Type error infer" in
-    let model = typeAnnotExpr env t.model in
-    let ty =
-      match tyTm model with TyArrow { from = from, to = to } then
-        if _isUnitTy from then to
-        else err ()
-      else err ()
-    in
+    let model = typeCheckExpr env t.model in
+    let tyRes = newvar env.currentLvl t.info in
+    unify env (tyTm model) (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes);
     TmInfer {{ t with model = model }
-                 with ty = TyDist { info = t.info, ty = ty } }
+                 with ty = TyDist { info = t.info, ty = tyRes } }
 
+  -- ANF
   sem normalize (k : Expr -> Expr) =
   | TmInfer ({ model = model } & t) ->
     normalizeName (lam model. k (TmInfer { t with model = model })) model
@@ -121,7 +117,7 @@ end
 
 
 -- Assume defines a new random variable
-lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
+lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
 
   syn Expr =
   | TmAssume { dist: Expr,
@@ -169,18 +165,16 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     TmAssume {{ t with dist = symbolizeExpr env t.dist }
                   with ty = symbolizeType env t.ty }
 
-  -- Type annotate
-  sem typeAnnotExpr (env: TypeEnv) =
+  -- Type check
+  sem typeCheckBase (env : TCEnv) =
   | TmAssume t ->
-    let err = lam. infoErrorExit t.info "Type error assume" in
-    let dist = typeAnnotExpr env t.dist in
-    let ty =
-      match tyTm dist with TyDist { ty = ty } then ty
-      else err ()
-    in
+    let dist = typeCheckExpr env t.dist in
+    let tyRes = newvar env.currentLvl t.info in
+    unify env (tyTm dist) (TyDist { info = t.info, ty = tyRes });
     TmAssume {{ t with dist = dist }
-                  with ty = ty }
+                  with ty = tyRes }
 
+  -- ANF
   sem normalize (k : Expr -> Expr) =
   | TmAssume ({ dist = dist } & t) ->
     normalizeName (lam dist. k (TmAssume { t with dist = dist })) dist
@@ -199,7 +193,7 @@ end
 
 
 -- Observe gives a random variable conditioned on a specific value
-lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
+lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
 
   syn Expr =
   | TmObserve { value: Expr,
@@ -252,25 +246,20 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
                     with dist = symbolizeExpr env t.dist }
                     with ty = symbolizeType env t.ty }
 
-  -- Type annotate
-  sem typeAnnotExpr (env: TypeEnv) =
+  -- Type check
+  sem typeCheckBase (env : TCEnv) =
   | TmObserve t ->
-    let err = lam. infoErrorExit t.info "Type error observe" in
-    let value = typeAnnotExpr env t.value in
-    let dist = typeAnnotExpr env t.dist in
-    let ty =
-      match tyTm value with ty1 then
-        match tyTm dist with TyDist { ty = ty2 } then
-          match compatibleType env.tyEnv ty1 ty2 with Some _ then
-            tyWithInfo t.info tyunit_
-          else err ()
-        else err ()
-      else err ()
-    in
+    let value = typeCheckExpr env t.value in
+    let dist = typeCheckExpr env t.dist in
+    let tyValue = newvar env.currentLvl t.info in
+    let tyDistRes = newvar env.currentLvl t.info in
+    unify env (tyTm dist) (TyDist { info = t.info, ty = tyDistRes });
+    unify env tyValue tyDistRes;
     TmObserve {{{ t with value = value }
                     with dist = dist }
-                    with ty = ty }
+                    with ty = tyWithInfo t.info tyunit_ }
 
+  -- ANF
   sem normalize (k : Expr -> Expr) =
   | TmObserve ({ value = value, dist = dist } & t) ->
     normalizeName
@@ -299,7 +288,7 @@ end
 
 -- Defines a weight term
 lang Weight =
-  Ast + PrettyPrint + Eq + Sym + TypeAnnot + FloatTypeAst + ANF + TypeLift
+  Ast + PrettyPrint + Eq + Sym + TypeCheck + FloatTypeAst + ANF + TypeLift
   syn Expr =
   | TmWeight { weight: Expr, ty: Type, info: Info }
 
@@ -344,18 +333,15 @@ lang Weight =
     TmWeight {{ t with weight = symbolizeExpr env t.weight }
                   with ty = symbolizeType env t.ty }
 
-  -- Type annotate
-  sem typeAnnotExpr (env: TypeEnv) =
+  -- Type check
+  sem typeCheckBase (env : TCEnv) =
   | TmWeight t ->
-    let err = lam. infoErrorExit t.info "Type error weight" in
-    let weight = typeAnnotExpr env t.weight in
-    let ty =
-      match tyTm weight with TyFloat _ then tyWithInfo t.info tyunit_
-      else err ()
-    in
+    let weight = typeCheckExpr env t.weight in
+    unify env (tyTm weight) (TyFloat { info = t.info });
     TmWeight {{ t with weight = weight }
-                  with ty = ty }
+                  with ty = tyWithInfo t.info tyunit_ }
 
+  -- ANF
   sem normalize (k : Expr -> Expr) =
   | TmWeight ({ weight = weight } & t) ->
     normalizeName (lam weight. k (TmWeight { t with weight = weight })) weight
@@ -424,7 +410,7 @@ let mexprPPLKeywords = concat mexprKeywords pplKeywords
 
 lang MExprPPL =
   CorePPL + MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeAnnot + MExprTypeLift + MExprArity
+  MExprTypeCheck + MExprTypeLift + MExprArity
 
   sem mexprPPLToString =
   | expr -> exprToStringKeywords mexprPPLKeywords expr
@@ -519,14 +505,14 @@ utest symbolize tmObserve with tmObserve using eqExpr in
 utest symbolize tmWeight with tmWeight using eqExpr in
 
 
--------------------------
--- TYPE-ANNOTATE TESTS --
--------------------------
+----------------------
+-- TYPE CHECK TESTS --
+----------------------
 -- TODO(dlunde,2021-04-28): TmInfer test
 
-utest tyTm (typeAnnot tmAssume) with tybool_ using eqType in
-utest tyTm (typeAnnot tmObserve) with tyunit_ using eqType in
-utest tyTm (typeAnnot tmWeight) with tyunit_ using eqType in
+utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
+utest tyTm (typeCheck tmObserve) with tyunit_ using eqType in
+utest tyTm (typeCheck tmWeight) with tyunit_ using eqType in
 
 ---------------
 -- ANF TESTS --

@@ -31,7 +31,7 @@ let methodsmc_ = use CorePPLSMC in lam p. MethodSMC {particles = p}
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/anf.mc"
 include "mexpr/type-lift.mc"
 
@@ -73,8 +73,8 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
   | TmResample t ->
     TmResample { t with ty = symbolizeType env t.ty }
 
-  -- Type annotate
-  sem typeAnnotExpr (env: TypeEnv) =
+  -- Type check
+  sem typeCheckBase (env : TCEnv) =
   | TmResample t -> TmResample { t with ty = tyWithInfo t.info tyunit_ }
 
   sem normalize (k : Expr -> Expr) =
@@ -99,7 +99,7 @@ lang SMC = Resample
 end
 
 lang Test =
-  Resample + MExprEq + MExprSym + MExprTypeAnnot + MExprANF
+  Resample + MExprEq + MExprSym + MExprTypeCheck + MExprANF
   + MExprTypeLift + MExprPrettyPrint
 end
 
@@ -147,10 +147,10 @@ utest symbolize resample_ with resample_ using eqExpr in
 
 
 -------------------------
--- TYPE-ANNOTATE TESTS --
+-- TYPE-CHECK TESTS --
 -------------------------
 
-utest tyTm (typeAnnot resample_) with tyunit_ using eqType in
+utest tyTm (typeCheck resample_) with tyunit_ using eqType in
 
 ---------------
 -- ANF TESTS --

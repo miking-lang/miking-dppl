@@ -10,6 +10,8 @@ include "../mexpr/smc.mc"
 include "rootppl.mc"
 
 include "mexpr/ast-builder.mc"
+include "mexpr/type-check.mc"
+include "mexpr/lamlift.mc"
 
 include "assoc-seq.mc"
 include "name.mc"
@@ -26,7 +28,7 @@ include "mexpr/pprint.mc"
 -----------------------------------------
 
 lang MExprPPLRootPPLCompile = MExprPPL + Resample + RootPPL + MExprCCompileAlloc
-  + SeqTypeNoStringTypeLift + Align
+  + SeqTypeNoStringTypeLift + Align + MExprLambdaLift
 
   -- Compiler internals
   syn CExpr =
@@ -1313,8 +1315,13 @@ let rootPPLCompile: Options -> Expr -> RPProg =
   -- Symbolize with empty environment
   let prog: Expr = symbolizeExpr symEnvEmpty prog in
 
-  -- Type annotate
-  let prog: Expr = typeAnnot prog in
+  -- Type check (and annotate)
+  let prog: Expr = typeCheck prog in
+
+  -- print (mexprPPLToString prog); print "\n\n";
+
+  -- Lift lambdas
+  let prog: Expr = liftLambdas prog in
 
   -- print (mexprPPLToString prog); print "\n\n";
 
@@ -1375,7 +1382,6 @@ let rootPPLCompile: Options -> Expr -> RPProg =
 
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in
-
 
   -- Run RootPPL compiler
   let rpprog: RPProg = rootPPLCompileH options env ci prog in
@@ -1583,6 +1589,82 @@ utest test { default with printSamples = false } nestedIfs with strJoin "\n" [
   "MAIN({",
   "  FIRST_BBLOCK(start);",
   "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let lift = "
+let f = lam x: Float.
+  let val = assume (Beta x x) in
+  let inner = lam obs: Bool.
+    observe true (Bernoulli val)
+  in
+  inner true;
+  val
+in
+f 1.0
+------------------------" in
+
+utest test default lift with strJoin "\n" [
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "#include \"inference/smc/smc.cuh\"",
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "INIT_MODEL_STACK()",
+  "struct GLOBAL {double ret; double t;};",
+  "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
+  "BBLOCK_DECLARE(start);",
+  "BBLOCK_DECLARE(end);",
+  "void inner(double, char);",
+  "BBLOCK_HELPER_DECLARE(STOCH_inner, void, double, char);",
+  "BBLOCK_HELPER_DECLARE(f, double, double);",
+  "BBLOCK_DECLARE(init);",
+  "BBLOCK(start, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  ((PSTATE.stackPtr) = (sizeof(struct GLOBAL)));",
+  "  struct STACK_init (*callsf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = end);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->ret))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP(init, NULL);",
+  "})",
+  "BBLOCK(end, {",
+  "  (NEXT = NULL);",
+  "})",
+  "void inner(double val, char obs) {",
+  "  (OBSERVE(bernoulli, val, 1));",
+  "}",
+  "BBLOCK_HELPER(STOCH_inner, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  (OBSERVE(bernoulli, val, 1));",
+  "}, void, double val, char obs)",
+  "BBLOCK_HELPER(f, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  double val;",
+  "  (val = (SAMPLE(beta, x, x)));",
+  "  BBLOCK_CALL(STOCH_inner, val, 1);",
+  "  return val;",
+  "}, double, double x)",
+  "BBLOCK(init, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  ((global->t) = BBLOCK_CALL(f, 1.));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = (global->t));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "CALLBACK(callback, {",
+  "  int i = 0;",
+  "  while ((i < N)) {",
+  "    struct GLOBAL (*global) = (( struct GLOBAL (*) ) ((PSTATES[i]).stack));",
+  "    printf(\"%f %f\\n\", (global->ret), (WEIGHTS[i]));",
+  "    (i = (i + 1));",
+  "  }",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(start);",
+  "  SMC(callback);",
   "})"
 ] using eqString in
 
