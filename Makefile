@@ -43,7 +43,7 @@ test-boot:
 rootppl_bin_path = $(HOME)/.local/bin/rootppl
 rootppl_src_path=$(HOME)/.local/src/rootppl/
 rootppl_bin = rootppl/rootppl
-rootppl_src = rootppl/src/
+rootppl_src = src/rootppl/src/
 
 install-rootppl:
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);

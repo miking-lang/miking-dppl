@@ -4,7 +4,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
 include "coreppl.mc"
 include "pgm.mc"
-include "../mexpr/smc.mc"
+include "mexpr/smc.mc"
 
 
 lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + ProbabilisticGraphicalModel + KeywordMaker

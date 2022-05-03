@@ -1,9 +1,9 @@
 
 include "string.mc"
 
-include "rootppl/rootppl.mc"
-include "rootppl/compile.mc"
-include "mexpr/importance.mc"
+include "../coreppl/rootppl/rootppl.mc"
+include "../coreppl/rootppl/compile.mc"
+include "../coreppl/mexpr/importance.mc"
 
 include "dppl-arg.mc"
 
