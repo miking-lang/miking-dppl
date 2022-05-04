@@ -11,7 +11,7 @@ bin_path=${HOME}/.local/bin
 all: build/${midppl_name}
 
 build/${midppl_name}: $(shell find . -name "*.mc")
-	time mi compile src/${midppl_name}.mc
+	time mi compile midppl/${midppl_name}.mc
 	mkdir -p build
 	cp ${midppl_name} build/${midppl_name}
 	rm ${midppl_name}
@@ -43,7 +43,7 @@ test-boot:
 rootppl_bin_path = $(HOME)/.local/bin/rootppl
 rootppl_src_path=$(HOME)/.local/src/rootppl/
 rootppl_bin = rootppl/rootppl
-rootppl_src = src/rootppl/src/
+rootppl_src = rootppl/src/
 
 install-rootppl:
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
