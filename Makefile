@@ -10,11 +10,12 @@ bin_path=${HOME}/.local/bin
 
 all: build/${midppl_name}
 
+midppl_tmp_file := $(shell mktemp)
 build/${midppl_name}: $(shell find . -name "*.mc")
-	time mi compile midppl/${midppl_name}.mc
+	time mi compile midppl/${midppl_name}.mc --output ${midppl_tmp_file}
 	mkdir -p build
-	cp ${midppl_name} build/${midppl_name}
-	rm ${midppl_name}
+	cp ${midppl_tmp_file} build/${midppl_name}
+	rm ${midppl_tmp_file}
 
 install: build/${midppl_name}
 	cp build/${midppl_name} ${bin_path}/${exec_name}
