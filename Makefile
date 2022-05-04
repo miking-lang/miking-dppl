@@ -6,6 +6,8 @@ exec_name=midppl
 tppl_name=tpplc
 plot_name=dplot
 bin_path=${HOME}/.local/bin
+src_path=${HOME}/.local/src/midppl/
+midppl_src=.
 # lib_path=${HOME}/.local/lib
 # lib_path_coreppl=${lib_path}/mcore/stdlib/coreppl
 
@@ -13,7 +15,7 @@ all: build/${midppl_name}
 
 midppl_tmp_file := $(shell mktemp)
 build/${midppl_name}: $(shell find . -name "*.mc")
-	time mi compile coreppl/${midppl_name}.mc --output ${midppl_tmp_file}
+	time mi compile coreppl/${midppl_name}.mc --typecheck --output ${midppl_tmp_file}
 	mkdir -p build
 	cp ${midppl_tmp_file} build/${midppl_name}
 	rm ${midppl_tmp_file}
@@ -28,10 +30,12 @@ build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
 
 
 install: build/${midppl_name} build/${tppl_name}
+	mkdir -p $(bin_path) $(src_path);
 	cp build/${midppl_name} ${bin_path}/${exec_name}
 	cp build/${tppl_name} ${bin_path}/${tppl_name}
 	chmod +x ${bin_path}/${exec_name}
 	chmod +x ${bin_path}/${tppl_name}
+	cp -rfT $(midppl_src) $(src_path)
 	#### Why do we need to install the below? Seems strange to merge it with the installed miking stdlib ######
 	# mkdir -p ${lib_path_coreppl}
 	# cp -f coreppl/* ${lib_path_coreppl}/.
