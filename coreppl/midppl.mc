@@ -25,7 +25,16 @@ match result with ParseOK r then
   else
     -- Read and parse the file
     let filename = head r.strings in
-    let ast = getAst filename in
+    let ast =
+      -- TODO(dlunde,2022-05-09): This is a temporary hack required because we
+      -- can only run deadcode elimination when parsing (it's implemented on
+      -- the OCaml side). For methods other than rootppl-smc, we want to allow
+      -- parsing programs with free variables, and can therefore not use dead
+      -- code elimination as this requires boot symbolization (which throws an
+      -- error on unbound variables).
+      match options.method with "rootppl-smc" then getAst false filename
+      else getAst true filename
+    in
 
     -- Transform the model, if the flag is selected
     let ast =
