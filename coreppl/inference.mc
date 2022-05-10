@@ -5,7 +5,8 @@ include "sys.mc"
 
 include "coreppl-to-rootppl/rootppl.mc"
 include "coreppl-to-rootppl/compile.mc"
-include "coreppl-to-mexpr/importance.mc"
+include "coreppl-to-mexpr/compile.mc"
+
 include "mexpr/mexpr.mc"
 
 include "dppl-arg.mc"
@@ -14,7 +15,8 @@ let performInference = lam options: Options. lam ast.
 
   if isPrefix eqChar "mexpr-" options.method then
 
-    -- Compile the ast with the chosen inference algorithm (handled in mexpr/compile.mc)
+    -- Compile the ast with the chosen inference algorithm (handled in
+    -- coreppl-to-mexpr/compile.mc)
     let ast: Expr = mexprCompile options ast in
 
     -- Output the compiled mexpr code
