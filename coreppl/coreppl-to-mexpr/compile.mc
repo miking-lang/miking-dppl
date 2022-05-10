@@ -4,7 +4,6 @@ include "mexpr/boot-parser.mc"
 include "sys.mc"
 
 include "../coreppl.mc"
-include "../../midppl/src.mc"
 
 lang MExprImportanceCompile = MExprPPL
 
@@ -30,19 +29,24 @@ let mexprCompile: Options -> Expr -> Expr =
   use MExprCompile in
   lam options. lam prog.
 
-    let parse = use BootParser in parseMCoreFile {
+    printLn (mexprToString prog); exit 0;
+
+    let parse = use BootParser in parseMCoreFile {{
       defaultBootParserParseMCoreFileArg
-      with eliminateDeadCode = false
-    } in
+      with eliminateDeadCode = false }
+      with allowFree = true }
+    in
 
     -- Load includes from Miking stdlib that must be available in the compiled program
     let tmpFile = sysTempFileMake () in
+    -- NOTE: This should be an actual file _in Miking DPPL_ instead, so that we can include things relative to it.
     writeFile tmpFile (join (map (lam i. join ["include \"", i, "\"\n"]) [
       "ext/dist-ext.mc",
       "ext/math-ext.mc"
     ]));
     let includes: Expr = parse tmpFile in
     sysDeleteFile tmpFile;
+    -- NOTE: If we also need dead code elimination, we can use the "keywords" option to parseMCoreFile
 
     -- Get the names of all externals loaded in the above step
     let externalIds: Set String = getExternalIds includes in
