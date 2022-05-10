@@ -1,7 +1,0 @@
-#!/bin/sh
-
-# Uses a custom lib path if specified
-if [ -z "${MIDPPL_LIB_PATH}" ]; then
-  MIDPPL_LIB_PATH=~/.local/lib/midppl
-fi
-boot eval ${MIDPPL_LIB_PATH}/coreppl/main.mc -- "$@"

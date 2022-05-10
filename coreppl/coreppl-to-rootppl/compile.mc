@@ -2,10 +2,10 @@
 
 include "../coreppl.mc"
 include "../parser.mc"
-include "../../midppl/dppl-arg.mc"
+include "../dppl-arg.mc"
 include "../align.mc"
 
-include "../mexpr/smc.mc"
+include "../inference-common/smc.mc"
 
 include "rootppl.mc"
 

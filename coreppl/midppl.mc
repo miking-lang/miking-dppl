@@ -6,8 +6,8 @@
 
 include "option.mc"
 include "string.mc"
-include "../coreppl/parser.mc"
-include "../coreppl/transformation.mc"
+include "parser.mc"
+include "transformation.mc"
 include "dppl-arg.mc"
 include "inference.mc"
 include "common.mc"

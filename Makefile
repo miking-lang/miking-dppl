@@ -12,7 +12,7 @@ all: build/${midppl_name}
 
 midppl_tmp_file := $(shell mktemp)
 build/${midppl_name}: $(shell find . -name "*.mc")
-	time mi compile midppl/${midppl_name}.mc --output ${midppl_tmp_file}
+	time mi compile coreppl/${midppl_name}.mc --output ${midppl_tmp_file}
 	mkdir -p build
 	cp ${midppl_tmp_file} build/${midppl_name}
 	rm ${midppl_tmp_file}
