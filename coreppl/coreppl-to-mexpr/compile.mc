@@ -4,32 +4,33 @@ include "mexpr/boot-parser.mc"
 include "sys.mc"
 
 include "../coreppl.mc"
+include "../src-location.mc"
 
-lang MExprImportanceCompile = MExprPPL
+-- Inference methods
+include "importance/compile.mc"
+include "naive-mcmc/compile.mc"
+include "trace-mcmc/compile.mc"
 
-  sem compile (includes: Expr) =
-  | prog -> map_Expr_Expr translateCorePPL prog
-
-  sem translateCorePPL =
-  | TmAssume t -> app_ (var_ "assume") (int_ 1234)
-  | TmObserve t -> app_ (var_ "observe") t.value
-  | TmWeight t -> app_ (var_ "weight") t.weight
-  -- | TmDist _ -> TODO(dlunde,2022-05-04): How do we handle distribution objects?
-  | expr -> expr
-
-end
-
-lang MExprCompile = MExprPPL + Externals
-end
 
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
+lang MExprCompile = MExprPPL + Externals
+end
 let mexprCompile: Options -> Expr -> Expr =
   use MExprCompile in
   lam options. lam prog.
 
-    printLn (mexprToString prog); exit 0;
+    -- Load runtime and compile function
+    let compiler =
+      match options.method with "mexpr-importance" then compilerImportance
+      else match options.method with "mexpr-naive-mcmc" then compilerNaiveMCMC
+      else match options.method with "mexpr-trace-mcmc" then compilerTraceMCMC
+      else
+        error (join [
+          "Unknown CorePPL to MExpr inference option:", options.method
+        ])
+    in match compiler with (runtime, compile) in
 
     let parse = use BootParser in parseMCoreFile {{
       defaultBootParserParseMCoreFileArg
@@ -37,34 +38,36 @@ let mexprCompile: Options -> Expr -> Expr =
       with allowFree = true }
     in
 
-    -- Load includes from Miking stdlib that must be available in the compiled program
-    let tmpFile = sysTempFileMake () in
-    -- NOTE: This should be an actual file _in Miking DPPL_ instead, so that we can include things relative to it.
-    writeFile tmpFile (join (map (lam i. join ["include \"", i, "\"\n"]) [
-      "ext/dist-ext.mc",
-      "ext/math-ext.mc"
-    ]));
-    let includes: Expr = parse tmpFile in
-    sysDeleteFile tmpFile;
-    -- NOTE: If we also need dead code elimination, we can use the "keywords" option to parseMCoreFile
+    -- Parse runtime
+    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
 
-    -- Get the names of all externals loaded in the above step
-    let externalIds: Set String = getExternalIds includes in
+    -- Get external definitions from runtime-AST (input to next step)
+    -- Remove duplicate external definitions from model
 
-    -- Symbolize the input program ...
+    -- Symbolize model
     let prog = symbolize prog in
-    -- ... but unsymbolize externals and remove duplicate external definitions
-    let prog = unSymbolizeExternals prog in
-    let prog = removeExternalDefs externalIds prog in
+    -- Type check model
+    let prog = typeCheck prog in
+    let resTy = tyTm prog in
+    -- Apply inference-specific transformation
+    let prog = compile prog in
+    -- Put model in top-level model function
+    let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
 
-    let prog =
-      match options.method with "mexpr-is" then
-        use MExprImportanceCompile in compile includes prog
-      else
-        error (join [
-          "Unknown CorePPL to MExpr inference option:", options.method
-        ])
-    in
+    -- Final code to run inference.
+    let post = bindall_ [
+      ulet_ "res" (appf2_ (var_ "run") (int_ 1000) (var_ "model")),
+      ulet_ "nc" (app_ (var_ "normConstant") (tupleproj_ 0 (var_ "res"))),
+      app_ (var_ "printLn") (app_ (var_ "float2string") (var_ "nc"))
+    ] in
 
+    -- Combine runtime, model, and generated post
+    let prog = bindall_ [runtime,prog,post] in
+
+    -- Symbolize the complete program (maybe not even needed?)
+    -- let prog = symbolize prog in
+
+    -- Type check the final program before returning! (maybe we shouldn't actually do this here, but in mi instead?)
+
+    -- Return complete program
     prog
-

@@ -17,11 +17,11 @@ let performInference = lam options: Options. lam ast.
 
     -- Compile the ast with the chosen inference algorithm (handled in
     -- coreppl-to-mexpr/compile.mc)
-    let ast: Expr = mexprCompile options ast in
+    let ast = mexprCompile options ast in
 
     -- Output the compiled mexpr code
     let outName = "out.mc" in
-    writeFile outName (use MExpr in mexprToString ast);
+    writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
 
     -- Output the compiled OCaml code (unless --skip-final is specified)
     if options.skipFinal then ()
@@ -29,7 +29,9 @@ let performInference = lam options: Options. lam ast.
 
   else match options.method with "rootppl-smc" then
     let outName = "out.cu" in
-    writeFile outName (printCompiledRPProg (rootPPLCompile options ast));
+
+    let ast = rootPPLCompile options ast in
+    writeFile outName (printCompiledRPProg ast);
     if options.skipFinal then ()
     else
       sysRunCommand [

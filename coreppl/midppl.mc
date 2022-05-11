@@ -25,7 +25,7 @@ match result with ParseOK r then
   else
     -- Read and parse the file
     let filename = head r.strings in
-    let ast = getAst filename in
+    let ast = parseMCorePPLFile filename in
 
     -- Transform the model, if the flag is selected
     let ast =

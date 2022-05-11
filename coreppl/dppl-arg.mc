@@ -33,12 +33,12 @@ let default = {
 -- Options configuration
 let config = [
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-is, rootppl-smc.",
+    "The selected inference method. The supported methods are: mexpr-importance, rootppl-smc.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
     join ["The number of particles. The default is 5000. This option is used if one ",
-          "of the following methods are used: mexpr-is, rootppl-smc."],
+          "of the following methods are used: mexpr-importance, rootppl-smc."],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],

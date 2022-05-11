@@ -727,7 +727,8 @@ utest _test false t ["t1", "t2", "res"] with [
 
 
 -- Test in `models/coreppl/crbd/crbd-unaligned.mc`
-let t = symbolizeExpr symEnvEmpty (getAst "coreppl/models/crbd/crbd-unaligned.mc") in
+let t = symbolizeExpr symEnvEmpty
+          (parseMCorePPLFile "coreppl/models/crbd/crbd-unaligned.mc") in
 utest _test false t ["w1","w2","w3"] with [
   ("w1", false),
   ("w2", false),

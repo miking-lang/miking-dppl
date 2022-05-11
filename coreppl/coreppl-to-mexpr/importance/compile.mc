@@ -1,58 +1,37 @@
-
-include "ocaml/mcore.mc"
-include "seq.mc"
-include "../coreppl.mc"
-include "../dppl-arg.mc"
+include "../dists.mc"
 include "mexpr/ast-builder.mc"
-include "external-dists.mc"
 
-lang MExprPPLImportance = MExprPPL + MExprExternalDists
+lang MExprPPLImportance = MExprPPL + TransformDist
 
-  sem transformImpSeq (accWeight:Name) =
-  | TmAssume {dist = d} -> sampleDistExpr accWeight d
-  | TmObserve {dist = d, value = v} ->  -- TODO: update log weight
-     modref_ (nvar_ accWeight) (logPdfDistExpr v accWeight d)
-  | expr -> smap_Expr_Expr (transformImpSeq accWeight) expr
+  -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
+  -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
+  -- MExprExpr or similar.
+  sem compile : Expr -> Expr
+  sem compile =
+  | t ->
+    -- Transform distributions to MExpr distributions
+    let t = map_Expr_Expr transformTmDist t in
 
-  sem sampleDistExpr (accWeight:Name) =
-  | TmDist { dist = DBeta {a = a, b = b}} -> betaSample_ a b
-  | TmDist { dist = DBernoulli {p = p}} -> bernoulliSample_ p
+    -- Transform samples, observes, and weights to MExpr
+    let t = map_Expr_Expr transformProb t in
 
-  sem logPdfDistExpr (x:Expr) (accWeight:Name) =
-  | TmDist { dist = DBeta {a = a, b = b}} -> betaLogPdf_ a b x
-  | TmDist { dist = DBernoulli {p = p}} -> bernoulliLogPmf_ p x
+    -- Transform observes to MExpr observes
 
-  sem transform =
-  | e ->
-      -- Create a name for the accumulated weight
-      let accWeight = nameSym "accWeight" in
-      -- Transform the AST, rewrite with importance sampling
-      let e = transformImpSeq accWeight e in
-      -- Add printing of accumulated weight and the result (one float)
-      let e = bindall_ [
-         nulet_ accWeight (ref_ (float_ 0.)),
-         ulet_ "res" e,
-         ulet_ "" (print_ (str_ "Result = ")),
-         ulet_ "" (print_ (float2string_ (var_ "res"))),
-         ulet_ "" (print_ (str_ "\nAccumulated weight = ")),
-         ulet_ "" (print_ (float2string_ (deref_ (nvar_ accWeight)))),
-         ulet_ "" (print_ (str_ "\n"))
-      ] in
-      -- Add imports of external distributions
-      addExternalDists e
+    -- Transform weights to MExpr weights
+
+    t
+
+  sem transformProb =
+  | TmAssume t -> withInfo t.info (app_ (recordproj_ "sample" t.dist) unit_)
+  | TmObserve t ->
+    let weight = withInfo t.info (app_ (recordproj_ "logObserve" t.dist) t.value) in
+    withInfo t.info (appf2_ (var_ "updateWeight") weight (var_ "state"))
+  | TmWeight t ->
+    withInfo t.info (app_ (var_ "updateWeight") t.weight)
+  | t -> t
+
+
 end
 
-
-
-let importanceSamplingInference = lam options: Options. lam ast.
-  use MExprPPLImportance in
-  let ast = symbolize (transform ast) in
-  -- Print (optional) the transformed MCore program
-  if options.printMCore then
-    printLn (mexprPPLToString ast);
-    exit 0
-  -- Execute the inference
-  else
-    let res = compileRunMCore "" [] ast in
-    print res.stdout
-
+let compilerImportance = use MExprPPLImportance in
+  ("importance/runtime.mc", compile)

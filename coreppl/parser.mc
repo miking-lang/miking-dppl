@@ -72,7 +72,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + Probabil
                                         info = info})
 end
 
-let getAst = lam filename.
+let parseMCorePPLFile = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config = {{{defaultBootParserParseMCoreFileArg
