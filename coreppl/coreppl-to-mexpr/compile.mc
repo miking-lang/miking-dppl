@@ -44,7 +44,7 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Get external definitions from runtime-AST (input to next step)
     -- Remove duplicate external definitions from model
 
-    -- Symbolize model
+    -- Symbolize model (ignore free variables)
     let prog = symbolize prog in
     -- Type check model
     let prog = typeCheck prog in
@@ -54,9 +54,9 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Put model in top-level model function
     let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
 
-    -- Final code to run inference.
+    -- Final code to run inference and print something useful.
     let post = bindall_ [
-      ulet_ "res" (appf2_ (var_ "run") (int_ 1000) (var_ "model")),
+      ulet_ "res" (appf1_ (var_ "run") (var_ "model")),
       ulet_ "nc" (app_ (var_ "normConstant") (tupleproj_ 0 (var_ "res"))),
       app_ (var_ "printLn") (app_ (var_ "float2string") (var_ "nc"))
     ] in

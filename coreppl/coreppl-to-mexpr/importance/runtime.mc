@@ -16,7 +16,8 @@ let updateWeight = lam v. lam state.
   modref state (addf (deref state) v)
 
 -- General inference algorithm for importance sampling
-let run = lam particles. lam model.
+let run = lam model.
+  let particles = 1000 in
   let weightInit = log (divf 1. (int2float particles)) in
   let states = createList particles (lam. ref weightInit) in
   let res = mapReverse model states in

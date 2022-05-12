@@ -4,19 +4,6 @@
 
 include "mexpr/ast-builder.mc"
 
-let dist = use MExprPPL in lam sampleFun. lam obsFun. lam args.
-  let args: [(Name, Expr)] = map (lam arg. (nameSym "arg", arg)) args in
-  let argLets = map (lam arg. nulet_ arg.0 arg.1) args in
-  let argNameVars = map (lam arg. nvar_ arg.0) args in
-  bindall_ (concat argLets [
-    (urecord_ [
-      ("sample",
-       ulam_ "x" (appSeq_ (var_ sampleFun) argNameVars)),
-      ("logObserve",
-       ulam_ "obs" (appSeq_ (var_ obsFun) (snoc argNameVars (var_ "obs"))))
-    ])
-  ])
-
 -- TODO(dlunde,2022-05-11): The common case where the user writes, e.g., assume
 -- (Bernoulli x), can also be optimized to not create an intermediate record.
 lang TransformDist = MExprPPL
@@ -27,12 +14,12 @@ lang TransformDist = MExprPPL
 
   sem transformDist: Dist -> Expr
   sem transformDist =
-  | DBinomial { n = n, p = p } -> dist "binomialSample" "binomialLogPmf" [p, n]
-  | DBernoulli { p = p } -> dist "bernoulliSample" "bernoulliLogPmf" [p]
-  | DBeta { a = a, b = b } -> dist "betaSample" "betaLogPdf" [a, b]
-  | DGaussian { mu = mu, sigma = sigma } -> dist "gaussianSample" "gaussianLogPdf" [mu, sigma]
-  | DMultinomial { n = n, p = p } -> dist "multinomialSample" "multinomialLogPmf" [n, p]
-  | DCategorical { p = p } -> dist "categoricalSample" "categoricalLogPmf" [p]
-  | DDirichlet { a = a } -> dist "dirichletSample" "dirichletLogPdf" [a]
-  | DUniform { a = a, b = b } -> dist "uniformContinuousSample" "uniformContinuousLogPdf" [a,b]
+  | DBinomial { n = n, p = p } -> appf2_ (var_ "distBinomial") n p
+  | DBernoulli { p = p } -> appf1_ (var_ "distBernoulli") p
+  | DBeta { a = a, b = b } -> appf2_ (var_ "distBeta") a b
+  | DGaussian { mu = mu, sigma = sigma } -> appf2_ (var_ "distGaussian") mu sigma
+  | DMultinomial { n = n, p = p } -> appf2_ (var_ "distMultinomial") n p
+  | DCategorical { p = p } -> appf1_ (var_ "distCategorical") p
+  | DDirichlet { a = a } -> appf1_ (var_ "distDirichlet") a
+  | DUniform { a = a, b = b } -> appf2_ (var_ "distUniform") a b
 end
