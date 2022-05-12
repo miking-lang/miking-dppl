@@ -1,10 +1,10 @@
-compiler/treeppl-ast.mc: compiler/treeppl.syn
-	tool compiler/treeppl.syn compiler/treeppl-ast.mc
+src/treeppl-ast.mc: src/treeppl.syn
+	tool src/treeppl.syn src/treeppl-ast.mc
 
-flip: compiler/treeppl-ast.mc examples/flip/flip.tppl
-	boot eval --debug-stack-trace compiler/tpplc.mc -- examples/flip/flip.tppl examples/flip/data.mc
+flip: src/treeppl-ast.mc models/flip/flip.tppl
+	boot eval --debug-stack-trace src/tpplc.mc -- models/flip/flip.tppl models/flip/data.mc
 
-flip-ast: compiler/treeppl.syn compiler/testparser.mc
-	boot eval compiler/testparser.mc -- examples/flip/flip.tppl
+flip-ast: src/treeppl.syn src/testparser.mc
+	boot eval src/testparser.mc -- models/flip/flip.tppl
 
 .PHONY: flip flip-ast

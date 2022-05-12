@@ -1,0 +1,7 @@
+/* Comment */
+// another comment
+model function flip(p: Bool): Bool {
+    e ~ Bernoulli(p)
+    return e
+}
+

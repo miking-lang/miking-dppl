@@ -1,0 +1,174 @@
+language TreePPL
+
+include "tppl-lexer-extensions.mc"
+
+-- Basic tokens
+token String {
+  repr = StringRepr {},
+  constructor = StringTok,
+  fragment = StringTokenParser,
+}
+token LIdent {
+  repr = LIdentRepr {},
+  constructor = LIdentTok,
+  fragment = LIdentTokenParser,
+  ty = String,
+}
+token UIdent {
+  repr = UIdentRepr {},
+  constructor = UIdentTok,
+  fragment = UIdentTokenParser,
+  ty = String,
+}
+
+-- Wrapping tokens that just change the type in the AST
+token UName {
+  base = UIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+token LName {
+  base = LIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+
+token Integer {
+  repr = IntRepr {},
+  constructor = IntTok,
+  fragment = UIntTokenParser,
+  ty = Int,
+}
+
+token Real {
+  repr = FloatRepr {},
+  constructor = FloatTok,
+  fragment = UFloatTokenParser,
+  ty = Float,
+}
+
+token {fragment = OperatorTokenParser,}
+token {fragment = CommaTokenParser,}
+token {fragment = SemiTokenParser,}
+token {fragment = BracketTokenParser,}
+
+token {fragment = TpplLineCommentParser,}
+token {fragment = TpplMultilineCommentParser,}
+token {fragment = WhitespaceParser,}
+
+type FileTppl
+type DeclTppl
+type TypeTppl
+--type Cons
+type StmtTppl
+type ExprTppl
+
+start FileTppl
+
+/-
+A TreePPL file consists of one more declarations.
+-/
+prod FileTppl: FileTppl = decl:DeclTppl+
+
+/- 
+Type usage 
+For now the type is only an Uppercase identifier, but in may
+be something else in the future (like with type parameters, etc.)
+Real
+Real[]
+Int[10]
+-/
+prod TypeTppl: TypeTppl = name:UName
+prod Sequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
+
+prod AtomicReal: TypeTppl = "Real"
+
+
+/-
+A function is declared with the keyword function, optionally preceeded by "model"
+it has zero or more arguments, all of which are type-annotated, it has an
+optional return type, and the body is given in { }. It consists of statements.
+-/
+prod Fun: DeclTppl =
+  model:"model"? "function" name:LName
+  "(" (args:{name:LName ":" ty:TypeTppl} args:{"," name:LName ":" ty:TypeTppl}*)? ")"
+  (":" returnTy:TypeTppl)?
+  "{" body:StmtTppl+ "}"
+
+/-
+A (type) constructor is similar to a function but needs to have at least one
+argument, and does not have the optional postfix :SomeType
+-/
+-- prod Constructor: Cons =
+--  name:UName "("( {args:LName ":" argsType:UName} ("," {args:LName ":" argsType:UName})*)? ")"
+
+/- Here is how you declare a type -/
+-- prod TypeDeclaration: Decl = "type" name:UName "=" ("|"? cons:Cons) ("|" cons:Cons)*
+
+
+
+
+/-
+Expressions
+-/
+prod Integer: ExprTppl = val:Integer
+prod String: ExprTppl = val:String
+prod Real: ExprTppl = val:Real
+prod Variable: ExprTppl = ident:LName
+
+-- infix left Addition: Expr = "+"
+prod left Add: ExprTppl = left:ExprTppl "+" right:ExprTppl
+-- infix Multiplication: Expr = "*"
+prod left Mul: ExprTppl = left:ExprTppl "*" right:ExprTppl
+-- inflix Subtraction: Expr = "-"
+prod left Sub: ExprTppl = left:ExprTppl "-" right:ExprTppl
+-- infix Division: Expr = "/"
+prod left Div: ExprTppl = left:ExprTppl "/" right:ExprTppl
+-- is
+prod Is: ExprTppl = thing:ExprTppl "is" constructor:UName
+-- to
+prod To: ExprTppl = beginVal:ExprTppl "to" endVal:ExprTppl
+
+
+
+-- Function call
+prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
+
+precedence {
+  FunCall;
+  Mul Div;
+  Add Sub;
+}
+
+
+prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"
+
+/----- Statements -----/
+-- Assume statement
+-- prod Assume: Stmnt = randomVar:LName "~" distribution:UName "(" (args:Expr ("," args:Expr)*)? ")"
+prod Assume: StmtTppl = randomVar:LName "~" dist:ExprTppl
+prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
+
+-- Observe statement
+prod Observe: StmtTppl = "observe" value:ExprTppl "~" distribution:UName "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
+
+-- If statement
+prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl+ "}" ("else" "{" ifFalseStmts:StmtTppl+ "}")?
+
+
+-- If ... is statement
+-- Q: LL1 error? is should be an Expression
+--prod IfIs: Stmnt = "if" observation:Expr "is" constructor:UName "{"
+--  instatements:Stmnt+
+"}"
+-- For loop
+prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl+ "}"
+
+prod Return: StmtTppl = "return" return:ExprTppl
+
+-- Comments
+-- Don't know how to do comments
+-- compiler hints TODO
+
+
+
