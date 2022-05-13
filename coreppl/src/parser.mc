@@ -84,6 +84,6 @@ let parseMCorePPLFile = lam filename.
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
-  makeKeywords [] (parseMExprString pplKeywords cpplstr)
+  makeKeywords [] (parseMExprStringKeywords pplKeywords cpplstr)
 
 

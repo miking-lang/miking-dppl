@@ -37,3 +37,10 @@ let output = lam res. lam names.
   let varianceVals = variance res expVals in
   printStatistics res names nc expVals varianceVals;
   saveCSV res names "data.csv" expOnLogWeights
+
+let printRes : all a. (a -> String) -> ([Float], [a]) -> () = lam printFun. lam res.
+  printLn (float2string (normConstant res.0));
+  let res = zip res.0 res.1 in
+  printLn (strJoin "\n" (map (lam sample.
+    join [(printFun sample.1), " ", (float2string sample.0)]
+  ) res))
