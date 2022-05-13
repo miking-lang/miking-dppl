@@ -3,7 +3,7 @@
 test () {
   set +e
   binary=$(mktemp)
-  compile_cmd="mi compile --test --disable-optimizations --output $binary"
+  compile_cmd="mi compile --test --typecheck --disable-optimizations --output $binary"
   output=$1
   output="$output\n$($compile_cmd $1 2>&1)"
   exit_code=$?

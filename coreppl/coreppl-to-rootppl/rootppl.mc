@@ -75,7 +75,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlock t -> CTBBlock { t with body = join (map f t.body) }
 
 
-  sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
+  sem sfold_CTop_CStmt f acc =
   | CTBBlockData _ -> acc
   | CTBBlockDataSingle _ -> acc
   | CTBBlockHelperDecl _ -> acc
@@ -92,7 +92,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CENext {}
 
 
-  sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
+  sem sfold_CExpr_CExpr f acc =
   | CESample t -> sfold_CDist_CExpr f acc t.dist
   | CEObserve t -> sfold_CDist_CExpr f (f acc t.value) t.dist
   | CEWeight t -> f acc t.weight
@@ -124,7 +124,8 @@ lang RootPPL = CAst + CPrettyPrint
   | CDGamma { k: CExpr, theta: CExpr }
 
 
-  sem sfold_CDist_CExpr (f: a -> CExpr -> a) (acc: a) =
+  sem sfold_CDist_CExpr : all acc. (acc -> CExpr -> acc) -> acc -> CDist -> acc
+  sem sfold_CDist_CExpr f acc =
   | CDBern t -> f acc t.p
   | CDBeta t -> f (f acc t.a) t.b
   | CDCategorical t -> f acc t.p

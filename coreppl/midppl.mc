@@ -6,10 +6,10 @@
 
 include "option.mc"
 include "string.mc"
-include "dppl-parser.mc"
+include "parser.mc"
+include "transformation.mc"
 include "dppl-arg.mc"
 include "inference.mc"
-include "transformation.mc"
 include "common.mc"
 
 mexpr

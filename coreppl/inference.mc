@@ -1,8 +1,10 @@
 
 include "string.mc"
-include "../rootppl/rootppl.mc"
-include "../rootppl/compile.mc"
-include "importance.mc"
+
+include "coreppl-to-rootppl/rootppl.mc"
+include "coreppl-to-rootppl/compile.mc"
+include "coreppl-to-mexpr/importance.mc"
+
 include "dppl-arg.mc"
 
 let performInference = lam options: Options. lam ast.

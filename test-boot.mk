@@ -2,7 +2,8 @@
 
 test-files=
 test-files+=${wildcard coreppl/*.mc}
-test-files+=${wildcard rootppl/*.mc}
+test-files+=${wildcard coreppl/coreppl-to-mexpr/*.mc}
+test-files+=${wildcard coreppl/coreppl-to-rootppl/*.mc}
 
 all: ${test-files}
 

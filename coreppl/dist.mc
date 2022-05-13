@@ -4,14 +4,14 @@ include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 include "mexpr/info.mc"
 include "mexpr/eq.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/anf.mc"
 include "mexpr/type-lift.mc"
 
 include "string.mc"
 include "seq.mc"
 
-lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
+lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   syn Expr =
   | TmDist { dist: Dist,
              ty: Type,
@@ -36,17 +36,26 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem withType (ty: Type) =
   | TmDist t -> TmDist { t with ty = ty }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
+  sem smapAccumLDist_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Dist -> (acc, Dist)
+  sem smapAccumLDist_Expr_Expr f acc =
   -- Intentionally left blank
 
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  -- Intentionally left blank
+  sem smapDist_Expr_Expr : (Expr -> Expr) -> Dist -> Dist
+  sem smapDist_Expr_Expr f =
+  | p ->
+    let res: ((), Dist) = smapAccumLDist_Expr_Expr (lam. lam a. ((), f a)) () p in
+    res.1
 
-  sem smap_Expr_Expr (f: Expr -> a) =
-  | TmDist t -> TmDist { t with dist = smapDist_Expr_Expr f t.dist }
+  sem sfoldDist_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem sfoldDist_Expr_Expr f acc =
+  | p ->
+    let res: (acc, Expr) = smapAccumLDist_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
 
-  sem sfold_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | TmDist t -> sfoldDist_Expr_Expr f acc t.dist
+  sem smapAccumL_Expr_Expr f acc =
+  | TmDist t ->
+    match smapAccumLDist_Expr_Expr f acc t.dist with (acc,dist) in
+    (acc, TmDist { t with dist = dist })
 
   sem infoTy =
   | TyDist t -> t.info
@@ -54,8 +63,10 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
   sem tyWithInfo (info : Info) =
   | TyDist t -> TyDist {t with info = info}
 
-  sem smap_Type_Type (f: Type -> a) =
-  | TyDist t -> TyDist { t with ty = f t.ty }
+  sem smapAccumL_Type_Type f acc =
+  | TyDist t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, TyDist {t with ty = ty})
 
   -- Pretty printing
   sem isAtomic =
@@ -74,7 +85,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   -- Intentionally left blank
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -97,26 +108,21 @@ lang Dist = PrettyPrint + Eq + Sym + TypeAnnot + ANF + TypeLift
     TmDist {{ t with dist = symbolizeDist env t.dist }
                 with ty = symbolizeType env t.ty }
 
-  -- Type annotate
-  sem compatibleTypeBase (tyEnv: TypeEnv) =
-  | (TyDist t1, TyDist t2) ->
-    match compatibleType tyEnv t1.ty t2.ty with Some t then
-      Some (TyDist {t1 with ty = t})
-    else None ()
-
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type checking
+  sem typeCheckDist : TCEnv -> Info -> Dist -> Type
   -- Intentionally left blank
-
-  sem typeAnnotDist (env: TypeEnv) =
-  | dist -> smapDist_Expr_Expr (typeAnnotExpr env) dist
-
-  sem typeAnnotExpr (env: TypeEnv) =
+  sem typeCheckBase (env : TCEnv) =
   | TmDist t ->
-    let dist = typeAnnotDist env t.dist in
-    let ty = TyDist { info = t.info, ty = tyDist env t.info dist } in
+    let dist = smapDist_Expr_Expr (typeCheckExpr env) t.dist in
+    let innerTyDist = typeCheckDist env t.info dist in
+    let innerTyDistVar = newvar env.currentLvl t.info in
+    unify env innerTyDistVar innerTyDist;
     TmDist {{ t with dist = dist }
-                with ty = ty }
+                with ty = TyDist { info = t.info, ty = innerTyDistVar } }
+  sem unifyBase (env : UnifyEnv) =
+  | (TyDist t1, TyDist t2) -> unifyTypes env (t1.ty, t2.ty)
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   -- Intentionally left blank
 
@@ -151,12 +157,11 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   syn Dist =
   | DUniform { a: Expr, b: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DUniform t -> DUniform {{ t with a = f t.a }
-                                with b = f t.b }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DUniform t -> f (f acc t.a) t.b
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DUniform t ->
+    match f acc t.a with (acc,a) in
+    match f acc t.b with (acc,b) in
+    (acc, DUniform {{t with a = a} with b = b})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -167,7 +172,7 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DUniform r ->
     match lhs with DUniform l then
       match eqExprH env free l.a r.a with Some free then
@@ -180,16 +185,13 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DUniform t -> DUniform {{ t with a = symbolizeExpr env t.a }
                                 with b = symbolizeExpr env t.b }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DUniform t ->
-    let err = lam. infoErrorExit info "Type error uniform" in
-    match tyTm t.a with TyFloat _ then
-      match tyTm t.b with TyFloat _ then
-        TyFloat { info = info }
-      else err ()
-    else err ()
+    let float = TyFloat { info = info } in
+    unify env (tyTm t.a) float; unify env (tyTm t.b) float; float
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DUniform ({ a = a, b = b } & t) ->
     normalizeName (lam a.
@@ -217,11 +219,10 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   syn Dist =
   | DBernoulli { p: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DBernoulli t -> DBernoulli { t with p = f t.p }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DBernoulli t -> f acc t.p
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DBernoulli t ->
+    match f acc t.p with (acc,p) in
+    (acc, DBernoulli {t with p = p})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -232,7 +233,7 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DBernoulli r ->
     match lhs with DBernoulli l then eqExprH env free l.p r.p else None ()
 
@@ -240,12 +241,12 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   sem symbolizeDist (env: SymEnv) =
   | DBernoulli t -> DBernoulli { t with p = symbolizeExpr env t.p }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DBernoulli t ->
-    match tyTm t.p with TyFloat _ then TyBool { info = info }
-    else infoErrorExit info "Type error bern"
+    unify env (tyTm t.p) (TyFloat { info = info }); TyBool { info = info }
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DBernoulli ({ p = p } & t) ->
     normalizeName (lam p. k (DBernoulli { t with p = p })) p
@@ -266,11 +267,10 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
   syn Dist =
   | DPoisson { lambda: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DPoisson t -> DPoisson { t with lambda = f t.lambda }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DPoisson t -> f acc t.lambda
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DPoisson t ->
+    match f acc t.lambda with (acc,lambda) in
+    (acc, DPoisson {t with lambda = lambda})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -281,7 +281,7 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DPoisson r ->
     match lhs with DPoisson l then eqExprH env free l.lambda r.lambda else None ()
 
@@ -289,12 +289,12 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
   sem symbolizeDist (env: SymEnv) =
   | DPoisson t -> DPoisson { t with lambda = symbolizeExpr env t.lambda }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DPoisson t ->
-    match tyTm t.lambda with TyFloat _ then TyInt { info = info }
-    else infoErrorExit info "Type error Poisson"
+    unify env (tyTm t.lambda) (TyFloat { info = info }); TyInt { info = info }
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DPoisson ({ lambda = lambda } & t) ->
     normalizeName (lam lambda. k (DPoisson { t with lambda = lambda })) lambda
@@ -316,12 +316,11 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   syn Dist =
   | DBeta { a: Expr, b: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DBeta t -> DBeta {{ t with a = f t.a }
-                          with b = f t.b }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DBeta t -> f (f acc t.a) t.b
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DBeta t ->
+    match f acc t.a with (acc,a) in
+    match f acc t.b with (acc,b) in
+    (acc, DBeta {{t with a = a} with b = b})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -332,7 +331,7 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DBeta r ->
     match lhs with DBeta l then
       match eqExprH env free l.a r.a with Some free then
@@ -345,16 +344,13 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DBeta t -> DBeta {{ t with a = symbolizeExpr env t.a }
                           with b = symbolizeExpr env t.b }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DBeta t ->
-    let err = lam. infoErrorExit info "Type error beta" in
-    match tyTm t.a with TyFloat _ then
-      match tyTm t.b with TyFloat _ then
-        TyFloat { info = info }
-      else err ()
-    else err ()
+    let float = TyFloat { info = info } in
+    unify env (tyTm t.a) float; unify env (tyTm t.b) float; float
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DBeta ({ a = a, b = b } & t) ->
     normalizeName (lam a.
@@ -381,12 +377,11 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   syn Dist =
   | DGamma { k: Expr, theta: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DGamma t -> DGamma {{ t with k = f t.k }
-                            with theta = f t.theta }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DGamma t -> f (f acc t.k) t.theta
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DGamma t ->
+    match f acc t.k with (acc,k) in
+    match f acc t.theta with (acc,theta) in
+    (acc, DGamma {{t with k = k} with theta = theta})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -397,7 +392,7 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DGamma r ->
     match lhs with DGamma l then
       match eqExprH env free l.k r.k with Some free then
@@ -410,16 +405,13 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   | DGamma t -> DGamma {{ t with k = symbolizeExpr env t.k }
                             with theta = symbolizeExpr env t.theta }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DGamma t ->
-    let err = lam. infoErrorExit info "Type error Gamma" in
-    match tyTm t.k with TyFloat _ then
-      match tyTm t.theta with TyFloat _ then
-        TyFloat { info = info }
-      else err ()
-    else err ()
+    let float = TyFloat { info = info } in
+    unify env (tyTm t.k) float; unify env (tyTm t.theta) float; float
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DGamma ({ k = k2, theta = theta } & t) ->
     normalizeName (lam k2.
@@ -449,11 +441,10 @@ lang CategoricalDist =
   -- p has type [Float]: the list of probabilities
   | DCategorical { p: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DCategorical t -> DCategorical { t with p = f t.p }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DCategorical t -> f acc t.p
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DCategorical t ->
+    match f acc t.p with (acc,p) in
+    (acc, DCategorical {t with p = p})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -464,7 +455,7 @@ lang CategoricalDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DCategorical { p = p2 } ->
     match lhs with DCategorical { p = p1 } then
       eqExprH env free p1 p2
@@ -475,12 +466,14 @@ lang CategoricalDist =
   | DCategorical t ->
     DCategorical { t with p = symbolizeExpr env t.p }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DCategorical t ->
-    match tyTm t.p with TySeq { ty = TyFloat _ } then TyInt { info = info }
-    else infoErrorExit info "Type error categorical"
+    let float = TyFloat { info = info } in
+    let seq = TySeq { ty = TyFloat { info = info }, info = info } in
+    unify env (tyTm t.p) seq; TyInt { info = info }
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DCategorical ({ p = p } & t) ->
     normalizeName (lam p. k (DCategorical {t with p = p})) p
@@ -502,12 +495,11 @@ lang MultinomialDist =
   -- p has type [Float]: the list of probabilities
   | DMultinomial { n: Expr, p: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DMultinomial t -> DMultinomial {{ t with n = f t.n }
-                                        with p = f t.p }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DMultinomial t -> f (f acc t.n) t.p
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DMultinomial t ->
+    match f acc t.n with (acc,n) in
+    match f acc t.p with (acc,p) in
+    (acc, DMultinomial {{t with n = n} with p = p})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -518,7 +510,7 @@ lang MultinomialDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DMultinomial { n = n2, p = p2 } ->
     match lhs with DMultinomial { n = n1, p = p1 } then
       match eqExprH env free n1 n2 with Some free then
@@ -532,16 +524,14 @@ lang MultinomialDist =
     DMultinomial {{ t with n = symbolizeExpr env t.n }
                       with p = symbolizeExpr env t.p }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DMultinomial t ->
-    let err = lam. infoErrorExit info "Type error multinomial" in
-    match tyTm t.n with TyInt _ then
-      match tyTm t.p with TySeq { ty = TyFloat _ } then
-        TySeq { ty = TyInt { info = info }, info = info }
-      else err ()
-    else err ()
+    unify env (tyTm t.n) (TyInt { info = info });
+    unify env (tyTm t.p) (TySeq { ty = TyFloat { info = info }, info = info });
+    TySeq { ty = TyInt { info = info }, info = info }
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DMultinomial ({ n = n, p = p } & t) ->
     normalizeName (lam n.
@@ -566,11 +556,10 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   -- a has type [Float]: the list of concentration parameters
   | DDirichlet { a: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DDirichlet t -> DDirichlet { t with a = f t.a }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DDirichlet t -> f acc t.a
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DDirichlet t ->
+    match f acc t.a with (acc,a) in
+    (acc, DDirichlet {t with a = a})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -581,7 +570,7 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DDirichlet { a = a2 } ->
     match lhs with DDirichlet { a = a1 } then
       eqExprH env free a1 a2
@@ -592,13 +581,13 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   | DDirichlet t ->
     DDirichlet { t with a = symbolizeExpr env t.a }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DDirichlet t ->
-    match tyTm t.a with TySeq { ty = TyFloat _ } then
-      TySeq { info = info, ty = TyFloat { info = info } }
-    else infoErrorExit info "Type error dirichlet"
+    let seqTy = TySeq { ty = TyFloat { info = info }, info = info } in
+    unify env (tyTm t.a) seqTy; seqTy
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DDirichlet ({ a = a } & t) ->
     normalizeName (lam a. k (DDirichlet { t with a = a })) a
@@ -617,11 +606,10 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   syn Dist =
   | DExponential { rate: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DExponential t -> DExponential { t with rate = f t.rate }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DExponential t -> f acc t.rate
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DExponential t ->
+    match f acc t.rate with (acc,rate) in
+    (acc, DExponential {t with rate = rate})
 
   sem pprintDist (indent: Int) (env: PprintEnv) =
   | DExponential t ->
@@ -631,7 +619,7 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DExponential r ->
     match lhs with DExponential l then eqExprH env free l.rate r.rate else None ()
 
@@ -639,12 +627,13 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem symbolizeDist (env: SymEnv) =
   | DExponential t -> DExponential { t with rate = symbolizeExpr env t.rate }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DExponential t ->
-    match tyTm t.rate with TyFloat _ then TyFloat { info = info }
-    else infoErrorExit info "Type error exponential"
+    let float = TyFloat { info = info } in
+    unify env (tyTm t.rate) float; float
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DExponential ({ rate = rate } & t) ->
     normalizeName (lam rate. k (DExponential { t with rate = rate })) rate
@@ -665,11 +654,10 @@ lang EmpiricalDist =
   -- samples has type [(Float,a)]: A set of weighted samples over type a
   | DEmpirical { samples: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DEmpirical t -> DEmpirical { t with samples = f t.samples }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DEmpirical t -> f acc t.samples
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DEmpirical t ->
+    match f acc t.samples with (acc,samples) in
+    (acc, DEmpirical {t with samples = samples})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -680,7 +668,7 @@ lang EmpiricalDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DEmpirical { samples = s2 } ->
     match lhs with DEmpirical { samples = s1 } then
       eqExprH env free s1 s2
@@ -691,21 +679,15 @@ lang EmpiricalDist =
   | DEmpirical t ->
     DEmpirical { t with samples = symbolizeExpr env t.samples }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DEmpirical t ->
-    let err = lam. infoErrorExit info "Type error empirical" in
-    match tyTm t.samples
-    with TySeq { ty = TyRecord { fields = fields } } then
-      if eqi (mapSize fields) 2 then
-        match mapLookup (stringToSid "0") fields with Some TyFloat _ then
-          match mapLookup (stringToSid "1") fields with Some ty then
-            ty
-          else err ()
-        else err ()
-      else err ()
-    else err ()
+    let resTy = newvar env.currentLvl info in
+    let innerTy = tyWithInfo info (tytuple_ [TyFloat { info = info }, resTy]) in
+    unify env (tyTm t.samples) (TySeq { ty = innerTy, info = info });
+    resTy
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DEmpirical ({ samples = samples } & t) ->
       normalizeName
@@ -726,12 +708,11 @@ lang GaussianDist =
   syn Dist =
   | DGaussian { mu: Expr, sigma: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DGaussian t -> DGaussian {{ t with mu = f t.mu }
-                                  with sigma = f t.sigma }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DGaussian t -> f (f acc t.mu) t.sigma
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DGaussian t ->
+    match f acc t.mu with (acc,mu) in
+    match f acc t.sigma with (acc,sigma) in
+    (acc, DGaussian {{t with mu = mu} with sigma = sigma})
 
   -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -742,7 +723,7 @@ lang GaussianDist =
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DGaussian r ->
     match lhs with DGaussian l then
       match eqExprH env free l.mu r.mu with Some free then
@@ -755,16 +736,13 @@ lang GaussianDist =
   | DGaussian t -> DGaussian {{ t with mu = symbolizeExpr env t.mu }
                                   with sigma = symbolizeExpr env t.sigma }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DGaussian t ->
-    let err = lam. infoErrorExit info "Type error Gaussian" in
-    match tyTm t.mu with TyFloat _ then
-      match tyTm t.sigma with TyFloat _ then
-        TyFloat { info = info }
-      else err ()
-    else err ()
+    let float = TyFloat { info = info } in
+    unify env (tyTm t.mu) float; unify env (tyTm t.sigma) float; float
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DGaussian ({ mu = mu, sigma = sigma } & t) ->
     normalizeName (lam mu.
@@ -788,11 +766,11 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
   syn Dist =
   | DBinomial { n: Expr, p: Expr }
 
-  sem smapDist_Expr_Expr (f: Expr -> a) =
-  | DBinomial t -> DBinomial { { t with n = f t.n } with p = f t.p }
-
-  sem sfoldDist_Expr_Expr (f: a -> b -> a) (acc: a) =
-  | DBinomial t -> f (f acc t.n) t.p
+  sem smapAccumLDist_Expr_Expr f acc =
+  | DBinomial t ->
+    match f acc t.n with (acc,n) in
+    match f acc t.p with (acc,p) in
+    (acc, DBinomial {{t with n = n} with p = p})
 
    -- Pretty printing
   sem pprintDist (indent: Int) (env: PprintEnv) =
@@ -803,7 +781,7 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
     else never
 
   -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
   | DBinomial r ->
     match lhs with DBinomial l then
       match eqExprH env free l.n r.n with Some free then
@@ -816,16 +794,14 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
   | DBinomial t -> DBinomial {{ t with n = symbolizeExpr env t.n }
                                   with p = symbolizeExpr env t.p }
 
-  -- Type Annotate
-  sem tyDist (env: TypeEnv) (info: Info) =
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
   | DBinomial t ->
-    let err = lam. infoErrorExit info "Type error Binomial" in
-    match tyTm t.n with TyInt _ then
-      match tyTm t.p with TyFloat _ then
-        TyInt { info = info }
-      else dprint t.p; err ()
-    else dprint t.n; err ()
+    let int = TyInt { info = info } in
+    let float = TyFloat { info = info } in
+    unify env (tyTm t.n) int; unify env (tyTm t.p) float; int
 
+  -- ANF
   sem normalizeDist (k : Dist -> Expr) =
   | DBinomial ({ n = n, p = p } & t) ->
     normalizeName (lam n.
@@ -901,8 +877,8 @@ lang DistAll =
 end
 
 lang Test =
-  DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeAnnot
-  + MExprANF + MExprTypeLiftUnOrderedRecords
+  DistAll + MExprAst + MExprPrettyPrint + MExprEq + MExprSym + MExprTypeCheck
+  + MExprANF + MExprTypeLift
 end
 
 mexpr
@@ -1145,18 +1121,18 @@ utest symbolize tmBinomial with tmBinomial using eqExpr in
 -- TYPE-ANNOTATE TESTS --
 -------------------------
 
-utest tyTm (typeAnnot tmUniform) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeAnnot tmBernoulli) with tydist_ tybool_ using eqType in
-utest tyTm (typeAnnot tmPoisson) with tydist_ tyint_ using eqType in
-utest tyTm (typeAnnot tmBeta) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeAnnot tmGamma) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeAnnot tmCategorical) with tydist_ tyint_ using eqType in
-utest tyTm (typeAnnot tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
-utest tyTm (typeAnnot tmExponential) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeAnnot tmEmpirical) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeAnnot tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
-utest tyTm (typeAnnot tmGaussian) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeAnnot tmBinomial) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmUniform) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmBernoulli) with tydist_ tybool_ using eqType in
+utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmBeta) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmGamma) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmCategorical) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
+utest tyTm (typeCheck tmExponential) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmEmpirical) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
+utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
 
 ---------------
 -- ANF TESTS --

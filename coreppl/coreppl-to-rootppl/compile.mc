@@ -1,13 +1,17 @@
 -- CorePPL compiler, targeting the RootPPL framework
 
-include "../coreppl/coreppl.mc"
-include "../coreppl/dppl-parser.mc"
-include "../coreppl/dppl-arg.mc"
-include "../coreppl/align.mc"
+include "../coreppl.mc"
+include "../parser.mc"
+include "../dppl-arg.mc"
+include "../align.mc"
+
+include "../inference-common/smc.mc"
 
 include "rootppl.mc"
 
 include "mexpr/ast-builder.mc"
+include "mexpr/type-check.mc"
+include "mexpr/lamlift.mc"
 
 include "assoc-seq.mc"
 include "name.mc"
@@ -23,8 +27,8 @@ include "mexpr/pprint.mc"
 -- BASE LANGUAGE FRAGMENT FOR COMPILER --
 -----------------------------------------
 
-lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
-  + SeqTypeNoStringTypeLift + Align
+lang MExprPPLRootPPLCompile = MExprPPL + Resample + RootPPL + MExprCCompileAlloc
+  + SeqTypeNoStringTypeLift + Align + MExprLambdaLift
 
   -- Compiler internals
   syn CExpr =
@@ -33,7 +37,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + RootPPL + MExprCCompileAlloc
   sem printCExpr (env: PprintEnv) =
   | CEResample {} -> (env, "<<<CEResample>>>")
 
-  sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
+  sem sfold_CExpr_CExpr f acc =
   | CEResample _ -> acc
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
@@ -245,7 +249,7 @@ let catIdents: Expr -> Map Name Int =
     in rec (mapEmpty nameCmp) expr
 
 -- RootPPL compile function
-let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
+let rootPPLCompileH: Options -> [(Name,Type)] -> Map Name Int -> Expr -> RPProg =
   use MExprPPLRootPPLCompile in
   lam options: Options.
   lam typeEnv: [(Name,Type)].
@@ -335,7 +339,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
       recursive let rec: Bool -> CStmt -> Bool = lam acc. lam stmt.
         match acc with false then false
         else match stmt with CSDef { id = Some id } then
-          if isIdentDet id then sfold_CStmt_CStmt rec acc else false
+          if isIdentDet id then sfold_CStmt_CStmt rec acc stmt else false
         else sfold_CStmt_CStmt rec acc stmt
       in
       if exprsDet then rec true stmt else false
@@ -470,7 +474,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
     recursive let findLocals: AccStackFrames -> [CStmt] -> AccStackFrames =
       lam acc: AccStackFrames. lam stmts: [CStmt].
         let acc = {acc with hasSplit = false} in
-        foldl (lam acc: AccStackFrames. lam stmt: Stmt.
+        foldl (lam acc: AccStackFrames. lam stmt: CStmt.
 
           -- Add def, if applicable
           let acc =
@@ -668,13 +672,13 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
     in
 
     -- C statement for setting the NEXT from an expression
-    let setNextFromExpr: CExpr -> CExpr = lam expr.
+    let setNextFromExpr: CExpr -> CStmt = lam expr.
       (CSExpr { expr = (CEBinOp { op = COAssign {}, lhs = CENext {}
                                 , rhs = expr })})
     in
 
     -- C statement for setting the NEXT to a BBLOCK name
-    let setNext: Name -> CExpr = lam name.
+    let setNext: Name -> CStmt = lam name.
       setNextFromExpr (CEVar { id = name })
     in
 
@@ -794,7 +798,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
 
     -- Generate code for calling a BBLOCK
     let constructCall:
-        StackFrame -> Name -> [CExpr] -> Option CExpr -> Name -> [CStmt] =
+        StackFrame -> Name -> [CExpr] -> Option CExpr -> CExpr -> [CStmt] =
       lam sf: StackFrame.
       lam fun: Name.
       lam args: [CExpr].
@@ -834,7 +838,7 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
         join [[callsf, ra], args, ret, [incr, call]]
     in
 
-    let constructCallFromStmt: StackFrame -> CStmt -> CExpr -> [Cstmt] =
+    let constructCallFromStmt: StackFrame -> CStmt -> CExpr -> [CStmt] =
       lam sf: StackFrame.
       lam stmt: CStmt.
       lam ra: CExpr.
@@ -1235,9 +1239,9 @@ let rootPPLCompileH: Options -> [(Name,Type)] -> [Name] -> Expr -> RPProg =
         let i = nameSym "i" in
         let specifier =
           switch retTy
-          case CTyInt _ | CTyInt32 _ | CTyInt64 _ then "%d"
+          case CTyInt _ | CTyInt32 _ | CTyInt64 _ | CTyChar _ then "%d"
           case CTyFloat _ | CTyDouble _ then "%f"
-          case _ then error "Printing of return type is currently not supported. Please use the --no-print-samples option."
+          case _ then error "Printing of values of the returned type is currently not supported. Please use the --no-print-samples option."
           end
         in Some [
           -- int i = 0;
@@ -1311,8 +1315,13 @@ let rootPPLCompile: Options -> Expr -> RPProg =
   -- Symbolize with empty environment
   let prog: Expr = symbolizeExpr symEnvEmpty prog in
 
-  -- Type annotate
-  let prog: Expr = typeAnnot prog in
+  -- Type check (and annotate)
+  let prog: Expr = typeCheck prog in
+
+  -- print (mexprPPLToString prog); print "\n\n";
+
+  -- Lift lambdas
+  let prog: Expr = liftLambdas prog in
 
   -- print (mexprPPLToString prog); print "\n\n";
 
@@ -1373,7 +1382,6 @@ let rootPPLCompile: Options -> Expr -> RPProg =
 
   -- Find categories for identifiers
   let ci: Map Name Int = catIdents prog in
-
 
   -- Run RootPPL compiler
   let rpprog: RPProg = rootPPLCompileH options env ci prog in
@@ -1581,6 +1589,82 @@ utest test { default with printSamples = false } nestedIfs with strJoin "\n" [
   "MAIN({",
   "  FIRST_BBLOCK(start);",
   "  SMC(NULL);",
+  "})"
+] using eqString in
+
+let lift = "
+let f = lam x: Float.
+  let val = assume (Beta x x) in
+  let inner = lam obs: Bool.
+    observe true (Bernoulli val)
+  in
+  inner true;
+  val
+in
+f 1.0
+------------------------" in
+
+utest test default lift with strJoin "\n" [
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "#include \"inference/smc/smc.cuh\"",
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "INIT_MODEL_STACK()",
+  "struct GLOBAL {double ret; double t;};",
+  "struct STACK_init {pplFunc_t ra; double (*retValLoc);};",
+  "BBLOCK_DECLARE(start);",
+  "BBLOCK_DECLARE(end);",
+  "void inner(double, char);",
+  "BBLOCK_HELPER_DECLARE(STOCH_inner, void, double, char);",
+  "BBLOCK_HELPER_DECLARE(f, double, double);",
+  "BBLOCK_DECLARE(init);",
+  "BBLOCK(start, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  ((PSTATE.stackPtr) = (sizeof(struct GLOBAL)));",
+  "  struct STACK_init (*callsf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) (PSTATE.stackPtr))));",
+  "  ((callsf->ra) = end);",
+  "  ((callsf->retValLoc) = (( double (*) ) ((( char (*) ) (&(global->ret))) - (PSTATE.stack))));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) + (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP(init, NULL);",
+  "})",
+  "BBLOCK(end, {",
+  "  (NEXT = NULL);",
+  "})",
+  "void inner(double val, char obs) {",
+  "  (OBSERVE(bernoulli, val, 1));",
+  "}",
+  "BBLOCK_HELPER(STOCH_inner, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  (OBSERVE(bernoulli, val, 1));",
+  "}, void, double val, char obs)",
+  "BBLOCK_HELPER(f, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  double val;",
+  "  (val = (SAMPLE(beta, x, x)));",
+  "  BBLOCK_CALL(STOCH_inner, val, 1);",
+  "  return val;",
+  "}, double, double x)",
+  "BBLOCK(init, {",
+  "  struct GLOBAL (*global) = (( struct GLOBAL (*) ) (PSTATE.stack));",
+  "  struct STACK_init (*sf) = (( struct STACK_init (*) ) ((PSTATE.stack) + (( uintptr_t ) ((PSTATE.stackPtr) - (sizeof(struct STACK_init))))));",
+  "  ((global->t) = BBLOCK_CALL(f, 1.));",
+  "  ((*(( double (*) ) ((PSTATE.stack) + (( uintptr_t ) (sf->retValLoc))))) = (global->t));",
+  "  ((PSTATE.stackPtr) = ((PSTATE.stackPtr) - (sizeof(struct STACK_init))));",
+  "  BBLOCK_JUMP((sf->ra), NULL);",
+  "})",
+  "CALLBACK(callback, {",
+  "  int i = 0;",
+  "  while ((i < N)) {",
+  "    struct GLOBAL (*global) = (( struct GLOBAL (*) ) ((PSTATES[i]).stack));",
+  "    printf(\"%f %f\\n\", (global->ret), (WEIGHTS[i]));",
+  "    (i = (i + 1));",
+  "  }",
+  "})",
+  "MAIN({",
+  "  FIRST_BBLOCK(start);",
+  "  SMC(callback);",
   "})"
 ] using eqString in
 
