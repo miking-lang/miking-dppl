@@ -6,7 +6,7 @@ let corepplSrcCwd = sysGetCwd ()
 
 let corepplSrcLocUnix =
   match sysGetEnv "HOME" with Some path then
-    join [path, "/.local/src/midppl/coreppl/"]
+    join [path, "/.local/src/cppl/"]
   else error "Environment variable HOME not set"
 
 let corepplSrcLoc =

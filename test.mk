@@ -1,13 +1,10 @@
 .PHONY: all
 
-test-files=
-test-files+=${wildcard coreppl/*.mc}
-test-files+=${wildcard coreppl/coreppl-to-mexpr/*.mc}
-test-files+=${wildcard coreppl/coreppl-to-rootppl/*.mc}
+test-files=$(shell find coreppl/src -name "*.mc")
 
 # NOTE(dlunde,2021-10-27): Cannot yet be compiled
-test-files := $(filter-out coreppl/pgm.mc,$(test-files))
-test-files := $(filter-out coreppl/transformation.mc,$(test-files))
+test-files := $(filter-out coreppl/src/pgm.mc,$(test-files))
+test-files := $(filter-out coreppl/src/transformation.mc,$(test-files))
 
 all: ${test-files}
 

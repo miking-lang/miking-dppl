@@ -2,6 +2,7 @@
 -- runtime distributions. The MExpr distributions are defined in the runtime file
 -- common/dists.mc
 
+include "../coreppl.mc"
 include "mexpr/ast-builder.mc"
 
 -- TODO(dlunde,2022-05-11): The common case where the user writes, e.g., assume

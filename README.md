@@ -3,7 +3,7 @@ Miking DPPL is a framework for developing probabilistic programming languages (P
 Currently, the framework includes the PPLs [CorePPL](#coreppl) and [RootPPL](#rootppl).
 
 ## Building and Installing
-The main binary for Miking DPPL is called `midppl`. Currently, this binary is built by running `make` in the project root, and installed to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) for building `midppl`.
+The main binary for development in Miking DPPL is called `cppl`. Currently, this binary is built by running `make` in the project root, and installed to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) for building `cppl`.
 The command `make test` executes a set of tests for various components in the Miking DPPL framework.
 
 ## CorePPL
@@ -26,7 +26,7 @@ For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor 
 
 ### Compiling CorePPL to RootPPL
 One option to run inference over a CorePPL program is to compile it to RootPPL.
-A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `midppl -m rootppl-smc cpplprog.mc`.
+A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `cppl -m rootppl-smc cpplprog.mc`.
 The file `out.cu` can then be compiled using, e.g., `rootppl out.cu --stack_size 10000`.
 The stack size option is mandatory for compiling RootPPL programs compiled from CorePPL.
 More information about RootPPL can be found at [RootPPL](#rootppl).

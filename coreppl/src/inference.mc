@@ -42,5 +42,5 @@ let performInference = lam options: Options. lam ast.
   else
     print "Please specify inference method using flag -m\n\n";
     print "Example:\n";
-    print "  midppl example.mc -m rootppl-smc\n";
+    print "  cppl example.mc -m rootppl-smc\n";
     exit 1
