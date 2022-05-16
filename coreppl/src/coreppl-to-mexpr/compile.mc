@@ -61,16 +61,16 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Put model in top-level model function
     let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
 
-    -- Final code to run inference and print something useful.
+    -- Printing function for return type
     let tyPrintFun =
-           match resTy with TyInt _ then   (var_ "int2string")
+      match resTy with TyInt _ then   (var_ "int2string")
       else match resTy with TyFloat _ then (var_ "float2string")
       else error "Return type cannot be printed"
     in
 
     let post = bindall_ [
-      ulet_ "res" (appf1_ (var_ "run") (var_ "model")),
-      appf2_ (var_ "printRes") tyPrintFun (var_ "res")
+      ulet_ "printFun" (app_ (var_ "printRes") tyPrintFun),
+      appf2_ (var_ "run") (var_ "model") (var_ "printFun")
     ] in
 
     -- Combine runtime, model, and generated post

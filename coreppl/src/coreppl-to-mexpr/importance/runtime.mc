@@ -6,41 +6,39 @@ include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
 
-include "../runtime/stats.mc"
+include "../runtime/common.mc"
 include "../runtime/dists.mc"
 
 -- In importance sampling, the state is simply the accumulated weight.
 type State = Ref Float
 
-let updateWeight = lam v. lam state.
-  modref state (addf (deref state) v)
+let updateWeight = lam v. lam state. modref state (addf (deref state) v)
+
+type Res a = ([Float],[a])
 
 -- General inference algorithm for importance sampling
-let run = lam model.
-  let particles = 1000 in
-  let weightInit = log (divf 1. (int2float particles)) in
-  let states = createList particles (lam. ref weightInit) in
-  let res = mapReverse model states in
-  let res = (mapReverse deref states, res) in
-  res
+let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFun.
+  -- Read number of runs and sweeps
+  match monteCarloArgs () with (particles, sweeps) in
 
--- The log-weight is always in the first column (list of lists)
-let expOnLogWeights = lam res.
-  mapReverse (lam t. match t with [x]++xs in cons (exp x) xs) res
+  -- Repeat once for each sweep
+  repeat (lam.
+      let weightInit: Float = 0. in
+      let states = createList particles (lam. ref weightInit) in
+      let res = mapReverse model states in
+      let res = (mapReverse deref states, res) in
+      printResFun res
+    ) sweeps
 
--- The output function. Prints normalizing constants, expected values, and variance
--- to the standard output. Saves the plot data in a CSV file.
-let output = lam res. lam names.
-  let names = cons "#" names in
-  let nc = normConstant res in
-  let expVals = expectedValues res nc in
-  let varianceVals = variance res expVals in
-  printStatistics res names nc expVals varianceVals;
-  saveCSV res names "data.csv" expOnLogWeights
-
-let printRes : all a. (a -> String) -> ([Float], [a]) -> () = lam printFun. lam res.
+let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
+  recursive let printSamples = lam weights. lam samples.
+    match (weights,samples) with ([w] ++ weights, [s] ++ samples) then
+      print (printFun s);
+      print " ";
+      printLn (float2string w);
+      printSamples weights samples
+    else match (weights,samples) with ([],[]) then ()
+    else error "Impossible"
+  in
   printLn (float2string (normConstant res.0));
-  let res = zip res.0 res.1 in
-  printLn (strJoin "\n" (map (lam sample.
-    join [(printFun sample.1), " ", (float2string sample.0)]
-  ) res))
+  printSamples res.0 res.1

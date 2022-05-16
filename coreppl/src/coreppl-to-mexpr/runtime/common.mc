@@ -12,6 +12,11 @@ let numarg = lam.
     exit 1
   else string2int (get argv 1)
 
+-- Returns the number of particles/samples/executions and sweeps from the program argument
+let monteCarloArgs = lam.
+  let particles = if leqi (length argv) 1 then 1 else string2int (get argv 1) in
+  let sweeps = if leqi (length argv) 2 then 1 else string2int (get argv 2) in
+  (particles, sweeps)
 
 -- Save the data to a CSV file
 let saveCSV = lam res. lam names. lam filename. lam expOnLogWeights.
@@ -59,7 +64,7 @@ let normConstant : [Float] -> Float = lam res.
   let negInf = (divf (negf 1.) 0.) in
   let max = foldl (lam acc. lam x. if geqf x acc then x else acc) negInf res in
   let sum = foldl (lam acc. lam x. addf (exp (subf x max)) acc) 0. res in
-  addf max (log sum)
+  subf (addf max (log sum)) (log (int2float (length res)))
 
 -- Computes the expected value for all variables. Returns
 -- a list that excludes the weight component and only contains
@@ -91,3 +96,18 @@ let variance = lam res. lam expVals.
   in
     let dval = int2float (length res) in
     map (lam x. divf x dval) sum
+
+-- The log-weight is always in the first column (list of lists)
+let expOnLogWeights = lam res.
+  mapReverse (lam t. match t with [x]++xs in cons (exp x) xs) res
+
+-- The output function. Prints normalizing constants, expected values, and variance
+-- to the standard output. Saves the plot data in a CSV file.
+let output = lam res. lam names.
+  let names = cons "#" names in
+  let nc = normConstant res in
+  let expVals = expectedValues res nc in
+  let varianceVals = variance res expVals in
+  printStatistics res names nc expVals varianceVals;
+  saveCSV res names "data.csv" expOnLogWeights
+
