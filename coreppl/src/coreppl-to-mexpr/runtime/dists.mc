@@ -4,6 +4,8 @@ include "ext/dist-ext.mc"
 
 type Dist a = { sample: () -> a, logObserve: a -> Float }
 
+let distPoisson : Float -> Dist Int = lam lambda.
+  { sample = lam. poissonSample lambda, logObserve = poissonLogPmf lambda }
 let distBinomial : Int -> Float -> Dist Int = lam n. lam p.
   { sample = lam. binomialSample p n, logObserve = binomialLogPmf p n }
 let distBernoulli : Float -> Dist Bool = lam p.

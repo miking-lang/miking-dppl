@@ -1,7 +1,7 @@
 include "../dists.mc"
 include "mexpr/ast-builder.mc"
 
-lang MExprPPLImportance = MExprPPL + TransformDist
+lang MExprPPLImportance = MExprPPL + Resample + TransformDist
 
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
@@ -32,6 +32,7 @@ lang MExprPPLImportance = MExprPPL + TransformDist
     withInfo t.info (appf2_ (var_ "updateWeight") weight (var_ "state"))
   | TmWeight t ->
     withInfo t.info (app_ (var_ "updateWeight") t.weight)
+  | TmResample t -> withInfo t.info unit_
   | t -> t
 
 end

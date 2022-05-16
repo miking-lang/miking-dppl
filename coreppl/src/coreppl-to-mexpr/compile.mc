@@ -4,6 +4,7 @@ include "mexpr/boot-parser.mc"
 include "sys.mc"
 
 include "../coreppl.mc"
+include "../inference-common/smc.mc"
 include "../src-location.mc"
 
 -- Inference methods
@@ -15,7 +16,7 @@ include "trace-mcmc/compile.mc"
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
-lang MExprCompile = MExprPPL + Externals
+lang MExprCompile = MExprPPL + Resample + Externals
 end
 let mexprCompile: Options -> Expr -> Expr =
   use MExprCompile in
