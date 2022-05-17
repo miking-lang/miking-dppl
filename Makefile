@@ -3,6 +3,7 @@
 
 midppl_name=midppl
 exec_name=midppl
+tppl_name=tpplc
 plot_name=dplot
 bin_path=${HOME}/.local/bin
 # lib_path=${HOME}/.local/lib
@@ -17,9 +18,20 @@ build/${midppl_name}: $(shell find . -name "*.mc")
 	cp ${midppl_tmp_file} build/${midppl_name}
 	rm ${midppl_tmp_file}
 
-install: build/${midppl_name}
+tppl_tmp_file := $(shell mktemp)
+build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
+	tool treeppl/src/treeppl.syn treeppl/src/treeppl-ast.mc
+	time mi compile treeppl/src/${tppl_name}.mc --output ${tppl_tmp_file}
+	mkdir -p build
+	cp ${tppl_tmp_file} build/${tppl_name}
+	rm ${tppl_tmp_file}
+
+
+install: build/${midppl_name} build/${tppl_name}
 	cp build/${midppl_name} ${bin_path}/${exec_name}
+	cp build/${tppl_name} ${bin_path}/${tppl_name}
 	chmod +x ${bin_path}/${exec_name}
+	chmod +x ${bin_path}/${tppl_name}
 	#### Why do we need to install the below? Seems strange to merge it with the installed miking stdlib ######
 	# mkdir -p ${lib_path_coreppl}
 	# cp -f coreppl/* ${lib_path_coreppl}/.
@@ -29,6 +41,7 @@ install: build/${midppl_name}
 
 uninstall:
 	rm -f ${bin_path}/${exec_name}
+	rm -f ${bin_path}/${tppl_name}
 	rm -f ${bin_path}/${plot_name}
 	# rm -rf ${lib_path_coreppl}
 

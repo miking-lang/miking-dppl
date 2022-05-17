@@ -1,0 +1,43 @@
+// TODO type DecoratedTree ...
+
+/*
+Leaf(age = 10.0, index = 1)
+Leaf {age = 10.0, index = 1} // preferable bec LL1 parser
+*/
+
+type Rate = {lambda: Real, mu: Real}
+type Event = {age: Real, states: mutable Int[]}
+
+// Here Be Mutability (in docorators)
+
+decorator divrates: Rate 
+decorator events: Event[] on Node // what happened above? mutable???
+decorator subTree: Tree // Error: Tree not a primitive type
+decorator endRates: Rate
+
+// Idea: decorators can only have primitive types, or a sequence of primitive types
+decorator eventAges: Real[]
+decorator eventStates: Int[][]  
+decorator lambda: Real
+decorator mu: Real
+
+t.lambda.set...
+t.mu.set...
+temp = t.lambda // temp is a simple copy
+temp = t.eventAges // error: cannot project out an array?
+
+function testFunction(t: Tree) {
+  t.divrates = {lambda = 1.0, mu = 0.5} // destructive update
+  t.events.add(age = 10, states = ...)     
+  x = t.divrates.lambda
+
+  print(t.divrates.lambda) // debug mode will produce an error
+                           // production mode will produce undefined behavior
+  t.divrates.set({lambda = 1.0, mu = 0.5})
+  temp = t.divrates // Error cannot project out of mutable stuff
+  temp.lambda // OK, temp is a record of type Rate
+  temp.set({lamba = 2.0, mu = 0.5}) // compile error!
+  t.divrates // what is the value here?  lambda is still 1.0
+  t.divrates.set({lamba = 2.0, mu = 0.5}) // temp does not change
+}
+

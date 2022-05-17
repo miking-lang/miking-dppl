@@ -32,20 +32,20 @@ Distribution over `v: PositiveReal[d]`.
 General syntax. x is unitialized yet (in the scope), or we want to throw away its previous binding:
 
 	assume x ~ Dist(params)  // now x is random variable (a structure with variate/ realization and the associated distribution), OR <=>
-	let x = assume(Dist(params))
+	let x = assume(Dist(params))  
 	let x = assume(Dist(params), ~sample = TRUE)   // forced sampling in the sense of immediate sampling as opposed to delayed sampling
-
+	
 For example
 
-	assume x ~ Exponential(~rate = 1)
+	assume x ~ Exponential(~rate = 1) 
 	// x is r.v. but may not have a realization yet
-
+	
 	let x = assume(Exponential(~rate = 1))
 	// x is r.v. but may not have a realization yet same as 44
-
+	
 	let x = assume(Exponential(~rate = 1), ~sample = TRUE)
 	// x is r.v. with a concreate realization of a value
-
+	
 WebPPL refernce behavior
 
 	x = sample(Exponential({rate: 1})
@@ -57,11 +57,11 @@ General syntax. `x` must exist and have value. Then:
 
 	x = 5
 	observe x ~ Dist(params)
-
+	
 For example
-
+	
 	observe 2 ~ Exponential(rate = 1)
-
+	
 Reference WebPPL code:
 
 	observe(Exponential({rate: 1}), 2)
@@ -107,12 +107,12 @@ Note: this potentially could be difficult.
 
 Cases:
 1. Name exists but has no value
-
-	float x
+	
+	float x 
 	//1.  name but no value
 
 2. Name exists and we have a value
-
+	
 	float x = 2
 	//2. name and we have a value
 
@@ -134,7 +134,7 @@ In case of 3 If the binding does not exist, x is sampled, then:
 
 ### 1.2.6 IID Sampling
 
-	assume x ~ iid(~dist = Dist(params), ~n = num_reps)    // iid distribution of length num_reps
+	assume x ~ iid(~dist = Dist(params), ~n = num_reps)    // iid distribution of length num_reps	
 	// x is a array or list of r.v.
 
 
