@@ -31,7 +31,7 @@ lang MExprPPLImportance = MExprPPL + Resample + TransformDist
     let weight = withInfo t.info (app_ (recordproj_ "logObserve" t.dist) t.value) in
     withInfo t.info (appf2_ (var_ "updateWeight") weight (var_ "state"))
   | TmWeight t ->
-    withInfo t.info (app_ (var_ "updateWeight") t.weight)
+    withInfo t.info (appf2_ (var_ "updateWeight") t.weight (var_ "state"))
   | TmResample t -> withInfo t.info unit_
   | t -> t
 

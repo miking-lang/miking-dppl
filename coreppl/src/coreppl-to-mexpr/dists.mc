@@ -15,6 +15,8 @@ lang TransformDist = MExprPPL
 
   sem transformDist: Dist -> Expr
   sem transformDist =
+  | DGamma { k = k, theta = theta } -> appf2_ (var_ "distGamma") k theta
+  | DExponential { rate = rate } -> appf1_ (var_ "distExponential") rate
   | DPoisson { lambda = lambda } -> appf1_ (var_ "distPoisson") lambda
   | DBinomial { n = n, p = p } -> appf2_ (var_ "distBinomial") n p
   | DBernoulli { p = p } -> appf1_ (var_ "distBernoulli") p
