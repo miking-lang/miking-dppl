@@ -1,4 +1,5 @@
 include "../dists.mc"
+include "../../inference-common/smc.mc"
 include "mexpr/ast-builder.mc"
 
 lang MExprPPLImportance = MExprPPL + Resample + TransformDist
@@ -10,10 +11,10 @@ lang MExprPPLImportance = MExprPPL + Resample + TransformDist
   sem compile =
   | t ->
     -- Transform distributions to MExpr distributions
-    let t = map_Expr_Expr transformTmDist t in
+    let t = mapPre_Expr_Expr transformTmDist t in
 
     -- Transform samples, observes, and weights to MExpr
-    let t = map_Expr_Expr transformProb t in
+    let t = mapPre_Expr_Expr transformProb t in
 
     -- Transform observes to MExpr observes
 

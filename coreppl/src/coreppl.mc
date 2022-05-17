@@ -415,26 +415,6 @@ lang MExprPPL =
   sem mexprPPLToString =
   | expr -> exprToStringKeywords mexprPPLKeywords expr
 
-  sem mapAccumL_Expr_Expr
-    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
-  sem mapAccumL_Expr_Expr f acc =
-  | expr ->
-    match f acc expr with (acc,expr) in
-    smapAccumL_Expr_Expr (mapAccumL_Expr_Expr f) acc expr
-
-  sem map_Expr_Expr : (Expr -> Expr) -> Expr -> Expr
-  sem map_Expr_Expr f =
-  | expr ->
-    let expr = f expr in
-    smap_Expr_Expr (map_Expr_Expr f) expr
-
-  sem fold_Expr_Expr
-    : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
-  sem fold_Expr_Expr f acc =
-  | expr ->
-    let acc = f acc expr in
-    sfold_Expr_Expr (fold_Expr_Expr f) acc expr
-
 end
 
 lang Test = MExprPPL + MExprANF
