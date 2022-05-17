@@ -1,6 +1,6 @@
 /* Comment */
 // another comment
-model function flip(p: Bool): Bool {
+model function flip(p: Real): Bool {
     e ~ Bernoulli(p)
     return e
 }

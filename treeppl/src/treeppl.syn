@@ -76,12 +76,13 @@ For now the type is only an Uppercase identifier, but in may
 be something else in the future (like with type parameters, etc.)
 Real
 Real[]
-Int[10]
+Int[10] 
 -/
 prod TypeTppl: TypeTppl = name:UName
 prod Sequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
 
 prod AtomicReal: TypeTppl = "Real"
+prod AtomicBool: TypeTppl = "Bool"
 
 
 /-

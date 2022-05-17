@@ -1,6 +1,6 @@
 /-
 TreePPL Compiler
-Authors: Viktor S and Viktor P
+Authors: Viktor S, Viktor P, Daniel L
 Dates: 2022
 
 Hello!
@@ -9,41 +9,41 @@ This is the TreePPL compiler (part of miking-dppl).
 
 Here is the compilation pipeline:
 
-example.tppl 
-  --parse--> (part of Viktor's Tool)
-TreePPL AST 
-  --analysis--> (part of this compiler)
-Side effects and enriched TreePPL AST 
-  --compile TPPL--> (part of this compiler)
-CorePPL AST + Variant Record Projection (another syn Expr...) 
-  --type checker--> 
-CorePPL AST + Variant Record Projection with types 
-  --desugar--> 
-CorePPL AST 
-  --CorePPL compiler-->
- RootPPL CU file 
-  --rootppl-->
-RootPPL program 
+  example.tppl 
+    --parse--> (part of Viktor's Tool)
+  TreePPL AST 
+    --analysis--> (part of this compiler)
+  Side effects and enriched TreePPL AST 
+    --compile TPPL--> (part of this compiler)
+  CorePPL AST + Variant Record Projection (another syn Expr...) 
+    --type checker--> 
+  CorePPL AST + Variant Record Projection with types 
+    --desugar--> 
+  CorePPL AST 
+    --CorePPL compiler-->
+  RootPPL CU file 
+    --rootppl-->
+  RootPPL program 
 
-To run this compiler (when it's ready), try:
+To try this compiler run:
 
-  mi compile --typecheck --keep-dead-code compiler.mc
-  mi compile --keep-dead-code compiler.mc
-  boot eval compiler
+  mi compile src/tpplc.mc
+  ./tpplc program.tppl data.mc
 
-TODO try entr to autocompile on save.
-
+You can install install the compiler with `make install` from the `miking-dppl` directory.
+  
 Some inspiration is drawn from the CorePPL C compiler.
 -/
 
 include "treeppl-ast.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/type-check.mc"
 
 include "../../coreppl/coreppl-to-rootppl/compile.mc"
 include "../../coreppl/coreppl.mc" -- TODO is this the best way?
 
-lang TreePPLCompile = TreePPLAst + CorePPL + RecLetsAst
+lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst 
   sem compile: Expr -> FileTppl -> Expr
   sem compile (input: Expr) =
   | FileTppl x -> 
@@ -57,17 +57,9 @@ lang TreePPLCompile = TreePPLAst + CorePPL + RecLetsAst
         ty = tyunknown_, 
         info = x.info
       }
-      
-      /-
-      1. find which function is the model function f
-      2. fold over arguments of model function, so that the inexpr
-      becomes f(data.arg1, data.arg2....) 
-      3. always add #include "data.mc" to all compiled programs
-      -/
-      -- this should be the application of whichever function
-                      -- is the model function on the input data
 
   sem mInvocation: Decl -> Option Expr
+
   sem mInvocation = 
   | _ -> None ()
   | FunDeclTppl (x & {model = Some _}) ->
@@ -89,6 +81,7 @@ lang TreePPLCompile = TreePPLAst + CorePPL + RecLetsAst
     Some (foldl f invar x.args)
   
   sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
+
   sem parseArgument =  
   | x -> TmVar {
       ident = x.name.v,
@@ -98,10 +91,10 @@ lang TreePPLCompile = TreePPLAst + CorePPL + RecLetsAst
     } 
 
   sem compileTpplDecl: DeclTppl -> RecLetBinding
+
   sem compileTpplDecl = 
   | FunDeclTppl f -> {
         ident = f.name.v,
-        -- TODO Write a function that maps TreePPL types to CorePPL
         tyBody = tyunknown_,
         body = 
           foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map compileStmtTppl f.body)),          
@@ -133,6 +126,10 @@ lang TreePPLCompile = TreePPLAst + CorePPL + RecLetsAst
     info = x.info
   }
 
+  | AtomicBoolTypeTppl x -> TyBool {
+    info = x.info
+  }
+
   sem compileStmtTppl: StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl = 
@@ -142,7 +139,6 @@ lang TreePPLCompile = TreePPLAst + CorePPL + RecLetsAst
     tyBody = tyunknown_, 
     body = TmAssume {
       dist = compileExprTppl a.dist,
-      --dist = unit_,
       ty = tyunknown_,
       info = a.info
     },
@@ -150,11 +146,8 @@ lang TreePPLCompile = TreePPLAst + CorePPL + RecLetsAst
     ty = tyunknown_,
     info = a.info
   }
-               
   | ReturnStmtTppl r ->
   lam cont. compileExprTppl r.return
-  
-  -- unit_ -- Expr
 
   sem compileExprTppl: ExprTppl -> Expr
 
@@ -186,21 +179,14 @@ match argv with ![_, _, _] then
   exit 0
 else match argv with [_, filename, data] in
 use BootParser in
---let input = bootParserParseMCoreFile_ data in
 let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
   data in
---dprint data;
---dprint input;
 let content = readFile filename in
 use TreePPLAst in
 match parseTreePPLExn filename content with  file in
---();
--- match file.decl with file in ();
--- dprint file
 
 use TreePPLCompile in
--- use BernoulliDist in
-  let corePplAst = compile input file in
+  let corePplAst: Expr = compile input file in
   let default = {
     method = "",
     particles = 5000,
@@ -211,15 +197,12 @@ use TreePPLCompile in
     transform = false,
     printSamples = true
   }
-  /-let options = {
-    method = "rootppl-smc",
-    resample = "manual",
-    printSamples = true
-  } -/ --  TODO(vsenderov,2022-05-10): Maybe parse from the command line
-  in 
+  --  TODO(vsenderov,2022-05-10): Maybe parse from the command line
+  in   
   let outfile = "out.cu" in
-  writeFile outfile (printCompiledRPProg (rootPPLCompile {default with method = "rootppl-smc"} corePplAst));
+  let prog: Expr = typeCheck corePplAst in
+  writeFile outfile (printCompiledRPProg (rootPPLCompile {default with method = "rootppl-smc"} prog));
   print (join ["RootPPL output written.\n",
    "To get an executable, compile with \n\n  rootppl --stack-size 10000 ", outfile, "\n\n"]);
   use MExprPPL in 
-  print (mexprPPLToString corePplAst)
+  print (concat (mexprPPLToString corePplAst) "\n\n")
