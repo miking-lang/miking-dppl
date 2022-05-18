@@ -16,10 +16,6 @@ lang MExprPPLImportance = MExprPPL + Resample + TransformDist
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProb t in
 
-    -- Transform observes to MExpr observes
-
-    -- Transform weights to MExpr weights
-
     t
 
   sem transformProb =
