@@ -14,7 +14,7 @@ rootppl_src_path=$(HOME)/.local/src/rootppl/
 rootppl_bin = rootppl/rootppl
 rootppl_src = rootppl/src/
 
-all: build/${cppl_name}
+all: build/${cppl_name} build/${tppl_name}
 
 cppl_tmp_file := $(shell mktemp)
 build/${cppl_name}: $(shell find . -name "*.mc")
@@ -25,13 +25,13 @@ build/${cppl_name}: $(shell find . -name "*.mc")
 
 tppl_tmp_file := $(shell mktemp)
 build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
-	tool treeppl/src/treeppl.syn treeppl/src/treeppl-ast.mc
-	time mi compile treeppl/src/${tppl_name}.mc --output ${tppl_tmp_file}
-	mkdir -p build
-	cp ${tppl_tmp_file} build/${tppl_name}
-	rm ${tppl_tmp_file}
+	# tool treeppl/src/treeppl.syn treeppl/src/treeppl-ast.mc
+	# time mi compile treeppl/src/${tppl_name}.mc --output ${tppl_tmp_file}
+	# mkdir -p build
+	# cp ${tppl_tmp_file} build/${tppl_name}
+	# rm ${tppl_tmp_file}
 
-install: build/${cppl_name}
+install: build/${cppl_name} build/${cppl_name}
 # CorePPL
 	mkdir -p $(bin_path) $(src_path);
 	cp build/${cppl_name} ${bin_path}/${exec_name}
@@ -39,8 +39,8 @@ install: build/${cppl_name}
 	cp -rfT $(cppl_src) $(src_path)
 
 # TreePPL
-	cp build/${tppl_name} ${bin_path}/${tppl_name}
-	chmod +x ${bin_path}/${tppl_name}
+	# cp build/${tppl_name} ${bin_path}/${tppl_name}
+	# chmod +x ${bin_path}/${tppl_name}
 
 # Scripts
 	cp -f scripts/${plot_name} ${bin_path}/.
@@ -57,7 +57,7 @@ uninstall:
 	rm -rf $(src_path)
 
 # TreePPL
-	rm -f ${bin_path}/${tppl_name}
+	# rm -f ${bin_path}/${tppl_name}
 
 # Scripts
 	rm -f ${bin_path}/${plot_name}
