@@ -32,13 +32,15 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
 
 let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
   recursive let printSamples = lam weights. lam samples.
-    match (weights,samples) with ([w] ++ weights, [s] ++ samples) then
+    if null weights then () else
+      let w = head weights in
+      let weights = tail weights in
+      let s = head samples in
+      let samples = tail samples in
       print (printFun s);
       print " ";
       printLn (float2string w);
       printSamples weights samples
-    else match (weights,samples) with ([],[]) then ()
-    else error "Impossible"
   in
   printLn (float2string (normConstant res.0));
   printSamples res.0 res.1
