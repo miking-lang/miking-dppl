@@ -40,8 +40,8 @@ include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
 
-include "../../coreppl/coreppl-to-rootppl/compile.mc"
-include "../../coreppl/coreppl.mc" -- TODO is this the best way?
+include "../../coreppl/src/coreppl-to-rootppl/compile.mc"
+include "../../coreppl/src/coreppl.mc" -- TODO is this the best way?
 
 lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst 
   sem compile: Expr -> FileTppl -> Expr

@@ -1,10 +1,23 @@
-src/treeppl-ast.mc: src/treeppl.syn
-	tool src/treeppl.syn src/treeppl-ast.mc
+tppl_name=tpplc
+bin_path=${HOME}/.local/bin
+src_path=${HOME}/.local/src/cppl/
+
+tppl_tmp_file := $(shell mktemp)
+build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
+	mi compile $(MCORE_STDLIB)/parser/tool.mc
+	./tool src/treeppl.syn src/treeppl-ast.mc
+	time mi compile src/${tppl_name}.mc --output ${tppl_tmp_file}
+	mkdir -p build
+	cp ${tppl_tmp_file} build/${tppl_name}
+	rm ${tppl_tmp_file}
+
+install-treeppl: build/${tppl_name}
+	cp build/${tppl_name} ${bin_path}/${tppl_name}
+	chmod +x ${bin_path}/${tppl_name}
 
 flip: src/treeppl-ast.mc models/flip/flip.tppl
-	boot eval --debug-stack-trace src/tpplc.mc -- models/flip/flip.tppl models/flip/data.mc
+	tpplc models/flip/flip.tppl models/flip/data.mc
 
-flip-ast: src/treeppl.syn src/testparser.mc
-	boot eval src/testparser.mc -- models/flip/flip.tppl
+all: flip
 
-.PHONY: flip flip-ast
+.PHONY: flip install-treeppl
