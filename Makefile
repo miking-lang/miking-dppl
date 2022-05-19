@@ -77,3 +77,12 @@ test:
 
 test-boot:
 	@$(MAKE) -s -f test-boot.mk all
+
+install-rootppl:
+	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
+	cp -f $(rootppl_bin) $(rootppl_bin_path)
+	cp -rfT $(rootppl_src) $(rootppl_src_path)
+
+uninstall-rootppl:
+	rm -rf $(rootppl_bin_path)
+	rm -rf $(rootppl_src_path)
