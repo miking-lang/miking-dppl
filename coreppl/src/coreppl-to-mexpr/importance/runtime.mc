@@ -14,10 +14,9 @@ type State = Ref Float
 
 let updateWeight = lam v. lam state. modref state (addf (deref state) v)
 
-type Res a = ([Float],[a])
-
 -- General inference algorithm for importance sampling
 let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFun.
+
   -- Read number of runs and sweeps
   match monteCarloArgs () with (particles, sweeps) in
 

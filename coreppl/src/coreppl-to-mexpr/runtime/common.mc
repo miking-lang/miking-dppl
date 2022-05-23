@@ -4,6 +4,8 @@ include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
 
+type Res a = ([Float],[a])
+
 -- Returns the number of particles/points from the program argument
 let numarg = lam.
   if neqi (length argv) 2 then
@@ -110,4 +112,3 @@ let output = lam res. lam names.
   let varianceVals = variance res expVals in
   printStatistics res names nc expVals varianceVals;
   saveCSV res names "data.csv" expOnLogWeights
-

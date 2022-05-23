@@ -59,6 +59,10 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Apply inference-specific transformation
     let prog = compile prog in
 
+    -- Construct record accessible in runtime (currently empty)
+    let pre = ulet_ "compileOptions" (urecord_ [
+    ]) in
+
     -- Put model in top-level model function
     let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
 
@@ -75,7 +79,7 @@ let mexprCompile: Options -> Expr -> Expr =
     ] in
 
     -- Combine runtime, model, and generated post
-    let prog = bindall_ [runtime,prog,post] in
+    let prog = bindall_ [pre,runtime,prog,post] in
 
     -- Return complete program
     prog
