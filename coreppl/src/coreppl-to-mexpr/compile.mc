@@ -6,6 +6,8 @@ include "sys.mc"
 include "../coreppl.mc"
 include "../inference-common/smc.mc"
 include "../src-location.mc"
+include "../parser.mc"
+include "../dppl-arg.mc"
 
 -- Inference methods
 include "importance/compile.mc"
@@ -83,3 +85,24 @@ let mexprCompile: Options -> Expr -> Expr =
 
     -- Return complete program
     prog
+
+mexpr
+
+let parse = parseMExprPPLString in
+
+let simple = parse "
+let x = assume (Beta 10.0 5.0) in
+let obs = true in
+observe obs (Bernoulli x);
+x
+" in
+
+-- Simple tests that ensure compilation throws no errors
+utest mexprCompile {default with method = "mexpr-importance" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-naive-mcmc" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-trace-mcmc" } simple
+with () using lam. lam. true in
+
+()
