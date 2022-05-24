@@ -6,12 +6,12 @@ exec_name=cppl
 tppl_name=tpplc
 plot_name=dplot
 bin_path=${HOME}/.local/bin
-src_path=${HOME}/.local/src/cppl/
+src_path=${HOME}/.local/src/coreppl/
 cppl_src=coreppl/src/
 
-rootppl_bin_path = $(HOME)/.local/bin/rootppl
+rootppl_bin_path = $(HOME)/.local/bin/rppl
 rootppl_src_path=$(HOME)/.local/src/rootppl/
-rootppl_bin = rootppl/rootppl
+rootppl_bin = rootppl/rppl
 rootppl_src = rootppl/src/
 
 all: build/${cppl_name}
