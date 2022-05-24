@@ -8,8 +8,8 @@ GPUARCH=75
 # test var needs to be set
 for test in testChiSquared testStudentClassic testStudent testNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testLinearNormalInverseGammaNormal testLinearNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalComplicated
 do
-    rootppl clean
-    rootppl -j $CORES $TESTDIR/$test.cu
+    rppl clean
+    rppl -j $CORES $TESTDIR/$test.cu
     ./program $NUMPART $NUMRUN
     mv $TESTDIR/$test.csv $TESTDIR/$DATADIR
     cp log_norm_const.txt $TESTDIR/$DATADIR/$test.logz

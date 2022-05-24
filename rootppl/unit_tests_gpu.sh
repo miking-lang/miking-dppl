@@ -12,8 +12,8 @@ GPUARCH=75
 echo "=============GPU TESTS============="
 for test in testStudentClassic testWaitingTime testWaitingTimeDelayed testObserveWaitingTime testObserveWaitingTimeDelayed testObserveXEvents testObserveXEventsDelayed testNormalInverseGammaNormal testLinearNormalInverseGammaNormal testNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalMultipass testLinearNormalInverseGammaNormalComplicated
 do
-    rootppl clean
-    rootppl $TESTDIR/$test.cu --arch $GPUARCH -j $CORES
+    rppl clean
+    rppl $TESTDIR/$test.cu --arch $GPUARCH -j $CORES
     ./program $NUMPART $NUMRUN
     mv $TESTDIR/$test.csv $TESTDIR/$DATADIR
     cp log_norm_const.txt $TESTDIR/$DATADIR/$test.logz

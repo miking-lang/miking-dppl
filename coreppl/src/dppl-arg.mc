@@ -8,10 +8,12 @@ type Options = {
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
+  skipFinal: Bool,
   transform: Bool,
 
   -- Options for the `rootppl-smc` method. TODO(dlunde,2022-03-24): Should maybe be defined somewhere else eventually?
-  printSamples: Bool
+  printSamples: Bool,
+  stackSize: Int
 }
 
 -- Default values for options
@@ -22,19 +24,21 @@ let default = {
   printModel = false,
   printMCore = false,
   exitBefore = false,
+  skipFinal = false,
   transform = false,
-  printSamples = true
+  printSamples = true,
+  stackSize = 10000
 }
 
 -- Options configuration
 let config = [
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: importance, rootppl-smc.",
+    "The selected inference method. The supported methods are: mexpr-importance, rootppl-smc.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
     join ["The number of particles. The default is 5000. This option is used if one ",
-          "of the following methods are used: importance, rootppl-smc."],
+          "of the following methods are used: mexpr-importance, rootppl-smc."],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],
@@ -50,9 +54,13 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with printMCore = true}),
   ([("--exit-before", "", "")],
-    "Exit before inference takes place. ",
+    "Exit before compiling.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with exitBefore = true}),
+  ([("--skip-final", "", "")],
+    "Do not perform the final compilation step (e.g., MExpr to OCaml).",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with skipFinal = true}),
   ([("--transform", "", "")],
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.
@@ -62,12 +70,16 @@ let config = [
   ([("--no-print-samples", "", "")],
     "Do not print the final samples when compiling with the rootppl-smc method.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with printSamples = false})
+      let o: Options = p.options in {o with printSamples = false}),
+  ([("--stack-size", " ", "<size>")],
+    join ["The stack size used by RootPPL. The default is 10000 (bytes)."],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with stackSize = argToIntMin p 1})
 ]
 
 -- Menu
 let menu = lam. join [
-  "Usage: midppl file.mc [<options>]\n\n",
+  "Usage: cppl file.mc [<options>]\n\n",
   "Options:\n",
   argHelpOptions config,
   "\n"

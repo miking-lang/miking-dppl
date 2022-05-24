@@ -1,22 +1,27 @@
 
 .PHONY : all test test-boot clean install uninstall
 
-midppl_name=midppl
-exec_name=midppl
+cppl_name=cppl
+exec_name=cppl
 tppl_name=tpplc
 plot_name=dplot
 bin_path=${HOME}/.local/bin
-# lib_path=${HOME}/.local/lib
-# lib_path_coreppl=${lib_path}/mcore/stdlib/coreppl
+src_path=${HOME}/.local/src/coreppl/
+cppl_src=coreppl/src/
 
-all: build/${midppl_name}
+rootppl_bin_path = $(HOME)/.local/bin/rppl
+rootppl_src_path=$(HOME)/.local/src/rootppl/
+rootppl_bin = rootppl/rppl
+rootppl_src = rootppl/src/
 
-midppl_tmp_file := $(shell mktemp)
-build/${midppl_name}: $(shell find . -name "*.mc")
-	time mi compile coreppl/${midppl_name}.mc --output ${midppl_tmp_file}
+all: build/${cppl_name}
+
+cppl_tmp_file := $(shell mktemp)
+build/${cppl_name}: $(shell find . -name "*.mc")
+	time mi compile coreppl/src/${cppl_name}.mc --typecheck --output ${cppl_tmp_file}
 	mkdir -p build
-	cp ${midppl_tmp_file} build/${midppl_name}
-	rm ${midppl_tmp_file}
+	cp ${cppl_tmp_file} build/${cppl_name}
+	rm ${cppl_tmp_file}
 
 tppl_tmp_file := $(shell mktemp)
 build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
@@ -26,24 +31,43 @@ build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
 	cp ${tppl_tmp_file} build/${tppl_name}
 	rm ${tppl_tmp_file}
 
-
-install: build/${midppl_name} build/${tppl_name}
-	cp build/${midppl_name} ${bin_path}/${exec_name}
-	cp build/${tppl_name} ${bin_path}/${tppl_name}
+install: build/${cppl_name}
+# CorePPL
+	mkdir -p $(bin_path) $(src_path);
+	cp build/${cppl_name} ${bin_path}/${exec_name}
 	chmod +x ${bin_path}/${exec_name}
-	chmod +x ${bin_path}/${tppl_name}
-	#### Why do we need to install the below? Seems strange to merge it with the installed miking stdlib ######
-	# mkdir -p ${lib_path_coreppl}
-	# cp -f coreppl/* ${lib_path_coreppl}/.
-	################################################
+	cp -rfT $(cppl_src) $(src_path)
+
+# Scripts
 	cp -f scripts/${plot_name} ${bin_path}/.
 	chmod +x ${bin_path}/${plot_name}
 
+# RootPPL
+	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
+	cp -f $(rootppl_bin) $(rootppl_bin_path)
+	cp -rfT $(rootppl_src) $(rootppl_src_path)
+
 uninstall:
+# CorePPL
 	rm -f ${bin_path}/${exec_name}
-	rm -f ${bin_path}/${tppl_name}
+	rm -rf $(src_path)
+
+# Scripts
 	rm -f ${bin_path}/${plot_name}
-	# rm -rf ${lib_path_coreppl}
+
+# RootPPL
+	rm -rf $(rootppl_bin_path)
+	rm -rf $(rootppl_src_path)
+
+
+install-treeppl: build/${tppl_name}
+# TreePPL
+	cp build/${tppl_name} ${bin_path}/${tppl_name}
+	chmod +x ${bin_path}/${tppl_name}
+
+uninstall-treeppl:
+# TreePPL
+	rm -f ${bin_path}/${tppl_name}
 
 clean:
 	rm -rf build
@@ -53,11 +77,6 @@ test:
 
 test-boot:
 	@$(MAKE) -s -f test-boot.mk all
-
-rootppl_bin_path = $(HOME)/.local/bin/rootppl
-rootppl_src_path=$(HOME)/.local/src/rootppl/
-rootppl_bin = rootppl/rootppl
-rootppl_src = rootppl/src/
 
 install-rootppl:
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);

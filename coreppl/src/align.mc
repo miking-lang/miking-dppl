@@ -9,30 +9,23 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
 
   syn AbsVal =
   | AVStoch {}
-  | AVConst { arity: Int }
 
   sem absValToString (env: PprintEnv) =
   | AVStoch {} -> (env, "stoch")
-  | AVConst { arity = arity } -> (env, join ["const", int2string arity])
 
   sem cmpAbsValH =
   | (AVStoch _, AVStoch _) -> 0
-  | (AVConst lhs, AVConst rhs) -> subi lhs.arity rhs.arity
 
   syn Constraint =
   -- {const} ⊆ lhs AND {stoch} ⊆ rhs ⇒ {stoch} ⊆ res
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
-  -- {const with arity > 0} ⊆ lhs ⇒ {const with arity-1} ⊆ res
-  | CstrConstApp { lhs: Name, res: Name }
   -- {stoch} ⊆ target ⇒ match condition is stochastic for match id
   | CstrStochMatchCond { target: Name, id: Name }
-
 
   sem initConstraint (graph: CFAGraph) =
   | CstrConstStochApp r & cstr ->
     let graph = initConstraintName r.lhs graph cstr in
     initConstraintName r.rhs graph cstr
-  | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrStochMatchCond r & cstr -> initConstraintName r.target graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
@@ -52,16 +45,17 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
         else graph
       else graph
     else graph
-  | CstrConstApp { lhs = lhs, res = res } ->
-    match update.1 with AVConst r then
-      if gti r.arity 1 then
-        addData graph (AVConst { r with arity = subi r.arity 1 }) res
-      else graph
-    else graph
   | CstrStochMatchCond { target = target, id = id } ->
     match update.1 with AVStoch _ then
       { graph with stochMatches = setInsert id graph.stochMatches }
     else graph
+
+  -- This function is called from the base Miking CFA fragment when the
+  -- constant application is complete (all arguments have been given).
+  -- For the stochastic value flow, this is uninteresting. Consequently, as a
+  -- default, we simply do nothing.
+  sem propagateConstraintConst res args graph =
+  | c -> graph
 
   sem constraintToString (env: PprintEnv) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
@@ -70,11 +64,6 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
     match pprintVarName env res with (env,res) in
     (env, join [
       "{const} ⊆ ", lhs, " AND {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
-  | CstrConstApp { lhs = lhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env res with (env,res) in
-    (env, join [
-      "{const with arity > 0} ⊆ ", lhs, " ⇒ {const with arity-1} ⊆ ", res ])
   | CstrStochMatchCond { target = target, id = id } ->
     match pprintVarName env target with (env,target) in
     match pprintVarName env id with (env,id) in
@@ -87,20 +76,21 @@ lang MExprPPLCFA = MExprCFA + MExprPPL
   -- Stochastic values
   | TmLet { ident = ident, body = TmAssume _ } ->
     [ CstrInit { lhs = AVStoch {}, rhs = ident } ]
-  -- Constants. NOTE(dlunde,2021-11-15): We probably want to handle various
-  -- constants differently as well, but for now this should be enough. Handling
-  -- of constants could potentially also be generalized as part of the default
-  -- cfa framework in Miking.
+  -- The below ensures all constants are tracked as needed for stoch
+  -- propagation. In the base CFA fragment in Miking, constant constraints are
+  -- only generated from a subset of constants. Here, we need to track _all_
+  -- constants. NOTE(dlunde,2022-05-18): There is some duplication here, as
+  -- some constants (e.g., constants for sequences) are generated both here and
+  -- in the base Miking CFA.
   | TmLet { ident = ident, body = TmConst { val = c } } ->
     let arity = constArity c in
     if eqi arity 0 then []
-    else [ CstrInit { lhs = AVConst { arity = arity }, rhs = ident } ]
+    else [ CstrInit { lhs = AVConst { const = c, args = []}, rhs = ident } ]
   | TmLet { ident = ident, body = TmApp app} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then [
         cstrStochDirect l.ident ident,
-        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident},
-        CstrConstApp { lhs = l.ident, res = ident}
+        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident}
       ]
       else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
     else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
@@ -727,7 +717,8 @@ utest _test false t ["t1", "t2", "res"] with [
 
 
 -- Test in `models/coreppl/crbd/crbd-unaligned.mc`
-let t = symbolizeExpr symEnvEmpty (getAst "coreppl/models/crbd/crbd-unaligned.mc") in
+let t = symbolizeExpr symEnvEmpty
+          (parseMCorePPLFile "coreppl/models/crbd/crbd-unaligned.mc") in
 utest _test false t ["w1","w2","w3"] with [
   ("w1", false),
   ("w2", false),

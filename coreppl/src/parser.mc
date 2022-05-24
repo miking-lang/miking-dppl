@@ -72,17 +72,18 @@ lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + Probabil
                                         info = info})
 end
 
-let getAst = lam filename.
+let parseMCorePPLFile = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {{defaultBootParserParseMCoreFileArg
-                 with keepUtests = false}
-                 with keywords = pplKeywords} in
+  let config = {{{defaultBootParserParseMCoreFileArg
+                  with keepUtests = false}
+                  with keywords = pplKeywords}
+                  with allowFree = true} in
   makeKeywords [] (parseMCoreFile config filename)
 
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
-  makeKeywords [] (parseMExprString pplKeywords cpplstr)
+  makeKeywords [] (parseMExprStringKeywords pplKeywords cpplstr)
 
 
