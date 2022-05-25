@@ -72,6 +72,7 @@ let mexprCompile: Options -> Expr -> Expr =
     let tyPrintFun =
       match resTy with TyInt _ then   (var_ "int2string")
       else match resTy with TyFloat _ then (var_ "float2string")
+      else match resTy with TyBool _ then (var_ "bool2string")
       else error "Return type cannot be printed"
     in
 
