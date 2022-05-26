@@ -5,7 +5,7 @@ include "parser.mc"
 
 include "mexpr/cfa.mc"
 
-lang MExprPPLCFA = MExprCFA + MExprPPL
+lang MExprPPLStochCFA = MExprCFA + MExprPPL
 
   syn AbsVal =
   | AVStoch {}
