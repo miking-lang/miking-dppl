@@ -3,7 +3,7 @@
 include "../coreppl.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
-include "../align.mc"
+include "../cfa.mc"
 
 include "../inference-common/smc.mc"
 
