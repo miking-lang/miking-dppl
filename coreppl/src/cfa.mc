@@ -182,7 +182,7 @@ type AlignFlow = {
   lhss: [Name]
 }
 
-lang Align = MExprPPLCFA
+lang Align = MExprPPLStochCFA
 
 -- Types for keeping track of alignment flow
   type AlignAcc = {
