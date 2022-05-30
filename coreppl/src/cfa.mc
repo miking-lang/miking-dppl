@@ -5,7 +5,75 @@ include "parser.mc"
 
 include "mexpr/cfa.mc"
 
-lang MExprPPLStochCFA = MExprCFA + MExprPPL
+lang PPLCFA = MExprCFA
+
+  type MCGF = Name -> Name -> Pat -> [Constraint]
+
+  -- TODO(dlunde,2022-05-30): It would be nice if we could achieve much of the
+  -- below in a more modular way (e.g., alignment part of analysis is defined
+  -- in the alignment fragment, stochastic part in the stochastic fragment,
+  -- etc.)
+  sem generateStochMatchResConstraints : MCGF
+  sem generateStochMatchConstraints : MCGF
+  sem generateUnalignedMatchConstraints : MCGF
+  sem mcgfs : () -> [MCGF]
+  | _ -> [
+      generateMatchConstraints,
+      generateStochMatchResConstraints,
+      generateStochMatchConstraints,
+      generateUnalignedMatchConstraints
+    ]
+  sem generateStochConstraints : Expr -> [Constraint]
+  sem generateAlignConstraints : Expr -> [Constraint]
+  sem cgfs : [MCGF] -> [Expr -> [Constraint]]
+  sem cgfs =
+  | mcfgs -> [
+      generateConstraints,
+      generateConstraintsMatch mcgfs,
+      generateStochConstraints,
+      generateAlignConstraints
+    ]
+
+  syn GraphData =
+  | PPLCFAData {
+      unaligned : Set Name
+    }
+
+  -- Type: Expr -> CFAGraph
+  sem initGraph (graphData: Option GraphData) =
+  | t ->
+
+    -- Initial graph
+    let graph: CFAGraph = emptyCFAGraph in
+
+    -- Initialize match constraint generating functions
+    let graph = { graph with mcgfs = mcgfs () } in
+
+    -- Initialize constraint generating functions
+    let cgfs = cgfs graph.mcgfs in
+
+    -- Recurse over program and generate constraints
+    let cstrs: [Constraint] = collectConstraints cgfs [] t in
+
+    -- Initialize all collected constraints
+    let graph = foldl initConstraint graph cstrs in
+
+    -- Return graph
+    graph
+
+  sem cfaPPL: Expr -> CFAGraph
+  sem cfaPPL =
+  | t -> match cfaPPLDebug (None ()) t with (_,graph) in graph
+
+  sem cfaPPLDebug : Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph)
+  sem cfaPPLDebug penv
+  | t ->
+    let graphData = PPLCFAData { unaligned = setEmpty nameCmp } in
+    cfaDebug (Some graphData) penv t
+
+end
+
+lang StochCFA = PPLCFA
 
   syn AbsVal =
   | AVStoch {}
@@ -19,14 +87,11 @@ lang MExprPPLStochCFA = MExprCFA + MExprPPL
   syn Constraint =
   -- {const} ⊆ lhs AND {stoch} ⊆ rhs ⇒ {stoch} ⊆ res
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
-  -- {stoch} ⊆ target ⇒ match condition is stochastic for match id
-  | CstrStochMatchCond { target: Name, id: Name }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrConstStochApp r & cstr ->
     let graph = initConstraintName r.lhs graph cstr in
     initConstraintName r.rhs graph cstr
-  | CstrStochMatchCond r & cstr -> initConstraintName r.target graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
@@ -45,10 +110,6 @@ lang MExprPPLStochCFA = MExprCFA + MExprPPL
         else graph
       else graph
     else graph
-  | CstrStochMatchCond { target = target, id = id } ->
-    match update.1 with AVStoch _ then
-      { graph with stochMatches = setInsert id graph.stochMatches }
-    else graph
 
   -- This function is called from the base Miking CFA fragment when the
   -- constant application is complete (all arguments have been given).
@@ -64,12 +125,6 @@ lang MExprPPLStochCFA = MExprCFA + MExprPPL
     match pprintVarName env res with (env,res) in
     (env, join [
       "{const} ⊆ ", lhs, " AND {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
-  | CstrStochMatchCond { target = target, id = id } ->
-    match pprintVarName env target with (env,target) in
-    match pprintVarName env id with (env,id) in
-    (env, join [
-      "{stoch} ⊆ ", target, " ⇒ match condition is stochastic for match ", id
-    ])
 
   sem generateStochConstraints =
   | _ -> []
@@ -109,22 +164,19 @@ lang MExprPPLStochCFA = MExprCFA + MExprPPL
     | PatBool _
     | PatRecord _
     ) & pat ->
-    -- We only generate these constraint where a match can fail, causing a
+    -- We only generate this constraint where a match can fail, causing a
     -- stochastic branch if the failed value is stochastic.
     [
-
       -- Result of match is stochastic if match can fail stochastically
       cstrStochDirect target id,
-
-      -- match is unaligned if it can fail stochastically
-      CstrStochMatchCond { target = target, id = id }
-
     ]
+
   | ( PatAnd p
     | PatOr p
     | PatNot p
     ) -> errorSingle [p.info] "Pattern currently not supported"
-  | _ -> []
+
+  | PatNamed _ -> []
 
   -- Ensures all extracted pattern components of a stochastic value are also
   -- stochastic. For example, all elements of a stochastic list are stochastic.
@@ -141,50 +193,93 @@ lang MExprPPLStochCFA = MExprCFA + MExprPPL
       cons (cstrStochDirect target name) acc
     ) [] pnames
 
-  -- Type: Expr -> CFAGraph
-  sem initGraph (graphData: Option GraphData) =
-  | t ->
+end
 
-    -- Initial graph
-    let graph: CFAGraph = emptyCFAGraph in
+lang AlignCFA = StochCFA
 
-    -- Initialize match constraint generating functions
-    let graph = { graph with mcgfs = [
-      generateMatchConstraints,
-      generateStochMatchResConstraints,
-      generateStochMatchConstraints
-    ] } in
+  syn AbsVal =
+  | AVUnaligned {}
 
-    -- Initialize constraint generating functions
-    let cgfs = [
-      generateConstraints,
-      generateConstraintsMatch graph.mcgfs,
-      generateStochConstraints
-    ] in
+  -- Alignment handling is custom (should not propagate as part of regular
+  -- direct constraints)
+  sem isDirect =
+  | AVUnaligned _ -> false
 
-    -- Recurse over program and generate constraints
-    let cstrs: [Constraint] = collectConstraints cgfs [] t in
+  syn Constraint =
+  -- {stoch} ⊆ target ⇒ names are unaligned
+  | CstrStochAlign { target: Name, names: [Name] }
+  -- {id} ⊆ unaligned names ⇒ names ⊆ unaligned names
+  | CstrAlign { id: Name, names: [Name] }
+  -- {app id} ⊆ unaligned names and {lam x. b} ⊆ lhs ⇒ {x} ⊆ unaligned names
+  | CstrAlignApp { id: Name, lhs: Name }
 
-    -- Initialize all collected constraints
-    let graph = foldl initConstraint graph cstrs in
+  sem initConstraint (graph: CFAGraph) =
+  | CstrStochMatchCond r & cstr -> initConstraintName r.target graph cstr
 
-    -- Return graph
-    graph
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrStochMatchCond { target = target, id = id } ->
+    match update.1 with AVStoch _ then
+      match graph.graphData with Some (PPLCFAData r) then
+        let graphData = Some (PPLCFAData
+          {r with unaligned = setInsert id r.unaligned}
+        ) in
+        { graph with graphData = graphData }
+      else error "Impossible in coreppl/src/cfa.mc"
+    else graph
+
+  sem constraintToString (env: PprintEnv) =
+  | CstrStochMatchCond { target = target, id = id } ->
+    match pprintVarName env target with (env,target) in
+    match pprintVarName env id with (env,id) in
+    (env, join [
+      "{stoch} ⊆ ", target, " ⇒ match condition is stochastic for match ", id
+    ])
+
+  sem generateConstraintsMatchAlign  =
+  | _ -> []
+  | TmLet { ident = ident, body = TmMatch t } ->
+    let innerNames = -- TODO get names from t.thn and t.els
+    match t.target with TmVar tv then
+      
+      foldl (lam acc. lam f. concat (f ident tv.ident t.pat) acc) cstrs mcgfs
+    else infoErrorExit (infoTm t.target) "Not a TmVar in match target"
+
+  sem generateUnalignedMatchConstraints (id: Name) (target: Name) =
+  | ( PatSeqTot _
+    | PatSeqEdge _
+    | PatCon _
+    | PatInt _
+    | PatChar _
+    | PatBool _
+    | PatRecord _
+    ) & pat ->
+    -- We only generate this constraint where a match can fail, causing a
+    -- stochastic branch if the failed value is stochastic.
+    [
+      -- Match is unaligned if it can fail stochastically
+      CstrStochMatchCond { target = target, id = id }
+    ]
+
+  | ( PatAnd p
+    | PatOr p
+    | PatNot p
+    ) -> infoErrorExit p.info "Pattern currently not supported"
+
+  | PatNamed _ -> []
 
 end
 
--- TODO(dlunde,2022-04-21): I want to move this inside Align fragment as well,
--- but it doesn't seem to work yet.
-type AlignFlow = {
-  -- Unaligned names
-  unaligned: [Name],
-  -- LHS names of applications
-  lhss: [Name]
-}
 
 lang Align = MExprPPLStochCFA
 
--- Types for keeping track of alignment flow
+  type AlignFlow = {
+    -- Unaligned names
+    unaligned: [Name],
+    -- LHS names of applications
+    lhss: [Name]
+  }
+
+  -- Types for keeping track of alignment flow
   type AlignAcc = {
     -- Map for matches (let key = match ...)
     mMap: Map Name AlignFlow,
@@ -405,6 +500,10 @@ lang Align = MExprPPLStochCFA
     let acc = { acc with current = current } in
     alignMap acc inexpr
   | t -> sfold_Expr_Expr alignMap acc t
+
+end
+
+lang MExprPPLCFA =
 
 end
 
