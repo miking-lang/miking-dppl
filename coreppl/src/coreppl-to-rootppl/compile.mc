@@ -28,7 +28,7 @@ include "mexpr/pprint.mc"
 -----------------------------------------
 
 lang MExprPPLRootPPLCompile = MExprPPL + Resample + RootPPL + MExprCCompileAlloc
-  + SeqTypeNoStringTypeLift + Align + MExprLambdaLift
+  + SeqTypeNoStringTypeLift + MExprPPLCFA + MExprLambdaLift
 
   -- Compiler internals
   syn CExpr =
@@ -1355,11 +1355,11 @@ let rootPPLCompile: Options -> Expr -> RPProg =
       use MExprPPLRootPPLCompileANFAll in
       let progANFAll: Expr = normalizeTerm prog in
 
-      -- Do static analysis for stochastic value flow
+      -- Do static analysis for stochastic value flow and alignment
       let cfaRes = cfa progANFAll in
 
       -- Propagate alignment information
-      let unaligned: Set Name = alignment cfaRes progANFAll in
+      let unaligned: Set Name = extractUnaligned cfaRes in
       let isAligned: Name -> Bool = lam n. not (setMem n unaligned) in
 
       addResample isAligned prog
@@ -1463,6 +1463,10 @@ utest test default simple with strJoin "\n" [
   "  SMC(callback);",
   "})"
 ] using eqString in
+
+-- Check that different alignment approaches do not crash
+utest test { default with resample = "likelihood" } simple with () using lam. lam. true in
+utest test { default with resample = "align" } simple with () using lam. lam. true in
 
 let nestedIfs = "
 recursive let f: Float -> Float =
