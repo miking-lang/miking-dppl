@@ -92,8 +92,8 @@ lang MExprPPLStochCFA = MExprCFA + MExprPPL
         cstrStochDirect l.ident ident,
         CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident}
       ]
-      else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
-    else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
+      else errorSingle [infoTm app.rhs] "Not a TmVar in application"
+    else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
   sem cstrStochDirect (lhs: Name) =
   | rhs -> CstrDirectAv {
@@ -123,7 +123,7 @@ lang MExprPPLStochCFA = MExprCFA + MExprPPL
   | ( PatAnd p
     | PatOr p
     | PatNot p
-    ) -> infoErrorExit p.info "Pattern currently not supported"
+    ) -> errorSingle [p.info] "Pattern currently not supported"
   | _ -> []
 
   -- Ensures all extracted pattern components of a stochastic value are also
@@ -341,7 +341,7 @@ lang Align = MExprPPLStochCFA
       with unaligned = cons ident c.unaligned }
       with lhss =
         let lhs = match a.lhs with TmVar t then t.ident
-          else infoErrorExit (infoTm a.lhs) "Not a TmVar in application" in
+          else errorSingle [infoTm a.lhs] "Not a TmVar in application" in
         cons lhs c.lhss }
     in
     let acc = { acc with current = current } in
@@ -394,7 +394,7 @@ lang Align = MExprPPLStochCFA
           let accI: AlignAcc = accI in
           let lMap = mapInsert t.ident accI.current accI.lMap in
           {{ accI with lMap = lMap } with current = current }
-        else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
+        else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
       ) acc bindings in
     alignMap acc inexpr
   | TmLet { ident = ident, body = body, inexpr = inexpr } ->
