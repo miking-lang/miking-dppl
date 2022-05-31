@@ -78,7 +78,7 @@ lang MExprPPLRootPPLCompile = MExprPPL + Resample + RootPPL + MExprCCompileAlloc
 
   -- Add error reporting for dist type
   sem compileType (env: CompileCEnv) =
-  | TyDist _ & ty -> infoErrorExit (infoTy ty) "TyDist in compileType"
+  | TyDist _ & ty -> errorSingle [infoTy ty] "TyDist in compileType"
 
   -- Do not lift polymorphic types. NOTE(dlunde,2021-10-08): This allows for
   -- some simple cases, like using `get` for lists.
