@@ -112,3 +112,17 @@ let output = lam res. lam names.
   let varianceVals = variance res expVals in
   printStatistics res names nc expVals varianceVals;
   saveCSV res names "data.csv" expOnLogWeights
+
+let printSamples : all a. (a -> String) -> [Float] -> [a] -> () =
+  lam printFun. lam weights. lam samples.
+    recursive let rec : [Float] -> [a] -> () = lam weights. lam samples.
+      if null weights then () else
+        let w = head weights in
+        let weights = tail weights in
+        let s = head samples in
+        let samples = tail samples in
+        print (printFun s);
+        print " ";
+        printLn (float2string w);
+        rec weights samples
+    in rec weights samples
