@@ -46,6 +46,7 @@ include "../../coreppl/src/coreppl.mc" -- TODO is this the best way?
 lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst 
   sem compile: Expr -> FileTppl -> Expr
   sem compile (input: Expr) =
+
   | FileTppl x -> 
       let invocation = match findMap mInvocation x.decl with Some x
         then x
@@ -59,9 +60,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
       }
 
   sem mInvocation: Decl -> Option Expr
-
   sem mInvocation = 
+
   | _ -> None ()
+
   | FunDeclTppl (x & {model = Some _}) ->
     let invar = TmVar { 
         ident = x.name.v,
@@ -81,8 +83,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
     Some (foldl f invar x.args)
   
   sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
-
   sem parseArgument =  
+
   | x -> TmVar {
       ident = x.name.v,
       ty = tyunknown_,
@@ -91,8 +93,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
     } 
 
   sem compileTpplDecl: DeclTppl -> RecLetBinding
-
   sem compileTpplDecl = 
+
   | FunDeclTppl f -> {
         ident = f.name.v,
         tyBody = tyunknown_,
@@ -133,7 +135,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
   sem compileStmtTppl: StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl = 
-  | AssumeStmtTppl a ->
+
+  | AssumeStmtTppl a -> 
   lam cont. TmLet {
     ident = a.randomVar.v, 
     tyBody = tyunknown_, 
@@ -146,12 +149,56 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
     ty = tyunknown_,
     info = a.info
   }
+  
+  | AssignStmtTppl a ->
+  lam cont. TmLet {
+    ident = a.var.v, 
+    tyBody = tyunknown_, 
+    body =  compileExprTppl a.val,
+    inexpr = cont,
+    ty = tyunknown_,
+    info = a.info
+  }
+
+  /--
+  To avoid code duplication.
+  Intuition: compiling with continuations
+  Instead of 
+    a; cont 
+  we do
+    let c = lam x. cont a in
+    a; c()
+  
+  Here c corresponds to contF.
+  --/
+  | IfStmtTppl a ->
+  lam cont.
+  let contName = nameSym "if-cont" in
+  let contF = ulam_ "" cont in
+  let cont: Expr = app_ (nvar_ contName) unit_ in
+    TmLet {
+      ident = contName,
+      body = contF,
+      tyBody = tyunknown_,
+      ty = tyunknown_,
+      info = a.info,
+      inexpr = TmMatch {
+        target = compileExprTppl a.condition,
+        pat    = ptrue_,
+        thn    = foldr (lam f. lam e. f e) cont (map compileStmtTppl a.ifTrueStmts),		 
+        els    = foldr (lam f. lam e. f e) cont (map compileStmtTppl a.ifFalseStmts),	 
+        ty     = tyunknown_,
+        info   = a.info
+      }
+    }
+
   | ReturnStmtTppl r ->
-  lam cont. compileExprTppl r.return
+  lam cont. match r.return with Some x then compileExprTppl x else unit_
 
   sem compileExprTppl: ExprTppl -> Expr
 
   sem compileExprTppl =
+
   | BernoulliExprTppl d ->
     TmDist {
       dist = DBernoulli {
@@ -168,7 +215,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
       info = v.info,
       frozen = false 
     }
-  
+
 end
    
 mexpr

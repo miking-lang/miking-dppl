@@ -25,7 +25,7 @@
 function flip(p: Real): Bool {
     // assert(0 <= p <= 1)    later version
     e ~ Bernoulli(p)
-    return e
+    return(e)
 }    
 
 /**  
@@ -46,8 +46,8 @@ function flip(p: Real): Bool {
  *  @return Nothing
  */ 
 function simulate_side_branch(start_time: Real, lambda: Real, mu: Real) {
-    waiting_time ~ Exponential(lambda + mu)
-    current_time = start_time - waiting_time // expressions, Section 0.1
+    assume waiting_time ~ Exponential(lambda + mu)
+    let current_time = start_time - waiting_time // expressions, Section 0.1
     if current_time < 0 { // conditionals, Section 0.5
         weight(0) // <=> log_weight(-inf)
     } else {

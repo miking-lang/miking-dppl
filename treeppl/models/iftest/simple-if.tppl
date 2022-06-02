@@ -1,0 +1,10 @@
+model function simpleif(p: Real) {
+  assume e ~ Bernoulli(p);
+  if e { 
+     return(e);
+  }
+}
+
+
+
+
