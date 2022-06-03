@@ -5,6 +5,7 @@ include "seq.mc"
 include "string.mc"
 
 type Res a = ([Float],[a])
+type ResOption a = ([Float],[Option a])
 
 -- Returns the number of particles/points from the program argument
 let numarg = lam.
@@ -122,6 +123,21 @@ let printSamples : all a. (a -> String) -> [Float] -> [a] -> () =
         let s = head samples in
         let samples = tail samples in
         print (printFun s);
+        print " ";
+        printLn (float2string w);
+        rec weights samples
+    in rec weights samples
+
+let printSamplesOption : all a. (a -> String) -> [Float] -> [Option a] -> () =
+  lam printFun. lam weights. lam samples.
+    recursive let rec : [Float] -> [Option a] -> () = lam weights. lam samples.
+      if null weights then () else
+        let w = head weights in
+        let weights = tail weights in
+        let s = head samples in
+        let samples = tail samples in
+        (match s with Some s then print (printFun s)
+         else print ".");
         print " ";
         printLn (float2string w);
         rec weights samples

@@ -11,6 +11,7 @@ include "../dppl-arg.mc"
 
 -- Inference methods
 include "importance/compile.mc"
+include "importance-cps/compile.mc"
 include "naive-mcmc/compile.mc"
 include "trace-mcmc/compile.mc"
 
@@ -26,7 +27,8 @@ let mexprCompile: Options -> Expr -> Expr =
 
     -- Load runtime and compile function
     let compiler =
-      match options.method with "mexpr-importance" then compilerImportance
+      match      options.method with "mexpr-importance" then compilerImportance
+      else match options.method with "mexpr-importance-cps" then compilerImportanceCPS
       else match options.method with "mexpr-naive-mcmc" then compilerNaiveMCMC
       else match options.method with "mexpr-trace-mcmc" then compilerTraceMCMC
       else
@@ -53,9 +55,12 @@ let mexprCompile: Options -> Expr -> Expr =
     let externals = getExternalIds runtime in
 
     -- Remove duplicate external definitions from model
+    -- TODO Move this later, after the inference-specific compile (needed for CPS)
     let prog = removeExternalDefs externals prog in
 
     -- Symbolize model (ignore free variables)
+    -- TODO Add symbolize option to also _not_ symbolize externals (we need to
+    -- leave externals in the model program in order for CPS to work)
     let prog = symbolizeAllowFree prog in
 
     -- Apply inference-specific transformation
@@ -100,6 +105,8 @@ x
 
 -- Simple tests that ensure compilation throws no errors
 utest mexprCompile {default with method = "mexpr-importance" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-importance-cps" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-naive-mcmc" } simple
 with () using lam. lam. true in
