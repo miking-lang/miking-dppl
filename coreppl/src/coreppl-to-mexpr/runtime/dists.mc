@@ -1,6 +1,7 @@
 -- Runtime support for first-class distributions in coreppl-to-mexpr compiler.
 
 include "math.mc"
+include "seq.mc"
 include "ext/dist-ext.mc"
 
 type Dist a = { sample: () -> a, logObserve: a -> Float }

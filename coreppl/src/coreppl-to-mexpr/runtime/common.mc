@@ -125,7 +125,7 @@ let printSamples : all a. (a -> String) -> [Float] -> [a] -> () =
         let samples = tail samples in
         print (printFun s);
         print " ";
-        printLn (float2string w);
+        print (float2string w); print "\n";
         rec weights samples
     in rec weights samples
 
@@ -140,6 +140,6 @@ let printSamplesOption : all a. (a -> String) -> [Float] -> [Option a] -> () =
         (match s with Some s then print (printFun s)
          else print ".");
         print " ";
-        printLn (float2string w);
+        print (float2string w); print "\n";
         rec weights samples
     in rec weights samples
