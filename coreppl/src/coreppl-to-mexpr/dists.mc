@@ -27,14 +27,16 @@ lang TransformDist = MExprPPL
   | DDirichlet { a = a } -> appf1_ (var_ "distDirichlet") a
   | DUniform { a = a, b = b } -> appf2_ (var_ "distUniform") a b
 
-  -- It may be that certain TyDist annotations remain after compilation. This
-  -- function removes them.
-  -- TODO(dlunde,2022-06-03): Temporary fix, this should be handled in some
-  -- nicer way. The best would be to simply map over all types in the program
-  -- and replace TyDist with the runtime dists defined in runtime/dists.mc
+  -- We need to remove TyDist after transforming to MExpr dists (the new MExpr
+  -- types will be inferred by the type checker)
   sem removeTyDist: Expr -> Expr
   sem removeTyDist =
-  | TmLet body ->
-    TmLet { body with tyBody = tyunknown_ }
-  | expr -> smap_Expr_Expr removeTyDist expr
+  | e ->
+    recursive let stripTyDist: Type -> Type =
+      lam ty.
+        match ty with TyDist _ then tyunknown_
+        else smap_Type_Type stripTyDist ty
+    in
+    let e = smap_Expr_Type stripTyDist e in
+    smap_Expr_Expr removeTyDist e
 end

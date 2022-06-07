@@ -106,13 +106,14 @@ let expOnLogWeights = lam res.
 
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
-let output = lam res. lam names.
-  let names = cons "#" names in
-  let nc = normConstant res in
-  let expVals = expectedValues res nc in
-  let varianceVals = variance res expVals in
-  printStatistics res names nc expVals varianceVals;
-  saveCSV res names "data.csv" expOnLogWeights
+-- NOTE(dlunde,2022-06-07): Does not currently type check
+-- let output = lam res. lam names.
+--   let names = cons "#" names in
+--   let nc = normConstant res in
+--   let expVals = expectedValues res nc in
+--   let varianceVals = variance res expVals in
+--   printStatistics res names nc expVals varianceVals;
+--   saveCSV res names "data.csv" expOnLogWeights
 
 let printSamples : all a. (a -> String) -> [Float] -> [a] -> () =
   lam printFun. lam weights. lam samples.

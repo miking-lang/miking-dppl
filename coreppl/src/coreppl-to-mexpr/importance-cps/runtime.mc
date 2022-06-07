@@ -16,8 +16,7 @@ con End : all a. a -> Stop a
 -- In importance sampling, the state is simply the accumulated weight.
 type State = Ref Float
 
--- TODO Remove, update state in run instead
-let updateWeight = lam v. lam state. modref state (addf (deref state) v)
+let updateWeight = lam weight. lam k. Checkpoint { weight = weight, k = k }
 
 let importance: all a. (State -> Stop a) -> State -> Option a =
   lam model. lam state.

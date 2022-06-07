@@ -6,29 +6,26 @@ include "mexpr/cps.mc"
 lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll
 
   -- CPS
-  sem cpsCont k =
+  sem exprCps k =
   -- Do nothing at assumes or resamples
   | TmLet ({ body = TmAssume _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+    TmLet { t with inexpr = exprCps k t.inexpr }
   | TmLet ({ body = TmResample _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+    TmLet { t with inexpr = exprCps k t.inexpr }
+  | TmLet ({ body = TmDist _ } & t) ->
+    TmLet { t with inexpr = exprCps k t.inexpr }
 
   -- This is where we use the continuation (weight and observe)
   | TmLet { ident = ident, body = TmWeight { weight = weight },
             inexpr = inexpr} & t ->
-    let k = if tailCall t then k else nulam_ ident (cpsCont k inexpr) in
-    conapp_ "Checkpoint" (urecord_ [
-        ("weight", weight),
-        ("k", k)
-      ])
+    let k = if tailCall t then k else nulam_ ident (exprCps k inexpr) in
+    appf2_ (var_ "updateWeight") weight k
 
   | TmLet { ident = ident, body = TmObserve { value = value, dist = dist },
             inexpr = inexpr } & t ->
-    let k = if tailCall t then k else nulam_ ident (cpsCont k inexpr) in
-    conapp_ "Checkpoint" (urecord_ [
-        ("weight", (app_ (recordproj_ "logObserve" dist) value)),
-        ("k", k)
-      ])
+    let k = if tailCall t then k else nulam_ ident (exprCps k inexpr) in
+    let weight = app_ (recordproj_ "logObserve" dist) value in
+    appf2_ (var_ "updateWeight") weight k
 
   sem compile : Expr -> Expr
   sem compile =
@@ -42,12 +39,10 @@ lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + ME
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    let t = removeTyDist t in
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProb t in
-
-    -- Replace dist types with correct types
-    let t = mapPre_Expr_Expr removeTyDist t in
 
     t
 

@@ -1,6 +1,7 @@
 include "mexpr/ast-builder.mc"
 include "mexpr/externals.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/type.mc"
 include "sys.mc"
 
 include "../coreppl.mc"
@@ -48,35 +49,35 @@ let mexprCompile: Options -> Expr -> Expr =
     let prog = typeCheck prog in
     let resTy = tyTm prog in
 
+    -- Symbolize model (ignore free variables and externals)
+    let prog = symbolizeExpr
+      { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
+    in
+
+    -- Apply inference-specific transformation
+    let prog = compile prog in
+
     -- Parse runtime
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
 
     -- Get external definitions from runtime-AST (input to next step)
     let externals = getExternalIds runtime in
 
-    -- Remove duplicate external definitions from model
-    -- TODO Move this later, after the inference-specific compile (needed for CPS)
+    -- Remove duplicate external definitions in model (already included in the
+    -- runtime)
     let prog = removeExternalDefs externals prog in
 
-    -- Symbolize model (ignore free variables)
-    -- TODO Add symbolize option to also _not_ symbolize externals (we need to
-    -- leave externals in the model program in order for CPS to work)
-    let prog = symbolizeAllowFree prog in
-
-    -- Apply inference-specific transformation
-    let prog = compile prog in
+    -- Put model in top-level model function
+    let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
 
     -- Construct record accessible in runtime (currently empty)
     let pre = ulet_ "compileOptions" (urecord_ [
     ]) in
 
-    -- Put model in top-level model function
-    let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
-
     -- Printing function for return type
     let tyPrintFun =
       match resTy with TyInt _ then   (var_ "int2string")
-      else match resTy with TyFloat _ then (var_ "float2string")
+      else match resTy with TyFloat _ then uconst_ (CFloat2string ())
       else match resTy with TyBool _ then (var_ "bool2string")
       else error "Return type cannot be printed"
     in
@@ -88,6 +89,9 @@ let mexprCompile: Options -> Expr -> Expr =
 
     -- Combine runtime, model, and generated post
     let prog = bindall_ [pre,runtime,prog,post] in
+
+    -- Type check the combined program
+    let prog = typeCheck prog in
 
     -- Return complete program
     prog
