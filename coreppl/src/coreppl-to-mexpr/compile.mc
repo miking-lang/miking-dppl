@@ -90,25 +90,11 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Combine runtime, model, and generated post
     let prog = bindall_ [pre,runtime,prog,post] in
 
-    -- Strip all type annotations on lets and lambdas
-    -- NOTE(dlunde,2022-06-08): Temporary solution that does not work in all
-    -- cases. Should not be needed in the future when the type checker can
-    -- handle programs in CPS.
-    -- Temporary function for removing all type annotations on lets and lambdas
-    recursive let removeTypeAnnotations: Expr -> Expr = lam e.
-      let e =
-        match e with TmLam _ | TmRecLets _ | TmLet _ then
-          smap_Expr_Type (lam. tyunknown_) e
-        else e
-      in smap_Expr_Expr removeTypeAnnotations e
-    in
-    let prog = removeTypeAnnotations prog in
-
     -- Type check the combined program
-    let prog = typeCheck prog in
-
-    -- Remove types again, type-checked programs do not currently print well.
-    let prog = removeTypeAnnotations prog in
+    -- TODO(dlunde,2022-06-08): This makes the output program non-parsable
+    -- (should probably be fixed in pprint?), which is why it is turned off by
+    -- default.
+    -- let prog = typeCheck prog in
 
     -- Return complete program
     prog
