@@ -18,7 +18,7 @@ all: build/${cppl_name}
 
 cppl_tmp_file := $(shell mktemp)
 build/${cppl_name}: $(shell find . -name "*.mc")
-	time mi compile coreppl/src/${cppl_name}.mc --typecheck --output ${cppl_tmp_file}
+	time mi compile coreppl/src/${cppl_name}.mc --output ${cppl_tmp_file}
 	mkdir -p build
 	cp ${cppl_tmp_file} build/${cppl_name}
 	rm ${cppl_tmp_file}

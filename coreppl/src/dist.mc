@@ -17,8 +17,8 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
              info: Info }
 
   syn Type =
-  | TyDist {info : Info,
-            ty   : Type}
+  | TyDist { info : Info,
+             ty   : Type }
 
   syn Dist =
   -- Intentionally left blank
@@ -128,6 +128,11 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   sem normalize (k : Expr -> Expr) =
   | TmDist ({ dist = dist } & t) ->
     normalizeDist (lam dist. k (TmDist { t with dist = dist })) dist
+
+  -- CPS
+  sem cpsCont k =
+  | TmLet ({ body = TmDist _ } & t) ->
+    TmLet { t with inexpr = cpsCont k t.inexpr }
 
   -- Type lift
   sem typeLiftDist (env : TypeLiftEnv) =

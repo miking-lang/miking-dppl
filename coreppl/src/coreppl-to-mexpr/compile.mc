@@ -1,6 +1,7 @@
 include "mexpr/ast-builder.mc"
 include "mexpr/externals.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/type.mc"
 include "sys.mc"
 
 include "../coreppl.mc"
@@ -11,6 +12,7 @@ include "../dppl-arg.mc"
 
 -- Inference methods
 include "importance/compile.mc"
+include "importance-cps/compile.mc"
 include "naive-mcmc/compile.mc"
 include "trace-mcmc/compile.mc"
 
@@ -26,7 +28,8 @@ let mexprCompile: Options -> Expr -> Expr =
 
     -- Load runtime and compile function
     let compiler =
-      match options.method with "mexpr-importance" then compilerImportance
+      match      options.method with "mexpr-importance" then compilerImportance
+      else match options.method with "mexpr-importance-cps" then compilerImportanceCPS
       else match options.method with "mexpr-naive-mcmc" then compilerNaiveMCMC
       else match options.method with "mexpr-trace-mcmc" then compilerTraceMCMC
       else
@@ -42,9 +45,20 @@ let mexprCompile: Options -> Expr -> Expr =
       with allowFree = true }
     in
 
-    -- Type check model
-    let prog = typeCheck prog in
-    let resTy = tyTm prog in
+    -- Type check model. NOTE(dlunde,2022-06-09): We do not want the
+    -- annotations added by the type checker, as this may make the printed
+    -- program unparsable. That's why we simply discard the result here (but,
+    -- we first extract the return type!.
+    let tcprog = typeCheck prog in
+    let resTy = tyTm tcprog in
+
+    -- Symbolize model (ignore free variables and externals)
+    let prog = symbolizeExpr
+      { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
+    in
+
+    -- Apply inference-specific transformation
+    let prog = compile prog in
 
     -- Parse runtime
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
@@ -52,27 +66,23 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Get external definitions from runtime-AST (input to next step)
     let externals = getExternalIds runtime in
 
-    -- Remove duplicate external definitions from model
+    -- Remove duplicate external definitions in model (already included in the
+    -- runtime)
     let prog = removeExternalDefs externals prog in
 
-    -- Symbolize model (ignore free variables)
-    let prog = symbolizeAllowFree prog in
-
-    -- Apply inference-specific transformation
-    let prog = compile prog in
+    -- Put model in top-level model function
+    let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
 
     -- Construct record accessible in runtime (currently empty)
     let pre = ulet_ "compileOptions" (urecord_ [
     ]) in
 
-    -- Put model in top-level model function
-    let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
-
     -- Printing function for return type
     let tyPrintFun =
       match resTy with TyInt _ then   (var_ "int2string")
-      else match resTy with TyFloat _ then (var_ "float2string")
+      else match resTy with TyFloat _ then uconst_ (CFloat2string ())
       else match resTy with TyBool _ then (var_ "bool2string")
+      else match resTy with TySeq { ty = TyChar _ } then (ulam_ "x" (var_ "x"))
       else error "Return type cannot be printed"
     in
 
@@ -83,6 +93,11 @@ let mexprCompile: Options -> Expr -> Expr =
 
     -- Combine runtime, model, and generated post
     let prog = bindall_ [pre,runtime,prog,post] in
+
+    -- Type check the combined program. NOTE(dlunde,2022-06-09): We do not want
+    -- the annotations added by the type checker, as this may make the printed
+    -- program unparsable. That's why we simply discard the result here.
+    typeCheck prog;
 
     -- Return complete program
     prog
@@ -100,6 +115,8 @@ x
 
 -- Simple tests that ensure compilation throws no errors
 utest mexprCompile {default with method = "mexpr-importance" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-importance-cps" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-naive-mcmc" } simple
 with () using lam. lam. true in
