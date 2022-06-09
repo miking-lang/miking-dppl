@@ -59,7 +59,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
         info = x.info
       }
 
-  sem mInvocation: Decl -> Option Expr
+  sem mInvocation: DeclTppl -> Option Expr
   sem mInvocation = 
 
   | _ -> None ()
@@ -160,22 +160,37 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
     info = a.info
   }
 
+  | WeightStmtTppl a ->
+  lam cont. TmLet {
+    ident = nameNoSym "foo", 
+    tyBody = tyunknown_, 
+    body =  TmWeight {
+      weight = compileExprTppl a.val,
+      ty = tyunknown_,
+      info = a.info
+    },
+    inexpr = cont,
+    ty = tyunknown_,
+    info = a.info
+  }
+
   /--
   To avoid code duplication.
   Intuition: compiling with continuations
   Instead of 
     a; cont 
   we do
-    let c = lam x. cont a in
+    let c = lam x:(). cont in
     a; c()
   
   Here c corresponds to contF.
   --/
+  -- TODO for Daniel: have C compiler handle f()
   | IfStmtTppl a ->
   lam cont.
   let contName = nameSym "if-cont" in
-  let contF = ulam_ "" cont in
-  let cont: Expr = app_ (nvar_ contName) unit_ in
+  let contF = lam_ "" tyint_ cont in -- continuation function
+  let cont: Expr = withInfo a.info (app_ (nvar_ contName) (int_ 0)) in
     TmLet {
       ident = contName,
       body = contF,
@@ -216,9 +231,58 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
       frozen = false 
     }
 
+  | RealExprTppl r ->
+    use FloatAst in
+    TmConst {
+      val = CFloat { val = r.val.v },
+      ty = tyunknown_,
+      info = r.info
+    }
+
 end
    
 mexpr
+
+-- helper to parse a Miking src with input data
+let bootParse = lam data.
+  use BootParser in
+    parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false} data
+in
+
+-- helper to parse a TreePPL src with the program
+let treeParse = lam filename.
+  let content = readFile filename in
+    use TreePPLAst in
+      (parseTreePPLExn filename content)
+in
+
+-- helper to test
+let testString = lam input. lam file.
+  use TreePPLCompile in
+    let corePplAst: Expr = compile input file in
+  (mexprPPLToString corePplAst)
+in
+
+-- test the flip example
+let testCode = treeParse "models/flip/flip.tppl" in
+let testInput = bootParse "models/flip/data.mc" in
+utest testString testInput testCode  with strJoin "\n" [
+  "recursive",
+  "  let flip =",
+  "    lam p: Float.",
+  "      let e =",
+  "        assume",
+  "          (Bernoulli",
+  "             p)",
+  "      in",
+  "      e",
+  "in",
+  "let p =",
+  "  0.5",
+  "in",
+  "flip",
+  "  p"
+] using eqString in
 
 match argv with ![_, _, _] then
   printLn "-- Error, arguments";
@@ -234,21 +298,13 @@ match parseTreePPLExn filename content with  file in
 
 use TreePPLCompile in
   let corePplAst: Expr = compile input file in
-  let default = {
-    method = "",
-    particles = 5000,
-    resample = "manual",
-    printModel = false,
-    printMCore = false,
-    exitBefore = false,
-    transform = false,
-    printSamples = true
-  }
-  --  TODO(vsenderov,2022-05-10): Maybe parse from the command line
-  in   
+  --  TODO(vsenderov,2022-05-10): Maybe parse from the command line  
   let outfile = "out.cu" in
+  let options = {default with method = "rootppl-smc"} in
   let prog: Expr = typeCheck corePplAst in
-  writeFile outfile (printCompiledRPProg (rootPPLCompile {default with method = "rootppl-smc"} prog));
+  --let prog = corePplAst in
+  writeFile outfile (printCompiledRPProg (rootPPLCompile options prog));
+  -- mexprCompile backend 
   print (join ["RootPPL output written.\n",
    "To get an executable, compile with \n\n  rootppl --stack-size 10000 ", outfile, "\n\n"]);
   use MExprPPL in 

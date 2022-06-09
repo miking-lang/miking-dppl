@@ -161,10 +161,10 @@ prod Assume: StmtTppl = "assume" randomVar:LName "~" dist:ExprTppl ";"
 prod Assign: StmtTppl = "let" var:LName "=" val:ExprTppl ";"
 --prod Observe: StmtTppl = "observe" value:ExprTppl "~" distribution:UName "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
 prod Observe: StmtTppl = "observe" value:ExprTppl "~" dist:ExprTppl ";"
-prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl+ "}" ("else" "{" ifFalseStmts:StmtTppl+ "}")?
+prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl* "}" ("else" "{" ifFalseStmts:StmtTppl* "}")?
 prod Weight: StmtTppl = "weight" "(" value:ExprTppl ")" ";"?
 prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl+ "}"
-prod Return: StmtTppl = "return" "(" return:ExprTppl? ")" ";"
+prod Return: StmtTppl = "return" "(" return:ExprTppl? ")" ";"?
 
 
 

@@ -1,0 +1,29 @@
+model function iftest(p: Real) {
+  assume test1 ~ Bernoulli(p);
+  assume test2 ~ Bernoulli(p);
+  
+  // three possibilities
+  // 1 or 2 and 4 or 3 and 4
+  if test1 {
+     if test2 {
+     	//weight(1.0);
+     	assume case1 ~ Bernoulli(p);
+	return(case1);
+     }
+     else {
+        assume case2 ~ Bernoulli(p);
+     }
+  }
+  else {
+    assume case3 ~ Bernoulli(p);
+  }
+  
+  assume case4 ~ Bernoulli(p);
+  return(case4)
+}
+
+
+function flip(p: Real): Bool {
+    assume e ~ Bernoulli(p);
+    return(e);
+}
