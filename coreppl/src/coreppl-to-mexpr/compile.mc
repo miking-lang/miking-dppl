@@ -45,9 +45,12 @@ let mexprCompile: Options -> Expr -> Expr =
       with allowFree = true }
     in
 
-    -- Type check model
-    let prog = typeCheck prog in
-    let resTy = tyTm prog in
+    -- Type check model. NOTE(dlunde,2022-06-09): We do not want the
+    -- annotations added by the type checker, as this may make the printed
+    -- program unparsable. That's why we simply discard the result here (but,
+    -- we first extract the return type!.
+    let tcprog = typeCheck prog in
+    let resTy = tyTm tcprog in
 
     -- Symbolize model (ignore free variables and externals)
     let prog = symbolizeExpr
@@ -79,6 +82,7 @@ let mexprCompile: Options -> Expr -> Expr =
       match resTy with TyInt _ then   (var_ "int2string")
       else match resTy with TyFloat _ then uconst_ (CFloat2string ())
       else match resTy with TyBool _ then (var_ "bool2string")
+      else match resTy with TySeq { ty = TyChar _ } then (ulam_ "x" (var_ "x"))
       else error "Return type cannot be printed"
     in
 
@@ -90,11 +94,10 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Combine runtime, model, and generated post
     let prog = bindall_ [pre,runtime,prog,post] in
 
-    -- Type check the combined program
-    -- TODO(dlunde,2022-06-08): This makes the output program non-parsable
-    -- (should probably be fixed in pprint?), which is why it is turned off by
-    -- default.
-    -- let prog = typeCheck prog in
+    -- Type check the combined program. NOTE(dlunde,2022-06-09): We do not want
+    -- the annotations added by the type checker, as this may make the printed
+    -- program unparsable. That's why we simply discard the result here.
+    typeCheck prog;
 
     -- Return complete program
     prog

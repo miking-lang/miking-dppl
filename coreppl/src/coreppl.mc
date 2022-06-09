@@ -251,10 +251,9 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   | TmObserve t ->
     let value = typeCheckExpr env t.value in
     let dist = typeCheckExpr env t.dist in
-    let tyValue = newvar env.currentLvl t.info in
     let tyDistRes = newvar env.currentLvl t.info in
     unify [t.info] env (tyTm dist) (TyDist { info = t.info, ty = tyDistRes });
-    unify [t.info] env tyValue tyDistRes;
+    unify [t.info] env (tyTm value) tyDistRes;
     TmObserve {{{ t with value = value }
                     with dist = dist }
                     with ty = tyWithInfo t.info tyunit_ }

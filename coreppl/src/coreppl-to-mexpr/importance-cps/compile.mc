@@ -18,14 +18,16 @@ lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + ME
   -- This is where we use the continuation (weight and observe)
   | TmLet { ident = ident, body = TmWeight { weight = weight },
             inexpr = inexpr} & t ->
-    let k = if tailCall t then k else nulam_ ident (exprCps k inexpr) in
-    appf2_ (var_ "updateWeight") weight k
+    let i = withInfo (infoTm t) in
+    let k = if tailCall t then k else i (nulam_ ident (exprCps k inexpr)) in
+    i (appf2_ (i (var_ "updateWeight")) weight k)
 
   | TmLet { ident = ident, body = TmObserve { value = value, dist = dist },
             inexpr = inexpr } & t ->
+    let i = withInfo (infoTm t) in
     let k = if tailCall t then k else nulam_ ident (exprCps k inexpr) in
-    let weight = app_ (recordproj_ "logObserve" dist) value in
-    appf2_ (var_ "updateWeight") weight k
+    let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
+    i (appf2_ (i (var_ "updateWeight")) weight k)
 
   sem compile : Expr -> Expr
   sem compile =
