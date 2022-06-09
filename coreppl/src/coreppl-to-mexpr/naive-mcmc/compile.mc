@@ -32,6 +32,7 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist
     let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
     i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
   | TmWeight t ->
+    let i = withInfo t.info in
     i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
   | TmResample t -> withInfo t.info unit_
   | t -> t
