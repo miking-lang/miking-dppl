@@ -49,7 +49,9 @@ lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + ME
     t
 
   sem transformProb =
-  | TmAssume t -> withInfo t.info (app_ (recordproj_ "sample" t.dist) unit_)
+  | TmAssume t ->
+    let i = withInfo t.info in
+    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
   | TmResample t -> withInfo t.info unit_
 
   -- Should already have been removed by CPS!

@@ -19,16 +19,20 @@ lang MExprPPLImportance = MExprPPL + Resample + TransformDist
     t
 
   sem transformProb =
-  | TmAssume t -> withInfo t.info (app_ (recordproj_ "sample" t.dist) unit_)
+  | TmAssume t ->
+    let i = withInfo t.info in
+    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
 
   -- NOTE(dlunde,2022-05-16): Note that we cannot stop immediately when the
   -- weight becomes 0 (-inf in log-space). For this, we need CPS, PCFGs, or
   -- maybe some type of exception handler.
   | TmObserve t ->
-    let weight = withInfo t.info (app_ (recordproj_ "logObserve" t.dist) t.value) in
-    withInfo t.info (appf2_ (var_ "updateWeight") weight (var_ "state"))
+    let i = withInfo t.info in
+    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+    i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
   | TmWeight t ->
-    withInfo t.info (appf2_ (var_ "updateWeight") t.weight (var_ "state"))
+    let i = withInfo t.info in
+    i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
   | TmResample t -> withInfo t.info unit_
   | t -> t
 
