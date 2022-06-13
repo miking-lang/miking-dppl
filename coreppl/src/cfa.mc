@@ -26,13 +26,17 @@ lang PPLCFA = MExprCFA + MExprPPL
     ]
   sem generateStochConstraints : Expr -> [Constraint]
   sem generateAlignConstraints : Expr -> [Constraint]
+  sem generateCheckpointInitConstraints : Expr -> [Constraint]
+  sem generateCheckpointConstraints : Expr -> [Constraint]
   sem cgfs : [MCGF] -> [Expr -> [Constraint]]
   sem cgfs =
   | mcgfs -> [
       generateConstraints,
       generateConstraintsMatch mcgfs,
       generateStochConstraints,
-      generateAlignConstraints
+      generateAlignConstraints,
+      generateCheckpointInitConstraints,
+      generateCheckpointConstraints
     ]
   ----------------------------------------------------------------------------
 
@@ -194,7 +198,7 @@ lang AlignCFA = StochCFA
   sem cmpAbsValH =
   | (AVUnaligned _, AVUnaligned _) -> 0
 
-  -- Alignment handling is custom (should not propagate as part of regular
+  -- Alignment CFA is custom (should not propagate as part of regular
   -- direct constraints)
   sem isDirect =
   | AVUnaligned _ -> false
@@ -284,7 +288,7 @@ lang AlignCFA = StochCFA
       in
       cons (CstrAlign { id = ident, names = innerNames }) cstrs
     else errorSingle [infoTm t.target] "Not a TmVar in match target"
-  | TmLet { ident = ident, body = TmApp app} ->
+  | TmLet { ident = ident, body = TmApp app } ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
         [ CstrAlignApp { id = ident, lhs = l.ident },
@@ -295,7 +299,74 @@ lang AlignCFA = StochCFA
 
 end
 
-lang MExprPPLCFA = StochCFA + AlignCFA
+lang CheckpointCFA = PPLCFA
+
+  syn AbsVal =
+  | AVCheckpoint {}
+
+  sem absValToString (env: PprintEnv) =
+  | AVCheckpoint {} -> (env, "checkpoint")
+
+  sem cmpAbsValH =
+  | (AVCheckpoint _, AVCheckpoint _) -> 0
+
+  -- Checkpoint CFA is custom (should not propagate as part of regular
+  -- direct constraints)
+  sem isDirect =
+  | AVCheckpoint _ -> false
+
+  syn Constraint =
+  -- {lam x. b} ⊆ lhs ⇒ ({checkpoint} ⊆ x ⇒ {checkpoint} ⊆ res)
+  | CstrCheckpointLamApp { lhs: Name, res: Name }
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrCheckpointLamApp r & cstr -> initConstraintName r.lhs graph cstr
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrCheckpointLamApp { lhs = lhs, res = res } ->
+    match update.1 with AVLam { ident = x } then
+      initConstraint graph (cstrCheckpointDirect x res)
+    else graph
+
+  sem constraintToString (env: PprintEnv) =
+  | CstrCheckpointLamApp { lhs = lhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
+
+  -- {checkpoint} ⊆ lhs ⇒ {checkpoint} ⊆ rhs
+  sem cstrCheckpointDirect (lhs: Name) =
+  | rhs -> CstrDirectAv {
+      lhs = lhs, lhsav = AVCheckpoint {}, rhs = rhs, rhsav = AVCheckpoint {}
+    }
+
+  sem checkpoint: Expr -> Bool
+  sem checkpoint =
+  | _ -> false
+
+  sem generateCheckpointInitConstraints  =
+  | _ -> []
+  | TmLet { ident = ident, body = b } ->
+    if checkpoint b then [ CstrInit { lhs = AVCheckpoint {}, rhs = ident } ]
+    else []
+
+  sem generateCheckpointConstraints  =
+  | _ -> []
+  | TmLet { ident = ident, body = TmLam t } ->
+    map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprNames t.body)
+  | TmLet { ident = ident, body = TmMatch t } ->
+    let innerNames = concat (exprNames t.thn) (exprNames t.els) in
+    map (lam lhs. cstrCheckpointDirect lhs ident) innerNames
+  | TmLet { ident = ident, body = TmApp app } ->
+    match app.lhs with TmVar l then
+      match app.rhs with TmVar r then
+        [ CstrCheckpointLamApp { lhs = l.ident, res = ident } ]
+      else errorSingle [infoTm app.rhs] "Not a TmVar in application"
+    else errorSingle [infoTm app.lhs] "Not a TmVar in application"
+
+end
+
+lang MExprPPLCFA = StochCFA + AlignCFA + CheckpointCFA
 end
 
 let extractUnaligned = use MExprPPLCFA in
@@ -306,7 +377,20 @@ let extractUnaligned = use MExprPPLCFA in
         else acc
       ) (setEmpty nameCmp) cfaRes.data
 
+let extractCheckpoint = use MExprPPLCFA in
+  lam cfaRes: CFAGraph.
+    mapFoldWithKey (lam acc: Set Name. lam k: Name. lam v: Set AbsVal.
+        if setAny (lam av. match av with AVCheckpoint _ then true else false) v
+        then setInsert k acc
+        else acc
+      ) (setEmpty nameCmp) cfaRes.data
+
 lang Test = MExprPPLCFA + MExprANFAll + DPPLParser
+
+  -- Use weight as checkpoint for tests
+  sem checkpoint =
+  | TmWeight _ -> true
+
 end
 
 -----------
@@ -359,7 +443,7 @@ let _test: Bool -> Expr -> [String] -> [(String,Bool)] =
     ) vars
 in
 
--- Custom equality function for testing stochastic value flow only
+-- Custom equality function for testing
 let eqTest = eqSeq (lam t1:(String,Bool). lam t2:(String,Bool).
   if eqString t1.0 t2.0 then eqBool t1.1 t2.1
   else false
@@ -613,7 +697,6 @@ utest _test false t ["t1", "t2", "res"] with [
   ("res", true)
 ] using eqTest in
 
-
 -- Test in `models/coreppl/crbd/crbd-unaligned.mc`
 let t = symbolizeExpr symEnvEmpty
           (parseMCorePPLFile "coreppl/models/crbd/crbd-unaligned.mc") in
@@ -623,6 +706,34 @@ utest _test false t ["w1","w2","w3"] with [
   ("w3", true)
 ]
 using eqTest in
+
+----------------------
+-- CHECKPOINT TESTS --
+----------------------
+
+let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    match _testBase env tANF with (env, cfaRes) in
+    let aRes: Set Name = extractCheckpoint cfaRes in
+    let sSet: Set String = setFold
+      (lam acc. lam n. setInsert (nameGetStr n) acc)
+      (setEmpty cmpString) aRes in
+    map (lam var: String. (var, setMem var sSet)) vars
+in
+
+let t = _parse "
+  let a = weight 1.0 in
+  let b = assume (Bernoulli 0.5) in
+  let c = addi 1 2 in
+  c
+------------------------" in
+utest _test false t ["a","b","c"] with [
+  ("a", true),
+  ("b", false),
+  ("c", false)
+] using eqTest in
 
 ()
 
