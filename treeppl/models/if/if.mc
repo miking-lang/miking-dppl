@@ -15,7 +15,7 @@ recursive
           (Bernoulli
              p)
       in
-      let if-cont =
+      let ifCont =
         lam #var"": Int.
           let case4 =
             assume
@@ -29,9 +29,9 @@ recursive
       with
         true
       then
-        let if-cont1 =
+        let ifCont1 =
           lam #var"": Int.
-            if-cont
+            ifCont
               0
         in
         match
@@ -51,7 +51,7 @@ recursive
               (Bernoulli
                  p)
           in
-          if-cont1
+          ifCont1
             0
       else
         let case3 =
@@ -59,7 +59,7 @@ recursive
             (Bernoulli
                p)
         in
-        if-cont
+        ifCont
           0
   let flip =
     lam p: Float.
@@ -75,5 +75,3 @@ let p =
 in
 iftest
   p
-
-

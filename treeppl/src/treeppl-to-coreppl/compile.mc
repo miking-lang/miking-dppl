@@ -14,7 +14,6 @@ include "treeppl-ast.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
-include "mexpr/eq.mc" -- for eqExpr
 include "sys.mc"
 
 include "../../../coreppl/src/coreppl-to-mexpr/compile.mc"
@@ -167,7 +166,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
   -- TODO for Daniel: have C compiler handle f()
   | IfStmtTppl a ->
   lam cont.
-  let contName = nameSym "if-cont" in
+  let contName = nameSym "ifCont" in
   let contF = lam_ "" tyint_ cont in -- continuation function
   let cont: Expr = withInfo a.info (app_ (nvar_ contName) (int_ 0)) in
     TmLet {
@@ -237,7 +236,8 @@ let parseTreePPLFile = lam filename.
 let compileTreePPLToString = lam input:Expr. lam program:FileTppl.
   use TreePPLCompile in
     let corePplAst: Expr = compile input program in
-      (mexprPPLToString corePplAst)
+      use MExprPPL in
+        (mexprPPLToString corePplAst)
 
 -- Compiles a TreePPL program and input to a CorePPL AST
 let compileTreePPL = lam input:Expr. lam program:FileTppl.
@@ -252,23 +252,19 @@ let testInput = parseMCoreFile "models/flip/data.mc" in
 let testMCoreProgram = parseMCorePPLFile "models/flip/flip.mc" in
 
 -- Doesn't work TODO
--- use MExprEq in
--- utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
--- instead do a silly thing:
 use MExprPPL in
-utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
+utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
 
 -- test the flip example, should iterate through the files instead
 let testTpplProgram = parseTreePPLFile "models/if/if.tppl" in
 let testInput = parseMCoreFile "models/if/data.mc" in
 let testMCoreProgram = parseMCorePPLFile "models/if/if.mc" in
 
--- Doesn't work TODO 
--- use MExprEq in
--- utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
--- instead do a silly thing:
 use MExprPPL in
-utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
+utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+-- If you want to print out the strings, use the following:
+-- use MExprPPL in
+--utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
 
 ()
 

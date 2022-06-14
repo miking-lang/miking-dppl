@@ -21,9 +21,3 @@ model function iftest(p: Real) {
   assume case4 ~ Bernoulli(p);
   return(case4)
 }
-
-
-function flip(p: Real): Bool {
-    assume e ~ Bernoulli(p);
-    return(e);
-}
