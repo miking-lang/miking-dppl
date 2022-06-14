@@ -1,47 +1,26 @@
 /-
-TreePPL Compiler
-Authors: Viktor S, Viktor P, Daniel L
-Dates: 2022
+TreePPL Compiler and Unit Tests
+===============================
 
-Hello!
+Viktor Senderov, Daniel Lundén, and Viktor Palmkvist (2022)
 
-This is the TreePPL compiler (part of miking-dppl).
-
-Here is the compilation pipeline:
-
-  example.tppl 
-    --parse--> (part of Viktor's Tool)
-  TreePPL AST 
-    --analysis--> (part of this compiler)
-  Side effects and enriched TreePPL AST 
-    --compile TPPL--> (part of this compiler)
-  CorePPL AST + Variant Record Projection (another syn Expr...) 
-    --type checker--> 
-  CorePPL AST + Variant Record Projection with types 
-    --desugar--> 
-  CorePPL AST 
-    --CorePPL compiler-->
-  RootPPL CU file 
-    --rootppl-->
-  RootPPL program 
-
-To try this compiler run:
-
-  mi compile src/tpplc.mc
-  ./tpplc program.tppl data.mc
-
-You can install install the compiler with `make install` from the `miking-dppl` directory.
+Unit tests available via:
   
-Some inspiration is drawn from the CorePPL C compiler.
+  mi compile models/treeppl-to-coreppl/compile.mc --test
+
 -/
 
 include "treeppl-ast.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
+include "mexpr/eq.mc" -- for eqExpr
+include "sys.mc"
 
-include "../../coreppl/src/coreppl-to-rootppl/compile.mc"
-include "../../coreppl/src/coreppl.mc" -- TODO is this the best way?
+include "../../../coreppl/src/coreppl-to-mexpr/compile.mc"
+include "../../../coreppl/src/coreppl-to-rootppl/compile.mc"
+include "../../../coreppl/src/coreppl.mc"
+include "../../../coreppl/src/parser.mc"
 
 lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst 
   sem compile: Expr -> FileTppl -> Expr
@@ -165,7 +144,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
     ident = nameNoSym "foo", 
     tyBody = tyunknown_, 
     body =  TmWeight {
-      weight = compileExprTppl a.val,
+      weight = compileExprTppl a.value,
       ty = tyunknown_,
       info = a.info
     },
@@ -240,72 +219,56 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
     }
 
 end
-   
+
+-- Version of parseMCoreFile needed to get input data into the program
+let parseMCoreFile = lam filename.
+  use BootParser in
+    parseMCoreFile
+      {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
+        filename
+
+-- Parses a TreePPL file
+let parseTreePPLFile = lam filename.
+  let content = readFile filename in
+    use TreePPLAst in (parseTreePPLExn filename content)
+
+-- Compiles a TreePPL program and input to a CorePPL string
+
+let compileTreePPLToString = lam input:Expr. lam program:FileTppl.
+  use TreePPLCompile in
+    let corePplAst: Expr = compile input program in
+      (mexprPPLToString corePplAst)
+
+-- Compiles a TreePPL program and input to a CorePPL AST
+let compileTreePPL = lam input:Expr. lam program:FileTppl.
+  use TreePPLCompile in
+    let corePplAst: Expr = compile input program in corePplAst
+
 mexpr
 
--- helper to parse a Miking src with input data
-let bootParse = lam data.
-  use BootParser in
-    parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false} data
-in
+-- test the flip example, TODO should iterate through the files instead
+let testTpplProgram = parseTreePPLFile "models/flip/flip.tppl" in
+let testInput = parseMCoreFile "models/flip/data.mc" in
+let testMCoreProgram = parseMCorePPLFile "models/flip/flip.mc" in
 
--- helper to parse a TreePPL src with the program
-let treeParse = lam filename.
-  let content = readFile filename in
-    use TreePPLAst in
-      (parseTreePPLExn filename content)
-in
+-- Doesn't work TODO
+-- use MExprEq in
+-- utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+-- instead do a silly thing:
+use MExprPPL in
+utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
 
--- helper to test
-let testString = lam input. lam file.
-  use TreePPLCompile in
-    let corePplAst: Expr = compile input file in
-  (mexprPPLToString corePplAst)
-in
+-- test the flip example, should iterate through the files instead
+let testTpplProgram = parseTreePPLFile "models/if/if.tppl" in
+let testInput = parseMCoreFile "models/if/data.mc" in
+let testMCoreProgram = parseMCorePPLFile "models/if/if.mc" in
 
--- test the flip example
-let testCode = treeParse "models/flip/flip.tppl" in
-let testInput = bootParse "models/flip/data.mc" in
-utest testString testInput testCode  with strJoin "\n" [
-  "recursive",
-  "  let flip =",
-  "    lam p: Float.",
-  "      let e =",
-  "        assume",
-  "          (Bernoulli",
-  "             p)",
-  "      in",
-  "      e",
-  "in",
-  "let p =",
-  "  0.5",
-  "in",
-  "flip",
-  "  p"
-] using eqString in
+-- Doesn't work TODO 
+-- use MExprEq in
+-- utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+-- instead do a silly thing:
+use MExprPPL in
+utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
 
-match argv with ![_, _, _] then
-  printLn "-- Error, arguments";
-  printLn "-- Correct: tpplc program.tppl data.mc";
-  exit 0
-else match argv with [_, filename, data] in
-use BootParser in
-let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
-  data in
-let content = readFile filename in
-use TreePPLAst in
-match parseTreePPLExn filename content with  file in
+()
 
-use TreePPLCompile in
-  let corePplAst: Expr = compile input file in
-  --  TODO(vsenderov,2022-05-10): Maybe parse from the command line  
-  let outfile = "out.cu" in
-  let options = {default with method = "rootppl-smc"} in
-  let prog: Expr = typeCheck corePplAst in
-  --let prog = corePplAst in
-  writeFile outfile (printCompiledRPProg (rootPPLCompile options prog));
-  -- mexprCompile backend 
-  print (join ["RootPPL output written.\n",
-   "To get an executable, compile with \n\n  rootppl --stack-size 10000 ", outfile, "\n\n"]);
-  use MExprPPL in 
-  print (concat (mexprPPLToString corePplAst) "\n\n")
