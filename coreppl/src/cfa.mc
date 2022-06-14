@@ -5,6 +5,9 @@ include "parser.mc"
 
 include "mexpr/cfa.mc"
 
+
+-- TODO Handle TmExt correctly (as constants)
+
 lang PPLCFA = MExprCFA + MExprPPL
 
   type MCGF = Name -> Name -> Pat -> [Constraint]
@@ -279,6 +282,12 @@ lang AlignCFA = PPLCFA + StochCFA
   | _ -> []
   | TmLet { ident = ident, body = TmLam t } ->
     [ CstrAlign { id = t.ident, names = exprNames t.body} ]
+  | TmRecLets { bindings = bindings } ->
+    map (lam b: RecLetBinding.
+      match b.body with TmLam t then
+        CstrAlign { id = t.ident, names = exprNames t.body}
+      else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
+    ) bindings
   | TmLet { ident = ident, body = TmMatch t } ->
     let innerNames = concat (exprNames t.thn) (exprNames t.els) in
     match t.target with TmVar tv then
@@ -408,6 +417,16 @@ lang CheckpointCFA = PPLCFA
     -- If the lambda evaluates a checkpoint, the ident is also said to contain
     -- a checkpoint (for symmetry with how constant functions are handled).
     cons (cstrCheckpointDirect t.ident ident) cstrs
+  | TmRecLets { bindings = bindings } ->
+    join (map (lam b: RecLetBinding.
+      match b.body with TmLam t then
+        -- Same as for lambda
+        let cstrs =
+          map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprNames t.body)
+        in
+        cons (cstrCheckpointDirect t.ident b.ident) cstrs
+      else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
+    ) bindings)
   | TmLet { ident = ident, body = TmMatch t } ->
     -- If any expression in one of the match branches evaluates a checkpoint, the
     -- match itself evaluates a checkpoint
@@ -642,9 +661,38 @@ utest _test false t ["t", "res"] with [
   ("res",true)
 ] using eqTest in
 
+-- Stochastic externals
+-- TODO Currently fails! Externals are not handled correctly
+let t = _parse "
+  external log : Float -> Float in
+  let x = log (assume (Beta 2.0 2.0)) in
+  x
+------------------------" in
+utest _test false t ["x"] with [
+  ("x", true)
+] using eqTest in
+
+-- Stochastic flow over names
+let t = _parse "
+  let res =
+    match assume (Bernoulli 0.5) with true then
+      let t = 1 in
+      t
+    else
+      2
+  in
+  res
+------------------------" in
+utest _test false t ["t", "res"] with [
+  ("t", false),
+  ("res",true)
+] using eqTest in
+
 ---------------------
 -- ALIGNMENT TESTS --
 ---------------------
+
+-- TODO Add missing tests for recursive lets!
 
 let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
   lam debug. lam t. lam vars.
