@@ -13,7 +13,7 @@ lang PPLCFA = MExprCFA + MExprPPL
   -- TODO(dlunde,2022-05-30): It would be nice if we could achieve the
   -- below in a more modular way (e.g., alignment part of analysis is defined
   -- in the alignment fragment, stochastic part in the stochastic fragment,
-  -- etc.)
+  -- etc.).
   ----------------------------------------------------------------------------
   sem generateStochMatchResConstraints : MCGF
   sem generateStochMatchConstraints : MCGF
@@ -45,7 +45,6 @@ lang PPLCFA = MExprCFA + MExprPPL
   sem exprNames: Expr -> [Name]
   sem exprNames =
   | t -> exprNamesAcc [] t
-
   sem exprNamesAcc: [Name] -> Expr -> [Name]
   sem exprNamesAcc acc =
   | TmVar t -> acc
@@ -156,7 +155,9 @@ lang StochCFA = PPLCFA
   | TmLet { ident = ident, body = TmConst { val = c } } ->
     let arity = constArity c in
     if eqi arity 0 then []
-    else [ CstrInit { lhs = AVConst { const = c, args = []}, rhs = ident } ]
+    else [
+      CstrInit { lhs = AVConst { id = ident, const = c, args = []}, rhs = ident }
+    ]
   | TmLet { ident = ident, body = TmApp app} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then [
@@ -187,7 +188,7 @@ lang StochCFA = PPLCFA
 
 end
 
-lang AlignCFA = StochCFA
+lang AlignCFA = PPLCFA + StochCFA
 
   syn AbsVal =
   | AVUnaligned {}
@@ -318,14 +319,45 @@ lang CheckpointCFA = PPLCFA
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ ({checkpoint} ⊆ x ⇒ {checkpoint} ⊆ res)
   | CstrCheckpointLamApp { lhs: Name, res: Name }
+  -- const<id> ⊆ lhs ⇒ ({checkpoint} ⊆ id ⇒ {checkpoint} ⊆ res)
+  | CstrCheckpointConstApp { lhs: Name, res: Name }
+  -- {checkpoint} ⊆ res ⇒
+  --   ({lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
+  --   AND const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id)
+  | CstrCheckpointAppReverse { res: Name, lhs: Name }
+  -- {lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
+  | CstrCheckpointLam { lhs: Name }
+  -- const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id
+  | CstrCheckpointConst { lhs: Name }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrCheckpointLamApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrCheckpointConstApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrCheckpointAppReverse r & cstr -> initConstraintName r.res graph cstr
+  | CstrCheckpointLam r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrCheckpointConst r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrCheckpointLamApp { lhs = lhs, res = res } ->
     match update.1 with AVLam { ident = x } then
       initConstraint graph (cstrCheckpointDirect x res)
+    else graph
+  | CstrCheckpointConstApp { lhs = lhs, res = res } ->
+    match update.1 with AVConst { id = id } then
+      initConstraint graph (cstrCheckpointDirect id res)
+    else graph
+  | CstrCheckpointAppReverse { res = res, lhs = lhs } ->
+    match update.1 with AVCheckpoint _ then
+      let graph = initConstraint graph (CstrCheckpointLam { lhs = lhs }) in
+      initConstraint graph (CstrCheckpointConst { lhs = lhs })
+    else graph
+  | CstrCheckpointLam { lhs = lhs } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      addData graph (AVCheckpoint {}) x
+    else graph
+  | CstrCheckpointConst { lhs = lhs } ->
+    match update.1 with AVConst { id = id } then
+      addData graph (AVCheckpoint {}) id
     else graph
 
   sem constraintToString (env: PprintEnv) =
@@ -333,6 +365,21 @@ lang CheckpointCFA = PPLCFA
     match pprintVarName env lhs with (env,lhs) in
     match pprintVarName env res with (env,res) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
+  | CstrCheckpointConstApp { lhs = lhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [ "{const<>x<>} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
+  | CstrCheckpointAppReverse { res = res, lhs = lhs } ->
+    match pprintVarName env res with (env,res) in
+    match constraintToString env (CstrCheckpointLam { lhs = lhs }) with (env,c1) in
+    match constraintToString env (CstrCheckpointConst { lhs = lhs }) with (env,c2) in
+    (env, join [ "{checkpoint} ⊆ ", res, " ⇒ ( ", c1, " AND ", c2, ")" ])
+  | CstrCheckpointLam { lhs = lhs } ->
+    match pprintVarName env lhs with (env,lhs) in
+    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x<" ])
+  | CstrCheckpointConst { lhs = lhs } ->
+    match pprintVarName env lhs with (env,lhs) in
+    (env, join [ "const<>id<> ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >id<" ])
 
   -- {checkpoint} ⊆ lhs ⇒ {checkpoint} ⊆ rhs
   sem cstrCheckpointDirect (lhs: Name) =
@@ -353,14 +400,27 @@ lang CheckpointCFA = PPLCFA
   sem generateCheckpointConstraints  =
   | _ -> []
   | TmLet { ident = ident, body = TmLam t } ->
-    map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprNames t.body)
+    -- If any expression in the body of the lambda evaluates a checkpoint, the
+    -- lambda itself evaluates a checkpoint
+    let cstrs =
+      map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprNames t.body)
+    in
+    -- If the lambda evaluates a checkpoint, the ident is also said to contain
+    -- a checkpoint (for symmetry with how constant functions are handled).
+    cons (cstrCheckpointDirect t.ident ident) cstrs
   | TmLet { ident = ident, body = TmMatch t } ->
+    -- If any expression in one of the match branches evaluates a checkpoint, the
+    -- match itself evaluates a checkpoint
     let innerNames = concat (exprNames t.thn) (exprNames t.els) in
     map (lam lhs. cstrCheckpointDirect lhs ident) innerNames
   | TmLet { ident = ident, body = TmApp app } ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
-        [ CstrCheckpointLamApp { lhs = l.ident, res = ident } ]
+        [
+          CstrCheckpointLamApp { lhs = l.ident, res = ident },
+          CstrCheckpointConstApp { lhs = l.ident, res = ident },
+          CstrCheckpointAppReverse { res = ident, lhs = l.ident }
+        ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
@@ -733,6 +793,94 @@ utest _test false t ["a","b","c"] with [
   ("a", true),
   ("b", false),
   ("c", false)
+] using eqTest in
+
+let t = _parse "
+  let f = (lam x.
+    let a = weight 1.0 in
+    let b = assume (Bernoulli 0.5) in
+    let c = addi 1 2 in
+    c) in
+  let g = (lam y.
+    let a2 = assume (Bernoulli 0.5) in
+    let b2 = addi 1 2 in
+    b2) in
+  let d = f 1 in
+  let e = g 1 in
+  e
+------------------------" in
+utest _test false t ["f","x","a","b","y","a2","b2","c","d","e"] with [
+  ("f", true),
+  ("x", true),
+  ("a", true),
+  ("b", false),
+  ("y", false),
+  ("a2", false),
+  ("b2", false),
+  ("c", false),
+  ("d", true),
+  ("e", false)
+] using eqTest in
+
+let t = _parse "
+  let f = (lam x. let a = weight 1.0 in a) in
+  let c1 = addi in
+  let c2 = addi in
+  let g = (lam y.
+    let b = y 1 in
+    b
+  ) in
+  let c = g f in
+  let d = g c1 in
+  let e = c1 1 in
+  let r = c2 1 in
+  r
+------------------------" in
+utest _test false t ["f","x","a","c1","c2","g","y","b","c","d","e","r"] with [
+  ("f", true),
+  ("x", true),
+  ("a", true),
+  ("c1", true),
+  ("c2", false),
+  ("g", true),
+  ("y", true),
+  ("b", true),
+  ("c", true),
+  ("d", true),
+  ("e", true),
+  ("r", false)
+] using eqTest in
+
+let t = _parse "
+  let a =
+    match 1 with _ then
+      match 1 with _ then
+        let mb = () in mb
+      else ()
+    else
+      match 1 with _ then
+        let ma = weight 1.0 in ma
+      else ()
+  in
+  let b =
+    match 1 with _ then
+      match 1 with _ then
+        let mc = () in mc
+      else ()
+    else
+      match 1 with _ then ()
+      else ()
+  in
+  let c = addi 1 2 in
+  c
+------------------------" in
+utest _test false t ["a","b","c","ma","mb","mc"] with [
+  ("a", true),
+  ("b", false),
+  ("c", false),
+  ("ma", true),
+  ("mb", false),
+  ("mc", false)
 ] using eqTest in
 
 ()
