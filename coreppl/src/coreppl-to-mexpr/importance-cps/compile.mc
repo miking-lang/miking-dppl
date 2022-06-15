@@ -1,9 +1,16 @@
 include "../dists.mc"
 include "../../inference-common/smc.mc"
+include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 
-lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll
+lang MExprPPLImportanceCPS =
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
+
+  -- Weight and observe are checkpoints
+  sem checkpoint =
+  | TmWeight _ -> true
+  | TmObserve _ -> true
 
   -- CPS
   sem exprCps env k =
@@ -43,8 +50,18 @@ lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + ME
     -- ANF transformation (required for CPS)
     let t = normalizeTerm t in
 
+    -- printLn (mexprToString t);
+
+    -- Static analysis
+    let cfaRes = cfa t in
+
+    -- Get checkpoint analysis result
+    let checkPointNames: Set Name = extractCheckpoint cfaRes in
+    -- printLn (join [ "[", strJoin "," (map nameGetStr (setToSeq checkPointNames)), "]"]);
+
     -- CPS transformation
-    let t = cpsFullCont (ulam_ "x" (conapp_ "End" (var_ "x"))) t in
+    let t =
+      cpsPartialCont checkPointNames (ulam_ "x" (conapp_ "End" (var_ "x"))) t in
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
