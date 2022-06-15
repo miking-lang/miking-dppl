@@ -714,7 +714,7 @@ utest _test false t ["t", "res"] with [
 -- ALIGNMENT TESTS --
 ---------------------
 
--- TODO Add missing tests for recursive lets!
+-- TODO(dlunde,2022-06-15): Add missing tests for recursive lets!
 
 let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
   lam debug. lam t. lam vars.
