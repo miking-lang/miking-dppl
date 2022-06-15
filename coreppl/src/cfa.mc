@@ -5,8 +5,8 @@ include "parser.mc"
 
 include "mexpr/cfa.mc"
 
-
--- TODO Handle TmExt correctly (as constants)
+-- TODO I need to look over flow of checkpoint and unaligned to variables bound
+-- by lambdas. The current approach is probably not sound.
 
 lang PPLCFA = MExprCFA + MExprPPL
 
@@ -114,9 +114,12 @@ lang StochCFA = PPLCFA
   syn Constraint =
   -- {const} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
+  -- {ext} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
+  | CstrExtStochApp { lhs: Name, rhs: Name, res: Name }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrConstStochApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrExtStochApp r & cstr -> initConstraintName r.lhs graph cstr
 
   sem cstrStochDirect (lhs: Name) =
   | rhs -> CstrDirectAv {
@@ -126,6 +129,10 @@ lang StochCFA = PPLCFA
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
     match update.1 with AVConst _ then
+      initConstraint graph (cstrStochDirect rhs res)
+    else graph
+  | CstrExtStochApp { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1 with AVExt _ then
       initConstraint graph (cstrStochDirect rhs res)
     else graph
 
@@ -142,7 +149,13 @@ lang StochCFA = PPLCFA
     match pprintVarName env rhs with (env,rhs) in
     match pprintVarName env res with (env,res) in
     (env, join [
-      "{const} ⊆ ", lhs, " AND {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
+      "{const} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
+  | CstrExtStochApp { lhs = lhs, rhs = rhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [
+      "{ext} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
 
   sem generateStochConstraints =
   | _ -> []
@@ -161,11 +174,29 @@ lang StochCFA = PPLCFA
     else [
       CstrInit { lhs = AVConst { id = ident, const = c, args = []}, rhs = ident }
     ]
+  -- Track all externals (similar to constants). If a stochastic value is
+  -- supplied as argument to an external, we assume that the result is
+  -- stochastic as well.
+  | TmExt {
+      tyIdent = tyIdent, inexpr = TmLet { ident = ident, inexpr = inexpr }
+    } ->
+    let arity = arityFunType tyIdent in
+    if eqi arity 0 then []
+    else [
+      CstrInit {
+        lhs = AVExt {
+          id = ident, ext = nameGetStr ident, arity = arity, args = []
+        },
+        rhs = ident
+      }
+    ]
+
   | TmLet { ident = ident, body = TmApp app} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then [
         cstrStochDirect l.ident ident,
-        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident}
+        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident},
+        CstrExtStochApp { lhs = l.ident, rhs = r.ident, res = ident}
       ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
@@ -208,101 +239,65 @@ lang AlignCFA = PPLCFA + StochCFA
   | AVUnaligned _ -> false
 
   syn Constraint =
-  -- {stoch} ⊆ target ⇒ for all n in names, {unaligned} ⊆ n
-  | CstrStochAlign { target: Name, names: [Name] }
-  -- {unaligned} ⊆ id ⇒ for all n in names, {unaligned} ⊆ n
-  | CstrAlign { id: Name, names: [Name] }
-  -- {unaligned} ⊆ id ⇒ ({lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x)
-  | CstrAlignApp { id: Name, lhs: Name }
-  -- {stoch} ⊆ lhs ⇒ ({lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x)
-  | CstrStochAlignApp { lhs: Name }
   -- {lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x
   | CstrAlignLamApp { lhs: Name }
 
   sem initConstraint (graph: CFAGraph) =
-  | CstrStochAlign r & cstr -> initConstraintName r.target graph cstr
-  | CstrAlign r & cstr -> initConstraintName r.id graph cstr
-  | CstrAlignApp r & cstr -> initConstraintName r.id graph cstr
-  | CstrStochAlignApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrAlignLamApp r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrStochAlign { target = target, names = names } ->
-    match update.1 with AVStoch _ then
-      foldl (lam graph. lam name. addData graph (AVUnaligned {}) name)
-        graph names
-    else graph
-  | CstrAlign { id = id, names = names } ->
-    match update.1 with AVUnaligned _ then
-      foldl (lam graph. lam name. addData graph (AVUnaligned {}) name)
-        graph names
-    else graph
-  | CstrAlignApp { id = id, lhs = lhs } ->
-    match update.1 with AVUnaligned _ then
-      initConstraint graph (CstrAlignLamApp { lhs = lhs })
-    else graph
-  | CstrStochAlignApp { lhs = lhs } ->
-    match update.1 with AVStoch _ then
-      initConstraint graph (CstrAlignLamApp { lhs = lhs })
-    else graph
   | CstrAlignLamApp { lhs = lhs } ->
     match update.1 with AVLam { ident = x, body = b } then
       addData graph (AVUnaligned {}) x
     else graph
 
   sem constraintToString (env: PprintEnv) =
-  | CstrStochAlign { target = target, names = names } ->
-    match pprintVarName env target with (env,target) in
-    match mapAccumL pprintVarName env names with (env,names) in
-    (env, join [
-      "{stoch} ⊆ ", target, " ⇒ {unaligned} ⊆ ", strJoin "," names
-    ])
-  | CstrAlign { id = id, names = names } ->
-    match pprintVarName env id with (env,id) in
-    match mapAccumL pprintVarName env names with (env,names) in
-    (env, join [
-      "{unaligned} ⊆ ", id, " ⇒ {unaligned} ⊆ ", strJoin "," names
-    ])
-  | CstrAlignApp { id = id, lhs = lhs } ->
-    match constraintToString env (CstrAlignLamApp { lhs = lhs })
-    with (env,rhs) in
-    match pprintVarName env id with (env,id) in
-    match pprintVarName env lhs with (env,lhs) in
-    (env, join [ "{unaligned} ⊆ ", id, " ⇒ (", rhs, ")" ])
-  | CstrStochAlignApp { lhs = lhs } ->
-    match constraintToString env (CstrAlignLamApp { lhs = lhs })
-    with (env,rhs) in
-    match pprintVarName env lhs with (env,lhs) in
-    (env, join [ "{stoch} ⊆ ", lhs, " ⇒ (", rhs, ")" ])
   | CstrAlignLamApp { lhs = lhs } ->
     match pprintVarName env lhs with (env,lhs) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {unaligned} ⊆ >x<"])
 
+  sem cstrAlignDirect (lhs: Name) =
+  | rhs -> CstrDirectAv {
+      lhs = lhs, lhsav = AVUnaligned {}, rhs = rhs, rhsav = AVUnaligned {}
+    }
+
+  sem cstrStochAlignDirect (lhs: Name) =
+  | rhs -> CstrDirectAv {
+      lhs = lhs, lhsav = AVStoch {}, rhs = rhs, rhsav = AVUnaligned {}
+    }
+
   sem generateAlignConstraints  =
   | _ -> []
   | TmLet { ident = ident, body = TmLam t } ->
-    [ CstrAlign { id = t.ident, names = exprNames t.body} ]
+    map (lam n. cstrAlignDirect t.ident n) (exprNames t.body)
   | TmRecLets { bindings = bindings } ->
-    map (lam b: RecLetBinding.
+    join (map (lam b: RecLetBinding.
       match b.body with TmLam t then
-        CstrAlign { id = t.ident, names = exprNames t.body}
+        map (lam n. cstrAlignDirect t.ident n) (exprNames t.body)
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
-    ) bindings
+    ) bindings)
   | TmLet { ident = ident, body = TmMatch t } ->
     let innerNames = concat (exprNames t.thn) (exprNames t.els) in
     match t.target with TmVar tv then
       let cstrs =
         if patFail t.pat then
-          [CstrStochAlign { target = tv.ident, names = innerNames }]
+          map (lam n. cstrStochAlignDirect tv.ident n) innerNames
         else []
       in
-      cons (CstrAlign { id = ident, names = innerNames }) cstrs
+      concat (map (lam n. cstrAlignDirect ident n) innerNames) cstrs
     else errorSingle [infoTm t.target] "Not a TmVar in match target"
   | TmLet { ident = ident, body = TmApp app } ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
-        [ CstrAlignApp { id = ident, lhs = l.ident },
-          CstrStochAlignApp { lhs = l.ident }
+        [
+          CstrDirectAvCstrs {
+            lhs = ident, lhsav = AVUnaligned {},
+            rhs = [CstrAlignLamApp { lhs = l.ident }]
+          },
+          CstrDirectAvCstrs {
+            lhs = l.ident, lhsav = AVStoch {},
+            rhs = [CstrAlignLamApp { lhs = l.ident }]
+          }
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
@@ -668,6 +663,7 @@ let t = _parse "
   let x = log (assume (Beta 2.0 2.0)) in
   x
 ------------------------" in
+-- printLn (mexprToString (normalizeTerm t));
 utest _test false t ["x"] with [
   ("x", true)
 ] using eqTest in
