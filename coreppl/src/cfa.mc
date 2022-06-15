@@ -331,6 +331,9 @@ lang CheckpointCFA = PPLCFA
   | CstrCheckpointLam { lhs: Name }
   -- const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id
   | CstrCheckpointConst { lhs: Name }
+  -- NOTE(dlunde,2022-06-15): We don't actually need to consider externals
+  -- here. They are always fully applied, and can never propagate AVCheckpoint
+  -- to other functions as a result.
 
   sem initConstraint (graph: CFAGraph) =
   | CstrCheckpointLamApp r & cstr -> initConstraintName r.lhs graph cstr
@@ -681,7 +684,6 @@ utest _test false t ["t", "res"] with [
 ] using eqTest in
 
 -- Stochastic externals
--- TODO Currently fails! Externals are not handled correctly
 let t = _parse "
   external log : Float -> Float in
   let x = log (assume (Beta 2.0 2.0)) in
@@ -993,6 +995,39 @@ utest _test false t ["f1","t","a","b","c","x","t2"] with [
   ("c", false),
   ("x", true),
   ("t2", false)
+] using eqTest in
+
+let t = _parse "
+  let c1 = addf in
+  let c2 = addf in
+  let f1 = lam x1. lam x2. x2 in
+  let f2 = lam y1. lam y2. let w = weight 1.0 in y2 in
+  let apply1 = lam fa1. let app1 = fa1 1.0 2.0 in app1 in
+  let apply2 = lam fa2. let app2 = fa2 1.0 2.0 in app2 in
+  let d1 = apply1 c1 in
+  let d2 = apply1 f1 in
+  let d3 = apply2 c2 in
+  apply2 f2
+" in
+utest _test false t [
+  "c1","c2","f1","f2","apply1","apply2",
+  "x1","x2","y1","y2","w","fa1","app1","fa2","app2"
+] with [
+  ("c1", false),
+  ("c2", true),
+  ("f1", false),
+  ("f2", true),
+  ("apply1", false),
+  ("apply2", true),
+  ("x1", false),
+  ("x2", false),
+  ("y1", true),
+  ("y2", true),
+  ("w", true),
+  ("fa1", false),
+  ("app1", false),
+  ("fa2", true),
+  ("app2", true)
 ] using eqTest in
 
 ()
