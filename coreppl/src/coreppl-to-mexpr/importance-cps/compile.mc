@@ -6,26 +6,33 @@ include "mexpr/cps.mc"
 lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll
 
   -- CPS
-  sem exprCps k =
+  sem exprCps env k =
   -- Do nothing at assumes or resamples
   | TmLet ({ body = TmAssume _ } & t) ->
-    TmLet { t with inexpr = exprCps k t.inexpr }
+    TmLet { t with inexpr = exprCps env k t.inexpr }
   | TmLet ({ body = TmResample _ } & t) ->
-    TmLet { t with inexpr = exprCps k t.inexpr }
+    TmLet { t with inexpr = exprCps env k t.inexpr }
   | TmLet ({ body = TmDist _ } & t) ->
-    TmLet { t with inexpr = exprCps k t.inexpr }
+    TmLet { t with inexpr = exprCps env k t.inexpr }
 
   -- This is where we use the continuation (weight and observe)
   | TmLet { ident = ident, body = TmWeight { weight = weight },
             inexpr = inexpr} & t ->
     let i = withInfo (infoTm t) in
-    let k = if tailCall t then k else i (nulam_ ident (exprCps k inexpr)) in
+    let k = if tailCall t then
+        match k with Some k then k
+        else error "Something went wrong with partial CPS transformation"
+      else i (nulam_ ident (exprCps env k inexpr)) in
     i (appf2_ (i (var_ "updateWeight")) weight k)
 
+  -- This is where we use the continuation (weight and observe)
   | TmLet { ident = ident, body = TmObserve { value = value, dist = dist },
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in
-    let k = if tailCall t then k else nulam_ ident (exprCps k inexpr) in
+    let k = if tailCall t then
+        match k with Some k then k
+        else error "Something went wrong with partial CPS transformation"
+      else i (nulam_ ident (exprCps env k inexpr)) in
     let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
     i (appf2_ (i (var_ "updateWeight")) weight k)
 
@@ -37,7 +44,7 @@ lang MExprPPLImportanceCPS = MExprPPL + Resample + TransformDist + MExprCPS + ME
     let t = normalizeTerm t in
 
     -- CPS transformation
-    let t = cpsCont (ulam_ "x" (conapp_ "End" (var_ "x"))) t in
+    let t = cpsFullCont (ulam_ "x" (conapp_ "End" (var_ "x"))) t in
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in

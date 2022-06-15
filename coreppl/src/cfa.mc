@@ -5,9 +5,6 @@ include "parser.mc"
 
 include "mexpr/cfa.mc"
 
--- TODO I need to look over flow of checkpoint and unaligned to variables bound
--- by lambdas. The current approach is probably not sound.
-
 lang PPLCFA = MExprCFA + MExprPPL
 
   type MCGF = Name -> Name -> Pat -> [Constraint]
@@ -42,24 +39,6 @@ lang PPLCFA = MExprCFA + MExprPPL
       generateCheckpointConstraints
     ]
   ----------------------------------------------------------------------------
-
-  -- For a given expression, returns all variables directly bound in that
-  -- expression (all top-level let bindings).
-  sem exprNames: Expr -> [Name]
-  sem exprNames =
-  | t -> exprNamesAcc [] t
-  sem exprNamesAcc: [Name] -> Expr -> [Name]
-  sem exprNamesAcc acc =
-  | TmVar t -> acc
-  | TmLet t -> exprNamesAcc (cons t.ident acc) t.inexpr
-  | TmRecLets t ->
-      foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
-        acc t.bindings
-  | TmType t -> exprNamesAcc acc t.inexpr
-  | TmConDef t -> exprNamesAcc acc t.inexpr
-  | TmUtest t -> exprNamesAcc acc t.next
-  | TmExt t -> exprNamesAcc acc t.inexpr
-  | t -> errorSingle [infoTm t] "Error in exprNames for CFA"
 
   -- Whether a pattern can fail
   sem patFail =
@@ -172,7 +151,12 @@ lang StochCFA = PPLCFA
     let arity = constArity c in
     if eqi arity 0 then []
     else [
-      CstrInit { lhs = AVConst { id = ident, const = c, args = []}, rhs = ident }
+      CstrInit {
+        lhs = AVConst {
+          id = ident, const = c, args = []
+        },
+        rhs = ident
+      }
     ]
   -- Track all externals (similar to constants). If a stochastic value is
   -- supplied as argument to an external, we assume that the result is
@@ -185,7 +169,7 @@ lang StochCFA = PPLCFA
     else [
       CstrInit {
         lhs = AVExt {
-          id = ident, ext = nameGetStr ident, arity = arity, args = []
+          ext = ident, arity = arity, args = []
         },
         rhs = ident
       }
@@ -266,6 +250,24 @@ lang AlignCFA = PPLCFA + StochCFA
       lhs = lhs, lhsav = AVStoch {}, rhs = rhs, rhsav = AVUnaligned {}
     }
 
+  -- For a given expression, returns all variables directly bound in that
+  -- expression.
+  sem exprNames: Expr -> [Name]
+  sem exprNames =
+  | t -> exprNamesAcc [] t
+  sem exprNamesAcc: [Name] -> Expr -> [Name]
+  sem exprNamesAcc acc =
+  | TmVar t -> acc
+  | TmLet t -> exprNamesAcc (cons t.ident acc) t.inexpr
+  | TmRecLets t ->
+      foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
+        acc t.bindings
+  | TmType t -> exprNamesAcc acc t.inexpr
+  | TmConDef t -> exprNamesAcc acc t.inexpr
+  | TmUtest t -> exprNamesAcc acc t.next
+  | TmExt t -> exprNamesAcc acc t.inexpr
+  | t -> errorSingle [infoTm t] "Error in exprNames for CFA"
+
   sem generateAlignConstraints  =
   | _ -> []
   | TmLet { ident = ident, body = TmLam t } ->
@@ -325,10 +327,6 @@ lang CheckpointCFA = PPLCFA
   | CstrCheckpointLamApp { lhs: Name, res: Name }
   -- const<id> ⊆ lhs ⇒ ({checkpoint} ⊆ id ⇒ {checkpoint} ⊆ res)
   | CstrCheckpointConstApp { lhs: Name, res: Name }
-  -- {checkpoint} ⊆ res ⇒
-  --   ({lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
-  --   AND const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id)
-  | CstrCheckpointAppReverse { res: Name, lhs: Name }
   -- {lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
   | CstrCheckpointLam { lhs: Name }
   -- const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id
@@ -337,7 +335,6 @@ lang CheckpointCFA = PPLCFA
   sem initConstraint (graph: CFAGraph) =
   | CstrCheckpointLamApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrCheckpointConstApp r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrCheckpointAppReverse r & cstr -> initConstraintName r.res graph cstr
   | CstrCheckpointLam r & cstr -> initConstraintName r.lhs graph cstr
   | CstrCheckpointConst r & cstr -> initConstraintName r.lhs graph cstr
 
@@ -349,11 +346,6 @@ lang CheckpointCFA = PPLCFA
   | CstrCheckpointConstApp { lhs = lhs, res = res } ->
     match update.1 with AVConst { id = id } then
       initConstraint graph (cstrCheckpointDirect id res)
-    else graph
-  | CstrCheckpointAppReverse { res = res, lhs = lhs } ->
-    match update.1 with AVCheckpoint _ then
-      let graph = initConstraint graph (CstrCheckpointLam { lhs = lhs }) in
-      initConstraint graph (CstrCheckpointConst { lhs = lhs })
     else graph
   | CstrCheckpointLam { lhs = lhs } ->
     match update.1 with AVLam { ident = x, body = b } then
@@ -373,11 +365,6 @@ lang CheckpointCFA = PPLCFA
     match pprintVarName env lhs with (env,lhs) in
     match pprintVarName env res with (env,res) in
     (env, join [ "{const<>x<>} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
-  | CstrCheckpointAppReverse { res = res, lhs = lhs } ->
-    match pprintVarName env res with (env,res) in
-    match constraintToString env (CstrCheckpointLam { lhs = lhs }) with (env,c1) in
-    match constraintToString env (CstrCheckpointConst { lhs = lhs }) with (env,c2) in
-    (env, join [ "{checkpoint} ⊆ ", res, " ⇒ ( ", c1, " AND ", c2, ")" ])
   | CstrCheckpointLam { lhs = lhs } ->
     match pprintVarName env lhs with (env,lhs) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x<" ])
@@ -391,6 +378,7 @@ lang CheckpointCFA = PPLCFA
       lhs = lhs, lhsav = AVCheckpoint {}, rhs = rhs, rhsav = AVCheckpoint {}
     }
 
+
   sem checkpoint: Expr -> Bool
   sem checkpoint =
   | _ -> false
@@ -401,13 +389,39 @@ lang CheckpointCFA = PPLCFA
     if checkpoint b then [ CstrInit { lhs = AVCheckpoint {}, rhs = ident } ]
     else []
 
+  -- For a given expression, returns all variables directly bound in that
+  -- expression as a result of applications, matches, or `let`s with bodies
+  -- that are checkpoints (e.g., often weight/assume/observe).
+  sem exprCheckpointNames: Expr -> [Name]
+  sem exprCheckpointNames =
+  | t -> exprCheckpointNamesAcc [] t
+  sem exprCheckpointNamesAcc: [Name] -> Expr -> [Name]
+  sem exprCheckpointNamesAcc acc =
+  | TmVar t -> acc
+  | TmLet t->
+    if checkpoint t.body then
+      exprCheckpointNamesAcc (cons t.ident acc) t.inexpr
+    else
+      exprCheckpointNamesAcc acc t.inexpr
+  | TmLet { ident = ident, body = TmApp _ | TmMatch _, inexpr = inexpr} ->
+    exprCheckpointNamesAcc (cons ident acc) inexpr
+  | TmRecLets t ->
+      foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
+        acc t.bindings
+  | TmType t -> exprCheckpointNamesAcc acc t.inexpr
+  | TmConDef t -> exprCheckpointNamesAcc acc t.inexpr
+  | TmUtest t -> exprCheckpointNamesAcc acc t.next
+  | TmExt t -> exprCheckpointNamesAcc acc t.inexpr
+  | t -> errorSingle [infoTm t] "Error in exprCheckpointNames for CFA"
+
+
   sem generateCheckpointConstraints  =
   | _ -> []
   | TmLet { ident = ident, body = TmLam t } ->
     -- If any expression in the body of the lambda evaluates a checkpoint, the
-    -- lambda itself evaluates a checkpoint
+    -- lambda evaluates a checkpoint
     let cstrs =
-      map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprNames t.body)
+      map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprCheckpointNames t.body)
     in
     -- If the lambda evaluates a checkpoint, the ident is also said to contain
     -- a checkpoint (for symmetry with how constant functions are handled).
@@ -417,7 +431,7 @@ lang CheckpointCFA = PPLCFA
       match b.body with TmLam t then
         -- Same as for lambda
         let cstrs =
-          map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprNames t.body)
+          map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprCheckpointNames t.body)
         in
         cons (cstrCheckpointDirect t.ident b.ident) cstrs
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
@@ -425,7 +439,7 @@ lang CheckpointCFA = PPLCFA
   | TmLet { ident = ident, body = TmMatch t } ->
     -- If any expression in one of the match branches evaluates a checkpoint, the
     -- match itself evaluates a checkpoint
-    let innerNames = concat (exprNames t.thn) (exprNames t.els) in
+    let innerNames = concat (exprCheckpointNames t.thn) (exprCheckpointNames t.els) in
     map (lam lhs. cstrCheckpointDirect lhs ident) innerNames
   | TmLet { ident = ident, body = TmApp app } ->
     match app.lhs with TmVar l then
@@ -433,7 +447,17 @@ lang CheckpointCFA = PPLCFA
         [
           CstrCheckpointLamApp { lhs = l.ident, res = ident },
           CstrCheckpointConstApp { lhs = l.ident, res = ident },
-          CstrCheckpointAppReverse { res = ident, lhs = l.ident }
+
+          -- {checkpoint} ⊆ res ⇒
+          --   ({lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
+          --   AND const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id)
+          CstrDirectAvCstrs {
+            lhs = ident, lhsav = AVCheckpoint (),
+            rhs = [
+              CstrCheckpointLam { lhs = l.ident },
+              CstrCheckpointConst { lhs = l.ident }
+            ]
+          }
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
@@ -696,10 +720,7 @@ let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
     let env = if debug then Some pprintEnvEmpty else None () in
     match _testBase env tANF with (env, cfaRes) in
     let aRes: Set Name = extractUnaligned cfaRes in
-    let sSet: Set String = setFold
-      (lam acc. lam n. setInsert (nameGetStr n) acc)
-      (setEmpty cmpString) aRes in
-    map (lam var: String. (var, not (setMem var sSet))) vars
+    map (lam var: String. (var, not (setMem (nameNoSym var) aRes))) vars
 in
 
 
@@ -802,9 +823,20 @@ utest _test false t ["t1", "t2", "res"] with [
 ] using eqTest in
 
 -- Test in `models/coreppl/crbd/crbd-unaligned.mc`
+let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    match _testBase env tANF with (env, cfaRes) in
+    let aRes: Set Name = extractUnaligned cfaRes in
+    let sSet: Set String = setFold
+      (lam acc. lam n. setInsert (nameGetStr n) acc)
+      (setEmpty cmpString) aRes in
+    map (lam var: String. (var, not (setMem var sSet))) vars
+in
 let t = symbolizeExpr symEnvEmpty
           (parseMCorePPLFile "coreppl/models/crbd/crbd-unaligned.mc") in
-utest _test false t ["w1","w2","w3"] with [
+utest _testWithSymbolize false t ["w1","w2","w3"] with [
   ("w1", false),
   ("w2", false),
   ("w3", true)
@@ -821,10 +853,7 @@ let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
     let env = if debug then Some pprintEnvEmpty else None () in
     match _testBase env tANF with (env, cfaRes) in
     let aRes: Set Name = extractCheckpoint cfaRes in
-    let sSet: Set String = setFold
-      (lam acc. lam n. setInsert (nameGetStr n) acc)
-      (setEmpty cmpString) aRes in
-    map (lam var: String. (var, setMem var sSet)) vars
+    map (lam var: String. (var, setMem (nameNoSym var) aRes)) vars
 in
 
 let t = _parse "
@@ -925,6 +954,45 @@ utest _test false t ["a","b","c","ma","mb","mc"] with [
   ("ma", true),
   ("mb", false),
   ("mc", false)
+] using eqTest in
+
+let t = _parse "
+  (lam x.
+    let a = x () in
+    let b = weight 1.0 in
+    b
+  )
+------------------------" in
+utest _test false t ["x","a","b"] with [
+  ("x", true),
+  ("a", false),
+  ("b", true)
+] using eqTest in
+
+let t = _parse "
+  recursive
+    let f1 = lam a. let t = (lam b. let ti = weight 1.0 in b) in t
+    let f2 = lam c. c
+  in
+  let t1 = 1 in
+  let t2 = f1 t1 in
+  let t3 = 2 in
+  let x = t2 t3 in
+  let t4 = 3 in
+  let y = f2 t4 in
+  let t5 = addi in
+  let t6 = t5 x in
+  let t7 = t6 y in
+  (lam x. x) t7
+" in
+utest _test false t ["f1","t","a","b","c","x","t2"] with [
+  ("f1", false),
+  ("t", true),
+  ("a", false),
+  ("b", true),
+  ("c", false),
+  ("x", true),
+  ("t2", false)
 ] using eqTest in
 
 ()
