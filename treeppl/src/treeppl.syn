@@ -61,7 +61,7 @@ type DeclTppl
 type TypeTppl
 --type Cons
 type StmtTppl
-type ExprTppl
+type ExprTppl { grouping = "(" ")", }
 
 start FileTppl
 
@@ -117,6 +117,7 @@ prod String: ExprTppl = val:String
 prod Real: ExprTppl = val:Real
 prod Variable: ExprTppl = ident:LName
 
+
 -- infix left Addition: Expr = "+"
 prod left Add: ExprTppl = left:ExprTppl "+" right:ExprTppl
 -- infix Multiplication: Expr = "*"
@@ -129,10 +130,15 @@ prod left Div: ExprTppl = left:ExprTppl "/" right:ExprTppl
 prod Is: ExprTppl = thing:ExprTppl "is" constructor:UName
 -- to
 prod To: ExprTppl = beginVal:ExprTppl "to" endVal:ExprTppl
+-- Comparisons
+prod left Less: ExprTppl = left:ExprTppl "<" right:ExprTppl
+prod left Greater: ExprTppl = left:ExprTppl ">" right:ExprTppl
+prod left LessEq: ExprTppl = left:ExprTppl "<=" right:ExprTppl
+prod left GreaterEq: ExprTppl = left:ExprTppl ">=" right:ExprTppl
+prod left Equal: ExprTppl = left:ExprTppl "==" right:ExprTppl
+prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
 
-
-
--- Function call
+-- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
 
 precedence {
@@ -141,35 +147,25 @@ precedence {
   Add Sub;
 }
 
+-- Built-in distro keywords
+prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
+prod Exponential: ExprTppl = "Exponential" "(" rate:ExprTppl ")"
+prod Gamma: ExprTppl = "Gamma" "(" shape:ExprTppl "," scale:ExprTppl ")"
+
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"
 
 /----- Statements -----/
--- Assume statement
--- prod Assume: Stmnt = randomVar:LName "~" distribution:UName "(" (args:Expr ("," args:Expr)*)? ")"
-prod Assume: StmtTppl = randomVar:LName "~" dist:ExprTppl
-prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
-
--- Observe statement
-prod Observe: StmtTppl = "observe" value:ExprTppl "~" distribution:UName "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
-
--- If statement
-prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl+ "}" ("else" "{" ifFalseStmts:StmtTppl+ "}")?
-
-
--- If ... is statement
--- Q: LL1 error? is should be an Expression
---prod IfIs: Stmnt = "if" observation:Expr "is" constructor:UName "{"
---  instatements:Stmnt+
-"}"
--- For loop
+prod ExprStmt: StmtTppl = e:ExprTppl ";" -- Epxressions as statements
+prod Assume: StmtTppl = "assume" randomVar:LName "~" dist:ExprTppl ";"
+prod Assign: StmtTppl = "let" var:LName "=" val:ExprTppl ";"
+--prod Observe: StmtTppl = "observe" value:ExprTppl "~" distribution:UName "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
+prod Observe: StmtTppl = "observe" value:ExprTppl "~" dist:ExprTppl ";"
+prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl* "}" ("else" "{" ifFalseStmts:StmtTppl* "}")?
+prod Weight: StmtTppl = "weight" "(" value:ExprTppl ")" ";"?
 prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl+ "}"
+prod Return: StmtTppl = "return" "(" return:ExprTppl? ")" ";"?
 
-prod Return: StmtTppl = "return" return:ExprTppl
-
--- Comments
--- Don't know how to do comments
--- compiler hints TODO
 
 
 

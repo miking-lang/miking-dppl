@@ -25,7 +25,8 @@ build/${cppl_name}: $(shell find . -name "*.mc")
 
 tppl_tmp_file := $(shell mktemp)
 build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
-	tool treeppl/src/treeppl.syn treeppl/src/treeppl-ast.mc
+	mi compile $(MCORE_STDLIB)/parser/tool.mc
+	./tool treeppl/src/treeppl.syn treeppl/src/treeppl-ast.mc
 	time mi compile treeppl/src/${tppl_name}.mc --output ${tppl_tmp_file}
 	mkdir -p build
 	cp ${tppl_tmp_file} build/${tppl_name}
