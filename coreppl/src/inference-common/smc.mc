@@ -44,7 +44,7 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
     TmResample { t with ty = symbolizeType env t.ty }
 
   -- Type check
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckExpr (env : TCEnv) =
   | TmResample t -> TmResample { t with ty = tyWithInfo t.info tyunit_ }
 
   sem normalize (k : Expr -> Expr) =
