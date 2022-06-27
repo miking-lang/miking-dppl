@@ -256,37 +256,39 @@ lang AlignCFA = PPLCFA + StochCFA
 
   -- For a given expression, returns all variables directly bound in that
   -- expression.
-  sem exprNames: Expr -> [Name]
-  sem exprNames =
-  | t -> exprNamesAcc [] t
-  sem exprNamesAcc: [Name] -> Expr -> [Name]
-  sem exprNamesAcc acc =
+  sem exprUnalignedNames: Expr -> [Name]
+  sem exprUnalignedNames =
+  | t -> exprUnalignedNamesAcc [] t
+  sem exprUnalignedNamesAcc: [Name] -> Expr -> [Name]
+  sem exprUnalignedNamesAcc acc =
   | TmVar t -> acc
-  | TmLet t -> exprNamesAcc (cons t.ident acc) t.inexpr
+  | TmLet t -> exprUnalignedNamesAcc (cons t.ident acc) t.inexpr
   | TmRecLets t ->
-      foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
-        acc t.bindings
-  | TmType t -> exprNamesAcc acc t.inexpr
-  | TmConDef t -> exprNamesAcc acc t.inexpr
-  | TmUtest t -> exprNamesAcc acc t.next
-  | TmExt t -> exprNamesAcc acc t.inexpr
-  | t -> errorSingle [infoTm t] "Error in exprNames for CFA"
+      exprUnalignedNamesAcc
+        (foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
+          acc t.bindings)
+        t.inexpr
+  | TmType t -> exprUnalignedNamesAcc acc t.inexpr
+  | TmConDef t -> exprUnalignedNamesAcc acc t.inexpr
+  | TmUtest t -> exprUnalignedNamesAcc acc t.next
+  | TmExt t -> exprUnalignedNamesAcc acc t.inexpr
+  | t -> errorSingle [infoTm t] "Error in exprUnalignedNames for CFA"
 
   sem generateAlignConstraints im =
   | _ -> []
   | TmLet ({ ident = ident, body = TmLam t } & b) ->
     let tident = name2int im t.info t.ident in
-    map (lam n. cstrAlignDirect tident (name2int im b.info n)) (exprNames t.body)
+    map (lam n. cstrAlignDirect tident (name2int im b.info n)) (exprUnalignedNames t.body)
   | TmRecLets ({ bindings = bindings } & rl) ->
     join (map (lam b: RecLetBinding.
       match b.body with TmLam t then
         let tident = name2int im t.info t.ident in
         map (lam n. cstrAlignDirect tident (name2int im rl.info n))
-          (exprNames t.body)
+          (exprUnalignedNames t.body)
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
     ) bindings)
   | TmLet ({ ident = ident, body = TmMatch t } & b) ->
-    let innerNames = concat (exprNames t.thn) (exprNames t.els) in
+    let innerNames = concat (exprUnalignedNames t.thn) (exprUnalignedNames t.els) in
     match t.target with TmVar tv then
       let cstrs =
         if patFail t.pat then
@@ -433,29 +435,19 @@ lang CheckpointCFA = PPLCFA
 
   sem generateCheckpointConstraints im =
   | _ -> []
-  | TmLet ({ ident = ident, body = TmLam t } & b) ->
-    -- If any expression in the body of the lambda evaluates a checkpoint, the
+  | TmLet ({ body = TmLam t } & b) ->
+    -- If certain expressions in the body of the lambda evaluates a checkpoint, the
     -- lambda evaluates a checkpoint
     let tident = name2int im t.info t.ident in
-    let ident = name2int im b.info ident in
-    let cstrs =
-      map (lam lhs. cstrCheckpointDirect (name2int im t.info lhs) tident)
-        (exprCheckpointNames t.body)
-    in
-    -- If the lambda evaluates a checkpoint, the ident is also said to contain
-    -- a checkpoint (for symmetry with how constant functions are handled).
-    cons (cstrCheckpointDirect tident ident) cstrs
+    map (lam lhs. cstrCheckpointDirect (name2int im t.info lhs) tident)
+      (exprCheckpointNames t.body)
   | TmRecLets ({ bindings = bindings } & rl) ->
     join (map (lam b: RecLetBinding.
       match b.body with TmLam t then
         -- Same as for lambda
         let tident = name2int im t.info t.ident in
-        let bident = name2int im rl.info b.ident in
-        let cstrs =
-          map (lam lhs. cstrCheckpointDirect (name2int im t.info lhs) tident)
-            (exprCheckpointNames t.body)
-        in
-        cons (cstrCheckpointDirect tident bident) cstrs
+        map (lam lhs. cstrCheckpointDirect (name2int im t.info lhs) tident)
+          (exprCheckpointNames t.body)
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
     ) bindings)
   | TmLet ({ ident = ident, body = TmMatch t } & b) ->
@@ -915,7 +907,7 @@ let t = _parse "
   e
 ------------------------" in
 utest _test false t ["f","x","a","b","y","a2","b2","c","d","e"] with [
-  ("f", true),
+  ("f", false),
   ("x", true),
   ("a", true),
   ("b", false),
@@ -942,12 +934,12 @@ let t = _parse "
   r
 ------------------------" in
 utest _test false t ["f","x","a","c1","c2","g","y","b","c","d","e","r"] with [
-  ("f", true),
+  ("f", false),
   ("x", true),
   ("a", true),
   ("c1", true),
   ("c2", false),
-  ("g", true),
+  ("g", false),
   ("y", true),
   ("b", true),
   ("c", true),
@@ -1019,7 +1011,7 @@ let t = _parse "
 " in
 utest _test false t ["f1","t","a","b","c","x","t2"] with [
   ("f1", false),
-  ("t", true),
+  ("t", false),
   ("a", false),
   ("b", true),
   ("c", false),
@@ -1046,9 +1038,9 @@ utest _test false t [
   ("c1", false),
   ("c2", true),
   ("f1", false),
-  ("f2", true),
+  ("f2", false),
   ("apply1", false),
-  ("apply2", true),
+  ("apply2", false),
   ("x1", false),
   ("x2", false),
   ("y1", true),
