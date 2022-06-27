@@ -13,7 +13,7 @@ lang PPLCFA = MExprCFA + MExprPPL
   -- TODO(dlunde,2022-05-30): It would be nice if we could achieve the
   -- below in a more modular way (e.g., alignment part of analysis is defined
   -- in the alignment fragment, stochastic part in the stochastic fragment,
-  -- etc.)
+  -- etc.).
   ----------------------------------------------------------------------------
   sem generateStochMatchResConstraints : MCGF
   sem generateStochMatchConstraints : MCGF
@@ -26,34 +26,19 @@ lang PPLCFA = MExprCFA + MExprPPL
     ]
   sem generateStochConstraints : Expr -> [Constraint]
   sem generateAlignConstraints : Expr -> [Constraint]
+  sem generateCheckpointInitConstraints : Expr -> [Constraint]
+  sem generateCheckpointConstraints : Expr -> [Constraint]
   sem cgfs : [MCGF] -> [Expr -> [Constraint]]
   sem cgfs =
   | mcgfs -> [
       generateConstraints,
       generateConstraintsMatch mcgfs,
       generateStochConstraints,
-      generateAlignConstraints
+      generateAlignConstraints,
+      generateCheckpointInitConstraints,
+      generateCheckpointConstraints
     ]
   ----------------------------------------------------------------------------
-
-  -- For a given expression, returns all variables directly bound in that
-  -- expression (all top-level let bindings).
-  sem exprNames: Expr -> [Name]
-  sem exprNames =
-  | t -> exprNamesAcc [] t
-
-  sem exprNamesAcc: [Name] -> Expr -> [Name]
-  sem exprNamesAcc acc =
-  | TmVar t -> acc
-  | TmLet t -> exprNamesAcc (cons t.ident acc) t.inexpr
-  | TmRecLets t ->
-      foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
-        acc t.bindings
-  | TmType t -> exprNamesAcc acc t.inexpr
-  | TmConDef t -> exprNamesAcc acc t.inexpr
-  | TmUtest t -> exprNamesAcc acc t.next
-  | TmExt t -> exprNamesAcc acc t.inexpr
-  | t -> errorSingle [infoTm t] "Error in exprNames for CFA"
 
   -- Whether a pattern can fail
   sem patFail =
@@ -108,9 +93,12 @@ lang StochCFA = PPLCFA
   syn Constraint =
   -- {const} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
   | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
+  -- {ext} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
+  | CstrExtStochApp { lhs: Name, rhs: Name, res: Name }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrConstStochApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrExtStochApp r & cstr -> initConstraintName r.lhs graph cstr
 
   sem cstrStochDirect (lhs: Name) =
   | rhs -> CstrDirectAv {
@@ -120,6 +108,10 @@ lang StochCFA = PPLCFA
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
     match update.1 with AVConst _ then
+      initConstraint graph (cstrStochDirect rhs res)
+    else graph
+  | CstrExtStochApp { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1 with AVExt _ then
       initConstraint graph (cstrStochDirect rhs res)
     else graph
 
@@ -136,7 +128,13 @@ lang StochCFA = PPLCFA
     match pprintVarName env rhs with (env,rhs) in
     match pprintVarName env res with (env,res) in
     (env, join [
-      "{const} ⊆ ", lhs, " AND {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
+      "{const} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
+  | CstrExtStochApp { lhs = lhs, rhs = rhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [
+      "{ext} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
 
   sem generateStochConstraints =
   | _ -> []
@@ -152,12 +150,37 @@ lang StochCFA = PPLCFA
   | TmLet { ident = ident, body = TmConst { val = c } } ->
     let arity = constArity c in
     if eqi arity 0 then []
-    else [ CstrInit { lhs = AVConst { const = c, args = []}, rhs = ident } ]
+    else [
+      CstrInit {
+        lhs = AVConst {
+          id = ident, const = c, args = []
+        },
+        rhs = ident
+      }
+    ]
+  -- Track all externals (similar to constants). If a stochastic value is
+  -- supplied as argument to an external, we assume that the result is
+  -- stochastic as well.
+  | TmExt {
+      tyIdent = tyIdent, inexpr = TmLet { ident = ident, inexpr = inexpr }
+    } ->
+    let arity = arityFunType tyIdent in
+    if eqi arity 0 then []
+    else [
+      CstrInit {
+        lhs = AVExt {
+          ext = ident, arity = arity, args = []
+        },
+        rhs = ident
+      }
+    ]
+
   | TmLet { ident = ident, body = TmApp app} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then [
         cstrStochDirect l.ident ident,
-        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident}
+        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident},
+        CstrExtStochApp { lhs = l.ident, rhs = r.ident, res = ident}
       ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
@@ -183,7 +206,7 @@ lang StochCFA = PPLCFA
 
 end
 
-lang AlignCFA = StochCFA
+lang AlignCFA = PPLCFA + StochCFA
 
   syn AbsVal =
   | AVUnaligned {}
@@ -194,108 +217,257 @@ lang AlignCFA = StochCFA
   sem cmpAbsValH =
   | (AVUnaligned _, AVUnaligned _) -> 0
 
-  -- Alignment handling is custom (should not propagate as part of regular
+  -- Alignment CFA is custom (should not propagate as part of regular
   -- direct constraints)
   sem isDirect =
   | AVUnaligned _ -> false
 
   syn Constraint =
-  -- {stoch} ⊆ target ⇒ for all n in names, {unaligned} ⊆ n
-  | CstrStochAlign { target: Name, names: [Name] }
-  -- {unaligned} ⊆ id ⇒ for all n in names, {unaligned} ⊆ n
-  | CstrAlign { id: Name, names: [Name] }
-  -- {unaligned} ⊆ id ⇒ ({lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x)
-  | CstrAlignApp { id: Name, lhs: Name }
-  -- {stoch} ⊆ lhs ⇒ ({lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x)
-  | CstrStochAlignApp { lhs: Name }
   -- {lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x
   | CstrAlignLamApp { lhs: Name }
 
   sem initConstraint (graph: CFAGraph) =
-  | CstrStochAlign r & cstr -> initConstraintName r.target graph cstr
-  | CstrAlign r & cstr -> initConstraintName r.id graph cstr
-  | CstrAlignApp r & cstr -> initConstraintName r.id graph cstr
-  | CstrStochAlignApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrAlignLamApp r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrStochAlign { target = target, names = names } ->
-    match update.1 with AVStoch _ then
-      foldl (lam graph. lam name. addData graph (AVUnaligned {}) name)
-        graph names
-    else graph
-  | CstrAlign { id = id, names = names } ->
-    match update.1 with AVUnaligned _ then
-      foldl (lam graph. lam name. addData graph (AVUnaligned {}) name)
-        graph names
-    else graph
-  | CstrAlignApp { id = id, lhs = lhs } ->
-    match update.1 with AVUnaligned _ then
-      initConstraint graph (CstrAlignLamApp { lhs = lhs })
-    else graph
-  | CstrStochAlignApp { lhs = lhs } ->
-    match update.1 with AVStoch _ then
-      initConstraint graph (CstrAlignLamApp { lhs = lhs })
-    else graph
   | CstrAlignLamApp { lhs = lhs } ->
     match update.1 with AVLam { ident = x, body = b } then
       addData graph (AVUnaligned {}) x
     else graph
 
   sem constraintToString (env: PprintEnv) =
-  | CstrStochAlign { target = target, names = names } ->
-    match pprintVarName env target with (env,target) in
-    match mapAccumL pprintVarName env names with (env,names) in
-    (env, join [
-      "{stoch} ⊆ ", target, " ⇒ {unaligned} ⊆ ", strJoin "," names
-    ])
-  | CstrAlign { id = id, names = names } ->
-    match pprintVarName env id with (env,id) in
-    match mapAccumL pprintVarName env names with (env,names) in
-    (env, join [
-      "{unaligned} ⊆ ", id, " ⇒ {unaligned} ⊆ ", strJoin "," names
-    ])
-  | CstrAlignApp { id = id, lhs = lhs } ->
-    match constraintToString env (CstrAlignLamApp { lhs = lhs })
-    with (env,rhs) in
-    match pprintVarName env id with (env,id) in
-    match pprintVarName env lhs with (env,lhs) in
-    (env, join [ "{unaligned} ⊆ ", id, " ⇒ (", rhs, ")" ])
-  | CstrStochAlignApp { lhs = lhs } ->
-    match constraintToString env (CstrAlignLamApp { lhs = lhs })
-    with (env,rhs) in
-    match pprintVarName env lhs with (env,lhs) in
-    (env, join [ "{stoch} ⊆ ", lhs, " ⇒ (", rhs, ")" ])
   | CstrAlignLamApp { lhs = lhs } ->
     match pprintVarName env lhs with (env,lhs) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {unaligned} ⊆ >x<"])
 
+  sem cstrAlignDirect (lhs: Name) =
+  | rhs -> CstrDirectAv {
+      lhs = lhs, lhsav = AVUnaligned {}, rhs = rhs, rhsav = AVUnaligned {}
+    }
+
+  sem cstrStochAlignDirect (lhs: Name) =
+  | rhs -> CstrDirectAv {
+      lhs = lhs, lhsav = AVStoch {}, rhs = rhs, rhsav = AVUnaligned {}
+    }
+
+  -- For a given expression, returns all variables directly bound in that
+  -- expression.
+  sem exprNames: Expr -> [Name]
+  sem exprNames =
+  | t -> exprNamesAcc [] t
+  sem exprNamesAcc: [Name] -> Expr -> [Name]
+  sem exprNamesAcc acc =
+  | TmVar t -> acc
+  | TmLet t -> exprNamesAcc (cons t.ident acc) t.inexpr
+  | TmRecLets t ->
+      foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
+        acc t.bindings
+  | TmType t -> exprNamesAcc acc t.inexpr
+  | TmConDef t -> exprNamesAcc acc t.inexpr
+  | TmUtest t -> exprNamesAcc acc t.next
+  | TmExt t -> exprNamesAcc acc t.inexpr
+  | t -> errorSingle [infoTm t] "Error in exprNames for CFA"
+
   sem generateAlignConstraints  =
   | _ -> []
   | TmLet { ident = ident, body = TmLam t } ->
-    [ CstrAlign { id = t.ident, names = exprNames t.body} ]
+    map (lam n. cstrAlignDirect t.ident n) (exprNames t.body)
+  | TmRecLets { bindings = bindings } ->
+    join (map (lam b: RecLetBinding.
+      match b.body with TmLam t then
+        map (lam n. cstrAlignDirect t.ident n) (exprNames t.body)
+      else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
+    ) bindings)
   | TmLet { ident = ident, body = TmMatch t } ->
     let innerNames = concat (exprNames t.thn) (exprNames t.els) in
     match t.target with TmVar tv then
       let cstrs =
         if patFail t.pat then
-          [CstrStochAlign { target = tv.ident, names = innerNames }]
+          map (lam n. cstrStochAlignDirect tv.ident n) innerNames
         else []
       in
-      cons (CstrAlign { id = ident, names = innerNames }) cstrs
+      concat (map (lam n. cstrAlignDirect ident n) innerNames) cstrs
     else errorSingle [infoTm t.target] "Not a TmVar in match target"
-  | TmLet { ident = ident, body = TmApp app} ->
+  | TmLet { ident = ident, body = TmApp app } ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
-        [ CstrAlignApp { id = ident, lhs = l.ident },
-          CstrStochAlignApp { lhs = l.ident }
+        [
+          CstrDirectAvCstrs {
+            lhs = ident, lhsav = AVUnaligned {},
+            rhs = [CstrAlignLamApp { lhs = l.ident }]
+          },
+          CstrDirectAvCstrs {
+            lhs = l.ident, lhsav = AVStoch {},
+            rhs = [CstrAlignLamApp { lhs = l.ident }]
+          }
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
 end
 
-lang MExprPPLCFA = StochCFA + AlignCFA
+lang CheckpointCFA = PPLCFA
+
+  syn AbsVal =
+  | AVCheckpoint {}
+
+  sem absValToString (env: PprintEnv) =
+  | AVCheckpoint {} -> (env, "checkpoint")
+
+  sem cmpAbsValH =
+  | (AVCheckpoint _, AVCheckpoint _) -> 0
+
+  -- Checkpoint CFA is custom (should not propagate as part of regular
+  -- direct constraints)
+  sem isDirect =
+  | AVCheckpoint _ -> false
+
+  syn Constraint =
+  -- {lam x. b} ⊆ lhs ⇒ ({checkpoint} ⊆ x ⇒ {checkpoint} ⊆ res)
+  | CstrCheckpointLamApp { lhs: Name, res: Name }
+  -- const<id> ⊆ lhs ⇒ ({checkpoint} ⊆ id ⇒ {checkpoint} ⊆ res)
+  | CstrCheckpointConstApp { lhs: Name, res: Name }
+  -- {lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
+  | CstrCheckpointLam { lhs: Name }
+  -- const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id
+  | CstrCheckpointConst { lhs: Name }
+  -- NOTE(dlunde,2022-06-15): We don't actually need to consider externals
+  -- here. They are always fully applied, and can never propagate AVCheckpoint
+  -- to other functions as a result.
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrCheckpointLamApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrCheckpointConstApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrCheckpointLam r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrCheckpointConst r & cstr -> initConstraintName r.lhs graph cstr
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrCheckpointLamApp { lhs = lhs, res = res } ->
+    match update.1 with AVLam { ident = x } then
+      initConstraint graph (cstrCheckpointDirect x res)
+    else graph
+  | CstrCheckpointConstApp { lhs = lhs, res = res } ->
+    match update.1 with AVConst { id = id } then
+      initConstraint graph (cstrCheckpointDirect id res)
+    else graph
+  | CstrCheckpointLam { lhs = lhs } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      addData graph (AVCheckpoint {}) x
+    else graph
+  | CstrCheckpointConst { lhs = lhs } ->
+    match update.1 with AVConst { id = id } then
+      addData graph (AVCheckpoint {}) id
+    else graph
+
+  sem constraintToString (env: PprintEnv) =
+  | CstrCheckpointLamApp { lhs = lhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
+  | CstrCheckpointConstApp { lhs = lhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [ "{const<>x<>} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
+  | CstrCheckpointLam { lhs = lhs } ->
+    match pprintVarName env lhs with (env,lhs) in
+    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x<" ])
+  | CstrCheckpointConst { lhs = lhs } ->
+    match pprintVarName env lhs with (env,lhs) in
+    (env, join [ "const<>id<> ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >id<" ])
+
+  -- {checkpoint} ⊆ lhs ⇒ {checkpoint} ⊆ rhs
+  sem cstrCheckpointDirect (lhs: Name) =
+  | rhs -> CstrDirectAv {
+      lhs = lhs, lhsav = AVCheckpoint {}, rhs = rhs, rhsav = AVCheckpoint {}
+    }
+
+
+  sem checkpoint: Expr -> Bool
+  sem checkpoint =
+  | _ -> false
+
+  sem generateCheckpointInitConstraints  =
+  | _ -> []
+  | TmLet { ident = ident, body = b } ->
+    if checkpoint b then [ CstrInit { lhs = AVCheckpoint {}, rhs = ident } ]
+    else []
+
+  -- For a given expression, returns all variables directly bound in that
+  -- expression as a result of applications, matches, or `let`s with bodies
+  -- that are checkpoints (e.g., often weight/assume/observe).
+  sem exprCheckpointNames: Expr -> [Name]
+  sem exprCheckpointNames =
+  | t -> exprCheckpointNamesAcc [] t
+  sem exprCheckpointNamesAcc: [Name] -> Expr -> [Name]
+  sem exprCheckpointNamesAcc acc =
+  | TmVar t -> acc
+  | TmLet t->
+    if checkpoint t.body then
+      exprCheckpointNamesAcc (cons t.ident acc) t.inexpr
+    else
+      exprCheckpointNamesAcc acc t.inexpr
+  | TmLet { ident = ident, body = TmApp _ | TmMatch _, inexpr = inexpr} ->
+    exprCheckpointNamesAcc (cons ident acc) inexpr
+  | TmRecLets t ->
+      foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
+        acc t.bindings
+  | TmType t -> exprCheckpointNamesAcc acc t.inexpr
+  | TmConDef t -> exprCheckpointNamesAcc acc t.inexpr
+  | TmUtest t -> exprCheckpointNamesAcc acc t.next
+  | TmExt t -> exprCheckpointNamesAcc acc t.inexpr
+  | t -> errorSingle [infoTm t] "Error in exprCheckpointNames for CFA"
+
+
+  sem generateCheckpointConstraints  =
+  | _ -> []
+  | TmLet { ident = ident, body = TmLam t } ->
+    -- If any expression in the body of the lambda evaluates a checkpoint, the
+    -- lambda evaluates a checkpoint
+    let cstrs =
+      map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprCheckpointNames t.body)
+    in
+    -- If the lambda evaluates a checkpoint, the ident is also said to contain
+    -- a checkpoint (for symmetry with how constant functions are handled).
+    cons (cstrCheckpointDirect t.ident ident) cstrs
+  | TmRecLets { bindings = bindings } ->
+    join (map (lam b: RecLetBinding.
+      match b.body with TmLam t then
+        -- Same as for lambda
+        let cstrs =
+          map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprCheckpointNames t.body)
+        in
+        cons (cstrCheckpointDirect t.ident b.ident) cstrs
+      else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
+    ) bindings)
+  | TmLet { ident = ident, body = TmMatch t } ->
+    -- If any expression in one of the match branches evaluates a checkpoint, the
+    -- match itself evaluates a checkpoint
+    let innerNames = concat (exprCheckpointNames t.thn) (exprCheckpointNames t.els) in
+    map (lam lhs. cstrCheckpointDirect lhs ident) innerNames
+  | TmLet { ident = ident, body = TmApp app } ->
+    match app.lhs with TmVar l then
+      match app.rhs with TmVar r then
+        [
+          CstrCheckpointLamApp { lhs = l.ident, res = ident },
+          CstrCheckpointConstApp { lhs = l.ident, res = ident },
+
+          -- {checkpoint} ⊆ res ⇒
+          --   ({lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
+          --   AND const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id)
+          CstrDirectAvCstrs {
+            lhs = ident, lhsav = AVCheckpoint (),
+            rhs = [
+              CstrCheckpointLam { lhs = l.ident },
+              CstrCheckpointConst { lhs = l.ident }
+            ]
+          }
+        ]
+      else errorSingle [infoTm app.rhs] "Not a TmVar in application"
+    else errorSingle [infoTm app.lhs] "Not a TmVar in application"
+
+end
+
+lang MExprPPLCFA = StochCFA + AlignCFA + CheckpointCFA
 end
 
 let extractUnaligned = use MExprPPLCFA in
@@ -306,7 +478,20 @@ let extractUnaligned = use MExprPPLCFA in
         else acc
       ) (setEmpty nameCmp) cfaRes.data
 
+let extractCheckpoint = use MExprPPLCFA in
+  lam cfaRes: CFAGraph.
+    mapFoldWithKey (lam acc: Set Name. lam k: Name. lam v: Set AbsVal.
+        if setAny (lam av. match av with AVCheckpoint _ then true else false) v
+        then setInsert k acc
+        else acc
+      ) (setEmpty nameCmp) cfaRes.data
+
 lang Test = MExprPPLCFA + MExprANFAll + DPPLParser
+
+  -- Use weight as checkpoint for tests
+  sem checkpoint =
+  | TmWeight _ -> true
+
 end
 
 -----------
@@ -359,7 +544,7 @@ let _test: Bool -> Expr -> [String] -> [(String,Bool)] =
     ) vars
 in
 
--- Custom equality function for testing stochastic value flow only
+-- Custom equality function for testing
 let eqTest = eqSeq (lam t1:(String,Bool). lam t2:(String,Bool).
   if eqString t1.0 t2.0 then eqBool t1.1 t2.1
   else false
@@ -498,9 +683,38 @@ utest _test false t ["t", "res"] with [
   ("res",true)
 ] using eqTest in
 
+-- Stochastic externals
+let t = _parse "
+  external log : Float -> Float in
+  let x = log (assume (Beta 2.0 2.0)) in
+  x
+------------------------" in
+-- printLn (mexprToString (normalizeTerm t));
+utest _test false t ["x"] with [
+  ("x", true)
+] using eqTest in
+
+-- Stochastic flow over names
+let t = _parse "
+  let res =
+    match assume (Bernoulli 0.5) with true then
+      let t = 1 in
+      t
+    else
+      2
+  in
+  res
+------------------------" in
+utest _test false t ["t", "res"] with [
+  ("t", false),
+  ("res",true)
+] using eqTest in
+
 ---------------------
 -- ALIGNMENT TESTS --
 ---------------------
+
+-- TODO(dlunde,2022-06-15): Add missing tests for recursive lets!
 
 let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
   lam debug. lam t. lam vars.
@@ -508,10 +722,7 @@ let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
     let env = if debug then Some pprintEnvEmpty else None () in
     match _testBase env tANF with (env, cfaRes) in
     let aRes: Set Name = extractUnaligned cfaRes in
-    let sSet: Set String = setFold
-      (lam acc. lam n. setInsert (nameGetStr n) acc)
-      (setEmpty cmpString) aRes in
-    map (lam var: String. (var, not (setMem var sSet))) vars
+    map (lam var: String. (var, not (setMem (nameNoSym var) aRes))) vars
 in
 
 
@@ -613,16 +824,211 @@ utest _test false t ["t1", "t2", "res"] with [
   ("res", true)
 ] using eqTest in
 
-
 -- Test in `models/coreppl/crbd/crbd-unaligned.mc`
+let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    match _testBase env tANF with (env, cfaRes) in
+    let aRes: Set Name = extractUnaligned cfaRes in
+    let sSet: Set String = setFold
+      (lam acc. lam n. setInsert (nameGetStr n) acc)
+      (setEmpty cmpString) aRes in
+    map (lam var: String. (var, not (setMem var sSet))) vars
+in
 let t = symbolizeExpr symEnvEmpty
           (parseMCorePPLFile "coreppl/models/crbd/crbd-unaligned.mc") in
-utest _test false t ["w1","w2","w3"] with [
+utest _testWithSymbolize false t ["w1","w2","w3"] with [
   ("w1", false),
   ("w2", false),
   ("w3", true)
 ]
 using eqTest in
+
+----------------------
+-- CHECKPOINT TESTS --
+----------------------
+
+let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    match _testBase env tANF with (env, cfaRes) in
+    let aRes: Set Name = extractCheckpoint cfaRes in
+    map (lam var: String. (var, setMem (nameNoSym var) aRes)) vars
+in
+
+let t = _parse "
+  let a = weight 1.0 in
+  let b = assume (Bernoulli 0.5) in
+  let c = addi 1 2 in
+  c
+------------------------" in
+utest _test false t ["a","b","c"] with [
+  ("a", true),
+  ("b", false),
+  ("c", false)
+] using eqTest in
+
+let t = _parse "
+  let f = (lam x.
+    let a = weight 1.0 in
+    let b = assume (Bernoulli 0.5) in
+    let c = addi 1 2 in
+    c) in
+  let g = (lam y.
+    let a2 = assume (Bernoulli 0.5) in
+    let b2 = addi 1 2 in
+    b2) in
+  let d = f 1 in
+  let e = g 1 in
+  e
+------------------------" in
+utest _test false t ["f","x","a","b","y","a2","b2","c","d","e"] with [
+  ("f", true),
+  ("x", true),
+  ("a", true),
+  ("b", false),
+  ("y", false),
+  ("a2", false),
+  ("b2", false),
+  ("c", false),
+  ("d", true),
+  ("e", false)
+] using eqTest in
+
+let t = _parse "
+  let f = (lam x. let a = weight 1.0 in a) in
+  let c1 = addi in
+  let c2 = addi in
+  let g = (lam y.
+    let b = y 1 in
+    b
+  ) in
+  let c = g f in
+  let d = g c1 in
+  let e = c1 1 in
+  let r = c2 1 in
+  r
+------------------------" in
+utest _test false t ["f","x","a","c1","c2","g","y","b","c","d","e","r"] with [
+  ("f", true),
+  ("x", true),
+  ("a", true),
+  ("c1", true),
+  ("c2", false),
+  ("g", true),
+  ("y", true),
+  ("b", true),
+  ("c", true),
+  ("d", true),
+  ("e", true),
+  ("r", false)
+] using eqTest in
+
+let t = _parse "
+  let a =
+    match 1 with _ then
+      match 1 with _ then
+        let mb = () in mb
+      else ()
+    else
+      match 1 with _ then
+        let ma = weight 1.0 in ma
+      else ()
+  in
+  let b =
+    match 1 with _ then
+      match 1 with _ then
+        let mc = () in mc
+      else ()
+    else
+      match 1 with _ then ()
+      else ()
+  in
+  let c = addi 1 2 in
+  c
+------------------------" in
+utest _test false t ["a","b","c","ma","mb","mc"] with [
+  ("a", true),
+  ("b", false),
+  ("c", false),
+  ("ma", true),
+  ("mb", false),
+  ("mc", false)
+] using eqTest in
+
+let t = _parse "
+  (lam x.
+    let a = x () in
+    let b = weight 1.0 in
+    b
+  )
+------------------------" in
+utest _test false t ["x","a","b"] with [
+  ("x", true),
+  ("a", false),
+  ("b", true)
+] using eqTest in
+
+let t = _parse "
+  recursive
+    let f1 = lam a. let t = (lam b. let ti = weight 1.0 in b) in t
+    let f2 = lam c. c
+  in
+  let t1 = 1 in
+  let t2 = f1 t1 in
+  let t3 = 2 in
+  let x = t2 t3 in
+  let t4 = 3 in
+  let y = f2 t4 in
+  let t5 = addi in
+  let t6 = t5 x in
+  let t7 = t6 y in
+  (lam x. x) t7
+" in
+utest _test false t ["f1","t","a","b","c","x","t2"] with [
+  ("f1", false),
+  ("t", true),
+  ("a", false),
+  ("b", true),
+  ("c", false),
+  ("x", true),
+  ("t2", false)
+] using eqTest in
+
+let t = _parse "
+  let c1 = addf in
+  let c2 = addf in
+  let f1 = lam x1. lam x2. x2 in
+  let f2 = lam y1. lam y2. let w = weight 1.0 in y2 in
+  let apply1 = lam fa1. let app1 = fa1 1.0 2.0 in app1 in
+  let apply2 = lam fa2. let app2 = fa2 1.0 2.0 in app2 in
+  let d1 = apply1 c1 in
+  let d2 = apply1 f1 in
+  let d3 = apply2 c2 in
+  apply2 f2
+" in
+utest _test false t [
+  "c1","c2","f1","f2","apply1","apply2",
+  "x1","x2","y1","y2","w","fa1","app1","fa2","app2"
+] with [
+  ("c1", false),
+  ("c2", true),
+  ("f1", false),
+  ("f2", true),
+  ("apply1", false),
+  ("apply2", true),
+  ("x1", false),
+  ("x2", false),
+  ("y1", true),
+  ("y2", true),
+  ("w", true),
+  ("fa1", false),
+  ("app1", false),
+  ("fa2", true),
+  ("app2", true)
+] using eqTest in
 
 ()
 

@@ -1328,6 +1328,9 @@ let rootPPLCompile: Options -> Expr -> RPProg =
   -- ANF transformation
   let prog: Expr = normalizeTerm prog in
 
+  -- Type check (again, due to ANF externals...)
+  let prog: Expr = typeCheck prog in
+
   -- Resample at aligned weight if enabled
   let prog =
     -- Add resample after weights (given a predicate)

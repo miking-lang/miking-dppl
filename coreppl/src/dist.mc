@@ -110,7 +110,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   -- Type checking
   sem typeCheckDist : TCEnv -> Info -> Dist -> Type
   -- Intentionally left blank
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckExpr (env : TCEnv) =
   | TmDist t ->
     let dist = smapDist_Expr_Expr (typeCheckExpr env) t.dist in
     let innerTyDist = typeCheckDist env t.info dist in

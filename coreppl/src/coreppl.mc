@@ -90,7 +90,7 @@ lang Infer =
                  with ty = symbolizeType env t.ty }
 
   -- Type check
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckExpr (env : TCEnv) =
   | TmInfer t ->
     let model = typeCheckExpr env t.model in
     let tyRes = newvar env.currentLvl t.info in
@@ -166,7 +166,7 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
                   with ty = symbolizeType env t.ty }
 
   -- Type check
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckExpr (env : TCEnv) =
   | TmAssume t ->
     let dist = typeCheckExpr env t.dist in
     let tyRes = newvar env.currentLvl t.info in
@@ -247,7 +247,7 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
                     with ty = symbolizeType env t.ty }
 
   -- Type check
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckExpr (env : TCEnv) =
   | TmObserve t ->
     let value = typeCheckExpr env t.value in
     let dist = typeCheckExpr env t.dist in
@@ -333,7 +333,7 @@ lang Weight =
                   with ty = symbolizeType env t.ty }
 
   -- Type check
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckExpr (env : TCEnv) =
   | TmWeight t ->
     let weight = typeCheckExpr env t.weight in
     unify [t.info] env (tyTm weight) (TyFloat { info = t.info });
