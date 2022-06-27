@@ -7,36 +7,34 @@ include "mexpr/cfa.mc"
 
 lang PPLCFA = MExprCFA + MExprPPL
 
-  type MCGF = Name -> Name -> Pat -> [Constraint]
-
   ----------------------------------------------------------------------------
   -- TODO(dlunde,2022-05-30): It would be nice if we could achieve the
   -- below in a more modular way (e.g., alignment part of analysis is defined
   -- in the alignment fragment, stochastic part in the stochastic fragment,
   -- etc.).
   ----------------------------------------------------------------------------
-  sem generateStochMatchResConstraints : MCGF
-  sem generateStochMatchConstraints : MCGF
-  sem mcgfs : () -> [MCGF]
+  sem generateStochMatchResConstraints : MatchGenFun
+  sem generateStochMatchConstraints : IndexMap -> MatchGenFun
+  sem mcgfs : IndexMap -> [MatchGenFun]
   sem mcgfs =
-  | _ -> [
+  | im -> [
       generateMatchConstraints,
       generateStochMatchResConstraints,
-      generateStochMatchConstraints
+      generateStochMatchConstraints im
     ]
-  sem generateStochConstraints : Expr -> [Constraint]
-  sem generateAlignConstraints : Expr -> [Constraint]
-  sem generateCheckpointInitConstraints : Expr -> [Constraint]
-  sem generateCheckpointConstraints : Expr -> [Constraint]
-  sem cgfs : [MCGF] -> [Expr -> [Constraint]]
+  sem generateStochConstraints : IndexMap -> GenFun
+  sem generateAlignConstraints : IndexMap -> GenFun
+  sem generateCheckpointInitConstraints : IndexMap -> GenFun
+  sem generateCheckpointConstraints : IndexMap -> GenFun
+  sem cgfs : CFAGraph -> [Expr -> [Constraint]]
   sem cgfs =
-  | mcgfs -> [
-      generateConstraints,
-      generateConstraintsMatch mcgfs,
-      generateStochConstraints,
-      generateAlignConstraints,
-      generateCheckpointInitConstraints,
-      generateCheckpointConstraints
+  | graph -> [
+      generateConstraints graph.im,
+      generateConstraintsMatch graph.im graph.mcgfs,
+      generateStochConstraints graph.im,
+      generateAlignConstraints graph.im,
+      generateCheckpointInitConstraints graph.im,
+      generateCheckpointConstraints graph.im
     ]
   ----------------------------------------------------------------------------
 
@@ -60,13 +58,13 @@ lang PPLCFA = MExprCFA + MExprPPL
   | t ->
 
     -- Initial graph
-    let graph: CFAGraph = emptyCFAGraph in
+    let graph: CFAGraph = emptyCFAGraph t in
 
     -- Initialize match constraint generating functions
-    let graph = { graph with mcgfs = mcgfs () } in
+    let graph = { graph with mcgfs = mcgfs graph.im } in
 
     -- Initialize constraint generating functions
-    let cgfs = cgfs graph.mcgfs in
+    let cgfs: [Expr -> [Constraint]] = cgfs graph in
 
     -- Recurse over program and generate constraints
     let cstrs: [Constraint] = collectConstraints cgfs [] t in
@@ -84,7 +82,7 @@ lang StochCFA = PPLCFA
   syn AbsVal =
   | AVStoch {}
 
-  sem absValToString (env: PprintEnv) =
+  sem absValToString graph (env: PprintEnv) =
   | AVStoch {} -> (env, "stoch")
 
   sem cmpAbsValH =
@@ -92,20 +90,20 @@ lang StochCFA = PPLCFA
 
   syn Constraint =
   -- {const} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
-  | CstrConstStochApp { lhs: Name, rhs: Name, res: Name }
+  | CstrConstStochApp { lhs: IName, rhs: IName, res: IName }
   -- {ext} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
-  | CstrExtStochApp { lhs: Name, rhs: Name, res: Name }
+  | CstrExtStochApp { lhs: IName, rhs: IName, res: IName }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrConstStochApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrExtStochApp r & cstr -> initConstraintName r.lhs graph cstr
 
-  sem cstrStochDirect (lhs: Name) =
+  sem cstrStochDirect (lhs: IName) =
   | rhs -> CstrDirectAv {
       lhs = lhs, lhsav = AVStoch {}, rhs = rhs, rhsav = AVStoch {}
     }
 
-  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
     match update.1 with AVConst _ then
       initConstraint graph (cstrStochDirect rhs res)
@@ -122,32 +120,33 @@ lang StochCFA = PPLCFA
   sem propagateConstraintConst res args graph =
   | c -> graph
 
-  sem constraintToString (env: PprintEnv) =
+  sem constraintToString graph (env: PprintEnv) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env rhs with (env,rhs) in
-    match pprintVarName env res with (env,res) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
+    match pprintVarIName graph.im env res with (env,res) in
     (env, join [
       "{const} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
   | CstrExtStochApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env rhs with (env,rhs) in
-    match pprintVarName env res with (env,res) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
+    match pprintVarIName graph.im env res with (env,res) in
     (env, join [
       "{ext} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
 
-  sem generateStochConstraints =
+  sem generateStochConstraints im =
   | _ -> []
   -- Stochastic values
-  | TmLet { ident = ident, body = TmAssume _ } ->
-    [ CstrInit { lhs = AVStoch {}, rhs = ident } ]
+  | TmLet ({ ident = ident, body = TmAssume _ } & b) ->
+    [ CstrInit { lhs = AVStoch {}, rhs = name2int im b.info ident } ]
   -- The below ensures all constants are tracked as needed for stoch
   -- propagation. In the base CFA fragment in Miking, constant constraints are
   -- only generated from a subset of constants. Here, we need to track _all_
   -- constants. NOTE(dlunde,2022-05-18): There is some duplication here, as
   -- some constants (e.g., constants for sequences) are generated both here and
   -- in the base Miking CFA.
-  | TmLet { ident = ident, body = TmConst { val = c } } ->
+  | TmLet ({ ident = ident, body = TmConst { val = c } } & b) ->
+    let ident = name2int im b.info ident in
     let arity = constArity c in
     if eqi arity 0 then []
     else [
@@ -161,9 +160,10 @@ lang StochCFA = PPLCFA
   -- Track all externals (similar to constants). If a stochastic value is
   -- supplied as argument to an external, we assume that the result is
   -- stochastic as well.
-  | TmExt {
+  | TmExt ({
       tyIdent = tyIdent, inexpr = TmLet { ident = ident, inexpr = inexpr }
-    } ->
+    } & b) ->
+    let ident = name2int im b.info ident in
     let arity = arityFunType tyIdent in
     if eqi arity 0 then []
     else [
@@ -175,23 +175,27 @@ lang StochCFA = PPLCFA
       }
     ]
 
-  | TmLet { ident = ident, body = TmApp app} ->
+  | TmLet ({ ident = ident, body = TmApp app } & b) ->
     match app.lhs with TmVar l then
-      match app.rhs with TmVar r then [
-        cstrStochDirect l.ident ident,
-        CstrConstStochApp { lhs = l.ident, rhs = r.ident, res = ident},
-        CstrExtStochApp { lhs = l.ident, rhs = r.ident, res = ident}
+      match app.rhs with TmVar r then
+      let ident = name2int im b.info ident in
+      let lident = name2int im l.info l.ident in
+      let rident = name2int im r.info r.ident in
+      [
+        cstrStochDirect lident ident,
+        CstrConstStochApp { lhs = lident, rhs = rident, res = ident},
+        CstrExtStochApp { lhs = lident, rhs = rident, res = ident}
       ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
-  sem generateStochMatchResConstraints (id: Name) (target: Name) =
+  sem generateStochMatchResConstraints (id: IName) (target: IName) =
   -- Result of match is stochastic if match can fail stochastically
   | pat -> if patFail pat then [cstrStochDirect target id] else []
 
   -- Ensures all extracted pattern components of a stochastic value are also
   -- stochastic. For example, all elements of a stochastic list are stochastic.
-  sem generateStochMatchConstraints (id: Name) (target: Name) =
+  sem generateStochMatchConstraints im id target =
   | pat ->
     recursive let f = lam acc. lam pat.
       let acc = match pat with PatNamed { ident = PName name }
@@ -201,7 +205,7 @@ lang StochCFA = PPLCFA
     in
     let pnames = f [] pat in
     foldl (lam acc. lam name.
-      cons (cstrStochDirect target name) acc
+      cons (cstrStochDirect target (name2int im (infoPat pat) name)) acc
     ) [] pnames
 
 end
@@ -211,7 +215,7 @@ lang AlignCFA = PPLCFA + StochCFA
   syn AbsVal =
   | AVUnaligned {}
 
-  sem absValToString (env: PprintEnv) =
+  sem absValToString graph (env: PprintEnv) =
   | AVUnaligned {} -> (env, "unaligned")
 
   sem cmpAbsValH =
@@ -224,28 +228,28 @@ lang AlignCFA = PPLCFA + StochCFA
 
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x
-  | CstrAlignLamApp { lhs: Name }
+  | CstrAlignLamApp { lhs: IName }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrAlignLamApp r & cstr -> initConstraintName r.lhs graph cstr
 
-  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrAlignLamApp { lhs = lhs } ->
     match update.1 with AVLam { ident = x, body = b } then
       addData graph (AVUnaligned {}) x
     else graph
 
-  sem constraintToString (env: PprintEnv) =
+  sem constraintToString graph (env: PprintEnv) =
   | CstrAlignLamApp { lhs = lhs } ->
-    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {unaligned} ⊆ >x<"])
 
-  sem cstrAlignDirect (lhs: Name) =
+  sem cstrAlignDirect (lhs: IName) =
   | rhs -> CstrDirectAv {
       lhs = lhs, lhsav = AVUnaligned {}, rhs = rhs, rhsav = AVUnaligned {}
     }
 
-  sem cstrStochAlignDirect (lhs: Name) =
+  sem cstrStochAlignDirect (lhs: IName) =
   | rhs -> CstrDirectAv {
       lhs = lhs, lhsav = AVStoch {}, rhs = rhs, rhsav = AVUnaligned {}
     }
@@ -268,37 +272,45 @@ lang AlignCFA = PPLCFA + StochCFA
   | TmExt t -> exprNamesAcc acc t.inexpr
   | t -> errorSingle [infoTm t] "Error in exprNames for CFA"
 
-  sem generateAlignConstraints  =
+  sem generateAlignConstraints im =
   | _ -> []
-  | TmLet { ident = ident, body = TmLam t } ->
-    map (lam n. cstrAlignDirect t.ident n) (exprNames t.body)
-  | TmRecLets { bindings = bindings } ->
+  | TmLet ({ ident = ident, body = TmLam t } & b) ->
+    let tident = name2int im t.info t.ident in
+    map (lam n. cstrAlignDirect tident (name2int im b.info n)) (exprNames t.body)
+  | TmRecLets ({ bindings = bindings } & rl) ->
     join (map (lam b: RecLetBinding.
       match b.body with TmLam t then
-        map (lam n. cstrAlignDirect t.ident n) (exprNames t.body)
+        let tident = name2int im t.info t.ident in
+        map (lam n. cstrAlignDirect tident (name2int im rl.info n))
+          (exprNames t.body)
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
     ) bindings)
-  | TmLet { ident = ident, body = TmMatch t } ->
+  | TmLet ({ ident = ident, body = TmMatch t } & b) ->
     let innerNames = concat (exprNames t.thn) (exprNames t.els) in
     match t.target with TmVar tv then
       let cstrs =
         if patFail t.pat then
-          map (lam n. cstrStochAlignDirect tv.ident n) innerNames
+          let tvident = name2int im tv.info tv.ident in
+          map (lam n. cstrStochAlignDirect tvident (name2int im t.info n))
+            innerNames
         else []
       in
-      concat (map (lam n. cstrAlignDirect ident n) innerNames) cstrs
+      let ident = name2int im b.info ident in
+      concat
+        (map (lam n. cstrAlignDirect ident (name2int im b.info n)) innerNames)
+        cstrs
     else errorSingle [infoTm t.target] "Not a TmVar in match target"
-  | TmLet { ident = ident, body = TmApp app } ->
+  | TmLet ({ ident = ident, body = TmApp app } & b) ->
     match app.lhs with TmVar l then
-      match app.rhs with TmVar r then
+      match app.rhs with TmVar _ then
         [
           CstrDirectAvCstrs {
-            lhs = ident, lhsav = AVUnaligned {},
-            rhs = [CstrAlignLamApp { lhs = l.ident }]
+            lhs = name2int im b.info ident, lhsav = AVUnaligned {},
+            rhs = [CstrAlignLamApp { lhs = name2int im l.info l.ident }]
           },
           CstrDirectAvCstrs {
-            lhs = l.ident, lhsav = AVStoch {},
-            rhs = [CstrAlignLamApp { lhs = l.ident }]
+            lhs = name2int im b.info l.ident, lhsav = AVStoch {},
+            rhs = [CstrAlignLamApp { lhs = name2int im l.info l.ident }]
           }
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
@@ -311,7 +323,7 @@ lang CheckpointCFA = PPLCFA
   syn AbsVal =
   | AVCheckpoint {}
 
-  sem absValToString (env: PprintEnv) =
+  sem absValToString graph (env: PprintEnv) =
   | AVCheckpoint {} -> (env, "checkpoint")
 
   sem cmpAbsValH =
@@ -324,13 +336,13 @@ lang CheckpointCFA = PPLCFA
 
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ ({checkpoint} ⊆ x ⇒ {checkpoint} ⊆ res)
-  | CstrCheckpointLamApp { lhs: Name, res: Name }
+  | CstrCheckpointLamApp { lhs: IName, res: IName }
   -- const<id> ⊆ lhs ⇒ ({checkpoint} ⊆ id ⇒ {checkpoint} ⊆ res)
-  | CstrCheckpointConstApp { lhs: Name, res: Name }
+  | CstrCheckpointConstApp { lhs: IName, res: IName }
   -- {lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
-  | CstrCheckpointLam { lhs: Name }
+  | CstrCheckpointLam { lhs: IName }
   -- const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id
-  | CstrCheckpointConst { lhs: Name }
+  | CstrCheckpointConst { lhs: IName }
   -- NOTE(dlunde,2022-06-15): We don't actually need to consider externals
   -- here. They are always fully applied, and can never propagate AVCheckpoint
   -- to other functions as a result.
@@ -341,7 +353,7 @@ lang CheckpointCFA = PPLCFA
   | CstrCheckpointLam r & cstr -> initConstraintName r.lhs graph cstr
   | CstrCheckpointConst r & cstr -> initConstraintName r.lhs graph cstr
 
-  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrCheckpointLamApp { lhs = lhs, res = res } ->
     match update.1 with AVLam { ident = x } then
       initConstraint graph (cstrCheckpointDirect x res)
@@ -359,24 +371,24 @@ lang CheckpointCFA = PPLCFA
       addData graph (AVCheckpoint {}) id
     else graph
 
-  sem constraintToString (env: PprintEnv) =
+  sem constraintToString graph (env: PprintEnv) =
   | CstrCheckpointLamApp { lhs = lhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env res with (env,res) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env res with (env,res) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
   | CstrCheckpointConstApp { lhs = lhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env res with (env,res) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env res with (env,res) in
     (env, join [ "{const<>x<>} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
   | CstrCheckpointLam { lhs = lhs } ->
-    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x<" ])
   | CstrCheckpointConst { lhs = lhs } ->
-    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
     (env, join [ "const<>id<> ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >id<" ])
 
   -- {checkpoint} ⊆ lhs ⇒ {checkpoint} ⊆ rhs
-  sem cstrCheckpointDirect (lhs: Name) =
+  sem cstrCheckpointDirect (lhs: IName) =
   | rhs -> CstrDirectAv {
       lhs = lhs, lhsav = AVCheckpoint {}, rhs = rhs, rhsav = AVCheckpoint {}
     }
@@ -386,9 +398,10 @@ lang CheckpointCFA = PPLCFA
   sem checkpoint =
   | _ -> false
 
-  sem generateCheckpointInitConstraints  =
+  sem generateCheckpointInitConstraints im =
   | _ -> []
-  | TmLet { ident = ident, body = b } ->
+  | TmLet ({ ident = ident, body = b } & l) ->
+    let ident = name2int im l.info ident in
     if checkpoint b then [ CstrInit { lhs = AVCheckpoint {}, rhs = ident } ]
     else []
 
@@ -418,38 +431,49 @@ lang CheckpointCFA = PPLCFA
   | t -> errorSingle [infoTm t] "Error in exprCheckpointNames for CFA"
 
 
-  sem generateCheckpointConstraints  =
+  sem generateCheckpointConstraints im =
   | _ -> []
-  | TmLet { ident = ident, body = TmLam t } ->
+  | TmLet ({ ident = ident, body = TmLam t } & b) ->
     -- If any expression in the body of the lambda evaluates a checkpoint, the
     -- lambda evaluates a checkpoint
+    let tident = name2int im t.info t.ident in
+    let ident = name2int im b.info ident in
     let cstrs =
-      map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprCheckpointNames t.body)
+      map (lam lhs. cstrCheckpointDirect (name2int im t.info lhs) tident)
+        (exprCheckpointNames t.body)
     in
     -- If the lambda evaluates a checkpoint, the ident is also said to contain
     -- a checkpoint (for symmetry with how constant functions are handled).
-    cons (cstrCheckpointDirect t.ident ident) cstrs
-  | TmRecLets { bindings = bindings } ->
+    cons (cstrCheckpointDirect tident ident) cstrs
+  | TmRecLets ({ bindings = bindings } & rl) ->
     join (map (lam b: RecLetBinding.
       match b.body with TmLam t then
         -- Same as for lambda
+        let tident = name2int im t.info t.ident in
+        let bident = name2int im rl.info b.ident in
         let cstrs =
-          map (lam lhs. cstrCheckpointDirect lhs t.ident) (exprCheckpointNames t.body)
+          map (lam lhs. cstrCheckpointDirect (name2int im t.info lhs) tident)
+            (exprCheckpointNames t.body)
         in
-        cons (cstrCheckpointDirect t.ident b.ident) cstrs
+        cons (cstrCheckpointDirect tident bident) cstrs
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
     ) bindings)
-  | TmLet { ident = ident, body = TmMatch t } ->
+  | TmLet ({ ident = ident, body = TmMatch t } & b) ->
     -- If any expression in one of the match branches evaluates a checkpoint, the
     -- match itself evaluates a checkpoint
-    let innerNames = concat (exprCheckpointNames t.thn) (exprCheckpointNames t.els) in
-    map (lam lhs. cstrCheckpointDirect lhs ident) innerNames
-  | TmLet { ident = ident, body = TmApp app } ->
+    let ident = name2int im b.info ident in
+    let innerNames =
+      concat (exprCheckpointNames t.thn) (exprCheckpointNames t.els)
+    in
+    map (lam lhs. cstrCheckpointDirect (name2int im b.info lhs) ident) innerNames
+  | TmLet ({ ident = ident, body = TmApp app } & b) ->
     match app.lhs with TmVar l then
-      match app.rhs with TmVar r then
+      match app.rhs with TmVar _ then
+        let ident = name2int im b.info ident in
+        let lident = name2int im l.info l.ident in
         [
-          CstrCheckpointLamApp { lhs = l.ident, res = ident },
-          CstrCheckpointConstApp { lhs = l.ident, res = ident },
+          CstrCheckpointLamApp { lhs = lident, res = ident },
+          CstrCheckpointConstApp { lhs = lident, res = ident },
 
           -- {checkpoint} ⊆ res ⇒
           --   ({lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
@@ -457,8 +481,8 @@ lang CheckpointCFA = PPLCFA
           CstrDirectAvCstrs {
             lhs = ident, lhsav = AVCheckpoint (),
             rhs = [
-              CstrCheckpointLam { lhs = l.ident },
-              CstrCheckpointConst { lhs = l.ident }
+              CstrCheckpointLam { lhs = lident },
+              CstrCheckpointConst { lhs = lident }
             ]
           }
         ]
@@ -472,17 +496,17 @@ end
 
 let extractUnaligned = use MExprPPLCFA in
   lam cfaRes: CFAGraph.
-    mapFoldWithKey (lam acc: Set Name. lam k: Name. lam v: Set AbsVal.
+    tensorFoldi (lam acc: Set Name. lam i: [Int]. lam v: Set AbsVal.
         if setAny (lam av. match av with AVUnaligned _ then true else false) v
-        then setInsert k acc
+        then setInsert (int2name cfaRes.im (head i)) acc
         else acc
       ) (setEmpty nameCmp) cfaRes.data
 
 let extractCheckpoint = use MExprPPLCFA in
   lam cfaRes: CFAGraph.
-    mapFoldWithKey (lam acc: Set Name. lam k: Name. lam v: Set AbsVal.
+    tensorFoldi (lam acc: Set Name. lam i: [Int]. lam v: Set AbsVal.
         if setAny (lam av. match av with AVCheckpoint _ then true else false) v
-        then setInsert k acc
+        then setInsert (int2name cfaRes.im (head i)) acc
         else acc
       ) (setEmpty nameCmp) cfaRes.data
 
@@ -536,8 +560,14 @@ let _test: Bool -> Expr -> [String] -> [(String,Bool)] =
   lam debug. lam t. lam vars.
     let env = if debug then Some pprintEnvEmpty else None () in
     match _testBase env t with (_, cfaRes) in
+    let stringMap: Map String Int = mapFoldWithKey (
+        lam acc: Map String Int. lam n: Name. lam i: Int.
+          mapInsert (nameGetStr n) i acc
+      ) (mapEmpty cmpString) cfaRes.im.name2int
+    in
+    let string2int: String -> Int = lam s. mapFindExn s stringMap in
     map (lam var: String.
-      let avs = dataLookup (nameNoSym var) cfaRes in
+      let avs = dataLookup (string2int var) cfaRes in
       let val = setFold
         (lam acc. lam av. match av with AVStoch _ then true else acc) false avs
       in (var, val)
