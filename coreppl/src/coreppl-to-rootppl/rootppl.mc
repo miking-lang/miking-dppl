@@ -189,7 +189,7 @@ lang RootPPL = CAst + CPrettyPrint
   sem printCTop (indent : Int) (env: PprintEnv) =
 
   | CTBBlockData { ty = ty, id = id, len = len } ->
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       match printCType "" env ty with (env,ty) then
         let len = int2string len in
         (env, join ["BBLOCK_DATA_MANAGED(", id, ", ", ty, ", ", len, ")"])
@@ -197,7 +197,7 @@ lang RootPPL = CAst + CPrettyPrint
     else never
 
   | CTBBlockDataSingle { ty = ty, id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       match printCType "" env ty with (env,ty) then
         (env, join ["BBLOCK_DATA_MANAGED_SINGLE(", id, ", ", ty, ")"])
       else never
@@ -206,7 +206,7 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockHelperDecl { ret = ret, id = id, params = params } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       let f = printCType "" in
       match mapAccumL f env params with (env,params) then
         let params = strJoin ", " params in
@@ -219,9 +219,9 @@ lang RootPPL = CAst + CPrettyPrint
   | CTBBlockHelper { ret = ret, id = id, params = params, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       let f = lam env. lam t: (CType,Name).
-        match pprintEnvGetStr env t.1 with (env,t1) then
+        match cPprintEnvGetStr env t.1 with (env,t1) then
           printCDef env t.0 t1 (None ())
         else never in
       match mapAccumL f env params with (env,params) then
@@ -237,14 +237,14 @@ lang RootPPL = CAst + CPrettyPrint
     else never
 
   | CTBBlockDecl { id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       (env, join [ "BBLOCK_DECLARE(", id, ");" ])
     else never
 
   | CTBBlock { id = id, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       match printCStmts ii env body with (env,body) then
         (env, join [
           "BBLOCK(", id, ", {", pprintNewline ii, body, pprintNewline i, "})"
@@ -396,7 +396,7 @@ lang RootPPL = CAst + CPrettyPrint
         printCStmts 2 env callback
       else (env,"")
     with (env,callback) in
-    match pprintEnvGetStr env startBlock with (env,startBlock) in
+    match cPprintEnvGetStr env startBlock with (env,startBlock) in
 
     let pStateTy = match pStateTy with "" then [] else [pStateTy] in
 
