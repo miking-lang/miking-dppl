@@ -1,83 +1,11 @@
--- Alignment analysis for CorePPL.
+-- Control-flow analysis for CorePPL.
 
 include "coreppl.mc"
 include "parser.mc"
 
 include "mexpr/cfa.mc"
 
-lang PPLCFA = MExprCFA + MExprPPL
-
-  ----------------------------------------------------------------------------
-  -- TODO(dlunde,2022-05-30): It would be nice if we could achieve the
-  -- below in a more modular way (e.g., alignment part of analysis is defined
-  -- in the alignment fragment, stochastic part in the stochastic fragment,
-  -- etc.).
-  ----------------------------------------------------------------------------
-  sem generateStochMatchResConstraints : MatchGenFun
-  sem generateStochMatchConstraints : IndexMap -> MatchGenFun
-  sem mcgfs : IndexMap -> [MatchGenFun]
-  sem mcgfs =
-  | im -> [
-      generateMatchConstraints,
-      generateStochMatchResConstraints,
-      generateStochMatchConstraints im
-    ]
-  sem generateStochConstraints : IndexMap -> GenFun
-  sem generateAlignConstraints : IndexMap -> GenFun
-  sem generateCheckpointInitConstraints : IndexMap -> GenFun
-  sem generateCheckpointConstraints : IndexMap -> GenFun
-  sem cgfs : CFAGraph -> [Expr -> [Constraint]]
-  sem cgfs =
-  | graph -> [
-      generateConstraints graph.im,
-      generateConstraintsMatch graph.im graph.mcgfs,
-      generateStochConstraints graph.im,
-      generateAlignConstraints graph.im,
-      generateCheckpointInitConstraints graph.im,
-      generateCheckpointConstraints graph.im
-    ]
-  ----------------------------------------------------------------------------
-
-  -- Whether a pattern can fail
-  sem patFail =
-  | ( PatSeqTot _
-    | PatSeqEdge _
-    | PatCon _
-    | PatInt _
-    | PatChar _
-    | PatBool _
-    | PatRecord _
-    ) & pat -> true
-  | PatAnd p -> if patFail p.lpat then true else patFail p.rpat
-  | PatOr p -> if patFail p.lpat then patFail p.rpat else false
-  | PatNot p -> true
-  | PatNamed _ -> false
-
-  -- Type: Expr -> CFAGraph
-  sem initGraph (graphData: Option GraphData) =
-  | t ->
-
-    -- Initial graph
-    let graph: CFAGraph = emptyCFAGraph t in
-
-    -- Initialize match constraint generating functions
-    let graph = { graph with mcgfs = mcgfs graph.im } in
-
-    -- Initialize constraint generating functions
-    let cgfs: [Expr -> [Constraint]] = cgfs graph in
-
-    -- Recurse over program and generate constraints
-    let cstrs: [Constraint] = collectConstraints cgfs [] t in
-
-    -- Initialize all collected constraints
-    let graph = foldl initConstraint graph cstrs in
-
-    -- Return graph
-    graph
-
-end
-
-lang StochCFA = PPLCFA
+lang StochCFA = MExprCFA + MExprPPL
 
   syn AbsVal =
   | AVStoch {}
@@ -189,6 +117,22 @@ lang StochCFA = PPLCFA
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
+  -- Whether a pattern can fail
+  sem patFail =
+  | ( PatSeqTot _
+    | PatSeqEdge _
+    | PatCon _
+    | PatInt _
+    | PatChar _
+    | PatBool _
+    | PatRecord _
+    ) & pat -> true
+  | PatAnd p -> if patFail p.lpat then true else patFail p.rpat
+  | PatOr p -> if patFail p.lpat then patFail p.rpat else false
+  | PatNot p -> true
+  | PatNamed _ -> false
+
+
   sem generateStochMatchResConstraints (id: IName) (target: IName) =
   -- Result of match is stochastic if match can fail stochastically
   | pat -> if patFail pat then [cstrStochDirect target id] else []
@@ -210,7 +154,7 @@ lang StochCFA = PPLCFA
 
 end
 
-lang AlignCFA = PPLCFA + StochCFA
+lang AlignCFA = MExprCFA + MExprPPL + StochCFA
 
   syn AbsVal =
   | AVUnaligned {}
@@ -320,7 +264,7 @@ lang AlignCFA = PPLCFA + StochCFA
 
 end
 
-lang CheckpointCFA = PPLCFA
+lang CheckpointCFA = MExprCFA + MExprPPL
 
   syn AbsVal =
   | AVCheckpoint {}
@@ -483,10 +427,52 @@ lang CheckpointCFA = PPLCFA
 
 end
 
-lang MExprPPLCFA = StochCFA + AlignCFA + CheckpointCFA
+-- Joint stochastic value, alignment, and checkpoint analysis
+lang MExprPPLCFAFull = StochCFA + AlignCFA + CheckpointCFA
+
+  -- TODO The checkpoint analysis should define a function that takes a
+  -- function (equivalent to sem checkpoint) deciding where initial
+  -- suspension/checkpoints are, and updates the given graph with a list of new
+  -- suitable constraints.
+
+  -- Type: Expr -> CFAGraph
+  sem initGraph: Option GraphData -> Expr -> CFAGraph
+  sem initGraph graphData =
+  | t ->
+
+    -- Initial graph
+    let graph: CFAGraph = emptyCFAGraph t in
+
+    -- Initialize match constraint generating functions
+    let graph = { graph with mcgfs = [
+      generateMatchConstraints,
+      generateStochMatchResConstraints,
+      generateStochMatchConstraints graph.im
+    ] } in
+
+    -- Initialize constraint generating functions
+    let cgfs: [Expr -> [Constraint]] = [
+      generateConstraints graph.im,
+      generateConstraintsMatch graph.im graph.mcgfs,
+      generateStochConstraints graph.im,
+      generateAlignConstraints graph.im,
+      generateCheckpointInitConstraints graph.im,
+      generateCheckpointConstraints graph.im
+    ] in
+
+    -- Recurse over program and generate constraints
+    let cstrs: [Constraint] = collectConstraints cgfs [] t in
+
+    -- Initialize all collected constraints
+    let graph = foldl initConstraint graph cstrs in
+
+    -- Return graph
+    graph
+
 end
 
-let extractUnaligned = use MExprPPLCFA in
+-- TODO Should be part of corresponding fragments instead
+let extractUnaligned = use TODO in
   lam cfaRes: CFAGraph.
     tensorFoldi (lam acc: Set Name. lam i: [Int]. lam v: Set AbsVal.
         if setAny (lam av. match av with AVUnaligned _ then true else false) v
@@ -494,7 +480,8 @@ let extractUnaligned = use MExprPPLCFA in
         else acc
       ) (setEmpty nameCmp) cfaRes.data
 
-let extractCheckpoint = use MExprPPLCFA in
+-- TODO Should be part of corresponding fragments instead
+let extractCheckpoint = use TODO in
   lam cfaRes: CFAGraph.
     tensorFoldi (lam acc: Set Name. lam i: [Int]. lam v: Set AbsVal.
         if setAny (lam av. match av with AVCheckpoint _ then true else false) v
@@ -502,7 +489,7 @@ let extractCheckpoint = use MExprPPLCFA in
         else acc
       ) (setEmpty nameCmp) cfaRes.data
 
-lang Test = MExprPPLCFA + MExprANFAll + DPPLParser
+lang Test = MExprPPLCFAFull + MExprANFAll + DPPLParser
 
   -- Use weight as checkpoint for tests
   sem checkpoint =
