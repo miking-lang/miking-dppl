@@ -1,5 +1,6 @@
 include "../dists.mc"
 include "../../inference-common/smc.mc"
+include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 
 lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
@@ -7,8 +8,8 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Expr -> Expr
-  sem compile =
+  sem compile : Options -> Expr -> Expr
+  sem compile options =
   | t ->
 
     -- Transform distributions to MExpr distributions
@@ -39,5 +40,5 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
 
 end
 
-let compilerTraceMCMC = use MExprPPLTraceMCMC in
-  ("trace-mcmc/runtime.mc", compile)
+let compilerTraceMCMC = lam options. use MExprPPLTraceMCMC in
+  ("trace-mcmc/runtime.mc", compile options)

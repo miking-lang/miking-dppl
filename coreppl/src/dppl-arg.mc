@@ -3,17 +3,24 @@ include "arg.mc"
 -- Options type
 type Options = {
   method: String,
-  particles : Int,
-  resample: String,
+  particles : Int, -- NOTE(dlunde,2022-06-28): Currently not used as it is provided at runtime.
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
   skipFinal: Bool,
   transform: Bool,
 
-  -- Options for the `rootppl-smc` method. TODO(dlunde,2022-03-24): Should maybe be defined somewhere else eventually?
+  -- Where to resample in SMC
+  resample: String,
+
+  -- Whether or not to print the actual result samples in compiled programs
   printSamples: Bool,
-  stackSize: Int
+
+  -- Option for the `rootppl-smc` method.
+  stackSize: Int,
+
+  -- Options for the `mexpr-*` methods.
+  cps: String
 }
 
 -- Default values for options
@@ -27,7 +34,8 @@ let default = {
   skipFinal = false,
   transform = false,
   printSamples = true,
-  stackSize = 10000
+  stackSize = 10000,
+  cps = "partial"
 }
 
 -- Options configuration
@@ -42,7 +50,7 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],
-    "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (sample only at manually defined resampling locations).",
+    "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (default, sample only at manually defined resampling locations).",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with resample = argToString p}),
   ([("--print-model", "", "")],
@@ -65,8 +73,6 @@ let config = [
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with transform = true}),
-
-  -- Options for method `rootppl-smc`
   ([("--no-print-samples", "", "")],
     "Do not print the final samples when compiling with the rootppl-smc method.",
     lam p: ArgPart Options.
@@ -74,7 +80,11 @@ let config = [
   ([("--stack-size", " ", "<size>")],
     join ["The stack size used by RootPPL. The default is 10000 (bytes)."],
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with stackSize = argToIntMin p 1})
+      let o: Options = p.options in {o with stackSize = argToIntMin p 1}),
+  ([("--cps", " ", "<option>")],
+    "Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial (default, usually the best), and full",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with cps = argToString p})
 ]
 
 -- Menu

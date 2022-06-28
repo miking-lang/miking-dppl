@@ -4,7 +4,7 @@ include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 
-lang MExprPPLImportanceCPS =
+lang MExprPPLSMC =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
 
   -- CPS
@@ -38,8 +38,8 @@ lang MExprPPLImportanceCPS =
     let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
     i (appf2_ (i (var_ "updateWeight")) weight k)
 
-  sem compile : Expr -> Expr
-  sem compile =
+  sem compile : Options -> Expr -> Expr
+  sem compile options =
   | t ->
 
     -- ANF transformation (required for CPS)
@@ -82,5 +82,5 @@ lang MExprPPLImportanceCPS =
 
 end
 
-let compilerImportanceCPS = use MExprPPLImportanceCPS in
-  ("importance-cps/runtime.mc", compile)
+let compilerSMC = lam options. use MExprPPLSMC in
+  ("smc/runtime.mc", compile options)
