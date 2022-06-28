@@ -7,11 +7,6 @@ include "mexpr/cps.mc"
 lang MExprPPLImportanceCPS =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
 
-  -- Weight and observe are checkpoints
-  sem checkpoint =
-  | TmWeight _ -> true
-  | TmObserve _ -> true
-
   -- CPS
   sem exprCps env k =
   -- Do nothing at assumes or resamples
@@ -53,10 +48,13 @@ lang MExprPPLImportanceCPS =
     -- printLn (mexprToString t);
 
     -- Static analysis
-    let cfaRes = cfa t in
-
-    -- Get checkpoint analysis result
-    let checkPointNames: Set Name = extractCheckpoint cfaRes in
+    let checkpoint = lam t.
+      match t with TmLet { ident = ident, body = body } then
+        match body with TmWeight _ | TmObserve _ then true else false
+      else errorSingle [infoTm t] "Impossible"
+    in
+    let checkPointNames: Set Name =
+      extractCheckpoint (checkpointCfa checkpoint t) in
     -- printLn (join [ "[", strJoin "," (map nameGetStr (setToSeq checkPointNames)), "]"]);
 
     -- CPS transformation
