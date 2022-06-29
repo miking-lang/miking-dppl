@@ -25,13 +25,23 @@ let importance: all a. (State -> Stop a) -> State -> Option a =
     let res: Stop a = model state in
 
     -- Then run it until the end
-    recursive let rec: Stop a -> Option a = lam res.
+    recursive let recEarlyStop: Stop a -> Option a = lam res.
       match res with Checkpoint { weight = weight, k = k } then
         modref state (addf (deref state) weight);
         if eqf (deref state) (negf inf) then None ()
-        else rec (k ())
+        else recEarlyStop (k ())
       else match res with End a then Some a else never
-    in rec res
+    in
+
+    recursive let rec: Stop a -> Option a = lam res.
+      match res with Checkpoint { weight = weight, k = k } then
+        modref state (addf (deref state) weight);
+        rec (k ())
+      else match res with End a then Some a else never
+    in
+
+    if compileOptions.earlyStop then recEarlyStop res
+    else rec res
 
 -- General inference algorithm for importance sampling
 let run : all a. (State -> Stop a) -> (ResOption a -> ()) -> () =
@@ -51,4 +61,6 @@ let run : all a. (State -> Stop a) -> (ResOption a -> ()) -> () =
 
 let printRes : all a. (a -> String) -> ResOption a -> () = lam printFun. lam res.
   printLn (float2string (normConstant res.0));
-  printSamplesOption printFun res.0 res.1
+  if compileOptions.printSamples then
+    printSamplesOption printFun res.0 res.1
+  else ()

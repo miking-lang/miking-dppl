@@ -81,7 +81,8 @@ let mexprCompile: Options -> Expr -> Expr =
     let pre = ulet_ "compileOptions" (urecord_ [
       ("resample", str_ options.resample),
       ("cps", str_ options.cps),
-      ("printSamples", bool_ options.printSamples)
+      ("printSamples", bool_ options.printSamples),
+      ("earlyStop", bool_ options.earlyStop)
     ]) in
 
     -- Printing function for return type
@@ -104,7 +105,7 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Type check the combined program. NOTE(dlunde,2022-06-09): We do not want
     -- the annotations added by the type checker, as this may make the printed
     -- program unparsable. That's why we simply discard the result here.
-    -- typeCheck prog;
+    typeCheck prog;
 
     -- Return complete program
     prog
@@ -123,11 +124,11 @@ x
 -- Simple tests that ensure compilation throws no errors
 utest mexprCompile {default with method = "mexpr-importance" } simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-importance-cps" } simple
-with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-naive-mcmc" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-trace-mcmc" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-smc" } simple
 with () using lam. lam. true in
 
 ()

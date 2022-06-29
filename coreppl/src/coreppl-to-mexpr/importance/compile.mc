@@ -8,6 +8,10 @@ include "mexpr/cps.mc"
 lang MExprPPLImportance =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
 
+  -------------------------
+  -- IMPORTANCE SAMPLING --
+  -------------------------
+
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
@@ -40,6 +44,10 @@ lang MExprPPLImportance =
   | TmResample t -> withInfo t.info unit_
   | t -> t
 
+
+  -------------------------------
+  -- IMPORTANCE SAMPLING (CPS) --
+  -------------------------------
 
   -- CPS compile
   sem exprCps env k =
@@ -98,9 +106,10 @@ lang MExprPPLImportance =
 
     -- Static analysis and CPS transformation
     let t =
-      let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
-      match options.cps with "partial" then
 
+      let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
+
+      match options.cps with "partial" then
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = body } then
             match body with TmWeight _ | TmObserve _ then true else false
@@ -109,12 +118,12 @@ lang MExprPPLImportance =
         let checkPointNames: Set Name =
           extractCheckpoint (checkpointCfa checkpoint t) in
         -- printLn (join [ "[", strJoin "," (map nameGetStr (setToSeq checkPointNames)), "]"]);
-
-        -- CPS transformation
         cpsPartialCont checkPointNames cont t
 
       else match options.cps with "full" then cpsFullCont cont t
+
       else error ( join [ "Invalid CPS option:", options.cps ])
+
     in
 
     -- Transform distributions to MExpr distributions

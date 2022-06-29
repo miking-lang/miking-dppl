@@ -20,7 +20,10 @@ type Options = {
   stackSize: Int,
 
   -- Options for the `mexpr-*` methods.
-  cps: String
+  cps: String,
+
+  -- Whether or not to apply early stopping
+  earlyStop: Bool
 }
 
 -- Default values for options
@@ -35,7 +38,8 @@ let default = {
   transform = false,
   printSamples = true,
   stackSize = 10000,
-  cps = "partial"
+  cps = "partial",
+  earlyStop = true
 }
 
 -- Options configuration
@@ -82,9 +86,13 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with stackSize = argToIntMin p 1}),
   ([("--cps", " ", "<option>")],
-    "Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial (default, usually the best), and full",
+    "Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial (default, usually the best), and full.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with cps = argToString p})
+      let o: Options = p.options in {o with cps = argToString p}),
+  ([("--no-early-stop", "", "")],
+    "Disables early stopping in certain inference algorithms.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with earlyStop = false})
 ]
 
 -- Menu

@@ -31,4 +31,6 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
 
 let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
   printLn (float2string (normConstant res.0));
-  printSamples printFun res.0 res.1
+  if compileOptions.printSamples then
+    printSamples printFun res.0 res.1
+  else ()
