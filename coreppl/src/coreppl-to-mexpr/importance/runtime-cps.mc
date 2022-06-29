@@ -6,8 +6,8 @@ include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
 
-include "../runtime/common.mc"
-include "../runtime/dists.mc"
+include "../runtime-common.mc"
+include "../runtime-dists.mc"
 
 type Stop a
 con Checkpoint : all a. { weight: Float, k: () -> Stop a } -> Stop a
@@ -61,6 +61,4 @@ let run : all a. (State -> Stop a) -> (ResOption a -> ()) -> () =
 
 let printRes : all a. (a -> String) -> ResOption a -> () = lam printFun. lam res.
   printLn (float2string (normConstant res.0));
-  if compileOptions.printSamples then
-    printSamplesOption printFun res.0 res.1
-  else ()
+  printSamplesOption printFun res.0 res.1

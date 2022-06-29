@@ -4,7 +4,7 @@ include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 
--- TODO(dlunde,2022-06-29): This file does not currently implement SMC
+-- TODO(dlunde,2022-06-29): This file does not currently implement SMC and is used as a sandbox for experimenting with CFA (suspension/checkpoint and alignment) and CPS
 
 lang MExprPPLSMC =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
@@ -56,16 +56,16 @@ lang MExprPPLSMC =
     -- ANF transformation (required for analysis and CPS)
     let t = normalizeTerm t in
 
-    printLn ""; printLn "--- INITIAL PROGRAM ---";
+    -- printLn ""; printLn "--- INITIAL PROGRAM ---";
     match pprintCode 0 pprintEnvEmpty t with (env,str) in
-    printLn (str);
+    -- printLn (str);
 
     -- Alignment analysis
     let alignRes = alignCfa t in
     let unalignedNames: Set Name = extractUnaligned alignRes in
-    printLn ""; printLn "--- UNALIGNED NAMES ---";
+    -- printLn ""; printLn "--- UNALIGNED NAMES ---";
     match mapAccumL pprintEnvGetStr env (setToSeq unalignedNames) with (env,unalignedStrings) in
-    printLn (join [ "[", strJoin "," unalignedStrings, "]"]);
+    -- printLn (join [ "[", strJoin "," unalignedStrings, "]"]);
 
     -- Checkpoint analysis, reuse previous alignment results to speed up the
     -- analysis
@@ -78,17 +78,17 @@ lang MExprPPLSMC =
     in
     let graph = addCheckpointConstraints checkpoint alignRes t in
     let checkpointNames: Set Name = extractCheckpoint (solveCfa graph) in
-    printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
+    -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
     match mapAccumL pprintEnvGetStr env (setToSeq checkpointNames) with (env,strings) in
-    printLn (join [ "[", strJoin "," strings, "]"]);
+    -- printLn (join [ "[", strJoin "," strings, "]"]);
 
     -- CPS transformation
     let t =
       cpsPartialCont checkpointNames (ulam_ "x" (conapp_ "End" (var_ "x"))) t in
 
-    printLn ""; printLn "--- CPS ---";
+    -- printLn ""; printLn "--- CPS ---";
     match pprintCode 0 pprintEnvEmpty t with (env,str) in
-    printLn (str);
+    -- printLn (str);
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in

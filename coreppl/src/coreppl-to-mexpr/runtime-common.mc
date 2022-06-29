@@ -127,7 +127,7 @@ let printSamples : all a. (a -> String) -> [Float] -> [a] -> () =
         print " ";
         print (float2string w); print "\n";
         rec weights samples
-    in rec weights samples
+    in if compileOptions.printSamples then rec weights samples else ()
 
 let printSamplesOption : all a. (a -> String) -> [Float] -> [Option a] -> () =
   lam printFun. lam weights. lam samples.
@@ -142,4 +142,4 @@ let printSamplesOption : all a. (a -> String) -> [Float] -> [Option a] -> () =
         print " ";
         print (float2string w); print "\n";
         rec weights samples
-    in rec weights samples
+    in if compileOptions.printSamples then rec weights samples else ()
