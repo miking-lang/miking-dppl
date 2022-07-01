@@ -95,17 +95,17 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
   sem propagateConstraintConst res args graph =
   | c -> graph
 
-  sem constraintToString graph (env: PprintEnv) =
+  sem constraintToString im (env: PprintEnv) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env rhs with (env,rhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [
       "{const} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
   | CstrExtStochApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env rhs with (env,rhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [
       "{ext} ⊆ ", lhs, " ⇒ {stoch} ⊆ ", rhs, " ⇒ {stoch} ⊆ ", res ])
 
@@ -230,9 +230,9 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
       addData graph (AVUnaligned {}) x
     else graph
 
-  sem constraintToString graph (env: PprintEnv) =
+  sem constraintToString im (env: PprintEnv) =
   | CstrAlignLamApp { lhs = lhs } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName im env lhs with (env,lhs) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {unaligned} ⊆ >x<"])
 
   sem cstrAlignDirect (lhs: IName) =
@@ -403,20 +403,20 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
       addData graph (AVCheckpoint {}) id
     else graph
 
-  sem constraintToString graph (env: PprintEnv) =
+  sem constraintToString im (env: PprintEnv) =
   | CstrCheckpointLamApp { lhs = lhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
   | CstrCheckpointConstApp { lhs = lhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [ "{const<>x<>} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x< ⇒ {checkpoint} ⊆ ", res ])
   | CstrCheckpointLam { lhs = lhs } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName im env lhs with (env,lhs) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >x<" ])
   | CstrCheckpointConst { lhs = lhs } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName im env lhs with (env,lhs) in
     (env, join [ "const<>id<> ⊆ ", lhs, " ⇒ {checkpoint} ⊆ >id<" ])
 
   -- {checkpoint} ⊆ lhs ⇒ {checkpoint} ⊆ rhs
