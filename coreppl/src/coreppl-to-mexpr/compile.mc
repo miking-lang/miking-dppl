@@ -26,6 +26,22 @@ let mexprCompile: Options -> Expr -> Expr =
   use MExprCompile in
   lam options. lam prog.
 
+    let desymbolizeExternals = lam prog.
+      recursive let rec = lam env. lam prog.
+        match prog with TmExt ({ ident = ident, inexpr = inexpr } & b) then
+          let noSymIdent = nameNoSym (nameGetStr ident) in
+          let env =
+            if nameHasSym ident then (mapInsert ident noSymIdent env) else env
+          in
+          TmExt { b with ident = noSymIdent, inexpr = rec env inexpr }
+        else match prog with TmVar ({ ident = ident } & b) then
+          let ident =
+            match mapLookup ident env with Some ident then ident else ident in
+          TmVar { b with ident = ident }
+        else smap_Expr_Expr (rec env) prog
+      in rec (mapEmpty nameCmp) prog
+    in
+
     -- Load runtime and compile function
     let compiler: (String, Expr -> Expr) =
       switch options.method
@@ -58,6 +74,9 @@ let mexprCompile: Options -> Expr -> Expr =
     let prog = symbolizeExpr
       { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
     in
+
+    -- Desymbolize externals in case any were symbolized beforehand.
+    let prog = desymbolizeExternals prog in
 
     -- Apply inference-specific transformation
     let prog = compile prog in
