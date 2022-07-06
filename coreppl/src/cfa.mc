@@ -57,7 +57,7 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
   syn AbsVal =
   | AVStoch {}
 
-  sem absValToString graph (env: PprintEnv) =
+  sem absValToString im (env: PprintEnv) =
   | AVStoch {} -> (env, "stoch")
 
   sem cmpAbsValH =
@@ -206,7 +206,7 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   syn AbsVal =
   | AVUnaligned {}
 
-  sem absValToString graph (env: PprintEnv) =
+  sem absValToString im (env: PprintEnv) =
   | AVUnaligned {} -> (env, "unaligned")
 
   sem cmpAbsValH =
@@ -355,7 +355,7 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
   syn AbsVal =
   | AVCheckpoint {}
 
-  sem absValToString graph (env: PprintEnv) =
+  sem absValToString im (env: PprintEnv) =
   | AVCheckpoint {} -> (env, "checkpoint")
 
   sem cmpAbsValH =
