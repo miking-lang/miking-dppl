@@ -6,8 +6,8 @@ include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
 
-include "../runtime/common.mc"
-include "../runtime/dists.mc"
+include "../runtime-common.mc"
+include "../runtime-dists.mc"
 
 type Stop a
 con Checkpoint : all a. { weight: Float, k: () -> Stop a } -> Stop a

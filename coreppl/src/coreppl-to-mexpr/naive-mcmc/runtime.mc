@@ -6,8 +6,8 @@ include "math.mc"
 include "seq.mc"
 include "string.mc"
 
-include "../runtime/common.mc"
-include "../runtime/dists.mc"
+include "../runtime-common.mc"
+include "../runtime-dists.mc"
 
 -- In naive MCMC, the state is simply the accumulated weight.
 type State = Ref Float

@@ -1,14 +1,22 @@
 include "../dists.mc"
 include "../../inference-common/smc.mc"
-include "mexpr/ast-builder.mc"
+include "../../cfa.mc"
 
-lang MExprPPLImportance = MExprPPL + Resample + TransformDist
+include "mexpr/ast-builder.mc"
+include "mexpr/cps.mc"
+
+lang MExprPPLImportance =
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
+
+  -------------------------
+  -- IMPORTANCE SAMPLING --
+  -------------------------
 
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Expr -> Expr
-  sem compile =
+  sem compile : Options -> Expr -> Expr
+  sem compile options =
   | t ->
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
@@ -36,7 +44,103 @@ lang MExprPPLImportance = MExprPPL + Resample + TransformDist
   | TmResample t -> withInfo t.info unit_
   | t -> t
 
+
+  -------------------------------
+  -- IMPORTANCE SAMPLING (CPS) --
+  -------------------------------
+
+  -- CPS compile
+  sem exprCps env k =
+  -- Do nothing at assumes or resamples
+  | TmLet ({ body = TmAssume _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet ({ body = TmResample _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet ({ body = TmDist _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
+
+  -- This is where we use the continuation (weight and observe)
+  | TmLet { ident = ident, body = TmWeight { weight = weight },
+            inexpr = inexpr} & t ->
+    let i = withInfo (infoTm t) in
+    let k =
+      if tailCall t then
+        match k with Some k then k
+        else error "Something went wrong with partial CPS transformation"
+      else i (nulam_ ident (exprCps env k inexpr))
+    in
+    i (appf2_ (i (var_ "updateWeight")) weight k)
+
+  -- This is where we use the continuation (weight and observe)
+  | TmLet { ident = ident, body = TmObserve { value = value, dist = dist },
+            inexpr = inexpr } & t ->
+    let i = withInfo (infoTm t) in
+    let k =
+      if tailCall t then
+        match k with Some k then k
+        else error "Something went wrong with partial CPS transformation"
+      else i (nulam_ ident (exprCps env k inexpr))
+    in
+    let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
+    i (appf2_ (i (var_ "updateWeight")) weight k)
+
+  sem transformProbCps =
+  | TmAssume t ->
+    let i = withInfo t.info in
+    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
+  | TmResample t -> withInfo t.info unit_
+
+  -- Should already have been removed by CPS!
+  | (TmObserve t | TmWeight t) ->
+    errorSingle [t.info] "Impossible in importance sampling with CPS"
+  | t -> t
+
+  sem compileCps : Options -> Expr -> Expr
+  sem compileCps options =
+  | t ->
+
+    -- ANF transformation (required for CPS)
+    let t = normalizeTerm t in
+
+    -- printLn (mexprToString t);
+
+    -- Static analysis and CPS transformation
+    let t =
+
+      let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
+
+      match options.cps with "partial" then
+        let checkpoint = lam t.
+          match t with TmLet { ident = ident, body = body } then
+            match body with TmWeight _ | TmObserve _ then true else false
+          else errorSingle [infoTm t] "Impossible"
+        in
+        let checkPointNames: Set Name =
+          extractCheckpoint (checkpointCfa checkpoint t) in
+        -- printLn (join [ "[", strJoin "," (map nameGetStr (setToSeq checkPointNames)), "]"]);
+        cpsPartialCont checkPointNames cont t
+
+      else match options.cps with "full" then cpsFullCont cont t
+
+      else error ( join [ "Invalid CPS option:", options.cps ])
+
+    in
+
+    -- Transform distributions to MExpr distributions
+    let t = mapPre_Expr_Expr transformTmDist t in
+    let t = removeTyDist t in
+
+    -- Transform samples, observes, and weights to MExpr
+    let t = mapPre_Expr_Expr transformProbCps t in
+
+    t
+
 end
 
-let compilerImportance = use MExprPPLImportance in
-  ("importance/runtime.mc", compile)
+let compilerImportance = lam options. use MExprPPLImportance in
+  match options.cps with "partial" | "full" then
+    ("importance/runtime-cps.mc", compileCps options)
+  else match options.cps with "none" then
+    ("importance/runtime.mc", compile options)
+  else
+    error ( join [ "Unknown CPS option:", options.cps ])

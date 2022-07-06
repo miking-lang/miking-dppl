@@ -12,9 +12,9 @@ include "../dppl-arg.mc"
 
 -- Inference methods
 include "importance/compile.mc"
-include "importance-cps/compile.mc"
 include "naive-mcmc/compile.mc"
 include "trace-mcmc/compile.mc"
+include "smc/compile.mc"
 
 
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
@@ -26,18 +26,36 @@ let mexprCompile: Options -> Expr -> Expr =
   use MExprCompile in
   lam options. lam prog.
 
-    -- Load runtime and compile function
-    let compiler =
-      match      options.method with "mexpr-importance" then compilerImportance
-      else match options.method with "mexpr-importance-cps" then compilerImportanceCPS
-      else match options.method with "mexpr-naive-mcmc" then compilerNaiveMCMC
-      else match options.method with "mexpr-trace-mcmc" then compilerTraceMCMC
-      else
-        error (join [
-          "Unknown CorePPL to MExpr inference method:", options.method
-        ])
+    let desymbolizeExternals = lam prog.
+      recursive let rec = lam env. lam prog.
+        match prog with TmExt ({ ident = ident, inexpr = inexpr } & b) then
+          let noSymIdent = nameNoSym (nameGetStr ident) in
+          let env =
+            if nameHasSym ident then (mapInsert ident noSymIdent env) else env
+          in
+          TmExt { b with ident = noSymIdent, inexpr = rec env inexpr }
+        else match prog with TmVar ({ ident = ident } & b) then
+          let ident =
+            match mapLookup ident env with Some ident then ident else ident in
+          TmVar { b with ident = ident }
+        else smap_Expr_Expr (rec env) prog
+      in rec (mapEmpty nameCmp) prog
+    in
 
-    in match compiler with (runtime, compile) in
+    -- Load runtime and compile function
+    let compiler: (String, Expr -> Expr) =
+      switch options.method
+        case "mexpr-importance" then compilerImportance options
+        case "mexpr-naive-mcmc" then compilerNaiveMCMC options
+        case "mexpr-trace-mcmc" then compilerTraceMCMC options
+        case "mexpr-smc" then compilerSMC options
+        case _ then error (
+          join [ "Unknown CorePPL to MExpr inference method:", options.method ]
+        )
+      end
+    in
+
+    match compiler with (runtime, compile) in
 
     let parse = use BootParser in parseMCoreFile {{
       defaultBootParserParseMCoreFileArg
@@ -57,6 +75,9 @@ let mexprCompile: Options -> Expr -> Expr =
       { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
     in
 
+    -- Desymbolize externals in case any were symbolized beforehand.
+    let prog = desymbolizeExternals prog in
+
     -- Apply inference-specific transformation
     let prog = compile prog in
 
@@ -73,8 +94,14 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Put model in top-level model function
     let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
 
-    -- Construct record accessible in runtime (currently empty)
+    -- Construct record accessible in runtime
+    -- NOTE(dlunde,2022-06-28): It would be nice if we automatically lift the
+    -- options variable here to an Expr.
     let pre = ulet_ "compileOptions" (urecord_ [
+      ("resample", str_ options.resample),
+      ("cps", str_ options.cps),
+      ("printSamples", bool_ options.printSamples),
+      ("earlyStop", bool_ options.earlyStop)
     ]) in
 
     -- Printing function for return type
@@ -116,11 +143,11 @@ x
 -- Simple tests that ensure compilation throws no errors
 utest mexprCompile {default with method = "mexpr-importance" } simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-importance-cps" } simple
-with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-naive-mcmc" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-trace-mcmc" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-smc" } simple
 with () using lam. lam. true in
 
 ()

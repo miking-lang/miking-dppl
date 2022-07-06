@@ -1359,10 +1359,7 @@ let rootPPLCompile: Options -> Expr -> RPProg =
       let progANFAll: Expr = normalizeTerm prog in
 
       -- Do static analysis for stochastic value flow and alignment
-      let cfaRes = cfa progANFAll in
-
-      -- Propagate alignment information
-      let unaligned: Set Name = extractUnaligned cfaRes in
+      let unaligned: Set Name = extractUnaligned (alignCfa progANFAll) in
       let isAligned: Name -> Bool = lam n. not (setMem n unaligned) in
 
       addResample isAligned prog
