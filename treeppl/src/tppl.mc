@@ -64,8 +64,9 @@ else -- defaulting to MExpr
     --printLn (mexprPPLToString corePplAst);
     --let prog = corePplAst in
     let prog: Expr = typeCheck corePplAst in
-    printLn "after typeCheck";
+    printLn "checkpoint 1";
     let ast = (mexprCompile options prog) in
+    printLn "checkpoint 2";
     writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
 
     -- Output the compiled OCaml code (unless --skip-final is specified)
