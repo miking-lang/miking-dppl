@@ -74,7 +74,7 @@ let normConstant : [Float] -> Float = lam res.
 -- the expected values for the given variables
 -- The function assumes that the first element in the
 -- result list is the weight.
-let expectedValues = lam res. lam normConst.
+let expectedValues = lam res: [[Float]]. lam normConst.
   foldl (lam acc. lam t.
      let w = exp (subf (head t) normConst) in
      let ys = tail t in
@@ -106,14 +106,13 @@ let expOnLogWeights = lam res.
 
 -- The output function. Prints normalizing constants, expected values, and variance
 -- to the standard output. Saves the plot data in a CSV file.
--- NOTE(dlunde,2022-06-07): Does not currently type check
--- let output = lam res. lam names.
---   let names = cons "#" names in
---   let nc = normConstant res in
---   let expVals = expectedValues res nc in
---   let varianceVals = variance res expVals in
---   printStatistics res names nc expVals varianceVals;
---   saveCSV res names "data.csv" expOnLogWeights
+let output = lam res: [[Float]]. lam names: [String].
+  let names = cons "#" names in
+  let nc = normConstant (map head res) in
+  let expVals = expectedValues res nc in
+  let varianceVals = variance res expVals in
+  printStatistics res names nc expVals varianceVals;
+  saveCSV res names "data.csv" expOnLogWeights
 
 let printSamples : all a. (a -> String) -> [Float] -> [a] -> () =
   lam printFun. lam weights. lam samples.
