@@ -57,10 +57,11 @@ let mexprCompile: Options -> Expr -> Expr =
 
     match compiler with (runtime, compile) in
 
-    let parse = use BootParser in parseMCoreFile {{
-      defaultBootParserParseMCoreFileArg
-      with eliminateDeadCode = false }
-      with allowFree = true }
+    let parse = use BootParser in parseMCoreFile {
+      defaultBootParserParseMCoreFileArg with
+        eliminateDeadCode = false,
+        allowFree = true
+      }
     in
 
     -- Type check model. NOTE(dlunde,2022-06-09): We do not want the
@@ -75,7 +76,7 @@ let mexprCompile: Options -> Expr -> Expr =
       { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
     in
 
-    -- Desymbolize externals in case any were symbolized beforehand.
+    -- Desymbolize externals in case any were symbolized beforehand
     let prog = desymbolizeExternals prog in
 
     -- Apply inference-specific transformation
@@ -121,9 +122,9 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Combine runtime, model, and generated post
     let prog = bindall_ [pre,runtime,prog,post] in
 
-    -- Type check the combined program. NOTE(dlunde,2022-06-09): We do not want
-    -- the annotations added by the type checker, as this may make the printed
-    -- program unparsable. That's why we simply discard the result here.
+    -- Type check the combined program. NOTE(dlunde,2022-06-09): Again, we do
+    -- not want the annotations added by the type checker, which is why we
+    -- simply discard the result here.
     typeCheck prog;
 
     -- Return complete program
