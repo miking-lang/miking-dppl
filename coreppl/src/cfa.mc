@@ -69,6 +69,19 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
   -- {ext} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
   | CstrExtStochApp { lhs: IName, rhs: IName, res: IName }
 
+  sem cmpConstraintH =
+  | (CstrConstStochApp { lhs = lhs1, rhs = rhs1, res = res1 },
+    CstrConstStochApp { lhs = lhs2, rhs = rhs2, res = res2 })
+  | (CstrExtStochApp { lhs = lhs1, rhs = rhs1, res = res1 },
+    CstrExtStochApp { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+    let d = subi lhs1 lhs2 in
+    if eqi d 0 then
+      let d = subi rhs1 rhs2 in
+      if eqi d 0 then
+        subi res1 res2
+      else d
+    else d
+
   sem initConstraint (graph: CFAGraph) =
   | CstrConstStochApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrExtStochApp r & cstr -> initConstraintName r.lhs graph cstr
@@ -220,6 +233,10 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x
   | CstrAlignLamApp { lhs: IName }
+
+  sem cmpConstraintH =
+  | (CstrAlignLamApp { lhs = lhs1 }, CstrAlignLamApp { lhs = lhs2 }) ->
+    subi lhs1 lhs2
 
   sem initConstraint (graph: CFAGraph) =
   | CstrAlignLamApp r & cstr -> initConstraintName r.lhs graph cstr
@@ -378,6 +395,17 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
   -- NOTE(dlunde,2022-06-15): We don't actually need to consider externals
   -- here. They are always fully applied, and can never propagate AVCheckpoint
   -- to other functions as a result.
+
+  sem cmpConstraintH =
+  | (CstrCheckpointLamApp { lhs = lhs1, res = res1 },
+    CstrCheckpointLamApp { lhs = lhs2,  res = res2 })
+  | (CstrCheckpointConstApp { lhs = lhs1, res = res1 },
+    CstrCheckpointConstApp { lhs = lhs2,  res = res2 }) ->
+    let d = subi lhs1 lhs2 in
+    if eqi d 0 then subi res1 res2 else d
+  | (CstrCheckpointLam { lhs = lhs1 }, CstrCheckpointLam { lhs = lhs2 })
+  | (CstrCheckpointConst { lhs = lhs1 }, CstrCheckpointConst { lhs = lhs2 }) ->
+    subi lhs1 lhs2
 
   sem initConstraint (graph: CFAGraph) =
   | CstrCheckpointLamApp r & cstr -> initConstraintName r.lhs graph cstr
