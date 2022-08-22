@@ -23,7 +23,10 @@ type Options = {
   cps: String,
 
   -- Whether or not to apply early stopping
-  earlyStop: Bool
+  earlyStop: Bool,
+
+  -- Debug compilation to MExpr
+  debugMExprCompile: Bool
 }
 
 -- Default values for options
@@ -39,13 +42,14 @@ let default = {
   printSamples = true,
   stackSize = 10000,
   cps = "partial",
-  earlyStop = true
+  earlyStop = true,
+  debugMExprCompile = false
 }
 
 -- Options configuration
 let config = [
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-importance, rootppl-smc.",
+    "The selected inference method. The supported methods are: mexpr-importance, mexpr-mcmc-aligned, mexpr-mcmc-trace, mexpr-mcmc-naive, rootppl-smc.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
@@ -92,7 +96,11 @@ let config = [
   ([("--no-early-stop", "", "")],
     "Disables early stopping in certain inference algorithms.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with earlyStop = false})
+      let o: Options = p.options in {o with earlyStop = false}),
+  ([("--debug-mexpr-compile", "", "")],
+    "Turn on debugging for CorePPL to MExpr compiler",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugMExprCompile = true})
 ]
 
 -- Menu
