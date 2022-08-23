@@ -17,6 +17,16 @@ lang MExprPPLAlignedMCMC =
   sem compile options =
   | t ->
 
+    -- Check that options are within the proper range
+    let gProb = options.mcmcAlignedGlobalProb in
+    let mProb = options.mcmcAlignedGlobalModProb in
+    if or (ltf gProb 0.0) (gtf gProb 1.0) then
+      error "--mcmc-aligned-global-prob must be between 0.0 and 1.0"
+    else ();
+    if or (ltf mProb 0.0) (gtf mProb 1.0) then
+      error "--mcmc-aligned-global-mod-prob must be between 0.0 and 1.0"
+    else ();
+
     -- ANF transformation (required for analysis)
     let t = normalizeTerm t in
 
@@ -28,9 +38,6 @@ lang MExprPPLAlignedMCMC =
     let t = mapPre_Expr_Expr transformTmDist t in
 
     -- Transform samples, observes, and weights to MExpr
-    -- - Replace aligned calls to "assume" with call to runtime function
-    -- - Replace unaligned calls to "assume" with a direct sample
-    -- - At all calls to "assume", increment trace length counter
     let t = mapPre_Expr_Expr (transformProb unalignedNames) t in
 
     t
@@ -40,14 +47,12 @@ lang MExprPPLAlignedMCMC =
 
   | TmLet ({ ident = ident, body = TmAssume t, inexpr = inexpr } & r) ->
     let i = withInfo r.info in
-    if setMem ident unalignedNames then
-      -- For unaligned assumes, just draw samples directly
-      TmLet { r with
-        body = i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
-      }
-    else
-      -- Delegate aligned assumes to "sampleAligned" function in runtime
-      TmLet { r with body = i (app_ (i (var_ "sampleAligned")) t.dist) }
+    TmLet { r with
+      body = i (app_ (i (var_
+          (if setMem ident unalignedNames then "sampleUnaligned"
+           else "sampleAligned")
+        )) t.dist)
+    }
 
   | TmObserve t ->
     let i = withInfo t.info in

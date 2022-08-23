@@ -52,10 +52,11 @@ let state: State = {
   alignedTraceLength = ref (negi 1)
 }
 
-
 let updateWeight = lam v.
-  let weight = state.weight in
-  modref weight (addf (deref weight) v)
+  modref state.weight (addf (deref state.weight) v)
+
+let incrTraceLength: () -> () = lam.
+  modref state.traceLength (addi (deref state.traceLength) 1)
 
 -- Procedure at aligned samples
 let sampleAligned: all a. Dist a -> a = lam dist.
@@ -76,28 +77,36 @@ let sampleAligned: all a. Dist a -> a = lam dist.
     else newSample ()
 
   in
+  incrTraceLength ();
   modref state.alignedTrace (cons sample (deref state.alignedTrace));
   unsafeCoerce sample
 
+let sampleUnaligned: all a. Dist a -> a = lam dist.
+  incrTraceLength ();
+  dist.sample ()
+
 -- Function to propose aligned trace changes between MH iterations.
 let modTrace: () -> () = lam.
+
+  let gProb = compileOptions.mcmcAlignedGlobalProb in
+  let mProb = compileOptions.mcmcAlignedGlobalModProb in
 
   let alignedTraceLength: Int = deref state.alignedTraceLength in
 
   -- One index must always change
   let invalidIndex: Int = uniformDiscreteSample 0 (subi alignedTraceLength 1) in
 
-  -- Enable global modifications in 20% (TODO: Replace with X) of cases
-  let modGlobal: Bool = bernoulliSample 0.2 in
+  -- Enable global modifications with probability gProb
+  let modGlobal: Bool = bernoulliSample gProb in
 
   recursive let rec: Int -> [Any] -> [Option Any] -> [Option Any] =
     lam i. lam samples. lam acc.
       match samples with [sample] ++ samples then
         -- Invalidate sample if it has the invalid index or with probability
-        -- 0.5 (TODO: Replace with Y) if global modification is enabled.
+        -- mProb if global modification is enabled.
         let mod =
           if eqi i 0 then true else
-            if modGlobal then bernoulliSample 0.5 else false in
+            if modGlobal then bernoulliSample 0.9 else false in
 
         let acc: [Option Any] =
           cons (if mod then None () else Some sample) acc in
@@ -115,23 +124,23 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
   -- Read number of runs and sweeps
   match monteCarloArgs () with (runs, sweeps) in
 
-  recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
-    lam weights. lam samples. lam iter.
+  recursive let mh : [Float] -> [Float] -> [a] -> Int -> ([Float], [a]) =
+    lam weights. lam weightsReused. lam samples. lam iter.
       if leqi iter 0 then (weights, samples)
       else
+        let prevSample = head samples in
         let prevTraceLength = deref state.traceLength in
-        let prevWeight = deref state.weight in
-        let prevWeightReused = deref state.weightReused in
+        let prevWeight = head weights in
+        let prevWeightReused = head weightsReused in
         modTrace ();
         modref state.weight 0.;
         modref state.weightReused 0.;
         modref state.traceLength 0;
         modref state.alignedTrace emptyList;
         let sample = model state in
+        let traceLength = deref state.traceLength in
         let weight = deref state.weight in
         let weightReused = deref state.weightReused in
-        let traceLength = deref state.traceLength in
-        let prevSample = head samples in
         let logMhAcceptProb =
           minf 0. (addf (addf
                     (subf weight prevWeight)
@@ -139,13 +148,26 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
                     (subf (log (int2float prevTraceLength))
                               (log (int2float traceLength))))
         in
+        -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
+        -- print "weight: "; printLn (float2string weight);
+        -- print "prevWeight: "; printLn (float2string prevWeight);
+        -- print "weightReused: "; printLn (float2string weightReused);
+        -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+        -- print "prevTraceLength: "; printLn (float2string (int2float prevTraceLength));
+        -- print "traceLength: "; printLn (float2string (int2float traceLength));
         let iter = subi iter 1 in
-        -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
-        -- computing the MH acceptance ratio?
         if bernoulliSample (exp logMhAcceptProb) then
-          mh (cons weight weights) (cons sample samples) iter
+          mh
+            (cons weight weights)
+            (cons weightReused weightsReused)
+            (cons sample samples)
+            iter
         else
-          mh (cons prevWeight weights) (cons prevSample samples) iter
+          mh
+            (cons prevWeight weights)
+            (cons prevWeightReused weightsReused)
+            (cons prevSample samples)
+            iter
   in
 
   -- Repeat once for each sweep
@@ -156,13 +178,14 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
       -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
       -- computing the MH acceptance ratio?
       let weight = deref state.weight in
+      let weightReused = deref state.weightReused in
       let iter = subi runs 1 in
 
-      -- Set aligned trace length (constant, only modified here)
+      -- Set aligned trace length (a constant, only modified here)
       modref state.alignedTraceLength (length (deref state.alignedTrace));
 
       -- Sample the rest
-      let res = mh [weight] [sample] iter in
+      let res = mh [weight] [weightReused] [sample] iter in
 
       -- Reverse to get the correct order
       let res = match res with (weights,samples) in

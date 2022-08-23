@@ -104,7 +104,9 @@ let mexprCompile: Options -> Expr -> Expr =
       ("resample", str_ options.resample),
       ("cps", str_ options.cps),
       ("printSamples", bool_ options.printSamples),
-      ("earlyStop", bool_ options.earlyStop)
+      ("earlyStop", bool_ options.earlyStop),
+      ("mcmcAlignedGlobalProb", float_ options.mcmcAlignedGlobalProb),
+      ("mcmcAlignedGlobalModProb", float_ options.mcmcAlignedGlobalModProb)
     ]) in
 
     -- Printing function for return type

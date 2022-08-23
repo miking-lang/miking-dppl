@@ -26,7 +26,11 @@ type Options = {
   earlyStop: Bool,
 
   -- Debug compilation to MExpr
-  debugMExprCompile: Bool
+  debugMExprCompile: Bool,
+
+  -- Aligned MCMC options
+  mcmcAlignedGlobalProb: Float,
+  mcmcAlignedGlobalModProb: Float
 }
 
 -- Default values for options
@@ -43,7 +47,9 @@ let default = {
   stackSize = 10000,
   cps = "partial",
   earlyStop = true,
-  debugMExprCompile = false
+  debugMExprCompile = false,
+  mcmcAlignedGlobalProb = 0.2,
+  mcmcAlignedGlobalModProb = 0.5
 }
 
 -- Options configuration
@@ -98,9 +104,15 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with earlyStop = false}),
   ([("--debug-mexpr-compile", "", "")],
-    "Turn on debugging for CorePPL to MExpr compiler",
+    "Turn on debugging for CorePPL to MExpr compiler.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with debugMExprCompile = true})
+      let o: Options = p.options in {o with debugMExprCompile = true}),
+  ([("--mcmc-aligned-global-prob", " ", "<value>")],
+    "The probability of performing a global MH step (non-global means only modify a single aligned sample in the previous trace).",
+    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcAlignedGlobalProb = argToFloat p }),
+  ([("--mcmc-aligned-global-mod-prob", " ", "<value>")],
+    "When performing a global MH step, this option gives the probability of changing each sample in the trace.",
+    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcAlignedGlobalModProb = argToFloat p })
 ]
 
 -- Menu
