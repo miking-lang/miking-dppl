@@ -5,6 +5,10 @@ include "mexpr/ast-builder.mc"
 
 lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist
 
+  ----------------
+  -- NAIVE MCMC --
+  ----------------
+
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
@@ -38,7 +42,14 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist
   | TmResample t -> withInfo t.info unit_
   | t -> t
 
+
+  ----------------------
+  -- NAIVE MCMC (CPS) --
+  ----------------------
+
+  -- TODO(dlunde,2022-08-22)
+
 end
 
 let compilerNaiveMCMC = lam options. use MExprPPLNaiveMCMC in
-  ("naive-mcmc/runtime.mc", compile options)
+  ("mcmc-naive/runtime.mc", compile options)

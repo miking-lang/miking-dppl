@@ -23,7 +23,14 @@ type Options = {
   cps: String,
 
   -- Whether or not to apply early stopping
-  earlyStop: Bool
+  earlyStop: Bool,
+
+  -- Debug compilation to MExpr
+  debugMExprCompile: Bool,
+
+  -- Aligned MCMC options
+  mcmcAlignedGlobalProb: Float,
+  mcmcAlignedGlobalModProb: Float
 }
 
 -- Default values for options
@@ -39,13 +46,16 @@ let default = {
   printSamples = true,
   stackSize = 10000,
   cps = "partial",
-  earlyStop = true
+  earlyStop = true,
+  debugMExprCompile = false,
+  mcmcAlignedGlobalProb = 0.2,
+  mcmcAlignedGlobalModProb = 0.5
 }
 
 -- Options configuration
 let config = [
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-importance, rootppl-smc.",
+    "The selected inference method. The supported methods are: mexpr-importance, mexpr-mcmc-aligned, mexpr-mcmc-trace, mexpr-mcmc-naive, rootppl-smc.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
@@ -92,7 +102,17 @@ let config = [
   ([("--no-early-stop", "", "")],
     "Disables early stopping in certain inference algorithms.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with earlyStop = false})
+      let o: Options = p.options in {o with earlyStop = false}),
+  ([("--debug-mexpr-compile", "", "")],
+    "Turn on debugging for CorePPL to MExpr compiler.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugMExprCompile = true}),
+  ([("--mcmc-aligned-global-prob", " ", "<value>")],
+    "The probability of performing a global MH step (non-global means only modify a single aligned sample in the previous trace).",
+    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcAlignedGlobalProb = argToFloat p }),
+  ([("--mcmc-aligned-global-mod-prob", " ", "<value>")],
+    "When performing a global MH step, this option gives the probability of changing each sample in the trace.",
+    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcAlignedGlobalModProb = argToFloat p })
 ]
 
 -- Menu

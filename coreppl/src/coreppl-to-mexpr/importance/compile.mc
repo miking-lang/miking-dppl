@@ -18,6 +18,8 @@ lang MExprPPLImportance =
   sem compile : Options -> Expr -> Expr
   sem compile options =
   | t ->
+    if options.earlyStop then error "Early stopping is not supported without CPS" else ();
+
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
 
@@ -31,9 +33,6 @@ lang MExprPPLImportance =
     let i = withInfo t.info in
     i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
 
-  -- NOTE(dlunde,2022-05-16): Note that we cannot stop immediately when the
-  -- weight becomes 0 (-inf in log-space). For this, we need CPS, PCFGs, or
-  -- maybe some type of exception handler.
   | TmObserve t ->
     let i = withInfo t.info in
     let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in

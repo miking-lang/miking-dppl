@@ -5,6 +5,10 @@ include "mexpr/ast-builder.mc"
 
 lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
 
+  ----------------
+  -- TRACE MCMC --
+  ----------------
+
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
@@ -38,7 +42,14 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
   | TmResample t -> withInfo t.info unit_
   | t -> t
 
+
+  ----------------------
+  -- TRACE MCMC (CPS) --
+  ----------------------
+
+  -- TODO(dlunde,2022-08-22)
+
 end
 
 let compilerTraceMCMC = lam options. use MExprPPLTraceMCMC in
-  ("trace-mcmc/runtime.mc", compile options)
+  ("mcmc-trace/runtime.mc", compile options)

@@ -560,11 +560,6 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
     let graph = addConstAllConstraints graph t in
     solveCfa graph
 
-  -- TODO The checkpoint analysis should define a function that takes a
-  -- function (equivalent to sem checkpoint) deciding where initial
-  -- suspension/checkpoints are, and updates the given graph with a list of new
-  -- suitable constraints.
-
   sem checkpointCfaDebug : (Expr -> Bool) -> PprintEnv -> Expr
                              -> (PprintEnv, CFAGraph)
   sem checkpointCfaDebug checkpoint pprintenv =

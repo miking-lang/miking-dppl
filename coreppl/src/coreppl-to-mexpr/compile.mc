@@ -12,8 +12,9 @@ include "../dppl-arg.mc"
 
 -- Inference methods
 include "importance/compile.mc"
-include "naive-mcmc/compile.mc"
-include "trace-mcmc/compile.mc"
+include "mcmc-naive/compile.mc"
+include "mcmc-trace/compile.mc"
+include "mcmc-aligned/compile.mc"
 include "smc/compile.mc"
 
 
@@ -46,8 +47,9 @@ let mexprCompile: Options -> Expr -> Expr =
     let compiler: (String, Expr -> Expr) =
       switch options.method
         case "mexpr-importance" then compilerImportance options
-        case "mexpr-naive-mcmc" then compilerNaiveMCMC options
-        case "mexpr-trace-mcmc" then compilerTraceMCMC options
+        case "mexpr-mcmc-naive" then compilerNaiveMCMC options
+        case "mexpr-mcmc-trace" then compilerTraceMCMC options
+        case "mexpr-mcmc-aligned" then compilerAlignedMCMC options
         case "mexpr-smc" then compilerSMC options
         case _ then error (
           join [ "Unknown CorePPL to MExpr inference method:", options.method ]
@@ -57,16 +59,17 @@ let mexprCompile: Options -> Expr -> Expr =
 
     match compiler with (runtime, compile) in
 
-    let parse = use BootParser in parseMCoreFile {{
-      defaultBootParserParseMCoreFileArg
-      with eliminateDeadCode = false }
-      with allowFree = true }
+    let parse = use BootParser in parseMCoreFile {
+      defaultBootParserParseMCoreFileArg with
+        eliminateDeadCode = false,
+        allowFree = true
+      }
     in
 
     -- Type check model. NOTE(dlunde,2022-06-09): We do not want the
     -- annotations added by the type checker, as this may make the printed
     -- program unparsable. That's why we simply discard the result here (but,
-    -- we first extract the return type!.
+    -- we first extract the return type).
     let tcprog = typeCheck prog in
     let resTy = tyTm tcprog in
 
@@ -75,7 +78,7 @@ let mexprCompile: Options -> Expr -> Expr =
       { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
     in
 
-    -- Desymbolize externals in case any were symbolized beforehand.
+    -- Desymbolize externals in case any were symbolized beforehand
     let prog = desymbolizeExternals prog in
 
     -- Apply inference-specific transformation
@@ -101,7 +104,9 @@ let mexprCompile: Options -> Expr -> Expr =
       ("resample", str_ options.resample),
       ("cps", str_ options.cps),
       ("printSamples", bool_ options.printSamples),
-      ("earlyStop", bool_ options.earlyStop)
+      ("earlyStop", bool_ options.earlyStop),
+      ("mcmcAlignedGlobalProb", float_ options.mcmcAlignedGlobalProb),
+      ("mcmcAlignedGlobalModProb", float_ options.mcmcAlignedGlobalModProb)
     ]) in
 
     -- Printing function for return type
@@ -121,10 +126,10 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Combine runtime, model, and generated post
     let prog = bindall_ [pre,runtime,prog,post] in
 
-    -- Type check the combined program. NOTE(dlunde,2022-06-09): We do not want
-    -- the annotations added by the type checker, as this may make the printed
-    -- program unparsable. That's why we simply discard the result here.
-    typeCheck prog;
+    if options.debugMExprCompile then
+      -- Check that the combined program type checks
+      typeCheck prog
+    else ();
 
     -- Return complete program
     prog
@@ -143,9 +148,11 @@ x
 -- Simple tests that ensure compilation throws no errors
 utest mexprCompile {default with method = "mexpr-importance" } simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-naive-mcmc" } simple
+utest mexprCompile {default with method = "mexpr-mcmc-naive" } simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-trace-mcmc" } simple
+utest mexprCompile {default with method = "mexpr-mcmc-trace" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-mcmc-aligned" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-smc" } simple
 with () using lam. lam. true in

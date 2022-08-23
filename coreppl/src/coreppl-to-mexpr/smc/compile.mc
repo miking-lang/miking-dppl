@@ -56,13 +56,14 @@ lang MExprPPLSMC =
     -- ANF transformation (required for analysis and CPS)
     let t = normalizeTerm t in
 
-    -- printLn ""; printLn "--- INITIAL PROGRAM ---";
+    -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
     match pprintCode 0 pprintEnvEmpty t with (env,str) in
     -- printLn (str);
 
     -- Alignment analysis
     let alignRes = alignCfa t in
     let unalignedNames: Set Name = extractUnaligned alignRes in
+    -- let unalignedNames: Set Name = setEmpty nameCmp in
     -- printLn ""; printLn "--- UNALIGNED NAMES ---";
     match mapAccumL pprintEnvGetStr env (setToSeq unalignedNames) with (env,unalignedStrings) in
     -- printLn (join [ "[", strJoin "," unalignedStrings, "]"]);
@@ -77,6 +78,8 @@ lang MExprPPLSMC =
       else errorSingle [infoTm t] "Impossible"
     in
     let graph = addCheckpointConstraints checkpoint alignRes t in
+    -- match (solveCfaDebug env graph) with (env,res) in
+    -- let checkpointNames: Set Name = extractCheckpoint res in
     let checkpointNames: Set Name = extractCheckpoint (solveCfa graph) in
     -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
     match mapAccumL pprintEnvGetStr env (setToSeq checkpointNames) with (env,strings) in
