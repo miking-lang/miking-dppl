@@ -3,7 +3,7 @@ Miking DPPL is a framework for developing probabilistic programming languages (P
 Currently, the framework includes the PPLs [CorePPL](#coreppl) and [RootPPL](#rootppl).
 
 ## Building and Installing
-The main binary for development in Miking DPPL is called `cppl`. Currently, this binary is built by running `make` in the project root, and installed to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) for building `cppl`.
+The main binary for development in Miking DPPL is called `cppl`. Currently, this binary is built by running `make` in the project root, and installed to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) to build `cppl`.
 The command `make test` executes a set of tests for various components in the Miking DPPL framework.
 
 ## CorePPL
@@ -24,12 +24,42 @@ With `weight`, the logarithm of the likelihood is updated directly (e.g., `weigh
 With `observe`, the likelihood is instead updated with the value of the pmf or pdf for the given distribution at the given observation.
 For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
 
-### Compiling CorePPL to RootPPL
-One option to run inference over a CorePPL program is to compile it to RootPPL.
+## Compiling CorePPL to MExpr
+The default option for inferring the distribution encoded by a CorePPL program is to compile it to MExpr (which then compiles to OCaml).
+You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm prefixed with `mexpr-` (run the command `cppl` to see the current list of available algorithms).
+For example, `cppl -m mexpr-importance cpplprog.mc` compiles `cpplprog.mc` to a binary file `out` which you can subsequently run to produce samples from the distribution encoded by `cpplprog.mc`:
+```
+$ ./out 10
+-0.290110454733
+0.80022937428 -0.222856874559
+0.843424730606 -0.170284615588
+0.80463734988 -0.217363600111
+0.884065007231 -0.123224681456
+0.660101541887 -0.415361604451
+0.83498403869 -0.180342669655
+0.430312010842 -0.84324472681
+0.721170725777 -0.326879379468
+0.675965445901 -0.391613319777
+0.826919003807 -0.190048528529
+```
+The argument is the number of samples.
+The first row prints the log of the normalizing constant, and the subsequent rows the samples.
+The first column is the sample, and the second its log-weight.
+For more help and options, run the `cppl` command without any arguments.
+
+### Implementing New Inference Algorithms
+The CorePPL to MExpr compiler is organized to make it easy to implement new inference algorithms.
+Currently, the best way to understand the framework is to look at the source code.
+There are also some slides available at `coreppl/docs/coreppl-to-mexpr.pdf`
+
+## Compiling CorePPL to RootPPL
+Another option to run inference over a CorePPL program is to compile it to RootPPL.
+This option potentially results in more efficient inference (due to the efficiency of RootPPL), but also has quite a lot of limitations (for example, RootPPL does not support automatic memory management or higher-order functions).
 A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `cppl -m rootppl-smc cpplprog.mc`.
 The file `out.cu` can then be compiled using, e.g., `rootppl out.cu --stack_size 10000`.
 The stack size option is mandatory for compiling RootPPL programs compiled from CorePPL.
 More information about RootPPL can be found at [RootPPL](#rootppl).
+
 
 ## RootPPL
 RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. See examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language.
