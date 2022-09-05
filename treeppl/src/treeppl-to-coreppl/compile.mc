@@ -296,19 +296,33 @@ mexpr
 -- test the flip example, TODO should iterate through the files instead
 let testTpplProgram = parseTreePPLFile "models/flip/flip.tppl" in
 let testInput = parseMCoreFile "models/flip/data.mc" in
-let testMCoreProgram = parseMCorePPLFile "models/flip/flip.mc" in
+let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/flip/flip.mc" in
+
 
 -- Doesn't work TODO
 use MExprPPL in
 utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
 
--- test the flip example, should iterate through the files instead
+-- test the if example, should iterate through the files instead
 let testTpplProgram = parseTreePPLFile "models/if/if.tppl" in
 let testInput = parseMCoreFile "models/if/data.mc" in
-let testMCoreProgram = parseMCorePPLFile "models/if/if.mc" in
+let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/if/if.mc" in
 
-use MExprPPL in
+--debug pretty printing
+--use TreePPLCompile in
+--printLn (mexprToString testMCoreProgram);
+
+--use MExprPPL in
 utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+
+-- test the externals example, should iterate through the files instead
+let testTpplProgram = parseTreePPLFile "models/externals/externals.tppl" in
+let testInput = parseMCoreFile "models/externals/data.mc" in
+let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/externals/externals.mc" in
+
+--use MExprPPL in
+utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+
 -- If you want to print out the strings, use the following:
 -- use MExprPPL in
 --utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
