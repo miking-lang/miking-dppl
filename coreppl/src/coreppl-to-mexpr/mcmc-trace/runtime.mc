@@ -126,4 +126,4 @@ let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
   -- NOTE(dlunde,2022-05-23): I don't think printing the norm. const makes
   -- sense for MCMC
   -- printLn (float2string (normConstant res.0));
-  printSamples printFun res.0 res.1
+  printSamples printFun (mapReverse (lam. 0.) res.0) res.1
