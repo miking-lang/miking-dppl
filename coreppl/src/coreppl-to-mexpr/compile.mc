@@ -14,7 +14,7 @@ include "../dppl-arg.mc"
 include "importance/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
-include "mcmc-aligned/compile.mc"
+include "mcmc-lightweight/compile.mc"
 include "smc/compile.mc"
 
 
@@ -49,7 +49,7 @@ let mexprCompile: Options -> Expr -> Expr =
         case "mexpr-importance" then compilerImportance options
         case "mexpr-mcmc-naive" then compilerNaiveMCMC options
         case "mexpr-mcmc-trace" then compilerTraceMCMC options
-        case "mexpr-mcmc-aligned" then compilerAlignedMCMC options
+        case "mexpr-mcmc-lightweight" then compilerLightweightMCMC options
         case "mexpr-smc" then compilerSMC options
         case _ then error (
           join [ "Unknown CorePPL to MExpr inference method:", options.method ]
@@ -105,8 +105,8 @@ let mexprCompile: Options -> Expr -> Expr =
       ("cps", str_ options.cps),
       ("printSamples", bool_ options.printSamples),
       ("earlyStop", bool_ options.earlyStop),
-      ("mcmcAlignedGlobalProb", float_ options.mcmcAlignedGlobalProb),
-      ("mcmcAlignedGlobalModProb", float_ options.mcmcAlignedGlobalModProb)
+      ("mcmcLightweightGlobalProb", float_ options.mcmcLightweightGlobalProb),
+      ("mcmcLightweightGlobalModProb", float_ options.mcmcLightweightGlobalModProb)
     ]) in
 
     -- Printing function for return type
@@ -152,7 +152,7 @@ utest mexprCompile {default with method = "mexpr-mcmc-naive" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-mcmc-trace" } simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-mcmc-aligned" } simple
+utest mexprCompile {default with method = "mexpr-mcmc-lightweight" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-smc" } simple
 with () using lam. lam. true in

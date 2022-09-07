@@ -13,6 +13,9 @@ type Options = {
   -- Where to resample in SMC
   resample: String,
 
+  -- Whether or not to use alignment (for certain inference algorithms)
+  align: Bool,
+
   -- Whether or not to print the actual result samples in compiled programs
   printSamples: Bool,
 
@@ -28,9 +31,9 @@ type Options = {
   -- Debug compilation to MExpr
   debugMExprCompile: Bool,
 
-  -- Aligned MCMC options
-  mcmcAlignedGlobalProb: Float,
-  mcmcAlignedGlobalModProb: Float
+  -- Lightweight MCMC options
+  mcmcLightweightGlobalProb: Float,
+  mcmcLightweightGlobalModProb: Float
 }
 
 -- Default values for options
@@ -38,6 +41,7 @@ let default = {
   method = "",
   particles = 5000,
   resample = "manual",
+  align = false,
   printModel = false,
   printMCore = false,
   exitBefore = false,
@@ -48,14 +52,14 @@ let default = {
   cps = "partial",
   earlyStop = true,
   debugMExprCompile = false,
-  mcmcAlignedGlobalProb = 0.2,
-  mcmcAlignedGlobalModProb = 0.5
+  mcmcLightweightGlobalProb = 0.2,
+  mcmcLightweightGlobalModProb = 0.5
 }
 
 -- Options configuration
 let config = [
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-importance, mexpr-mcmc-aligned, mexpr-mcmc-trace, mexpr-mcmc-naive, rootppl-smc.",
+    "The selected inference method. The supported methods are: mexpr-importance, mexpr-mcmc-lightweight, mexpr-mcmc-trace, mexpr-mcmc-naive, rootppl-smc.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
@@ -67,6 +71,10 @@ let config = [
     "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (default, sample only at manually defined resampling locations).",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with resample = argToString p}),
+  ([("--align", "", "")],
+    "Whether or not to align the model for certain inference algorithms.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with align = true}),
   ([("--print-model", "", "")],
     "The parsed model is pretty printed before inference.",
     lam p: ArgPart Options.
@@ -88,7 +96,7 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with transform = true}),
   ([("--no-print-samples", "", "")],
-    "Do not print the final samples when compiling with the rootppl-smc method.",
+    "Do not print the final samples in the compiled program.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with printSamples = false}),
   ([("--stack-size", " ", "<size>")],
@@ -107,12 +115,12 @@ let config = [
     "Turn on debugging for CorePPL to MExpr compiler.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugMExprCompile = true}),
-  ([("--mcmc-aligned-global-prob", " ", "<value>")],
-    "The probability of performing a global MH step (non-global means only modify a single aligned sample in the previous trace).",
-    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcAlignedGlobalProb = argToFloat p }),
-  ([("--mcmc-aligned-global-mod-prob", " ", "<value>")],
+  ([("--mcmc-lightweight-global-prob", " ", "<value>")],
+    "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace).",
+    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalProb = argToFloat p }),
+  ([("--mcmc-lightweight-global-mod-prob", " ", "<value>")],
     "When performing a global MH step, this option gives the probability of changing each sample in the trace.",
-    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcAlignedGlobalModProb = argToFloat p })
+    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalModProb = argToFloat p })
 ]
 
 -- Menu
