@@ -11,7 +11,7 @@ include "map.mc"
 include "../runtime-common.mc"
 include "../runtime-dists.mc"
 
--- Any-type, used for 
+-- Any-type, used for samples
 type Any = ()
 
 type Address = [Int]

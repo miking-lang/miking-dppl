@@ -74,7 +74,7 @@ lang MExprPPLLightweightMCMC =
     let t = transform (setEmpty nameCmp) t in
 
     -- Type addressing transform
-    -- TODO: We must also translate all the function types (but, ignore condefs as in CPS)
+    let t = mapPre_Expr_Expr exprTyTransform t in
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
@@ -93,6 +93,22 @@ lang MExprPPLLightweightMCMC =
     modref sym (addi s 1);
     cons_ (i (int_ s)) (i (nvar_ addrName))
 
+  sem transformConst: Int -> Expr -> Expr
+  sem transformConst arity =
+  | e ->
+    let i = withInfo (infoTm e) in
+    recursive let vars = lam acc. lam arity.
+      if lti arity 1 then acc
+      else
+        let arg = nameNoSym (concat "a" (int2string arity)) in
+        vars (cons arg acc) (subi arity 1)
+    in
+    let varNames: [Name] = vars [] arity in
+    let inner = foldl (lam acc. lam v. i (app_ acc (nvar_ v))) e varNames in
+    foldr (lam v. lam acc.
+        i (nlam_ addrName (tyseq_ tyint_) (i (nulam_ v acc)))
+      ) inner varNames
+
   sem transform: Set Name -> Expr -> Expr
   sem transform externalIds =
 
@@ -101,14 +117,10 @@ lang MExprPPLLightweightMCMC =
   | TmLam _ & t ->
     match smap_Expr_Expr (transform externalIds) t with TmLam r & t in
     let i = withInfo r.info in
-    i (nlam_ addrName tyint_ t)
+    i (nlam_ addrName (tyseq_ tyint_) t)
 
   | TmConst r & t ->
-    -- Wrap constant functions in lambdas where they are introduced
-    if gti (constArity r.val) 0 then
-      let i = withInfo r.info in
-      i (nlam_ addrName tyint_ t)
-    else t
+    transformConst (constArity r.val) t
 
   | TmExt r & t ->
     TmExt { r with inexpr = transform (setInsert r.ident externalIds) r.inexpr }
@@ -118,17 +130,22 @@ lang MExprPPLLightweightMCMC =
     -- NOTE(dlunde,2022-09-07): the somewhat obscure code below code replaces
     -- an application a b c d with
     --
-    --   (tr a) s1 (tr b) s2 (tr c) s3,
+    --   (tr a) s1 (tr b) s2 (tr c) s3 (tr d),
     --
     -- where s1-s3 are unique symbols and tr represents recursively applying
     -- the transformation. However, if a is a variable that refers to an
     -- external (which are guaranteed to always be fully applied), it instead
     -- simply results in
     --
-    --   (tr a) (tr b) (tr c)
+    --   (tr a) (tr b) (tr c) (tr d)
     --
     -- as externals cannot be curried or sent as first-class values (nor can
     -- they evaluate any `assume`s internally).
+    --
+    -- Lastly, we also optimize (full _and_ partial) constant applications. For
+    -- example, assume a is a constant of arity 4. The result is then
+    --
+    --   lam addr. lam e. a (tr b) (tr c) (tr d) e
 
     let transformApp = lam app.
       match app with TmApp r then
@@ -137,7 +154,7 @@ lang MExprPPLLightweightMCMC =
       else error "Impossible"
     in
 
-    recursive let rec = lam app.
+    recursive let rec = lam app. lam numArgs.
       match app with TmApp r then
 
         -- Always transform the argument (the rhs)
@@ -145,24 +162,35 @@ lang MExprPPLLightweightMCMC =
 
         -- Recurse over lhs if it's an app
         match r.lhs with TmApp _ then
-          match rec r.lhs with (lhs, extApp) in
+          match rec r.lhs (addi 1 numArgs) with (lhs, constExtArgs) in
           let app = TmApp { r with lhs = lhs } in
-          (if extApp then app else transformApp app, extApp)
+          if gti constExtArgs 0 then
+            (app, subi constExtArgs 1)
+          else
+            (transformApp app, 0)
 
-        -- Base case
+        -- Base case: variables (including external applications)
         else match r.lhs with TmVar { ident = ident } then
           if setMem ident externalIds
-            then (TmApp r,true) else (transformApp (TmApp r), false)
+            then (TmApp r, numArgs) else (transformApp (TmApp r), 0)
 
-        -- Base case (also remember to transform the lhs)
+        -- Base case: constant application
+        else match r.lhs with TmConst rc then
+          (TmApp r, subi (constArity rc.val) 1)
+
+        -- Base case: other (e.g., lambdas)
+        -- OPT(dlunde,2022-09-08): Lambdas could also be optimized if applied
+        -- directly when constructed (as they, at least partially, can't escape
+        -- then).
         else
           let app = TmApp { r with lhs = transform externalIds r.lhs } in
-          (transformApp app, false)
+          (transformApp app, 0)
 
       else error "Impossible"
     in
 
-    match rec t with (t,_) in t
+    match rec t 0 with (t,remainingConstArity) in
+    transformConst remainingConstArity t
 
   | TmAssume r ->
     let i = withInfo r.info in
@@ -178,6 +206,33 @@ lang MExprPPLLightweightMCMC =
     i (appf1_ (i (var_ "updateWeight")) r.weight)
 
   | TmResample r -> withInfo r.info unit_
+
+  sem exprTyTransform =
+  | t -> smap_Expr_Type tyTransform t
+  | TmConDef r & t ->
+    -- We do not transform the top-level arrow type of the condef (due to the
+    -- nested smap_Type_Type), as data values are constructed as usual.
+    -- NOTE(dlunde,2022-07-13): We currently leave TyAlls wrapping the
+    -- top-level arrow type intact.
+    -- NOTE(dlunde,2022-07-13): Issues can arise here if the top-level arrow
+    -- type of a condef is a type variable that was defined earlier with
+    -- TmType. It is then incorrectly transformed.
+    recursive let rec = lam ty.
+      match ty with TyAll b then TyAll { b with ty = rec b.ty }
+      else match ty with TyArrow _ & t then smap_Type_Type tyTransform t
+      else errorSingle [r.info]
+        "Error in mcmc-lightweight compile: Problem with TmConDef in exprTyTransform"
+    in smap_Expr_Type rec t
+
+  sem tyTransform =
+  | t -> smap_Type_Type tyTransform t
+  -- Function type a -> b becomes [Int] -> a -> b
+  | TyArrow r ->
+    let i = tyWithInfo r.info in
+    let from = tyTransform r.from in
+    let to = tyTransform r.to in
+    (i (tyarrow_ (i (tyseq_ (i tyint_)))
+        (TyArrow { r with from = from, to = to })))
 
   -------------------------------
   -- STATIC ALIGNED MCMC (CPS) --
