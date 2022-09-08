@@ -146,13 +146,19 @@ x
 " in
 
 -- Simple tests that ensure compilation throws no errors
-utest mexprCompile {default with method = "mexpr-importance" } simple
+utest mexprCompile {default with method = "mexpr-importance", cps = "none" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-importance", cps = "partial" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-importance", cps = "full" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-mcmc-naive" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-mcmc-trace" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-mcmc-lightweight" } simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-mcmc-lightweight", align = true } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-smc" } simple
 with () using lam. lam. true in
