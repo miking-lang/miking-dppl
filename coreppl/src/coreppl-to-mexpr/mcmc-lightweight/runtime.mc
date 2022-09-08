@@ -38,6 +38,20 @@ type State = {
 
 let emptyList = toList []
 
+-- Custom sequence comparison (the one in the standard library is optimized for
+-- ropes, not lists)
+let seqCmp : all a. (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
+  recursive let work = lam s1. lam s2.
+    match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
+      let c = cmp h1 h2 in
+      if eqi c 0 then work t1 t2
+      else c
+    else match (s1, s2) with (t1, []) then 1
+    else match (s1, s2) with ([], t2) then negi 1
+    else 0
+  in
+  work s1 s2
+
 let emptyAddressMap = mapEmpty (seqCmp subi)
 
 -- State (reused throughout inference)
