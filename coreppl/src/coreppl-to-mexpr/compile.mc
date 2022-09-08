@@ -5,6 +5,7 @@ include "mexpr/type.mc"
 include "sys.mc"
 
 include "../coreppl.mc"
+include "../extract.mc"
 include "../inference-common/smc.mc"
 include "../src-location.mc"
 include "../parser.mc"
@@ -21,12 +22,18 @@ include "smc/compile.mc"
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
-lang MExprCompile = MExprPPL + Resample + Externals
-end
-let mexprCompile: Options -> Expr -> Expr =
-  use MExprCompile in
-  lam options. lam prog.
+lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract
+  sem _addNameToRunBinding : Name -> Expr -> Expr
+  sem _addNameToRunBinding runId =
+  | TmLet t ->
+    if and (not (nameHasSym t.ident)) (eqString (nameGetStr t.ident) "run") then
+      TmLet {t with ident = runId}
+    else TmLet {t with inexpr = _addNameToRunBinding runId t.inexpr}
+  | t -> smap_Expr_Expr (_addNameToRunBinding runId) t
 
+  sem mexprCompile : Options -> InferData -> Expr -> Expr
+  sem mexprCompile options inferData =
+  | prog ->
     let desymbolizeExternals = lam prog.
       recursive let rec = lam env. lam prog.
         match prog with TmExt ({ ident = ident, inexpr = inexpr } & b) then
@@ -66,13 +73,6 @@ let mexprCompile: Options -> Expr -> Expr =
       }
     in
 
-    -- Type check model. NOTE(dlunde,2022-06-09): We do not want the
-    -- annotations added by the type checker, as this may make the printed
-    -- program unparsable. That's why we simply discard the result here (but,
-    -- we first extract the return type).
-    let tcprog = typeCheck prog in
-    let resTy = tyTm tcprog in
-
     -- Symbolize model (ignore free variables and externals)
     let prog = symbolizeExpr
       { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
@@ -87,6 +87,11 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Parse runtime
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
 
+    -- Assign a pre-defined name to the 'run' binding.
+    -- TODO(larshum, 2022-09-08): Is it safe to assume this binding always
+    -- exists, and that it is unique in the runtime program?
+    let runtime = _addNameToRunBinding inferData.runId runtime in
+
     -- Get external definitions from runtime-AST (input to next step)
     let externals = getExternalIds runtime in
 
@@ -95,7 +100,9 @@ let mexprCompile: Options -> Expr -> Expr =
     let prog = removeExternalDefs externals prog in
 
     -- Put model in top-level model function
-    let prog = ulet_ "model" (lams_ [("state", tycon_ "State")] prog) in
+    let prog =
+      nulet_ inferData.modelId
+        (nlams_ (snoc inferData.params (nameSym "state", tycon_ "State")) prog) in
 
     -- Construct record accessible in runtime
     -- NOTE(dlunde,2022-06-28): It would be nice if we automatically lift the
@@ -109,22 +116,8 @@ let mexprCompile: Options -> Expr -> Expr =
       ("mcmcAlignedGlobalModProb", float_ options.mcmcAlignedGlobalModProb)
     ]) in
 
-    -- Printing function for return type
-    let tyPrintFun =
-      match resTy with TyInt _ then   (var_ "int2string")
-      else match resTy with TyFloat _ then uconst_ (CFloat2string ())
-      else match resTy with TyBool _ then (var_ "bool2string")
-      else match resTy with TySeq { ty = TyChar _ } then (ulam_ "x" (var_ "x"))
-      else error "Return type cannot be printed"
-    in
-
-    let post = bindall_ [
-      ulet_ "printFun" (app_ (var_ "printRes") tyPrintFun),
-      appf2_ (var_ "run") (var_ "model") (var_ "printFun")
-    ] in
-
-    -- Combine runtime, model, and generated post
-    let prog = bindall_ [pre,runtime,prog,post] in
+    -- Combine runtime and model
+    let prog = bindall_ [pre,runtime,prog] in
 
     if options.debugMExprCompile then
       -- Check that the combined program type checks
@@ -133,8 +126,17 @@ let mexprCompile: Options -> Expr -> Expr =
 
     -- Return complete program
     prog
+end
+
+let mexprCompile = use MExprCompile in mexprCompile
 
 mexpr
+
+let mexprCompile = lam method. lam e.
+  use DPPLExtract in
+  let inferData = defaultInferData method in
+  mexprCompile {default with method = method} inferData e
+in
 
 let parse = parseMExprPPLString in
 
@@ -146,15 +148,15 @@ x
 " in
 
 -- Simple tests that ensure compilation throws no errors
-utest mexprCompile {default with method = "mexpr-importance" } simple
+utest mexprCompile "mexpr-importance" simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-mcmc-naive" } simple
+utest mexprCompile "mexpr-mcmc-naive" simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-mcmc-trace" } simple
+utest mexprCompile "mexpr-mcmc-trace" simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-mcmc-aligned" } simple
+utest mexprCompile "mexpr-mcmc-aligned" simple
 with () using lam. lam. true in
-utest mexprCompile {default with method = "mexpr-smc" } simple
+utest mexprCompile "mexpr-smc" simple
 with () using lam. lam. true in
 
 ()

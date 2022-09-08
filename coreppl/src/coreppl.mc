@@ -38,13 +38,10 @@ lang Infer =
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
-  | TmInfer { method: InferMethod,
-              model: Expr,
+  | TmInfer { model: Expr,
+              method: String,
               ty: Type,
               info: Info }
-
-  -- Interface type for infer methods
-  syn InferMethod =
 
   sem infoTm =
   | TmInfer t -> t.info
@@ -69,16 +66,18 @@ lang Infer =
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmInfer t ->
-    -- TODO(dlunde,2021-04-28): Infer method not yet printed
     let i = pprintIncr indent in
     match printParen i env t.model with (env,model) then
-      (env, join ["infer", pprintNewline i, model])
+      -- TODO(larshum, 2022-09-08): Use an extensible constructor type instead
+      -- of strings to represent the inference method.
+      match t.method with "mexpr-importance" then
+        (env, join ["inferImportance", pprintNewline i, model])
+      else error "Unsupported inference method"
     else never
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmInfer r ->
-    -- TODO(dlunde,2021-04-28): Infer method not yet checked for equality
     match lhs with TmInfer l then
       eqExprH env free l.model r.model
     else None ()
@@ -95,8 +94,17 @@ lang Infer =
     let model = typeCheckExpr env t.model in
     let tyRes = newvar env.currentLvl t.info in
     unify [t.info] env (tyTm model) (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes);
-    TmInfer {{ t with model = model }
-                 with ty = TyDist { info = t.info, ty = tyRes } }
+
+    -- TODO(larshum, 2022-09-07): If we reuse the 'TmInfer' for different
+    -- inference methods, then the type-checking here needs to depend on the
+    -- 'method' field.
+    let weightsTy = TySeq {ty = TyFloat {info = t.info}, info = t.info} in
+    let samplesTy = TySeq {ty = tyRes, info = t.info} in
+    let inferTy = TyRecord {
+      fields = mapFromSeq cmpSID [
+        (stringToSid "0", weightsTy), (stringToSid "1", samplesTy)],
+      info = t.info } in
+    TmInfer { t with model = model, ty = inferTy }
 
   -- ANF
   sem normalize (k : Expr -> Expr) =
@@ -396,7 +404,7 @@ let weight_ = use Weight in
 ---------------------------
 
 lang CorePPL =
-  Ast + Assume + Observe + Weight + ObserveWeightTranslation + DistAll
+  Ast + Assume + Observe + Weight + Infer + ObserveWeightTranslation + DistAll
 end
 
 let pplKeywords = [

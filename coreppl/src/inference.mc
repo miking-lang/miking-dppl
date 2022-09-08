@@ -15,17 +15,7 @@ let performInference = lam options: Options. lam ast.
 
   if isPrefix eqChar "mexpr-" options.method then
 
-    -- Compile the ast with the chosen inference algorithm (handled in
-    -- coreppl-to-mexpr/compile.mc)
-    let ast = mexprCompile options ast in
-
-    -- Output the compiled mexpr code
-    let outName = "out.mc" in
-    writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
-
-    -- Output the compiled OCaml code (unless --skip-final is specified)
-    if options.skipFinal then ()
-    else sysRunCommand ["mi", "compile", outName] "" "."; ()
+    error "Full program inference is not supported for MExpr inference methods"
 
   else match options.method with "rootppl-smc" then
     let outName = "out.cu" in

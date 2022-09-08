@@ -14,6 +14,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + Probabil
   | TmAssume _ -> true
   | TmObserve _ -> true
   | TmWeight _ -> true
+  | TmInfer _ -> true
   | TmDist _ -> true
   | TmPlate _ -> true
 
@@ -30,6 +31,10 @@ lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + Probabil
                                             info = info})
   | "resample" -> Some (0, lam lst. TmResample {ty = TyUnknown {info = info},
                                                 info = info})
+  | "inferImportance" -> Some (1, lam lst. TmInfer {model = get lst 0,
+                                                    method = "mexpr-importance",
+                                                    ty = TyUnknown {info = info},
+                                                    info = info})
   | "plate" -> Some (2, lam lst. TmPlate {fun = get lst 0,
                                           lst = get lst 1,
                                           ty = TyUnknown {info = info},

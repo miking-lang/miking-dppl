@@ -43,22 +43,18 @@ let importance: all a. (State -> Stop a) -> State -> Option a =
     if compileOptions.earlyStop then recEarlyStop res
     else rec res
 
+let unwrapOpt : all a. Option a -> a = lam opt.
+  match opt with Some x then x
+  else error "Could not unwrap option"
+
 -- General inference algorithm for importance sampling
-let run : all a. (State -> Stop a) -> (ResOption a -> ()) -> () =
-  lam model. lam printResFun.
+let run : all a. (State -> Stop a) -> ([Float], [a]) =
+  lam model.
 
     -- Read number of runs and sweeps
     match monteCarloArgs () with (particles, sweeps) in
 
-    -- Repeat once for each sweep
-    repeat (lam.
-        let weightInit: Float = 0. in
-        let states = createList particles (lam. ref weightInit) in
-        let res = mapReverse (importance model) states in
-        let res = (mapReverse deref states, res) in
-        printResFun res
-      ) sweeps
-
-let printRes : all a. (a -> String) -> ResOption a -> () = lam printFun. lam res.
-  printLn (float2string (normConstant res.0));
-  printSamplesOption printFun res.0 res.1
+    let weightInit: Float = 0. in
+    let states = createList particles (lam. ref weightInit) in
+    let res = mapReverse (importance model) states in
+    (mapReverse deref states, reverse (mapReverse unwrapOpt res))
