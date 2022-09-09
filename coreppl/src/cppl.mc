@@ -34,27 +34,21 @@ lang CPPLLang = MExprAst + DPPLExtract
       -- Perform the actual inference
       performInference options ast
 
-  sem transformModelAst : Options -> (Expr, InferData) -> Expr
+  sem transformModelAst : Options -> ModelData -> ModelData
   sem transformModelAst options =
-  | (ast, inferData) ->
-    -- Transform the model, if the flag is set
+  | modelData ->
+    -- Transform the model AST, if the flag is set
     let ast =
       if options.transform then
-        transform ast
-      else ast in
+        transform modelData.ast
+      else modelData.ast in
 
-    -- Optionally print the model
+    -- Optionally print the model AST
     (if options.printModel then
       use DPPLParser in printLn (mexprPPLToString ast)
     else ());
 
-    -- Do not apply the inference compilation, if the flag is set
-    if options.exitBefore then ast
-    else
-      -- Apply the inference-specific compilation on the model AST, using the
-      -- inference method specified for the model.
-      let options = {options with method = inferData.method} in
-      mexprCompile options inferData ast
+    {modelData with ast = ast}
 end
 
 let compileRootPPL = use CPPLLang in compileRootPPL
@@ -88,12 +82,15 @@ match result with ParseOK r then
       match extractInfer ast with (ast, modelAsts) in
 
       -- Apply the transformations on each model
-      let modelAsts = map (transformModelAst options) modelAsts in
+      let modelAsts =
+        mapMapWithKey
+          (lam. lam models. map (transformModelAst options) models)
+          modelAsts in
 
       -- Combine the model ASTs with the original AST
       -- NOTE(larshum, 2022-09-07): This produces a lot of duplicated code in
       -- the AST, if the infer expression is used multiple times.
-      let ast = bindall_ (snoc modelAsts ast) in
+      let ast = mexprCompile options ast modelAsts in
 
       -- Exit before performing the inference, if the flag is set
       if options.exitBefore then exit 0

@@ -31,9 +31,79 @@ lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract
     else TmLet {t with inexpr = _addNameToRunBinding runId t.inexpr}
   | t -> smap_Expr_Expr (_addNameToRunBinding runId) t
 
-  sem mexprCompile : Options -> InferData -> Expr -> Expr
-  sem mexprCompile options inferData =
-  | prog ->
+  -- TODO(larshum, 2022-09-09): Replace strings with constructor types?
+  sem loadCompiler : Options -> String -> (String, Expr -> Expr)
+  sem loadCompiler options =
+  | "mexpr-importance" -> compilerImportance options
+  | "mexpr-mcmc-naive" -> compilerNaiveMCMC options
+  | "mexpr-mcmc-trace" -> compilerTraceMCMC options
+  | "mexpr-mcmc-aligned" -> compilerAlignedMCMC options
+  | "mexpr-smc" -> compilerSMC options
+  | _ ->
+    error (join ["Unknown CorePPL to MExpr inference method:", options.method])
+
+  sem mexprCompile : Options -> Expr -> Map String [ModelData] -> Expr
+  sem mexprCompile options mainAst =
+  | methodInferData ->
+    -- Construct record accessible at runtime
+    -- NOTE(dlunde,2022-06-28): It would be nice if we automatically lift the
+    -- options variable here to an Expr.
+    let pre = ulet_ "compileOptions" (urecord_ [
+      ("resample", str_ options.resample),
+      ("cps", str_ options.cps),
+      ("printSamples", bool_ options.printSamples),
+      ("earlyStop", bool_ options.earlyStop),
+      ("mcmcAlignedGlobalProb", float_ options.mcmcAlignedGlobalProb),
+      ("mcmcAlignedGlobalModProb", float_ options.mcmcAlignedGlobalModProb)
+    ]) in
+
+    match mapAccumL (compileInferenceMethod options) [] (mapBindings methodInferData)
+    with (runtimes, modelAsts) in
+
+    let prog = bindall_ (join [[pre], runtimes, join modelAsts, [mainAst]]) in
+
+    if options.debugMExprCompile then
+      -- Check that the combined program type checks
+      typeCheck prog
+    else ();
+
+    -- Return complete program
+    prog
+
+  sem compileInferenceMethod : Options -> [Expr] -> (String, [ModelData]) -> ([Expr], [Expr])
+  sem compileInferenceMethod options acc =
+  | (inferMethod, models) ->
+    match loadCompiler options inferMethod with (runtime, compile) in
+
+    let parse = use BootParser in parseMCoreFile {
+      defaultBootParserParseMCoreFileArg with
+        eliminateDeadCode = false,
+        allowFree = true
+      }
+    in
+
+    -- Parse runtime
+    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
+
+    -- Assign a pre-defined name to the 'run' binding.
+    -- TODO(larshum, 2022-09-08): Is it safe to assume this binding always
+    -- exists, and that it is unique in every runtime program?
+    let runId =
+      let fst : ModelData = head models in
+      fst.runId
+    in
+    let runtime = _addNameToRunBinding runId runtime in
+
+    -- Get external definitions from runtime-AST
+    let externals = getExternalIds runtime in
+
+    let modelAsts = map (compileModel compile externals) models in
+
+    (snoc acc runtime, modelAsts)
+
+  sem compileModel : (Expr -> Expr) -> Set String -> ModelData -> Expr
+  sem compileModel compile externals =
+  | model ->
     let desymbolizeExternals = lam prog.
       recursive let rec = lam env. lam prog.
         match prog with TmExt ({ ident = ident, inexpr = inexpr } & b) then
@@ -50,32 +120,9 @@ lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract
       in rec (mapEmpty nameCmp) prog
     in
 
-    -- Load runtime and compile function
-    let compiler: (String, Expr -> Expr) =
-      switch options.method
-        case "mexpr-importance" then compilerImportance options
-        case "mexpr-mcmc-naive" then compilerNaiveMCMC options
-        case "mexpr-mcmc-trace" then compilerTraceMCMC options
-        case "mexpr-mcmc-aligned" then compilerAlignedMCMC options
-        case "mexpr-smc" then compilerSMC options
-        case _ then error (
-          join [ "Unknown CorePPL to MExpr inference method:", options.method ]
-        )
-      end
-    in
-
-    match compiler with (runtime, compile) in
-
-    let parse = use BootParser in parseMCoreFile {
-      defaultBootParserParseMCoreFileArg with
-        eliminateDeadCode = false,
-        allowFree = true
-      }
-    in
-
     -- Symbolize model (ignore free variables and externals)
     let prog = symbolizeExpr
-      { symEnvEmpty with allowFree = true, ignoreExternals = true } prog
+      { symEnvEmpty with allowFree = true, ignoreExternals = true } model.ast
     in
 
     -- Desymbolize externals in case any were symbolized beforehand
@@ -84,48 +131,13 @@ lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract
     -- Apply inference-specific transformation
     let prog = compile prog in
 
-    -- Parse runtime
-    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
-
-    -- Assign a pre-defined name to the 'run' binding.
-    -- TODO(larshum, 2022-09-08): Is it safe to assume this binding always
-    -- exists, and that it is unique in the runtime program?
-    let runtime = _addNameToRunBinding inferData.runId runtime in
-
-    -- Get external definitions from runtime-AST (input to next step)
-    let externals = getExternalIds runtime in
-
     -- Remove duplicate external definitions in model (already included in the
     -- runtime)
     let prog = removeExternalDefs externals prog in
 
     -- Put model in top-level model function
-    let prog =
-      nulet_ inferData.modelId
-        (nlams_ (snoc inferData.params (nameSym "state", tycon_ "State")) prog) in
-
-    -- Construct record accessible in runtime
-    -- NOTE(dlunde,2022-06-28): It would be nice if we automatically lift the
-    -- options variable here to an Expr.
-    let pre = ulet_ "compileOptions" (urecord_ [
-      ("resample", str_ options.resample),
-      ("cps", str_ options.cps),
-      ("printSamples", bool_ options.printSamples),
-      ("earlyStop", bool_ options.earlyStop),
-      ("mcmcAlignedGlobalProb", float_ options.mcmcAlignedGlobalProb),
-      ("mcmcAlignedGlobalModProb", float_ options.mcmcAlignedGlobalModProb)
-    ]) in
-
-    -- Combine runtime and model
-    let prog = bindall_ [pre,runtime,prog] in
-
-    if options.debugMExprCompile then
-      -- Check that the combined program type checks
-      typeCheck prog
-    else ();
-
-    -- Return complete program
-    prog
+    nulet_ model.modelId
+      (nlams_ (snoc model.params (nameSym "state", tycon_ "State")) prog)
 end
 
 let mexprCompile = use MExprCompile in mexprCompile
