@@ -128,10 +128,11 @@ let mexprCompile = use MExprCompile in mexprCompile
 
 mexpr
 
-let mexprCompile = lam method. lam e.
-  use DPPLExtract in
-  let inferData = defaultInferData method in
-  mexprCompile {default with method = method} inferData e
+let compileModel = lam method. lam modelAst.
+  use MExprCompile in
+  match loadCompiler default method with (_, compile) in
+  let model = {defaultModelData method with ast = modelAst} in
+  compileModel compile model
 in
 
 let parse = parseMExprPPLString in
@@ -144,15 +145,15 @@ x
 " in
 
 -- Simple tests that ensure compilation throws no errors
-utest mexprCompile "mexpr-importance" simple
+utest compileModel "mexpr-importance" simple
 with () using lam. lam. true in
-utest mexprCompile "mexpr-mcmc-naive" simple
+utest compileModel "mexpr-mcmc-naive" simple
 with () using lam. lam. true in
-utest mexprCompile "mexpr-mcmc-trace" simple
+utest compileModel "mexpr-mcmc-trace" simple
 with () using lam. lam. true in
-utest mexprCompile "mexpr-mcmc-aligned" simple
+utest compileModel "mexpr-mcmc-aligned" simple
 with () using lam. lam. true in
-utest mexprCompile "mexpr-smc" simple
+utest compileModel "mexpr-smc" simple
 with () using lam. lam. true in
 
 ()
