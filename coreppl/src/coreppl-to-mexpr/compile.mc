@@ -10,6 +10,7 @@ include "../inference-common/smc.mc"
 include "../src-location.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
+include "dedup.mc"
 
 -- Inference methods
 include "importance/compile.mc"
@@ -22,7 +23,7 @@ include "smc/compile.mc"
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
-lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract
+lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract + CPPLDedup
   sem _addNameToRunBinding : Name -> Expr -> Expr
   sem _addNameToRunBinding runId =
   | TmLet t ->
@@ -62,6 +63,15 @@ lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract
 
     let prog = bindall_ (join [[pre], runtimes, join modelAsts, [mainAst]]) in
 
+    -- Remove duplicate definitions of types and declarations of externals. To
+    -- do this, we first symbolize the program, then remove the symbols of
+    -- types and external declarations prior to removing duplicates. The result
+    -- is that references to different "versions" of external declarations end
+    -- up referring to the same after re-symbolization of the AST.
+    let prog = symbolize prog in
+    let prog = deduplicateTypesAndExternals prog in
+    let prog = symbolize prog in
+
     if options.debugMExprCompile then
       -- Check that the combined program type checks
       typeCheck prog
@@ -94,46 +104,20 @@ lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract
     in
     let runtime = _addNameToRunBinding runId runtime in
 
-    -- Get external definitions from runtime-AST
-    let externals = getExternalIds runtime in
-
-    let modelAsts = map (compileModel compile externals) models in
+    let modelAsts = map (compileModel compile) models in
 
     (snoc acc runtime, modelAsts)
 
-  sem compileModel : (Expr -> Expr) -> Set String -> ModelData -> Expr
-  sem compileModel compile externals =
+  sem compileModel : (Expr -> Expr) -> ModelData -> Expr
+  sem compileModel compile =
   | model ->
-    let desymbolizeExternals = lam prog.
-      recursive let rec = lam env. lam prog.
-        match prog with TmExt ({ ident = ident, inexpr = inexpr } & b) then
-          let noSymIdent = nameNoSym (nameGetStr ident) in
-          let env =
-            if nameHasSym ident then (mapInsert ident noSymIdent env) else env
-          in
-          TmExt { b with ident = noSymIdent, inexpr = rec env inexpr }
-        else match prog with TmVar ({ ident = ident } & b) then
-          let ident =
-            match mapLookup ident env with Some ident then ident else ident in
-          TmVar { b with ident = ident }
-        else smap_Expr_Expr (rec env) prog
-      in rec (mapEmpty nameCmp) prog
-    in
-
     -- Symbolize model (ignore free variables and externals)
     let prog = symbolizeExpr
       { symEnvEmpty with allowFree = true, ignoreExternals = true } model.ast
     in
 
-    -- Desymbolize externals in case any were symbolized beforehand
-    let prog = desymbolizeExternals prog in
-
     -- Apply inference-specific transformation
     let prog = compile prog in
-
-    -- Remove duplicate external definitions in model (already included in the
-    -- runtime)
-    let prog = removeExternalDefs externals prog in
 
     -- Put model in top-level model function
     nulet_ model.modelId
