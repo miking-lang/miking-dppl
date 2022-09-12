@@ -52,8 +52,8 @@ let default = {
   cps = "partial",
   earlyStop = true,
   debugMExprCompile = false,
-  mcmcLightweightGlobalProb = 0.2,
-  mcmcLightweightGlobalModProb = 0.5
+  mcmcLightweightGlobalProb = 0.1,
+  mcmcLightweightGlobalModProb = 0.1
 }
 
 -- Options configuration
@@ -63,12 +63,16 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
-    join ["The number of particles. The default is 5000. This option is used if one ",
-          "of the following methods are used: mexpr-importance, rootppl-smc."],
+    join [
+      "The number of particles. The default is ", (int2string default.particles),
+      ". This option is used if one of the following methods are used: mexpr-importance, rootppl-smc."
+    ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],
-    "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (default, sample only at manually defined resampling locations).",
+    join [
+      "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (sample only at manually defined resampling locations). Default: ", default.resample, "."
+    ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with resample = argToString p}),
   ([("--align", "", "")],
@@ -100,11 +104,14 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with printSamples = false}),
   ([("--stack-size", " ", "<size>")],
-    join ["The stack size used by RootPPL. The default is 10000 (bytes)."],
+    join [
+      "The stack size used by RootPPL. The default is ",
+      (int2string default.stackSize), " (bytes)."
+    ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with stackSize = argToIntMin p 1}),
   ([("--cps", " ", "<option>")],
-    "Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial (default, usually the best), and full.",
+    join ["Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: ", default.cps, "."],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with cps = argToString p}),
   ([("--no-early-stop", "", "")],
@@ -115,11 +122,17 @@ let config = [
     "Turn on debugging for CorePPL to MExpr compiler.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugMExprCompile = true}),
-  ([("--mcmc-lightweight-global-prob", " ", "<value>")],
-    "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace).",
+  ([("--mcmc-lw-gprob", " ", "<value>")],
+    join [
+      "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: ",
+      float2string default.mcmcLightweightGlobalProb, "."
+    ],
     lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalProb = argToFloat p }),
-  ([("--mcmc-lightweight-global-mod-prob", " ", "<value>")],
-    "When performing a global MH step, this option gives the probability of changing each sample in the trace.",
+  ([("--mcmc-lw-mprob", " ", "<value>")],
+    join [
+      "When performing a global MH step, this option gives the probability of changing each sample in the trace. Default: ",
+      float2string default.mcmcLightweightGlobalModProb, "."
+    ],
     lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalModProb = argToFloat p })
 ]
 

@@ -252,10 +252,10 @@ let compilerLightweightMCMC = lam options. use MExprPPLLightweightMCMC in
   let gProb = options.mcmcLightweightGlobalProb in
   let mProb = options.mcmcLightweightGlobalModProb in
   if or (ltf gProb 0.0) (gtf gProb 1.0) then
-  error "--mcmc-lightweight-global-prob must be between 0.0 and 1.0"
+  error "--mcmc-lw-gprob must be between 0.0 and 1.0"
   else ();
   if or (ltf mProb 0.0) (gtf mProb 1.0) then
-  error "--mcmc-lightweight-global-mod-prob must be between 0.0 and 1.0"
+  error "--mcmc-lw-mprob must be between 0.0 and 1.0"
   else ();
 
   if options.align then
