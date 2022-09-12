@@ -33,13 +33,34 @@ let _isUnitTy = use RecordTypeAst in lam ty.
 -- TERMS --
 -----------
 
+-- Defines the basic components of an inference method. To add a new inference
+-- method, a new constructor must be defined for the InferMethod type and the
+-- inferMethodName and typeCheckInferMethod functions must be implemented for
+-- this type.
+lang InferMethodBase
+  syn InferMethod =
+
+  sem cmpInferMethod : InferMethod -> InferMethod -> Int
+  sem cmpInferMethod lhs =
+  | rhs -> cmpInferMethodH (lhs, rhs)
+
+  sem cmpInferMethodH : (InferMethod, InferMethod) -> Int
+  sem cmpInferMethodH =
+  | (l, r) -> subi (constructorTag l) (constructorTag r)
+
+  sem inferMethodName : InferMethod -> String
+
+  sem typeCheckInferMethod : TCEnv -> Type -> Info -> InferMethod -> Type
+end
+
 lang Infer =
-  Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeCheck + ANF + TypeLift
+  Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeCheck + ANF +
+  TypeLift + InferMethodBase
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
   | TmInfer { model: Expr,
-              method: String,
+              method: InferMethod,
               ty: Type,
               info: Info }
 
@@ -67,19 +88,17 @@ lang Infer =
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmInfer t ->
     let i = pprintIncr indent in
-    match printParen i env t.model with (env,model) then
-      -- TODO(larshum, 2022-09-08): Use an extensible constructor type instead
-      -- of strings to represent the inference method.
-      match t.method with "mexpr-importance" then
-        (env, join ["inferImportance", pprintNewline i, model])
-      else error "Unsupported inference method"
-    else never
+    match printParen i env t.model with (env,model) in
+    let methodId = inferMethodName t.method in
+    (env, join [methodId, pprintNewline i, model])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmInfer r ->
     match lhs with TmInfer l then
-      eqExprH env free l.model r.model
+      if eqi (constructorTag l.method) (constructorTag r.method) then
+        eqExprH env free l.model r.model
+      else None ()
     else None ()
 
   -- Symbolize
@@ -94,16 +113,7 @@ lang Infer =
     let model = typeCheckExpr env t.model in
     let tyRes = newvar env.currentLvl t.info in
     unify [t.info] env (tyTm model) (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes);
-
-    -- TODO(larshum, 2022-09-07): If we reuse the 'TmInfer' for different
-    -- inference methods, then the type-checking here needs to depend on the
-    -- 'method' field.
-    let weightsTy = TySeq {ty = TyFloat {info = t.info}, info = t.info} in
-    let samplesTy = TySeq {ty = tyRes, info = t.info} in
-    let inferTy = TyRecord {
-      fields = mapFromSeq cmpSID [
-        (stringToSid "0", weightsTy), (stringToSid "1", samplesTy)],
-      info = t.info } in
+    let inferTy = typeCheckInferMethod env tyRes t.info t.method in
     TmInfer { t with model = model, ty = inferTy }
 
   -- ANF

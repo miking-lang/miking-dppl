@@ -12,25 +12,13 @@ include "mexpr/mexpr.mc"
 include "dppl-arg.mc"
 
 let performInference = lam options: Options. lam ast.
+  let outName = "out.cu" in
 
-  if isPrefix eqChar "mexpr-" options.method then
-
-    error "Full program inference is not supported for MExpr inference methods"
-
-  else match options.method with "rootppl-smc" then
-    let outName = "out.cu" in
-
-    let ast = rootPPLCompile options ast in
-    writeFile outName (printCompiledRPProg ast);
-    if options.skipFinal then ()
-    else
-      sysRunCommand [
-        "rootppl", outName,
-        "--stack-size", (int2string options.stackSize)
-      ] "" "."; ()
-
+  let ast = rootPPLCompile options ast in
+  writeFile outName (printCompiledRPProg ast);
+  if options.skipFinal then ()
   else
-    print "Please specify inference method using flag -m\n\n";
-    print "Example:\n";
-    print "  cppl example.mc -m rootppl-smc\n";
-    exit 1
+    sysRunCommand [
+      "rootppl", outName,
+      "--stack-size", (int2string options.stackSize)
+    ] "" "."; ()

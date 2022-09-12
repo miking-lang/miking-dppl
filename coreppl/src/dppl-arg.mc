@@ -2,7 +2,7 @@ include "arg.mc"
 
 -- Options type
 type Options = {
-  method: String,
+  useRootppl : Bool,
   particles : Int, -- NOTE(dlunde,2022-06-28): Currently not used as it is provided at runtime.
   printModel: Bool,
   printMCore: Bool,
@@ -35,7 +35,7 @@ type Options = {
 
 -- Default values for options
 let default = {
-  method = "",
+  useRootppl = false,
   particles = 5000,
   resample = "manual",
   printModel = false,
@@ -54,10 +54,10 @@ let default = {
 
 -- Options configuration
 let config = [
-  ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-importance, mexpr-mcmc-aligned, mexpr-mcmc-trace, mexpr-mcmc-naive, rootppl-smc.",
+  ([("--rootppl", " ", "")],
+    "Compiles the program using the rootppl-smc inference method. When using this flag, the entire program represents the model.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with method = argToString p}),
+      let o: Options = p.options in {o with useRootppl = true}),
   ([("-p", " ", "<particles>")],
     join ["The number of particles. The default is 5000. This option is used if one ",
           "of the following methods are used: mexpr-importance, rootppl-smc."],

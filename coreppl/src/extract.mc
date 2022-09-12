@@ -5,14 +5,14 @@ include "name.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 
-lang DPPLExtract = MExprPPL + MExprExtract + MExprLambdaLift
+lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   -- The data representing an infer expression.
   type ModelData = {
     -- The AST representation of the model.
     ast : Expr,
 
     -- The inference method used for this model.
-    method : String,
+    method : InferMethod,
 
     -- Identifiers for the 'model' and 'run' bindings generated for defining
     -- the model-specific code and the inference-specific run function.
@@ -23,7 +23,7 @@ lang DPPLExtract = MExprPPL + MExprExtract + MExprLambdaLift
     params : [(Name, Type)]
   }
 
-  sem defaultModelData : String -> ModelData
+  sem defaultModelData : InferMethod -> ModelData
   sem defaultModelData =
   | method -> { ast = unit_, method = method, modelId = nameSym "model"
               , runId = nameNoSym "", params = [] }
@@ -35,7 +35,7 @@ lang DPPLExtract = MExprPPL + MExprExtract + MExprLambdaLift
   --    calls to the inference algorithms.
   -- 2. A map with an entry for each inference method. Every inference method
   --    is mapped to a sequence of records describing each model.
-  sem extractInfer : Expr -> (Expr, Map String [ModelData])
+  sem extractInfer : Expr -> (Expr, Map InferMethod [ModelData])
   sem extractInfer =
   | ast ->
     -- Symbolize and type-check the AST (required by lambda lifting)
@@ -62,26 +62,26 @@ lang DPPLExtract = MExprPPL + MExprExtract + MExprLambdaLift
               mapInsert modelId modelData acc)
             acc models)
         (mapEmpty nameCmp) data in
-    let inferData : Map String [ModelData] =
+    let inferData : Map InferMethod [ModelData] =
       mapFoldWithKey
         (lam acc. lam modelId. lam modelData.
           match mapLookup modelData.method acc with Some s then
             mapInsert modelData.method (snoc s modelData) acc
           else
             mapInsert modelData.method [modelData] acc)
-        (mapEmpty cmpString) modelData in
+        (mapEmpty cmpInferMethod) modelData in
     (removeInfers solutions modelData ast, inferData)
 
   -- Binds all infer expressions in the provided AST to a variable, such that
   -- an expression 'infer e' is rewritten as 'let t = e in t'. The result is
   -- the updated AST and a sequence containing the newly introduced identifiers
   -- 't'.
-  sem bindInferExpressions : Expr -> (Map String (Map Name ModelData), Expr)
+  sem bindInferExpressions : Expr -> (Map InferMethod (Map Name ModelData), Expr)
   sem bindInferExpressions =
-  | ast -> bindInferExpressionsH (mapEmpty cmpString) ast
+  | ast -> bindInferExpressionsH (mapEmpty cmpInferMethod) ast
 
-  sem bindInferExpressionsH : Map String (Map Name ModelData) -> Expr
-                           -> (Map String (Map Name ModelData), Expr)
+  sem bindInferExpressionsH : Map InferMethod (Map Name ModelData) -> Expr
+                           -> (Map InferMethod (Map Name ModelData), Expr)
   sem bindInferExpressionsH inferData =
   | TmInfer t ->
     let inferId = nameSym "t" in

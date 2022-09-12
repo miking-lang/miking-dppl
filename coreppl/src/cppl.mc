@@ -73,7 +73,7 @@ match result with ParseOK r then
     -- NOTE(larshum, 2022-09-07): RootPPL is compiled using the old behaviour,
     -- where the entire file is the model. Otherwise, we expect use of 'infer'
     -- within the program.
-    match options.method with "rootppl-smc" then
+    if options.useRootppl then
       compileRootPPL options ast
     else
       -- Extract the infer expressions from the AST, producing a separate AST

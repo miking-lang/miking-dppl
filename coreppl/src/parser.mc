@@ -5,9 +5,12 @@ include "mexpr/keyword-maker.mc"
 include "coreppl.mc"
 include "pgm.mc"
 include "inference-common/smc.mc"
+include "coreppl-to-mexpr/importance/method.mc"
 
 
-lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + ProbabilisticGraphicalModel + KeywordMaker
+lang DPPLParser =
+  BootParser + MExprPrettyPrint + MExprPPL + Resample +
+  ProbabilisticGraphicalModel + KeywordMaker + ImportanceSamplingMethod
 
   -- Keyword maker
   sem isKeyword =
@@ -32,7 +35,7 @@ lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + Probabil
   | "resample" -> Some (0, lam lst. TmResample {ty = TyUnknown {info = info},
                                                 info = info})
   | "inferImportance" -> Some (1, lam lst. TmInfer {model = get lst 0,
-                                                    method = "mexpr-importance",
+                                                    method = ImportanceSampling (),
                                                     ty = TyUnknown {info = info},
                                                     info = info})
   | "plate" -> Some (2, lam lst. TmPlate {fun = get lst 0,

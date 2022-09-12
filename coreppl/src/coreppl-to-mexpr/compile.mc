@@ -23,7 +23,7 @@ include "smc/compile.mc"
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
-lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract + CPPLDedup
+lang MExprCompile = MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + CPPLDedup
   sem _addNameToRunBinding : Name -> Expr -> Expr
   sem _addNameToRunBinding runId =
   | TmLet t ->
@@ -32,18 +32,12 @@ lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract + CPPLDedup
     else TmLet {t with inexpr = _addNameToRunBinding runId t.inexpr}
   | t -> smap_Expr_Expr (_addNameToRunBinding runId) t
 
-  -- TODO(larshum, 2022-09-09): Replace strings with constructor types?
-  sem loadCompiler : Options -> String -> (String, Expr -> Expr)
+  sem loadCompiler : Options -> InferMethod -> (String, Expr -> Expr)
   sem loadCompiler options =
-  | "mexpr-importance" -> compilerImportance options
-  | "mexpr-mcmc-naive" -> compilerNaiveMCMC options
-  | "mexpr-mcmc-trace" -> compilerTraceMCMC options
-  | "mexpr-mcmc-aligned" -> compilerAlignedMCMC options
-  | "mexpr-smc" -> compilerSMC options
-  | _ ->
-    error (join ["Unknown CorePPL to MExpr inference method:", options.method])
+  | ImportanceSampling _ -> compilerImportance options
+  | _ -> error "Unsupported CorePPL to MExpr inference method"
 
-  sem mexprCompile : Options -> Expr -> Map String [ModelData] -> Expr
+  sem mexprCompile : Options -> Expr -> Map InferMethod [ModelData] -> Expr
   sem mexprCompile options mainAst =
   | methodInferData ->
     -- Construct record accessible at runtime
@@ -80,7 +74,8 @@ lang MExprCompile = MExprPPL + Resample + Externals + DPPLExtract + CPPLDedup
     -- Return complete program
     prog
 
-  sem compileInferenceMethod : Options -> [Expr] -> (String, [ModelData]) -> ([Expr], [Expr])
+  sem compileInferenceMethod : Options -> [Expr] -> (InferMethod, [ModelData])
+                            -> ([Expr], [Expr])
   sem compileInferenceMethod options acc =
   | (inferMethod, models) ->
     match loadCompiler options inferMethod with (runtime, compile) in
