@@ -194,16 +194,20 @@ lang MExprPPLLightweightMCMC =
 
   | TmAssume r ->
     let i = withInfo r.info in
-    i (appf2_ (i (var_ "sample")) (addr r.info) r.dist)
+    let dist = transform externalIds r.dist in
+    i (appf2_ (i (var_ "sample")) (addr r.info) dist)
 
   | TmObserve r ->
     let i = withInfo r.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" r.dist)) r.value) in
+    let dist = transform externalIds r.dist in
+    let value = transform externalIds r.value in
+    let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
     i (appf1_ (i (var_ "updateWeight")) weight)
 
   | TmWeight r ->
     let i = withInfo r.info in
-    i (appf1_ (i (var_ "updateWeight")) r.weight)
+    let weight = transform externalIds r.weight in
+    i (appf1_ (i (var_ "updateWeight")) weight)
 
   | TmResample r -> withInfo r.info unit_
 
