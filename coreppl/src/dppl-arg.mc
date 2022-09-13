@@ -33,7 +33,10 @@ type Options = {
 
   -- Lightweight MCMC options
   mcmcLightweightGlobalProb: Float,
-  mcmcLightweightGlobalModProb: Float
+  mcmcLightweightGlobalModProb: Float,
+
+  -- MCMC options,
+  printAcceptanceRate: Bool
 }
 
 -- Default values for options
@@ -53,7 +56,8 @@ let default = {
   earlyStop = true,
   debugMExprCompile = false,
   mcmcLightweightGlobalProb = 0.1,
-  mcmcLightweightGlobalModProb = 0.1
+  mcmcLightweightGlobalModProb = 0.1,
+  printAcceptanceRate = false
 }
 
 -- Options configuration
@@ -133,7 +137,11 @@ let config = [
       "When performing a global MH step, this option gives the probability of changing each sample in the trace. Default: ",
       float2string default.mcmcLightweightGlobalModProb, "."
     ],
-    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalModProb = argToFloat p })
+    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalModProb = argToFloat p }),
+  ([("--print-accept-rate", "", "")],
+    "Prints the acceptance rate of MCMC algorithms.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with printAcceptanceRate = true})
 ]
 
 -- Menu
