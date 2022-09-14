@@ -18,7 +18,6 @@ lang MExprPPLImportance =
   sem compile : Options -> Expr -> Expr
   sem compile options =
   | t ->
-    if options.earlyStop then error "Early stopping is not supported without CPS" else ();
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in

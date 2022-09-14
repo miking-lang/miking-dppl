@@ -6,16 +6,17 @@ include "math.mc"
 include "seq.mc"
 include "string.mc"
 include "option.mc"
+include "map.mc"
 
 include "../runtime-common.mc"
 include "../runtime-dists.mc"
 
--- Any-type, used for traces
+-- Any-type, used for samples
 type Any = ()
 
+type Address = [Int]
 
--- In aligned MCMC, the state is the accumulated weight, samples, and samples to
--- reuse.
+-- In lightweight MCMC, the state is the accumulated weight, a map of samples for the current run, and a map of samples from the previous run to potentially reuse.
 type State = {
 
   -- The weight of the current execution
@@ -24,32 +25,42 @@ type State = {
   -- The weight of reused values in the current execution
   weightReused: Ref Float,
 
-  -- The aligned trace for this execution
-  alignedTrace: Ref [Any],
+  -- The sample database for this execution
+  db: Ref (Map Address Any),
 
-  -- Number of encountered assumes (unaligned and aligned)
+  -- Number of encountered assumes
   traceLength: Ref Int,
 
-  -- The previous aligned trace, with potentially invalidated samples
-  oldAlignedTrace: Ref [Option Any],
-
-  -- Aligned trace length (a constant, determined at the first run)
-  alignedTraceLength: Ref Int
+  -- The previous database, with potentially invalidated samples
+  oldDb: Ref (Map Address (Option Any))
 
 }
 
--- NOTE(dlunde,2022-05-23): The below implementation does not
--- work with ropes for some reason (segfaults). We must therefore use lists.
 let emptyList = toList []
+
+-- Custom sequence comparison (the one in the standard library is optimized for
+-- ropes, not lists)
+let seqCmp : all a. (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
+  recursive let work = lam s1. lam s2.
+    match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
+      let c = cmp h1 h2 in
+      if eqi c 0 then work t1 t2
+      else c
+    else match (s1, s2) with (t1, []) then 1
+    else match (s1, s2) with ([], t2) then negi 1
+    else 0
+  in
+  work s1 s2
+
+let emptyAddressMap = mapEmpty (seqCmp subi)
 
 -- State (reused throughout inference)
 let state: State = {
   weight = ref 0.,
   weightReused = ref 0.,
-  alignedTrace = ref emptyList,
+  db = ref emptyAddressMap,
   traceLength = ref 0,
-  oldAlignedTrace = ref emptyList,
-  alignedTraceLength = ref (negi 1)
+  oldDb = ref emptyAddressMap
 }
 
 let updateWeight = lam v.
@@ -58,65 +69,48 @@ let updateWeight = lam v.
 let incrTraceLength: () -> () = lam.
   modref state.traceLength (addi (deref state.traceLength) 1)
 
--- Procedure at aligned samples
-let sampleAligned: all a. Dist a -> a = lam dist.
-  let oldAlignedTrace: [Option Any] = deref state.oldAlignedTrace in
+-- Procedure at samples
+let sample: all a. Address -> Dist a -> a = lam addr. lam dist.
+  let oldDb: Map Address (Option Any) = deref state.oldDb in
   let newSample: () -> Any = lam. unsafeCoerce (dist.sample ()) in
+
   let sample: Any =
-    match oldAlignedTrace with [sample] ++ oldAlignedTrace then
-      modref state.oldAlignedTrace oldAlignedTrace;
-      match sample with Some sample then
-        let s: a = unsafeCoerce sample in
-        modref state.weightReused
-          (addf (deref state.weightReused) (dist.logObserve s));
-        sample
-      else newSample ()
-
-    -- This case should only happen in the first run when there is no previous
-    -- aligned trace
+    match mapLookup addr oldDb with Some (Some sample) then
+      let s: a = unsafeCoerce sample in
+      modref state.weightReused
+        (addf (deref state.weightReused) (dist.logObserve s));
+      sample
     else newSample ()
-
   in
   incrTraceLength ();
-  modref state.alignedTrace (cons sample (deref state.alignedTrace));
+  modref state.db (mapInsert addr sample (deref state.db));
   unsafeCoerce sample
 
-let sampleUnaligned: all a. Dist a -> a = lam dist.
-  incrTraceLength ();
-  dist.sample ()
+-- Function to propose db changes between MH iterations.
+let modDb: () -> () = lam.
 
--- Function to propose aligned trace changes between MH iterations.
-let modTrace: () -> () = lam.
+  let gProb = compileOptions.mcmcLightweightGlobalProb in
+  let mProb = compileOptions.mcmcLightweightGlobalModProb in
 
-  let gProb = compileOptions.mcmcAlignedGlobalProb in
-  let mProb = compileOptions.mcmcAlignedGlobalModProb in
-
-  let alignedTraceLength: Int = deref state.alignedTraceLength in
-
-  -- One index must always change
-  let invalidIndex: Int = uniformDiscreteSample 0 (subi alignedTraceLength 1) in
+  let db = deref state.db in
 
   -- Enable global modifications with probability gProb
   let modGlobal: Bool = bernoulliSample gProb in
 
-  recursive let rec: Int -> [Any] -> [Option Any] -> [Option Any] =
-    lam i. lam samples. lam acc.
-      match samples with [sample] ++ samples then
-        -- Invalidate sample if it has the invalid index or with probability
-        -- mProb if global modification is enabled.
-        let mod =
-          if eqi i 0 then true else
-            if modGlobal then bernoulliSample 0.9 else false in
-
-        let acc: [Option Any] =
-          cons (if mod then None () else Some sample) acc in
-        rec (subi i 1) samples acc
-
-      else acc
-  in
-  modref state.oldAlignedTrace
-    (rec invalidIndex (deref state.alignedTrace) emptyList)
-
+  -- One item in the db (chosen at random) must always change
+  let invalidIndex: Int = uniformDiscreteSample 0 (subi (mapSize db) 1) in
+  let currentIndex: Ref Int = ref 0 in
+  modref state.oldDb
+    (mapMap (lam sample: Any.
+       -- Invalidate sample if it has the invalid index or with probability
+       -- mProb if global modification is enabled.
+       let mod =
+         if eqi invalidIndex (deref currentIndex) then true else
+           if modGlobal then bernoulliSample mProb else false in
+       let sample = if mod then None () else Some sample in
+       modref currentIndex (addi (deref currentIndex) 1);
+       sample
+    ) db)
 
 -- General inference algorithm for aligned MCMC
 let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFun.
@@ -132,11 +126,11 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
         let prevTraceLength = deref state.traceLength in
         let prevWeight = head weights in
         let prevWeightReused = head weightsReused in
-        modTrace ();
+        modDb ();
         modref state.weight 0.;
         modref state.weightReused 0.;
+        modref state.db emptyAddressMap;
         modref state.traceLength 0;
-        modref state.alignedTrace emptyList;
         let sample = model state in
         let traceLength = deref state.traceLength in
         let weight = deref state.weight in
@@ -181,9 +175,6 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
       let weightReused = deref state.weightReused in
       let iter = subi runs 1 in
 
-      -- Set aligned trace length (a constant, only modified here)
-      modref state.alignedTraceLength (length (deref state.alignedTrace));
-
       -- Sample the rest
       let res = mh [weight] [weightReused] [sample] iter in
 
@@ -201,4 +192,4 @@ let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
   -- NOTE(dlunde,2022-05-23): I don't think printing the norm. const makes
   -- sense for MCMC
   -- printLn (float2string (normConstant res.0));
-  printSamples printFun res.0 res.1
+  printSamples printFun (mapReverse (lam. 0.) res.0) res.1

@@ -142,3 +142,11 @@ let printSamplesOption : all a. (a -> String) -> [Float] -> [Option a] -> () =
         print (float2string w); print "\n";
         rec weights samples
     in if compileOptions.printSamples then rec weights samples else ()
+
+-- MCMC acceptance rate
+let _mcmcAccepts = ref 0
+let _mcmcSamples = ref (negi 1)
+let mcmcAcceptInit = lam n. modref _mcmcSamples n; modref _mcmcAccepts 0
+let mcmcAccept = lam. modref _mcmcAccepts (addi (deref _mcmcAccepts) 1)
+let mcmcAcceptRate = lam.
+  divf (int2float (deref _mcmcAccepts)) (int2float (deref _mcmcSamples))
