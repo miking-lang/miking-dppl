@@ -13,7 +13,10 @@ include "extract.mc"
 include "inference.mc"
 include "common.mc"
 
-lang CPPLLang = MExprAst + DPPLExtract
+include "mexpr/ast.mc"
+include "mexpr/duplicate-code-elimination.mc"
+
+lang CPPLLang = MExprAst + DPPLExtract + MExprCompile
   sem compileRootPPL : Options -> Expr -> ()
   sem compileRootPPL options =
   | ast ->
@@ -25,7 +28,7 @@ lang CPPLLang = MExprAst + DPPLExtract
 
     -- Optionally print the model
     (if options.printModel then
-      use DPPLParser in printLn (mexprPPLToString ast)
+      printLn (mexprPPLToString ast)
     else ());
 
     -- Exit before inference, if the flag is set
@@ -34,28 +37,33 @@ lang CPPLLang = MExprAst + DPPLExtract
       -- Perform the actual inference
       performInference options ast
 
-  sem transformModelAst : Options -> ModelData -> ModelData
-  sem transformModelAst options =
-  | modelData ->
-    -- Transform the model AST, if the flag is set
-    let ast =
-      if options.transform then
-        transform modelData.ast
-      else modelData.ast in
+  sem _makeError : Info -> String -> Expr
+  sem _makeError info =
+  | msg ->
+    let toStr = lam msg.
+      map
+        (lam ch. TmConst {val = CChar {val = ch},
+                          ty = TyChar {info = info}, info = info})
+        msg
+    in
+    TmApp {
+      lhs = TmConst {val = CError (), ty = TyUnknown {info = info}, info = info},
+      rhs = TmSeq {tms = toStr msg,
+                   ty = TySeq {ty = TyChar {info = info}, info = info},
+                   info = info},
+      ty = TyUnknown {info = info}, info = info}
 
-    -- Optionally print the model AST
-    (if options.printModel then
-      use DPPLParser in printLn (mexprPPLToString ast)
-    else ());
-
-    {modelData with ast = ast}
+  sem replaceDpplKeywordsWithError : Expr -> Expr
+  sem replaceDpplKeywordsWithError =
+  | TmAssume t -> _makeError t.info "Cannot use assume outside of model code"
+  | TmObserve t -> _makeError t.info "Cannot use observe outside of model code"
+  | TmWeight t -> _makeError t.info "Cannot use weight outside of model code"
+  | t -> smap_Expr_Expr replaceDpplKeywordsWithError t
 end
 
-let compileRootPPL = use CPPLLang in compileRootPPL
-
-let transformModelAst = use CPPLLang in transformModelAst
-
 mexpr
+
+use CPPLLang in
 
 -- Use the arg.mc library to parse arguments
 let result = argParse default config in
@@ -76,21 +84,30 @@ match result with ParseOK r then
     if options.useRootppl then
       compileRootPPL options ast
     else
-      -- Extract the infer expressions from the AST, producing a separate AST
-      -- for each model, paired with a string representing the chosen inference
-      -- method.
-      match extractInfer ast with (ast, modelAsts) in
+      let ast = symbolize ast in
 
-      -- Apply the transformations on each model
-      let modelAsts =
-        mapMapWithKey
-          (lam. lam models. map (transformModelAst options) models)
-          modelAsts in
+      -- Load the runtimes used in the provided AST, and collect identifiers of
+      -- common methods within the runtimes.
+      let runtimes = loadRuntimes options ast in
 
-      -- Combine the model ASTs with the original AST
-      -- NOTE(larshum, 2022-09-07): This produces a lot of duplicated code in
-      -- the AST, if the infer expression is used multiple times.
-      let ast = mexprCompile options ast modelAsts in
+      -- Combine the runtimes with the main AST and eliminate duplicate
+      -- definitions due to files having common dependencies.
+      let ast = combineRuntimes options runtimes ast in
+
+      -- Extract the infer expressions to separate ASTs, one per inference
+      -- method. The result consists of the provided AST, updated such that
+      -- each infer is replaced with a call to the 'run' function provided by
+      -- the chosen runtime. It also consists of one AST per inference method
+      -- used in the program.
+      match extractInfer runtimes ast with (ast, modelAsts) in
+
+      -- Replace any remaining uses of DPPL specific keywords, like assume or
+      -- observe, with an error, as they cannot be used outside of the model
+      -- code.
+      let ast = replaceDpplKeywordsWithError ast in
+
+      -- Process the model ASTs and insert them in the original AST.
+      let ast = mexprCompile options runtimes ast modelAsts in
 
       -- Exit before performing the inference, if the flag is set
       if options.exitBefore then exit 0

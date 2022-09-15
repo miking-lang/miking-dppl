@@ -35,20 +35,20 @@ let _isUnitTy = use RecordTypeAst in lam ty.
 
 -- Defines the basic components of an inference method. To add a new inference
 -- method, a new constructor must be defined for the InferMethod type and the
--- inferMethodName and typeCheckInferMethod functions must be implemented for
--- this type.
+-- inferMethodToString and typeCheckInferMethod functions must be implemented
+-- for this type.
 lang InferMethodBase
   syn InferMethod =
 
   sem cmpInferMethod : InferMethod -> InferMethod -> Int
   sem cmpInferMethod lhs =
-  | rhs -> cmpInferMethodH (lhs, rhs)
+  | rhs -> subi (constructorTag lhs) (constructorTag rhs)
 
-  sem cmpInferMethodH : (InferMethod, InferMethod) -> Int
-  sem cmpInferMethodH =
-  | (l, r) -> subi (constructorTag l) (constructorTag r)
+  sem eqInferMethod : InferMethod -> InferMethod -> Bool
+  sem eqInferMethod lhs =
+  | rhs -> eqi (cmpInferMethod lhs rhs) 0
 
-  sem inferMethodName : InferMethod -> String
+  sem inferMethodToString : InferMethod -> String
 
   sem typeCheckInferMethod : TCEnv -> Type -> Info -> InferMethod -> Type
 end
@@ -89,8 +89,8 @@ lang Infer =
   | TmInfer t ->
     let i = pprintIncr indent in
     match printParen i env t.model with (env,model) in
-    let methodId = inferMethodName t.method in
-    (env, join [methodId, pprintNewline i, model])
+    let methodId = inferMethodToString t.method in
+    (env, join ["infer", methodId, pprintNewline i, model])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =

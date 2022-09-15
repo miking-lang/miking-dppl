@@ -3,13 +3,13 @@ include "../../coreppl.mc"
 
 lang ImportanceSamplingMethod = InferMethodBase + MExprAst
   syn InferMethod =
-  | ImportanceSampling ()
+  | Importance ()
 
-  sem inferMethodName =
-  | ImportanceSampling _ -> "inferImportance"
+  sem inferMethodToString =
+  | Importance _ -> "Importance"
 
   sem typeCheckInferMethod env tyRes info =
-  | ImportanceSampling _ ->
+  | Importance _ ->
     let weightsTy = TySeq {ty = TyFloat {info = info}, info = info} in
     let samplesTy = TySeq {ty = tyRes, info = info} in
     TyRecord {
