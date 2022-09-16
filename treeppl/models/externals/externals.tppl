@@ -1,0 +1,7 @@
+model function foobar(p: Real) {
+  assume e ~ Bernoulli(p);
+  if e {
+    weight(2.0);
+  }
+  return(e);
+}

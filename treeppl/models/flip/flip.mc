@@ -16,6 +16,13 @@ in
 (flip 0.5)
 -/
 mexpr
+external externalExp : Float -> Float
+in
+external externalLog : Float -> Float
+in
+let p =
+  0.5
+in
 recursive
   let flip =
     lam p: Float.
@@ -25,9 +32,6 @@ recursive
              p)
       in
       e
-in
-let p =
-  0.5
 in
 flip
   p
