@@ -100,7 +100,9 @@ lang MExprPPLImportance =
     -- ANF transformation (required for CPS)
     let t = normalizeTerm t in
 
-    -- printLn (mexprToString t);
+    -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
+    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    -- printLn (str);
 
     -- Static analysis and CPS transformation
     let t =
@@ -115,7 +117,9 @@ lang MExprPPLImportance =
         in
         let checkPointNames: Set Name =
           extractCheckpoint (checkpointCfa checkpoint t) in
-        -- printLn (join [ "[", strJoin "," (map nameGetStr (setToSeq checkPointNames)), "]"]);
+        -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
+        -- match mapAccumL pprintEnvGetStr env (setToSeq checkPointNames) with (env,strings) in
+        -- printLn (join [ "[", strJoin "," strings, "]"]);
         cpsPartialCont checkPointNames cont t
 
       else match options.cps with "full" then cpsFullCont cont t
