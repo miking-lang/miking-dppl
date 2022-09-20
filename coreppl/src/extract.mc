@@ -26,8 +26,6 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
     match bindInferExpressions runtimes ast with (data, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
 
-    let ast = eliminateThunkParameter data ast in
-
     let modelAsts =
       mapMapWithKey
         (lam method. lam.
@@ -83,16 +81,17 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
     let info = t.info in
     let inferBinding = TmLet {
       ident = inferId,
-      tyBody = tyTm t.model,
-      body = t.model,
-      inexpr = TmVar {ident = inferId, ty = tyTm t.model, info = info, frozen = false},
-      ty = tyTm t.model, info = info} in
+      tyBody = tyarrow_ tyunit_ (tyTm t.model),
+      body = TmLam {
+        ident = nameNoSym "",
+        tyIdent = tyunit_,
+        body = TmApp {
+          lhs = t.model, rhs = unit_, ty = tyTm t.model, info = info},
+        ty = tyarrow_ tyunit_ (tyTm t.model), info = info},
+      inexpr = TmVar {ident = inferId, ty = t.ty, info = info, frozen = false},
+      ty = t.ty, info = info} in
     (mapInsert inferId t.method acc, inferBinding)
   | t -> smapAccumL_Expr_Expr (bindInferExpressionsH runtimes) acc t
-
-  sem eliminateThunkParameter : Map Name InferMethod -> Expr -> Expr
-  sem eliminateThunkParameter inferMethods =
-  | t -> t
 
   -- Extracts an AST consisting of the model of all infers using the same
   -- inference method, and the expressions these depend on.
