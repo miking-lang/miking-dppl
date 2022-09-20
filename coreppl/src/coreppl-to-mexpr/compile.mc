@@ -1,14 +1,14 @@
 include "mexpr/ast-builder.mc"
 include "mexpr/externals.mc"
-include "mexpr/boot-parser.mc"
 include "mexpr/type.mc"
 include "sys.mc"
 
 include "../coreppl.mc"
 include "../inference-common/smc.mc"
-include "../src-location.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
+
+include "./common.mc"
 
 -- Inference methods
 include "importance/compile.mc"
@@ -59,13 +59,6 @@ let mexprCompile: Options -> Expr -> Expr =
 
     match compiler with (runtime, compile) in
 
-    let parse = use BootParser in parseMCoreFile {
-      defaultBootParserParseMCoreFileArg with
-        eliminateDeadCode = false,
-        allowFree = true
-      }
-    in
-
     -- Type check model. NOTE(dlunde,2022-06-09): We do not want the
     -- annotations added by the type checker, as this may make the printed
     -- program unparsable. That's why we simply discard the result here (but,
@@ -85,7 +78,7 @@ let mexprCompile: Options -> Expr -> Expr =
     let prog = compile prog in
 
     -- Parse runtime
-    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
+    let runtime = parseRuntime runtime in
 
     -- Get external definitions from runtime-AST (input to next step)
     let externals = getExternalIds runtime in
