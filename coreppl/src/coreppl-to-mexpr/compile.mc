@@ -12,7 +12,6 @@ include "../inference-common/smc.mc"
 include "../src-location.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
-include "dedup.mc"
 
 -- Inference methods
 include "importance/compile.mc"
@@ -106,7 +105,7 @@ end
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
 lang MExprCompile =
-  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + CPPLDedup + LoadRuntime
+  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime
 
   sem _addNameToRunBinding : Name -> Expr -> Expr
   sem _addNameToRunBinding runId =
