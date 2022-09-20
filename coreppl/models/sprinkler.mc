@@ -5,7 +5,7 @@ let sprinkler =
           else assume (Bernoulli 0.4) in
 let grassWet = true in
 observe grassWet (
-  switch (rain, sprinkler)
+  switch (sprinkler, rain)
   case (false, false) then Bernoulli 0.0
   case (false, true) then Bernoulli 0.8
   case (true, false) then Bernoulli 0.9
