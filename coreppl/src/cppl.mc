@@ -17,8 +17,9 @@ include "mexpr/ast.mc"
 include "mexpr/duplicate-code-elimination.mc"
 
 lang CPPLLang = MExprAst + DPPLExtract + MExprCompile
-  sem compileRootPPL : Options -> Expr -> ()
-  sem compileRootPPL options =
+  -- Compiles such that the entire program is considered the model.
+  sem compileSingle : Options -> Expr -> ()
+  sem compileSingle options =
   | ast ->
     -- Transform the model, if the flag is set
     let ast =
@@ -77,18 +78,17 @@ match result with ParseOK r then
     -- Read and parse the file
     let filename = head r.strings in
     let ast = parseMCorePPLFile filename in
+    let ast = symbolize ast in
 
-    -- NOTE(larshum, 2022-09-07): RootPPL is compiled using the old behaviour,
-    -- where the entire file is the model. Otherwise, we expect use of 'infer'
-    -- within the program.
-    if options.useRootppl then
-      compileRootPPL options ast
+    -- Load the runtimes used in the provided AST, and collect identifiers of
+    -- common methods within the runtimes.
+    let runtimes = loadRuntimes options ast in
+
+    -- If no runtimes are found, it means there are no uses of 'infer' in the
+    -- program. In this case, we compile using the old behaviour.
+    if mapIsEmpty runtimes then
+      compileSingle options ast
     else
-      let ast = symbolize ast in
-
-      -- Load the runtimes used in the provided AST, and collect identifiers of
-      -- common methods within the runtimes.
-      let runtimes = loadRuntimes options ast in
 
       -- Combine the runtimes with the main AST and eliminate duplicate
       -- definitions due to files having common dependencies.
@@ -122,7 +122,7 @@ match result with ParseOK r then
           let res = sysRunCommand ["mi", "compile", outName] "" "." in
           if eqi res.returncode 0 then ()
           else
-            error (join ["Compilation of generated code failed\nstdout:\n",
+            error (join ["Compilation of generated MExpr code failed\nstdout:\n",
                          res.stdout, "\nstderr:\n", res.stderr])
 else
   -- Error in Argument parsing

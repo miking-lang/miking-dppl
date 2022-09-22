@@ -47,21 +47,24 @@ lang LoadRuntime = DPPLParser + MExprFindSym + MExprEliminateDuplicateCode
       -- symbolize the runtime of the corresponding method, and add it to the
       -- accumulated map.
       match loadCompiler options t.method with (runtime, _) in
-
-      let parse = use BootParser in parseMCoreFile {
-        defaultBootParserParseMCoreFileArg with
-          eliminateDeadCode = false,
-          allowFree = true
-        }
-      in
-      let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
-      let runtime = symbolizeExpr {symEnvEmpty with allowFree = true} runtime in
-      match collectRuntimeIds t.method runtime
-      with (runId, updateWeightId, stateId) in
-      let entry = { ast = runtime, runId = runId
-                  , updateWeightId = updateWeightId, stateId = stateId } in
-      mapInsert t.method entry acc
+      mapInsert t.method (loadRuntimeEntry t.method runtime) acc
   | t -> sfold_Expr_Expr (loadRuntimesH options) acc t
+
+  sem loadRuntimeEntry : InferMethod -> String -> RuntimeEntry
+  sem loadRuntimeEntry method =
+  | runtime ->
+    let parse = use BootParser in parseMCoreFile {
+      defaultBootParserParseMCoreFileArg with
+        eliminateDeadCode = false,
+        allowFree = true
+      }
+    in
+    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
+    let runtime = symbolizeExpr {symEnvEmpty with allowFree = true} runtime in
+    match collectRuntimeIds method runtime
+    with (runId, updateWeightId, stateId) in
+    { ast = runtime, runId = runId, updateWeightId = updateWeightId
+    , stateId = stateId }
 
   sem collectRuntimeIds : InferMethod -> Expr -> (Name, Name, Name)
   sem collectRuntimeIds method =

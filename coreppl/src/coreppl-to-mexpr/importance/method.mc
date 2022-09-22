@@ -6,7 +6,10 @@ lang ImportanceSamplingMethod = InferMethodBase + MExprAst
   | Importance ()
 
   sem inferMethodToString =
-  | Importance _ -> "Importance"
+  | Importance _ -> "mexpr-importance"
+
+  sem parseInferMethod =
+  | "mexpr-importance" -> Importance ()
 
   sem typeCheckInferMethod env tyRes info =
   | Importance _ ->

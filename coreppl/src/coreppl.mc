@@ -50,6 +50,10 @@ lang InferMethodBase
 
   sem inferMethodToString : InferMethod -> String
 
+  sem parseInferMethod : String -> InferMethod
+  sem parseInferMethod =
+  | s -> error (concat "No such inference method: " s)
+
   sem typeCheckInferMethod : TCEnv -> Type -> Info -> InferMethod -> Type
 end
 
@@ -90,7 +94,8 @@ lang Infer =
     let i = pprintIncr indent in
     match printParen i env t.model with (env,model) in
     let methodId = inferMethodToString t.method in
-    (env, join ["infer", methodId, pprintNewline i, model])
+    (env, join ["infer", pprintNewline i, "{method = ", methodId, "}",
+                pprintNewline i, model])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =

@@ -28,3 +28,7 @@ let run : all a. (State -> a) -> (Res a -> ()) -> ([Float], [a]) = lam model.
   let states = createList particles (lam. ref weightInit) in
   let res = mapReverse model states in
   (mapReverse deref states, reverse (mapReverse unwrapOpt res))
+
+let printRes : all a. (a -> String) -> ([Float], [a]) -> () = lam printFun. lam res.
+  printLn (float2string (normConstant res.0));
+  printSamples printFun res.0 res.1
