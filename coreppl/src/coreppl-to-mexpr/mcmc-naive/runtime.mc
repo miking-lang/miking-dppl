@@ -32,6 +32,7 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
         let logMhAcceptProb: Float = minf 0. (subf weight prevWeight) in
         let iter: Int = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then
+          mcmcAccept ();
           mh (cons weight weights) (cons sample samples) iter
         else
           mh (cons prevWeight weights) (cons prevSample samples) iter
@@ -39,6 +40,9 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
 
   -- Repeat once for each sweep
   repeat (lam.
+
+      -- Used to keep track of acceptance ratio
+      mcmcAcceptInit runs;
 
       -- Draw an initial sample first
       let state = ref 0. in
@@ -63,4 +67,7 @@ let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
   -- NOTE(dlunde,2022-05-23): I don't think printing the norm. const makes
   -- sense for MCMC
   -- printLn (float2string (normConstant res.0));
-  printSamples printFun res.0 res.1
+  (if compileOptions.printAcceptanceRate then
+    printLn (float2string (mcmcAcceptRate ()))
+  else ());
+  printSamples printFun (mapReverse (lam. 0.) res.0) res.1

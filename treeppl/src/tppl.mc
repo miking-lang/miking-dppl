@@ -32,6 +32,7 @@ if eqString backend "rootppl" then
     --  TODO(vsenderov,2022-05-10): Maybe parse from the command line  
     let outfile = "out.cu" in
     let options = {default with method = "rootppl-smc"} in
+    printLn "NEVER!";
     let prog: Expr = typeCheck corePplAst in
     --let prog = corePplAst in
     writeFile outfile (printCompiledRPProg (rootPPLCompile options prog));
@@ -48,7 +49,7 @@ else -- defaulting to MExpr
     exit 0
   else match argv with [_, filename, data] in
   use BootParser in
-  let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with   eliminateDeadCode = false}
+  let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
     data in
   let content = readFile filename in
   use TreePPLAst in
@@ -56,9 +57,12 @@ else -- defaulting to MExpr
   
   use TreePPLCompile in
     let corePplAst: Expr = compile input file in
+    --dprint corePplAst;
     --  TODO(vsenderov,2022-05-10): Maybe parse from the command line  
     let outName = "out.mc" in
     let options = { default with method = "mexpr-importance" } in
+    --printLn (mexprPPLToString corePplAst);
+    --let prog = corePplAst in
     let prog: Expr = typeCheck corePplAst in
     let ast = (mexprCompile options prog) in
     writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));

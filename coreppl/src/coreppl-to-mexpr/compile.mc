@@ -17,7 +17,7 @@ include "../dppl-arg.mc"
 include "importance/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
-include "mcmc-aligned/compile.mc"
+include "mcmc-lightweight/compile.mc"
 include "smc/compile.mc"
 
 lang LoadRuntime = DPPLParser + MExprFindSym + MExprEliminateDuplicateCode
@@ -89,8 +89,9 @@ lang LoadRuntime = DPPLParser + MExprFindSym + MExprEliminateDuplicateCode
       ("cps", str_ options.cps),
       ("printSamples", bool_ options.printSamples),
       ("earlyStop", bool_ options.earlyStop),
-      ("mcmcAlignedGlobalProb", float_ options.mcmcAlignedGlobalProb),
-      ("mcmcAlignedGlobalModProb", float_ options.mcmcAlignedGlobalModProb)
+      ("mcmcLightweightGlobalProb", float_ options.mcmcLightweightGlobalProb),
+      ("mcmcLightweightGlobalModProb", float_ options.mcmcLightweightGlobalModProb),
+      ("printAcceptanceRate", bool_ options.printAcceptanceRate)
     ]) in
 
     let runtimeAsts = map (lam entry. entry.ast) (mapValues runtimes) in
@@ -315,6 +316,8 @@ with () using lam. lam. true in
 utest compileModel "mexpr-mcmc-trace" simple
 with () using lam. lam. true in
 utest compileModel "mexpr-mcmc-aligned" simple
+with () using lam. lam. true in
+utest compileModel "mexpr-mcmc-lightweight" simple
 with () using lam. lam. true in
 utest compileModel "mexpr-smc" simple
 with () using lam. lam. true in

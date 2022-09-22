@@ -14,6 +14,7 @@ include "treeppl-ast.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
+
 include "sys.mc"
 
 include "../../../coreppl/src/coreppl-to-mexpr/compile.mc"
@@ -21,21 +22,65 @@ include "../../../coreppl/src/coreppl-to-rootppl/compile.mc"
 include "../../../coreppl/src/coreppl.mc"
 include "../../../coreppl/src/parser.mc"
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst 
-  sem compile: Expr -> FileTppl -> Expr
-  sem compile (input: Expr) =
+-- Version of parseMCoreFile needed to get input data into the program
+let parseMCoreFile = lam filename.
+  use BootParser in
+    parseMCoreFile
+      {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
+        filename
 
+lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
+-- TODO If this works it should go to externals
+  sem constructExternalMap : Expr -> Map String Name
+  sem constructExternalMap =
+  | expr -> constructExternalMapH (mapEmpty cmpString) expr
+  sem constructExternalMapH : Map String Name -> Expr -> Map String Name
+  sem constructExternalMapH acc =
+  | TmExt t -> constructExternalMapH (mapInsert (nameGetStr t.ident) t.ident acc) t.inexpr
+  | expr -> sfold_Expr_Expr constructExternalMapH acc expr
+
+  -- smap_Expr_Expr, sfold_Expr_Expr explained in recursion cookbook
+  sem filterExternalMap: Set String -> Expr -> Expr
+  sem filterExternalMap ids =
+  | TmExt t ->
+    let inexpr = filterExternalMap ids t.inexpr in
+    --if (nameGetStr t.ident) in ids then TmExt {t with inexpr = inexpr}
+    match setMem (nameGetStr t.ident) ids with true then TmExt {t with inexpr = inexpr}
+    else inexpr
+  | expr -> smap_Expr_Expr (filterExternalMap ids) expr
+  | TmLet t -> filterExternalMap ids t.inexpr -- strips all the lets
+
+  -- a type with useful information passed down from compile
+  type TpplCompileContext = {
+    logName: Name,
+    expName: Name
+  }
+
+  sem compile: Expr -> FileTppl -> Expr
+
+  sem compile (input: Expr) =
   | FileTppl x -> 
+      let externals = parseMCoreFile "src/externals/ext.mc" in
+      let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
+      let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
+      let externals = symbolize externals in
+      let externalMap = constructExternalMap externals in
+      let compileContext: TpplCompileContext = {
+        logName = mapFindExn "externalLog" externalMap,
+        expName = mapFindExn "externalExp" externalMap
+      } in
+      let input = bind_ externals input in
+      --dprint x;
       let invocation = match findMap mInvocation x.decl with Some x
         then x
         else printLn "You need a model function"; never
       in 
-      TmRecLets {
-        bindings = map compileTpplDecl x.decl,
-        inexpr = bind_ input invocation,
+      bind_ input (TmRecLets {
+        bindings = map (compileTpplDecl compileContext) x.decl,
+        inexpr = invocation,
         ty = tyunknown_, 
         info = x.info
-      }
+      })
 
   sem mInvocation: DeclTppl -> Option Expr
   sem mInvocation = 
@@ -70,14 +115,14 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
       frozen = false 
     } 
 
-  sem compileTpplDecl: DeclTppl -> RecLetBinding
-  sem compileTpplDecl = 
+  sem compileTpplDecl: TpplCompileContext -> DeclTppl -> RecLetBinding
+  sem compileTpplDecl (context: TpplCompileContext) = 
 
   | FunDeclTppl f -> {
         ident = f.name.v,
         tyBody = tyunknown_,
         body = 
-          foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map compileStmtTppl f.body)),          
+          foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),          
         info = f.info
       }   
 
@@ -110,9 +155,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
     info = x.info
   }
 
-  sem compileStmtTppl: StmtTppl -> (Expr -> Expr)
+  sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
-  sem compileStmtTppl = 
+  sem compileStmtTppl (context: TpplCompileContext) = 
 
   | AssumeStmtTppl a -> 
   lam cont. TmLet {
@@ -139,18 +184,25 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
   }
 
   | WeightStmtTppl a ->
-  lam cont. TmLet {
+  lam cont. 
+
+  let cExpr: Expr = (compileExprTppl a.value) in
+  let logExpr: Expr = withInfo a.info (app_ (nvar_ context.logName) cExpr) in
+  let tmp = TmLet {
     ident = nameNoSym "foo", 
     tyBody = tyunknown_, 
     body =  TmWeight {
-      weight = compileExprTppl a.value,
+      weight = logExpr,
+      --weight = cExpr,
       ty = tyunknown_,
       info = a.info
     },
     inexpr = cont,
     ty = tyunknown_,
     info = a.info
-  }
+  } in
+  --printLn (mexprPPLToString tmp);
+  tmp
 
   /--
   To avoid code duplication.
@@ -178,8 +230,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
       inexpr = TmMatch {
         target = compileExprTppl a.condition,
         pat    = ptrue_,
-        thn    = foldr (lam f. lam e. f e) cont (map compileStmtTppl a.ifTrueStmts),		 
-        els    = foldr (lam f. lam e. f e) cont (map compileStmtTppl a.ifFalseStmts),	 
+        thn    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts),		 
+        els    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts),	 
         ty     = tyunknown_,
         info   = a.info
       }
@@ -219,12 +271,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst
 
 end
 
--- Version of parseMCoreFile needed to get input data into the program
-let parseMCoreFile = lam filename.
-  use BootParser in
-    parseMCoreFile
-      {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
-        filename
+
 
 -- Parses a TreePPL file
 let parseTreePPLFile = lam filename.
@@ -249,19 +296,33 @@ mexpr
 -- test the flip example, TODO should iterate through the files instead
 let testTpplProgram = parseTreePPLFile "models/flip/flip.tppl" in
 let testInput = parseMCoreFile "models/flip/data.mc" in
-let testMCoreProgram = parseMCorePPLFile "models/flip/flip.mc" in
+let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/flip/flip.mc" in
+
 
 -- Doesn't work TODO
 use MExprPPL in
 utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
 
--- test the flip example, should iterate through the files instead
+-- test the if example, should iterate through the files instead
 let testTpplProgram = parseTreePPLFile "models/if/if.tppl" in
 let testInput = parseMCoreFile "models/if/data.mc" in
-let testMCoreProgram = parseMCorePPLFile "models/if/if.mc" in
+let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/if/if.mc" in
 
-use MExprPPL in
+--debug pretty printing
+--use TreePPLCompile in
+--printLn (mexprToString testMCoreProgram);
+
+--use MExprPPL in
 utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+
+-- test the externals example, should iterate through the files instead
+let testTpplProgram = parseTreePPLFile "models/externals/externals.tppl" in
+let testInput = parseMCoreFile "models/externals/data.mc" in
+let testMCoreProgram = parseMCorePPLFileNoDeadCodeElimination "models/externals/externals.mc" in
+
+--use MExprPPL in
+utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExpr in
+
 -- If you want to print out the strings, use the following:
 -- use MExprPPL in
 --utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in

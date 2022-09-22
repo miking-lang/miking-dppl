@@ -88,6 +88,17 @@ let parseMCorePPLFile = lam filename.
                   with allowFree = true} in
   makeKeywords [] (parseMCoreFile config filename)
 
+
+let parseMCorePPLFileNoDeadCodeElimination = lam filename.
+  use DPPLParser in
+  -- Read and parse the mcore file
+  let config = {{{{defaultBootParserParseMCoreFileArg
+                   with keepUtests = false}
+                   with keywords = pplKeywords}
+                   with eliminateDeadCode = false}
+                   with allowFree = true} in
+  makeKeywords [] (parseMCoreFile config filename)
+
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in

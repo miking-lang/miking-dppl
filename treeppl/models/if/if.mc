@@ -1,7 +1,11 @@
-include "math.mc"
-
 mexpr
-
+external externalExp : Float -> Float
+in
+external externalLog : Float -> Float
+in
+let p =
+  0.5
+in
 recursive
   let iftest =
     lam p: Float.
@@ -61,17 +65,6 @@ recursive
         in
         ifCont
           0
-  let flip =
-    lam p: Float.
-      let e =
-        assume
-          (Bernoulli
-             p)
-      in
-      e
-in
-let p =
-  0.5
 in
 iftest
   p
