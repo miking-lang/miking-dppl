@@ -12,6 +12,7 @@ include "dppl-arg.mc"
 include "extract.mc"
 include "inference.mc"
 include "common.mc"
+include "build.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/duplicate-code-elimination.mc"
@@ -109,21 +110,9 @@ match result with ParseOK r then
       -- Process the model ASTs and insert them in the original AST.
       let ast = mexprCompile options runtimes ast modelAsts in
 
-      -- Exit before performing the inference, if the flag is set
+      -- Exit before producing the output files, if the flag is set
       if options.exitBefore then exit 0
-      else
-        -- Output the compiled mexpr code
-        let outName = "out.mc" in
-        writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
-
-        -- Output the compiled OCaml code (unless --skip-final is specified)
-        if options.skipFinal then ()
-        else
-          let res = sysRunCommand ["mi", "compile", outName] "" "." in
-          if eqi res.returncode 0 then ()
-          else
-            error (join ["Compilation of generated MExpr code failed\nstdout:\n",
-                         res.stdout, "\nstderr:\n", res.stderr])
+      else buildMExpr options ast
 else
   -- Error in Argument parsing
   argPrintError result;

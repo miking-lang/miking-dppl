@@ -7,8 +7,7 @@ include "coreppl-to-rootppl/rootppl.mc"
 include "coreppl-to-rootppl/compile.mc"
 include "coreppl-to-mexpr/compile.mc"
 
-include "mexpr/mexpr.mc"
-
+include "build.mc"
 include "dppl-arg.mc"
 
 lang InferenceLang = DPPLParser + LoadRuntime
@@ -52,13 +51,7 @@ let performInference = lam options: Options. lam ast.
     -- coreppl-to-mexpr/compile.mc)
     let ast = mexprCompile options runtimes mainAst modelAsts in
 
-    -- Output the compiled mexpr code
-    let outName = "out.mc" in
-    writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
-
-    -- Output the compiled OCaml code (unless --skip-final is specified)
-    if options.skipFinal then ()
-    else sysRunCommand ["mi", "compile", outName] "" "."; ()
+    buildMExpr options ast
 
   else match options.method with "rootppl-smc" then
     let outName = "out.cu" in
