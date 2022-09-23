@@ -22,8 +22,6 @@ HOST std::tuple<floating_t, floating_t> calcLogWeightSumAndESSCpu(floating_t* w,
     // Corresponds to ExpWeightsKernel used in the parallel implementation
     #pragma omp parallel for
     for(int i = 0; i < numParticles; i++) {
-        if (isnan(w[i]))
-            w[i] = -INFINITY;
         w[i] = exp(w[i] - maxLogWeight);
     }
 
@@ -50,8 +48,7 @@ HOST floating_t calcESSHelperCpu(floating_t* scaledW, floating_t scaledWeightSum
     floating_t wScaledSumOfSquares = 0;
     #pragma omp parallel for reduction (+:wScaledSumOfSquares)
     for(int i = 0; i < numParticles; i++) {
-        if (! isnan(scaledW[i]))
-            wScaledSumOfSquares += scaledW[i] * scaledW[i];
+      wScaledSumOfSquares += scaledW[i] * scaledW[i];
     }
 
     floating_t wSumSquared = scaledWeightSum * scaledWeightSum;
