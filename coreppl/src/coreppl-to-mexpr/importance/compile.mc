@@ -1,4 +1,5 @@
 include "../dists.mc"
+include "../common.mc"
 include "../../inference-common/smc.mc"
 include "../../cfa.mc"
 
@@ -7,6 +8,7 @@ include "mexpr/cps.mc"
 
 lang MExprPPLImportance =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
+  + MExprPPLCommon
 
   -------------------------
   -- IMPORTANCE SAMPLING --
@@ -97,10 +99,22 @@ lang MExprPPLImportance =
   sem compileCps options =
   | t ->
 
+    -- Read in native versions of higher-order constants and replace usage of
+    -- the constants with the native version. Require because of CPS which
+    -- cannot handle higher-order constants.
+    let t = replaceHigherOrderConstants t in
+    -- Also symbolize the new replacements to avoid CFA inaccuracy
+    let t = symbolizeExpr
+      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
+    in
+
+
     -- ANF transformation (required for CPS)
     let t = normalizeTerm t in
 
-    -- printLn (mexprToString t);
+    -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
+    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    -- printLn (str);
 
     -- Static analysis and CPS transformation
     let t =
@@ -115,7 +129,9 @@ lang MExprPPLImportance =
         in
         let checkPointNames: Set Name =
           extractCheckpoint (checkpointCfa checkpoint t) in
-        -- printLn (join [ "[", strJoin "," (map nameGetStr (setToSeq checkPointNames)), "]"]);
+        -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
+        -- match mapAccumL pprintEnvGetStr env (setToSeq checkPointNames) with (env,strings) in
+        -- printLn (join [ "[", strJoin "," strings, "]"]);
         cpsPartialCont checkPointNames cont t
 
       else match options.cps with "full" then cpsFullCont cont t

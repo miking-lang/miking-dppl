@@ -2,16 +2,20 @@ include "name.mc"
 include "mexpr/const-arity.mc"
 
 include "../dists.mc"
+include "../common.mc"
 include "../../inference-common/smc.mc"
 include "../../cfa.mc"
 include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/type.mc"
+include "mexpr/const-types.mc"
 
 let addrName = nameSym "addr"
 let sym: Ref Int = ref 0
 
 lang MExprPPLLightweightMCMC =
   MExprPPL + Resample + TransformDist + MExprANFAll + MExprPPLCFA + MExprArity
+  + MExprPPLCommon
 
   -------------------------
   -- STATIC ALIGNED MCMC --
@@ -22,6 +26,15 @@ lang MExprPPLLightweightMCMC =
   sem compileAligned : Options -> Expr -> Expr
   sem compileAligned options =
   | t ->
+
+    -- Read in native versions of higher-order constants and replace usage of
+    -- the constants with the native version. Simplifies CFA analysis (no need
+    -- to handle higher-order constants).
+    let t = replaceHigherOrderConstants t in
+    -- Also symbolize the new replacements to avoid CFA inaccuracy
+    let t = symbolizeExpr
+      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
+    in
 
     -- ANF transformation (required for analysis)
     let t = normalizeTerm t in
@@ -69,6 +82,15 @@ lang MExprPPLLightweightMCMC =
   sem compile : Options -> Expr -> Expr
   sem compile options =
   | t ->
+
+    -- Read in native versions of higher-order constants and replace usage of
+    -- the constants with the native version. Simplifies addressing transform
+    -- (no need to handle higher-order constants).
+    let t = replaceHigherOrderConstants t in
+    -- Also symbolize the new replacements to avoid CFA inaccuracy
+    let t = symbolizeExpr
+      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
+    in
 
     -- Addressing transform combined with CorePPL->MExpr transform
     let t = transform (setEmpty nameCmp) t in
@@ -120,7 +142,12 @@ lang MExprPPLLightweightMCMC =
     i (nlam_ addrName (tyseq_ tyint_) t)
 
   | TmConst r & t ->
-    transformConst (constArity r.val) t
+    if isHigherOrderFunType (tyConst r.val) then
+      -- TODO(dlunde,2022-09-19): Add support for higher-order constant functions
+      errorSingle [r.info]
+        "Higher-order constant functions not yet supported in addressing transform"
+    else
+      transformConst (constArity r.val) t
 
   | TmExt r & t ->
     TmExt { r with inexpr = transform (setInsert r.ident externalIds) r.inexpr }
@@ -176,7 +203,12 @@ lang MExprPPLLightweightMCMC =
 
         -- Base case: constant application
         else match r.lhs with TmConst rc then
-          (TmApp r, subi (constArity rc.val) 1)
+          if isHigherOrderFunType (tyConst rc.val) then
+            -- TODO(dlunde,2022-09-19): Add support for higher-order constant functions
+            errorSingle [rc.info]
+              "Higher-order constant functions not yet supported in addressing transform"
+          else
+            (TmApp r, subi (constArity rc.val) 1)
 
         -- Base case: other (e.g., lambdas)
         -- OPT(dlunde,2022-09-08): Lambdas could also be optimized if applied
