@@ -61,6 +61,15 @@ let printStatistics = lam res. lam names. lam normConst. lam expVals. lam varian
     print "\n";
     print (join ["Normalization constant: ", float2string normConst, "\n"])
 
+-- Systematic sampling
+let systematicSample: all a. [a] -> [Float] -> Float -> Int -> [a] = lam seq. lam weights. lam weightSum. lam sampleCount.
+  let step = divf weightSum (int2float sampleCount) in
+  recursive let systematicSampleRec = lam seq. lam weights. lam u. lam out.
+    if null weights then out
+    else if ltf u (head weights) then systematicSampleRec seq weights (addf u step) (cons (head seq) out)
+    else systematicSampleRec (tail seq) (tail weights) (subf u (head weights)) out
+  in
+  systematicSampleRec seq weights (uniformContinuousSample 0. step) (toList [])
 
 -- Computing the normalization constant using the log-sum-exp trick
 let normConstant : [Float] -> Float = lam res.
