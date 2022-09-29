@@ -11,6 +11,8 @@ include "../dppl-arg.mc"
 include "./common.mc"
 
 -- Inference methods
+include "apf/compile.mc"
+include "bpf/compile.mc"
 include "importance/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
@@ -46,6 +48,8 @@ let mexprCompile: Options -> Expr -> Expr =
     -- Load runtime and compile function
     let compiler: (String, Expr -> Expr) =
       switch options.method
+        case "mexpr-apf" then compilerAPF options
+        case "mexpr-bpf" then compilerBPF options
         case "mexpr-importance" then compilerImportance options
         case "mexpr-mcmc-naive" then compilerNaiveMCMC options
         case "mexpr-mcmc-trace" then compilerTraceMCMC options
@@ -140,6 +144,10 @@ x
 " in
 
 -- Simple tests that ensure compilation throws no errors
+utest mexprCompile {default with method = "mexpr-apf"} simple
+with () using lam. lam. true in
+utest mexprCompile {default with method = "mexpr-bpf"} simple
+with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-importance", cps = "none" } simple
 with () using lam. lam. true in
 utest mexprCompile {default with method = "mexpr-importance", cps = "partial" } simple
