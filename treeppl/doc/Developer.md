@@ -10,14 +10,15 @@ abstract: |
 
 # TreePPL Compiler Hacker's Handbook
 
-Hi and welcome to the TreePPL compiler! In this guide you will find information on the intricacies of the TreePPL compiler, how to setup your development environment, and hopefully, after reading it, you will be well-equiped to start contributing to the project!
+Hi, and welcome to the TreePPL compiler! In this guide you will find information on the intricacies of the TreePPL compiler, how to setup your development environment, and hopefully, after reading it you will be well-equiped to start contributing to the project!
 This is also a reference for experienced developers.
-For this reason it will start with the very basics but also cover the advanced aspects of compiler development.
+For this reason it will start with the very basics but also cover some advanced aspects of compiler development.
 
 ## What is TreePPL?
 
-[TreePPL](https://treeppl.org) is a high level probabilistic programming language (PPL) build within the [Miking](https://miking.org) platform.
-Its primary domain is phylogenetics and evolutionary biology and it can be thought of as a statistical modeling language with a focus on tree data structures.
+[TreePPL](https://treeppl.org) is a high-level probabilistic programming language (PPL) build within the [Miking](https://miking.org) platform.
+Its primary domain is phylogenetics and evolutionary biology.
+It can be thought of as a statistical modeling language with a focus on tree data structures.
 
 ## Getting started with TreePPL development
 
@@ -32,9 +33,11 @@ make install
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 ```
 
-TreePPL itself is not a stand-alone package, but rather it is a part of `miking-dppl`, and it is found under the `treeppl/` directory of that package.
+TreePPL itself is not a stand-alone package (2022-09-30), but rather it is a part of `miking-dppl`, and it is found under the `treeppl/` directory.
 The installation of `miking-dppl` has several steps.
-First, you  install CorePPL, which is an intermediate language, to which all TreePPL programs compile to.
+First, you  install CorePPL, which is an intermediate level probabilistic programming language, to which all TreePPL programs compile to.
+[MCore](https://miking.org/docs/miking#mcore) itself consists of two components: MExpr, which is an MCore expression, and MLang, which is a language for defining languages.
+CorePPL can be thought of a probabilistic extension of the base Miking language, MCore.
 From the `miking-dppl` directory you issue:
 
 ```
@@ -95,25 +98,7 @@ TODO Debugging chapter.
 Regardless of which method you use, the actual compilation process is the same.
 Here is the compilation pipeline:
 
-```
-  flip.tppl                                  data.mc
-      |                                        |
-     (1)                                       |
-      |                                        |
-  TreePPL abstract syntax tree (AST)          (3)
-      |                                        |
-     (2)                                       |
-      |                                        |
-  CorePPL program (AST)                +     Miking expression of the input 
-                                      / \
-                                (4)  /   \
-                                    /     \
-                        a CUDA RootPPL or a Miking MCore program
-                                    \     /
-                                   (5)  (6)* - default behavior
-                                      \ /
-                                  executable
-```
+![Compilation pipeline](uml/compilation-pipeline.png)
 
 In other words, the TreePPL program is parsed (1), then compiled to a CorePPL program (2), which is concatenated with the parsed data (3), then the CorePPL compiler (4) produces either a RootPPL C++ program (`.cu`), or a Miking MCore program (`.mc`). The RootPPL program can be compiled with `rppl` (`rootppl` previously) (5) to get an executable. The default behavior, is, however, for the Miking compiler (6) to be executed as part of the TreePPL compilation, which produces the executable.
 

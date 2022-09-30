@@ -1,0 +1,32 @@
+@startuml
+state choice1 <<choice>>
+state PROGRAM.TPPL <<entryPoint>>
+state DATA.MC <<entryPoint>>
+
+PROGRAM.TPPL -->  TreePPL_AST : TreePPL parser (1)
+PROGRAM.TPPL : Probabilistic program source (TreePPL)
+
+TreePPL_AST --> CorePPL_AST : TreePPL compiler (2) 
+TreePPL_AST : TreePPL abstract syntax tree
+
+CorePPL_AST --> choice1
+CorePPL_AST : CorePPL AST (not MExpr!) 
+
+DATA.MC --> Input_MExpr : MCore parser (3)
+DATA.MC : Input as Miking source
+
+Input_MExpr --> choice1
+Input_MExpr : Input as parsed MExpr
+
+choice1 --> CUDA_RootPPL : CorePPL compiler (4)
+choice1 --> MCore_AST
+
+CUDA_RootPPL --> a.out : RootPPL compiler (5)
+CUDA_RootPPL : CUDA C++ source code
+
+MCore_AST --> a.out : MCore compiler (6*)
+MCore_AST : The program compiled to MCore
+
+a.out : Binary executable
+
+@enduml
