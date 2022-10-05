@@ -17,7 +17,7 @@ include "build.mc"
 include "mexpr/ast.mc"
 include "mexpr/duplicate-code-elimination.mc"
 
-lang CPPLLang = MExprAst + DPPLExtract + MExprCompile
+lang CPPLLang = MExprAst + DPPLExtract + MExprCompile + TransformDist
   -- Compiles such that the entire program is considered the model.
   sem compileSingle : Options -> Expr -> ()
   sem compileSingle options =
@@ -55,12 +55,17 @@ lang CPPLLang = MExprAst + DPPLExtract + MExprCompile
                    info = info},
       ty = TyUnknown {info = info}, info = info}
 
-  sem replaceDpplKeywordsWithError : Expr -> Expr
-  sem replaceDpplKeywordsWithError =
-  | TmAssume t -> _makeError t.info "Cannot use assume outside of model code"
+  sem replaceDpplKeywords : Expr -> Expr
+  sem replaceDpplKeywords =
+  | TmAssume t ->
+    -- NOTE(larshum, 2022-10-05): It is allowed to use assume outside of model
+    -- code because it is independent of the inference method.
+    let i = withInfo t.info in
+    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
   | TmObserve t -> _makeError t.info "Cannot use observe outside of model code"
   | TmWeight t -> _makeError t.info "Cannot use weight outside of model code"
-  | t -> smap_Expr_Expr replaceDpplKeywordsWithError t
+  | TmResample t -> _makeError t.info "Cannot use resample outside of model code"
+  | t -> t
 end
 
 mexpr
@@ -102,10 +107,13 @@ match result with ParseOK r then
       -- used in the program.
       match extractInfer runtimes ast with (ast, modelAsts) in
 
-      -- Replace any remaining uses of DPPL specific keywords, like assume or
-      -- observe, with an error, as they cannot be used outside of the model
-      -- code.
-      let ast = replaceDpplKeywordsWithError ast in
+      -- Replace uses of DPPL-specific keywords with corresponding code. The
+      -- assume is replaced with a sample of the corresponding distribution.
+      -- Keywords such as observe and weight result in errors because they
+      -- cannot be used outside of the inferred model.
+      let ast = mapPre_Expr_Expr transformTmDist ast in
+      let ast = removeTyDist ast in
+      let ast = mapPre_Expr_Expr replaceDpplKeywords ast in
 
       -- Process the model ASTs and insert them in the original AST.
       let ast = mexprCompile options runtimes ast modelAsts in
