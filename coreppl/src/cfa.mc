@@ -4,6 +4,8 @@ include "coreppl.mc"
 include "parser.mc"
 
 include "mexpr/cfa.mc"
+include "mexpr/type.mc"
+include "mexpr/const-types.mc"
 
 lang ConstAllCFA = MExprCFA + MExprPPL
 
@@ -325,6 +327,12 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
+  | TmLet { ident = ident, body = TmConst { val = c, info = info } }  ->
+    if isHigherOrderFunType (tyConst c) then
+      -- TODO(dlunde,2022-09-19): Add support for higher-order constant functions
+      errorSingle [info]
+        "Higher-order constant functions not yet supported in alignment analysis"
+    else []
 
   sem addAlignConstraints (graph: CFAGraph) =
   | t ->
@@ -539,6 +547,12 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
+  | TmLet { ident = ident, body = TmConst { val = c, info = info } }  ->
+    if isHigherOrderFunType (tyConst c) then
+      -- TODO(dlunde,2022-09-19): Add support for higher-order constant functions
+      errorSingle [info]
+        "Higher-order constant functions not yet supported in checkpoint analysis"
+    else []
 
   sem addCheckpointConstraints (checkpoint: Expr -> Bool) (graph: CFAGraph) =
   | t ->

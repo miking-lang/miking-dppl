@@ -17,17 +17,11 @@ __global__ void scaleExpWeightsAndSquareWeightsKernel(floating_t* w, int numPart
 
     floating_t localW = w[idx];
 
-    if (isnan(localW))
-        localW = -INFINITY;
-
     localW = exp(localW - maxLogWeight);
 
     w[idx] = localW;
 
-    if (isnan(localW))
-        wSquared[idx] = 0;
-    else
-        wSquared[idx] = localW * localW;
+    wSquared[idx] = localW * localW;
 
 }
 

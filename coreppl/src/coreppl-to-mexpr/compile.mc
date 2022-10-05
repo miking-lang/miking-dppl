@@ -1,7 +1,6 @@
 include "mexpr/ast-builder.mc"
 include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/externals.mc"
-include "mexpr/boot-parser.mc"
 include "mexpr/type.mc"
 include "mexpr/utils.mc"
 include "sys.mc"
@@ -9,11 +8,14 @@ include "sys.mc"
 include "../coreppl.mc"
 include "../extract.mc"
 include "../inference-common/smc.mc"
-include "../src-location.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
 
+include "./common.mc"
+
 -- Inference methods
+include "apf/compile.mc"
+include "bpf/compile.mc"
 include "importance/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
