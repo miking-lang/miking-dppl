@@ -20,6 +20,25 @@ lang DPPLParser =
   | TmDist _ -> true
   | TmPlate _ -> true
 
+  sem parseMethod : Expr -> Option InferMethod
+  sem parseMethod =
+  | TmRecord t ->
+    recursive let mexprStringToString : [Expr] -> Option String = lam tms.
+      if null tms then Some ""
+      else match tms with [TmConst {val = CChar {val = c}}] ++ t then
+        optionMap (lam x. cons c x) (mexprStringToString t)
+      else None ()
+    in
+    let methodSid = stringToSid "method" in
+    match mapLookup methodSid t.bindings with Some (TmSeq {tms = chars}) then
+      match mexprStringToString chars with Some method then
+        -- TODO(larshum, 2022-10-05): Add support for inference method specific
+        -- parsing of parameters here.
+        Some (parseInferMethod method)
+      else None ()
+    else None ()
+  | _ -> None ()
+
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
                                             ty = TyUnknown {info = info},
@@ -33,10 +52,15 @@ lang DPPLParser =
                                             info = info})
   | "resample" -> Some (0, lam lst. TmResample {ty = TyUnknown {info = info},
                                                 info = info})
-  | "inferImportance" -> Some (1, lam lst. TmInfer {model = get lst 0,
-                                                    method = Importance (),
-                                                    ty = TyUnknown {info = info},
-                                                    info = info})
+  | "infer" ->
+    let method = lam arg.
+      match parseMethod arg with Some inferMethod then inferMethod
+      else errorSingle [infoTm arg] "Invalid inference configuration parameter"
+    in
+    Some (2, lam lst. TmInfer {method = method (get lst 0),
+                               model = get lst 1,
+                               ty = TyUnknown {info = info},
+                               info = info})
   | "plate" -> Some (2, lam lst. TmPlate {fun = get lst 0,
                                           lst = get lst 1,
                                           ty = TyUnknown {info = info},
