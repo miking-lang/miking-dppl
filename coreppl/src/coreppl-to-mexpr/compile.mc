@@ -10,6 +10,7 @@ include "../extract.mc"
 include "../inference-common/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
+include "../transformation.mc"
 
 include "./common.mc"
 
@@ -111,7 +112,8 @@ end
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
 lang MExprCompile =
-  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime
+  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
+  Transformation
 
   sem _addNameToRunBinding : Name -> Expr -> Expr
   sem _addNameToRunBinding runId =
@@ -297,34 +299,40 @@ let mexprCompile = use MExprCompile in mexprCompile
 
 mexpr
 
-let compileModel = lam method. lam modelAst.
-  use MExprCompile in
-  match loadCompiler default method with (_, compile) in
-  let model = {defaultModelData method with ast = modelAst} in
-  compileModel compile model
-in
-
 let parse = parseMExprPPLString in
 
 let simple = parse "
-let x = assume (Beta 10.0 5.0) in
-let obs = true in
-observe obs (Bernoulli x);
-x
+let t : () -> Float = lam.
+  let x = assume (Beta 10.0 5.0) in
+  let obs = true in
+  observe obs (Bernoulli x);
+  x
+in
+t {}
 " in
+match use MExprFindSym in findNamesOfStrings ["t"] simple with [Some modelId] in
+
+let compileModel = lam method. lam modelAst.
+  use MExprCompile in
+  let method = parseInferMethod method in
+  match loadCompiler default method with (runtime, compile) in
+  let entry = loadRuntimeEntry method runtime in
+  compileModel compile entry modelId (modelAst, [])
+in
 
 -- Simple tests that ensure compilation throws no errors
 utest compileModel "mexpr-importance" simple
 with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-naive" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-trace" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-aligned" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-lightweight" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-smc" simple
-with () using lam. lam. true in
+-- NOTE(larshum, 2022-10-05): Not implemented yet
+--utest compileModel "mexpr-mcmc-naive" simple
+--with () using lam. lam. true in
+--utest compileModel "mexpr-mcmc-trace" simple
+--with () using lam. lam. true in
+--utest compileModel "mexpr-mcmc-aligned" simple
+--with () using lam. lam. true in
+--utest compileModel "mexpr-mcmc-lightweight" simple
+--with () using lam. lam. true in
+--utest compileModel "mexpr-smc" simple
+--with () using lam. lam. true in
 
 ()
