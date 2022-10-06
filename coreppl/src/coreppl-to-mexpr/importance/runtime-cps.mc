@@ -43,9 +43,12 @@ let importance: all a. (State -> Stop a) -> State -> Option a =
     if compileOptions.earlyStop then recEarlyStop res
     else rec res
 
-let unwrapOpt : all a. Option a -> a = lam opt.
-  match opt with Some x then x
-  else error "Could not unwrap option"
+let filterNone : all a. ([Float], [a]) -> Ref Float -> Option a -> ([Float], [a]) =
+  lam acc. lam state. lam res.
+  match res with Some v then
+    match acc with (weightsAcc, resAcc) in
+    (cons (deref state) weightsAcc, cons v resAcc)
+  else acc
 
 -- General inference algorithm for importance sampling
 let run : all a. (State -> Stop a) -> ([Float], [a]) =
@@ -57,7 +60,9 @@ let run : all a. (State -> Stop a) -> ([Float], [a]) =
     let weightInit: Float = 0. in
     let states = createList particles (lam. ref weightInit) in
     let res = mapReverse (importance model) states in
-    (mapReverse deref states, reverse (mapReverse unwrapOpt res))
+
+    match foldl2 filterNone ([], []) states res with (weightsRev, resRev) in
+    (weightsRev, reverse resRev)
 
 let printRes : all a. (a -> String) -> ([Float], [a]) -> () = lam printFun. lam res.
   printLn (float2string (normConstant res.0));
