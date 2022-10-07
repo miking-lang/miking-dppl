@@ -6,7 +6,11 @@ include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 
 lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
-  type ModelRepr = (Expr, [(Name, Type)])
+  type ModelRepr = {
+    ast : Expr,
+    method : InferMethod,
+    params : [(Name, Type)]
+  }
 
   -- Takes an AST and extracts the models used within infer expressions.
   --
@@ -16,7 +20,7 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   -- 2. A map with an entry for each inference method. Every inference method
   --    is mapped to a sequence of records describing each model.
   sem extractInfer : Map InferMethod RuntimeEntry -> Expr
-                  -> (Expr, Map InferMethod (Map Name ModelRepr))
+                  -> (Expr, Map Name ModelRepr)
   sem extractInfer runtimes =
   | ast ->
     -- Symbolize and type-check the AST (required by lambda lifting)
@@ -28,38 +32,25 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
 
     let modelAsts =
       mapMapWithKey
-        (lam method. lam.
-          -- Collect the identifiers of all infer expressions that use the
-          -- current inference method.
-          let inferIds =
-            mapFoldWithKey
-              (lam acc. lam id. lam m.
-                if eqInferMethod method m then cons id acc
-                else acc)
-              [] data in
+        (lam inferId. lam method.
+          match mapLookup inferId solutions with Some paramMap then
+            let params = mapBindings paramMap in
+            let ast = extractInferAst inferId ast in
+            (inferId, {ast = ast, method = method, params = params})
+          else error "Lambda lifting was not correctly applied to infer")
+        data in
 
-          -- Construct a map from each infer identifier to an extracted AST.
-          mapFromSeq nameCmp
-            (map
-              (lam inferId.
-                match mapLookup inferId solutions with Some paramMap then
-                  let params = mapBindings paramMap in
-                  let astx = extractInferAst inferId ast in
-                  (inferId, (astx, params))
-                else error "Lambda lifting was not correctly applied to infer")
-              inferIds))
-        runtimes in
-
-    -- Map the infer identifiers to the identifiers used by its corresponding
+    -- Map the infer identifiers to the identifiers used by their corresponding
     -- runtime.
     let inferIds : Map Name RuntimeEntry =
       mapMapWithKey
-        (lam id. lam method.
+        (lam id. lam model.
+          match model with {method = method} in
           match mapLookup method runtimes with Some entry then
             entry
           else error (join ["Runtime not found for method '",
                             inferMethodToString method, "'"]))
-        data in
+        modelAsts in
 
     (removeInfers solutions inferIds ast, modelAsts)
 

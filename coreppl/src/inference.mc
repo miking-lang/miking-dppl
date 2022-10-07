@@ -17,7 +17,7 @@ let performInference = lam options: Options. lam ast.
   use InferenceLang in
   if isPrefix eqChar "mexpr-" options.method then
 
-    let inferMethod = parseInferMethod options.method in
+    let inferMethod = inferMethodFromOptions options options.method in
 
     match loadCompiler options inferMethod with (runtime, _) in
 
@@ -44,8 +44,7 @@ let performInference = lam options: Options. lam ast.
     match combineRuntimes options runtimes mainAst with (runtimes, mainAst) in
 
     -- Treat the input AST as the (only) input model.
-    let modelAsts = mapFromSeq cmpInferMethod
-      [(inferMethod, mapFromSeq nameCmp [(modelId, (ast, []))])] in
+    let modelAsts = mapFromSeq nameCmp [(modelId, (ast, []))] in
 
     -- Compile the ast with the chosen inference algorithm (handled in
     -- coreppl-to-mexpr/compile.mc)

@@ -1,15 +1,21 @@
 include "mexpr/ast.mc"
 include "../../coreppl.mc"
+include "../../dppl-arg.mc"
 
 lang ImportanceSamplingMethod = InferMethodBase + MExprAst
   syn InferMethod =
-  | Importance ()
+  | Importance {particles : Int}
 
   sem inferMethodToString =
   | Importance _ -> "mexpr-importance"
 
-  sem parseInferMethod =
-  | "mexpr-importance" -> Importance ()
+  sem inferMethodFromOptions options =
+  | "mexpr-importance" ->
+    Importance {particles = options.particles}
+
+  sem parseInferMethodH env =
+  | "mexpr-importance" ->
+    Importance {particles = parseRequiredFieldInt env "particles"}
 
   sem typeCheckInferMethod env tyRes info =
   | Importance _ ->

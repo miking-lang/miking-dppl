@@ -1,15 +1,21 @@
 include "mexpr/ast.mc"
 include "../../coreppl.mc"
+include "../../dppl-arg.mc"
 
 lang BPFMethod = InferMethodBase + MExprAst
   syn InferMethod =
-  | BPF ()
+  | BPF {particles : Int}
 
   sem inferMethodToString =
   | BPF _ -> "mexpr-bpf"
 
-  sem parseInferMethod =
-  | "mexpr-bpf" -> BPF ()
+  sem inferMethodFromOptions options =
+  | "mexpr-bpf" ->
+    BPF {particles = options.particles}
+
+  sem parseInferMethodH env =
+  | "mexpr-bpf" ->
+    BPF {particles = parseRequiredFieldInt env "particles"}
 
   sem typeCheckInferMethod env tyRes info =
   | BPF _ ->

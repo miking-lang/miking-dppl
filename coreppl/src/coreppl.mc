@@ -19,6 +19,7 @@ include "mexpr/const-arity.mc"
 include "string.mc"
 
 include "dist.mc"
+include "infer-parser.mc"
 
 -------------
 -- HELPERS --
@@ -37,7 +38,7 @@ let _isUnitTy = use RecordTypeAst in lam ty.
 -- method, a new constructor must be defined for the InferMethod type and the
 -- inferMethodToString and typeCheckInferMethod functions must be implemented
 -- for this type.
-lang InferMethodBase
+lang InferMethodBase = InferParser
   syn InferMethod =
 
   sem cmpInferMethod : InferMethod -> InferMethod -> Int
@@ -48,11 +49,11 @@ lang InferMethodBase
   sem eqInferMethod lhs =
   | rhs -> eqi (cmpInferMethod lhs rhs) 0
 
-  sem inferMethodToString : InferMethod -> String
+  sem inferMethodFromOptions : Options -> String -> InferMethod
+  sem inferMethodFromOptions options =
+  | s -> error (concat "Unknown inference method: " s)
 
-  sem parseInferMethod : String -> InferMethod
-  sem parseInferMethod =
-  | s -> error (concat "No such inference method: " s)
+  sem inferMethodToString : InferMethod -> String
 
   sem typeCheckInferMethod : TCEnv -> Type -> Info -> InferMethod -> Type
 end

@@ -164,21 +164,17 @@ lang MExprCompile =
     ast
 
   sem mexprCompile : Options -> Map InferMethod RuntimeEntry -> Expr
-                  -> Map InferMethod (Map Name ModelRepr) -> Expr
+                  -> Map Name ModelRepr -> Expr
   sem mexprCompile options runtimes mainAst =
   | modelAsts ->
     let modelAsts =
       mapMapWithKey
-        (lam method. lam models.
+        (lam id. lam model.
+          match model with {ast = ast, method = method, params = params} in
           match loadCompiler options method with (_, compile) in
-
           match mapLookup method runtimes with Some entry then
-            mapMapWithKey
-              (lam id. lam model.
-                match model with (modelAst, modelParams) in
-                let modelAst = transformModelAst options modelAst in
-                compileModel compile entry id (modelAst, modelParams))
-              models
+            let modelAst = transformModelAst options ast in
+            compileModel compile entry id model
           else error (concat "Runtime definition not found for method "
                              (inferMethodToString method)))
         modelAsts in
@@ -187,11 +183,8 @@ lang MExprCompile =
     -- distinguish between which inference method they use at this point.
     let modelMap : Map Name Expr =
       mapFoldWithKey
-        (lam acc. lam method. lam models.
-          mapFoldWithKey
-            (lam acc. lam id. lam model.
-              mapInsert id model acc)
-            acc models)
+        (lam acc. lam id. lam model.
+          mapInsert id model acc)
         (mapEmpty nameCmp) modelAsts in
 
     -- Insert all models into the main AST at the first point where any of the
@@ -208,7 +201,8 @@ lang MExprCompile =
 
   sem compileModel : (Expr -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
   sem compileModel compile entry modelId =
-  | (modelAst, modelParams) ->
+  | {ast = modelAst, params = modelParams} ->
+
     -- Symbolize model using the symbolization environment from the top-level
     -- of its corresponding runtime as a starting point.
     let prog = symbolizeExpr entry.topSymEnv modelAst in
