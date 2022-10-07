@@ -5,11 +5,15 @@ include "mexpr/keyword-maker.mc"
 include "coreppl.mc"
 include "pgm.mc"
 include "inference-common/smc.mc"
+
+-- Include the inference method definition definition files.
 include "coreppl-to-mexpr/importance/method.mc"
+include "coreppl-to-mexpr/bpf/method.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
-  ProbabilisticGraphicalModel + KeywordMaker + ImportanceSamplingMethod
+  ProbabilisticGraphicalModel + KeywordMaker + ImportanceSamplingMethod +
+  BPFMethod
 
   -- Keyword maker
   sem isKeyword =

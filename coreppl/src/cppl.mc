@@ -41,7 +41,8 @@ lang CPPLLang = MExprAst + DPPLExtract + MExprCompile + TransformDist
 
   sem _makeError : Info -> String -> Expr
   sem _makeError info =
-  | msg ->
+  | keywordStr ->
+    let msg = join ["Cannot use ", keywordStr, " outside of inferred model"] in
     let toStr = lam msg.
       map
         (lam ch. TmConst {val = CChar {val = ch},
@@ -57,15 +58,11 @@ lang CPPLLang = MExprAst + DPPLExtract + MExprCompile + TransformDist
 
   sem replaceDpplKeywords : Expr -> Expr
   sem replaceDpplKeywords =
-  | TmAssume t ->
-    -- NOTE(larshum, 2022-10-05): It is allowed to use assume outside of model
-    -- code because it is independent of the inference method.
-    let i = withInfo t.info in
-    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
-  | TmObserve t -> _makeError t.info "Cannot use observe outside of model code"
-  | TmWeight t -> _makeError t.info "Cannot use weight outside of model code"
-  | TmResample t -> _makeError t.info "Cannot use resample outside of model code"
-  | t -> t
+  | TmAssume t -> _makeError t.info "assume"
+  | TmObserve t -> _makeError t.info "observe"
+  | TmWeight t -> _makeError t.info "weight"
+  | TmResample t -> _makeError t.info "resample"
+  | t -> smap_Expr_Expr replaceDpplKeywords t
 end
 
 mexpr
@@ -98,7 +95,7 @@ match result with ParseOK r then
 
       -- Combine the runtimes with the main AST and eliminate duplicate
       -- definitions due to files having common dependencies.
-      let ast = combineRuntimes options runtimes ast in
+      match combineRuntimes options runtimes ast with (runtimes, ast) in
 
       -- Extract the infer expressions to separate ASTs, one per inference
       -- method. The result consists of the provided AST, updated such that
@@ -107,13 +104,11 @@ match result with ParseOK r then
       -- used in the program.
       match extractInfer runtimes ast with (ast, modelAsts) in
 
-      -- Replace uses of DPPL-specific keywords with corresponding code. The
-      -- assume is replaced with a sample of the corresponding distribution.
-      -- Keywords such as observe and weight result in errors because they
-      -- cannot be used outside of the inferred model.
-      let ast = mapPre_Expr_Expr transformTmDist ast in
-      let ast = removeTyDist ast in
-      let ast = mapPre_Expr_Expr replaceDpplKeywords ast in
+      -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
+      -- with errors. This code is unreachable unless the inferred models are
+      -- also used outside of infers, which is an error.
+      -- TODO(larshum, 2022-10-07): Detect such errors statically.
+      let ast = replaceDpplKeywords ast in
 
       -- Process the model ASTs and insert them in the original AST.
       let ast = mexprCompile options runtimes ast modelAsts in

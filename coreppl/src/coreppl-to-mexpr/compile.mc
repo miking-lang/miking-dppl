@@ -25,15 +25,26 @@ include "smc/compile.mc"
 
 lang LoadRuntime = DPPLParser + MExprFindSym + MExprEliminateDuplicateCode
   type RuntimeEntry = {
+    -- An AST representation of the runtime
     ast : Expr,
+
+    -- The identifier of the run function for this runtime.
     runId : Name,
-    updateWeightId : Name,
-    stateId : Name
+
+    -- The identifier of the State type for this runtime.
+    stateId : Name,
+
+    -- A symbolization environment containing the identifiers defined in the
+    -- top-level of the runtime program. This environment is used to symbolize
+    -- the model AST so that it refers to definitions in its corresponding
+    -- runtime.
+    topSymEnv : SymEnv
   }
 
   sem loadCompiler : Options -> InferMethod -> (String, Expr -> Expr)
   sem loadCompiler options =
   | Importance _ -> compilerImportance options
+  | BPF _ -> compilerBPF options
   | _ -> error "Unsupported CorePPL to MExpr inference method"
 
   sem loadRuntimes : Options -> Expr -> Map InferMethod RuntimeEntry
@@ -63,28 +74,42 @@ lang LoadRuntime = DPPLParser + MExprFindSym + MExprEliminateDuplicateCode
       }
     in
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
-    let runtime = symbolizeExpr {symEnvEmpty with allowFree = true} runtime in
-    match collectRuntimeIds method runtime
-    with (runId, updateWeightId, stateId) in
-    { ast = runtime, runId = runId, updateWeightId = updateWeightId
-    , stateId = stateId }
+    let runtime = symbolizeAllowFree runtime in
+    match findRequiredRuntimeIds method runtime with (runId, stateId) in
+    { ast = runtime, runId = runId, stateId = stateId
+    , topSymEnv = addTopNames symEnvEmpty runtime }
 
-  sem collectRuntimeIds : InferMethod -> Expr -> (Name, Name, Name)
-  sem collectRuntimeIds method =
+  -- Finds a pre-defined list of identifiers in the given runtime AST, which
+  -- are assumed to be present in all runtimes.
+  sem findRequiredRuntimeIds : InferMethod -> Expr -> (Name, Name)
+  sem findRequiredRuntimeIds method =
   | runtime ->
-    let ids = findNamesOfStrings ["run", "updateWeight", "State"] runtime in
-    match ids with [Some runId, Some updateWeightId, Some stateId] then
-      (runId, updateWeightId, stateId)
+    let ids = findNamesOfStrings ["run", "State"] runtime in
+    match ids with [Some runId, Some stateId] then (runId, stateId)
     else
       let methodStr = inferMethodToString method in
       let missingImpl =
-        match get ids 0 with None () then "run"
-        else match get ids 1 with None () then "updateWeight"
+        match get ids 0 with None _ then "run"
         else "State" in
-      error (join ["Missing implementation of ", missingImpl, " ",
-                   "in the ", methodStr, " runtime"])
+      error (join ["Missing implementation of ", missingImpl, " in the ",
+                   methodStr, " runtime"])
 
-  sem combineRuntimes : Options -> Map InferMethod RuntimeEntry -> Expr -> Expr
+  sem updateSymEnv : Map Name Name -> RuntimeEntry -> RuntimeEntry
+  sem updateSymEnv replacements =
+  | entry ->
+    let replaceId = lam id.
+      optionGetOrElse (lam. id) (mapLookup id replacements)
+    in
+    let replaceInEnv = lam env. mapMapWithKey (lam. lam id. replaceId id) env in
+    let replaceInSymEnv = lam symEnv.
+      {symEnv with varEnv = replaceInEnv symEnv.varEnv,
+                   conEnv = replaceInEnv symEnv.conEnv,
+                   tyConEnv = replaceInEnv symEnv.tyConEnv}
+    in
+    {entry with topSymEnv = replaceInSymEnv entry.topSymEnv}
+
+  sem combineRuntimes : Options -> Map InferMethod RuntimeEntry -> Expr
+                     -> (Map InferMethod RuntimeEntry, Expr)
   sem combineRuntimes options runtimes =
   | ast ->
     -- Construct record accessible at runtime
@@ -102,10 +127,17 @@ lang LoadRuntime = DPPLParser + MExprFindSym + MExprEliminateDuplicateCode
 
     let runtimeAsts = map (lam entry. entry.ast) (mapValues runtimes) in
 
-    -- Concatenate the runtime record and the runtime ASTs with the main AST,
-    -- and eliminate any duplicate code due to common dependencies.
+    -- Concatenate the runtime record and the runtime ASTs with the main AST.
     let ast = bindall_ (join [[pre], runtimeAsts, [ast]]) in
-    eliminateDuplicateCode ast
+
+    -- Eliminate duplicate code in the combined AST, and update the
+    -- symbolization environment of the runtime entries accordingly.
+    match eliminateDuplicateCodeWithSummary ast with (replacements, ast) in
+    let runtimes =
+      mapMapWithKey
+        (lam. lam runtime. updateSymEnv replacements runtime)
+        runtimes in
+    (runtimes, ast)
 end
 
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
@@ -114,14 +146,6 @@ end
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation
-
-  sem _addNameToRunBinding : Name -> Expr -> Expr
-  sem _addNameToRunBinding runId =
-  | TmLet t ->
-    if and (not (nameHasSym t.ident)) (eqString (nameGetStr t.ident) "run") then
-      TmLet {t with ident = runId}
-    else TmLet {t with inexpr = _addNameToRunBinding runId t.inexpr}
-  | t -> smap_Expr_Expr (_addNameToRunBinding runId) t
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -174,10 +198,6 @@ lang MExprCompile =
     -- models are used.
     let prog = insertModels modelMap mainAst in
 
-    -- Add the correct symbols to the references to runtime functions by the
-    -- model AST code.
-    let prog = symbolizeRuntimeReferences prog in
-
     if options.debugMExprCompile then
       -- Check that the combined program type checks
       typeCheck prog
@@ -189,39 +209,73 @@ lang MExprCompile =
   sem compileModel : (Expr -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
   sem compileModel compile entry modelId =
   | (modelAst, modelParams) ->
-    -- Symbolize model (ignore free variables and externals)
-    let prog = symbolizeExpr
-      { symEnvEmpty with allowFree = true, ignoreExternals = true } modelAst
-    in
+    -- Symbolize model using the symbolization environment from the top-level
+    -- of its corresponding runtime as a starting point.
+    let prog = symbolizeExpr entry.topSymEnv modelAst in
 
     -- Apply inference-specific transformation
     let prog = compile prog in
 
-    let prog = replaceUnsymbolizedId entry.updateWeightId prog in
-    let prog = replaceUnsymbolizedId entry.stateId prog in
+    -- Update all unsymbolized references to refer to their corresponding
+    -- definition in the runtime AST.
+    match entry.topSymEnv with {varEnv = varEnv, conEnv = conEnv, tyConEnv = tyConEnv} in
+    let stateVarId = nameSym "state" in
+    let unsymIds =
+      mapUnion
+        (mapUnion (mapUnion varEnv conEnv) tyConEnv)
+        (mapFromSeq cmpString (map (lam id. (nameGetStr id, id)) [stateVarId]))
+    in
+    let prog = replaceUnsymbolizedIds unsymIds prog in
 
     nulet_ modelId
-      (nlams_ (snoc modelParams (nameSym "state", ntycon_ entry.stateId)) prog)
+      (nlams_ (snoc modelParams (stateVarId, ntycon_ entry.stateId)) prog)
 
-    sem replaceUnsymbolizedId : Name -> Expr -> Expr
-    sem replaceUnsymbolizedId id =
-    | TmVar t ->
-      if and (not (nameHasSym t.ident)) (nameEqStr t.ident id) then
-        TmVar {t with ident = id,
-                      ty = replaceUnsymbolizedIdType id t.ty}
-      else TmVar {t with ty = replaceUnsymbolizedIdType id t.ty}
-    | t ->
-      let t = withType (replaceUnsymbolizedIdType id (tyTm t)) t in
-      let t = smap_Expr_Type (replaceUnsymbolizedIdType id) t in
-      smap_Expr_Expr (replaceUnsymbolizedId id) t
+  sem replaceUnsymbolized : Map String Name -> Name -> Name
+  sem replaceUnsymbolized ids =
+  | id ->
+    if not (nameHasSym id) then
+      optionGetOrElse (lam. id) (mapLookup (nameGetStr id) ids)
+    else id
 
-  sem replaceUnsymbolizedIdType : Name -> Type -> Type
-  sem replaceUnsymbolizedIdType id =
+  sem replaceUnsymbolizedIds : Map String Name -> Expr -> Expr
+  sem replaceUnsymbolizedIds ids =
+  | TmVar t ->
+    TmVar {t with ident = replaceUnsymbolized ids t.ident,
+                  ty = replaceUnsymbolizedIdsType ids t.ty}
+  | TmType t ->
+    TmType {t with ident = replaceUnsymbolized ids t.ident,
+                   tyIdent = replaceUnsymbolizedIdsType ids t.tyIdent,
+                   inexpr = replaceUnsymbolizedIds ids t.inexpr,
+                   ty = replaceUnsymbolizedIdsType ids t.ty}
+  | TmConDef t ->
+    TmConDef {t with ident = replaceUnsymbolized ids t.ident,
+                     tyIdent = replaceUnsymbolizedIdsType ids t.tyIdent,
+                     inexpr = replaceUnsymbolizedIds ids t.inexpr,
+                     ty = replaceUnsymbolizedIdsType ids t.ty}
+  | TmConApp t ->
+    TmConApp {t with ident = replaceUnsymbolized ids t.ident,
+                     body = replaceUnsymbolizedIds ids t.body,
+                     ty = replaceUnsymbolizedIdsType ids t.ty}
+  | t ->
+    let t = smap_Expr_Expr (replaceUnsymbolizedIds ids) t in
+    let t = smap_Expr_Type (replaceUnsymbolizedIdsType ids) t in
+    let t = smap_Expr_Pat (replaceUnsymbolizedIdsPat ids) t in
+    withType (replaceUnsymbolizedIdsType ids (tyTm t)) t
+
+  sem replaceUnsymbolizedIdsType : Map String Name -> Type -> Type
+  sem replaceUnsymbolizedIdsType ids =
   | TyCon t ->
-    if and (not (nameHasSym t.ident)) (nameEqStr t.ident id) then
-      TyCon {t with ident = id}
-    else TyCon t
-  | ty -> smap_Type_Type (replaceUnsymbolizedIdType id) ty
+    TyCon {t with ident = replaceUnsymbolized ids t.ident}
+  | ty -> smap_Type_Type (replaceUnsymbolizedIdsType ids) ty
+
+  sem replaceUnsymbolizedIdsPat : Map String Name -> Pat -> Pat
+  sem replaceUnsymbolizedIdsPat ids =
+  | PatCon t ->
+    PatCon {t with ident = replaceUnsymbolized ids t.ident,
+                   subpat = replaceUnsymbolizedIdsPat ids t.subpat}
+  | p ->
+    let p = smap_Pat_Pat (replaceUnsymbolizedIdsPat ids) p in
+    withTypePat (replaceUnsymbolizedIdsType ids (tyPat p)) p
 
   -- We insert all models before the first binding where any of them are used.
   -- This is simple but correct, as we only need them to be placed after the
@@ -250,49 +304,6 @@ lang MExprCompile =
     else if mapMem t.ident models then true
     else false
   | t -> sfold_Expr_Expr (modelUsedInBody models) acc t
-
-  sem symbolizeRuntimeReferences : Expr -> Expr
-  sem symbolizeRuntimeReferences =
-  | t -> symbolizeRuntimeReferencesExpr (mapEmpty nameCmp) t
-
-  sem symbolizeRuntimeReferencesExpr : Map Name Name -> Expr -> Expr
-  sem symbolizeRuntimeReferencesExpr names =
-  | TmVar t ->
-    match mapLookup t.ident names with Some id then
-      TmVar {t with ident = id}
-    else TmVar t
-  | TmConApp t ->
-    match mapLookup t.ident names with Some id then
-      TmConApp {t with ident = id}
-    else TmConApp t
-  | TmLet t ->
-    let names = _addName t.ident names in
-    TmLet {t with body = symbolizeRuntimeReferencesExpr names t.body,
-                  inexpr = symbolizeRuntimeReferencesExpr names t.inexpr}
-  | TmRecLets t ->
-    let symbolizeBinding = lam names. lam bind.
-      {bind with body = symbolizeRuntimeReferencesExpr names bind.body}
-    in
-    let names =
-      foldl
-        (lam names. lam bind. _addName bind.ident names)
-        names t.bindings in
-    TmRecLets {t with bindings = map (symbolizeBinding names) t.bindings,
-                      inexpr = symbolizeRuntimeReferencesExpr names t.inexpr}
-  | TmType t ->
-    let names = _addName t.ident names in
-    TmType {t with inexpr = symbolizeRuntimeReferencesExpr names t.inexpr}
-  | TmConDef t ->
-    let names = _addName t.ident names in
-    TmConDef {t with inexpr = symbolizeRuntimeReferencesExpr names t.inexpr}
-  | TmExt t ->
-    let names = _addName t.ident names in
-    TmExt {t with inexpr = symbolizeRuntimeReferencesExpr names t.inexpr}
-  | t -> smap_Expr_Expr (symbolizeRuntimeReferencesExpr names) t
-
-  sem _addName : Name -> Map Name Name -> Map Name Name
-  sem _addName id =
-  | names -> mapInsert (nameNoSym (nameGetStr id)) id names
 end
 
 let mexprCompile = use MExprCompile in mexprCompile

@@ -41,7 +41,7 @@ let performInference = lam options: Options. lam ast.
     let mainAst = bindall_ [
       ulet_ "printFun" (app_ (var_ "printRes") tyPrintFun),
       app_ (var_ "printFun") (app_ (var_ "run") (nvar_ modelId))] in
-    let mainAst = combineRuntimes options runtimes mainAst in
+    match combineRuntimes options runtimes mainAst with (runtimes, mainAst) in
 
     -- Treat the input AST as the (only) input model.
     let modelAsts = mapFromSeq cmpInferMethod

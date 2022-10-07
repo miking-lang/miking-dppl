@@ -19,7 +19,7 @@ let unwrapOpt : all a. Option a -> a = lam opt.
   else error "Could not unwrap option"
 
 -- General inference algorithm for importance sampling
-let run : all a. (State -> a) -> (Res a -> ()) -> ([Float], [a]) = lam model.
+let run : all a. (State -> a) -> ([Float], [a]) = lam model.
 
   -- Read number of runs
   match monteCarloArgs () with (particles, _) in
