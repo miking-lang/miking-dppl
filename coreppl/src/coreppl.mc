@@ -19,7 +19,7 @@ include "mexpr/const-arity.mc"
 include "string.mc"
 
 include "dist.mc"
-include "infer-parser.mc"
+include "infer-method.mc"
 
 -------------
 -- HELPERS --
@@ -33,30 +33,6 @@ let _isUnitTy = use RecordTypeAst in lam ty.
 -----------
 -- TERMS --
 -----------
-
--- Defines the basic components of an inference method. To add a new inference
--- method, a new constructor must be defined for the InferMethod type and the
--- inferMethodToString and typeCheckInferMethod functions must be implemented
--- for this type.
-lang InferMethodBase = InferParser
-  syn InferMethod =
-
-  sem cmpInferMethod : InferMethod -> InferMethod -> Int
-  sem cmpInferMethod lhs =
-  | rhs -> subi (constructorTag lhs) (constructorTag rhs)
-
-  sem eqInferMethod : InferMethod -> InferMethod -> Bool
-  sem eqInferMethod lhs =
-  | rhs -> eqi (cmpInferMethod lhs rhs) 0
-
-  sem inferMethodFromOptions : Options -> String -> InferMethod
-  sem inferMethodFromOptions options =
-  | s -> error (concat "Unknown inference method: " s)
-
-  sem inferMethodToString : InferMethod -> String
-
-  sem typeCheckInferMethod : TCEnv -> Type -> Info -> InferMethod -> Type
-end
 
 lang Infer =
   Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeCheck + ANF +
@@ -93,10 +69,9 @@ lang Infer =
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmInfer t ->
     let i = pprintIncr indent in
+    match pprintInferMethod i env t.method with (env, method) in
     match printParen i env t.model with (env,model) in
-    let methodId = inferMethodToString t.method in
-    (env, join ["infer", pprintNewline i, "{method = ", methodId, "}",
-                pprintNewline i, model])
+    (env, join ["infer", pprintNewline i, method, pprintNewline i, model])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -117,10 +92,11 @@ lang Infer =
   sem typeCheckExpr (env : TCEnv) =
   | TmInfer t ->
     let model = typeCheckExpr env t.model in
+    let method = typeCheckInferMethod env t.info t.method in
     let tyRes = newvar env.currentLvl t.info in
     unify [t.info] env (tyTm model) (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes);
-    let inferTy = typeCheckInferMethod env tyRes t.info t.method in
-    TmInfer { t with model = model, ty = inferTy }
+    TmInfer { t with model = model, method = method,
+                     ty = TyDist {info = t.info, ty = tyRes} }
 
   -- ANF
   sem normalize (k : Expr -> Expr) =

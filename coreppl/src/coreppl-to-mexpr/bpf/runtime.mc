@@ -8,17 +8,19 @@ include "../runtime-common.mc"
 include "../runtime-dists.mc"
 
 type Checkpoint a
-con Resample: all a. {k: () -> Checkpoint a} -> Checkpoint a
-con End: all a. a -> Checkpoint a
+con Resample : all a. {k : () -> Checkpoint a} -> Checkpoint a
+con End : all a. a -> Checkpoint a
 
 type State = Ref Float
 
 let resample = lam k. Resample {k = k}
 
-let updateWeight = lam weight. lam state. modref state (addf (deref state) weight)
+let updateWeight = lam weight. lam state.
+  modref state (addf (deref state) weight)
 
--- WARNING: As of now, particles must be started and propagated sequentially (they cannot run in parallel)!
-let run: all a. (State -> Checkpoint a) -> ([Float], [a]) = lam model.
+let run : all a. (State -> Checkpoint a) -> Dist a = lam model.
+  use RuntimeDist in
+
   match monteCarloArgs () with (particleCount, _) in
   let logParticleCount = log (int2float particleCount) in
 
@@ -61,8 +63,5 @@ let run: all a. (State -> Checkpoint a) -> ([Float], [a]) = lam model.
         runRec particles
   in
   let particles = createList particleCount start in
-  runRec particles
-
-let printRes : all a. (a -> String) -> ([Float], [a]) -> () = lam printFun. lam res.
-  printLn (float2string (normConstant res.0)) -- ;
-  -- printSamplesOption printFun res.0 res.1
+  match runRec particles with (weights, samples) in
+  DistBPF {weights = weights, samples = samples}

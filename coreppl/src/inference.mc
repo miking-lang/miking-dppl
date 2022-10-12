@@ -41,14 +41,18 @@ let performInference = lam options: Options. lam ast.
     let mainAst = bindall_ [
       ulet_ "printFun" (app_ (var_ "printRes") tyPrintFun),
       app_ (var_ "printFun") (app_ (var_ "run") (nvar_ modelId))] in
-    match combineRuntimes options runtimes mainAst with (runtimes, mainAst) in
+    match combineRuntimes options runtimes with (runtimes, runtimeAst, symEnv) in
+
+    let mainAst = symbolizeExpr symEnv mainAst in
+    let ast = bind_ runtimeAst mainAst in
 
     -- Treat the input AST as the (only) input model.
-    let modelAsts = mapFromSeq nameCmp [(modelId, (ast, []))] in
+    let modelRepr = {ast = ast, method = inferMethod, params = []} in
+    let modelAsts = mapFromSeq nameCmp [(modelId, modelRepr)] in
 
     -- Compile the ast with the chosen inference algorithm (handled in
     -- coreppl-to-mexpr/compile.mc)
-    let ast = mexprCompile options runtimes mainAst modelAsts in
+    let ast = mexprCompile options runtimes ast modelAsts in
 
     buildMExpr options ast
 

@@ -39,6 +39,13 @@ lang CPPLLang = MExprAst + DPPLExtract + MExprCompile + TransformDist
       -- Perform the actual inference
       performInference options ast
 
+  -- Used to transform away distributions in the main AST.
+  sem transformDistributions : Expr -> Expr
+  sem transformDistributions =
+  | t ->
+    let t = mapPre_Expr_Expr transformTmDist t in
+    removeTyDist t
+
   sem _makeError : Info -> String -> Expr
   sem _makeError info =
   | keywordStr ->
@@ -93,9 +100,17 @@ match result with ParseOK r then
       compileSingle options ast
     else
 
-      -- Combine the runtimes with the main AST and eliminate duplicate
-      -- definitions due to files having common dependencies.
-      match combineRuntimes options runtimes ast with (runtimes, ast) in
+      -- Combine the runtime ASTs to one AST and eliminate duplicate
+      -- definitions due to files having common dependencies. The result is an
+      -- updated map of runtime entries, a combined runtime AST and a
+      -- symbolization environment. The latter is used for symbolizing the
+      -- main AST,
+      match combineRuntimes options runtimes with (runtimes, runtimeAst, symEnv) in
+
+      -- Transform distributions in the main AST to use MExpr code, before
+      -- symbolizing it.
+      let ast = transformDistributions ast in
+      let ast = symbolizeExpr symEnv ast in
 
       -- Extract the infer expressions to separate ASTs, one per inference
       -- method. The result consists of the provided AST, updated such that
@@ -103,6 +118,10 @@ match result with ParseOK r then
       -- the chosen runtime. It also consists of one AST per inference method
       -- used in the program.
       match extractInfer runtimes ast with (ast, modelAsts) in
+
+      -- Combine the main AST with the runtime AST, after extracting the
+      -- models.
+      let ast = bind_ runtimeAst ast in
 
       -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
       -- with errors. This code is unreachable unless the inferred models are

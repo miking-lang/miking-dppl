@@ -1,28 +1,28 @@
 include "mexpr/ast.mc"
-include "../../coreppl.mc"
-include "../../dppl-arg.mc"
+include "../../infer-method.mc"
 
 lang ImportanceSamplingMethod = InferMethodBase + MExprAst
   syn InferMethod =
-  | Importance {particles : Int}
+  | Importance {particles : Expr}
 
-  sem inferMethodToString =
-  | Importance _ -> "mexpr-importance"
+  sem pprintInferMethod indent env =
+  | Importance {particles = particles} ->
+    let i = pprintIncr indent in
+    match pprintCode i env particles with (env, particles) in
+    (env, join ["Importance {particles = ", particles, "}"])
+
+  sem inferMethodFromCon info bindings =
+  | methodStr & "Importance" ->
+    Importance {particles = getRequiredField info bindings "particles"}
 
   sem inferMethodFromOptions options =
   | "mexpr-importance" ->
-    Importance {particles = options.particles}
+    Importance {particles = int_ options.particles}
 
-  sem parseInferMethodH env =
-  | "mexpr-importance" ->
-    Importance {particles = parseRequiredFieldInt env "particles"}
-
-  sem typeCheckInferMethod env tyRes info =
-  | Importance _ ->
-    let weightsTy = TySeq {ty = TyFloat {info = info}, info = info} in
-    let samplesTy = TySeq {ty = tyRes, info = info} in
-    TyRecord {
-      fields = mapFromSeq cmpSID [
-        (stringToSid "0", weightsTy), (stringToSid "1", samplesTy)],
-      info = info }
+  sem typeCheckInferMethod env info =
+  | Importance {particles = particles} ->
+    let int = TyInt {info = info} in
+    let particles = typeCheckExpr env particles in
+    unify [info, infoTm particles] env (tyTm particles) int;
+    Importance {particles = particles}
 end

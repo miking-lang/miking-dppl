@@ -13,19 +13,51 @@ lang TransformDist = MExprPPL
   | TmDist t -> transformDist (withInfo t.info) t.dist
   | t -> t
 
+  -- TODO(larshum, 2022-10-12): This code assumes the MLang transformation
+  -- performs name mangling as of writing. Therefore, it will break after we
+  -- make the change.
   sem transformDist: (Expr -> Expr) -> Dist -> Expr
   sem transformDist i =
-  | DGamma { k = k, theta = theta } -> i (appf2_ (i (var_ "distGamma")) k theta)
-  | DExponential { rate = rate } -> i (appf1_ (i (var_ "distExponential")) rate)
-  | DPoisson { lambda = lambda } -> i (appf1_ (i (var_ "distPoisson")) lambda)
-  | DBinomial { n = n, p = p } -> i (appf2_ (i (var_ "distBinomial")) n p)
-  | DBernoulli { p = p } -> i (appf1_ (i (var_ "distBernoulli")) p)
-  | DBeta { a = a, b = b } -> i (appf2_ (i (var_ "distBeta")) a b)
-  | DGaussian { mu = mu, sigma = sigma } -> i (appf2_ (i (var_ "distGaussian")) mu sigma)
-  | DMultinomial { n = n, p = p } -> i (appf2_ (i (var_ "distMultinomial")) n p)
-  | DCategorical { p = p } -> i (appf1_ (i (var_ "distCategorical")) p)
-  | DDirichlet { a = a } -> i (appf1_ (i (var_ "distDirichlet")) a)
-  | DUniform { a = a, b = b } -> i (appf2_ (i (var_ "distUniform")) a b)
+  | DGamma { k = k, theta = theta } ->
+    i (conapp_
+        "RuntimeDist_DistGamma"
+        (i (urecord_ [("shape", k), ("scale", theta)])))
+  | DExponential { rate = rate } ->
+    i (conapp_
+        "RuntimeDist_DistExponential"
+        (i (urecord_ [("rate", rate)])))
+  | DPoisson { lambda = lambda } ->
+    i (conapp_
+        "RuntimeDist_DistPoisson"
+        (i (urecord_ [("lambda", lambda)])))
+  | DBinomial { n = n, p = p } ->
+    i (conapp_
+        "RuntimeDist_DistBinomial"
+        (i (urecord_ [("n", n), ("p", p)])))
+  | DBernoulli { p = p } ->
+    i (conapp_
+        "RuntimeDist_DistBernoulli"
+        (i (urecord_ [("p", p)])))
+  | DBeta { a = a, b = b } ->
+    i (conapp_
+        "RuntimeDist_DistBeta"
+        (i (urecord_ [("a", a), ("b", b)])))
+  | DGaussian { mu = mu, sigma = sigma } ->
+    i (conapp_
+        "RuntimeDist_DistGaussian"
+        (i (urecord_ [("mu", mu), ("sigma", sigma)])))
+  | DMultinomial { n = n, p = p } ->
+    i (conapp_
+        "RuntimeDist_DistMultinomial"
+        (i (urecord_ [("n", n), ("p", p)])))
+  | DCategorical { p = p } ->
+    i (conapp_
+        "RuntimeDist_DistCategorical"
+        (i (urecord_ [("p", p)])))
+  | DUniform { a = a, b = b } ->
+    i (conapp_
+        "RuntimeDist_DistUniform"
+        (i (urecord_ [("a", a), ("b", b)])))
 
   -- We need to remove TyDist after transforming to MExpr dists (the new MExpr
   -- types will be inferred by the type checker)

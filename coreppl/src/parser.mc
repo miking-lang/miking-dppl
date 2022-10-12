@@ -3,7 +3,6 @@ include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
 
 include "coreppl.mc"
-include "infer-parser.mc"
 include "pgm.mc"
 include "inference-common/smc.mc"
 
@@ -12,9 +11,17 @@ include "coreppl-to-mexpr/importance/method.mc"
 include "coreppl-to-mexpr/bpf/method.mc"
 
 lang DPPLParser =
-  BootParser + InferParser + MExprPrettyPrint + MExprPPL + Resample +
+  BootParser + MExprPrettyPrint + MExprPPL + Resample +
   ProbabilisticGraphicalModel + KeywordMaker + ImportanceSamplingMethod +
   BPFMethod
+
+  -- Interprets the argument to infer which encodes the inference method and
+  -- its configuration parameters.
+  sem interpretInferMethod : Expr -> InferMethod
+  sem interpretInferMethod =
+  | TmConApp {ident = ident, body = TmRecord {bindings = bindings}, info = info} ->
+    inferMethodFromCon info bindings (nameGetStr ident)
+  | t -> errorSingle [infoTm t] "Expected a constructor application"
 
   -- Keyword maker
   sem isKeyword =
@@ -38,7 +45,7 @@ lang DPPLParser =
                                             info = info})
   | "resample" -> Some (0, lam lst. TmResample {ty = TyUnknown {info = info},
                                                 info = info})
-  | "infer" -> Some (2, lam lst. TmInfer {method = parseInferMethod (get lst 0),
+  | "infer" -> Some (2, lam lst. TmInfer {method = interpretInferMethod (get lst 0),
                                           model = get lst 1,
                                           ty = TyUnknown {info = info},
                                           info = info})

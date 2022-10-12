@@ -23,33 +23,30 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
                   -> (Expr, Map Name ModelRepr)
   sem extractInfer runtimes =
   | ast ->
-    -- Symbolize and type-check the AST (required by lambda lifting)
-    let ast = symbolize ast in
-    let ast = typeCheck ast in
-
     match bindInferExpressions runtimes ast with (data, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
 
-    let modelAsts =
+    let modelAsts : Map Name ModelRepr =
       mapMapWithKey
         (lam inferId. lam method.
           match mapLookup inferId solutions with Some paramMap then
             let params = mapBindings paramMap in
             let ast = extractInferAst inferId ast in
-            (inferId, {ast = ast, method = method, params = params})
+            {ast = ast, method = method, params = params}
           else error "Lambda lifting was not correctly applied to infer")
         data in
 
-    -- Map the infer identifiers to the identifiers used by their corresponding
+    -- Map the infer identifiers to the representation of their corresponding
     -- runtime.
     let inferIds : Map Name RuntimeEntry =
       mapMapWithKey
-        (lam id. lam model.
+        (lam. lam model.
           match model with {method = method} in
           match mapLookup method runtimes with Some entry then
             entry
-          else error (join ["Runtime not found for method '",
-                            inferMethodToString method, "'"]))
+          else
+            match pprintInferMethod 0 pprintEnvEmpty method with (_, method) in
+            error (join ["Missing runtime for method (", method, ")"]))
         modelAsts in
 
     (removeInfers solutions inferIds ast, modelAsts)
@@ -137,17 +134,7 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
     in
     match collectAppArgs app with (TmVar {ident = id}, args) then
       match mapLookup id inferIds with Some ids then
-        match mapLookup ids.runId solutions with Some paramMap then
-          let params =
-            map
-              (lam idTy.
-                match idTy with (id, ty) in
-                TmVar {ident = id, ty = ty, info = infoTy ty, frozen = false})
-              (mapBindings paramMap) in
-          appSeq_
-            (nvar_ ids.runId)
-            (snoc params (appSeq_ (nvar_ id) args))
-        else app
+        app_ (nvar_ ids.runId) (appSeq_ (nvar_ id) args)
       else app
     else app
   | t -> smap_Expr_Expr (replaceInferApplication solutions inferIds) t

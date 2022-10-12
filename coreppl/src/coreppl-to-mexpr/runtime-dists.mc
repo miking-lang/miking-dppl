@@ -1,32 +1,66 @@
 -- Runtime support for first-class distributions in coreppl-to-mexpr compiler.
 
+include "runtime-dists-base.mc"
+include "bpf/dist.mc"
+include "importance/dist.mc"
+
 include "math.mc"
 include "seq.mc"
 include "ext/dist-ext.mc"
 
-type Dist a = { sample: () -> a, logObserve: a -> Float }
+lang RuntimeDist = RuntimeDistBase + ImportanceRuntimeDist + BPFRuntimeDist
+  syn Dist a =
+  | DistGamma {shape : Float, scale : Float}
+  | DistExponential {rate : Float}
+  | DistPoisson {lambda : Float}
+  | DistBinomial {n : Int, p : Float}
+  | DistBernoulli {p : Float}
+  | DistBeta {a : Float, b : Float}
+  | DistGaussian {mu : Float, sigma : Float}
+  | DistMultinomial {n : Int, p : [Float]}
+  | DistCategorical {p : [Float]}
+  | DistDirichlet {a : [Float]}
+  | DistUniform {a : Float, b : Float}
 
-let distGamma : Float -> Float -> Dist Float = lam shape. lam scale.
-  { sample = lam. gammaSample shape scale, logObserve = gammaLogPdf shape scale }
-let distExponential : Float -> Dist Float = lam rate.
-  { sample = lam. exponentialSample rate, logObserve = exponentialLogPdf rate }
-let distPoisson : Float -> Dist Int = lam lambda.
-  { sample = lam. poissonSample lambda, logObserve = poissonLogPmf lambda }
-let distBinomial : Int -> Float -> Dist Int = lam n. lam p.
-  { sample = lam. binomialSample p n, logObserve = binomialLogPmf p n }
-let distBernoulli : Float -> Dist Bool = lam p.
-  { sample = lam. bernoulliSample p, logObserve = bernoulliLogPmf p }
-let distBeta : Float -> Float -> Dist Float = lam a. lam b.
-  { sample = lam. betaSample a b, logObserve = betaLogPdf a b }
-let distGaussian : Float -> Float -> Dist Float = lam mu. lam sigma.
-  { sample = lam. gaussianSample mu sigma, logObserve = gaussianLogPdf mu sigma }
-let distMultinomial : Int -> [Float] -> Dist [Int] = lam n. lam p.
-  { sample = lam. multinomialSample p n,
-    logObserve = lam o.
-      if eqi n (foldl1 addi o) then multinomialLogPmf p o else negf (inf) }
-let distCategorical: [Float] -> Dist Int = lam p.
-  { sample = lam. categoricalSample p, logObserve = categoricalLogPmf p }
-let distDirichlet: [Float] -> Dist [Float] = lam a.
-  { sample = lam. dirichletSample a, logObserve = dirichletLogPdf a }
-let distUniform: Float -> Float -> Dist Float = lam a. lam b.
-  { sample = lam. uniformContinuousSample a b, logObserve = uniformContinuousLogPdf a b }
+  sem sample =
+  | DistGamma t -> lam. unsafeCoerce (gammaSample t.shape t.scale)
+  | DistExponential t -> lam. unsafeCoerce (exponentialSample t.rate)
+  | DistPoisson t -> lam. unsafeCoerce (poissonSample t.lambda)
+  | DistBinomial t -> lam. unsafeCoerce (binomialSample t.p t.n)
+  | DistBernoulli t -> lam. unsafeCoerce (bernoulliSample t.p)
+  | DistBeta t -> lam. unsafeCoerce (betaSample t.a t.b)
+  | DistGaussian t -> lam. unsafeCoerce (gaussianSample t.mu t.sigma)
+  | DistMultinomial t -> lam. unsafeCoerce (multinomialSample t.p t.n)
+  | DistCategorical t -> lam. unsafeCoerce (categoricalSample t.p)
+  | DistDirichlet t -> lam. unsafeCoerce (dirichletSample t.a)
+  | DistUniform t -> lam. unsafeCoerce (uniformContinuousSample t.a t.b)
+
+  sem logObserve =
+  | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
+  | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
+  | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
+  | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
+  | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
+  | DistBeta t -> unsafeCoerce (betaLogPdf t.a t.b)
+  | DistGaussian t -> unsafeCoerce (gaussianLogPdf t.mu t.sigma)
+  | DistMultinomial t ->
+    unsafeCoerce (lam o.
+      if eqi t.n (foldl1 addi o) then multinomialLogPmf t.p o
+      else negf inf)
+  | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
+  | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
+  | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
+
+  sem printRes printFun =
+  | DistGamma _
+  | DistExponential _
+  | DistPoisson _
+  | DistBinomial _
+  | DistBernoulli _
+  | DistBeta _
+  | DistGaussian _
+  | DistMultinomial _
+  | DistCategorical _
+  | DistDirichlet _
+  | DistUniform _ -> error "printRes is not implemented for default distributions"
+end
