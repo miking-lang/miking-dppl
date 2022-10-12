@@ -12,6 +12,6 @@ lang BPFRuntimeDist = RuntimeDistBase
 
   sem printRes printFun =
   | DistBPF t ->
-    printLn (float2string (normConstant t.weights)) -- ;
-    -- printSamplesOption printFun t.weights t.samples
+    printLn (float2string (normConstant t.weights));
+    printSamples printFun t.weights t.samples
 end
