@@ -36,23 +36,25 @@ let performInference = lam options: Options. lam ast.
       else error "Return type cannot be printed"
     in
 
-    -- Combine the runtimes with the main AST and eliminate duplicate
-    -- definitions due to files having common dependencies.
-    let mainAst = bindall_ [
-      ulet_ "printFun" (app_ (var_ "printRes") tyPrintFun),
-      app_ (var_ "printFun") (app_ (var_ "run") (nvar_ modelId))] in
+    -- Combine the runtime ASTs to one AST, and eliminate duplicate definitions
+    -- due to runtimes having common dependencies.
     match combineRuntimes options runtimes with (runtimes, runtimeAst, symEnv) in
 
+    -- Produce the main AST, which in this case just prints the result, and
+    -- combine it with the runtime AST using its symbolization environment.
+    let mainAst = bindall_ [
+      ulet_ "printFun" (app_ (var_ "RuntimeDist_printRes") tyPrintFun),
+      app_ (var_ "printFun") (app_ (var_ "run") (nvar_ modelId))] in
     let mainAst = symbolizeExpr symEnv mainAst in
-    let ast = bind_ runtimeAst mainAst in
+    let mainAst = bind_ runtimeAst mainAst in
 
     -- Treat the input AST as the (only) input model.
     let modelRepr = {ast = ast, method = inferMethod, params = []} in
-    let modelAsts = mapFromSeq nameCmp [(modelId, modelRepr)] in
+    let models = mapFromSeq nameCmp [(modelId, modelRepr)] in
 
     -- Compile the ast with the chosen inference algorithm (handled in
     -- coreppl-to-mexpr/compile.mc)
-    let ast = mexprCompile options runtimes ast modelAsts in
+    let ast = mexprCompile options runtimes mainAst models in
 
     buildMExpr options ast
 

@@ -29,4 +29,4 @@ let run : all a. (State -> a) -> Dist a = lam model.
   let states = createList particles (lam. ref weightInit) in
   let res = mapReverse model states in
   DistImportance { weights = mapReverse deref states
-                 , samples = reverse (mapReverse unwrapOpt res) }
+                 , samples = res }
