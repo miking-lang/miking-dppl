@@ -81,8 +81,8 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
     (mapInsert inferId t.method acc, inferBinding)
   | t -> smapAccumL_Expr_Expr (bindInferExpressionsH runtimes) acc t
 
-  -- Extracts an AST consisting of the model of all infers using the same
-  -- inference method, and the expressions these depend on.
+  -- Extracts an AST consisting of the model whose binding has the provided
+  -- inference ID.
   sem extractInferAst : Name -> Expr -> Expr
   sem extractInferAst inferId =
   | ast ->
@@ -96,6 +96,23 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   | TmLet t ->
     if nameEq t.ident inferId then bodyWithoutLambdas t.body
     else TmLet {t with inexpr = inlineInferBinding inferId t.inexpr}
+  | TmRecLets t ->
+    recursive let findInferBinding = lam bindings.
+      match bindings with [bind] ++ bindings then
+        if nameEq bind.ident inferId then Some bind
+        else findInferBinding bindings
+      else None ()
+    in
+    let removeInferBinding = lam bindings.
+      filter (lam bind. not (nameEq bind.ident inferId)) bindings
+    in
+    match findInferBinding t.bindings with Some bind then
+      -- Inline the body of the infer binding and place it after the recursive
+      -- let-expression.
+      let inexpr = bodyWithoutLambdas bind.body in
+      TmRecLets {t with bindings = removeInferBinding t.bindings,
+                        inexpr = inexpr}
+    else TmRecLets {t with inexpr = inlineInferBinding inferId t.inexpr}
   | t -> smap_Expr_Expr (inlineInferBinding inferId) t
 
   sem bodyWithoutLambdas : Expr -> Expr
@@ -118,6 +135,13 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   | TmLet t ->
     if mapMem t.ident inferIds then removeInferBindings inferIds t.inexpr
     else TmLet {t with inexpr = removeInferBindings inferIds t.inexpr}
+  | TmRecLets t ->
+    let filterBinding = lam bind.
+      if mapMem bind.ident inferIds then None ()
+      else Some bind
+    in
+    TmRecLets {t with bindings = filterOption (map filterBinding t.bindings),
+                      inexpr = removeInferBindings inferIds t.inexpr}
   | t -> smap_Expr_Expr (removeInferBindings inferIds) t
 
   -- Replaces the application of the infer binding with a call to the run
@@ -125,18 +149,18 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   sem replaceInferApplication : Map Name (Map Name Type) -> Map Name RuntimeEntry
                               -> Expr -> Expr
   sem replaceInferApplication solutions inferIds =
-  | app & (TmApp t) ->
-    let collectAppArgs = lam app.
+  | e & (TmVar _ | TmApp _) ->
+    let collectAppArgs = lam e.
       recursive let work = lam acc. lam e.
         match e with TmApp t then work (cons t.rhs acc) t.lhs
         else (e, acc)
-      in work [] app
+      in work [] e
     in
-    match collectAppArgs app with (TmVar {ident = id}, args) then
+    match collectAppArgs e with (TmVar {ident = id}, args) then
       match mapLookup id inferIds with Some ids then
         app_ (nvar_ ids.runId) (appSeq_ (nvar_ id) args)
-      else app
-    else app
+      else e
+    else e
   | t -> smap_Expr_Expr (replaceInferApplication solutions inferIds) t
 end
 
