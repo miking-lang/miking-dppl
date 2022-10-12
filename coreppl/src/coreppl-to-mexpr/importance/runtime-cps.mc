@@ -51,11 +51,10 @@ let filterNone : all a. ([Float], [a]) -> Ref Float -> Option a -> ([Float], [a]
   else acc
 
 -- General inference algorithm for importance sampling
-let run : all a. (State -> Stop a) -> Dist a = lam model.
+let run : all a. Unknown -> (State -> Stop a) -> Dist a = lam config. lam model.
   use RuntimeDist in
 
-  -- Read number of runs and sweeps
-  match monteCarloArgs () with (particles, sweeps) in
+  let particles = config.particles in
 
   let weightInit: Float = 0. in
   let states = createList particles (lam. ref weightInit) in

@@ -18,10 +18,11 @@ let resample = lam k. Resample {k = k}
 let updateWeight = lam weight. lam state.
   modref state (addf (deref state) weight)
 
-let run : all a. (State -> Checkpoint a) -> Dist a = lam model.
+let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
+  lam config. lam model.
   use RuntimeDist in
 
-  match monteCarloArgs () with (particleCount, _) in
+  let particleCount = config.particles in
   let logParticleCount = log (int2float particleCount) in
 
   let state = ref 0. in

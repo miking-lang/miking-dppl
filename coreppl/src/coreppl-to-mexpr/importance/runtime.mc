@@ -19,11 +19,10 @@ let unwrapOpt : all a. Option a -> a = lam o.
   else error "Could not unwrap option"
 
 -- General inference algorithm for importance sampling
-let run : all a. (State -> a) -> Dist a = lam model.
+let run : all a. Unknown -> (State -> a) -> Dist a = lam config. lam model.
   use RuntimeDist in
 
-  -- Read number of runs
-  match monteCarloArgs () with (particles, _) in
+  let particles = config.particles in
 
   let weightInit = 0.0 in
   let states = createList particles (lam. ref weightInit) in

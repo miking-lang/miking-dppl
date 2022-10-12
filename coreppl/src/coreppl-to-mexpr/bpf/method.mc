@@ -13,11 +13,16 @@ lang BPFMethod = InferMethodBase + MExprAst
 
   sem inferMethodFromCon info bindings =
   | "BPF" ->
-    BPF {particles = getRequiredField info bindings "particles"}
+    match getFields info bindings ["particles"] with [particles] in
+    BPF {particles = particles}
 
   sem inferMethodFromOptions options =
   | "mexpr-bpf" ->
     BPF {particles = int_ options.particles}
+
+  sem inferMethodConfig info =
+  | BPF {particles = particles} ->
+    fieldsToRecord info [("particles", particles)]
 
   sem typeCheckInferMethod env info =
   | BPF {particles = particles} ->

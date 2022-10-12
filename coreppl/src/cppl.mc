@@ -40,6 +40,8 @@ lang CPPLLang = MExprAst + DPPLExtract + MExprCompile + TransformDist
       performInference options ast
 
   -- Used to transform away distributions in the main AST.
+  -- TODO(larshum, 2022-10-12): Replace the types with references to the 'Dist'
+  -- type defined in the runtime instead of removing them.
   sem transformDistributions : Expr -> Expr
   sem transformDistributions =
   | t ->
@@ -88,7 +90,6 @@ match result with ParseOK r then
     -- Read and parse the file
     let filename = head r.strings in
     let ast = parseMCorePPLFile filename in
-    let ast = symbolize ast in
 
     -- Load the runtimes used in the provided AST, and collect identifiers of
     -- common methods within the runtimes.

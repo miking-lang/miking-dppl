@@ -98,7 +98,9 @@ let parseMCorePPLFile = lam filename.
                   with keepUtests = false}
                   with keywords = pplKeywords}
                   with allowFree = true} in
-  makeKeywords [] (parseMCoreFile config filename)
+  let ast = parseMCoreFile config filename in
+  let ast = symbolizeAllowFree ast in
+  makeKeywords [] ast
 
 
 let parseMCorePPLFileNoDeadCodeElimination = lam filename.
@@ -109,10 +111,12 @@ let parseMCorePPLFileNoDeadCodeElimination = lam filename.
                    with keywords = pplKeywords}
                    with eliminateDeadCode = false}
                    with allowFree = true} in
-  makeKeywords [] (parseMCoreFile config filename)
+  let ast = parseMCoreFile config filename in
+  let ast = symbolizeAllowFree ast in
+  makeKeywords [] ast
 
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
-  makeKeywords [] (parseMExprStringKeywords pplKeywords cpplstr)
-
+  let ast = parseMExprStringKeywords pplKeywords cpplstr in
+  makeKeywords [] ast

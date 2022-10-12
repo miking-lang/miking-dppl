@@ -36,20 +36,20 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
           else error "Lambda lifting was not correctly applied to infer")
         data in
 
-    -- Map the infer identifiers to the representation of their corresponding
-    -- runtime.
-    let inferIds : Map Name RuntimeEntry =
+    -- Construct a map from the identifier of an infer binding to its
+    -- corresponding inference method configuration and a runtime entry.
+    let inferData : Map Name (InferMethod, RuntimeEntry) =
       mapMapWithKey
         (lam. lam model.
           match model with {method = method} in
           match mapLookup method runtimes with Some entry then
-            entry
+            (method, entry)
           else
             match pprintInferMethod 0 pprintEnvEmpty method with (_, method) in
             error (join ["Missing runtime for method (", method, ")"]))
         modelAsts in
 
-    (removeInfers solutions inferIds ast, modelAsts)
+    (removeInfers solutions inferData ast, modelAsts)
 
   -- Binds all infer expressions in the provided AST to a variable, such that
   -- an expression 'infer e' is rewritten as 'let t = e in t'. The result is
@@ -120,35 +120,37 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   | TmLam t -> bodyWithoutLambdas t.body
   | t -> t
 
-  sem removeInfers : Map Name (Map Name Type) -> Map Name RuntimeEntry -> Expr -> Expr
-  sem removeInfers solutions inferIds =
+  sem removeInfers : Map Name (Map Name Type)
+                  -> Map Name (InferMethod, RuntimeEntry) -> Expr -> Expr
+  sem removeInfers solutions inferData =
   | ast ->
-    let ast = removeInferBindings inferIds ast in
-    replaceInferApplication solutions inferIds ast
+    let ast = removeInferBindings inferData ast in
+    replaceInferApplication solutions inferData ast
 
   -- Removes bindings of identifiers that correspond to extracted infer
   -- expressions from the AST. Note that lambda lifting ensures all bindings
   -- are on top-level, so we do not need to consider the bodies of
   -- let-expressions.
-  sem removeInferBindings : Map Name RuntimeEntry -> Expr -> Expr
-  sem removeInferBindings inferIds =
+  sem removeInferBindings : Map Name (InferMethod, RuntimeEntry) -> Expr -> Expr
+  sem removeInferBindings inferData =
   | TmLet t ->
-    if mapMem t.ident inferIds then removeInferBindings inferIds t.inexpr
-    else TmLet {t with inexpr = removeInferBindings inferIds t.inexpr}
+    if mapMem t.ident inferData then removeInferBindings inferData t.inexpr
+    else TmLet {t with inexpr = removeInferBindings inferData t.inexpr}
   | TmRecLets t ->
     let filterBinding = lam bind.
-      if mapMem bind.ident inferIds then None ()
+      if mapMem bind.ident inferData then None ()
       else Some bind
     in
     TmRecLets {t with bindings = filterOption (map filterBinding t.bindings),
-                      inexpr = removeInferBindings inferIds t.inexpr}
-  | t -> smap_Expr_Expr (removeInferBindings inferIds) t
+                      inexpr = removeInferBindings inferData t.inexpr}
+  | t -> smap_Expr_Expr (removeInferBindings inferData) t
 
   -- Replaces the application of the infer binding with a call to the run
   -- function of the corresponding runtime.
-  sem replaceInferApplication : Map Name (Map Name Type) -> Map Name RuntimeEntry
+  sem replaceInferApplication : Map Name (Map Name Type)
+                              -> Map Name (InferMethod, RuntimeEntry)
                               -> Expr -> Expr
-  sem replaceInferApplication solutions inferIds =
+  sem replaceInferApplication solutions inferData =
   | e & (TmVar _ | TmApp _) ->
     let collectAppArgs = lam e.
       recursive let work = lam acc. lam e.
@@ -156,12 +158,14 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
         else (e, acc)
       in work [] e
     in
-    match collectAppArgs e with (TmVar {ident = id}, args) then
-      match mapLookup id inferIds with Some ids then
-        app_ (nvar_ ids.runId) (appSeq_ (nvar_ id) args)
+    match collectAppArgs e with (TmVar {ident = id, info = info}, args) then
+      match mapLookup id inferData with Some (method, entry) then
+        appf2_ (nvar_ entry.runId)
+          (inferMethodConfig info method)
+          (appSeq_ (nvar_ id) args)
       else e
     else e
-  | t -> smap_Expr_Expr (replaceInferApplication solutions inferIds) t
+  | t -> smap_Expr_Expr (replaceInferApplication solutions inferData) t
 end
 
 let extractInfer = use DPPLExtract in extractInfer

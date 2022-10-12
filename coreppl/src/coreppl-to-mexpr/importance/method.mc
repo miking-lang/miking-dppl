@@ -13,11 +13,16 @@ lang ImportanceSamplingMethod = InferMethodBase + MExprAst
 
   sem inferMethodFromCon info bindings =
   | methodStr & "Importance" ->
-    Importance {particles = getRequiredField info bindings "particles"}
+    match getFields info bindings ["particles"] with [particles] in
+    Importance {particles = particles}
 
   sem inferMethodFromOptions options =
   | "mexpr-importance" ->
     Importance {particles = int_ options.particles}
+
+  sem inferMethodConfig info =
+  | Importance {particles = particles} ->
+    fieldsToRecord info [("particles", particles)]
 
   sem typeCheckInferMethod env info =
   | Importance {particles = particles} ->
