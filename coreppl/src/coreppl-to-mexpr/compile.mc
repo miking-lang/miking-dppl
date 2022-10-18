@@ -65,10 +65,14 @@ lang MExprCompile =
     -- models are used.
     let prog = insertModels modelMap mainAst in
 
-    if options.debugMExprCompile then
+    -- TODO(larshum, 2022-10-18): If the returned AST has been type-checked, we
+    -- get an error when re-parsing the pretty-printed program with mi, because
+    -- recursive-let expressions have missing TyAlls. Therefore we return the
+    -- non type-checked version for now.
+    (if options.debugMExprCompile then
       -- Check that the combined program type checks
-      typeCheck prog
-    else ();
+      typeCheck prog; ()
+    else ());
 
     -- Return complete program
     prog

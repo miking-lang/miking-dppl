@@ -8,7 +8,7 @@ include "math.mc"
 include "seq.mc"
 include "ext/dist-ext.mc"
 
-lang RuntimeDist = RuntimeDistBase + ImportanceRuntimeDist + BPFRuntimeDist
+lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   syn Dist a =
   | DistGamma {shape : Float, scale : Float}
   | DistExponential {rate : Float}
@@ -22,19 +22,21 @@ lang RuntimeDist = RuntimeDistBase + ImportanceRuntimeDist + BPFRuntimeDist
   | DistDirichlet {a : [Float]}
   | DistUniform {a : Float, b : Float}
 
+  sem sample : all a. Dist a -> a
   sem sample =
-  | DistGamma t -> lam. unsafeCoerce (gammaSample t.shape t.scale)
-  | DistExponential t -> lam. unsafeCoerce (exponentialSample t.rate)
-  | DistPoisson t -> lam. unsafeCoerce (poissonSample t.lambda)
-  | DistBinomial t -> lam. unsafeCoerce (binomialSample t.p t.n)
-  | DistBernoulli t -> lam. unsafeCoerce (bernoulliSample t.p)
-  | DistBeta t -> lam. unsafeCoerce (betaSample t.a t.b)
-  | DistGaussian t -> lam. unsafeCoerce (gaussianSample t.mu t.sigma)
-  | DistMultinomial t -> lam. unsafeCoerce (multinomialSample t.p t.n)
-  | DistCategorical t -> lam. unsafeCoerce (categoricalSample t.p)
-  | DistDirichlet t -> lam. unsafeCoerce (dirichletSample t.a)
-  | DistUniform t -> lam. unsafeCoerce (uniformContinuousSample t.a t.b)
+  | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
+  | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
+  | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
+  | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
+  | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
+  | DistBeta t -> unsafeCoerce (betaSample t.a t.b)
+  | DistGaussian t -> unsafeCoerce (gaussianSample t.mu t.sigma)
+  | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
+  | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
+  | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
+  | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
 
+  sem logObserve : all a. Dist a -> a -> Float
   sem logObserve =
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
   | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
@@ -51,6 +53,7 @@ lang RuntimeDist = RuntimeDistBase + ImportanceRuntimeDist + BPFRuntimeDist
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
 
+  sem printRes : all a. (a -> String) -> Dist a -> String
   sem printRes printFun =
   | DistGamma _
   | DistExponential _
@@ -64,3 +67,16 @@ lang RuntimeDist = RuntimeDistBase + ImportanceRuntimeDist + BPFRuntimeDist
   | DistDirichlet _
   | DistUniform _ -> error "printRes is not implemented for default distributions"
 end
+
+-- We include the below definitions to produce non-mangled functions.
+let sample : all a. Dist a -> a =
+  use RuntimeDist in
+  sample
+
+let logObserve : all a. Dist a -> a -> Float =
+  use RuntimeDist in
+  logObserve
+
+let printRes : all a. (a -> String) -> Dist a -> () =
+  use RuntimeDist in
+  printRes

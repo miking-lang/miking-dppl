@@ -17,7 +17,9 @@ include "build.mc"
 include "mexpr/ast.mc"
 include "mexpr/duplicate-code-elimination.mc"
 
-lang CPPLLang = MExprAst + DPPLExtract + MExprCompile + TransformDist
+lang CPPLLang =
+  MExprAst + DPPLExtract + MExprCompile + TransformDist + MExprEliminateDuplicateCode
+
   -- Compiles such that the entire program is considered the model.
   sem compileSingle : Options -> Expr -> ()
   sem compileSingle options =
@@ -104,14 +106,18 @@ match result with ParseOK r then
       -- Combine the runtime ASTs to one AST and eliminate duplicate
       -- definitions due to files having common dependencies. The result is an
       -- updated map of runtime entries, a combined runtime AST and a
-      -- symbolization environment. The latter is used for symbolizing the
-      -- main AST,
-      match combineRuntimes options runtimes with (runtimes, runtimeAst, symEnv) in
+      -- symbolization environment.
+      match combineRuntimes options runtimes with (runtimes, runtimeAst, runtimeSymEnv) in
 
       -- Transform distributions in the main AST to use MExpr code, before
-      -- symbolizing it.
+      -- symbolizing it using the symbolization environment produced by the
+      -- runtime.
+      -- TODO(larshum, 2022-10-18): Restrict the contents of the runtime
+      -- symbolization environment to only include the identifiers we want to
+      -- expose, such as 'Dist', 'sample' and 'logObserve'. Currently, it
+      -- includes all top-level identifiers.
       let ast = transformDistributions ast in
-      let ast = symbolizeExpr symEnv ast in
+      let ast = symbolizeExpr runtimeSymEnv ast in
 
       -- Extract the infer expressions to separate ASTs, one per inference
       -- method. The result consists of the provided AST, updated such that
@@ -121,8 +127,9 @@ match result with ParseOK r then
       match extractInfer runtimes ast with (ast, modelAsts) in
 
       -- Combine the main AST with the runtime AST, after extracting the
-      -- models.
+      -- models, and eliminate duplicate code due to common dependencies.
       let ast = bind_ runtimeAst ast in
+      let ast = eliminateDuplicateCode ast in
 
       -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
       -- with errors. This code is unreachable unless the inferred models are
