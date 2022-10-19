@@ -261,6 +261,9 @@ lang MExprPPLLightweightMCMC =
         "Error in mcmc-lightweight compile: Problem with TmConDef in exprTyTransform"
     in smap_Expr_Type rec t
 
+  -- Don't touch the types of externals
+  | TmExt r -> TmExt {r with inexpr = exprTyTransform r.inexpr}
+
   sem tyTransform =
   | t -> smap_Type_Type tyTransform t
   -- Function type a -> b becomes [Int] -> a -> b
