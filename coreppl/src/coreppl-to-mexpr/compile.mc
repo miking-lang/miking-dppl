@@ -206,16 +206,13 @@ in
 -- Simple tests that ensure compilation throws no errors
 utest compileModel "mexpr-importance" simple
 with () using lam. lam. true in
--- NOTE(larshum, 2022-10-05): Not implemented yet
---utest compileModel "mexpr-mcmc-naive" simple
---with () using lam. lam. true in
---utest compileModel "mexpr-mcmc-trace" simple
---with () using lam. lam. true in
---utest compileModel "mexpr-mcmc-aligned" simple
---with () using lam. lam. true in
---utest compileModel "mexpr-mcmc-lightweight" simple
---with () using lam. lam. true in
---utest compileModel "mexpr-smc" simple
---with () using lam. lam. true in
+utest compileModel "mexpr-mcmc-naive" simple
+with () using lam. lam. true in
+utest compileModel "mexpr-mcmc-trace" simple
+with () using lam. lam. true in
+utest compileModel "mexpr-mcmc-aligned" simple
+with () using lam. lam. true in
+utest compileModel "mexpr-mcmc-lightweight" simple
+with () using lam. lam. true in
 
 ()

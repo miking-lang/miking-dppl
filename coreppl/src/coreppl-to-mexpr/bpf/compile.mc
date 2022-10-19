@@ -20,7 +20,7 @@ lang MExprPPLBPF =
   | TmLet { ident = ident, body = TmResample {},
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in
-    let k = 
+    let k =
       if tailCall t then
         match k with Some k then
           k

@@ -15,7 +15,7 @@ include "smc/compile.mc"
 
 lang LoadRuntime =
   DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode
-  
+
   type RuntimeEntry = {
     -- An AST representation of the runtime
     ast : Expr,

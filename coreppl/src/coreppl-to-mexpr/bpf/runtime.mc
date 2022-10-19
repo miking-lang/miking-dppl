@@ -18,6 +18,7 @@ let resample = lam k. Resample {k = k}
 let updateWeight = lam weight. lam state.
   modref state (addf (deref state) weight)
 
+-- WARNING: As of now, particles must be started and propagated sequentially (they cannot run in parallel)!
 let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
   lam config. lam model.
   use RuntimeDist in
@@ -65,4 +66,4 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
   in
   let particles = createList particleCount start in
   match runRec particles with (weights, samples) in
-  DistBPF {weights = weights, samples = samples}
+  DistEmpirical {weights = weights, samples = samples}

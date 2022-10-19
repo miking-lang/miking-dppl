@@ -1,5 +1,6 @@
 include "dppl-arg.mc"
 include "mexpr/mexpr.mc"
+include "sys.mc"
 
 let buildMExpr = lam options. lam ast.
   -- Output the compiled mexpr code

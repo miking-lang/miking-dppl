@@ -27,14 +27,14 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist
   sem transformProb =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
+    i (appf2_ (i (var_ "RuntimeDist_sample")) t.dist (i unit_))
 
   -- NOTE(dlunde,2022-05-16): Note that we cannot stop immediately when the
   -- weight becomes 0 (-inf in log-space). For this, we need CPS, PCFGs, or
   -- maybe some type of exception handler.
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+    let weight = i (appf2_ (i (var_ "RuntimeDist_logObserve")) t.dist t.value) in
     i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
   | TmWeight t ->
     let i = withInfo t.info in

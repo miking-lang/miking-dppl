@@ -34,7 +34,7 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
   -- maybe some type of exception handler.
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+    let weight = i (appf2_ (i (var_ "RuntimeDist_logObserve")) t.dist t.value) in
     i (appf1_ (i (var_ "updateWeight")) weight)
   | TmWeight t ->
     let i = withInfo t.info in

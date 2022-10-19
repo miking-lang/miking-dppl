@@ -65,7 +65,8 @@ lang MExprPPLLightweightMCMC =
 
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+
+    let weight = i (appf2_ (i (var_ "RuntimeDist_logObserve")) t.dist t.value) in
     i (appf1_ (i (var_ "updateWeight")) weight)
 
   | TmWeight t ->
@@ -233,7 +234,7 @@ lang MExprPPLLightweightMCMC =
     let i = withInfo r.info in
     let dist = transform externalIds r.dist in
     let value = transform externalIds r.value in
-    let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
+    let weight = i (appf2_ (i (var_ "RuntimeDist_logObserve")) dist value) in
     i (appf1_ (i (var_ "updateWeight")) weight)
 
   | TmWeight r ->

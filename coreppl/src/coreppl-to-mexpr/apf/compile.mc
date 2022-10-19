@@ -20,7 +20,7 @@ lang MExprPPLAPF =
   | TmLet { ident = ident, body = TmResample {},
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in
-    let k = 
+    let k =
       if tailCall t then
         match k with Some k then
           k
@@ -34,11 +34,11 @@ lang MExprPPLAPF =
   sem transformProb =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
+    i (appf2_ (i (var_ "RuntimeDist_sample")) t.dist (i unit_))
   | TmResample t -> errorSingle [t.info] "Impossible"
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+    let weight = i (appf2_ (i (var_ "RuntimeDist_logObserve")) t.dist t.value) in
     i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
   | TmWeight t ->
     let i = withInfo t.info in

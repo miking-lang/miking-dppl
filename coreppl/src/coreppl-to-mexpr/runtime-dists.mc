@@ -1,14 +1,21 @@
 -- Runtime support for first-class distributions in coreppl-to-mexpr compiler.
 
-include "runtime-dists-base.mc"
-include "bpf/dist.mc"
-include "importance/dist.mc"
-
 include "math.mc"
 include "seq.mc"
 include "ext/dist-ext.mc"
 
 lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
+
+  -- Base interface
+  syn Dist a =
+
+  sem sample : all a. Dist a -> a
+
+  sem logObserve : all a. Dist a -> (a -> Float)
+
+  sem printRes : all a. (a -> String) -> Dist a -> ()
+
+  -- Elementary distributions
   syn Dist a =
   | DistGamma {shape : Float, scale : Float}
   | DistExponential {rate : Float}
@@ -66,6 +73,37 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   | DistCategorical _
   | DistDirichlet _
   | DistUniform _ -> error "printRes is not implemented for default distributions"
+
+  -- Empirical distribution
+  syn Dist a =
+  | DistEmpirical {
+      weights : [Float],
+      samples : [a],
+
+      -- NOTE(dlunde,2022-10-18): Monte Carlo inference often returns futher
+      -- information (not only the samples). This field is used for this.
+      extra : EmpiricalExtra
+    }
+
+  -- TODO(dlunde,2022-10-18): Would probably be nice to specify this per
+  -- inference algorithm (in their respective subfolders)
+  syn EmpiricalExtra =
+  | EmpNorm { normConst: Float }
+  | EmpMCMC { acceptRate: Float }
+
+  sem sample =
+  -- TODO(dlunde,2022-10-18): Implement this
+  | DistEmpirical t -> error "Sampling not supported for empirical distribution"
+
+  sem logObserve =
+  -- TODO(dlunde,2022-10-18): Implement this
+  | DistEmpirical t -> error "Log observe not supported for empirical distribution"
+
+  sem printRes printFun =
+  | DistEmpirical t ->
+    printLn (float2string (normConstant t.weights));
+    printSamples printFun t.weights t.samples
+
 end
 
 -- We include the below definitions to produce non-mangled functions.

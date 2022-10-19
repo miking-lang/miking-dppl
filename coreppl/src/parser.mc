@@ -12,8 +12,9 @@ include "coreppl-to-mexpr/bpf/method.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
-  ProbabilisticGraphicalModel + KeywordMaker + ImportanceSamplingMethod +
-  BPFMethod
+  ProbabilisticGraphicalModel + KeywordMaker +
+
+  ImportanceSamplingMethod + BPFMethod + APFMethod
 
   -- Interprets the argument to infer which encodes the inference method and
   -- its configuration parameters.

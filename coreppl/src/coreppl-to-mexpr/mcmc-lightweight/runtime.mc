@@ -71,14 +71,15 @@ let incrTraceLength: () -> () = lam.
 
 -- Procedure at samples
 let sample: all a. Address -> Dist a -> a = lam addr. lam dist.
+  use RuntimeDist in
   let oldDb: Map Address (Option Any) = deref state.oldDb in
-  let newSample: () -> Any = lam. unsafeCoerce (dist.sample ()) in
+  let newSample: () -> Any = lam. unsafeCoerce (sample dist) in
 
   let sample: Any =
     match mapLookup addr oldDb with Some (Some sample) then
       let s: a = unsafeCoerce sample in
       modref state.weightReused
-        (addf (deref state.weightReused) (dist.logObserve s));
+        (addf (deref state.weightReused) (logObserve dist s));
       sample
     else newSample ()
   in
@@ -113,10 +114,10 @@ let modDb: () -> () = lam.
     ) db)
 
 -- General inference algorithm for aligned MCMC
-let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFun.
 
-  -- Read number of runs and sweeps
-  match monteCarloArgs () with (runs, sweeps) in
+let run : all a. Unknown -> (State -> a) -> Dist a =
+  lam config. lam model.
+  use RuntimeDist in
 
   recursive let mh : [Float] -> [Float] -> [a] -> Int -> ([Float], [a]) =
     lam weights. lam weightsReused. lam samples. lam iter.
@@ -165,38 +166,34 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
             iter
   in
 
-  -- Repeat once for each sweep
-  repeat (lam.
+  let runs = config.iterations in
 
-      -- Used to keep track of acceptance ratio
-      mcmcAcceptInit runs;
+  -- Used to keep track of acceptance ratio
+  mcmcAcceptInit runs;
 
-      -- First sample
-      let sample = model state in
-      -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
-      -- computing the MH acceptance ratio?
-      let weight = deref state.weight in
-      let weightReused = deref state.weightReused in
-      let iter = subi runs 1 in
+  -- First sample
+  let sample = model state in
+  -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
+  -- computing the MH acceptance ratio?
+  let weight = deref state.weight in
+  let weightReused = deref state.weightReused in
+  let iter = subi runs 1 in
 
-      -- Sample the rest
-      let res = mh [weight] [weightReused] [sample] iter in
+  -- Sample the rest
+  let res = mh [weight] [weightReused] [sample] iter in
 
-      -- Reverse to get the correct order
-      let res = match res with (weights,samples) in
-        (reverse weights, reverse samples)
-      in
+  -- Reverse to get the correct order
+  let res = match res with (weights,samples) in
+    (reverse weights, reverse samples)
+  in
 
-      -- Print
-      printResFun res
-
-    ) sweeps
-
-let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
-  -- NOTE(dlunde,2022-05-23): I don't think printing the norm. const makes
-  -- sense for MCMC
-  -- printLn (float2string (normConstant res.0));
   (if compileOptions.printAcceptanceRate then
     printLn (float2string (mcmcAcceptRate ()))
   else ());
-  printSamples printFun (mapReverse (lam. 0.) res.0) res.1
+
+  -- Return
+  DistEmpirical {
+    weights = weights,
+    samples = samples,
+    extra = EmpMCMC { acceptRate = mcmcAcceptRate () }
+  }
