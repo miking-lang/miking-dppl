@@ -184,6 +184,8 @@ mexpr
 
 let parse = parseMExprPPLString in
 
+-- TODO(dlunde,2022-10-19): We should also add a `simpleInfer` test that uses
+-- the new infer keyword.
 let simple = parse "
 let t : () -> Float = lam.
   let x = assume (Beta 10.0 5.0) in
