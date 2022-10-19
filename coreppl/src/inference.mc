@@ -2,6 +2,7 @@
 include "string.mc"
 include "seq.mc"
 include "sys.mc"
+include "mexpr/duplicate-code-elimination.mc"
 
 include "coreppl-to-rootppl/rootppl.mc"
 include "coreppl-to-rootppl/compile.mc"
@@ -10,7 +11,7 @@ include "coreppl-to-mexpr/compile.mc"
 include "build.mc"
 include "dppl-arg.mc"
 
-lang InferenceLang = DPPLParser + LoadRuntime
+lang InferenceLang = DPPLParser + LoadRuntime + MExprEliminateDuplicateCode
 end
 
 let performInference = lam options: Options. lam ast.
@@ -55,6 +56,10 @@ let performInference = lam options: Options. lam ast.
     -- Compile the ast with the chosen inference algorithm (handled in
     -- coreppl-to-mexpr/compile.mc)
     let ast = mexprCompile options runtimes mainAst models in
+
+    -- Eliminate duplicate code after merging the model AST with the rest of
+    -- the code.
+    let ast = eliminateDuplicateCode ast in
 
     buildMExpr options ast
 
