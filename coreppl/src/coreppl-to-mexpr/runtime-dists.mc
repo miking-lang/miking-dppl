@@ -53,7 +53,7 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
 
-  sem printRes : all a. (a -> String) -> Dist a -> String
+  sem printRes : all a. (a -> String) -> Dist a -> ()
   sem printRes printFun =
   | DistGamma _
   | DistExponential _

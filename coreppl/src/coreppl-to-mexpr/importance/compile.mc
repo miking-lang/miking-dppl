@@ -32,11 +32,11 @@ lang MExprPPLImportance =
   sem transformProb =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (appf2_ (i (var_ "RuntimeDist_sample")) t.dist (i unit_))
+    i (app_ (i (var_ "sample")) t.dist)
 
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (appf2_ (i (var_ "RuntimeDist_logObserve")) t.dist t.value) in
+    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
     i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
   | TmWeight t ->
     let i = withInfo t.info in
@@ -81,13 +81,13 @@ lang MExprPPLImportance =
         else error "Something went wrong with partial CPS transformation"
       else i (nulam_ ident (exprCps env k inexpr))
     in
-    let weight = i (appf2_ (i (var_ "RuntimeDist_logObserve")) dist value) in
+    let weight = i (appf2_ (i (var_ "logObserve")) dist value) in
     i (appf2_ (i (var_ "updateWeight")) weight k)
 
   sem transformProbCps =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (appf2_ (i (var_ "RuntimeDist_sample")) t.dist (i unit_))
+    i (app_ (i (var_ "sample")) t.dist)
   | TmResample t -> withInfo t.info unit_
 
   -- Should already have been removed by CPS!
