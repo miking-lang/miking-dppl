@@ -197,7 +197,10 @@ match use MExprFindSym in findNamesOfStrings ["t"] simple with [Some modelId] in
 
 let truefn = lam. lam. true in
 
-let dummyOptions = default in
+-- TODO(dlunde,2022-10-19): "with debugMExprCompile = true" currently has no
+-- effect. This should be fixed so that we also parse and type check the
+-- runtime files as part of the utests.
+let dummyOptions = {default with debugMExprCompile = true} in
 
 let compileModel = lam methodStr. lam modelAst.
   use MExprCompile in

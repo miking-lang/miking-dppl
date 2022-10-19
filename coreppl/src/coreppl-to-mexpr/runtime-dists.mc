@@ -77,7 +77,7 @@ end
 lang RuntimeDistEmpirical = RuntimeDistBase
   syn Dist a =
   | DistEmpirical {
-      weights : [Float],
+      logWeights : [Float],
       samples : [a],
 
       -- NOTE(dlunde,2022-10-18): Monte Carlo inference often returns futher
@@ -93,17 +93,24 @@ lang RuntimeDistEmpirical = RuntimeDistBase
 
   sem sample =
   | DistEmpirical t ->
-    let i: Int = externalCategoricalSample t.weights in
+    -- TODO(dlunde,2022-10-19): Just taking exp directly could be numerically
+    -- unstable. We want sampling to be efficient, however, so appropriately
+    -- scaling the weights every time we want to sample the distribution is not
+    -- really an option. We should maybe even save the weights as
+    -- non-log-weights to not have to take the exponential of every weight all
+    -- the time.
+    let expWeights = map exp t.logWeights in
+    let i: Int = externalCategoricalSample expWeights in
     unsafeCoerce (get t.samples i)
 
   sem logObserve =
-  -- TODO(dlunde,2022-10-18): Implement this
+  -- TODO(dlunde,2022-10-18): Implement this?
   | DistEmpirical t -> error "Log observe not supported for empirical distribution"
 
   sem printRes printFun =
   | DistEmpirical t ->
-    printLn (float2string (normConstant t.weights));
-    printSamples printFun t.weights t.samples
+    printLn (float2string (normConstant t.logWeights));
+    printSamples printFun t.logWeights t.samples
 end
 
 lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical
