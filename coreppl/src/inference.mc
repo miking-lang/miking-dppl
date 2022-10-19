@@ -3,6 +3,7 @@ include "string.mc"
 include "seq.mc"
 include "sys.mc"
 include "mexpr/duplicate-code-elimination.mc"
+include "mexpr/externals.mc"
 
 include "coreppl-to-rootppl/rootppl.mc"
 include "coreppl-to-rootppl/compile.mc"
@@ -11,7 +12,26 @@ include "coreppl-to-mexpr/compile.mc"
 include "build.mc"
 include "dppl-arg.mc"
 
-lang InferenceLang = DPPLParser + LoadRuntime + MExprEliminateDuplicateCode
+lang InferenceLang =
+  DPPLParser + LoadRuntime + MExprEliminateDuplicateCode + Externals
+
+	sem desymbolizeExternals : Expr -> Expr
+	sem desymbolizeExternals =
+	| prog -> desymbolizeExternalsH (mapEmpty nameCmp) prog
+
+  sem desymbolizeExternalsH : Map Name Name -> Expr -> Expr
+  sem desymbolizeExternalsH env =
+  | TmExt ({ident = ident, inexpr = inexpr} & b) ->
+    let noSymIdent = nameNoSym (nameGetStr ident) in
+    let env =
+      if nameHasSym ident then (mapInsert ident noSymIdent env) else env
+    in
+    TmExt { b with ident = noSymIdent, inexpr = desymbolizeExternalsH env inexpr }
+  | TmVar ({ident = ident} & b) ->
+    let ident =
+      match mapLookup ident env with Some ident then ident else ident in
+    TmVar { b with ident = ident }
+  | prog -> smap_Expr_Expr (desymbolizeExternalsH env) prog
 end
 
 let performInference = lam options: Options. lam ast.
@@ -41,10 +61,20 @@ let performInference = lam options: Options. lam ast.
     -- due to runtimes having common dependencies.
     match combineRuntimes options runtimes with (runtimes, runtimeAst, symEnv) in
 
+    -- Desymbolize externals in case any were symbolized beforehand
+    let ast = desymbolizeExternals ast in
+
+    -- Get external definitions from runtime-AST (input to next step)
+    let externals = getExternalIds runtimeAst in
+
+    -- Remove duplicate external definitions in model (already included in the
+    -- runtime)
+    let ast = removeExternalDefs externals ast in
+
     -- Produce the main AST, which in this case just prints the result, and
     -- combine it with the runtime AST using its symbolization environment.
     let mainAst = bindall_ [
-      ulet_ "printFun" (app_ (var_ "RuntimeDist_printRes") tyPrintFun),
+      ulet_ "printFun" (app_ (var_ "printRes") tyPrintFun),
       app_ (var_ "printFun") (app_ (var_ "run") (nvar_ modelId))] in
     let mainAst = symbolizeExpr symEnv mainAst in
     let mainAst = bind_ runtimeAst mainAst in
@@ -56,10 +86,6 @@ let performInference = lam options: Options. lam ast.
     -- Compile the ast with the chosen inference algorithm (handled in
     -- coreppl-to-mexpr/compile.mc)
     let ast = mexprCompile options runtimes mainAst models in
-
-    -- Eliminate duplicate code after merging the model AST with the rest of
-    -- the code.
-    let ast = eliminateDuplicateCode ast in
 
     buildMExpr options ast
 
