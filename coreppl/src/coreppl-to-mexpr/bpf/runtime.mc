@@ -66,4 +66,8 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
   in
   let particles = createList particleCount start in
   match runRec particles with (weights, samples) in
-  DistEmpirical {weights = weights, samples = samples}
+  DistEmpirical {
+    weights = weights,
+    samples = samples,
+    extra = EmpNorm {normConst = negf 1.0}
+  }

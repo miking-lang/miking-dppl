@@ -36,7 +36,11 @@ lang LoadRuntime =
   sem loadCompiler : Options -> InferMethod -> (String, Expr -> Expr)
   sem loadCompiler options =
   | Importance _ -> compilerImportance options
+  | APF _ -> compilerAPF options
   | BPF _ -> compilerBPF options
+  | LightweightMCMC _ -> compilerLightweightMCMC options
+  | NaiveMCMC _ -> compilerNaiveMCMC options
+  | TraceMCMC _ -> compilerTraceMCMC options
   | _ -> error "Unsupported CorePPL to MExpr inference method"
 
   sem loadRuntimes : Options -> Expr -> Map InferMethod RuntimeEntry

@@ -12,7 +12,7 @@ lang ImportanceSamplingMethod = InferMethodBase + MExprAst
     (env, join ["Importance {particles = ", particles, "}"])
 
   sem inferMethodFromCon info bindings =
-  | methodStr & "Importance" ->
+  | "Importance" ->
     match getFields info bindings ["particles"] with [particles] in
     Importance {particles = particles}
 

@@ -20,7 +20,7 @@ lang LightweightMCMCMethod = InferMethodBase + MExprAst
                 "globalProb =", globalProb, "}"])
 
   sem inferMethodFromCon info bindings =
-  | methodStr & "LightweightMCMC" ->
+  | "LightweightMCMC" ->
     match getFields info bindings ["iterations", "aligned", "globalProb"]
     with [iterations, aligned, globalProb] in
     LightweightMCMC {
@@ -34,7 +34,7 @@ lang LightweightMCMCMethod = InferMethodBase + MExprAst
       -- better name
       iterations = int_ options.particles,
       aligned = bool_ options.align,
-      globalProb = globalProb.mcmcLightweightGlobalProb
+      globalProb = float_ options.mcmcLightweightGlobalProb
     }
 
   sem inferMethodConfig info =
@@ -42,7 +42,7 @@ lang LightweightMCMCMethod = InferMethodBase + MExprAst
     fieldsToRecord info [
       ("iterations", t.iterations),
       ("aligned", t.aligned),
-      ("globalProb", t.globalProb),
+      ("globalProb", t.globalProb)
     ]
 
   sem typeCheckInferMethod env info =

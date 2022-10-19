@@ -4,9 +4,8 @@ include "math.mc"
 include "seq.mc"
 include "ext/dist-ext.mc"
 
-lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
-
-  -- Base interface
+-- Base interface
+lang RuntimeDistBase
   syn Dist a =
 
   sem sample : all a. Dist a -> a
@@ -14,8 +13,10 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   sem logObserve : all a. Dist a -> (a -> Float)
 
   sem printRes : all a. (a -> String) -> Dist a -> ()
+end
 
-  -- Elementary distributions
+-- Elementary distributions
+lang RuntimeDistElementary = RuntimeDistBase
   syn Dist a =
   | DistGamma {shape : Float, scale : Float}
   | DistExponential {rate : Float}
@@ -29,7 +30,6 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   | DistDirichlet {a : [Float]}
   | DistUniform {a : Float, b : Float}
 
-  sem sample : all a. Dist a -> a
   sem sample =
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
   | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
@@ -43,7 +43,6 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
 
-  sem logObserve : all a. Dist a -> a -> Float
   sem logObserve =
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
   | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
@@ -60,7 +59,6 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
 
-  sem printRes : all a. (a -> String) -> Dist a -> ()
   sem printRes printFun =
   | DistGamma _
   | DistExponential _
@@ -73,8 +71,10 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   | DistCategorical _
   | DistDirichlet _
   | DistUniform _ -> error "printRes is not implemented for default distributions"
+end
 
-  -- Empirical distribution
+-- Empirical distribution
+lang RuntimeDistEmpirical = RuntimeDistBase
   syn Dist a =
   | DistEmpirical {
       weights : [Float],
@@ -103,10 +103,13 @@ lang RuntimeDist = ImportanceRuntimeDist + BPFRuntimeDist
   | DistEmpirical t ->
     printLn (float2string (normConstant t.weights));
     printSamples printFun t.weights t.samples
-
 end
 
--- We include the below definitions to produce non-mangled functions.
+lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical
+end
+
+-- We include the below definitions to produce non-mangled functions, which we
+-- can refer to in the runtime handler without hard-coding the mangled prefix.
 let sample : all a. Dist a -> a =
   use RuntimeDist in
   sample

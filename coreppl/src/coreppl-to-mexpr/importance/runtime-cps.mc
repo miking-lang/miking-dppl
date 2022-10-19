@@ -66,5 +66,5 @@ let run : all a. Unknown -> (State -> Stop a) -> Dist a = lam config. lam model.
     samples = reverse resRev,
 
     -- TODO(dlunde,2022-10-19): Properly extract the normalizing constant
-    extra = EmpNorm { normConst = -1 }
+    extra = EmpNorm { normConst = negf 1.0 }
   }

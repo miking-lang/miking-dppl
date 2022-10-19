@@ -20,43 +20,43 @@ lang TransformDist = MExprPPL
   sem transformDist i =
   | DGamma { k = k, theta = theta } ->
     i (conapp_
-        "RuntimeDist_DistGamma"
+        "RuntimeDistElementary_DistGamma"
         (i (urecord_ [("shape", k), ("scale", theta)])))
   | DExponential { rate = rate } ->
     i (conapp_
-        "RuntimeDist_DistExponential"
+        "RuntimeDistElementary_DistExponential"
         (i (urecord_ [("rate", rate)])))
   | DPoisson { lambda = lambda } ->
     i (conapp_
-        "RuntimeDist_DistPoisson"
+        "RuntimeDistElementary_DistPoisson"
         (i (urecord_ [("lambda", lambda)])))
   | DBinomial { n = n, p = p } ->
     i (conapp_
-        "RuntimeDist_DistBinomial"
+        "RuntimeDistElementary_DistBinomial"
         (i (urecord_ [("n", n), ("p", p)])))
   | DBernoulli { p = p } ->
     i (conapp_
-        "RuntimeDist_DistBernoulli"
+        "RuntimeDistElementary_DistBernoulli"
         (i (urecord_ [("p", p)])))
   | DBeta { a = a, b = b } ->
     i (conapp_
-        "RuntimeDist_DistBeta"
+        "RuntimeDistElementary_DistBeta"
         (i (urecord_ [("a", a), ("b", b)])))
   | DGaussian { mu = mu, sigma = sigma } ->
     i (conapp_
-        "RuntimeDist_DistGaussian"
+        "RuntimeDistElementary_DistGaussian"
         (i (urecord_ [("mu", mu), ("sigma", sigma)])))
   | DMultinomial { n = n, p = p } ->
     i (conapp_
-        "RuntimeDist_DistMultinomial"
+        "RuntimeDistElementary_DistMultinomial"
         (i (urecord_ [("n", n), ("p", p)])))
   | DCategorical { p = p } ->
     i (conapp_
-        "RuntimeDist_DistCategorical"
+        "RuntimeDistElementary_DistCategorical"
         (i (urecord_ [("p", p)])))
   | DUniform { a = a, b = b } ->
     i (conapp_
-        "RuntimeDist_DistUniform"
+        "RuntimeDistElementary_DistUniform"
         (i (urecord_ [("a", a), ("b", b)])))
 
   -- We need to remove TyDist after transforming to MExpr dists (the new MExpr

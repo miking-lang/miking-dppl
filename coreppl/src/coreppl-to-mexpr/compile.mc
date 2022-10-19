@@ -195,24 +195,25 @@ t {}
 " in
 match use MExprFindSym in findNamesOfStrings ["t"] simple with [Some modelId] in
 
-let compileModel = lam method. lam modelAst.
+let truefn = lam. lam. true in
+
+let dummyOptions = default in
+
+let compileModel = lam methodStr. lam modelAst.
   use MExprCompile in
-  let method = parseInferMethod method in
-  match loadCompiler default method with (runtime, compile) in
-  let entry = loadRuntimeEntry method runtime in
-  compileModel compile entry modelId (modelAst, [])
+  let inferMethod = inferMethodFromOptions dummyOptions methodStr in
+  match loadCompiler dummyOptions inferMethod with (runtime, compile) in
+  let entry = loadRuntimeEntry inferMethod runtime in
+  let modelRepr = {ast = modelAst, method = inferMethod, params = []} in
+  compileModel compile entry modelId modelRepr
 in
 
--- Simple tests that ensure compilation throws no errors
-utest compileModel "mexpr-importance" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-naive" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-trace" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-aligned" simple
-with () using lam. lam. true in
-utest compileModel "mexpr-mcmc-lightweight" simple
-with () using lam. lam. true in
+-- Simple tests that ensure compilation of a simple model throws no errors
+utest compileModel "mexpr-importance" simple with () using truefn in
+utest compileModel "mexpr-apf" simple with () using truefn in
+utest compileModel "mexpr-bpf" simple with () using truefn in
+utest compileModel "mexpr-mcmc-naive" simple with () using truefn in
+utest compileModel "mexpr-mcmc-trace" simple with () using truefn in
+utest compileModel "mexpr-mcmc-lightweight" simple with () using truefn in
 
 ()

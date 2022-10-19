@@ -4,7 +4,7 @@ include "../../infer-method.mc"
 lang TraceMCMCMethod = InferMethodBase + MExprAst
   syn InferMethod =
   | TraceMCMC {
-      iterations : Expr, -- Type Int
+      iterations : Expr -- Type Int
     }
 
   sem pprintInferMethod indent env =
@@ -20,7 +20,7 @@ lang TraceMCMCMethod = InferMethodBase + MExprAst
     TraceMCMC { iterations = iterations }
 
   sem inferMethodFromOptions options =
-  | "mexpr-mcmc-lightweight" ->
+  | "mexpr-mcmc-trace" ->
     TraceMCMC {
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name
@@ -39,6 +39,6 @@ lang TraceMCMCMethod = InferMethodBase + MExprAst
     let iterations = typeCheckExpr env t.iterations in
     unify [info, infoTm iterations] env (tyTm iterations) int;
     TraceMCMC {
-      iterations = iterations,
+      iterations = iterations
     }
 end

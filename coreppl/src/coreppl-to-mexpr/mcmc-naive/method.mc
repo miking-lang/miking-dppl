@@ -4,7 +4,7 @@ include "../../infer-method.mc"
 lang NaiveMCMCMethod = InferMethodBase + MExprAst
   syn InferMethod =
   | NaiveMCMC {
-      iterations : Expr, -- Type Int
+      iterations : Expr -- Type Int
     }
 
   sem pprintInferMethod indent env =
@@ -14,13 +14,13 @@ lang NaiveMCMCMethod = InferMethodBase + MExprAst
     (env, join ["NaiveMCMC {iterations = ", iterations, "}"])
 
   sem inferMethodFromCon info bindings =
-  | methodStr & "NaiveMCMC" ->
+  | "NaiveMCMC" ->
     match getFields info bindings ["iterations"]
     with [iterations] in
     NaiveMCMC { iterations = iterations }
 
   sem inferMethodFromOptions options =
-  | "mexpr-mcmc-lightweight" ->
+  | "mexpr-mcmc-naive" ->
     NaiveMCMC {
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name
@@ -39,6 +39,6 @@ lang NaiveMCMCMethod = InferMethodBase + MExprAst
     let iterations = typeCheckExpr env t.iterations in
     unify [info, infoTm iterations] env (tyTm iterations) int;
     NaiveMCMC {
-      iterations = iterations,
+      iterations = iterations
     }
 end

@@ -7,14 +7,19 @@ include "pgm.mc"
 include "inference-common/smc.mc"
 
 -- Include the inference method definition definition files.
-include "coreppl-to-mexpr/importance/method.mc"
+include "coreppl-to-mexpr/apf/method.mc"
 include "coreppl-to-mexpr/bpf/method.mc"
+include "coreppl-to-mexpr/importance/method.mc"
+include "coreppl-to-mexpr/mcmc-lightweight/method.mc"
+include "coreppl-to-mexpr/mcmc-naive/method.mc"
+include "coreppl-to-mexpr/mcmc-trace/method.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
   ProbabilisticGraphicalModel + KeywordMaker +
 
-  ImportanceSamplingMethod + BPFMethod + APFMethod
+  APFMethod + BPFMethod + ImportanceSamplingMethod + LightweightMCMCMethod +
+  NaiveMCMCMethod + TraceMCMCMethod
 
   -- Interprets the argument to infer which encodes the inference method and
   -- its configuration parameters.
