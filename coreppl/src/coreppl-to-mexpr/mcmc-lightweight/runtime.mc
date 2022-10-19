@@ -193,7 +193,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
 
   -- Return
   DistEmpirical {
-    logWeights = weights,
-    samples = samples,
+    logWeights = res.0,
+    samples = res.1,
     extra = EmpMCMC { acceptRate = mcmcAcceptRate () }
   }
