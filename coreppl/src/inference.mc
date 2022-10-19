@@ -73,9 +73,11 @@ let performInference = lam options: Options. lam ast.
 
     -- Produce the main AST, which in this case just prints the result, and
     -- combine it with the runtime AST using its symbolization environment.
+    let inferConfig = inferMethodConfig (NoInfo ()) inferMethod in
     let mainAst = bindall_ [
       ulet_ "printFun" (app_ (var_ "printRes") tyPrintFun),
-      app_ (var_ "printFun") (app_ (var_ "run") (nvar_ modelId))] in
+      app_ (var_ "printFun")
+        (appf2_ (var_ "run") inferConfig (nvar_ modelId))] in
     let mainAst = symbolizeExpr symEnv mainAst in
     let mainAst = bind_ runtimeAst mainAst in
 
