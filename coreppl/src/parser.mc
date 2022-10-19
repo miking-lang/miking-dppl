@@ -18,8 +18,8 @@ lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
   ProbabilisticGraphicalModel + KeywordMaker +
 
-  APFMethod + BPFMethod + ImportanceSamplingMethod + LightweightMCMCMethod +
-  NaiveMCMCMethod + TraceMCMCMethod
+  ImportanceSamplingMethod + BPFMethod + APFMethod +
+  LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod
 
   -- Interprets the argument to infer which encodes the inference method and
   -- its configuration parameters.

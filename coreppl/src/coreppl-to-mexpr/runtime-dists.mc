@@ -92,8 +92,9 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   | EmpMCMC { acceptRate: Float }
 
   sem sample =
-  -- TODO(dlunde,2022-10-18): Implement this
-  | DistEmpirical t -> error "Sampling not supported for empirical distribution"
+  | DistEmpirical t ->
+    let i: Int = externalCategoricalSample t.weights in
+    unsafeCoerce (get t.samples i)
 
   sem logObserve =
   -- TODO(dlunde,2022-10-18): Implement this
