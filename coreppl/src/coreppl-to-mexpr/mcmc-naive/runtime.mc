@@ -61,8 +61,6 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
   else ());
 
   -- Return
-  DistEmpirical {
-    logWeights = weights,
-    samples = samples,
-    extra = EmpMCMC { acceptRate = mcmcAcceptRate () }
-  }
+  constructDistEmpirical samples weights
+    -- TODO(dlunde,2022-10-20): Add normconst
+    (EmpMCMC { acceptRate = mcmcAcceptRate () })

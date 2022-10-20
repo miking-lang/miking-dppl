@@ -61,10 +61,6 @@ let run : all a. Unknown -> (State -> Stop a) -> Dist a = lam config. lam model.
   let res = mapReverse (importance model) states in
 
   match foldl2 filterNone ([], []) states res with (weightsRev, resRev) in
-  DistEmpirical {
-    logWeights = weightsRev,
-    samples = reverse resRev,
-
+  constructDistEmpirical (reverse resRev) weightsRev
     -- TODO(dlunde,2022-10-19): Properly extract the normalizing constant
-    extra = EmpNorm { normConst = negf 1.0 }
-  }
+    (EmpNorm { normConst = negf 1.0 })

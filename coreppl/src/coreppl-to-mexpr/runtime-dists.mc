@@ -77,6 +77,7 @@ end
 lang RuntimeDistEmpirical = RuntimeDistBase
   syn Dist a =
   | DistEmpirical {
+      weights : [Float],
       logWeights : [Float],
       samples : [a],
 
@@ -91,6 +92,30 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   | EmpNorm { normConst: Float }
   | EmpMCMC { acceptRate: Float }
 
+  -- DistEmpirical should always be created via this function
+  sem constructDistEmpirical samples logWeights =
+  | extra ->
+
+    -- Compute LSE
+    let maxLogWeight = foldl (lam acc. lam lw. if geqf lw acc then lw else acc)
+                         (negf inf) logWeights in
+    let lse =
+      addf maxLogWeight
+        (log (foldl (lam acc. lam lw. exp (subf lw maxLogWeight)) 0. logWeights))
+    in
+
+    -- Normalize logweights (so that the new LSE = 0)
+    let logWeights = map (lam lw. subf lw lse) logWeights in
+
+    -- Compute standard weights
+    let weights = map exp logWeights in
+
+    DistEmpirical {
+      weights = weights, logWeights = logWeights,
+      samples = samples, extra = extra
+    }
+
+
   sem sample =
   | DistEmpirical t ->
     -- TODO(dlunde,2022-10-19): Just taking exp directly could be numerically
@@ -99,8 +124,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     -- really an option. We should maybe even save the weights as
     -- non-log-weights to not have to take the exponential of every weight all
     -- the time.
-    let expWeights = map exp t.logWeights in
-    let i: Int = externalCategoricalSample expWeights in
+    let i: Int = externalCategoricalSample t.weights in
     unsafeCoerce (get t.samples i)
 
   sem logObserve =

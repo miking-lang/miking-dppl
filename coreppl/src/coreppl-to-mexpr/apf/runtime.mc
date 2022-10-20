@@ -93,8 +93,7 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
   in
   let particles = start () in
   match runRec particles with (weights,samples) in
-  DistEmpirical {
-    logWeights = weights,
-    samples = samples,
-    extra = EmpNorm {normConst = negf 1.0}
-  }
+  -- Return
+  constructDistEmpirical samples weights
+    -- TODO(dlunde,2022-10-20): Add normconst
+    (EmpNorm {normConst = negf 1.0})

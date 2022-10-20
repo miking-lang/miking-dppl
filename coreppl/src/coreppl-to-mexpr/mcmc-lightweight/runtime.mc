@@ -192,8 +192,5 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
   else ());
 
   -- Return
-  DistEmpirical {
-    logWeights = res.0,
-    samples = res.1,
-    extra = EmpMCMC { acceptRate = mcmcAcceptRate () }
-  }
+  constructDistEmpirical res.1 res.0
+    (EmpMCMC { acceptRate = mcmcAcceptRate () })

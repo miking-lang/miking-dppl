@@ -122,9 +122,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
       printLn (float2string (mcmcAcceptRate ()))
     else ());
 
-    -- Return
-    DistEmpirical {
-      logWeights = weights,
-      samples = samples,
-      extra = EmpMCMC { acceptRate = mcmcAcceptRate () }
-    }
+  -- Return
+  constructDistEmpirical samples weights
+    -- TODO(dlunde,2022-10-20): Add normconst
+    (EmpMCMC { acceptRate = mcmcAcceptRate () })
