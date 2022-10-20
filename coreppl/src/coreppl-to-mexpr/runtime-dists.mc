@@ -96,13 +96,15 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   sem constructDistEmpirical samples logWeights =
   | extra ->
 
-    let logWeights = [0.,1.,2.] in
-
     -- print "INPUT: "; printLn (strJoin "," (map float2string logWeights));
 
     -- Compute LSE
     let maxLogWeight = foldl (lam acc. lam lw. if geqf lw acc then lw else acc)
                          (negf inf) logWeights in
+    (if eqf maxLogWeight (negf inf)
+     then error "All weights are -inf when constructing empirical distribution"
+     else ());
+
     -- print "MAX: "; printLn (float2string maxLogWeight);
     let lse =
       addf maxLogWeight
@@ -142,7 +144,8 @@ lang RuntimeDistEmpirical = RuntimeDistBase
 
   sem printRes printFun =
   | DistEmpirical t ->
-    printLn (float2string (normConstant t.logWeights));
+    -- NOTE(dlunde,2022-10-20): Not something we want to do in general
+    -- printLn (float2string (normConstant t.logWeights));
     printSamples printFun t.logWeights t.samples
 end
 

@@ -87,7 +87,7 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
     if forAll (lam p. match p.checkpoint with End _ then true else false) particles then
       let propagations = (foldl (lam acc. lam p. (addi acc p.propagations)) 0 particles) in
       let corrFactor = subf logParticleCount (log (int2float (subi propagations 1))) in
-      unzip (mapReverse (lam p. (addf p.weight corrFactor, match p.checkpoint with End a in Some a)) particles)
+      unzip (mapReverse (lam p. (addf p.weight corrFactor, match p.checkpoint with End a in a)) particles)
     else
       runRec (propagate particles)
   in

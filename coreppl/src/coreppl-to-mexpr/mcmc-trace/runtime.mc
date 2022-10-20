@@ -47,6 +47,7 @@ let updateWeight = lam v.
   modref weight (addf (deref weight) v)
 
 let sampleMH: all a. Dist a -> a = lam dist.
+  use RuntimeDist in
   let traceLength = deref state.traceLength in
   let cut = deref state.cut in
   let sample: Any =
@@ -55,7 +56,7 @@ let sampleMH: all a. Dist a -> a = lam dist.
       let sample = head r in
       modref state.oldTrace (tail r);
       sample
-    else unsafeCoerce (dist.sample ())
+    else unsafeCoerce (sample dist)
   in
   modref state.traceLength (addi (deref state.traceLength) 1);
   modref state.trace (cons sample (deref state.trace));
@@ -123,6 +124,6 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
     else ());
 
   -- Return
-  constructDistEmpirical samples weights
+  constructDistEmpirical res.1 res.0
     -- TODO(dlunde,2022-10-20): Add normconst
     (EmpMCMC { acceptRate = mcmcAcceptRate () })
