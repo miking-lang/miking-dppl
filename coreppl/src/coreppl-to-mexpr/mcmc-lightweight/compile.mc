@@ -23,8 +23,8 @@ lang MExprPPLLightweightMCMC =
   -- NOTE: Assumes must be transformed based on alignment (some samples are
   -- just drawn directly, and some are reused)
 
-  sem compileAligned : Options -> Expr -> Expr
-  sem compileAligned options =
+  sem compileAligned : Options -> Set String -> Expr -> Expr
+  sem compileAligned options externals =
   | t ->
 
     -- Read in native versions of higher-order constants and replace usage of
@@ -80,8 +80,8 @@ lang MExprPPLLightweightMCMC =
   ------------------------------------------
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
   ------------------------------------------
-  sem compile : Options -> Expr -> Expr
-  sem compile options =
+  sem compile : Options -> Set String -> Expr -> Expr
+  sem compile options externals =
   | t ->
 
     -- Read in native versions of higher-order constants and replace usage of
@@ -94,7 +94,7 @@ lang MExprPPLLightweightMCMC =
     in
 
     -- Addressing transform combined with CorePPL->MExpr transform
-    let t = transform (setEmpty nameCmp) t in
+    let t = transform externals t in
 
     -- Type addressing transform
     let t = mapPre_Expr_Expr exprTyTransform t in
@@ -132,7 +132,7 @@ lang MExprPPLLightweightMCMC =
         i (nlam_ addrName (tyseq_ tyint_) (i (nulam_ v acc)))
       ) inner varNames
 
-  sem transform: Set Name -> Expr -> Expr
+  sem transform: Set String -> Expr -> Expr
   sem transform externalIds =
 
   | t -> smap_Expr_Expr (transform externalIds) t
@@ -151,7 +151,7 @@ lang MExprPPLLightweightMCMC =
       transformConst (constArity r.val) t
 
   | TmExt r & t ->
-    TmExt { r with inexpr = transform (setInsert r.ident externalIds) r.inexpr }
+    TmExt { r with inexpr = transform (setInsert (nameGetStr r.ident) externalIds) r.inexpr }
 
   | TmApp _ & t ->
 
@@ -199,7 +199,7 @@ lang MExprPPLLightweightMCMC =
 
         -- Base case: variables (including external applications)
         else match r.lhs with TmVar { ident = ident } then
-          if setMem ident externalIds
+          if setMem (nameGetStr ident) externalIds
             then (TmApp r, numArgs) else (transformApp (TmApp r), 0)
 
         -- Base case: constant application

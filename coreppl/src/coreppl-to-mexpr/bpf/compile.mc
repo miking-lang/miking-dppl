@@ -45,8 +45,8 @@ lang MExprPPLBPF =
     i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
   | t -> t
 
-  sem compile: Options -> Expr -> Expr
-  sem compile options =
+  sem compile: Options -> Set String -> Expr -> Expr
+  sem compile options externals =
   | t ->
     -- ANF transformation (required for CPS)
     let t = normalizeTerm t in
