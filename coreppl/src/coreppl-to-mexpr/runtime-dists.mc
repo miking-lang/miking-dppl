@@ -98,26 +98,26 @@ lang RuntimeDistEmpirical = RuntimeDistBase
 
     let logWeights = [0.,1.,2.] in
 
-    print "INPUT: "; printLn (strJoin "," (map float2string logWeights));
+    -- print "INPUT: "; printLn (strJoin "," (map float2string logWeights));
 
     -- Compute LSE
     let maxLogWeight = foldl (lam acc. lam lw. if geqf lw acc then lw else acc)
                          (negf inf) logWeights in
-    print "MAX: "; printLn (float2string maxLogWeight);
+    -- print "MAX: "; printLn (float2string maxLogWeight);
     let lse =
       addf maxLogWeight
         (log (foldl (lam acc. lam lw. addf acc (exp (subf lw maxLogWeight)))
                 0. logWeights))
     in
-    print "LSE: "; printLn (float2string lse);
+    -- print "LSE: "; printLn (float2string lse);
 
     -- Normalize logweights (so that the new LSE = 0)
     let logWeights = map (lam lw. subf lw lse) logWeights in
-    print "LOG-NORMALIZED: "; printLn (strJoin "," (map float2string logWeights));
+    -- print "LOG-NORMALIZED: "; printLn (strJoin "," (map float2string logWeights));
 
     -- Compute standard weights
     let weights = map exp logWeights in
-    print "NORMALIZED: "; printLn (strJoin "," (map float2string weights));
+    -- print "NORMALIZED: "; printLn (strJoin "," (map float2string weights));
 
     DistEmpirical {
       weights = weights, logWeights = logWeights,
