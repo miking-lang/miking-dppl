@@ -4,42 +4,23 @@
 -- File main.mc is the main file of the Miking DPPL project
 
 
-include "option.mc"
-include "string.mc"
 include "parser.mc"
 include "transformation.mc"
 include "dppl-arg.mc"
 include "extract.mc"
-include "inference.mc"
-include "common.mc"
 include "build.mc"
+include "coreppl-to-mexpr/compile.mc"
 
+include "option.mc"
+include "string.mc"
+include "common.mc"
 include "mexpr/ast.mc"
 include "mexpr/duplicate-code-elimination.mc"
+include "mexpr/utils.mc"
 
 lang CPPLLang =
-  MExprAst + DPPLExtract + MExprCompile + TransformDist + MExprEliminateDuplicateCode
-
-  -- Compiles such that the entire program is considered the model.
-  sem compileSingle : Options -> Expr -> ()
-  sem compileSingle options =
-  | ast ->
-    -- Transform the model, if the flag is set
-    let ast =
-      if options.transform then
-        transform ast
-      else ast in
-
-    -- Optionally print the model
-    (if options.printModel then
-      printLn (mexprPPLToString ast)
-    else ());
-
-    -- Exit before inference, if the flag is set
-    if options.exitBefore then ()
-    else
-      -- Perform the actual inference
-      performInference options ast
+  MExprAst + DPPLExtract + MExprCompile + TransformDist +
+  MExprEliminateDuplicateCode + MExprSubstitute
 
   -- Used to transform away distributions in the main AST.
   -- TODO(larshum, 2022-10-12): Replace the types with references to the 'Dist'
@@ -98,51 +79,104 @@ match result with ParseOK r then
     let runtimes = loadRuntimes options ast in
 
     -- If no runtimes are found, it means there are no uses of 'infer' in the
-    -- program. In this case, we compile using the old behaviour.
-    if mapIsEmpty runtimes then
-      compileSingle options ast
-    else
+    -- program. In this case, the entire AST is the model code, so we transform
+    -- it as:
+    --
+    -- let d = infer <method> (lam. <model>) in
+    -- printRes <pp> d
+    --
+    -- where <method> = inference method chosen according to options
+    --       <model> = the entire AST
+    --       <pp> = the pretty-print function used to print the result
+    match
+      if mapIsEmpty runtimes then
+        let inferMethod = inferMethodFromOptions options options.method in
 
-      -- Combine the runtime ASTs to one AST and eliminate duplicate
-      -- definitions due to files having common dependencies. The result is an
-      -- updated map of runtime entries, a combined runtime AST and a
-      -- symbolization environment.
-      match combineRuntimes options runtimes with (runtimes, runtimeAst, runtimeSymEnv) in
+        let resTy = tyTm (typeCheck ast) in
+        let tyPrintFun =
+          match resTy with TyInt _ then   (var_ "int2string")
+          else match resTy with TyFloat _ then uconst_ (CFloat2string ())
+          else match resTy with TyBool _ then (var_ "bool2string")
+          else match resTy with TySeq { ty = TyChar _ } then (ulam_ "x" (var_ "x"))
+          else error "Return type cannot be printed"
+        in
 
-      -- Transform distributions in the main AST to use MExpr code, before
-      -- symbolizing it using the symbolization environment produced by the
-      -- runtime.
-      -- TODO(larshum, 2022-10-18): Restrict the contents of the runtime
-      -- symbolization environment to only include the identifiers we want to
-      -- expose, such as 'Dist', 'sample' and 'logObserve'. Currently, it
-      -- includes all top-level identifiers.
-      let ast = transformDistributions ast in
-      let ast = symbolizeExpr runtimeSymEnv ast in
+        let distId = nameSym "d" in
+        let info = infoTy resTy in
+        let infer = TmInfer {
+          method = inferMethod,
+          model = TmLam {
+            ident = nameNoSym "",
+            tyIdent = TyRecord {fields = mapEmpty cmpSID, info = info},
+            body = ast, ty = TyUnknown {info = info}, info = info
+          },
+          ty = TyUnknown {info = info}, info = info
+        } in
+        let ast =
+          bind_
+            (nulet_ distId infer)
+            (appf2_ (var_ "printRes") tyPrintFun (nvar_ distId))
+        in
 
-      -- Extract the infer expressions to separate ASTs, one per inference
-      -- method. The result consists of the provided AST, updated such that
-      -- each infer is replaced with a call to the 'run' function provided by
-      -- the chosen runtime. It also consists of one AST per inference method
-      -- used in the program.
-      match extractInfer runtimes ast with (ast, modelAsts) in
+        match loadCompiler options inferMethod with (runtime, _) in
 
-      -- Combine the main AST with the runtime AST, after extracting the
-      -- models, and eliminate duplicate code due to common dependencies.
-      let ast = bind_ runtimeAst ast in
-      let ast = eliminateDuplicateCode ast in
+        let runtimes = mapFromSeq cmpInferMethod
+          [(inferMethod, loadRuntimeEntry inferMethod runtime)] in
 
-      -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
-      -- with errors. This code is unreachable unless the inferred models are
-      -- also used outside of infers, which is an error.
-      -- TODO(larshum, 2022-10-07): Detect such errors statically.
-      let ast = replaceDpplKeywords ast in
+        (runtimes, ast)
+      else (runtimes, ast)
+    with (runtimes, ast) in
 
-      -- Process the model ASTs and insert them in the original AST.
-      let ast = mexprCompile options runtimes ast modelAsts in
+    -- Combine the runtime ASTs to one AST and eliminate duplicate
+    -- definitions due to files having common dependencies. The result is an
+    -- updated map of runtime entries, a combined runtime AST and a
+    -- symbolization environment.
+    match combineRuntimes options runtimes with (runtimes, runtimeAst, runtimeSymEnv) in
 
-      -- Exit before producing the output files, if the flag is set
-      if options.exitBefore then exit 0
-      else buildMExpr options ast
+    -- Transform distributions in the main AST to use MExpr code, before
+    -- symbolizing it using the symbolization environment produced by the
+    -- runtime.
+    -- TODO(larshum, 2022-10-18): Restrict the contents of the runtime
+    -- symbolization environment to only include the identifiers we want to
+    -- expose, such as 'Dist', 'sample' and 'logObserve'. Currently, it
+    -- includes all top-level identifiers.
+    let ast = transformDistributions ast in
+    let ast = symbolizeExpr runtimeSymEnv ast in
+
+    -- Extract the infer expressions to separate ASTs, one per inference
+    -- method. The result consists of the provided AST, updated such that
+    -- each infer is replaced with a call to the 'run' function provided by
+    -- the chosen runtime. It also consists of one AST per inference method
+    -- used in the program.
+    match extractInfer runtimes ast with (ast, modelAsts) in
+
+    -- Combine the main AST with the runtime AST, after extracting the
+    -- models, and eliminate duplicate code due to common dependencies.
+    let ast = bind_ runtimeAst ast in
+    match eliminateDuplicateCodeWithSummary ast with (replaced, ast) in
+
+    -- Apply the replacements performed by the duplicate code elimination on
+    -- the model ASTs.
+    let modelAsts =
+      mapMapWithKey
+        (lam. lam modelEntry.
+          let modelAst = substituteIdentifiers replaced modelEntry.ast in
+          {modelEntry with ast = modelAst})
+        modelAsts
+    in
+
+    -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
+    -- with errors. This code is unreachable unless the inferred models are
+    -- also used outside of infers, which is an error.
+    -- TODO(larshum, 2022-10-07): Detect such errors statically.
+    let ast = replaceDpplKeywords ast in
+
+    -- Compile the model ASTs and insert them in the original AST.
+    let ast = mexprCompile options runtimes ast modelAsts in
+
+    -- Exit before producing the output files, if the flag is set
+    if options.exitBefore then exit 0
+    else buildMExpr options ast
 else
   -- Error in Argument parsing
   argPrintError result;

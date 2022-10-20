@@ -20,24 +20,6 @@ lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation
 
-  sem desymbolizeExternals : Expr -> Expr
-  sem desymbolizeExternals =
-  | prog -> desymbolizeExternalsH (mapEmpty nameCmp) prog
-
-  sem desymbolizeExternalsH : Map Name Name -> Expr -> Expr
-  sem desymbolizeExternalsH env =
-  | TmExt ({ident = ident, inexpr = inexpr} & b) ->
-    let noSymIdent = nameNoSym (nameGetStr ident) in
-    let env =
-      if nameHasSym ident then (mapInsert ident noSymIdent env) else env
-    in
-    TmExt { b with ident = noSymIdent, inexpr = desymbolizeExternalsH env inexpr }
-  | TmVar ({ident = ident} & b) ->
-    let ident =
-      match mapLookup ident env with Some ident then ident else ident in
-    TmVar { b with ident = ident }
-  | prog -> smap_Expr_Expr (desymbolizeExternalsH env) prog
-
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
   | modelAst ->
@@ -64,9 +46,9 @@ lang MExprCompile =
           match model with {ast = ast, method = method, params = params} in
           match loadCompiler options method with (_, compile) in
           match mapLookup method runtimes with Some entry then
-            let compile = compile entry.externals in
+            let compileExt = compile entry.externals in
             let modelAst = transformModelAst options ast in
-            let ast = compileModel compile entry id model in
+            let ast = compileModel compileExt entry id model in
             removeExternalDefs entry.externals ast
           else
             match pprintInferMethod 0 pprintEnvEmpty method with (_, method) in
@@ -104,9 +86,6 @@ lang MExprCompile =
     -- Symbolize model using the symbolization environment from the top-level
     -- of its corresponding runtime as a starting point.
     let prog = symbolizeExpr entry.topSymEnv modelAst in
-
-    -- Desymbolize externals in case any were symbolized beforehand
-    let prog = desymbolizeExternals prog in
 
     -- Apply inference-specific transformation
     let prog = compile prog in
