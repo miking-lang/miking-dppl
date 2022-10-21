@@ -23,6 +23,18 @@ let model = lam alpha. lam beta.
   obsBernoulliTrue x;
   x
 
+let printRes = lam printFun. lam dist.
+  match distEmpiricalSamples dist with (samples, weights) in
+  recursive let work = lam samples. lam weights.
+    match (samples, weights) with ([s] ++ samples, [w] ++ weights) then
+      print (printFun s);
+      print " ";
+      print (float2string w);
+      print "\n";
+      work samples weights
+    else ()
+  in work samples weights
+
 mexpr
 
 let alpha = divf (int2float (randIntU 0 100)) 10.0 in
