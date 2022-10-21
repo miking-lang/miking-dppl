@@ -11,8 +11,6 @@ lang RuntimeDistBase
   sem sample : all a. Dist a -> a
 
   sem logObserve : all a. Dist a -> (a -> Float)
-
-  sem printRes : all a. (a -> String) -> Dist a -> ()
 end
 
 -- Elementary distributions
@@ -58,19 +56,6 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
-
-  sem printRes printFun =
-  | DistGamma _
-  | DistExponential _
-  | DistPoisson _
-  | DistBinomial _
-  | DistBernoulli _
-  | DistBeta _
-  | DistGaussian _
-  | DistMultinomial _
-  | DistCategorical _
-  | DistDirichlet _
-  | DistUniform _ -> error "printRes is not implemented for default distributions"
 end
 
 -- Empirical distribution
@@ -128,7 +113,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
 
   sem empiricalSamples =
   | DistEmpirical t -> (t.samples, t.logWeights)
-  | _ -> []
+  | _ -> ([], [])
 
   sem empiricalNormConst =
   | DistEmpirical t ->
@@ -155,12 +140,6 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   sem logObserve =
   -- TODO(dlunde,2022-10-18): Implement this?
   | DistEmpirical t -> error "Log observe not supported for empirical distribution"
-
-  sem printRes printFun =
-  | DistEmpirical t ->
-    -- NOTE(dlunde,2022-10-20): Not something we want to do in general
-    -- printLn (float2string (normConstant t.logWeights));
-    printSamples printFun t.logWeights t.samples
 end
 
 lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical
@@ -168,6 +147,18 @@ end
 
 -- We include the below definitions to produce non-mangled functions, which we
 -- can refer to in the runtime handler without hard-coding the mangled prefix.
+let distEmpiricalSamples : all a. Dist a -> ([a], [Float]) =
+  use RuntimeDist in
+  empiricalSamples
+
+let distEmpiricalNormConst : all a. Dist a -> Float =
+  use RuntimeDist in
+  empiricalNormConst
+
+let distEmpiricalAcceptRate : all a. Dist a -> Float =
+  use RuntimeDist in
+  empiricalAcceptRate
+
 let sample : all a. Dist a -> a =
   use RuntimeDist in
   sample
@@ -175,7 +166,3 @@ let sample : all a. Dist a -> a =
 let logObserve : all a. Dist a -> a -> Float =
   use RuntimeDist in
   logObserve
-
-let printRes : all a. (a -> String) -> Dist a -> () =
-  use RuntimeDist in
-  printRes

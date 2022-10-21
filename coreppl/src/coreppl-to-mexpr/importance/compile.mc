@@ -142,7 +142,6 @@ lang MExprPPLImportance =
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
-    let t = removeTyDist t in
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProbCps t in

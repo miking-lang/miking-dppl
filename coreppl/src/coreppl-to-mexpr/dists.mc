@@ -11,6 +11,9 @@ lang TransformDist = MExprPPL
   sem transformTmDist: Expr -> Expr
   sem transformTmDist =
   | TmDist t -> transformDist (withInfo t.info) t.dist
+  | TmConst {val = c & (CDistEmpiricalSamples _ | CDistEmpiricalNormConst _ |
+                        CDistEmpiricalAcceptRate _)} ->
+    var_ (getConstStringCode 0 c)
   | t -> t
 
   -- TODO(larshum, 2022-10-12): This code assumes the MLang transformation
@@ -59,16 +62,28 @@ lang TransformDist = MExprPPL
         "RuntimeDistElementary_DistUniform"
         (i (urecord_ [("a", a), ("b", b)])))
 
-  -- We need to remove TyDist after transforming to MExpr dists (the new MExpr
-  -- types will be inferred by the type checker)
-  sem removeTyDist: Expr -> Expr
-  sem removeTyDist =
-  | e ->
-    recursive let stripTyDist: Type -> Type =
-      lam ty.
-        match ty with TyDist t then tyWithInfo t.info tyunknown_
-        else smap_Type_Type stripTyDist ty
-    in
-    let e = smap_Expr_Type stripTyDist e in
-    smap_Expr_Expr removeTyDist e
+  -- We need to replace occurrences of TyDist after transforming to MExpr
+  -- distributions.
+  sem replaceTyDist: Expr -> Expr
+  sem replaceTyDist =
+  | t ->
+    let t = smap_Expr_Type toRuntimeTyDist t in
+    let t = smap_Expr_Pat replaceTyDistPat t in
+    let t = smap_Expr_Expr replaceTyDist t in
+    withType (toRuntimeTyDist (tyTm t)) t
+
+  sem toRuntimeTyDist : Type -> Type
+  sem toRuntimeTyDist =
+  | TyDist t ->
+    TyApp {
+      lhs = TyCon {ident = nameNoSym "Dist", info = t.info},
+      rhs = t.ty,
+      info = t.info}
+  | ty -> smap_Type_Type toRuntimeTyDist ty
+
+  sem replaceTyDistPat : Pat -> Pat
+  sem replaceTyDistPat =
+  | p ->
+    let p = smap_Pat_Pat replaceTyDistPat p in
+    withTypePat (toRuntimeTyDist (tyPat p)) p
 end

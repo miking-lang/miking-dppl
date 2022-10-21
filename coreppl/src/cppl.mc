@@ -22,39 +22,87 @@ lang CPPLLang =
   MExprAst + DPPLExtract + MExprCompile + TransformDist +
   MExprEliminateDuplicateCode + MExprSubstitute
 
-  -- Used to transform away distributions in the main AST.
-  -- TODO(larshum, 2022-10-12): Replace the types with references to the 'Dist'
-  -- type defined in the runtime instead of removing them.
-  sem transformDistributions : Expr -> Expr
-  sem transformDistributions =
-  | t ->
-    let t = mapPre_Expr_Expr transformTmDist t in
-    removeTyDist t
+  -- Generates an AST node for the function used to print a sampled value.
+  -- TODO(larshum, 2022-10-21): Add support for printing int and bool types.
+  -- This is problematic as their pretty-print functions are not built-in, nor
+  -- are they guaranteed to be included in the user code.
+  sem getTypePrintFunction : RuntimeEntry -> Type -> Expr
+  sem getTypePrintFunction runtimeEntry =
+  | TyFloat _ -> uconst_ (CFloat2string ())
+  | TySeq {ty = TyChar _} -> ulam_ "x" (var_ "x")
+  | _ -> error "Return type cannot be printed"
 
-  sem _makeError : Info -> String -> Expr
-  sem _makeError info =
-  | keywordStr ->
-    let msg = join ["Cannot use ", keywordStr, " outside of inferred model"] in
-    let toStr = lam msg.
-      map
-        (lam ch. TmConst {val = CChar {val = ch},
-                          ty = TyChar {info = info}, info = info})
-        msg
+  -- Generates an infer AST node applied on the entire provided AST, using the
+  -- provided inference method.
+  sem inferMethodApplication : InferMethod -> Expr -> Expr
+  sem inferMethodApplication inferMethod =
+  | ast ->
+    let info = infoTm ast in
+    TmInfer {
+      method = inferMethod,
+      model = TmLam {
+        ident = nameNoSym "",
+        tyIdent = TyRecord {fields = mapEmpty cmpSID, info = info},
+        body = ast, ty = TyUnknown {info = info}, info = info
+      },
+      ty = TyUnknown {info = info}, info = info }
+
+  -- Generates code for printing the "result" of an empirical distribution.
+  sem printResCode : () -> Expr
+  sem printResCode =
+  | _ ->
+    let idx = ref 0 in
+    let i = lam.
+      let id = deref idx in
+      modref idx (addi id 1);
+      infoVal "<printRes code>" id 0 0 0
     in
-    TmApp {
-      lhs = TmConst {val = CError (), ty = TyUnknown {info = info}, info = info},
-      rhs = TmSeq {tms = toStr msg,
-                   ty = TySeq {ty = TyChar {info = info}, info = info},
-                   info = info},
-      ty = TyUnknown {info = info}, info = info}
+    let recBody = ulam_ "weights" (ulam_ "samples" (
+      match_ (utuple_ [var_ "weights", var_ "samples"])
+        (ptuple_ [pseqedge_ [pvar_ "w"] "weights" [], pseqedge_ [pvar_ "s"] "samples" []])
+        (bindall_ [
+          -- NOTE(larshum, 2022-10-21): We add custom info here to prevent
+          -- deadcode elimination from considering the bindings as equivalent.
+          withInfo (i ()) (ulet_ "" (print_ (app_ (var_ "printFun") (var_ "s")))),
+          withInfo (i ()) (ulet_ "" (print_ (str_ " "))),
+          withInfo (i ()) (ulet_ "" (print_ (float2string_ (var_ "w")))),
+          withInfo (i ()) (ulet_ "" (print_ (str_ "\n"))),
+          appf2_ (var_ "rec") (var_ "weights") (var_ "samples")])
+        unit_
+    )) in
+    ulam_ "printFun" (ulam_ "dist" (
+      bind_
+        (ureclets_ [("rec", recBody)])
+        (match_ (app_ (uconst_ (CDistEmpiricalSamples ())) (var_ "dist"))
+          (ptuple_ [pvar_ "samples", pvar_ "weights"])
+          (appf2_ (var_ "rec") (var_ "weights") (var_ "samples"))
+          never_)
+    ))
 
-  sem replaceDpplKeywords : Expr -> Expr
-  sem replaceDpplKeywords =
-  | TmAssume t -> _makeError t.info "assume"
-  | TmObserve t -> _makeError t.info "observe"
-  | TmWeight t -> _makeError t.info "weight"
-  | TmResample t -> _makeError t.info "resample"
-  | t -> smap_Expr_Expr replaceDpplKeywords t
+  -- Applies a transformation on full-program models, that allows them to be
+  -- compiled in the same way as programs that use infer.
+  sem programModelTransform : Options -> Expr -> (Map InferMethod RuntimeEntry, Expr)
+  sem programModelTransform options =
+  | ast ->
+      let inferMethod = inferMethodFromOptions options options.method in
+
+      match loadCompiler options inferMethod with (runtime, _) in
+
+      let runtimeEntry = loadRuntimeEntry inferMethod runtime in
+      let runtimes = mapFromSeq cmpInferMethod [(inferMethod, runtimeEntry)] in
+
+      let resTy = tyTm (typeCheck ast) in
+      let tyPrintFun = getTypePrintFunction runtimeEntry resTy in
+
+      let ast = bindall_ [
+        ulet_ "d" (inferMethodApplication inferMethod ast),
+        ulet_ "printRes" (printResCode ()),
+        if options.printSamples then
+          appf2_ (var_ "printRes") tyPrintFun (var_ "d")
+        else unit_
+      ] in
+
+      (runtimes, ast)
 end
 
 mexpr
@@ -83,96 +131,25 @@ match result with ParseOK r then
     -- it as:
     --
     -- let d = infer <method> (lam. <model>) in
+    -- let printRes = ... in
     -- printRes <pp> d
     --
     -- where <method> = inference method chosen according to options
     --       <model> = the entire AST
     --       <pp> = the pretty-print function used to print the result
     match
-      if mapIsEmpty runtimes then
-        let inferMethod = inferMethodFromOptions options options.method in
-
-        let resTy = tyTm (typeCheck ast) in
-        let tyPrintFun =
-          match resTy with TyInt _ then   (var_ "int2string")
-          else match resTy with TyFloat _ then uconst_ (CFloat2string ())
-          else match resTy with TyBool _ then (var_ "bool2string")
-          else match resTy with TySeq { ty = TyChar _ } then (ulam_ "x" (var_ "x"))
-          else error "Return type cannot be printed"
-        in
-
-        let distId = nameSym "d" in
-        let info = infoTy resTy in
-        let infer = TmInfer {
-          method = inferMethod,
-          model = TmLam {
-            ident = nameNoSym "",
-            tyIdent = TyRecord {fields = mapEmpty cmpSID, info = info},
-            body = ast, ty = TyUnknown {info = info}, info = info
-          },
-          ty = TyUnknown {info = info}, info = info
-        } in
-        let ast =
-          bind_
-            (nulet_ distId infer)
-            (appf2_ (var_ "printRes") tyPrintFun (nvar_ distId))
-        in
-
-        match loadCompiler options inferMethod with (runtime, _) in
-
-        let runtimes = mapFromSeq cmpInferMethod
-          [(inferMethod, loadRuntimeEntry inferMethod runtime)] in
-
-        (runtimes, ast)
+      if mapIsEmpty runtimes then programModelTransform options ast
       else (runtimes, ast)
     with (runtimes, ast) in
 
-    -- Combine the runtime ASTs to one AST and eliminate duplicate
+    -- Combine the required runtime ASTs to one AST and eliminate duplicate
     -- definitions due to files having common dependencies. The result is an
     -- updated map of runtime entries, a combined runtime AST and a
     -- symbolization environment.
-    match combineRuntimes options runtimes with (runtimes, runtimeAst, runtimeSymEnv) in
+    let runtimeData = combineRuntimes options runtimes in
 
-    -- Transform distributions in the main AST to use MExpr code, before
-    -- symbolizing it using the symbolization environment produced by the
-    -- runtime.
-    -- TODO(larshum, 2022-10-18): Restrict the contents of the runtime
-    -- symbolization environment to only include the identifiers we want to
-    -- expose, such as 'Dist', 'sample' and 'logObserve'. Currently, it
-    -- includes all top-level identifiers.
-    let ast = transformDistributions ast in
-    let ast = symbolizeExpr runtimeSymEnv ast in
-
-    -- Extract the infer expressions to separate ASTs, one per inference
-    -- method. The result consists of the provided AST, updated such that
-    -- each infer is replaced with a call to the 'run' function provided by
-    -- the chosen runtime. It also consists of one AST per inference method
-    -- used in the program.
-    match extractInfer runtimes ast with (ast, modelAsts) in
-
-    -- Combine the main AST with the runtime AST, after extracting the
-    -- models, and eliminate duplicate code due to common dependencies.
-    let ast = bind_ runtimeAst ast in
-    match eliminateDuplicateCodeWithSummary ast with (replaced, ast) in
-
-    -- Apply the replacements performed by the duplicate code elimination on
-    -- the model ASTs.
-    let modelAsts =
-      mapMapWithKey
-        (lam. lam modelEntry.
-          let modelAst = substituteIdentifiers replaced modelEntry.ast in
-          {modelEntry with ast = modelAst})
-        modelAsts
-    in
-
-    -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
-    -- with errors. This code is unreachable unless the inferred models are
-    -- also used outside of infers, which is an error.
-    -- TODO(larshum, 2022-10-07): Detect such errors statically.
-    let ast = replaceDpplKeywords ast in
-
-    -- Compile the model ASTs and insert them in the original AST.
-    let ast = mexprCompile options runtimes ast modelAsts in
+    -- Compile the CorePPL AST using the provided options and runtime data.
+    let ast = mexprCompile options runtimeData ast in
 
     -- Exit before producing the output files, if the flag is set
     if options.exitBefore then exit 0

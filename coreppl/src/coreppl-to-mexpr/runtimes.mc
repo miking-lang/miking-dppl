@@ -37,6 +37,16 @@ lang LoadRuntime =
     externals : Set String
   }
 
+  type Runtimes = {
+    -- Maps each kind of infer method (ignoring configuration parameters) to
+    -- information about the runtime it uses.
+    entries : Map InferMethod RuntimeEntry,
+
+    -- A combined AST containing the code of all runtimes, after eliminating
+    -- duplicates found in multiple of them.
+    ast : Expr
+  }
+
   sem loadCompiler : Options -> InferMethod -> (String, Set String -> Expr -> Expr)
   sem loadCompiler options =
   | Importance _ -> compilerImportance options
@@ -95,22 +105,7 @@ lang LoadRuntime =
       error (join ["Missing identifier ", missingImpl, " in the runtime of (",
                    methodStr, ")"])
 
-  sem updateSymEnv : Map Name Name -> RuntimeEntry -> RuntimeEntry
-  sem updateSymEnv replacements =
-  | entry ->
-    let replaceId = lam id.
-      optionGetOrElse (lam. id) (mapLookup id replacements)
-    in
-    let replaceInEnv = lam env. mapMapWithKey (lam. lam id. replaceId id) env in
-    let replaceInSymEnv = lam symEnv.
-      {symEnv with varEnv = replaceInEnv symEnv.varEnv,
-                   conEnv = replaceInEnv symEnv.conEnv,
-                   tyConEnv = replaceInEnv symEnv.tyConEnv}
-    in
-    {entry with topSymEnv = replaceInSymEnv entry.topSymEnv}
-
-  sem combineRuntimes : Options -> Map InferMethod RuntimeEntry
-                     -> (Map InferMethod RuntimeEntry, Expr, SymEnv)
+  sem combineRuntimes : Options -> Map InferMethod RuntimeEntry -> Runtimes
   sem combineRuntimes options =
   | runtimes ->
     -- Construct record accessible at runtime
@@ -131,12 +126,27 @@ lang LoadRuntime =
     -- Concatenate the runtime record and the runtime ASTs.
     let ast = bindall_ (join [[pre], runtimeAsts]) in
 
-    -- Eliminate duplicate code in the combined AST, and update the
-    -- symbolization environment of the runtime entries accordingly.
+    -- Eliminate duplicate code in the combined AST of all runtimes, and update
+    -- the symbolization environments of the individual runtimes accordingly.
     match eliminateDuplicateCodeWithSummary ast with (replacements, ast) in
     let runtimes =
       mapMapWithKey
         (lam. lam runtime. updateSymEnv replacements runtime)
         runtimes in
-    (runtimes, ast, addTopNames symEnvEmpty ast)
+
+    {entries = runtimes, ast = ast}
+
+  sem updateSymEnv : Map Name Name -> RuntimeEntry -> RuntimeEntry
+  sem updateSymEnv replacements =
+  | entry ->
+    let replaceId = lam id.
+      optionGetOrElse (lam. id) (mapLookup id replacements)
+    in
+    let replaceInEnv = lam env. mapMapWithKey (lam. lam id. replaceId id) env in
+    let replaceInSymEnv = lam symEnv.
+      {symEnv with varEnv = replaceInEnv symEnv.varEnv,
+                   conEnv = replaceInEnv symEnv.conEnv,
+                   tyConEnv = replaceInEnv symEnv.tyConEnv}
+    in
+    {entry with topSymEnv = replaceInSymEnv entry.topSymEnv}
 end
