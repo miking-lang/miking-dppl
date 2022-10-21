@@ -95,6 +95,13 @@ lang DPPLParser =
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
+
+  sem isTypeKeyword =
+  | TyDist _ -> true
+
+  sem matchTypeKeywordString (info: Info) =
+  | "Dist" -> Some(1, lam lst. TyDist { info = info, ty = get lst 0 })
+
 end
 
 let parseMCorePPLFile = lam filename.
@@ -106,7 +113,7 @@ let parseMCorePPLFile = lam filename.
                   with allowFree = true} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
-  makeKeywords [] ast
+  makeKeywords ast
 
 
 let parseMCorePPLFileNoDeadCodeElimination = lam filename.
@@ -119,10 +126,10 @@ let parseMCorePPLFileNoDeadCodeElimination = lam filename.
                    with allowFree = true} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
-  makeKeywords [] ast
+  makeKeywords ast
 
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
   let ast = parseMExprStringKeywords pplKeywords cpplstr in
-  makeKeywords [] ast
+  makeKeywords ast
