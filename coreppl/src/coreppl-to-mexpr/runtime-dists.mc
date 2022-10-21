@@ -126,6 +126,20 @@ lang RuntimeDistEmpirical = RuntimeDistBase
       samples = samples, extra = extra
     }
 
+  sem empiricalSamples =
+  | DistEmpirical t -> (t.samples, t.logWeights)
+  | _ -> []
+
+  sem empiricalNormConst =
+  | DistEmpirical t ->
+    match t.extra with EmpNorm { normConst = normConst } then normConst else nan
+  | _ -> nan
+
+  sem empiricalAcceptRate =
+  | DistEmpirical t ->
+    match t.extra with EmpMCMC { acceptRate = acceptRate }
+    then acceptRate else nan
+  | _ -> nan
 
   sem sample =
   | DistEmpirical t ->
