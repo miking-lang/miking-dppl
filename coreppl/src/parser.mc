@@ -1,6 +1,7 @@
 include "digraph.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
+include "mexpr/builtin.mc"
 
 include "coreppl.mc"
 include "pgm.mc"
@@ -104,13 +105,21 @@ lang DPPLParser =
 
 end
 
+-- Extend builtins with CorePPL builtins
+let builtin = use MExprPPL in concat
+  [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
+  , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
+  , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
+  ] builtin
+
 let parseMCorePPLFile = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {{{defaultBootParserParseMCoreFileArg
-                  with keepUtests = false}
-                  with keywords = pplKeywords}
-                  with allowFree = true} in
+  let config = {defaultBootParserParseMCoreFileArg with
+                  keepUtests = false,
+                  keywords = pplKeywords,
+                  allowFree = true,
+                  builtin = builtin} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
   makeKeywords ast
@@ -119,11 +128,12 @@ let parseMCorePPLFile = lam filename.
 let parseMCorePPLFileNoDeadCodeElimination = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {{{{defaultBootParserParseMCoreFileArg
-                   with keepUtests = false}
-                   with keywords = pplKeywords}
-                   with eliminateDeadCode = false}
-                   with allowFree = true} in
+  let config = {defaultBootParserParseMCoreFileArg with
+                   keepUtests = false,
+                   keywords = pplKeywords,
+                   eliminateDeadCode = false,
+                   allowFree = true,
+                   builtin = builtin} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
   makeKeywords ast
