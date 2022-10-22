@@ -138,11 +138,26 @@ lang MExprCompile =
           let compileExt = compile entry.externals in
           let ast = transformModelAst options ast in
           let ast = compileModel compileExt entry id model in
-          removeExternalDefs entry.externals ast
+          removeModelDefinitions ast
         else
           match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in
           error (join ["Runtime definition missing for (", methodStr, ")"]))
       models
+
+  -- Removes all definitions of types, constructors, and externals from the
+  -- model AST.
+  --
+  -- NOTE(larshum, 2022-10-22): We assume that the model code does not contain
+  -- local definitions, but that any that are included are due to the
+  -- extraction including all dependencies. Under this assumption, the
+  -- definition is also present in the CorePPL program, and thus we can safely
+  -- remove it from the model code.
+  sem removeModelDefinitions : Expr -> Expr
+  sem removeModelDefinitions =
+  | TmType t -> removeModelDefinitions t.inexpr
+  | TmConDef t -> removeModelDefinitions t.inexpr
+  | TmExt t -> removeModelDefinitions t.inexpr
+  | t -> smap_Expr_Expr removeModelDefinitions t
 
   sem compileModel : (Expr -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
   sem compileModel compile entry modelId =
