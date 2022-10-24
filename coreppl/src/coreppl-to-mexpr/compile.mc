@@ -17,12 +17,6 @@ include "../src-location.mc"
 include "dists.mc"
 include "runtimes.mc"
 
-let parseRuntime = use BootParser in lam runtime. parseMCoreFile {
-  defaultBootParserParseMCoreFileArg with
-    eliminateDeadCode = false,
-    allowFree = true
-  } (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime])
-
 lang DPPLKeywordReplace = DPPLParser
   sem _makeError : Info -> String -> Expr
   sem _makeError info =
@@ -191,7 +185,13 @@ lang MExprCompile =
   sem replaceHigherOrderConstants =
   | t ->
     let t = mapPre_Expr_Expr _replaceHigherOrderConstantExpr t in
-    let replacements = parseRuntime "runtime-const.mc" in
+    let replacements =
+      parseMCoreFile {
+        defaultBootParserParseMCoreFileArg with
+          eliminateDeadCode = false,
+          allowFree = true
+        } (join [corepplSrcLoc, "/coreppl-to-mexpr/runtime-const.mc"])
+    in
     let replacements = normalizeTerm replacements in
     let t = bind_ replacements t in
     let t = symbolizeExpr
@@ -199,7 +199,7 @@ lang MExprCompile =
     in
     t
 
-  sem compileModel : (Expr -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
+  sem compileModel : ((Expr,Expr) -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
   sem compileModel compile entry modelId =
   | {ast = modelAst, params = modelParams} ->
 

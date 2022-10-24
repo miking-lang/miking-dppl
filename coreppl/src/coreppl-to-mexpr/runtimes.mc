@@ -4,6 +4,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/utils.mc"
 
 include "../parser.mc"
+include "../src-location.mc"
 
 -- Inference methods
 include "apf/compile.mc"
@@ -12,7 +13,6 @@ include "importance/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
 include "mcmc-lightweight/compile.mc"
-include "smc/compile.mc"
 
 lang LoadRuntime =
   DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode + Externals

@@ -66,14 +66,15 @@ let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
 
 let newSample: all a. Dist a -> (Any,Float) = lam dist.
-  let s = dist.sample () in
-  let w = dist.logObserve s in
+  use RuntimeDist in
+  let s = sample dist in
+  let w = logObserve dist s in
   (unsafeCoerce s, w)
 
 let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
-  lam dist. lam sample. lam w.
+  lam dist. lam sample. lam w. use RuntimeDist in
     let s: a = unsafeCoerce sample in
-    let wNew = dist.logObserve s in
+    let wNew = logObserve dist s in
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
     (sample, wNew)

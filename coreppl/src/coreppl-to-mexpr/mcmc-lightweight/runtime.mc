@@ -87,16 +87,17 @@ let incrTraceLength: () -> () = lam.
 
 -- Procedure at samples
 let sample: all a. Address -> Dist a -> a = lam addr. lam dist.
+  use RuntimeDist in
   let oldDb: Map Address (Option (Any,Float)) = deref state.oldDb in
   let newSample: () -> (Any,Float) = lam.
-    let s = dist.sample () in
-    let w = dist.logObserve s in
+    let s = sample dist in
+    let w = logObserve dist s in
     (unsafeCoerce s, w)
   in
   let sample: (Any,Float) =
     match mapLookup addr oldDb with Some (Some (sample,w)) then
       let s: a = unsafeCoerce sample in
-      let wNew = dist.logObserve s in
+      let wNew = logObserve dist s in
       modref state.weightReused (addf (deref state.weightReused) wNew);
       modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
       (sample, wNew)
