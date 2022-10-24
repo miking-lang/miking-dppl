@@ -15,8 +15,8 @@ lang MExprPPLImportance =
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Options -> Set Name -> (Expr,Expr) -> Expr
-  sem compile options externals =
+  sem compile : Options -> (Expr,Expr) -> Expr
+  sem compile options =
   | (t,_) ->
 
     -- Transform distributions to MExpr distributions
@@ -93,8 +93,8 @@ lang MExprPPLImportance =
     errorSingle [t.info] "Impossible in importance sampling with CPS"
   | t -> t
 
-  sem compileCps : Options -> Set Name -> (Expr,Expr) -> Expr
-  sem compileCps options externals =
+  sem compileCps : Options -> (Expr,Expr) -> Expr
+  sem compileCps options =
   | (_,t) ->
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";

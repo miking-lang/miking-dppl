@@ -66,15 +66,14 @@ let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
 
 let newSample: all a. Dist a -> (Any,Float) = lam dist.
-  use RuntimeDist in
-  let s = sample dist in
-  let w = logObserve dist s in
+  let s = use RuntimeDist in sample dist in
+  let w = use RuntimeDist in logObserve dist s in
   (unsafeCoerce s, w)
 
 let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
-  lam dist. lam sample. lam w. use RuntimeDist in
+  lam dist. lam sample. lam w.
     let s: a = unsafeCoerce sample in
-    let wNew = logObserve dist s in
+    let wNew = use RuntimeDist in logObserve dist s in
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
     (sample, wNew)
@@ -176,7 +175,6 @@ let runModel = lam model.
 -- General inference algorithm for aligned MCMC
 let run : all a. Unknown -> (State -> a) -> Dist a =
   lam config. lam model.
-  use RuntimeDist in
 
   recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
     lam weights. lam samples. lam iter.
@@ -254,8 +252,6 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
   else ());
 
   -- Return
-  DistEmpirical {
-    logWeights = weights,
-    samples = samples,
-    extra = EmpMCMC { acceptRate = mcmcAcceptRate () }
-  }
+  use RuntimeDist in
+  constructDistEmpirical res.1 (create runs (lam. 1.))
+    (EmpMCMC { acceptRate = mcmcAcceptRate () })

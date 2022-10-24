@@ -25,8 +25,8 @@ lang MExprPPLLightweightMCMC =
   -- NOTE: Assumes must be transformed based on alignment (some samples are
   -- just drawn directly, and some are reused)
 
-  sem compileAligned : Options -> Set Name -> (Expr,Expr) -> Expr
-  sem compileAligned options externals =
+  sem compileAligned : Options -> (Expr,Expr) -> Expr
+  sem compileAligned options =
   | (_,t) ->
 
     -- Alignment analysis
@@ -70,12 +70,12 @@ lang MExprPPLLightweightMCMC =
   ------------------------------------------
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
   ------------------------------------------
-  sem compile : Options -> Set Name -> (Expr,Expr) -> Expr
-  sem compile options externals =
+  sem compile : Options -> (Expr,Expr) -> Expr
+  sem compile options =
   | (_,t) ->
 
     -- Addressing transform combined with CorePPL->MExpr transform
-    let t = transform externals t in
+    let t = transform (setEmpty nameCmp) t in
 
     -- Type addressing transform
     let t = mapPre_Expr_Expr exprTyTransform t in
@@ -130,8 +130,16 @@ lang MExprPPLLightweightMCMC =
     else
       transformConst (constArity r.val) t
 
+  -- NOTE(dlunde,2022-10-24): We keep track of externals currently in scope.
+  -- Note that the ANF transformation "replaces" externals with their eta
+  -- expansions. Hence, we must also remove externals from scope after a `let`
+  -- defines them anew.
   | TmExt r & t ->
     TmExt { r with inexpr = transform (setInsert r.ident externalIds) r.inexpr }
+  | TmLet r ->
+    let body = transform externalIds r.body in
+    let inexpr = transform (setRemove r.ident externalIds) r.inexpr in
+    TmLet { r with body = body, inexpr = inexpr }
 
   | TmApp _ & t ->
 

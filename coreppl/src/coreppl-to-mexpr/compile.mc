@@ -138,9 +138,8 @@ lang MExprCompile =
         match model with {ast = ast, method = method, params = params} in
         match loadCompiler options method with (_, compile) in
         match mapLookup method runtimes.entries with Some entry then
-          let compileExt = compile entry.externals in
           let ast = transformModelAst options ast in
-          let ast = compileModel compileExt entry id model in
+          let ast = compileModel compile entry id model in
           removeModelDefinitions ast
         else
           match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in

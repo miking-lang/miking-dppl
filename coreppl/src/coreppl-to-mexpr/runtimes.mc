@@ -14,7 +14,7 @@ include "mcmc-trace/compile.mc"
 include "mcmc-lightweight/compile.mc"
 
 lang LoadRuntime =
-  DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode + Externals
+  DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode
 
   type RuntimeEntry = {
     -- An AST representation of the runtime
@@ -30,10 +30,8 @@ lang LoadRuntime =
     -- top-level of the runtime program. This environment is used to symbolize
     -- the model AST so that it refers to definitions in its corresponding
     -- runtime.
-    topSymEnv : SymEnv,
+    topSymEnv : SymEnv
 
-    -- String names of externals in the runtime AST.
-    externals : Set Name
   }
 
   type Runtimes = {
@@ -47,7 +45,7 @@ lang LoadRuntime =
   }
 
   sem loadCompiler : Options -> InferMethod
-                       -> (String, Set Name -> (Expr,Expr) -> Expr)
+                       -> (String, (Expr,Expr) -> Expr)
   sem loadCompiler options =
   | Importance _ -> compilerImportance options
   | APF _ -> compilerAPF options
@@ -86,14 +84,8 @@ lang LoadRuntime =
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
     let runtime = symbolizeAllowFree runtime in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
-    let externals = getExternalIdentifiers (setEmpty nameCmp) runtime in
     { ast = runtime, runId = runId, stateId = stateId
-    , topSymEnv = addTopNames symEnvEmpty runtime, externals = externals }
-
-  sem getExternalIdentifiers : Set Name -> Expr -> Set Name
-  sem getExternalIdentifiers acc =
-  | TmExt t -> getExternalIdentifiers (setInsert t.ident acc) t.inexpr
-  | t -> sfold_Expr_Expr getExternalIdentifiers acc t
+    , topSymEnv = addTopNames symEnvEmpty runtime }
 
   -- Finds a pre-defined list of identifiers in the given runtime AST, which
   -- are assumed to be present in all runtimes.

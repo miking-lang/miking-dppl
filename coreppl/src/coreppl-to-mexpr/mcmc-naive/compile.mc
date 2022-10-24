@@ -12,8 +12,8 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Options -> Set Name -> (Expr,Expr) -> Expr
-  sem compile options externals =
+  sem compile : Options -> (Expr,Expr) -> Expr
+  sem compile options =
   | (t,_) ->
 
     -- Transform distributions to MExpr distributions
