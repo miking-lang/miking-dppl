@@ -1,5 +1,4 @@
 include "mexpr/duplicate-code-elimination.mc"
-include "mexpr/externals.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/utils.mc"
 
@@ -34,7 +33,7 @@ lang LoadRuntime =
     topSymEnv : SymEnv,
 
     -- String names of externals in the runtime AST.
-    externals : Set String
+    externals : Set Name
   }
 
   type Runtimes = {
@@ -48,7 +47,7 @@ lang LoadRuntime =
   }
 
   sem loadCompiler : Options -> InferMethod
-                       -> (String, Set String -> (Expr,Expr) -> Expr)
+                       -> (String, Set Name -> (Expr,Expr) -> Expr)
   sem loadCompiler options =
   | Importance _ -> compilerImportance options
   | APF _ -> compilerAPF options
@@ -87,9 +86,14 @@ lang LoadRuntime =
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
     let runtime = symbolizeAllowFree runtime in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
-    let externals = getExternalIds runtime in
+    let externals = getExternalIdentifiers (setEmpty nameCmp) runtime in
     { ast = runtime, runId = runId, stateId = stateId
     , topSymEnv = addTopNames symEnvEmpty runtime, externals = externals }
+
+  sem getExternalIdentifiers : Set Name -> Expr -> Set Name
+  sem getExternalIdentifiers acc =
+  | TmExt t -> getExternalIdentifiers (setInsert t.ident acc) t.inexpr
+  | t -> sfold_Expr_Expr getExternalIdentifiers acc t
 
   -- Finds a pre-defined list of identifiers in the given runtime AST, which
   -- are assumed to be present in all runtimes.

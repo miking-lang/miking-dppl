@@ -45,7 +45,7 @@ lang MExprPPLBPF =
     i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
   | t -> t
 
-  sem compile: Options -> Set String -> (Expr,Expr) -> Expr
+  sem compile: Options -> Set Name -> (Expr,Expr) -> Expr
   sem compile options externals =
   | (_,t) ->
     -- Static analysis and CPS transformation

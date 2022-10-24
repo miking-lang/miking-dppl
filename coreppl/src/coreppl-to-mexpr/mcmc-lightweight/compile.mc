@@ -25,7 +25,7 @@ lang MExprPPLLightweightMCMC =
   -- NOTE: Assumes must be transformed based on alignment (some samples are
   -- just drawn directly, and some are reused)
 
-  sem compileAligned : Options -> Set String -> (Expr,Expr) -> Expr
+  sem compileAligned : Options -> Set Name -> (Expr,Expr) -> Expr
   sem compileAligned options externals =
   | (_,t) ->
 
@@ -70,7 +70,7 @@ lang MExprPPLLightweightMCMC =
   ------------------------------------------
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
   ------------------------------------------
-  sem compile : Options -> Set String -> (Expr,Expr) -> Expr
+  sem compile : Options -> Set Name -> (Expr,Expr) -> Expr
   sem compile options externals =
   | (_,t) ->
 
@@ -112,7 +112,7 @@ lang MExprPPLLightweightMCMC =
         i (nlam_ addrName (tycon_ "Address") (i (nulam_ v acc)))
       ) inner varNames
 
-  sem transform: Set String -> Expr -> Expr
+  sem transform: Set Name -> Expr -> Expr
   sem transform externalIds =
 
   | t -> smap_Expr_Expr (transform externalIds) t
@@ -131,7 +131,7 @@ lang MExprPPLLightweightMCMC =
       transformConst (constArity r.val) t
 
   | TmExt r & t ->
-    TmExt { r with inexpr = transform (setInsert (nameGetStr r.ident) externalIds) r.inexpr }
+    TmExt { r with inexpr = transform (setInsert r.ident externalIds) r.inexpr }
 
   | TmApp _ & t ->
 
@@ -179,7 +179,7 @@ lang MExprPPLLightweightMCMC =
 
         -- Base case: variables (including external applications)
         else match r.lhs with TmVar { ident = ident } then
-          if setMem (nameGetStr ident) externalIds
+          if setMem ident externalIds
             then (TmApp r, numArgs) else (transformApp (TmApp r), 0)
 
         -- Base case: constant application

@@ -12,7 +12,7 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Options -> Set String -> (Expr,Expr) -> Expr
+  sem compile : Options -> Set Name -> (Expr,Expr) -> Expr
   sem compile options externals =
   | (t,_) ->
 
