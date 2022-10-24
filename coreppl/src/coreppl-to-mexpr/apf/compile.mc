@@ -45,11 +45,9 @@ lang MExprPPLAPF =
     i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
   | t -> t
 
-  sem compile: Options -> Set String -> Expr -> Expr
+  sem compile: Options -> Set String -> (Expr,Expr) -> Expr
   sem compile options externals =
-  | t ->
-    -- ANF transformation (required for CPS)
-    let t = normalizeTerm t in
+  | (_,t) ->
     -- Static analysis and CPS transformation
     let t =
       let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in

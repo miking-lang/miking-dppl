@@ -2,7 +2,6 @@ include "name.mc"
 include "mexpr/const-arity.mc"
 
 include "../dists.mc"
-include "../common.mc"
 include "../../inference-common/smc.mc"
 include "../../cfa.mc"
 include "../../dppl-arg.mc"
@@ -12,10 +11,13 @@ include "mexpr/const-types.mc"
 
 let addrName = nameSym "addr"
 let sym: Ref Int = ref 0
+let uniqueSym = lam.
+  let s = deref sym in
+  modref sym (addi s 1);
+  s
 
 lang MExprPPLLightweightMCMC =
   MExprPPL + Resample + TransformDist + MExprANFAll + MExprPPLCFA + MExprArity
-  + MExprPPLCommon
 
   -------------------------
   -- STATIC ALIGNED MCMC --
@@ -23,21 +25,9 @@ lang MExprPPLLightweightMCMC =
   -- NOTE: Assumes must be transformed based on alignment (some samples are
   -- just drawn directly, and some are reused)
 
-  sem compileAligned : Options -> Set String -> Expr -> Expr
+  sem compileAligned : Options -> Set String -> (Expr,Expr) -> Expr
   sem compileAligned options externals =
-  | t ->
-
-    -- Read in native versions of higher-order constants and replace usage of
-    -- the constants with the native version. Simplifies CFA analysis (no need
-    -- to handle higher-order constants).
-    let t = replaceHigherOrderConstants t in
-    -- Also symbolize the new replacements to avoid CFA inaccuracy
-    let t = symbolizeExpr
-      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
-    in
-
-    -- ANF transformation (required for analysis)
-    let t = normalizeTerm t in
+  | (_,t) ->
 
     -- Alignment analysis
     let alignRes = alignCfa t in
@@ -56,11 +46,11 @@ lang MExprPPLLightweightMCMC =
 
   | TmLet ({ ident = ident, body = TmAssume t, inexpr = inexpr } & r) ->
     let i = withInfo r.info in
-    TmLet { r with
-      body = i (app_ (i (var_
-          (if setMem ident unalignedNames then "sampleUnaligned"
-           else "sampleAligned")
-        )) t.dist)
+    TmLet { r with body =
+      if setMem ident unalignedNames then
+        i (appf2_ (i (var_ "sampleUnaligned")) (i (int_ (uniqueSym ()))) t.dist)
+      else
+        i (appf1_ (i (var_ "sampleAligned")) t.dist)
     }
 
   | TmObserve t ->
@@ -80,18 +70,9 @@ lang MExprPPLLightweightMCMC =
   ------------------------------------------
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
   ------------------------------------------
-  sem compile : Options -> Set String -> Expr -> Expr
+  sem compile : Options -> Set String -> (Expr,Expr) -> Expr
   sem compile options externals =
-  | t ->
-
-    -- Read in native versions of higher-order constants and replace usage of
-    -- the constants with the native version. Simplifies addressing transform
-    -- (no need to handle higher-order constants).
-    let t = replaceHigherOrderConstants t in
-    -- Also symbolize the new replacements to avoid CFA inaccuracy
-    let t = symbolizeExpr
-      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
-    in
+  | (_,t) ->
 
     -- Addressing transform combined with CorePPL->MExpr transform
     let t = transform externals t in
@@ -104,7 +85,7 @@ lang MExprPPLLightweightMCMC =
 
     -- Initialize addr to the empty list (not rope) at the
     -- beginning of the program.
-    let t = bind_ (nulet_ addrName (var_ "emptyList")) t in
+    let t = bind_ (nulet_ addrName (var_ "emptyAddress")) t in
 
     t
 
@@ -112,9 +93,8 @@ lang MExprPPLLightweightMCMC =
   sem addr =
   | i ->
     let i = withInfo i in
-    let s = deref sym in
-    modref sym (addi s 1);
-    cons_ (i (int_ s)) (i (nvar_ addrName))
+    let s = uniqueSym () in
+    i (appf2_ (i (var_ "constructAddress")) (i (nvar_ addrName)) (i (int_ s)))
 
   sem transformConst: Int -> Expr -> Expr
   sem transformConst arity =
@@ -129,7 +109,7 @@ lang MExprPPLLightweightMCMC =
     let varNames: [Name] = vars [] arity in
     let inner = foldl (lam acc. lam v. i (app_ acc (nvar_ v))) e varNames in
     foldr (lam v. lam acc.
-        i (nlam_ addrName (tyseq_ tyint_) (i (nulam_ v acc)))
+        i (nlam_ addrName (tycon_ "Address") (i (nulam_ v acc)))
       ) inner varNames
 
   sem transform: Set String -> Expr -> Expr
@@ -140,7 +120,7 @@ lang MExprPPLLightweightMCMC =
   | TmLam _ & t ->
     match smap_Expr_Expr (transform externalIds) t with TmLam r & t in
     let i = withInfo r.info in
-    i (nlam_ addrName (tyseq_ tyint_) t)
+    i (nlam_ addrName (tycon_ "Address") t)
 
   | TmConst r & t ->
     if isHigherOrderFunType (tyConst r.val) then
@@ -271,7 +251,7 @@ lang MExprPPLLightweightMCMC =
     let i = tyWithInfo r.info in
     let from = tyTransform r.from in
     let to = tyTransform r.to in
-    (i (tyarrow_ (i (tyseq_ (i tyint_)))
+    (i (tyarrow_ (i (tycon_ "Address"))
         (TyArrow { r with from = from, to = to })))
 
   -------------------------------
@@ -290,13 +270,9 @@ let compilerLightweightMCMC = lam options. use MExprPPLLightweightMCMC in
 
   -- Check that options are within the proper range
   let gProb = options.mcmcLightweightGlobalProb in
-  let mProb = options.mcmcLightweightGlobalModProb in
-  if or (ltf gProb 0.0) (gtf gProb 1.0) then
+  (if or (ltf gProb 0.0) (gtf gProb 1.0) then
   error "--mcmc-lw-gprob must be between 0.0 and 1.0"
-  else ();
-  if or (ltf mProb 0.0) (gtf mProb 1.0) then
-  error "--mcmc-lw-mprob must be between 0.0 and 1.0"
-  else ();
+  else ());
 
   if options.align then
     ("mcmc-lightweight/runtime-aligned.mc", compileAligned options)

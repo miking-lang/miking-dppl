@@ -1,5 +1,4 @@
 include "../dists.mc"
-include "../common.mc"
 include "../../inference-common/smc.mc"
 include "../../cfa.mc"
 
@@ -8,7 +7,6 @@ include "mexpr/cps.mc"
 
 lang MExprPPLImportance =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
-  + MExprPPLCommon
 
   -------------------------
   -- IMPORTANCE SAMPLING --
@@ -17,9 +15,9 @@ lang MExprPPLImportance =
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Options -> Set String -> Expr -> Expr
+  sem compile : Options -> Set String -> (Expr,Expr) -> Expr
   sem compile options externals =
-  | t ->
+  | (t,_) ->
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
@@ -95,22 +93,9 @@ lang MExprPPLImportance =
     errorSingle [t.info] "Impossible in importance sampling with CPS"
   | t -> t
 
-  sem compileCps : Options -> Set String -> Expr -> Expr
+  sem compileCps : Options -> Set String -> (Expr,Expr) -> Expr
   sem compileCps options externals =
-  | t ->
-
-    -- Read in native versions of higher-order constants and replace usage of
-    -- the constants with the native version. Require because of CPS which
-    -- cannot handle higher-order constants.
-    let t = replaceHigherOrderConstants t in
-    -- Also symbolize the new replacements to avoid CFA inaccuracy
-    let t = symbolizeExpr
-      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
-    in
-
-
-    -- ANF transformation (required for CPS)
-    let t = normalizeTerm t in
+  | (_,t) ->
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in

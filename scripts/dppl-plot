@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+
+import matplotlib.pyplot as plt
+import sys
+import math
+import argparse
+
+parser = argparse.ArgumentParser(description='Plot Miking DPPL inference results from standard input.')
+
+parser.add_argument('--bins', type=int, default=100,
+                    help="Number of bins. The default is 100.")
+parser.add_argument('--burn', type=int, default=0,
+                    help="Number of samples to burn (e.g., if using MCMC). The default is 0.")
+parser.add_argument('--xmin', type=float, default=None,
+                    help="For two-dimensional numerical plots, determines the leftmost edge of the plot axis.")
+parser.add_argument('--xmax', type=float, default=None,
+                    help="For two-dimensional numerical plots, determines the rightmost edge of the plot axis.")
+parser.add_argument('--ymin', type=float, default=None,
+                    help="For two-dimensional numerical plots, determines the bottom edge of the plot axis.")
+parser.add_argument('--ymax', type=float, default=None,
+                    help="For two-dimensional numerical plots, determines the top edge of the plot axis.")
+
+args = parser.parse_args()
+
+# Read in data from standard in
+data = sys.stdin.read().splitlines()
+if " " not in data[0]:
+    data.pop(0)
+samples = []
+weights = []
+for line in data:
+    line = line.rsplit(maxsplit=1)
+    sample = line[0].strip()
+    weight = float(line[1])
+    if math.isinf(weight): continue
+    samples.append(sample)
+    weights.append(weight)
+del samples[:args.burn]
+del weights[:args.burn]
+m = max(weights)
+weights = [math.exp(w - m) for w in weights]
+
+def is_float(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+if is_float(samples[0]):
+    samples = [float(sample) for sample in samples]
+    range = (args.xmin,args.xmax) if (args.xmin is not None and args.xmax is not None) else None
+    plt.hist(samples, bins=args.bins, density=True, weights=weights, range=range)
+    if args.xmin is not None: plt.xlim(left=args.xmin)
+    if args.xmax is not None: plt.xlim(right=args.xmax)
+    if args.ymin is not None: plt.ylim(bottom=args.ymin)
+    if args.ymax is not None: plt.ylim(top=args.ymax)
+    plt.show()
+else:
+    sys.stderr.write("Sample type not supported\n")

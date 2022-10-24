@@ -47,7 +47,8 @@ lang LoadRuntime =
     ast : Expr
   }
 
-  sem loadCompiler : Options -> InferMethod -> (String, Set String -> Expr -> Expr)
+  sem loadCompiler : Options -> InferMethod
+                       -> (String, Set String -> (Expr,Expr) -> Expr)
   sem loadCompiler options =
   | Importance _ -> compilerImportance options
   | APF _ -> compilerAPF options
@@ -117,7 +118,7 @@ lang LoadRuntime =
       ("printSamples", bool_ options.printSamples),
       ("earlyStop", bool_ options.earlyStop),
       ("mcmcLightweightGlobalProb", float_ options.mcmcLightweightGlobalProb),
-      ("mcmcLightweightGlobalModProb", float_ options.mcmcLightweightGlobalModProb),
+      ("mcmcLightweightReuseLocal", bool_ options.mcmcLightweightReuseLocal),
       ("printAcceptanceRate", bool_ options.printAcceptanceRate)
     ]) in
 

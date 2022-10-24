@@ -4,7 +4,7 @@
 cppl_name=cppl
 exec_name=cppl
 tppl_name=tpplc
-plot_name=dplot
+plot_name=dppl-plot
 bin_path=${HOME}/.local/bin
 src_path=${HOME}/.local/src/coreppl/
 cppl_src=coreppl/src/
