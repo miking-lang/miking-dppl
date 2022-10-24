@@ -41,7 +41,7 @@ let alpha = divf (int2float (randIntU 0 100)) 10.0 in
 let beta = divf (int2float (randIntU 0 100)) 10.0 in
 
 -- Run the model using each of the available runtimes
-let p = randIntU 0 10 in
+let p = addi 10 (randIntU 0 10) in
 let dist = infer (Importance {particles = p}) (lam. model alpha beta) in
 printRes float2string dist;
 printLn (create 20 (lam. '='));
