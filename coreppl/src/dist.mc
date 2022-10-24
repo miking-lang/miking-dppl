@@ -157,11 +157,13 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   -- Builtin operations on distributions
   syn Const =
   | CDistEmpiricalSamples {}
+  | CDistEmpiricalDegenerate {}
   | CDistEmpiricalNormConst {}
   | CDistEmpiricalAcceptRate {}
 
   sem getConstStringCode (indent : Int) =
   | CDistEmpiricalSamples _ -> "distEmpiricalSamples"
+  | CDistEmpiricalDegenerate _ -> "distEmpiricalDegenerate"
   | CDistEmpiricalNormConst _ -> "distEmpiricalNormConst"
   | CDistEmpiricalAcceptRate _ -> "distEmpiricalAcceptRate"
 
@@ -172,11 +174,13 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   | CDistEmpiricalSamples _ ->
     tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a"))
                   (tytuple_ [tyseq_ (tyvar_ "a"), tyseq_ tyfloat_]))
+  | CDistEmpiricalDegenerate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tybool_)
   | CDistEmpiricalNormConst _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
   | CDistEmpiricalAcceptRate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
 
   sem constArity =
   | CDistEmpiricalSamples _ -> 1
+  | CDistEmpiricalDegenerate _ -> 1
   | CDistEmpiricalNormConst _ -> 1
   | CDistEmpiricalAcceptRate _ -> 1
 

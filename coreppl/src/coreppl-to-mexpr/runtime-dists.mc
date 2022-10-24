@@ -65,6 +65,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
       weights : [Float],
       logWeights : [Float],
       samples : [a],
+      degenerate : Bool,
 
       -- NOTE(dlunde,2022-10-18): Monte Carlo inference often returns futher
       -- information (not only the samples). This field is used for this.
@@ -86,9 +87,8 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     -- Compute LSE
     let maxLogWeight = foldl (lam acc. lam lw. if geqf lw acc then lw else acc)
                          (negf inf) logWeights in
-    (if eqf maxLogWeight (negf inf)
-     then error "All weights are -inf when constructing empirical distribution"
-     else ());
+
+    let degenerate = eqf maxLogWeight (negf inf) in
 
     -- print "MAX: "; printLn (float2string maxLogWeight);
     let lse =
@@ -107,13 +107,17 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     -- print "NORMALIZED: "; printLn (strJoin "," (map float2string weights));
 
     DistEmpirical {
-      weights = weights, logWeights = logWeights,
+      weights = weights, logWeights = logWeights, degenerate = degenerate,
       samples = samples, extra = extra
     }
 
   sem empiricalSamples =
   | DistEmpirical t -> (t.samples, t.logWeights)
   | _ -> ([], [])
+
+  sem empiricalDegenerate =
+  | DistEmpirical t -> t.degenerate
+  | _ -> false
 
   sem empiricalNormConst =
   | DistEmpirical t ->
@@ -150,6 +154,10 @@ end
 let distEmpiricalSamples : all a. Dist a -> ([a], [Float]) =
   use RuntimeDist in
   empiricalSamples
+
+let distEmpiricalDegenerate : all a. Dist a -> Bool =
+  use RuntimeDist in
+  empiricalDegenerate
 
 let distEmpiricalNormConst : all a. Dist a -> Float =
   use RuntimeDist in

@@ -11,8 +11,13 @@ lang TransformDist = MExprPPL
   sem transformTmDist: Expr -> Expr
   sem transformTmDist =
   | TmDist t -> transformDist (withInfo t.info) t.dist
-  | TmConst {val = c & (CDistEmpiricalSamples _ | CDistEmpiricalNormConst _ |
-                        CDistEmpiricalAcceptRate _)} ->
+  | TmConst {val = c &
+      ( CDistEmpiricalSamples _
+      | CDistEmpiricalDegenerate _
+      | CDistEmpiricalNormConst _
+      | CDistEmpiricalAcceptRate _
+      )
+    } ->
     var_ (getConstStringCode 0 c)
   | t -> t
 

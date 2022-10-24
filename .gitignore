@@ -8,6 +8,8 @@ rootppl/log_norm_const.txt
 data.csv
 \#*
 *~
+out
+out.mc
 out.cu
 a.out
 tool

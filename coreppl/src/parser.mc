@@ -108,6 +108,7 @@ end
 -- Extend builtins with CorePPL builtins
 let builtin = use MExprPPL in concat
   [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
+  , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
   , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
   , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
   ] builtin

@@ -51,6 +51,7 @@ lang ConstAllCFA = MExprCFA + MExprPPL
   -- data.
   sem generateConstraintsConst info ident =
   | ( CDistEmpiricalSamples _
+    | CDistEmpiricalDegenerate _
     | CDistEmpiricalNormConst _
     | CDistEmpiricalAcceptRate _ ) ->
     errorSingle [info] "Constant not supported in CorePPL CFA"
