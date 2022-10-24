@@ -124,6 +124,6 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
     else ());
 
   -- Return
-  constructDistEmpirical res.1 res.0
+  constructDistEmpirical res.1 (create runs (lam. 1.))
     -- TODO(dlunde,2022-10-20): Add normconst
     (EmpMCMC { acceptRate = mcmcAcceptRate () })

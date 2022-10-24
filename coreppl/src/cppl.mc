@@ -18,6 +18,8 @@ include "mexpr/ast.mc"
 include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/utils.mc"
 
+let errMsgPrintFunction = "Return type cannot be printed"
+
 lang CPPLLang =
   MExprAst + DPPLExtract + MExprCompile + TransformDist +
   MExprEliminateDuplicateCode + MExprSubstitute
@@ -28,9 +30,15 @@ lang CPPLLang =
   -- are they guaranteed to be included in the user code.
   sem getTypePrintFunction : RuntimeEntry -> Type -> Expr
   sem getTypePrintFunction runtimeEntry =
+  | TyInt _ -> error "TODO"
+  | TyBool _ -> error "TODO"
   | TyFloat _ -> uconst_ (CFloat2string ())
   | TySeq {ty = TyChar _} -> ulam_ "x" (var_ "x")
-  | _ -> error "Return type cannot be printed"
+  | TyChar _ -> ulam_ "x" (seq_ [(var_ "x")])
+  | TyRecord r ->
+    if mapIsEmpty r.fields then ulam_ "x" (str_ "()")
+    else error errMsgPrintFunction
+  | _ -> error errMsgPrintFunction
 
   -- Generates an infer AST node applied on the entire provided AST, using the
   -- provided inference method.

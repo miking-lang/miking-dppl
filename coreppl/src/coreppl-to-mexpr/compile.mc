@@ -1,8 +1,10 @@
 include "mexpr/ast-builder.mc"
 include "mexpr/externals.mc"
+include "mexpr/boot-parser.mc"
 include "mexpr/type.mc"
 include "mexpr/utils.mc"
 include "sys.mc"
+include "map.mc"
 
 include "../coreppl.mc"
 include "../extract.mc"
@@ -10,8 +12,8 @@ include "../inference-common/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
 include "../transformation.mc"
+include "../src-location.mc"
 
-include "./common.mc"
 include "dists.mc"
 include "runtimes.mc"
 
@@ -56,7 +58,8 @@ end
 -- or similar.
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
-  Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute
+  Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
+  MExprANFAll
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -135,9 +138,8 @@ lang MExprCompile =
         match model with {ast = ast, method = method, params = params} in
         match loadCompiler options method with (_, compile) in
         match mapLookup method runtimes.entries with Some entry then
-          let compileExt = compile entry.externals in
           let ast = transformModelAst options ast in
-          let ast = compileModel compileExt entry id model in
+          let ast = compileModel compile entry id model in
           removeModelDefinitions ast
         else
           match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in
@@ -159,12 +161,58 @@ lang MExprCompile =
   | TmExt t -> removeModelDefinitions t.inexpr
   | t -> smap_Expr_Expr removeModelDefinitions t
 
-  sem compileModel : (Expr -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
+  sem _replaceHigherOrderConstant: Const -> Option Expr
+  sem _replaceHigherOrderConstant =
+  | CMap _ -> Some (var_ "map")
+  | CMapi _ -> Some (var_ "mapi")
+  | CIter _ -> Some (var_ "iter")
+  | CIteri _ -> Some (var_ "iteri")
+  | CFoldl _ -> Some (var_ "foldl")
+  | CFoldr _ -> Some (var_ "foldr")
+  | CCreate _ -> Some (var_ "create")
+  | _ -> None ()
+
+  sem _replaceHigherOrderConstantExpr: Expr -> Expr
+  sem _replaceHigherOrderConstantExpr =
+  | TmConst r ->
+    match _replaceHigherOrderConstant r.val with Some t then
+      withType r.ty (withInfo r.info t)
+    else TmConst r
+  | t -> t
+
+  sem replaceHigherOrderConstants: Expr -> Expr
+  sem replaceHigherOrderConstants =
+  | t ->
+    let t = mapPre_Expr_Expr _replaceHigherOrderConstantExpr t in
+    let replacements =
+      parseMCoreFile {
+        defaultBootParserParseMCoreFileArg with
+          eliminateDeadCode = false,
+          allowFree = true
+        } (join [corepplSrcLoc, "/coreppl-to-mexpr/runtime-const.mc"])
+    in
+    let replacements = normalizeTerm replacements in
+    let t = bind_ replacements t in
+    let t = symbolizeExpr
+      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
+    in
+    t
+
+  sem compileModel : ((Expr,Expr) -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
   sem compileModel compile entry modelId =
   | {ast = modelAst, params = modelParams} ->
 
+    -- ANF
+    let modelAst = normalizeTerm modelAst in
+
+    -- ANF with higher-order intrinsics replaced with alternatives in
+    -- seq-native.mc
+    -- TODO(dlunde,2022-10-24): @Lars I'm not sure how I should combine this
+    -- with your updates.
+    let modelAstNoHigherOrderConstants = replaceHigherOrderConstants modelAst in
+
     -- Apply inference-specific transformation
-    let ast = compile modelAst in
+    let ast = compile (modelAst, modelAstNoHigherOrderConstants) in
 
     -- Bind the model code in a let-expression, which we can insert in the main
     -- AST.
@@ -251,10 +299,12 @@ let compileModel = lam methodStr. lam modelAst.
   match loadCompiler dummyOptions inferMethod with (runtime, compile) in
   let entry = loadRuntimeEntry inferMethod runtime in
   let modelRepr = {ast = modelAst, method = inferMethod, params = []} in
-  compileModel (compile (setEmpty cmpString)) entry modelId modelRepr
+  compileModel compile entry modelId modelRepr
 in
 
 -- Simple tests that ensure compilation of a simple model throws no errors
+-- TODO(dlunde,2022-10-24): These tests are not good enough. We need to also
+-- test individual options for the different methods (i.e., align and CPS)
 utest compileModel "mexpr-importance" simple with () using truefn in
 utest compileModel "mexpr-apf" simple with () using truefn in
 utest compileModel "mexpr-bpf" simple with () using truefn in
