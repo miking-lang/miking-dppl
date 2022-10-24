@@ -12,8 +12,8 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Options -> Expr -> Expr
-  sem compile options =
+  sem compile : Options -> Set String -> Expr -> Expr
+  sem compile options externals =
   | t ->
 
     -- Transform distributions to MExpr distributions
@@ -34,7 +34,7 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
   -- maybe some type of exception handler.
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
     i (appf1_ (i (var_ "updateWeight")) weight)
   | TmWeight t ->
     let i = withInfo t.info in

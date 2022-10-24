@@ -46,6 +46,16 @@ lang ConstAllCFA = MExprCFA + MExprPPL
       }
     ]
 
+  -- NOTE(dlunde,2022-10-21): We do not support these CorePPL constants in PPL
+  -- models/code. They are only used outside of inference to extract inference
+  -- data.
+  sem generateConstraintsConst info ident =
+  | ( CDistEmpiricalSamples _
+    | CDistEmpiricalDegenerate _
+    | CDistEmpiricalNormConst _
+    | CDistEmpiricalAcceptRate _ ) ->
+    errorSingle [info] "Constant not supported in CorePPL CFA"
+
   sem addConstAllConstraints (graph: CFAGraph) =
   | t ->
     let cgfs = [ generateConstAllConstraints graph.im ] in

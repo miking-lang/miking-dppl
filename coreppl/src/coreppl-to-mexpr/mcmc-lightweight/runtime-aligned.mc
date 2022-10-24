@@ -60,15 +60,16 @@ let incrTraceLength: () -> () = lam.
 
 -- Procedure at aligned samples
 let sampleAligned: all a. Dist a -> a = lam dist.
+  use RuntimeDist in
   let oldAlignedTrace: [Option Any] = deref state.oldAlignedTrace in
-  let newSample: () -> Any = lam. unsafeCoerce (dist.sample ()) in
+  let newSample: () -> Any = lam. unsafeCoerce (sample dist) in
   let sample: Any =
     match oldAlignedTrace with [sample] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
       match sample with Some sample then
         let s: a = unsafeCoerce sample in
         modref state.weightReused
-          (addf (deref state.weightReused) (dist.logObserve s));
+          (addf (deref state.weightReused) (logObserve dist s));
         sample
       else newSample ()
 
@@ -82,8 +83,9 @@ let sampleAligned: all a. Dist a -> a = lam dist.
   unsafeCoerce sample
 
 let sampleUnaligned: all a. Dist a -> a = lam dist.
+  use RuntimeDist in
   incrTraceLength ();
-  dist.sample ()
+  sample dist
 
 -- Function to propose aligned trace changes between MH iterations.
 let modTrace: () -> () = lam.
@@ -119,10 +121,9 @@ let modTrace: () -> () = lam.
 
 
 -- General inference algorithm for aligned MCMC
-let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFun.
-
-  -- Read number of runs and sweeps
-  match monteCarloArgs () with (runs, sweeps) in
+let run : all a. Unknown -> (State -> a) -> Dist a =
+  lam config. lam model.
+  use RuntimeDist in
 
   recursive let mh : [Float] -> [Float] -> [a] -> Int -> ([Float], [a]) =
     lam weights. lam weightsReused. lam samples. lam iter.
@@ -171,41 +172,34 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
             iter
   in
 
-  -- Repeat once for each sweep
-  repeat (lam.
+  let runs = config.iterations in
 
-      -- Used to keep track of acceptance ratio
-      mcmcAcceptInit runs;
+  -- Used to keep track of acceptance ratio
+  mcmcAcceptInit runs;
 
-      -- First sample
-      let sample = model state in
-      -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
-      -- computing the MH acceptance ratio?
-      let weight = deref state.weight in
-      let weightReused = deref state.weightReused in
-      let iter = subi runs 1 in
+  -- First sample
+  let sample = model state in
+  -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
+  -- computing the MH acceptance ratio?
+  let weight = deref state.weight in
+  let weightReused = deref state.weightReused in
+  let iter = subi runs 1 in
 
-      -- Set aligned trace length (a constant, only modified here)
-      modref state.alignedTraceLength (length (deref state.alignedTrace));
+  -- Set aligned trace length (a constant, only modified here)
+  modref state.alignedTraceLength (length (deref state.alignedTrace));
 
-      -- Sample the rest
-      let res = mh [weight] [weightReused] [sample] iter in
+  -- Sample the rest
+  let res = mh [weight] [weightReused] [sample] iter in
 
-      -- Reverse to get the correct order
-      let res = match res with (weights,samples) in
-        (reverse weights, reverse samples)
-      in
+  -- Reverse to get the correct order
+  let res = match res with (weights,samples) in
+    (reverse weights, reverse samples)
+  in
 
-      -- Print
-      printResFun res
-
-    ) sweeps
-
-let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
-  -- NOTE(dlunde,2022-05-23): I don't think printing the norm. const makes
-  -- sense for MCMC
-  -- printLn (float2string (normConstant res.0));
   (if compileOptions.printAcceptanceRate then
     printLn (float2string (mcmcAcceptRate ()))
   else ());
-  printSamples printFun (mapReverse (lam. 0.) res.0) res.1
+
+  -- Return
+  constructDistEmpirical res.1 res.0
+    (EmpMCMC { acceptRate = mcmcAcceptRate () })

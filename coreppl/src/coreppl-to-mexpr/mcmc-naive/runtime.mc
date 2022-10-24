@@ -15,10 +15,9 @@ type State = Ref Float
 let updateWeight = lam v. lam state. modref state (addf (deref state) v)
 
 -- General inference algorithm for naive MCMC
-let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFun.
-
-  -- Read number of runs and sweeps
-  match monteCarloArgs () with (runs, sweeps) in
+let run : all a. Unknown -> (State -> a) -> Dist a =
+  lam config. lam model.
+  use RuntimeDist in
 
   recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
     lam weights: [Float]. lam samples: [a]. lam iter: Int.
@@ -38,36 +37,30 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFu
           mh (cons prevWeight weights) (cons prevSample samples) iter
   in
 
-  -- Repeat once for each sweep
-  repeat (lam.
+  let runs = config.iterations in
 
-      -- Used to keep track of acceptance ratio
-      mcmcAcceptInit runs;
+  -- Used to keep track of acceptance ratio
+  mcmcAcceptInit runs;
 
-      -- Draw an initial sample first
-      let state = ref 0. in
-      let sample = model state in
-      let weight = deref state in
-      let iter: Int = subi runs 1 in
+  -- Draw an initial sample first
+  let state = ref 0. in
+  let sample = model state in
+  let weight = deref state in
+  let iter: Int = subi runs 1 in
 
-      -- Draw remaining samples
-      let res = mh [weight] [sample] iter in
+  -- Draw remaining samples
+  let res = mh [weight] [sample] iter in
 
-      -- Reverse to get the correct order
-      let res = match res with (weights,samples) in
-        (reverse weights, reverse samples)
-      in
+  -- Reverse to get the correct order
+  let res = match res with (weights,samples) in
+    (reverse weights, reverse samples)
+  in
 
-      -- Print
-      printResFun res
-
-    ) sweeps
-
-let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
-  -- NOTE(dlunde,2022-05-23): I don't think printing the norm. const makes
-  -- sense for MCMC
-  -- printLn (float2string (normConstant res.0));
   (if compileOptions.printAcceptanceRate then
     printLn (float2string (mcmcAcceptRate ()))
   else ());
-  printSamples printFun (mapReverse (lam. 0.) res.0) res.1
+
+  -- Return
+  constructDistEmpirical res.1 (create runs (lam. 1.))
+    -- TODO(dlunde,2022-10-20): Add normconst
+    (EmpMCMC { acceptRate = mcmcAcceptRate () })

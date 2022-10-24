@@ -17,8 +17,8 @@ lang MExprPPLImportance =
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Options -> Expr -> Expr
-  sem compile options =
+  sem compile : Options -> Set String -> Expr -> Expr
+  sem compile options externals =
   | t ->
 
     -- Transform distributions to MExpr distributions
@@ -32,11 +32,11 @@ lang MExprPPLImportance =
   sem transformProb =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
+    i (app_ (i (var_ "sample")) t.dist)
 
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
     i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
   | TmWeight t ->
     let i = withInfo t.info in
@@ -81,13 +81,13 @@ lang MExprPPLImportance =
         else error "Something went wrong with partial CPS transformation"
       else i (nulam_ ident (exprCps env k inexpr))
     in
-    let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
+    let weight = i (appf2_ (i (var_ "logObserve")) dist value) in
     i (appf2_ (i (var_ "updateWeight")) weight k)
 
   sem transformProbCps =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (recordproj_ "sample" t.dist)) (i unit_))
+    i (app_ (i (var_ "sample")) t.dist)
   | TmResample t -> withInfo t.info unit_
 
   -- Should already have been removed by CPS!
@@ -95,8 +95,8 @@ lang MExprPPLImportance =
     errorSingle [t.info] "Impossible in importance sampling with CPS"
   | t -> t
 
-  sem compileCps : Options -> Expr -> Expr
-  sem compileCps options =
+  sem compileCps : Options -> Set String -> Expr -> Expr
+  sem compileCps options externals =
   | t ->
 
     -- Read in native versions of higher-order constants and replace usage of
@@ -142,7 +142,6 @@ lang MExprPPLImportance =
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
-    let t = removeTyDist t in
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProbCps t in

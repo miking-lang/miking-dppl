@@ -2,7 +2,7 @@ include "arg.mc"
 
 -- Options type
 type Options = {
-  method: String,
+  method : String,
   particles : Int, -- NOTE(dlunde,2022-06-28): Currently not used as it is provided at runtime.
   printModel: Bool,
   printMCore: Bool,
@@ -122,10 +122,10 @@ let config = [
     "Disables early stopping in certain inference algorithms.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with earlyStop = false}),
-  ([("--debug-mexpr-compile", "", "")],
+  ([("--no-debug-mexpr-compile", "", "")],
     "Turn on debugging for CorePPL to MExpr compiler.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with debugMExprCompile = true}),
+      let o: Options = p.options in {o with debugMExprCompile = false}),
   ([("--mcmc-lw-gprob", " ", "<value>")],
     join [
       "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: ",

@@ -153,6 +153,37 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
       (env, TyDist {t with ty = ty})
     else never
 
+
+  -- Builtin operations on distributions
+  syn Const =
+  | CDistEmpiricalSamples {}
+  | CDistEmpiricalDegenerate {}
+  | CDistEmpiricalNormConst {}
+  | CDistEmpiricalAcceptRate {}
+
+  sem getConstStringCode (indent : Int) =
+  | CDistEmpiricalSamples _ -> "distEmpiricalSamples"
+  | CDistEmpiricalDegenerate _ -> "distEmpiricalDegenerate"
+  | CDistEmpiricalNormConst _ -> "distEmpiricalNormConst"
+  | CDistEmpiricalAcceptRate _ -> "distEmpiricalAcceptRate"
+
+  sem _tydist =
+  | a -> TyDist {info = NoInfo (), ty = a}
+
+  sem tyConst =
+  | CDistEmpiricalSamples _ ->
+    tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a"))
+                  (tytuple_ [tyseq_ (tyvar_ "a"), tyseq_ tyfloat_]))
+  | CDistEmpiricalDegenerate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tybool_)
+  | CDistEmpiricalNormConst _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
+  | CDistEmpiricalAcceptRate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
+
+  sem constArity =
+  | CDistEmpiricalSamples _ -> 1
+  | CDistEmpiricalDegenerate _ -> 1
+  | CDistEmpiricalNormConst _ -> 1
+  | CDistEmpiricalAcceptRate _ -> 1
+
 end
 
 
@@ -845,7 +876,7 @@ let dist_ = use Dist in
   lam d. TmDist {dist = d, ty = tyunknown_, info = NoInfo ()}
 
 let tydist_ = use Dist in
-  lam ty. TyDist {info = NoInfo (), ty = ty}
+  lam ty. _tydist ty
 
 let uniform_ = use UniformDist in
   lam a. lam b. dist_ (DUniform {a = a, b = b})

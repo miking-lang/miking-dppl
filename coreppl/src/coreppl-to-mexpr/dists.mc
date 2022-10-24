@@ -11,32 +11,84 @@ lang TransformDist = MExprPPL
   sem transformTmDist: Expr -> Expr
   sem transformTmDist =
   | TmDist t -> transformDist (withInfo t.info) t.dist
+  | TmConst {val = c &
+      ( CDistEmpiricalSamples _
+      | CDistEmpiricalDegenerate _
+      | CDistEmpiricalNormConst _
+      | CDistEmpiricalAcceptRate _
+      )
+    } ->
+    var_ (getConstStringCode 0 c)
   | t -> t
 
+  -- TODO(larshum, 2022-10-12): This code assumes the MLang transformation
+  -- performs name mangling as of writing. Therefore, it will break after we
+  -- make the change.
   sem transformDist: (Expr -> Expr) -> Dist -> Expr
   sem transformDist i =
-  | DGamma { k = k, theta = theta } -> i (appf2_ (i (var_ "distGamma")) k theta)
-  | DExponential { rate = rate } -> i (appf1_ (i (var_ "distExponential")) rate)
-  | DPoisson { lambda = lambda } -> i (appf1_ (i (var_ "distPoisson")) lambda)
-  | DBinomial { n = n, p = p } -> i (appf2_ (i (var_ "distBinomial")) n p)
-  | DBernoulli { p = p } -> i (appf1_ (i (var_ "distBernoulli")) p)
-  | DBeta { a = a, b = b } -> i (appf2_ (i (var_ "distBeta")) a b)
-  | DGaussian { mu = mu, sigma = sigma } -> i (appf2_ (i (var_ "distGaussian")) mu sigma)
-  | DMultinomial { n = n, p = p } -> i (appf2_ (i (var_ "distMultinomial")) n p)
-  | DCategorical { p = p } -> i (appf1_ (i (var_ "distCategorical")) p)
-  | DDirichlet { a = a } -> i (appf1_ (i (var_ "distDirichlet")) a)
-  | DUniform { a = a, b = b } -> i (appf2_ (i (var_ "distUniform")) a b)
+  | DGamma { k = k, theta = theta } ->
+    i (conapp_
+        "RuntimeDistElementary_DistGamma"
+        (i (urecord_ [("shape", k), ("scale", theta)])))
+  | DExponential { rate = rate } ->
+    i (conapp_
+        "RuntimeDistElementary_DistExponential"
+        (i (urecord_ [("rate", rate)])))
+  | DPoisson { lambda = lambda } ->
+    i (conapp_
+        "RuntimeDistElementary_DistPoisson"
+        (i (urecord_ [("lambda", lambda)])))
+  | DBinomial { n = n, p = p } ->
+    i (conapp_
+        "RuntimeDistElementary_DistBinomial"
+        (i (urecord_ [("n", n), ("p", p)])))
+  | DBernoulli { p = p } ->
+    i (conapp_
+        "RuntimeDistElementary_DistBernoulli"
+        (i (urecord_ [("p", p)])))
+  | DBeta { a = a, b = b } ->
+    i (conapp_
+        "RuntimeDistElementary_DistBeta"
+        (i (urecord_ [("a", a), ("b", b)])))
+  | DGaussian { mu = mu, sigma = sigma } ->
+    i (conapp_
+        "RuntimeDistElementary_DistGaussian"
+        (i (urecord_ [("mu", mu), ("sigma", sigma)])))
+  | DMultinomial { n = n, p = p } ->
+    i (conapp_
+        "RuntimeDistElementary_DistMultinomial"
+        (i (urecord_ [("n", n), ("p", p)])))
+  | DCategorical { p = p } ->
+    i (conapp_
+        "RuntimeDistElementary_DistCategorical"
+        (i (urecord_ [("p", p)])))
+  | DUniform { a = a, b = b } ->
+    i (conapp_
+        "RuntimeDistElementary_DistUniform"
+        (i (urecord_ [("a", a), ("b", b)])))
 
-  -- We need to remove TyDist after transforming to MExpr dists (the new MExpr
-  -- types will be inferred by the type checker)
-  sem removeTyDist: Expr -> Expr
-  sem removeTyDist =
-  | e ->
-    recursive let stripTyDist: Type -> Type =
-      lam ty.
-        match ty with TyDist t then tyWithInfo t.info tyunknown_
-        else smap_Type_Type stripTyDist ty
-    in
-    let e = smap_Expr_Type stripTyDist e in
-    smap_Expr_Expr removeTyDist e
+  -- We need to replace occurrences of TyDist after transforming to MExpr
+  -- distributions.
+  sem replaceTyDist: Expr -> Expr
+  sem replaceTyDist =
+  | t ->
+    let t = smap_Expr_Type toRuntimeTyDist t in
+    let t = smap_Expr_Pat replaceTyDistPat t in
+    let t = smap_Expr_Expr replaceTyDist t in
+    withType (toRuntimeTyDist (tyTm t)) t
+
+  sem toRuntimeTyDist : Type -> Type
+  sem toRuntimeTyDist =
+  | TyDist t ->
+    TyApp {
+      lhs = TyCon {ident = nameNoSym "Dist", info = t.info},
+      rhs = t.ty,
+      info = t.info}
+  | ty -> smap_Type_Type toRuntimeTyDist ty
+
+  sem replaceTyDistPat : Pat -> Pat
+  sem replaceTyDistPat =
+  | p ->
+    let p = smap_Pat_Pat replaceTyDistPat p in
+    withTypePat (toRuntimeTyDist (tyPat p)) p
 end

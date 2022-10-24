@@ -1,19 +1,41 @@
-
-
+include "digraph.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
+include "mexpr/builtin.mc"
+
 include "coreppl.mc"
 include "pgm.mc"
 include "inference-common/smc.mc"
 
+-- Include the inference method definition definition files.
+include "coreppl-to-mexpr/apf/method.mc"
+include "coreppl-to-mexpr/bpf/method.mc"
+include "coreppl-to-mexpr/importance/method.mc"
+include "coreppl-to-mexpr/mcmc-lightweight/method.mc"
+include "coreppl-to-mexpr/mcmc-naive/method.mc"
+include "coreppl-to-mexpr/mcmc-trace/method.mc"
 
-lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + ProbabilisticGraphicalModel + KeywordMaker
+lang DPPLParser =
+  BootParser + MExprPrettyPrint + MExprPPL + Resample +
+  ProbabilisticGraphicalModel + KeywordMaker +
+
+  ImportanceSamplingMethod + BPFMethod + APFMethod +
+  LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod
+
+  -- Interprets the argument to infer which encodes the inference method and
+  -- its configuration parameters.
+  sem interpretInferMethod : Expr -> InferMethod
+  sem interpretInferMethod =
+  | TmConApp {ident = ident, body = TmRecord {bindings = bindings}, info = info} ->
+    inferMethodFromCon info bindings (nameGetStr ident)
+  | t -> errorSingle [infoTm t] "Expected a constructor application"
 
   -- Keyword maker
   sem isKeyword =
   | TmAssume _ -> true
   | TmObserve _ -> true
   | TmWeight _ -> true
+  | TmInfer _ -> true
   | TmDist _ -> true
   | TmPlate _ -> true
 
@@ -30,6 +52,10 @@ lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + Probabil
                                             info = info})
   | "resample" -> Some (0, lam lst. TmResample {ty = TyUnknown {info = info},
                                                 info = info})
+  | "infer" -> Some (2, lam lst. TmInfer {method = interpretInferMethod (get lst 0),
+                                          model = get lst 1,
+                                          ty = TyUnknown {info = info},
+                                          info = info})
   | "plate" -> Some (2, lam lst. TmPlate {fun = get lst 0,
                                           lst = get lst 1,
                                           ty = TyUnknown {info = info},
@@ -70,31 +96,51 @@ lang DPPLParser = BootParser + MExprPrettyPrint + MExprPPL + Resample + Probabil
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
+
+  sem isTypeKeyword =
+  | TyDist _ -> true
+
+  sem matchTypeKeywordString (info: Info) =
+  | "Dist" -> Some(1, lam lst. TyDist { info = info, ty = get lst 0 })
+
 end
+
+-- Extend builtins with CorePPL builtins
+let builtin = use MExprPPL in concat
+  [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
+  , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
+  , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
+  , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
+  ] builtin
 
 let parseMCorePPLFile = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {{{defaultBootParserParseMCoreFileArg
-                  with keepUtests = false}
-                  with keywords = pplKeywords}
-                  with allowFree = true} in
-  makeKeywords [] (parseMCoreFile config filename)
+  let config = {defaultBootParserParseMCoreFileArg with
+                  keepUtests = false,
+                  keywords = pplKeywords,
+                  allowFree = true,
+                  builtin = builtin} in
+  let ast = parseMCoreFile config filename in
+  let ast = symbolizeAllowFree ast in
+  makeKeywords ast
 
 
 let parseMCorePPLFileNoDeadCodeElimination = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {{{{defaultBootParserParseMCoreFileArg
-                   with keepUtests = false}
-                   with keywords = pplKeywords}
-                   with eliminateDeadCode = false}
-                   with allowFree = true} in
-  makeKeywords [] (parseMCoreFile config filename)
+  let config = {defaultBootParserParseMCoreFileArg with
+                   keepUtests = false,
+                   keywords = pplKeywords,
+                   eliminateDeadCode = false,
+                   allowFree = true,
+                   builtin = builtin} in
+  let ast = parseMCoreFile config filename in
+  let ast = symbolizeAllowFree ast in
+  makeKeywords ast
 
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
-  makeKeywords [] (parseMExprStringKeywords pplKeywords cpplstr)
-
-
+  let ast = parseMExprStringKeywords pplKeywords cpplstr in
+  makeKeywords ast

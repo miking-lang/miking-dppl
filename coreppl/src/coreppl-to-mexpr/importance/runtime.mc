@@ -14,21 +14,19 @@ type State = Ref Float
 
 let updateWeight = lam v. lam state. modref state (addf (deref state) v)
 
+let unwrapOpt : all a. Option a -> a = lam o.
+  match o with Some x then x
+  else error "Could not unwrap option"
+
 -- General inference algorithm for importance sampling
-let run : all a. (State -> a) -> (Res a -> ()) -> () = lam model. lam printResFun.
+let run : all a. Unknown -> (State -> a) -> Dist a = lam config. lam model.
+  use RuntimeDist in
 
-  -- Read number of runs and sweeps
-  match monteCarloArgs () with (particles, sweeps) in
+  let particles = config.particles in
 
-  -- Repeat once for each sweep
-  repeat (lam.
-      let weightInit: Float = 0. in
-      let states = createList particles (lam. ref weightInit) in
-      let res = mapReverse model states in
-      let res = (mapReverse deref states, res) in
-      printResFun res
-    ) sweeps
-
-let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
-  printLn (float2string (normConstant res.0));
-  printSamples printFun res.0 res.1
+  let weightInit = 0.0 in
+  let states = createList particles (lam. ref weightInit) in
+  let res = mapReverse model states in
+  constructDistEmpirical (reverse resRev) weightsRev
+    -- TODO(dlunde,2022-10-19): Properly extract the normalizing constant
+    (EmpNorm { normConst = negf 1.0 })

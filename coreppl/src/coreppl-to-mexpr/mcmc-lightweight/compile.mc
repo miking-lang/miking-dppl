@@ -23,8 +23,8 @@ lang MExprPPLLightweightMCMC =
   -- NOTE: Assumes must be transformed based on alignment (some samples are
   -- just drawn directly, and some are reused)
 
-  sem compileAligned : Options -> Expr -> Expr
-  sem compileAligned options =
+  sem compileAligned : Options -> Set String -> Expr -> Expr
+  sem compileAligned options externals =
   | t ->
 
     -- Read in native versions of higher-order constants and replace usage of
@@ -65,7 +65,8 @@ lang MExprPPLLightweightMCMC =
 
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (app_ (i (recordproj_ "logObserve" t.dist)) t.value) in
+
+    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
     i (appf1_ (i (var_ "updateWeight")) weight)
 
   | TmWeight t ->
@@ -79,8 +80,8 @@ lang MExprPPLLightweightMCMC =
   ------------------------------------------
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
   ------------------------------------------
-  sem compile : Options -> Expr -> Expr
-  sem compile options =
+  sem compile : Options -> Set String -> Expr -> Expr
+  sem compile options externals =
   | t ->
 
     -- Read in native versions of higher-order constants and replace usage of
@@ -93,7 +94,7 @@ lang MExprPPLLightweightMCMC =
     in
 
     -- Addressing transform combined with CorePPL->MExpr transform
-    let t = transform (setEmpty nameCmp) t in
+    let t = transform externals t in
 
     -- Type addressing transform
     let t = mapPre_Expr_Expr exprTyTransform t in
@@ -131,7 +132,7 @@ lang MExprPPLLightweightMCMC =
         i (nlam_ addrName (tyseq_ tyint_) (i (nulam_ v acc)))
       ) inner varNames
 
-  sem transform: Set Name -> Expr -> Expr
+  sem transform: Set String -> Expr -> Expr
   sem transform externalIds =
 
   | t -> smap_Expr_Expr (transform externalIds) t
@@ -150,7 +151,7 @@ lang MExprPPLLightweightMCMC =
       transformConst (constArity r.val) t
 
   | TmExt r & t ->
-    TmExt { r with inexpr = transform (setInsert r.ident externalIds) r.inexpr }
+    TmExt { r with inexpr = transform (setInsert (nameGetStr r.ident) externalIds) r.inexpr }
 
   | TmApp _ & t ->
 
@@ -198,7 +199,7 @@ lang MExprPPLLightweightMCMC =
 
         -- Base case: variables (including external applications)
         else match r.lhs with TmVar { ident = ident } then
-          if setMem ident externalIds
+          if setMem (nameGetStr ident) externalIds
             then (TmApp r, numArgs) else (transformApp (TmApp r), 0)
 
         -- Base case: constant application
@@ -233,7 +234,7 @@ lang MExprPPLLightweightMCMC =
     let i = withInfo r.info in
     let dist = transform externalIds r.dist in
     let value = transform externalIds r.value in
-    let weight = i (app_ (i (recordproj_ "logObserve" dist)) value) in
+    let weight = i (appf2_ (i (var_ "logObserve")) dist value) in
     i (appf1_ (i (var_ "updateWeight")) weight)
 
   | TmWeight r ->
@@ -259,6 +260,9 @@ lang MExprPPLLightweightMCMC =
       else errorSingle [r.info]
         "Error in mcmc-lightweight compile: Problem with TmConDef in exprTyTransform"
     in smap_Expr_Type rec t
+
+  -- Don't touch the types of externals
+  | TmExt r -> TmExt r
 
   sem tyTransform =
   | t -> smap_Type_Type tyTransform t

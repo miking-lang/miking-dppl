@@ -47,6 +47,7 @@ let updateWeight = lam v.
   modref weight (addf (deref weight) v)
 
 let sampleMH: all a. Dist a -> a = lam dist.
+  use RuntimeDist in
   let traceLength = deref state.traceLength in
   let cut = deref state.cut in
   let sample: Any =
@@ -55,18 +56,16 @@ let sampleMH: all a. Dist a -> a = lam dist.
       let sample = head r in
       modref state.oldTrace (tail r);
       sample
-    else unsafeCoerce (dist.sample ())
+    else unsafeCoerce (sample dist)
   in
   modref state.traceLength (addi (deref state.traceLength) 1);
   modref state.trace (cons sample (deref state.trace));
   unsafeCoerce sample
 
 -- General inference algorithm for trace MCMC
-let run : all a. (State -> a) -> (Res a -> ()) -> () =
-  lam model. lam printResFun.
-
-    -- Read number of runs and sweeps
-    match monteCarloArgs () with (runs, sweeps) in
+let run : all a. Unknown -> (State -> a) -> Dist a =
+  lam config. lam model.
+  use RuntimeDist in
 
     recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
       lam weights. lam samples. lam iter.
@@ -102,35 +101,29 @@ let run : all a. (State -> a) -> (Res a -> ()) -> () =
             mh (cons prevWeight weights) (cons prevSample samples) iter
     in
 
-    -- Repeat once for each sweep
-    repeat (lam.
+    let runs = config.iterations in
 
-        -- Used to keep track of acceptance ratio
-        mcmcAcceptInit runs;
+    -- Used to keep track of acceptance ratio
+    mcmcAcceptInit runs;
 
-        -- First sample
-        let sample = model state in
-        let weight = deref state.weight in
-        let iter = subi runs 1 in
+    -- First sample
+    let sample = model state in
+    let weight = deref state.weight in
+    let iter = subi runs 1 in
 
-        -- Sample the rest
-        let res = mh [weight] [sample] iter in
+    -- Sample the rest
+    let res = mh [weight] [sample] iter in
 
-        -- Reverse to get the correct order
-        let res = match res with (weights,samples) in
-          (reverse weights, reverse samples)
-        in
+    -- Reverse to get the correct order
+    let res = match res with (weights,samples) in
+      (reverse weights, reverse samples)
+    in
 
-        -- Print
-        printResFun res
+    (if compileOptions.printAcceptanceRate then
+      printLn (float2string (mcmcAcceptRate ()))
+    else ());
 
-      ) sweeps
-
-let printRes : all a. (a -> String) -> Res a -> () = lam printFun. lam res.
-  -- NOTE(dlunde,2022-05-23): I don't think printing the norm. const makes
-  -- sense for MCMC
-  -- printLn (float2string (normConstant res.0));
-  (if compileOptions.printAcceptanceRate then
-    printLn (float2string (mcmcAcceptRate ()))
-  else ());
-  printSamples printFun (mapReverse (lam. 0.) res.0) res.1
+  -- Return
+  constructDistEmpirical res.1 res.0
+    -- TODO(dlunde,2022-10-20): Add normconst
+    (EmpMCMC { acceptRate = mcmcAcceptRate () })
