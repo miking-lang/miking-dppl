@@ -118,7 +118,7 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   sem bodyWithoutLambdas : Expr -> Expr
   sem bodyWithoutLambdas =
   | TmLam t -> bodyWithoutLambdas t.body
-  | t -> t
+  | t -> withType (TyUnknown {info = infoTm t}) t
 
   sem removeInfers : Map Name (Map Name Type)
                   -> Map Name (InferMethod, RuntimeEntry) -> Expr -> Expr
