@@ -299,7 +299,7 @@ let compileModel = lam methodStr. lam modelAst.
   match loadCompiler dummyOptions inferMethod with (runtime, compile) in
   let entry = loadRuntimeEntry inferMethod runtime in
   let modelRepr = {ast = modelAst, method = inferMethod, params = []} in
-  compileModel (compile (setEmpty cmpString)) entry modelId modelRepr
+  compileModel compile entry modelId modelRepr
 in
 
 -- Simple tests that ensure compilation of a simple model throws no errors
