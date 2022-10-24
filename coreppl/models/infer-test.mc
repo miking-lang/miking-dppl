@@ -35,37 +35,36 @@ let printRes = lam printFun. lam dist.
     else ()
   in work samples weights
 
+let printDist = lam dist.
+  (if distEmpiricalDegenerate dist then
+    printLn "Empirical distribution has only negative infinity weights"
+  else printRes float2string dist);
+  printLn (create 20 (lam. '='))
+
 mexpr
 
 let alpha = divf (int2float (randIntU 0 100)) 10.0 in
 let beta = divf (int2float (randIntU 0 100)) 10.0 in
 
 -- Run the model using each of the available runtimes
-let p = addi 10 (randIntU 0 10) in
+let p = randIntU 0 10 in
 let dist = infer (Importance {particles = p}) (lam. model alpha beta) in
-printRes float2string dist;
-printLn (create 20 (lam. '='));
+printDist dist;
 
 let dist = infer (BPF {particles = p}) (lam. model alpha beta) in
-printRes float2string dist;
-printLn (create 20 (lam. '='));
+printDist dist;
 
 let dist = infer (APF {particles = p}) (lam. model alpha beta) in
-printRes float2string dist;
-printLn (create 20 (lam. '='));
+printDist dist;
 
 let dist = infer (LightweightMCMC {iterations = p, aligned = false, globalProb = 0.5}) (lam. model alpha beta) in
-printRes float2string dist;
-printLn (create 20 (lam. '='));
+printDist dist;
 
 let dist = infer (NaiveMCMC {iterations = p}) (lam. model alpha beta) in
-printRes float2string dist;
-printLn (create 20 (lam. '='));
+printDist dist;
 
 let dist = infer (TraceMCMC {iterations = p}) (lam. model alpha beta) in
-printRes float2string dist;
-printLn (create 20 (lam. '='));
+printDist dist;
 
 let dist = loop (Uniform 1.0 2.0) in
-printRes float2string dist;
-printLn (create 20 (lam. '='))
+printDist dist
