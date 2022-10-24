@@ -262,7 +262,7 @@ lang MExprPPLLightweightMCMC =
     in smap_Expr_Type rec t
 
   -- Don't touch the types of externals
-  | TmExt r -> TmExt {r with inexpr = exprTyTransform r.inexpr}
+  | TmExt r -> TmExt r
 
   sem tyTransform =
   | t -> smap_Type_Type tyTransform t
