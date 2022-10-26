@@ -98,4 +98,10 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   -- Type checks the inference method. This ensures that the provided arguments
   -- have the correct types.
   sem typeCheckInferMethod : TCEnv -> Info -> InferMethod -> InferMethod
+
+  -- Symbolizes infer methods.
+  sem symbolizeInferMethod : SymEnv -> InferMethod -> InferMethod
+
+  -- Overrides the number of runs/iterations/particles in the InferMethod
+  sem setRuns : Expr -> InferMethod -> InferMethod
 end

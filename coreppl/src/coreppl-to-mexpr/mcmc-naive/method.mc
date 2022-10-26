@@ -1,7 +1,6 @@
-include "mexpr/ast.mc"
-include "../../infer-method.mc"
+include "../../coreppl.mc"
 
-lang NaiveMCMCMethod = InferMethodBase + MExprAst
+lang NaiveMCMCMethod = MExprPPL
   syn InferMethod =
   | NaiveMCMC {
       iterations : Expr -- Type Int
@@ -41,4 +40,12 @@ lang NaiveMCMCMethod = InferMethodBase + MExprAst
     NaiveMCMC {
       iterations = iterations
     }
+
+  sem symbolizeInferMethod env =
+  | NaiveMCMC r ->
+    NaiveMCMC {r with iterations = symbolizeExpr env r.iterations}
+
+  sem setRuns expr =
+  | NaiveMCMC r -> NaiveMCMC {r with iterations = expr}
+
 end

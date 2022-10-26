@@ -9,6 +9,7 @@ include "transformation.mc"
 include "dppl-arg.mc"
 include "extract.mc"
 include "build.mc"
+include "src-location.mc"
 include "coreppl-to-mexpr/compile.mc"
 
 include "option.mc"
@@ -30,8 +31,8 @@ lang CPPLLang =
   -- are they guaranteed to be included in the user code.
   sem getTypePrintFunction : RuntimeEntry -> Type -> Expr
   sem getTypePrintFunction runtimeEntry =
-  | TyInt _ -> error "TODO"
-  | TyBool _ -> error "TODO"
+  | TyInt _ -> var_ "int2string"
+  | TyBool _ -> var_ "bool2string"
   | TyFloat _ -> uconst_ (CFloat2string ())
   | TySeq {ty = TyChar _} -> ulam_ "x" (var_ "x")
   | TyChar _ -> ulam_ "x" (seq_ [(var_ "x")])
@@ -48,44 +49,8 @@ lang CPPLLang =
     let info = infoTm ast in
     TmInfer {
       method = inferMethod,
-      model = TmLam {
-        ident = nameNoSym "",
-        tyIdent = TyRecord {fields = mapEmpty cmpSID, info = info},
-        body = ast, ty = TyUnknown {info = info}, info = info
-      },
+      model = ast,
       ty = TyUnknown {info = info}, info = info }
-
-  -- Generates code for printing the "result" of an empirical distribution.
-  sem printResCode : () -> Expr
-  sem printResCode =
-  | _ ->
-    let idx = ref 0 in
-    let i = lam.
-      let id = deref idx in
-      modref idx (addi id 1);
-      infoVal "<printRes code>" id 0 0 0
-    in
-    let recBody = ulam_ "weights" (ulam_ "samples" (
-      match_ (utuple_ [var_ "weights", var_ "samples"])
-        (ptuple_ [pseqedge_ [pvar_ "w"] "weights" [], pseqedge_ [pvar_ "s"] "samples" []])
-        (bindall_ [
-          -- NOTE(larshum, 2022-10-21): We add custom info here to prevent
-          -- deadcode elimination from considering the bindings as equivalent.
-          withInfo (i ()) (ulet_ "" (print_ (app_ (var_ "printFun") (var_ "s")))),
-          withInfo (i ()) (ulet_ "" (print_ (str_ " "))),
-          withInfo (i ()) (ulet_ "" (print_ (float2string_ (var_ "w")))),
-          withInfo (i ()) (ulet_ "" (print_ (str_ "\n"))),
-          appf2_ (var_ "rec") (var_ "weights") (var_ "samples")])
-        unit_
-    )) in
-    ulam_ "printFun" (ulam_ "dist" (
-      bind_
-        (ureclets_ [("rec", recBody)])
-        (match_ (app_ (uconst_ (CDistEmpiricalSamples ())) (var_ "dist"))
-          (ptuple_ [pvar_ "samples", pvar_ "weights"])
-          (appf2_ (var_ "rec") (var_ "weights") (var_ "samples"))
-          never_)
-    ))
 
   -- Applies a transformation on full-program models, that allows them to be
   -- compiled in the same way as programs that use infer.
@@ -102,13 +67,56 @@ lang CPPLLang =
       let resTy = tyTm (typeCheck ast) in
       let tyPrintFun = getTypePrintFunction runtimeEntry resTy in
 
-      let ast = bindall_ [
-        ulet_ "d" (inferMethodApplication inferMethod ast),
-        ulet_ "printRes" (printResCode ()),
+      let top =
+        parseMCorePPLFileLib (join [corepplSrcLoc, "/coreppl-to-mexpr/top.mc"])
+      in
+
+      -- We do not use the -p cppl option to determine the number of iterations
+      -- if the number is instead given as the first argument on the command
+      -- line when running the program.
+      let inferMethod = setRuns (var_ "particles") inferMethod in
+
+      let inferCode = bindall_ [
+        ulet_ "d" (inferMethodApplication inferMethod (var_ "ast")),
+
+        ulet_ "" (
+            match options.method with
+                "mexpr-importance"
+              | "mexpr-bpf"
+              | "mexpr-apf"
+            then
+              app_ (var_ "printNormConst") (var_ "d")
+            else match options.method with
+                "mexpr-mcmc-naive"
+              | "mexpr-mcmc-trace"
+              | "mexpr-mcmc-lightweight"
+            then
+              if options.printAcceptanceRate then
+                app_ (var_ "printAcceptRate") (var_ "d")
+              else
+                unit_
+            else error "Inference algorithm not supported in global mode"
+          ),
+
         if options.printSamples then
-          appf2_ (var_ "printRes") tyPrintFun (var_ "d")
+          appf2_ (var_ "printSamples") tyPrintFun (var_ "d")
         else unit_
+
       ] in
+
+      let ast = bindall_ [
+        ulet_ "ast"
+          (TmLam {
+            ident = nameNoSym "",
+            tyIdent = TyRecord {fields = mapEmpty cmpSID, info = infoTm ast},
+            body = ast, ty = TyUnknown {info = infoTm ast}, info = infoTm ast
+          }),
+        ulet_ "particles" (int_ options.particles),
+        top,
+        appf2_ (var_ "repeat") (ulam_ "" inferCode) (var_ "sweeps")
+      ] in
+
+      -- printLn (mexprPPLToString ast);
 
       (runtimes, ast)
 end

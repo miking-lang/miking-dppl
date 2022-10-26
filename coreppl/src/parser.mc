@@ -125,7 +125,6 @@ let parseMCorePPLFile = lam filename.
   let ast = symbolizeAllowFree ast in
   makeKeywords ast
 
-
 let parseMCorePPLFileNoDeadCodeElimination = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
@@ -137,6 +136,18 @@ let parseMCorePPLFileNoDeadCodeElimination = lam filename.
                    builtin = builtin} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
+  makeKeywords ast
+
+let parseMCorePPLFileLib = lam filename.
+  use DPPLParser in
+  -- Read and parse the mcore file
+  let config = {defaultBootParserParseMCoreFileArg with
+                   keepUtests = false,
+                   keywords = pplKeywords,
+                   eliminateDeadCode = false,
+                   allowFree = true,
+                   builtin = builtin} in
+  let ast = parseMCoreFile config filename in
   makeKeywords ast
 
 -- Similar to getAst, but calls parseMExprString instead

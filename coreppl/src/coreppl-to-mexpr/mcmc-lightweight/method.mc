@@ -1,7 +1,6 @@
-include "mexpr/ast.mc"
-include "../../infer-method.mc"
+include "../../coreppl.mc"
 
-lang LightweightMCMCMethod = InferMethodBase + MExprAst
+lang LightweightMCMCMethod = MExprPPL
   syn InferMethod =
   | LightweightMCMC {
       iterations : Expr, -- Type Int
@@ -61,4 +60,15 @@ lang LightweightMCMCMethod = InferMethodBase + MExprAst
       aligned = aligned,
       globalProb = globalProb
     }
+
+  sem symbolizeInferMethod env =
+  | LightweightMCMC r ->
+    LightweightMCMC {r with
+      iterations = symbolizeExpr env r.iterations,
+      aligned = symbolizeExpr env r.aligned,
+      globalProb = symbolizeExpr env r.globalProb
+    }
+
+  sem setRuns expr =
+  | LightweightMCMC r -> LightweightMCMC {r with iterations = expr}
 end

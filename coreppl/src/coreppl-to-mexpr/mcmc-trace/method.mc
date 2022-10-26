@@ -1,7 +1,6 @@
-include "mexpr/ast.mc"
-include "../../infer-method.mc"
+include "../../coreppl.mc"
 
-lang TraceMCMCMethod = InferMethodBase + MExprAst
+lang TraceMCMCMethod = MExprPPL
   syn InferMethod =
   | TraceMCMC {
       iterations : Expr -- Type Int
@@ -41,4 +40,12 @@ lang TraceMCMCMethod = InferMethodBase + MExprAst
     TraceMCMC {
       iterations = iterations
     }
+
+  sem symbolizeInferMethod env =
+  | TraceMCMC r ->
+    TraceMCMC {r with iterations = symbolizeExpr env r.iterations}
+
+  sem setRuns expr =
+  | TraceMCMC r -> TraceMCMC {r with iterations = expr}
+
 end

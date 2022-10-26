@@ -119,10 +119,6 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
       (reverse weights, reverse samples)
     in
 
-    (if compileOptions.printAcceptanceRate then
-      printLn (float2string (mcmcAcceptRate ()))
-    else ());
-
   -- Return
   constructDistEmpirical res.1 (create runs (lam. 1.))
     -- TODO(dlunde,2022-10-20): Add normconst

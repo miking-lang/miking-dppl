@@ -1,7 +1,6 @@
-include "mexpr/ast.mc"
-include "../../infer-method.mc"
+include "../../coreppl.mc"
 
-lang ImportanceSamplingMethod = InferMethodBase + MExprAst
+lang ImportanceSamplingMethod = MExprPPL
   syn InferMethod =
   | Importance {particles : Expr}
 
@@ -30,4 +29,11 @@ lang ImportanceSamplingMethod = InferMethodBase + MExprAst
     let particles = typeCheckExpr env particles in
     unify [info, infoTm particles] env (tyTm particles) int;
     Importance {particles = particles}
+
+  sem symbolizeInferMethod env =
+  | Importance r -> Importance {r with particles = symbolizeExpr env r.particles}
+
+  sem setRuns expr =
+  | Importance r -> Importance {r with particles = expr}
+
 end

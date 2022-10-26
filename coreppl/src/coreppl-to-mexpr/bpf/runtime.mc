@@ -69,5 +69,4 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
 
   -- Return
   constructDistEmpirical samples weights
-    -- TODO(dlunde,2022-10-20): Add normconst
-    (EmpNorm {normConst = negf 1.0})
+    (EmpNorm {normConst = normConstant weights})
