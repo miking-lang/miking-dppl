@@ -67,15 +67,10 @@ let systematicSample: all a. [a] -> [Float] -> Float -> Int -> [a] = lam seq. la
 
 -- Computing the normalization constant using the log-sum-exp trick
 let normConstant : [Float] -> Float = lam res.
-  let negInf = (divf (negf 1.) 0.) in
+  let negInf = divf (negf 1.) 0. in
   let max = foldl (lam acc. lam x. if geqf x acc then x else acc) negInf res in
-  match foldl
-    (lam acc. lam x.
-       if eqf x (negf inf) then acc else
-         (addf (exp (subf x max)) acc.0, addi 1 acc.1)
-    ) (0., 0) res
-  with (sum,count) in
-  subf (addf max (log sum)) (log (int2float count))
+  let sum = foldl (lam acc. lam x. addf (exp (subf x max)) acc) 0. res in
+  subf (addf max (log sum)) (log (int2float (length res)))
 
 -- Computes the expected value for all variables. Returns
 -- a list that excludes the weight component and only contains
