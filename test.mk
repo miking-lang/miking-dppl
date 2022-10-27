@@ -2,7 +2,7 @@
 
 # Include all .mc files but ignore files under coreppl-to-mexpr that starts
 # with "runtime" (they cannot be executed standalone)
-test-files=$(shell find coreppl/src -name "*.mc" -not \( -path "*coreppl-to-mexpr/*" -name "runtime*.mc" \))
+test-files=$(shell find coreppl/src -name "*.mc" -not \( -path "*coreppl-to-mexpr/*" \( -name "runtime*.mc" -or -name "top.mc" \) \))
 test-files+=coreppl/src/coreppl-to-mexpr/runtimes.mc
 
 # NOTE(dlunde,2021-10-27): Cannot yet be compiled

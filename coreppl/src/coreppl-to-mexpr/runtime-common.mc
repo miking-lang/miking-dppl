@@ -15,12 +15,6 @@ let numarg = lam.
     exit 1
   else string2int (get argv 1)
 
--- Returns the number of particles/samples/executions and sweeps from the program argument
-let monteCarloArgs = lam.
-  let particles = if leqi (length argv) 1 then 1 else string2int (get argv 1) in
-  let sweeps = if leqi (length argv) 2 then 1 else string2int (get argv 2) in
-  (particles, sweeps)
-
 -- Save the data to a CSV file
 let saveCSV = lam res. lam names. lam filename. lam expOnLogWeights.
   match writeOpen filename with Some ch then
@@ -73,7 +67,7 @@ let systematicSample: all a. [a] -> [Float] -> Float -> Int -> [a] = lam seq. la
 
 -- Computing the normalization constant using the log-sum-exp trick
 let normConstant : [Float] -> Float = lam res.
-  let negInf = (divf (negf 1.) 0.) in
+  let negInf = divf (negf 1.) 0. in
   let max = foldl (lam acc. lam x. if geqf x acc then x else acc) negInf res in
   let sum = foldl (lam acc. lam x. addf (exp (subf x max)) acc) 0. res in
   subf (addf max (log sum)) (log (int2float (length res)))

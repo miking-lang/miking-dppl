@@ -85,8 +85,9 @@ lang Infer =
   -- Symbolize
   sem symbolizeExpr (env: SymEnv) =
   | TmInfer t ->
-    TmInfer {{ t with model = symbolizeExpr env t.model }
-                 with ty = symbolizeType env t.ty }
+    TmInfer {{{ t with model = symbolizeExpr env t.model }
+                  with ty = symbolizeType env t.ty }
+                  with method = symbolizeInferMethod env t.method }
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =

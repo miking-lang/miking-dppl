@@ -27,6 +27,6 @@ let run : all a. Unknown -> (State -> a) -> Dist a = lam config. lam model.
   let weightInit = 0.0 in
   let states = createList particles (lam. ref weightInit) in
   let res = mapReverse model states in
-  constructDistEmpirical (reverse res) (mapReverse deref states)
-    -- TODO(dlunde,2022-10-19): Properly extract the normalizing constant
-    (EmpNorm { normConst = negf 1.0 })
+  let weights = mapReverse deref states in
+  constructDistEmpirical (reverse res) weights
+    (EmpNorm { normConst = normConstant weights })

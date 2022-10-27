@@ -60,7 +60,11 @@ let run : all a. Unknown -> (State -> Stop a) -> Dist a = lam config. lam model.
   let states = createList particles (lam. ref weightInit) in
   let res = mapReverse (importance model) states in
 
+  -- NOTE(dlunde,2022-10-27): It is very important that we compute the
+  -- normalizing constant _before_ discarding the None values in filterNone.
+  -- Otherwise the normalizing constant estimate is incorrect!
+  let normConst = normConstant weightsRev in
+
   match foldl2 filterNone ([], []) states res with (weightsRev, resRev) in
   constructDistEmpirical (reverse resRev) weightsRev
-    -- TODO(dlunde,2022-10-19): Properly extract the normalizing constant
-    (EmpNorm { normConst = negf 1.0 })
+    (EmpNorm { normConst = normConst })

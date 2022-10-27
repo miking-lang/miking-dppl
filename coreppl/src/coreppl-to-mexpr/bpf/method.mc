@@ -1,7 +1,6 @@
-include "mexpr/ast.mc"
-include "../../infer-method.mc"
+include "../../coreppl.mc"
 
-lang BPFMethod = InferMethodBase + MExprAst
+lang BPFMethod = MExprPPL
   syn InferMethod =
   | BPF {particles : Expr}
 
@@ -30,4 +29,11 @@ lang BPFMethod = InferMethodBase + MExprAst
     let particles = typeCheckExpr env particles in
     unify [info, infoTm particles] env (tyTm particles) int;
     BPF {particles = particles}
+
+  sem symbolizeInferMethod env =
+  | BPF r -> BPF {r with particles = symbolizeExpr env r.particles}
+
+  sem setRuns expr =
+  | BPF r -> BPF {r with particles = expr}
+
 end
