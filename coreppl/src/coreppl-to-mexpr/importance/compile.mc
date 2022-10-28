@@ -97,9 +97,9 @@ lang MExprPPLImportance =
   sem compileCps options =
   | (_,t) ->
 
-    printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
-    match pprintCode 0 pprintEnvEmpty t with (env,str) in
-    printLn (str);
+    -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
+    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    -- printLn (str);
 
     -- Static analysis and CPS transformation
     let t =
@@ -115,9 +115,9 @@ lang MExprPPLImportance =
         let checkPointNames: Set Name =
           extractCheckpoint (checkpointCfa checkpoint t) in
 
-        printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
-        match mapAccumL pprintEnvGetStr env (setToSeq checkPointNames) with (env,strings) in
-        printLn (join [ "[", strJoin "," strings, "]"]);
+        -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
+        -- match mapAccumL pprintEnvGetStr env (setToSeq checkPointNames) with (env,strings) in
+        -- printLn (join [ "[", strJoin "," strings, "]"]);
 
         cpsPartialCont checkPointNames cont t
 
@@ -127,9 +127,9 @@ lang MExprPPLImportance =
 
     in
 
-    printLn ""; printLn "--- AFTER CPS ---";
-    match pprintCode 0 pprintEnvEmpty t with (env,str) in
-    printLn (str);
+    -- printLn ""; printLn "--- AFTER CPS ---";
+    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    -- printLn (str);
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
