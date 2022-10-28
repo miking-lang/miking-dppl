@@ -34,10 +34,12 @@ lang CPPLLang =
   | TyInt _ -> var_ "int2string"
   | TyBool _ -> var_ "bool2string"
   | TyFloat _ -> uconst_ (CFloat2string ())
+  -- TODO(dlunde,2022-10-28): For some reason, the versions below using ulam_
+  -- do not seem to work.
   | TySeq {ty = TyChar _} -> ulam_ "x" (var_ "x")
   | TyChar _ -> ulam_ "x" (seq_ [(var_ "x")])
   | TyRecord r ->
-    if mapIsEmpty r.fields then ulam_ "x" (str_ "()")
+    if mapIsEmpty r.fields then ulam_ "" (str_ "()")
     else error errMsgPrintFunction
   | _ -> error errMsgPrintFunction
 
