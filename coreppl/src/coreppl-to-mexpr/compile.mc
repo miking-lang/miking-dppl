@@ -14,6 +14,7 @@ include "../dppl-arg.mc"
 include "../transformation.mc"
 include "../src-location.mc"
 
+include "backcompat.mc"
 include "dists.mc"
 include "runtimes.mc"
 
@@ -269,22 +270,25 @@ end
 
 let mexprCompile = use MExprCompile in mexprCompile
 
+lang TestCompileLang =
+  MExprCompile + CPPLBackcompat + MExprFindSym + DPPLParser
+end
+
 mexpr
+
+use TestCompileLang in
 
 let parse = parseMExprPPLString in
 
 -- TODO(dlunde,2022-10-19): We should also add a `simpleInfer` test that uses
 -- the new infer keyword.
 let simple = parse "
-let t : () -> Float = lam.
-  let x = assume (Beta 10.0 5.0) in
-  let obs = true in
-  observe obs (Bernoulli x);
-  x
-in
-t {}
+let x = assume (Beta 10.0 5.0) in
+let obs = true in
+observe obs (Bernoulli x);
+x
 " in
-match use MExprFindSym in findNamesOfStrings ["t"] simple with [Some modelId] in
+let simple = symbolize simple in
 
 let truefn = lam. lam. true in
 
@@ -293,23 +297,21 @@ let truefn = lam. lam. true in
 -- runtime files as part of the utests.
 let dummyOptions = {default with debugMExprCompile = true} in
 
-let compileModel = lam methodStr. lam modelAst.
-  use MExprCompile in
-  let inferMethod = inferMethodFromOptions dummyOptions methodStr in
-  match loadCompiler dummyOptions inferMethod with (runtime, compile) in
-  let entry = loadRuntimeEntry inferMethod runtime in
-  let modelRepr = {ast = modelAst, method = inferMethod, params = []} in
-  compileModel compile entry modelId modelRepr
+let compile = lam options. lam methodStr. lam ast.
+  let options = {options with method = methodStr} in
+  match programModelTransform options ast with (runtimes, ast) in
+  let runtimeData = combineRuntimes options runtimes in
+  mexprCompile options runtimeData ast
 in
 
 -- Simple tests that ensure compilation of a simple model throws no errors
 -- TODO(dlunde,2022-10-24): These tests are not good enough. We need to also
 -- test individual options for the different methods (i.e., align and CPS)
-utest compileModel "mexpr-importance" simple with () using truefn in
-utest compileModel "mexpr-apf" simple with () using truefn in
-utest compileModel "mexpr-bpf" simple with () using truefn in
-utest compileModel "mexpr-mcmc-naive" simple with () using truefn in
-utest compileModel "mexpr-mcmc-trace" simple with () using truefn in
-utest compileModel "mexpr-mcmc-lightweight" simple with () using truefn in
+utest compile dummyOptions "mexpr-importance" simple with () using truefn in
+utest compile dummyOptions "mexpr-apf" simple with () using truefn in
+utest compile dummyOptions "mexpr-bpf" simple with () using truefn in
+utest compile dummyOptions "mexpr-mcmc-naive" simple with () using truefn in
+utest compile dummyOptions "mexpr-mcmc-trace" simple with () using truefn in
+utest compile dummyOptions "mexpr-mcmc-lightweight" simple with () using truefn in
 
 ()
