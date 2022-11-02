@@ -36,7 +36,10 @@ type Options = {
   mcmcLightweightReuseLocal: Bool, -- Currently has no effect
 
   -- MCMC options,
-  printAcceptanceRate: Bool
+  printAcceptanceRate: Bool,
+
+  -- PMCMC particle count
+  pmcmcParticles: Int
 }
 
 -- Default values for options
@@ -57,7 +60,8 @@ let default = {
   debugMExprCompile = true,
   mcmcLightweightGlobalProb = 0.1,
   mcmcLightweightReuseLocal = true,
-  printAcceptanceRate = false
+  printAcceptanceRate = false,
+  pmcmcParticles = 2
 }
 
 -- Options configuration
@@ -139,7 +143,15 @@ let config = [
   ([("--print-accept-rate", "", "")],
     "Prints the acceptance rate of MCMC algorithms.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with printAcceptanceRate = true})
+      let o: Options = p.options in {o with printAcceptanceRate = true}),
+  ([("--pmcmcParticles", " ", "<particles>")],
+    join [
+      "The number of particles for the smc proposal computation. The default is ",
+      (int2string default.pmcmcParticles),
+      ". This option is used if one of the following methods are used: mexpr-pmcmc-*."
+    ],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with particles = argToIntMin p 1})
 ]
 
 -- Menu
@@ -149,4 +161,3 @@ let menu = lam. join [
   argHelpOptions config,
   "\n"
 ]
-

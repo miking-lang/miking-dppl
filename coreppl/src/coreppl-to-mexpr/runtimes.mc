@@ -12,6 +12,7 @@ include "importance/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
 include "mcmc-lightweight/compile.mc"
+include "pmcmc-pimh/compile.mc"
 
 lang LoadRuntime =
   DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode
@@ -53,6 +54,7 @@ lang LoadRuntime =
   | LightweightMCMC _ -> compilerLightweightMCMC options
   | NaiveMCMC _ -> compilerNaiveMCMC options
   | TraceMCMC _ -> compilerTraceMCMC options
+  | PIMH _ -> compilerPIMH options
   | _ -> error "Unsupported CorePPL to MExpr inference method"
 
   sem loadRuntimes : Options -> Expr -> Map InferMethod RuntimeEntry
