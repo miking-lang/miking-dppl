@@ -7,12 +7,12 @@ tppl_name=tpplc
 plot_name=dppl-plot
 bin_path=${HOME}/.local/bin
 src_path=${HOME}/.local/src/coreppl/
-cppl_src=coreppl/src/
+cppl_src=coreppl/src/.
 
 rootppl_bin_path = $(HOME)/.local/bin/rppl
 rootppl_src_path=$(HOME)/.local/src/rootppl/
 rootppl_bin = rootppl/rppl
-rootppl_src = rootppl/src/
+rootppl_src = rootppl/src/.
 
 all: build/${cppl_name}
 
@@ -37,7 +37,7 @@ install: build/${cppl_name}
 	mkdir -p $(bin_path) $(src_path);
 	cp build/${cppl_name} ${bin_path}/${exec_name}
 	chmod +x ${bin_path}/${exec_name}
-	cp -rfT $(cppl_src) $(src_path)
+	cp -rf $(cppl_src) $(src_path)
 
 # Scripts
 	cp -f scripts/${plot_name} ${bin_path}/.
@@ -46,7 +46,7 @@ install: build/${cppl_name}
 # RootPPL
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
 	cp -f $(rootppl_bin) $(rootppl_bin_path)
-	cp -rfT $(rootppl_src) $(rootppl_src_path)
+	cp -rf $(rootppl_src) $(rootppl_src_path)
 
 uninstall:
 # CorePPL
@@ -82,7 +82,7 @@ test-boot:
 install-rootppl:
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
 	cp -f $(rootppl_bin) $(rootppl_bin_path)
-	cp -rfT $(rootppl_src) $(rootppl_src_path)
+	cp -rf $(rootppl_src) $(rootppl_src_path)
 
 uninstall-rootppl:
 	rm -rf $(rootppl_bin_path)
