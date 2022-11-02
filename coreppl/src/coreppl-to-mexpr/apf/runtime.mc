@@ -45,7 +45,7 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
   in
   let propagate = lam particles.
     let maxWeight = foldl (lam acc. lam p. if geqf p.weight acc then p.weight else acc) negInf particles in
-    let expWeights = map (lam p. exp (subf p.weight maxWeight)) particles in
+    let expWeights = reverse (mapReverse (lam p. exp (subf p.weight maxWeight)) particles) in
     let expWeightSum = foldl (lam acc. lam w. (addf acc w)) 0. expWeights in
     let propagations = foldl (lam acc. lam p. (addi acc p.propagations)) 0 particles in
     let contWeight = subf (addf maxWeight (log expWeightSum)) (log (int2float (subi propagations 1))) in
