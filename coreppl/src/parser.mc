@@ -14,13 +14,15 @@ include "coreppl-to-mexpr/importance/method.mc"
 include "coreppl-to-mexpr/mcmc-lightweight/method.mc"
 include "coreppl-to-mexpr/mcmc-naive/method.mc"
 include "coreppl-to-mexpr/mcmc-trace/method.mc"
+include "coreppl-to-mexpr/pmcmc-pimh/method.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
   ProbabilisticGraphicalModel + KeywordMaker +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
-  LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod
+  LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
+	PIMHMethod
 
   -- Interprets the argument to infer which encodes the inference method and
   -- its configuration parameters.

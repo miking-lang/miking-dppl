@@ -311,5 +311,6 @@ utest compileModel "mexpr-bpf" simple with () using truefn in
 utest compileModel "mexpr-mcmc-naive" simple with () using truefn in
 utest compileModel "mexpr-mcmc-trace" simple with () using truefn in
 utest compileModel "mexpr-mcmc-lightweight" simple with () using truefn in
+utest compileModel "mexpr-pmcmc-pimh" simple with () using truefn in
 
 ()
