@@ -86,9 +86,13 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
 
   -- Constructs an inference method from the arguments of a TmConApp.
   sem inferMethodFromCon : Info -> Map SID Expr -> String -> InferMethod
+  sem inferMethodFromCon info bindings =
+  | s -> errorSingle [info] (concat "Unknown inference method: " s)
 
   -- Constructs an inference method from command-line options.
   sem inferMethodFromOptions : Options -> String -> InferMethod
+  sem inferMethodFromOptions options =
+  | s -> error (concat "Unknown inference method string: " s)
 
   -- Produces a record expression containing the configuration parameters of
   -- the inference method. This record is passed to the inference runtime
