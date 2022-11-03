@@ -26,6 +26,6 @@ let buildRootPPL = lam options. lam ast.
   writeFile outName (printCompiledRPProg ast);
   if options.skipFinal then ()
   else
-    let msg = "Compilation of generated CUDA code failed" in
+    let msg = "RootPPL compilation failed" in
     let cmds = ["rppl", outName, "--stack-size" , int2string options.stackSize] in
     runCommandWithError cmds msg
