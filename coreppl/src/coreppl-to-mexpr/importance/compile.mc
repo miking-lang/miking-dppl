@@ -114,12 +114,14 @@ lang MExprPPLImportance =
         in
         let checkPointNames: Set Name =
           extractCheckpoint (checkpointCfa checkpoint t) in
+        -- match checkpointCfaDebug checkpoint env t with (env,res) in
+        -- let checkPointNames: Set Name = extractCheckpoint res in
 
         -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
         -- match mapAccumL pprintEnvGetStr env (setToSeq checkPointNames) with (env,strings) in
         -- printLn (join [ "[", strJoin "," strings, "]"]);
 
-        cpsPartialCont checkPointNames cont t
+        cpsPartialCont (lam n. setMem n checkPointNames) cont t
 
       else match options.cps with "full" then cpsFullCont cont t
 

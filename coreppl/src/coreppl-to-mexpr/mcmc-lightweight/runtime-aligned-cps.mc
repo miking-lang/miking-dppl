@@ -13,10 +13,20 @@ include "../runtime-dists.mc"
 -- Any-type, used for traces
 type Any = ()
 
+-- Type used to resume execution midway through a previous run using a
+-- continuation.
+type Cont a = {
+  cont: Any -> a,
+  weight: Float,
+  prevWeightReused: Float,
+  weightReused: Float,
+  unalignedTraces: [[(Any, Float, Int)]],
+  dist: Dist Any
+}
 
 -- In aligned MCMC, the state is the accumulated weight, samples, and samples to
 -- reuse.
-type State = {
+type State a = {
 
   -- The weight of the current execution
   weight: Ref Float,
@@ -25,8 +35,11 @@ type State = {
   prevWeightReused: Ref Float,
   weightReused: Ref Float,
 
-  -- The aligned trace for this execution.
-  alignedTrace: Ref [(Any, Float)],
+  -- NOTE(dlunde,2022-11-03): Both the aligned and unaligned traces are stored
+  -- in _reverse_ order (unlike oldAlignedTrace and oldUnalignedTraces that are
+  -- stored in the actual order)
+  -- The aligned trace
+  alignedTrace: Ref [(Any, Float, Cont a)],
   -- The unaligned traces in between the aligned traces, including their
   -- syntactic ID for matching.
   unalignedTraces: Ref [[(Any, Float, Int)]],
@@ -34,8 +47,8 @@ type State = {
   -- Whether or not to reuse local unaligned samples
   reuseUnaligned: Ref Bool,
 
-  -- The previous aligned trace, with potentially invalidated samples
-  oldAlignedTrace: Ref [Option (Any, Float)],
+  -- The previous aligned trace
+  oldAlignedTrace: Ref [(Any, Float)],
   -- The previous unaligned traces in between the aligned traces, including
   -- their syntactic ID for matching.
   oldUnalignedTraces: Ref [[(Any, Float, Int)]],
@@ -50,7 +63,7 @@ type State = {
 let emptyList = toList []
 
 -- State (reused throughout inference)
-let state: State = {
+let state: State Unknown = {
   weight = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
@@ -79,15 +92,12 @@ let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
     (sample, wNew)
 
 -- Procedure at aligned samples
-let sampleAligned: all a. Dist a -> a = lam dist.
-  let oldAlignedTrace: [Option (Any,Float)] = deref state.oldAlignedTrace in
+let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown = lam dist. lam k.
+  let oldAlignedTrace: [(Any,Float)] = deref state.oldAlignedTrace in
   let sample: (Any, Float) =
-    match oldAlignedTrace with [sample] ++ oldAlignedTrace then
+    match oldAlignedTrace with [(sample,w)] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
-      match sample with Some (sample,w) then
-        reuseSample dist sample w
-      else
-        newSample dist
+      reuseSample dist sample w
     else
       -- This case should only happen in the first run when there is no
       -- previous aligned trace, or when we take a global step
@@ -105,8 +115,19 @@ let sampleAligned: all a. Dist a -> a = lam dist.
   (match deref state.oldUnalignedTraces with [] then () else
     modref state.oldUnalignedTraces (tail (deref state.oldUnalignedTraces)));
 
-  modref state.alignedTrace (cons sample (deref state.alignedTrace));
-  unsafeCoerce (sample.0)
+  -- Snapshot that can later be used to resume execution from this sample.
+  let cont: Cont Unknown = {
+    cont = unsafeCoerce k,
+    weight = deref state.weight,
+    prevWeightReused = deref state.prevWeightReused,
+    weightReused = deref state.weightReused,
+    unalignedTraces = deref state.unalignedTraces,
+    dist = unsafeCoerce dist
+  } in
+
+  modref state.alignedTrace
+    (cons (sample.0, sample.1, cont) (deref state.alignedTrace));
+  k (unsafeCoerce sample.0)
 
 let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   let sample: (Any, Float) =
@@ -128,49 +149,62 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   modref state.unalignedTraces (cons (cons (sample,w,i) current) rest);
   unsafeCoerce sample
 
--- Function to propose aligned trace changes between MH iterations.
-let modTrace: () -> () = lam.
-
-  let alignedTraceLength: Int = deref state.alignedTraceLength in
-
-  recursive let rec: Int -> [(Any,Float)] -> [Option (Any,Float)]
-                       -> [Option (Any,Float)] =
-    lam i. lam samples. lam acc.
-      match samples with [sample] ++ samples then
-        -- Invalidate sample if it has the invalid index
-        let acc: [Option (Any, Float)] =
-          cons (if eqi i 0 then None () else Some sample) acc in
-        rec (subi i 1) samples acc
-
-      else acc
-  in
+-- Function to run new MH iterations.
+let runNext: all a. (State -> a) -> a = lam model.
 
   -- Enable global modifications with probability gProb
   let gProb = compileOptions.mcmcLightweightGlobalProb in
   let modGlobal: Bool = bernoulliSample gProb in
 
-  if modGlobal then
+  if modGlobal then (
     modref state.oldAlignedTrace emptyList;
-    modref state.oldUnalignedTraces emptyList
-  else
+    modref state.oldUnalignedTraces emptyList;
+    modref state.weight 0.;
+    modref state.prevWeightReused 0.;
+    modref state.weightReused 0.;
+    modref state.reuseUnaligned true;
+    modref state.alignedTrace emptyList;
+    modref state.unalignedTraces (toList [emptyList]);
+    model state
+  ) else
+
+    recursive let rec: Int -> [(Any,Float,Cont a)] -> [(Any,Float)] -> a =
+      lam i. lam alignedTrace. lam oldAlignedTrace.
+        match alignedTrace with [sample] ++ alignedTrace then
+          if gti i 0 then
+            -- printLn (join ["Continuing at: ", int2string i]);
+            rec (subi i 1) alignedTrace
+              (cons (sample.0, sample.1) oldAlignedTrace)
+          else (
+            -- printLn (join ["Stopping at: ", int2string i]);
+            let cont = sample.2 in
+            let s = newSample cont.dist in
+            modref state.oldAlignedTrace (cons s oldAlignedTrace);
+            modref state.oldUnalignedTraces (mapReverse (lam trace.
+              reverse trace
+            ) cont.unalignedTraces);
+            modref state.weight cont.weight;
+            modref state.prevWeightReused cont.prevWeightReused;
+            modref state.weightReused cont.weightReused;
+            modref state.alignedTrace alignedTrace;
+            modref state.unalignedTraces cont.unalignedTraces;
+
+            -- This is where we actually run the program
+            -- printLn "A";
+            let res = sampleAligned cont.dist cont.cont in
+            -- printLn "B";
+            res
+          )
+        else error "Impossible"
+    in
+
     -- One index must always change
-    let invalidIndex: Int = uniformDiscreteSample 0 (subi alignedTraceLength 1) in
-    modref state.oldAlignedTrace
-      (rec invalidIndex (deref state.alignedTrace) emptyList);
-
-    -- Also set correct old unaligned traces (always reused if possible, no
-    -- invalidation)
-    modref state.oldUnalignedTraces (deref state.unalignedTraces)
-
-let runModel = lam model.
-  let sample = model state in
-
-  -- Reverse all unaligned traces _and_ the list of unaligned traces
-  modref state.unalignedTraces (mapReverse (lam trace.
-    reverse trace
-  ) (deref state.unalignedTraces));
-
-  sample
+    let invalidIndex: Int =
+      uniformDiscreteSample 0 (subi (deref state.alignedTraceLength) 1) in
+    -- printLn (join ["The aligned trace length is: ", int2string (deref state.alignedTraceLength)]);
+    -- printLn (join ["The aligned trace length is really: ", int2string (length (deref state.alignedTrace))]);
+    -- printLn (join ["The invalid index is: ", int2string invalidIndex]);
+    rec invalidIndex (deref state.alignedTrace) emptyList
 
 -- General inference algorithm for aligned MCMC
 let run : all a. Unknown -> (State -> a) -> Dist a =
@@ -184,14 +218,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         let prevUnalignedTraces = deref state.unalignedTraces in
         let prevSample = head samples in
         let prevWeight = head weights in
-        modTrace ();
-        modref state.weight 0.;
-        modref state.prevWeightReused 0.;
-        modref state.weightReused 0.;
-        modref state.reuseUnaligned true;
-        modref state.alignedTrace emptyList;
-        modref state.unalignedTraces (toList [emptyList]);
-        let sample = runModel model in
+        let sample = runNext model in
         let weight = deref state.weight in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
@@ -200,11 +227,12 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
                     (subf weight prevWeight)
                     (subf weightReused prevWeightReused))
         in
-        -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
-        -- print "weight: "; printLn (float2string weight);
-        -- print "prevWeight: "; printLn (float2string prevWeight);
-        -- print "weightReused: "; printLn (float2string weightReused);
-        -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+        print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
+        print "weight: "; printLn (float2string weight);
+        print "prevWeight: "; printLn (float2string prevWeight);
+        print "weightReused: "; printLn (float2string weightReused);
+        print "prevWeightReused: "; printLn (float2string prevWeightReused);
+        printLn "-----";
         let iter = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then
           mcmcAccept ();
@@ -229,7 +257,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
   mcmcAcceptInit runs;
 
   -- First sample
-  let sample = runModel model in
+  let sample = model state in
   -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
   -- computing the MH acceptance ratio?
   let weight = deref state.weight in

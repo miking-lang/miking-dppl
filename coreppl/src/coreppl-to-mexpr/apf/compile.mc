@@ -59,7 +59,7 @@ lang MExprPPLAPF =
             errorSingle [infoTm t] "Impossible"
         in
         let checkPointNames: Set Name = extractCheckpoint (checkpointCfa checkpoint t) in
-        cpsPartialCont checkPointNames cont t
+        cpsPartialCont (lam n. setMem n checkPointNames) cont t
       else match options.cps with "full" then
         cpsFullCont cont t
       else
