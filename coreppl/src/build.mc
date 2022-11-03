@@ -2,6 +2,8 @@ include "dppl-arg.mc"
 include "mexpr/mexpr.mc"
 include "sys.mc"
 
+include "coreppl-to-rootppl/compile.mc"
+
 let buildMExpr = lam options. lam ast.
   -- Output the compiled mexpr code
   let outName = "out.mc" in
@@ -15,3 +17,13 @@ let buildMExpr = lam options. lam ast.
     else
       error (join ["Compilation of generated MExpr code failed\nstdout:\n",
                    res.stdout, "\nstderr:\n", res.stderr])
+
+let buildRootPPL = lam options. lam ast.
+  let outName = "out.cu" in
+  writeFile outName (printCompiledRPProg ast);
+  if options.skipFinal then ()
+  else
+    sysRunCommand [
+      "rootppl", outName,
+      "--stack-size", int2string options.stackSize
+    ] "" "."; ()

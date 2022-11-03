@@ -12,6 +12,7 @@ include "build.mc"
 include "src-location.mc"
 include "coreppl-to-mexpr/backcompat.mc"
 include "coreppl-to-mexpr/compile.mc"
+include "coreppl-to-rootppl/compile.mc"
 
 include "option.mc"
 include "string.mc"
@@ -45,6 +46,18 @@ match result with ParseOK r then
     -- Load the runtimes used in the provided AST, and collect identifiers of
     -- common methods within the runtimes.
     let runtimes = loadRuntimes options ast in
+
+    -- Handle the RootPPL backend in the old way, without using infers.
+    if eqString options.method "rootppl-smc" then
+      if mapIsEmpty runtimes then
+        let ast =
+          if options.transform then transform ast
+          else ast
+        in
+        let ast = rootPPLCompile options ast in
+        buildRootPPL options ast
+      else error "Use of infer is not supported by RootPPL backend"
+    else
 
     -- If no runtimes are found, it means there are no uses of 'infer' in the
     -- program. In this case, the entire AST is the model code, so we transform
