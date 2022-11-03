@@ -313,5 +313,6 @@ utest compile dummyOptions "mexpr-bpf" simple with () using truefn in
 utest compile dummyOptions "mexpr-mcmc-naive" simple with () using truefn in
 utest compile dummyOptions "mexpr-mcmc-trace" simple with () using truefn in
 utest compile dummyOptions "mexpr-mcmc-lightweight" simple with () using truefn in
+utest compile dummyOptions "mexpr-pmcmc-pimh" simple with () using truefn in
 
 ()
