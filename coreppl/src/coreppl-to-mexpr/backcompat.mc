@@ -70,6 +70,7 @@ lang CPPLBackcompat = LoadRuntime
                 "mexpr-mcmc-naive"
               | "mexpr-mcmc-trace"
               | "mexpr-mcmc-lightweight"
+              | "mexpr-pmcmc-pimh"
             then
               if options.printAcceptanceRate then
                 app_ (var_ "printAcceptRate") (var_ "d")
