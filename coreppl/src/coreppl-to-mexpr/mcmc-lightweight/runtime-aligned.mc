@@ -25,6 +25,9 @@ type State = {
   prevWeightReused: Ref Float,
   weightReused: Ref Float,
 
+  -- NOTE(dlunde,2022-11-03): Both the aligned and unaligned traces are stored
+  -- in _reverse_ order (unlike oldAlignedTrace and oldUnalignedTraces that are
+  -- stored in the actual order)
   -- The aligned trace for this execution.
   alignedTrace: Ref [(Any, Float)],
   -- The unaligned traces in between the aligned traces, including their
@@ -48,6 +51,10 @@ type State = {
 -- NOTE(dlunde,2022-05-23): The below implementation does not
 -- work with ropes for some reason (segfaults). We must therefore use lists.
 let emptyList = toList []
+
+-- TODO: Remove me
+let countReuse = ref 0
+let countReuseUnaligned = ref 0
 
 -- State (reused throughout inference)
 let state: State = {
@@ -85,6 +92,7 @@ let sampleAligned: all a. Dist a -> a = lam dist.
     match oldAlignedTrace with [sample] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
       match sample with Some (sample,w) then
+      modref countReuse (addi 1 (deref countReuse));
         reuseSample dist sample w
       else
         newSample dist
@@ -115,6 +123,7 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
       match oldUnalignedTraces with [[(sample,w,iOld)] ++ samples] ++ rest then
         if eqi i iOld then
           modref state.oldUnalignedTraces (cons samples rest);
+          modref countReuseUnaligned (addi 1 (deref countReuseUnaligned));
           reuseSample dist sample w
         else
           modref state.reuseUnaligned false; newSample dist
@@ -160,17 +169,11 @@ let modTrace: () -> () = lam.
 
     -- Also set correct old unaligned traces (always reused if possible, no
     -- invalidation)
-    modref state.oldUnalignedTraces (deref state.unalignedTraces)
+    modref state.oldUnalignedTraces (mapReverse (lam trace.
+      reverse trace
+    ) (deref state.unalignedTraces));
 
-let runModel = lam model.
-  let sample = model state in
-
-  -- Reverse all unaligned traces _and_ the list of unaligned traces
-  modref state.unalignedTraces (mapReverse (lam trace.
-    reverse trace
-  ) (deref state.unalignedTraces));
-
-  sample
+    ()
 
 -- General inference algorithm for aligned MCMC
 let run : all a. Unknown -> (State -> a) -> Dist a =
@@ -191,7 +194,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         modref state.reuseUnaligned true;
         modref state.alignedTrace emptyList;
         modref state.unalignedTraces (toList [emptyList]);
-        let sample = runModel model in
+        let sample = model state in
         let weight = deref state.weight in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
@@ -205,6 +208,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         -- print "prevWeight: "; printLn (float2string prevWeight);
         -- print "weightReused: "; printLn (float2string weightReused);
         -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+        -- printLn "-----";
         let iter = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then
           mcmcAccept ();
@@ -229,7 +233,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
   mcmcAcceptInit runs;
 
   -- First sample
-  let sample = runModel model in
+  let sample = model state in
   -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
   -- computing the MH acceptance ratio?
   let weight = deref state.weight in
@@ -245,6 +249,9 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
   let res = match res with (weights,samples) in
     (reverse weights, reverse samples)
   in
+
+  -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
+  -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
 
   -- Return
   use RuntimeDist in
