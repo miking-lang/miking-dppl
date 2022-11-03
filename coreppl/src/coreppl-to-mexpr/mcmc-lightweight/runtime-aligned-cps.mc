@@ -93,6 +93,17 @@ let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
 
 -- Procedure at aligned samples
 let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown = lam dist. lam k.
+  -- Snapshot that can later be used to resume execution from this sample.
+  let cont: Cont Unknown = {
+    cont = unsafeCoerce k,
+    weight = deref state.weight,
+    prevWeightReused = deref state.prevWeightReused,
+    weightReused = deref state.weightReused,
+    unalignedTraces = deref state.unalignedTraces,
+    dist = unsafeCoerce dist
+  } in
+
+
   let oldAlignedTrace: [(Any,Float)] = deref state.oldAlignedTrace in
   let sample: (Any, Float) =
     match oldAlignedTrace with [(sample,w)] ++ oldAlignedTrace then
@@ -114,16 +125,6 @@ let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown = lam dist. lam k.
   -- Remove head of oldUnalignedTraces
   (match deref state.oldUnalignedTraces with [] then () else
     modref state.oldUnalignedTraces (tail (deref state.oldUnalignedTraces)));
-
-  -- Snapshot that can later be used to resume execution from this sample.
-  let cont: Cont Unknown = {
-    cont = unsafeCoerce k,
-    weight = deref state.weight,
-    prevWeightReused = deref state.prevWeightReused,
-    weightReused = deref state.weightReused,
-    unalignedTraces = deref state.unalignedTraces,
-    dist = unsafeCoerce dist
-  } in
 
   modref state.alignedTrace
     (cons (sample.0, sample.1, cont) (deref state.alignedTrace));
@@ -227,12 +228,12 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
                     (subf weight prevWeight)
                     (subf weightReused prevWeightReused))
         in
-        print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
-        print "weight: "; printLn (float2string weight);
-        print "prevWeight: "; printLn (float2string prevWeight);
-        print "weightReused: "; printLn (float2string weightReused);
-        print "prevWeightReused: "; printLn (float2string prevWeightReused);
-        printLn "-----";
+        -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
+        -- print "weight: "; printLn (float2string weight);
+        -- print "prevWeight: "; printLn (float2string prevWeight);
+        -- print "weightReused: "; printLn (float2string weightReused);
+        -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+        -- printLn "-----";
         let iter = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then
           mcmcAccept ();
