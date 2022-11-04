@@ -18,7 +18,6 @@ type Any = ()
 type Cont a = {
   cont: Any -> a,
   weight: Float,
-  weightReused: Float,
   dist: Dist Any
 }
 
@@ -89,6 +88,8 @@ let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
   lam dist. lam sample. lam w.
     let s: a = unsafeCoerce sample in
     let wNew = use RuntimeDist in logObserve dist s in
+    -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
+    -- printLn (join ["Mod prevWeightReused: ", float2string w]);
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
     (sample, wNew)
@@ -102,7 +103,6 @@ let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Unknow
     let cont: Cont Unknown = {
       cont = unsafeCoerce k,
       weight = deref state.weight,
-      weightReused = deref state.weightReused,
       dist = unsafeCoerce dist
     } in
 
@@ -129,6 +129,7 @@ let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown =
     match oldAlignedTrace with [(sample,w)] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
       modref countReuse (addi 1 (deref countReuse));
+      -- print "Aligned ";
       reuseSample dist sample w
     else
       newSample dist
@@ -145,6 +146,7 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
         if eqi i iOld then
           modref state.oldUnalignedTraces (cons samples rest);
           modref countReuseUnaligned (addi 1 (deref countReuseUnaligned));
+          -- print "Unaligned ";
           reuseSample dist sample w
         else
           modref state.reuseUnaligned false; newSample dist
@@ -191,10 +193,10 @@ let runNext: all a. (State -> a) -> a = lam model.
           else (
             let cont = s1.2 in
             modref state.oldAlignedTrace oldAlignedTrace;
-            modref state.oldUnalignedTraces (cons emptyList oldUnalignedTraces);
+            modref state.oldUnalignedTraces (cons emptyList (cons (reverse s2) oldUnalignedTraces));
             modref state.weight cont.weight;
-            modref state.prevWeightReused cont.weightReused;
-            modref state.weightReused cont.weightReused;
+            modref state.prevWeightReused 0.;
+            modref state.weightReused 0.;
             modref state.alignedTrace alignedTrace;
             modref state.unalignedTraces unalignedTraces;
             -- printLn (join ["New aligned trace length: ", int2string (length (deref state.alignedTrace))]);
@@ -236,8 +238,8 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         let sample = runNext model in
         -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
-        -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. int2string tup.2) ls), "]"]) prevUnalignedTraces)); printLn "]";
-        -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. int2string tup.2) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
+        -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
+        -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
         let weight = deref state.weight in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in

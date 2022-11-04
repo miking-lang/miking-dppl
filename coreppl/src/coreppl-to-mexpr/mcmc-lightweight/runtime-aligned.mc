@@ -81,6 +81,8 @@ let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
   lam dist. lam sample. lam w.
     let s: a = unsafeCoerce sample in
     let wNew = use RuntimeDist in logObserve dist s in
+    -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
+    -- printLn (join ["Mod prevWeightReused: ", float2string w]);
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
     (sample, wNew)
@@ -92,9 +94,11 @@ let sampleAligned: all a. Dist a -> a = lam dist.
     match oldAlignedTrace with [sample] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
       match sample with Some (sample,w) then
-      modref countReuse (addi 1 (deref countReuse));
+        modref countReuse (addi 1 (deref countReuse));
+        -- print "Aligned ";
         reuseSample dist sample w
       else
+        -- printLn "Not reused!";
         newSample dist
     else
       -- This case should only happen in the first run when there is no
@@ -124,6 +128,7 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
         if eqi i iOld then
           modref state.oldUnalignedTraces (cons samples rest);
           modref countReuseUnaligned (addi 1 (deref countReuseUnaligned));
+          -- print "Unaligned ";
           reuseSample dist sample w
         else
           modref state.reuseUnaligned false; newSample dist
@@ -195,6 +200,10 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         modref state.alignedTrace emptyList;
         modref state.unalignedTraces (toList [emptyList]);
         let sample = model state in
+        -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
+        -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
+        -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
+        -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
         let weight = deref state.weight in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
