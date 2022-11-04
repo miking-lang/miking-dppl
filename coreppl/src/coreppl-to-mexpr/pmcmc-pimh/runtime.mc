@@ -69,6 +69,7 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
           (mapReverse (lam p. (p.weight, match p.checkpoint with End a in a))
             particles)
       else
+        print "RESAMPLING"; printLn "";
         let maxWeight =
           foldl
             (lam acc. lam p. if geqf p.weight acc then p.weight else acc)
@@ -111,6 +112,8 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
       else
         -- Compute a new proposal with a particle filter sweep
         match runSMC () with (weights, samples) in
+        -- print "N-PARTIVLES: "; printLn (int2string (length weights));
+        -- print "WEIGHT-PARTICLE-1: "; printLn (float2string (head weights));
         let logZ = normConstant weights in
         -- print "LOG-Z: "; printLn (float2string logZ);
         let prevLogZ = head logZs in
@@ -158,7 +161,10 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
   -- flatten and normalize weights
   let weights =
     join (
-      zipWith (lam logWs. lam logZ. map (lam logW. subf logW logZ) logWs)
+      zipWith
+        (lam logWs. lam logZ.
+          if eqf logZ negInf then (create particleCount (lam. negInf))
+          else  map (lam logW. subf logW logZ) logWs)
         weightSets logZs)
   in
   let samples = join sampleSets in
