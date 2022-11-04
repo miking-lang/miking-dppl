@@ -1,11 +1,16 @@
 
 include "ext/file-ext.mc"
 include "ext/math-ext.mc"
+include "ext/dist-ext.mc"
 include "seq.mc"
 include "string.mc"
 
 type Res a = ([Float],[a])
 type ResOption a = ([Float],[Option a])
+
+-- Set the seed if specified
+let #var"" =
+  if compileOptions.seedIsSome then setSeed compileOptions.seed else ()
 
 -- Constants
 let negInf = divf (negf 1.) 0.

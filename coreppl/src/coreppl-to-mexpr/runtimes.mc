@@ -117,7 +117,13 @@ lang LoadRuntime =
       ("earlyStop", bool_ options.earlyStop),
       ("mcmcLightweightGlobalProb", float_ options.mcmcLightweightGlobalProb),
       ("mcmcLightweightReuseLocal", bool_ options.mcmcLightweightReuseLocal),
-      ("printAcceptanceRate", bool_ options.printAcceptanceRate)
+      ("printAcceptanceRate", bool_ options.printAcceptanceRate),
+
+      -- NOTE(dlunde,2022-11-04): Emulating option type
+      ("seedIsSome",
+       match options.seed with Some seed then bool_ true else bool_ false),
+      ("seed", match options.seed with Some seed then int_ seed else int_ 0)
+
     ]) in
 
     let runtimeAsts = map (lam entry. entry.ast) (mapValues runtimes) in

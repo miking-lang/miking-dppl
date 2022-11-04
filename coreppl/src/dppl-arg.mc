@@ -3,7 +3,7 @@ include "arg.mc"
 -- Options type
 type Options = {
   method : String,
-  particles : Int, -- NOTE(dlunde,2022-06-28): Currently not used as it is provided at runtime.
+  particles : Int,
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
@@ -39,7 +39,10 @@ type Options = {
   printAcceptanceRate: Bool,
 
   -- PMCMC particle count
-  pmcmcParticles: Int
+  pmcmcParticles: Int,
+
+  -- The random seed to use
+  seed: Option Int
 }
 
 -- Default values for options
@@ -61,7 +64,8 @@ let default = {
   mcmcLightweightGlobalProb = 0.1,
   mcmcLightweightReuseLocal = true,
   printAcceptanceRate = false,
-  pmcmcParticles = 2
+  pmcmcParticles = 2,
+  seed = None ()
 }
 
 -- Options configuration
@@ -151,7 +155,11 @@ let config = [
       ". This option is used if one of the following methods are used: mexpr-pmcmc-*."
     ],
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with pmcmcParticles = argToIntMin p 1})
+      let o: Options = p.options in {o with pmcmcParticles = argToIntMin p 1}),
+  ([("--seed", " ", "<seed>")],
+    "The random seed to use. Initialized randomly if option is omitted.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with seed = Some (argToInt p)})
 ]
 
 -- Menu
