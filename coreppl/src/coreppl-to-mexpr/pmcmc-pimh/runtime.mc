@@ -69,7 +69,7 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
           (mapReverse (lam p. (p.weight, match p.checkpoint with End a in a))
             particles)
       else
-        print "RESAMPLING"; printLn "";
+        -- print "RESAMPLING"; printLn "";
         let maxWeight =
           foldl
             (lam acc. lam p. if geqf p.weight acc then p.weight else acc)
