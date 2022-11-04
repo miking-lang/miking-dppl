@@ -328,9 +328,18 @@ lang MExprPPLLightweightMCMC =
   sem compileAlignedCps options =
   | (_,t) ->
 
+    -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
+    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    -- printLn (str);
+    -- dprint t;
+
     -- Alignment analysis
     let alignRes = alignCfa t in
     let unalignedNames: Set Name = extractUnaligned alignRes in
+
+    -- printLn ""; printLn "--- UNALIGNED NAMES ---";
+    -- match mapAccumL pprintEnvGetStr env (setToSeq unalignedNames) with (env,strings) in
+    -- printLn (join [ "[", strJoin "," strings, "]"]);
 
     -- CPS transformation
     let t =
@@ -346,6 +355,10 @@ lang MExprPPLLightweightMCMC =
         in
         let checkPointNames: Set Name =
           extractCheckpoint (checkpointCfa checkpoint t) in
+
+        -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
+        -- match mapAccumL pprintEnvGetStr env (setToSeq checkPointNames) with (env,strings) in
+        -- printLn (join [ "[", strJoin "," strings, "]"]);
 
         let t = mapPre_Expr_Expr (transformPreAlignedCps unalignedNames) t in
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
