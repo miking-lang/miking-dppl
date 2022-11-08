@@ -102,6 +102,8 @@ lang MExprPPLImportance =
     -- printLn (str);
 
     -- Static analysis and CPS transformation
+
+    -- let t1 = wallTimeMs () in
     let t =
 
       let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
@@ -128,6 +130,8 @@ lang MExprPPLImportance =
       else error ( join [ "Invalid CPS option:", options.cps ])
 
     in
+    -- let t2 = wallTimeMs () in
+    -- printLn (float2string (subf t2 t1));
 
     -- printLn ""; printLn "--- AFTER CPS ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
