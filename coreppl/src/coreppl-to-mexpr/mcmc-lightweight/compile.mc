@@ -1,5 +1,6 @@
 include "name.mc"
 include "mexpr/const-arity.mc"
+include "mexpr/cps.mc"
 
 include "../dists.mc"
 include "../../inference-common/smc.mc"

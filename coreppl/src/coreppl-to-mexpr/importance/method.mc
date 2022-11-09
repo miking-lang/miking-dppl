@@ -1,4 +1,5 @@
 include "../../coreppl.mc"
+include "../../dppl-arg.mc"
 
 lang ImportanceSamplingMethod = MExprPPL
   syn InferMethod =
@@ -12,7 +13,10 @@ lang ImportanceSamplingMethod = MExprPPL
 
   sem inferMethodFromCon info bindings =
   | "Importance" ->
-    match getFields info bindings ["particles"] with [particles] in
+    let expectedFields = [
+      ("particles", int_ default.particles)
+    ] in
+    match getFields info bindings expectedFields with [particles] in
     Importance {particles = particles}
 
   sem inferMethodFromOptions options =

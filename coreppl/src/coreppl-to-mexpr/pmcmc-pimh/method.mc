@@ -1,4 +1,5 @@
 include "../../coreppl.mc"
+include "../../dppl-arg.mc"
 
 lang PIMHMethod = MExprPPL
   syn InferMethod =
@@ -17,8 +18,11 @@ lang PIMHMethod = MExprPPL
 
   sem inferMethodFromCon info bindings =
   | "PIMH" ->
-    match getFields info bindings ["particles"] with [particles] in
-    match getFields info bindings ["iterations"] with [iterations] in
+    let expectedFields = [
+      ("particles", int_ default.particles),
+      ("iterations", int_ default.pmcmcParticles)
+    ] in
+    match getFields info bindings expectedFields with [particles, iterations] in
     PIMH {particles = particles, iterations = iterations}
 
   sem inferMethodFromOptions options =

@@ -1,4 +1,5 @@
 include "../../coreppl.mc"
+include "../../dppl-arg.mc"
 
 lang TraceMCMCMethod = MExprPPL
   syn InferMethod =
@@ -14,8 +15,10 @@ lang TraceMCMCMethod = MExprPPL
 
   sem inferMethodFromCon info bindings =
   | methodStr & "TraceMCMC" ->
-    match getFields info bindings ["iterations"]
-    with [iterations] in
+    let expectedFields = [
+      ("iterations", int_ default.particles)
+    ] in
+    match getFields info bindings expectedFields with [iterations] in
     TraceMCMC { iterations = iterations }
 
   sem inferMethodFromOptions options =

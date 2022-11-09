@@ -1,4 +1,5 @@
 include "../../coreppl.mc"
+include "../../dppl-arg.mc"
 
 lang LightweightMCMCMethod = MExprPPL
   syn InferMethod =
@@ -20,7 +21,12 @@ lang LightweightMCMCMethod = MExprPPL
 
   sem inferMethodFromCon info bindings =
   | "LightweightMCMC" ->
-    match getFields info bindings ["iterations", "aligned", "globalProb"]
+    let expectedFields = [
+      ("iterations", int_ default.particles),
+      ("aligned", bool_ default.align),
+      ("globalProb", float_ default.mcmcLightweightGlobalProb)
+    ] in
+    match getFields info bindings expectedFields
     with [iterations, aligned, globalProb] in
     LightweightMCMC {
       iterations = iterations, aligned = aligned, globalProb = globalProb
