@@ -57,7 +57,7 @@ printDist dist;
 let dist = infer (APF {particles = p}) (lam. model alpha beta) in
 printDist dist;
 
-let dist = infer (LightweightMCMC {iterations = p, aligned = false, globalProb = 0.5}) (lam. model alpha beta) in
+let dist = infer (LightweightMCMC {iterations = p}) (lam. model alpha beta) in
 printDist dist;
 
 let dist = infer (NaiveMCMC {iterations = p}) (lam. model alpha beta) in
