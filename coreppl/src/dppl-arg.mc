@@ -70,14 +70,14 @@ let default = {
 
 -- Options configuration
 let config = [
+  -- TODO(dlunde,2022-11-14): Could we automatically generate the list of available inference algorithms instead of hardcoding it?
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-importance, mexpr-mcmc-lightweight, mexpr-mcmc-trace, mexpr-mcmc-naive, rootppl-smc.",
+    "The selected inference method. The supported methods are: mexpr-is-lw, mexpr-smc-bpf, mexpr-smc-apf, mexpr-mcmc-lightweight, mexpr-mcmc-trace, mexpr-mcmc-naive, mexpr-pmcmc-pimh, rootppl-smc.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
     join [
-      "The number of particles. The default is ", (int2string default.particles),
-      ". This option is used if one of the following methods are used: mexpr-importance, rootppl-smc."
+      "The number of particles (i.e., samples or iterations). The default is ", (int2string default.particles)
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),

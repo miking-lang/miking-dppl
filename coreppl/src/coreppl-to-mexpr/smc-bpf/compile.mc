@@ -73,4 +73,4 @@ lang MExprPPLBPF =
 end
 
 let compilerBPF = lam options. use MExprPPLBPF in
-  ("bpf/runtime.mc", compile options)
+  ("smc-bpf/runtime.mc", compile options)

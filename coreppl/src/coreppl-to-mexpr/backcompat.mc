@@ -61,9 +61,9 @@ lang CPPLBackcompat = LoadRuntime
 
         ulet_ "" (
             match options.method with
-                "mexpr-importance"
-              | "mexpr-bpf"
-              | "mexpr-apf"
+                "mexpr-is-lw"
+              | "mexpr-smc-bpf"
+              | "mexpr-smc-apf"
             then
               app_ (var_ "printNormConst") (var_ "d")
             else match options.method with

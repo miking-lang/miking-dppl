@@ -292,9 +292,6 @@ let simple = symbolize simple in
 
 let truefn = lam. lam. true in
 
--- TODO(dlunde,2022-10-19): "with debugMExprCompile = true" currently has no
--- effect. This should be fixed so that we also parse and type check the
--- runtime files as part of the utests.
 let dummyOptions = {default with debugMExprCompile = true} in
 
 let compile = lam options. lam methodStr. lam ast.
@@ -305,14 +302,36 @@ let compile = lam options. lam methodStr. lam ast.
 in
 
 -- Simple tests that ensure compilation of a simple model throws no errors
--- TODO(dlunde,2022-10-24): These tests are not good enough. We need to also
--- test individual options for the different methods (i.e., align and CPS)
-utest compile dummyOptions "mexpr-importance" simple with () using truefn in
-utest compile dummyOptions "mexpr-apf" simple with () using truefn in
-utest compile dummyOptions "mexpr-bpf" simple with () using truefn in
+
+-- Likelihood weighting
+utest compile {dummyOptions with cps = "none"}
+        "mexpr-is-lw" simple with () using truefn in
+utest compile {dummyOptions with cps = "partial"}
+        "mexpr-is-lw" simple with () using truefn in
+utest compile {dummyOptions with cps = "full"}
+        "mexpr-is-lw" simple with () using truefn in
+
+-- APF
+utest compile dummyOptions "mexpr-smc-apf" simple with () using truefn in
+
+-- BPF
+utest compile dummyOptions "mexpr-smc-bpf" simple with () using truefn in
+
+-- Naive MCMC
 utest compile dummyOptions "mexpr-mcmc-naive" simple with () using truefn in
+
+-- Trace MCMC
 utest compile dummyOptions "mexpr-mcmc-trace" simple with () using truefn in
+
+-- Lightweight MCMC
 utest compile dummyOptions "mexpr-mcmc-lightweight" simple with () using truefn in
+utest compile {dummyOptions with align = true, cps = "none"}
+        "mexpr-mcmc-lightweight" simple with () using truefn in
+utest compile {dummyOptions with align = true, cps = "partial"}
+        "mexpr-mcmc-lightweight" simple with () using truefn in
+utest compile {dummyOptions with align = true, cps = "full"}
+        "mexpr-mcmc-lightweight" simple with () using truefn in
+
 utest compile dummyOptions "mexpr-pmcmc-pimh" simple with () using truefn in
 
 ()

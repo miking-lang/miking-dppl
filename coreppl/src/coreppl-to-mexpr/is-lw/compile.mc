@@ -149,8 +149,8 @@ end
 
 let compilerImportance = lam options. use MExprPPLImportance in
   match options.cps with "partial" | "full" then
-    ("importance/runtime-cps.mc", compileCps options)
+    ("is-lw/runtime-cps.mc", compileCps options)
   else match options.cps with "none" then
-    ("importance/runtime.mc", compile options)
+    ("is-lw/runtime.mc", compile options)
   else
     error ( join [ "Unknown CPS option:", options.cps ])

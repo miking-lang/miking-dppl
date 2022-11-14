@@ -6,9 +6,9 @@ include "../parser.mc"
 include "../src-location.mc"
 
 -- Inference methods
-include "apf/compile.mc"
-include "bpf/compile.mc"
-include "importance/compile.mc"
+include "smc-apf/compile.mc"
+include "smc-bpf/compile.mc"
+include "is-lw/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
 include "mcmc-lightweight/compile.mc"

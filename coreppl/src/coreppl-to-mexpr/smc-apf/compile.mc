@@ -73,4 +73,4 @@ lang MExprPPLAPF =
 end
 
 let compilerAPF = lam options. use MExprPPLAPF in
-  ("apf/runtime.mc", compile options)
+  ("smc-apf/runtime.mc", compile options)
