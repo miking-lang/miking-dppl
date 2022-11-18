@@ -4,7 +4,7 @@ include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 
-lang MExprPPLBPF =
+lang MExprPPLAPF =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
 
   -- CPS compile
@@ -59,7 +59,7 @@ lang MExprPPLBPF =
             errorSingle [infoTm t] "Impossible"
         in
         let checkPointNames: Set Name = extractCheckpoint (checkpointCfa checkpoint t) in
-        cpsPartialCont checkPointNames cont t
+        cpsPartialCont (lam n. setMem n checkPointNames) cont t
       else match options.cps with "full" then
         cpsFullCont cont t
       else
@@ -72,5 +72,5 @@ lang MExprPPLBPF =
     t
 end
 
-let compilerBPF = lam options. use MExprPPLBPF in
-  ("bpf/runtime.mc", compile options)
+let compilerAPF = lam options. use MExprPPLAPF in
+  ("smc-apf/runtime.mc", compile options)

@@ -58,6 +58,10 @@ lang TransformDist = MExprPPL
     i (conapp_
         "RuntimeDistElementary_DistMultinomial"
         (i (urecord_ [("n", n), ("p", p)])))
+  | DDirichlet { a = a } ->
+    i (conapp_
+        "RuntimeDistElementary_DistDirichlet"
+        (i (urecord_ [("a", a)])))
   | DCategorical { p = p } ->
     i (conapp_
         "RuntimeDistElementary_DistCategorical"

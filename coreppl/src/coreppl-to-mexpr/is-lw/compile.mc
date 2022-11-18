@@ -102,6 +102,8 @@ lang MExprPPLImportance =
     -- printLn (str);
 
     -- Static analysis and CPS transformation
+
+    -- let t1 = wallTimeMs () in
     let t =
 
       let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
@@ -114,16 +116,26 @@ lang MExprPPLImportance =
         in
         let checkPointNames: Set Name =
           extractCheckpoint (checkpointCfa checkpoint t) in
+        -- match checkpointCfaDebug checkpoint env t with (env,res) in
+        -- let checkPointNames: Set Name = extractCheckpoint res in
+
         -- printLn ""; printLn "--- CHECKPOINT ANALYSIS RESULT ---";
         -- match mapAccumL pprintEnvGetStr env (setToSeq checkPointNames) with (env,strings) in
         -- printLn (join [ "[", strJoin "," strings, "]"]);
-        cpsPartialCont checkPointNames cont t
+
+        cpsPartialCont (lam n. setMem n checkPointNames) cont t
 
       else match options.cps with "full" then cpsFullCont cont t
 
       else error ( join [ "Invalid CPS option:", options.cps ])
 
     in
+    -- let t2 = wallTimeMs () in
+    -- printLn (float2string (subf t2 t1));
+
+    -- printLn ""; printLn "--- AFTER CPS ---";
+    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    -- printLn (str);
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
@@ -137,8 +149,8 @@ end
 
 let compilerImportance = lam options. use MExprPPLImportance in
   match options.cps with "partial" | "full" then
-    ("importance/runtime-cps.mc", compileCps options)
+    ("is-lw/runtime-cps.mc", compileCps options)
   else match options.cps with "none" then
-    ("importance/runtime.mc", compile options)
+    ("is-lw/runtime.mc", compile options)
   else
     error ( join [ "Unknown CPS option:", options.cps ])

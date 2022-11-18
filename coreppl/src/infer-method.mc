@@ -8,45 +8,43 @@ include "mexpr/type-check.mc"
 include "dppl-arg.mc"
 
 lang InferMethodHelper = MExprAst
-  -- Accesses a required field from the bindings, and fails if it is not
-  -- present in the provided bindings.
-  sem getRequiredField : Info -> Map SID Expr -> String -> Expr
-  sem getRequiredField info bindings =
-  | fieldStr ->
-    optionGetOrElse
-      (lam.
-        errorSingle [info]
-          (concat "Missing configuration parameter: " fieldStr))
-      (mapLookup (stringToSid fieldStr) bindings)
-
   -- Extracts the fields corresponding to the provided sequence of strings, and
   -- ensures that no additional fields have been defined.
-  sem getFields : Info -> Map SID Expr -> [String] -> [Expr]
+  sem getFields : Info -> Map SID Expr -> [(String, Expr)] -> [Expr]
   sem getFields info bindings =
-  | fieldStrs ->
-    let fieldSids = setOfSeq cmpSID (map stringToSid fieldStrs) in
-    let bindingSids = mapMapWithKey (lam. lam. ()) bindings in
-    -- NOTE(larshum, 2022-10-12): If the provided fields are exactly the ones
-    -- we expect.
-    if setEq fieldSids bindingSids then
-      map (getRequiredField info bindings) fieldStrs
+  | fields ->
+    -- Construct a record containing the default values for all fields that may
+    -- occur.
+    match unzip fields with (fieldStrs, defaults) in
+    let defaultRecord =
+      mapFromSeq cmpSID (zip (map stringToSid fieldStrs) defaults) in
+
+    -- If the user-provided record defines fields that are not defined in the
+    -- default record, it means they are trying to set options that are not
+    -- supported.
+    let mapToSet = lam m. mapMapWithKey (lam. lam. ()) m in
+    let unknownFields = setSubtract (mapToSet bindings) (mapToSet defaultRecord) in
+    if mapIsEmpty unknownFields then
+
+      -- Update the record by replacing the default values with values provided
+      -- by the user.
+      let record =
+        mapFoldWithKey
+          (lam record. lam sid. lam expr.
+            if mapMem sid record then mapInsert sid expr record
+            else error "Unexpected field: " (sidToString sid))
+          defaultRecord bindings in
+
+      -- Return the values after updating according to the user-provided
+      -- values, in the same order as they were provided as input. The use of
+      -- filterOption will never result in an error as all fieldStrs are part
+      -- of the default record.
+      filterOption (map (lam s. mapLookup (stringToSid s) record) fieldStrs)
+
     else
-      -- NOTE(larshum, 2022-10-12): We expected to find the provided fields.
-      -- Any fields not there, but in the bindings are missing, while those
-      -- that are found only in the provided bindings are unknown (not
-      -- declared).
-      let printFields = lam msgPrefix. lam set.
-        if setIsEmpty set then ""
-        else
-          join [msgPrefix, strJoin "," (map sidToString (setToSeq set)), "\n"]
-      in
-      let missingFields = setSubtract fieldSids bindingSids in
-      let unknownFields = setSubtract bindingSids fieldSids in
-      let msg = join [
-        "Invalid inference method configuration parameter.\n",
-        printFields "Missing fields: " missingFields,
-        printFields "Unexpected fields: " unknownFields
-      ] in
+      let msg = join
+        [ "Unexpected fields: "
+        , strJoin "," (map sidToString (setToSeq unknownFields)), "\n" ] in
       errorSingle [info] msg
 
   -- Converts the provided sequence of string-expression tuples to a record
@@ -86,9 +84,13 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
 
   -- Constructs an inference method from the arguments of a TmConApp.
   sem inferMethodFromCon : Info -> Map SID Expr -> String -> InferMethod
+  sem inferMethodFromCon info bindings =
+  | s -> errorSingle [info] (concat "Unknown inference method: " s)
 
   -- Constructs an inference method from command-line options.
   sem inferMethodFromOptions : Options -> String -> InferMethod
+  sem inferMethodFromOptions options =
+  | s -> error (concat "Unknown inference method string: " s)
 
   -- Produces a record expression containing the configuration parameters of
   -- the inference method. This record is passed to the inference runtime

@@ -3,7 +3,7 @@ include "arg.mc"
 -- Options type
 type Options = {
   method : String,
-  particles : Int, -- NOTE(dlunde,2022-06-28): Currently not used as it is provided at runtime.
+  particles : Int,
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
@@ -36,7 +36,13 @@ type Options = {
   mcmcLightweightReuseLocal: Bool, -- Currently has no effect
 
   -- MCMC options,
-  printAcceptanceRate: Bool
+  printAcceptanceRate: Bool,
+
+  -- PMCMC particle count
+  pmcmcParticles: Int,
+
+  -- The random seed to use
+  seed: Option Int
 }
 
 -- Default values for options
@@ -57,19 +63,21 @@ let default = {
   debugMExprCompile = true,
   mcmcLightweightGlobalProb = 0.1,
   mcmcLightweightReuseLocal = true,
-  printAcceptanceRate = false
+  printAcceptanceRate = false,
+  pmcmcParticles = 2,
+  seed = None ()
 }
 
 -- Options configuration
 let config = [
+  -- TODO(dlunde,2022-11-14): Could we automatically generate the list of available inference algorithms instead of hardcoding it?
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-importance, mexpr-mcmc-lightweight, mexpr-mcmc-trace, mexpr-mcmc-naive, rootppl-smc.",
+    "The selected inference method. The supported methods are: mexpr-is-lw, mexpr-smc-bpf, mexpr-smc-apf, mexpr-mcmc-lightweight, mexpr-mcmc-trace, mexpr-mcmc-naive, mexpr-pmcmc-pimh, rootppl-smc.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
   ([("-p", " ", "<particles>")],
     join [
-      "The number of particles. The default is ", (int2string default.particles),
-      ". This option is used if one of the following methods are used: mexpr-importance, rootppl-smc."
+      "The number of particles (i.e., samples or iterations). The default is ", (int2string default.particles)
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
@@ -139,7 +147,19 @@ let config = [
   ([("--print-accept-rate", "", "")],
     "Prints the acceptance rate of MCMC algorithms.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with printAcceptanceRate = true})
+      let o: Options = p.options in {o with printAcceptanceRate = true}),
+  ([("--pmcmcParticles", " ", "<particles>")],
+    join [
+      "The number of particles for the smc proposal computation. The default is ",
+      (int2string default.pmcmcParticles),
+      ". This option is used if one of the following methods are used: mexpr-pmcmc-*."
+    ],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with pmcmcParticles = argToIntMin p 1}),
+  ([("--seed", " ", "<seed>")],
+    "The random seed to use. Initialized randomly if option is omitted.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with seed = Some (argToInt p)})
 ]
 
 -- Menu
@@ -149,4 +169,3 @@ let menu = lam. join [
   argHelpOptions config,
   "\n"
 ]
-

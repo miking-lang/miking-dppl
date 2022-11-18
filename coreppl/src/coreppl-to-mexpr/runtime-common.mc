@@ -1,11 +1,19 @@
 
 include "ext/file-ext.mc"
 include "ext/math-ext.mc"
+include "ext/dist-ext.mc"
 include "seq.mc"
 include "string.mc"
 
 type Res a = ([Float],[a])
 type ResOption a = ([Float],[Option a])
+
+-- Set the seed if specified
+let #var"" =
+  if compileOptions.seedIsSome then setSeed compileOptions.seed else ()
+
+-- Constants
+let negInf = divf (negf 1.) 0.
 
 -- Returns the number of particles/points from the program argument
 let numarg = lam.
@@ -67,10 +75,11 @@ let systematicSample: all a. [a] -> [Float] -> Float -> Int -> [a] = lam seq. la
 
 -- Computing the normalization constant using the log-sum-exp trick
 let normConstant : [Float] -> Float = lam res.
-  let negInf = divf (negf 1.) 0. in
   let max = foldl (lam acc. lam x. if geqf x acc then x else acc) negInf res in
-  let sum = foldl (lam acc. lam x. addf (exp (subf x max)) acc) 0. res in
-  subf (addf max (log sum)) (log (int2float (length res)))
+  if eqf max negInf then negInf
+  else
+    let sum = foldl (lam acc. lam x. addf (exp (subf x max)) acc) 0. res in
+    subf (addf max (log sum)) (log (int2float (length res)))
 
 -- Computes the expected value for all variables. Returns
 -- a list that excludes the weight component and only contains

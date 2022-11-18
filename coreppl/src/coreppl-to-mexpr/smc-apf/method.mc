@@ -1,4 +1,5 @@
 include "../../coreppl.mc"
+include "../../dppl-arg.mc"
 
 lang APFMethod = MExprPPL
   syn InferMethod =
@@ -12,11 +13,14 @@ lang APFMethod = MExprPPL
 
   sem inferMethodFromCon info bindings =
   | "APF" ->
-    match getFields info bindings ["particles"] with [particles] in
+    let expectedFields = [
+      ("particles", int_ default.particles)
+    ] in
+    match getFields info bindings expectedFields with [particles] in
     APF {particles = particles}
 
   sem inferMethodFromOptions options =
-  | "mexpr-apf" ->
+  | "mexpr-smc-apf" ->
     APF {particles = int_ options.particles}
 
   sem inferMethodConfig info =

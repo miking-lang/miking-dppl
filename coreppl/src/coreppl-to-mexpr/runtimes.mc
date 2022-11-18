@@ -6,12 +6,13 @@ include "../parser.mc"
 include "../src-location.mc"
 
 -- Inference methods
-include "apf/compile.mc"
-include "bpf/compile.mc"
-include "importance/compile.mc"
+include "smc-apf/compile.mc"
+include "smc-bpf/compile.mc"
+include "is-lw/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
 include "mcmc-lightweight/compile.mc"
+include "pmcmc-pimh/compile.mc"
 
 lang LoadRuntime =
   DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode
@@ -53,6 +54,7 @@ lang LoadRuntime =
   | LightweightMCMC _ -> compilerLightweightMCMC options
   | NaiveMCMC _ -> compilerNaiveMCMC options
   | TraceMCMC _ -> compilerTraceMCMC options
+  | PIMH _ -> compilerPIMH options
   | _ -> error "Unsupported CorePPL to MExpr inference method"
 
   sem loadRuntimes : Options -> Expr -> Map InferMethod RuntimeEntry
@@ -115,7 +117,13 @@ lang LoadRuntime =
       ("earlyStop", bool_ options.earlyStop),
       ("mcmcLightweightGlobalProb", float_ options.mcmcLightweightGlobalProb),
       ("mcmcLightweightReuseLocal", bool_ options.mcmcLightweightReuseLocal),
-      ("printAcceptanceRate", bool_ options.printAcceptanceRate)
+      ("printAcceptanceRate", bool_ options.printAcceptanceRate),
+
+      -- NOTE(dlunde,2022-11-04): Emulating option type
+      ("seedIsSome",
+       match options.seed with Some seed then bool_ true else bool_ false),
+      ("seed", match options.seed with Some seed then int_ seed else int_ 0)
+
     ]) in
 
     let runtimeAsts = map (lam entry. entry.ast) (mapValues runtimes) in
