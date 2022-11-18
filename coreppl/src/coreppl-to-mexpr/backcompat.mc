@@ -89,6 +89,7 @@ lang CPPLBackcompat = LoadRuntime
         ulet_ "ast"
           (TmLam {
             ident = nameNoSym "",
+            tyAnnot = TyRecord {fields = mapEmpty cmpSID, info = infoTm ast},
             tyIdent = TyRecord {fields = mapEmpty cmpSID, info = infoTm ast},
             body = ast, ty = TyUnknown {info = infoTm ast}, info = infoTm ast
           }),

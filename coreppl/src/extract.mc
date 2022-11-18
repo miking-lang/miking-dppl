@@ -69,9 +69,11 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
     let info = t.info in
     let inferBinding = TmLet {
       ident = inferId,
+      tyAnnot = tyarrow_ tyunit_ (tyTm t.model),
       tyBody = tyarrow_ tyunit_ (tyTm t.model),
       body = TmLam {
         ident = nameNoSym "",
+        tyAnnot = tyunit_,
         tyIdent = tyunit_,
         body = TmApp {
           lhs = t.model, rhs = unit_, ty = tyTm t.model, info = info},
