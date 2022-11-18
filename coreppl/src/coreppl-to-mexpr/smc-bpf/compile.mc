@@ -48,6 +48,11 @@ lang MExprPPLBPF =
   sem compile: Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (_,t) ->
+
+    -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
+    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    -- printLn (str);
+
     -- Static analysis and CPS transformation
     let t =
       let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
