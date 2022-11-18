@@ -31,6 +31,39 @@ lang MExprPPLBPF =
     in
       i (appf1_ (i (var_ "resample")) k)
 
+  sem transformStopFirstAssume: Expr -> Option Expr
+  sem transformStopFirstAssume =
+
+  -- Terms that cannot execute an assume internally (in ANF)
+  | TmLet ({
+      body = TmVar _ | TmLam _ | TmConst _ | TmSeq _
+           | TmRecord _ | TmType _ | TmConDef _ | TmExt _
+      } & r) ->
+      match transformStopFirstAssume r.inexpr with Some inexpr then
+        Some (TmLet { r with inexpr = inexpr })
+      else None ()
+
+  | TmRecLets r ->
+    match transformStopFirstAssume r.inexpr with Some inexpr then
+      Some (TmRecLets { r with inexpr = inexpr })
+    else None ()
+
+  -- Allow tail call match with single branch
+  | TmLet ({ ident = ident, body = TmMatch ({ thn = thn, els = TmNever _ } & rm),
+            inexpr = TmVar { ident = varIdent } } & r) ->
+    if nameEq ident varIdent then
+      match transformStopFirstAssume thn with Some thn then
+        Some (TmLet { r with body = TmMatch { rm with thn = thn } })
+      else None ()
+    else None ()
+
+  -- If we reach an assume, do the transformation
+  | TmLet { ident = ident, body = TmAssume r, inexpr = inexpr, info = info } ->
+    let i = withInfo info in
+    Some (i (appf2_ (i (var_ "stopFirstAssume")) r.dist (i (nulam_ ident inexpr))))
+
+  | t -> None ()
+
   sem transformProb =
   | TmAssume t ->
     let i = withInfo t.info in
@@ -70,11 +103,28 @@ lang MExprPPLBPF =
       else
         error (join ["Invalid CPS option:", options.cps])
     in
+
+    -- Attempt to identify and stop at first assume to potentially reuse
+    -- previous empirical distribution (see runtime)
+    let t =
+      match transformStopFirstAssume t with Some t then t
+      else
+        let i = withInfo (infoTm t) in
+        i (app_ (i (var_ "stopInit")) (i (ulam_ "" t)))
+    in
+
+    -- printLn ""; printLn "--- AFTER ---";
+    -- match pprintCode 0 env t with (env,str) in
+    -- printLn (str);
+
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProb t in
+
     t
+
 end
 
 let compilerBPF = lam options. use MExprPPLBPF in

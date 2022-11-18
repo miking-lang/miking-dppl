@@ -4,7 +4,7 @@ include "string.mc"
 
 let inferModel = lam prior. lam.
   let x = assume prior in
-  observe true (Bernoulli x);
+  observe true (Bernoulli x); resample;
   x
 
 -- Repeatedly run inference on the prior until we get a 1 from randIntU.
