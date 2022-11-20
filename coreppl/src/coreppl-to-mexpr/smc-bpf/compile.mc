@@ -35,10 +35,7 @@ lang MExprPPLBPF =
   sem transformStopFirstAssume =
 
   -- Terms that cannot execute an assume internally (in ANF)
-  | TmLet ({
-      body = TmVar _ | TmLam _ | TmConst _ | TmSeq _
-           | TmRecord _ | TmType _ | TmConDef _ | TmExt _
-      } & r) ->
+  | TmLet ({body = TmVar _ | TmLam _ | TmConst _ | TmSeq _ | TmRecord _} & r) ->
       match transformStopFirstAssume r.inexpr with Some inexpr then
         Some (TmLet { r with inexpr = inexpr })
       else None ()
@@ -46,6 +43,21 @@ lang MExprPPLBPF =
   | TmRecLets r ->
     match transformStopFirstAssume r.inexpr with Some inexpr then
       Some (TmRecLets { r with inexpr = inexpr })
+    else None ()
+
+  | TmExt r ->
+    match transformStopFirstAssume r.inexpr with Some inexpr then
+      Some (TmExt {r with inexpr = inexpr})
+    else None ()
+
+  | TmType r ->
+    match transformStopFirstAssume r.inexpr with Some inexpr then
+      Some (TmType {r with inexpr = inexpr})
+    else None ()
+
+  | TmConDef r ->
+    match transformStopFirstAssume r.inexpr with Some inexpr then
+      Some (TmConDef {r with inexpr = inexpr})
     else None ()
 
   -- Allow tail call match with single branch
