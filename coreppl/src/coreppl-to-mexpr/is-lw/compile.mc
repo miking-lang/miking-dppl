@@ -89,8 +89,8 @@ lang MExprPPLImportance =
   | TmResample t -> withInfo t.info unit_
 
   -- Should already have been removed by CPS!
-  | (TmObserve t | TmWeight t) ->
-    errorSingle [t.info] "Impossible in importance sampling with CPS"
+  | (TmObserve _ | TmWeight _) & tm ->
+    errorSingle [infoTm tm] "Impossible in importance sampling with CPS"
   | t -> t
 
   sem compileCps : Options -> (Expr,Expr) -> Expr
