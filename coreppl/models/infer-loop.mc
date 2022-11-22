@@ -3,6 +3,7 @@ include "math.mc"
 include "string.mc"
 
 let inferModel = lam prior. lam.
+  match prior with prior in
   let x = assume prior in
   observe true (Bernoulli x); resample;
   x

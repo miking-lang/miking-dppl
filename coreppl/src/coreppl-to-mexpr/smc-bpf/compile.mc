@@ -60,13 +60,10 @@ lang MExprPPLBPF =
       Some (TmConDef {r with inexpr = inexpr})
     else None ()
 
-  -- Allow tail call match with single branch
-  | TmLet ({ ident = ident, body = TmMatch ({ thn = thn, els = TmNever _ } & rm),
-            inexpr = TmVar { ident = varIdent } } & r) ->
-    if nameEq ident varIdent then
-      match transformStopFirstAssume thn with Some thn then
-        Some (TmLet { r with body = TmMatch { rm with thn = thn } })
-      else None ()
+  -- Allow tail call match with single branch (e.g., `match ... with ... in ...`)
+  | TmMatch ({ thn = thn, els = TmLet { body = TmNever _ } & els } & r)->
+    match transformStopFirstAssume thn with Some thn then
+      Some (TmMatch { r with thn = thn, els = withInfo (infoTm els) never_ })
     else None ()
 
   -- If we reach an assume, do the transformation
