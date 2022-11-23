@@ -18,8 +18,13 @@ let resample = lam k. Resample {k = k}
 let updateWeight = lam weight. lam state.
   modref state (addf (deref state) weight)
 
+let stopFirstAssume = lam dist. lam cont. (Some dist, cont)
+let stopInit = lam cont. (None (), cont)
+
 -- WARNING: As of now, particles must be started and propagated sequentially (they cannot run in parallel)!
-let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
+let run : all a. all b. Unknown
+                 -> (State -> (Option (Dist b), b -> Checkpoint a))
+                 -> Dist a =
   lam config. lam model.
   use RuntimeDist in
 
@@ -27,13 +32,15 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
   let logParticleCount = log (int2float particleCount) in
 
   let state = ref 0. in
-  let start = lam.
-    modref state 0.;
-    let checkpoint = model state in
-    {
-      weight = deref state,
-      checkpoint = checkpoint
-    }
+  type Stop a = { weight: Float, checkpoint: Checkpoint a } in
+  let start: (b -> Checkpoint a) -> Float -> (() -> b) -> Int -> Stop a =
+    lam cont. lam weight. lam sampleFun. lam.
+      modref state weight;
+      let checkpoint: Checkpoint a = cont (sampleFun ()) in
+      {
+        weight = deref state,
+        checkpoint = checkpoint
+      }
   in
   let propagate = lam particle. lam contWeight.
     modref state contWeight;
@@ -64,7 +71,27 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> Dist a =
         let particles = mapReverse (lam p. propagate p contWeight) resampled in
         runRec particles
   in
-  let particles = createList particleCount start in
+
+  match model state with (d, cont) in
+  let particles: [Stop a] =
+    match d with Some d then
+      use RuntimeDist in
+      match d with DistEmpirical r then
+        if eqi particleCount (length r.samples) then
+          -- Call cont with sample = old sample for each particle, start at weight = old sample weight
+          foldl2 (lam acc. lam s. lam lw. cons (start cont lw (lam. s) 0) acc)
+            (toList []) r.samples r.logWeights
+        else
+          -- Call cont with sample = new sample for each particle, start at weight = 0
+          createList particleCount (start cont 0. (lam. sample d))
+      else
+        -- Call cont with sample = new sample for each particle, start at weight = 0
+        createList particleCount (start cont 0. (lam. sample d))
+    else
+      -- Call cont with sample = () for each particle, start at weight = 0
+      createList particleCount (start cont 0. (lam. unsafeCoerce ()))
+  in
+
   match runRec particles with (weights, samples) in
 
   -- Return

@@ -77,6 +77,7 @@ lang TransformDist = MExprPPL
   sem replaceTyDist =
   | t ->
     let t = smap_Expr_Type toRuntimeTyDist t in
+    let t = smap_Expr_TypeLabel toRuntimeTyDist t in
     let t = smap_Expr_Pat replaceTyDistPat t in
     let t = smap_Expr_Expr replaceTyDist t in
     withType (toRuntimeTyDist (tyTm t)) t

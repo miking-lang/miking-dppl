@@ -4,6 +4,7 @@ include "parser.mc"
 include "name.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
+include "pmexpr/utils.mc"
 
 lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   type ModelRepr = {
@@ -89,7 +90,8 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   sem extractInferAst inferId =
   | ast ->
     let ast = extractAst (setOfSeq nameCmp [inferId]) ast in
-    inlineInferBinding inferId ast
+    let ast = inlineInferBinding inferId ast in
+    inlineInexpr (mapEmpty nameCmp) ast
 
   -- Inlines the body of the infer binding without lambdas. This places the
   -- model code in the top-level of the program.
@@ -116,6 +118,49 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
                         inexpr = inexpr}
     else TmRecLets {t with inexpr = inlineInferBinding inferId t.inexpr}
   | t -> smap_Expr_Expr (inlineInferBinding inferId) t
+
+  -- Performs repeated inlining of the final inexpr, which contains the actual
+  -- model, until we have inlined the function itself.
+  sem inlineInexpr : Map Name Expr -> Expr -> Expr
+  sem inlineInexpr env =
+  | TmLet t ->
+    TmLet {t with inexpr = inlineInexpr (mapInsert t.ident t.body env) t.inexpr}
+  | TmRecLets t ->
+    let env =
+      foldl (lam env. lam bind. mapInsert bind.ident bind.body env)
+        env t.bindings in
+    TmRecLets {t with inexpr = inlineInexpr env t.inexpr}
+  | TmType t -> TmType {t with inexpr = inlineInexpr env t.inexpr}
+  | TmConDef t -> TmConDef {t with inexpr = inlineInexpr env t.inexpr}
+  | TmUtest t -> TmUtest {t with next = inlineInexpr env t.next}
+  | TmExt t -> TmExt {t with inexpr = inlineInexpr env t.inexpr}
+  | t -> inlineDirectApplication env t
+
+  sem inlineDirectApplication : Map Name Expr -> Expr -> Expr
+  sem inlineDirectApplication env =
+  | t ->
+    recursive let replaceArgs = lam subMap. lam body. lam args.
+      switch (body, args)
+      case (TmLam t, [arg] ++ args) then
+        let subMap = mapInsert t.ident arg subMap in
+        replaceArgs subMap t.body args
+      case (t, []) then substitute subMap t
+      end
+    in
+    match collectAppArguments t with (TmVar {ident = id}, args & ![]) then
+      match mapLookup id env with Some body then
+        inlineDirectApplication env (replaceArgs (mapEmpty nameCmp) body args)
+      else
+        errorSingle [infoTm t]
+          (join ["Reference to undefined function ", nameGetStr id])
+    else t
+
+  sem substitute : Map Name Expr -> Expr -> Expr
+  sem substitute subMap =
+  | TmVar t ->
+    match mapLookup t.ident subMap with Some e then e
+    else TmVar t
+  | t -> smap_Expr_Expr (substitute subMap) t
 
   sem bodyWithoutLambdas : Expr -> Expr
   sem bodyWithoutLambdas =
