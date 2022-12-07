@@ -45,7 +45,7 @@ make
 make install
 ```
 
-Then, to install the TreePPL compiler itself, `tppl`, you issue:
+Then, to install the TreePPL compiler itself, `tpplc`, you issue:
 
 ```
 make install-treeppl
@@ -58,7 +58,7 @@ make uninstall-treeppl
 ```
 
 This behavior is programmed in the `Makefile` in the root of `miking-dppl`.
-There is another makefile, under `treeppl/Makefile`, which holds the recipe for building `tppl`.
+There is another makefile, under `treeppl/Makefile`, which holds the recipe for building `tpplc`.
 
 In certain circumstances you may need to install the CUDA C++ backend compiler itself, RootPPL `rppl`.
 
