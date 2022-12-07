@@ -1,4 +1,4 @@
-tppl_name=tppl
+tppl_name=tpplc
 bin_path=${HOME}/.local/bin
 src_path=${HOME}/.local/src/cppl/
 
