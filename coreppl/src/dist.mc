@@ -94,7 +94,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
 
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyDist r ->
-    match unwrapType typeEnv lhs with Some (TyDist l) then
+    match unwrapType lhs with TyDist l then
       eqTypeH typeEnv free l.ty r.ty
     else None ()
 
