@@ -148,10 +148,12 @@ lang LoadRuntime =
       optionGetOrElse (lam. id) (mapLookup id replacements)
     in
     let replaceInEnv = lam env. mapMapWithKey (lam. lam id. replaceId id) env in
+    let replaceInTyConEnv =
+      lam env. mapMapWithKey (lam. lam v. (replaceId v.0, v.1, v.2)) env in
     let replaceInSymEnv = lam symEnv.
       {symEnv with varEnv = replaceInEnv symEnv.varEnv,
                    conEnv = replaceInEnv symEnv.conEnv,
-                   tyConEnv = replaceInEnv symEnv.tyConEnv}
+                   tyConEnv = replaceInTyConEnv symEnv.tyConEnv}
     in
     {entry with topSymEnv = replaceInSymEnv entry.topSymEnv}
 end
