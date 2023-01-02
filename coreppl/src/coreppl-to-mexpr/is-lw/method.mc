@@ -31,7 +31,7 @@ lang ImportanceSamplingMethod = MExprPPL
   | Importance {particles = particles} ->
     let int = TyInt {info = info} in
     let particles = typeCheckExpr env particles in
-    unify [info, infoTm particles] env (tyTm particles) int;
+    unify [info, infoTm particles] (tyTm particles) int;
     Importance {particles = particles}
 
   sem symbolizeInferMethod env =
