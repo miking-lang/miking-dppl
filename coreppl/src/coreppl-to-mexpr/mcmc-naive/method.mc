@@ -39,7 +39,7 @@ lang NaiveMCMCMethod = MExprPPL
   | NaiveMCMC t ->
     let int = TyInt {info = info} in
     let iterations = typeCheckExpr env t.iterations in
-    unify [info, infoTm iterations] env (tyTm iterations) int;
+    unify [info, infoTm iterations] (tyTm iterations) int;
     NaiveMCMC {
       iterations = iterations
     }

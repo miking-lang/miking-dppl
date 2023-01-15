@@ -94,7 +94,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
 
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyDist r ->
-    match unwrapType typeEnv lhs with Some (TyDist l) then
+    match unwrapType lhs with TyDist l then
       eqTypeH typeEnv free l.ty r.ty
     else None ()
 
@@ -115,7 +115,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
     let dist = smapDist_Expr_Expr (typeCheckExpr env) t.dist in
     let innerTyDist = typeCheckDist env t.info dist in
     let innerTyDistVar = newvar env.currentLvl t.info in
-    unify [t.info] env innerTyDistVar innerTyDist;
+    unify [t.info] innerTyDistVar innerTyDist;
     TmDist {{ t with dist = dist }
                 with ty = TyDist { info = t.info, ty = innerTyDistVar } }
   sem unifyBase (env : UnifyEnv) =
@@ -224,8 +224,8 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DUniform t ->
     let float = TyFloat { info = info } in
-    unify [info, infoTm t.a] env (tyTm t.a) float;
-    unify [info, infoTm t.b] env (tyTm t.b) float;
+    unify [info, infoTm t.a] (tyTm t.a) float;
+    unify [info, infoTm t.b] (tyTm t.b) float;
     float
 
   -- ANF
@@ -281,7 +281,7 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
   -- Type Check
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DBernoulli t ->
-    unify [info, infoTm t.p] env (tyTm t.p) (TyFloat { info = info });
+    unify [info, infoTm t.p] (tyTm t.p) (TyFloat { info = info });
     TyBool { info = info }
 
   -- ANF
@@ -330,7 +330,7 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
   -- Type Check
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DPoisson t ->
-    unify [info, infoTm t.lambda] env (tyTm t.lambda) (TyFloat { info = info });
+    unify [info, infoTm t.lambda] (tyTm t.lambda) (TyFloat { info = info });
     TyInt { info = info }
 
   -- ANF
@@ -387,8 +387,8 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DBeta t ->
     let float = TyFloat { info = info } in
-    unify [info, infoTm t.a] env (tyTm t.a) float;
-    unify [info, infoTm t.b] env (tyTm t.b) float;
+    unify [info, infoTm t.a] (tyTm t.a) float;
+    unify [info, infoTm t.b] (tyTm t.b) float;
     float
 
   -- ANF
@@ -450,8 +450,8 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DGamma t ->
     let float = TyFloat { info = info } in
-    unify [info, infoTm t.k] env (tyTm t.k) float;
-    unify [info, infoTm t.theta] env (tyTm t.theta) float;
+    unify [info, infoTm t.k] (tyTm t.k) float;
+    unify [info, infoTm t.theta] (tyTm t.theta) float;
     float
 
   -- ANF
@@ -514,7 +514,7 @@ lang CategoricalDist =
   | DCategorical t ->
     let float = TyFloat { info = info } in
     let seq = TySeq { ty = TyFloat { info = info }, info = info } in
-    unify [info, infoTm t.p] env (tyTm t.p) seq;
+    unify [info, infoTm t.p] (tyTm t.p) seq;
     TyInt { info = info }
 
   -- ANF
@@ -571,8 +571,8 @@ lang MultinomialDist =
   -- Type Check
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DMultinomial t ->
-    unify [info, infoTm t.n] env (tyTm t.n) (TyInt { info = info });
-    unify [info, infoTm t.p] env (tyTm t.p)
+    unify [info, infoTm t.n] (tyTm t.n) (TyInt { info = info });
+    unify [info, infoTm t.p] (tyTm t.p)
       (TySeq { ty = TyFloat { info = info }, info = info });
     TySeq { ty = TyInt { info = info }, info = info }
 
@@ -630,7 +630,7 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DDirichlet t ->
     let seqTy = TySeq { ty = TyFloat { info = info }, info = info } in
-    unify [info, infoTm t.a] env (tyTm t.a) seqTy; seqTy
+    unify [info, infoTm t.a] (tyTm t.a) seqTy; seqTy
 
   -- ANF
   sem normalizeDist (k : Dist -> Expr) =
@@ -676,7 +676,7 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DExponential t ->
     let float = TyFloat { info = info } in
-    unify [info, infoTm t.rate] env (tyTm t.rate) float; float
+    unify [info, infoTm t.rate] (tyTm t.rate) float; float
 
   -- ANF
   sem normalizeDist (k : Dist -> Expr) =
@@ -729,7 +729,7 @@ lang EmpiricalDist =
   | DEmpirical t ->
     let resTy = newvar env.currentLvl info in
     let innerTy = tyWithInfo info (tytuple_ [TyFloat { info = info }, resTy]) in
-    unify [info, infoTm t.samples] env (tyTm t.samples)
+    unify [info, infoTm t.samples] (tyTm t.samples)
       (TySeq { ty = innerTy, info = info });
     resTy
 
@@ -786,8 +786,8 @@ lang GaussianDist =
   sem typeCheckDist (env: TCEnv) (info: Info) =
   | DGaussian t ->
     let float = TyFloat { info = info } in
-    unify [info, infoTm t.mu] env (tyTm t.mu) float;
-    unify [info, infoTm t.mu] env (tyTm t.sigma) float; float
+    unify [info, infoTm t.mu] (tyTm t.mu) float;
+    unify [info, infoTm t.mu] (tyTm t.sigma) float; float
 
   -- ANF
   sem normalizeDist (k : Dist -> Expr) =
@@ -846,8 +846,8 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
   | DBinomial t ->
     let int = TyInt { info = info } in
     let float = TyFloat { info = info } in
-    unify [info, infoTm t.n] env (tyTm t.n) int;
-    unify [info, infoTm t.p] env (tyTm t.p) float; int
+    unify [info, infoTm t.n] (tyTm t.n) int;
+    unify [info, infoTm t.p] (tyTm t.p) float; int
 
   -- ANF
   sem normalizeDist (k : Dist -> Expr) =
