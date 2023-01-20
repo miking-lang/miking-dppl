@@ -106,7 +106,7 @@ let foldToSeq = lam a. lam e. cons e a in
 
 utest smap_Expr_Expr mapVar resample_ with resample_ using eqExpr in
 
-utest sfold_Expr_Expr foldToSeq [] resample_ with [] in
+utest sfold_Expr_Expr foldToSeq [] resample_ with [] using eqSeq eqExpr in
 
 
 ---------------------
