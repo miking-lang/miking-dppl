@@ -161,7 +161,7 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: all a. (State -> a) -> a = lam model.
+let runNext: all a. (State a -> a) -> a = lam model.
 
   -- Enable global modifications with probability gProb
   let gProb = compileOptions.mcmcLightweightGlobalProb in
@@ -224,7 +224,7 @@ let runNext: all a. (State -> a) -> a = lam model.
       emptyList emptyList
 
 -- General inference algorithm for aligned MCMC
-let run : all a. Unknown -> (State -> a) -> Dist a =
+let run : all a. Unknown -> (State a -> a) -> Dist a =
   lam config. lam model.
 
   recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
