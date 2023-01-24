@@ -24,8 +24,8 @@ lang LoadRuntime =
     -- The identifier of the run function for this runtime.
     runId : Name,
 
-    -- The identifier of the State type for this runtime.
-    stateId : Name,
+    -- The type for which State is an alias for this runtime.
+    stateType : Type,
 
     -- A symbolization environment containing the identifiers defined in the
     -- top-level of the runtime program. This environment is used to symbolize
@@ -86,7 +86,8 @@ lang LoadRuntime =
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
     let runtime = symbolizeAllowFree runtime in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
-    { ast = runtime, runId = runId, stateId = stateId
+    let stateType = findStateType method stateId runtime in
+    { ast = runtime, runId = runId, stateType = stateType
     , topSymEnv = addTopNames symEnvEmpty runtime }
 
   -- Finds a pre-defined list of identifiers in the given runtime AST, which
@@ -103,6 +104,38 @@ lang LoadRuntime =
         else "State" in
       error (join ["Missing identifier ", missingImpl, " in the runtime of (",
                    methodStr, ")"])
+
+  sem findStateType : InferMethod -> Name -> Expr -> Type
+  sem findStateType method stateId =
+  | runtime ->
+    match findStateTypeH stateId (None ()) runtime with Some ty then ty
+    else
+      match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in
+      error (join [ "Could not find State type definition in runtime of ("
+                  , methodStr, ")" ])
+
+  sem findStateTypeH : Name -> Option Type -> Expr -> Option Type
+  sem findStateTypeH stateId acc =
+  | TmType {ident = id, params = params, tyIdent = tyIdent, inexpr = inexpr} ->
+    if nameEq id stateId then
+      -- Create a type application for each type parameter of the State type.
+      recursive let g = lam ty. lam params.
+        match params with [_] ++ params then
+          tyapp_ ty (TyUnknown {info = infoTy ty})
+        else ty
+      in
+      let display = g (ntycon_ stateId) params in
+
+      -- Replace all inner type variables with TyUnknown to let the
+      -- type-checker can correctly infer them.
+      recursive let unknownTyVars = lam ty.
+        match ty with TyVar t then TyUnknown {info = t.info}
+        else smap_Type_Type unknownTyVars ty
+      in
+      let content = unknownTyVars tyIdent in
+      Some (TyAlias {display = display, content = content})
+    else findStateTypeH stateId acc inexpr
+  | t -> sfold_Expr_Expr (findStateTypeH stateId) acc t
 
   sem combineRuntimes : Options -> Map InferMethod RuntimeEntry -> Runtimes
   sem combineRuntimes options =

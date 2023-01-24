@@ -220,7 +220,7 @@ lang MExprCompile =
     let stateVarId = nameNoSym "state" in
     let ast =
       nulet_ modelId
-        (nlams_ (snoc modelParams (stateVarId, ntycon_ entry.stateId)) ast) in
+        (nlams_ (snoc modelParams (stateVarId, entry.stateType)) ast) in
 
     -- Replace any occurrences of TyDist in the program with the runtime
     -- distribution type. This needs to be performed after the previous step as
