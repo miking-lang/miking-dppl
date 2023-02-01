@@ -28,5 +28,5 @@ let run : all a. Unknown -> (State -> a) -> Dist a = lam config. lam model.
   let states = createList particles (lam. ref weightInit) in
   let res = mapReverse model states in
   let weights = mapReverse deref states in
-  constructDistEmpirical (reverse res) weights
+  constructDistEmpirical res weights
     (EmpNorm { normConst = normConstant weights })
