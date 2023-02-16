@@ -1,0 +1,329 @@
+type Globals = Globals {logActivity : Real, logTurnoverRate : Real, rateVariance : Real}
+
+type SpecTree =
+  | Node {left : SpecTree, right : SpecTree, age : Real}
+  | Leaf {age : Real}
+
+function new_rate(g: Globals, logSplitRate: Real): Real {
+  assume newRate ~ Gaussian(g.logActivity + logSplitRate, g.rateVariance);
+  return newRate;
+}
+
+function min(a: Real, b: Real): Real {
+  if a <= b {
+    return a;
+  }
+  return b;
+}
+
+function observe_extinct(g: Globals, age: Real, logSplitRate: Real) {
+  let logEndRate = g.logTurnoverRate - logSplitRate;
+  assume split ~ Exponential(exp(logSplitRate));
+  assume end ~ Exponential(exp(logEndRate));
+
+  if age - min(split, end) <= 0.0 {
+    // Next event is after the present, i.e., we survive, i.e., we're
+    // not extinct
+    weight 0.0;
+  }
+  if split <= end {
+    // We split here, and both branches must go extinct
+    let nextAge = age - split;
+    observe_extinct(g, nextAge, new_rate(g, logSplitRate));
+    // OPT(vipa, 2022-11-29): I feel like this could be avoided if we
+    // could observe the (local) weight of the sub-computation and
+    // incorporate it twice
+    observe_extinct(g, nextAge, new_rate(g, logSplitRate));
+  } else {
+    // We went extinct, so we're good
+  }
+}
+
+function observe_tree(g: Globals, age: Real, logSplitRate: Real, tree: SpecTree) {
+  // A split happens at some point
+  assume split ~ Exponential(exp(logSplitRate));
+
+  // No extinctions happen before that (or before the next node,
+  // whichever comes first)
+  let logEndRate = g.logTurnoverRate - logSplitRate;
+  observe 0.0 ~ Poisson(exp(logEndRate) * min(split, age - tree.age));
+
+  let ageAfterSplit = age - split;
+  if ageAfterSplit > tree.age {
+    // Split happens before the next node, i.e., one of the branches
+    // must go fully exctinct
+
+    // We don't know which one; either choice will produce the same
+    // pruned tree. Thus we *should* technically try both and add the
+    // two probabilities together. However, since the parameters given
+    // to the functions are the same it suffices to run one and double
+    // its probability.
+    // TODO(vipa, 2022-11-29): If the OPT with the same date is not
+    // correct, then this weight seems suspicious
+    weight 2.0;
+
+    // First branch goes extinct (resp. second)
+    observe_extinct(g, ageAfterSplit, new_rate(g, logSplitRate));
+    // The second branch must be the tree we're observing
+    // (resp. first)
+    observe_tree(g, ageAfterSplit, new_rate(g, logSplitRate), tree);
+
+  } else {
+    // We get here with probability
+    // P(neither split nor extinct before tree.age)
+
+    if tree is Node {
+      // We must split right now
+      observe 0.0 ~ Exponential(exp(logSplitRate));
+
+      observe_tree(g, ageAfterSplit, new_rate(g, logSplitRate), tree.left);
+      observe_tree(g, ageAfterSplit, new_rate(g, logSplitRate), tree.right);
+    } else {
+      if tree is Leaf {
+        // Extinct or present day
+        if tree.age > 0.0 {
+          // Went extinct before present day, i.e., cannot be observed.
+          weight 0.0;
+        }
+      }
+    }
+  }
+}
+
+model function top(g: Globals, tree: SpecTree) {
+  observe_tree(g, tree.age, 1., tree.left);
+  observe_tree(g, tree.age, 1., tree.right);
+}
+
+// type Option(a) =
+//   | Some {val : a}
+//   | None {}
+
+// decorator age : Real;
+// decorator logSplitRate : Real;
+
+// function gen_pruned_tree(globals: Globals, age: Real, parentLogSplitrate: Real) : Option Tree {
+//   assume logSplitRate ~ Gaussian(globals.logActivity + parentLogSplitrate, globals.rateVariance);
+//   assume split ~ Exponential(exp(logSplitRate));
+//   let logEndRate = globals.logTurnoverRate - logSplitRate;
+//   assume end ~ Exponential(exp(logEndRate));
+
+//   if split <= end {
+//     let newAge = age - split;
+//     let l = gen_pruned_tree(globals, newAge, logSplitRate);
+//     let r = gen_pruned_tree(globals, newAge, logSplitRate);
+//     if l is Some && r is Some {
+//       return Some {val = Node {left = l.val, right = r.val, age = newAge}};
+//     }
+//     if l is Some {
+//       return l;
+//     }
+//     if r is Some {
+//       return r;
+//     }
+//     return None {};
+//   }
+
+//   let newAge = age - end;
+//   if newAge <= 0 {
+//     return Some {val = Leaf {age = 0}};
+//   }
+//   return None {};
+// }
+
+// /*
+// Return points and their dataflow knowledge:
+// ret = Some {val = Node {...}},
+//   // These need to be computed forwards; they are hidden variables in
+//   // some sense
+//   assume logSplitrate ~ Gaussian(globals.logActivity + parentLogSplitrate, globals.rateVariance);
+//   let logEndRate = globals.logTurnoverRate - logSplitRate;
+//   assume end ~ Exponential(exp(logEndRate))
+
+//   // These should be computed backwards, since we can use information
+//   // from the return value
+//   observe Some {val = ret.val.right} ~ gen_pruned_tree(globals, ret.val.age, logSplitRate)
+//   observe Some {val = ret.val.left} ~ gen_pruned_tree(globals, ret.val.age, logSplitRate)
+//   let split = age - ret.val.age
+//   assert split <= end
+//   observe split ~ Exponential(exp(logSplitRate))
+
+// ret = l
+//   // forward
+//   assume logSplitRate ~ Gaussian(globals.logActivity + parentLogSplitrate, globals.rateVariance);
+//   assume split ~ Exponential(exp(logSplitRate));
+//   let logEndRate = globals.logTurnoverRate - logSplitRate;
+//   assume end ~ Exponential(exp(logEndRate));
+//   assert split <= end
+//   let newAge = age - split;
+
+//   // backward
+//   observe None {} ~ gen_pruned_tree(globals, newAge, logSplitRate)
+//   observe ret ~ gen_pruned_tree(globals, newAge, logSplitRate)
+
+// ret = r
+//   // mirror of `ret = l`
+
+// ret = None {} (first case)
+//   // forward
+//   assume logSplitRate ~ Gaussian(globals.logActivity + parentLogSplitrate, globals.rateVariance);
+//   assume split ~ Exponential(exp(logSplitRate));
+//   let logEndRate = globals.logTurnoverRate - logSplitRate;
+//   assume end ~ Exponential(exp(logEndRate));
+//   assert split <= end
+//   let newAge = age - split;
+
+//   // backward
+//   observe None {} ~ gen_pruned_tree(globals, newAge, logSplitRate)
+//   observe None {} ~ gen_pruned_tree(globals, newAge, logSplitRate)
+
+// ret = Some {val = Leaf {age = 0}}
+//   // forward
+//   assume logSplitRate ~ Gaussian(globals.logActivity + parentLogSplitrate, globals.rateVariance)
+//   assume split ~ Exponential(exp(logSplitRate))
+//   let logEndRate = globals.logTurnoverRate - logSplitRate
+//   assume end ~ Exponential(exp(logEndRate))
+//   assert !(split <= end)
+//   let newAge = age - end
+//   assert newAge <= 0
+
+// ret = None {} (second case)
+//   // forward
+//   assume logSplitRate ~ Gaussian(globals.logActivity + parentLogSplitrate, globals.rateVariance)
+//   assume split ~ Exponential(exp(logSplitRate))
+//   let logEndRate = globals.logTurnoverRate - logSplitRate
+//   assume end ~ Exponential(exp(logEndRate))
+//   assert !(split <= end)
+//   let newAge = age - end
+//   assert !(newAge <= 0)
+
+// */
+
+// /*
+// Working copy
+// ret = Some {val = Node {...}},
+//   // These should be computed backwards, since we can use information
+//   // from the return value
+//   observe Some {val = ret.val.right} ~ gen_pruned_tree(globals, ret.val.age, logSplitRate)
+//   observe Some {val = ret.val.left} ~ gen_pruned_tree(globals, ret.val.age, logSplitRate)
+//   let split = age - ret.val.age
+//   assert split <= end
+//   observe split ~ Exponential(exp(logSplitRate))
+
+// ret = Some {val = Leaf {age = 0}}
+//   // forward
+//   assume split ~ Exponential(exp(logSplitRate))
+//   assert !(split <= end)
+//   let newAge = age - end
+//   assert newAge <= 0
+
+// ret = l
+//   // forward
+//   assert ret is Some  // NOTE(vipa, 2022-11-23): assume some floating in dependency order
+//   assume split ~ Exponential(exp(logSplitRate));
+//   assert split <= end
+//   let newAge = age - split;
+
+//   // backward
+//   observe None {} ~ gen_pruned_tree(globals, newAge, logSplitRate)
+//   observe ret ~ gen_pruned_tree(globals, newAge, logSplitRate)
+
+// ret = r
+//   // mirror of `ret = l`
+// */
+
+// function gen_pruned_tree_observe(globals: Globals, age: Real, logSplitRate: Real, obs: Option Tree) {
+//   // Assuming some dataflow exists, and we can query if statements
+//   // happen in all return points
+//   assume logSplitrate ~ Gaussian(globals.logActivity + parentLogSplitrate, globals.rateVariance);
+//   let logEndRate = globals.logTurnoverRate - logSplitRate;
+//   assume end ~ Exponential(exp(logEndRate));
+
+//   // Splitting based on case analysis of `obs` (the returned constructors are patterns)
+//   if obs is Some {
+//     // We have one reachable assert:
+//     let split_temp = age - ret.val.age;
+//     if split_temp <= end {
+//       // All branches survive
+//     } else {
+//       // All but the first survive
+
+//       // Logically, this should only be possible if we draw a `split`
+//       // that is lower than `end` (and `split_temp`), but that's
+//       // probably not viable to show without induction, which ought to
+//       // be too hard for the static analysis here
+//     }
+//   }
+//   if obs is None {
+//     // `ret = l` and `ret = r` die to contradiction.
+//     // Common line:
+//     assume split ~ Exponential(exp(logSplitRate));
+//     // We now have a split on `split <= end`
+//     if split <= end {
+//       // Single branch remaining
+//       let newAge = age - split;
+//       gen_pruned_tree_observe(globals, newAge, logSplitRate, None {});
+//       gen_pruned_tree_observe(globals, newAge, logSplitRate, None {});
+//       return;
+//     } else {
+//       // Single branch remaining
+//       let newAge = age - end;
+//       // Split on `newAge <= 0`
+//       if newAge <= 0 {
+//         // Zero branches remaining
+//         weight 0;
+//         return;
+//       } else {
+//         // Single branch remaining, but no more things to check; we're done
+//         return;
+//       }
+//     }
+//   }
+// }
+
+// function gen_pruned_tree_observe(globals: Globals, age: Real, logSplitRate: Real, obs: Option Tree) {
+//   // We want to find which return we're using, ideally by directly
+//   // examining `obs`. Here each return knows precisely the `Option`
+//   // constructor in use, thus we can begin there.
+//   if abs is Some {
+//   }
+//   if abs is None {
+//     // No information remains in `obs`, thus we must compute the sum
+//     // of the weights we could use to get here
+//     let splitRate = exp(logSplitRate);
+//     let endRate = globals.turnoverRate / splitRate;
+//     assume split ~ Exponential(splitRate);
+//     assume end ~ Exponential(endRate);
+//     if split <= end {
+//       // Dataflow analysis should be able to give us that `l = None {} = r`
+//       assume logSplitRateLeft ~ Gaussian(globals.logActivity + logSplitRate, globals.rateVariance);
+//       assume logSplitRateRight ~ Gaussian(globals.logActivity + logSplitRate, globals.rateVariance);
+//       let newAge = age - split;
+//       gen_pruned_tree_observe(globals, newAge, logSplitRateLeft, None{});
+//       gen_pruned_tree_observe(globals, newAge, logSplitRateLeft, None{});
+//       return;
+//     }
+//   }
+// }
+
+// function gen_tree_level(globals: Globals, age: Real, logSplitRate: Real) : TreeF (Real, Real) {
+//   let splitRate = exp(logSplitRate);
+//   let endRate = globals.turnoverRate / splitRate;
+//   assume split ~ Exponential(splitRate);
+//   assume end ~ Exponential(endRate);
+//   if split <= end {
+//     assume logSplitRateLeft ~ Gaussian(globals.logActivity + logSplitRate, globals.rateVariance);
+//     assume logSplitRateRight ~ Gaussian(globals.logActivity + logSplitRate, globals.rateVariance);
+//     let newAge = age - split;
+//     return Node {
+//       left = (newAge, logSplitRateLeft),
+//       right = (newAge, logSplitRateRight),
+//       age = newAge,
+//       logSplitRate = logSplitRate
+//     };
+//   } else {
+//     return Leaf {age = age - end};
+//   }
+// }
+
+// function observe_tree_level(globals: Globals, gen: TreeF ((Option Tree) -> Tree)
