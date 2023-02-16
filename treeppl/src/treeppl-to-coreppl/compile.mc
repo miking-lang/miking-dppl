@@ -157,7 +157,7 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
       (foldl wrap never_ relevantConstructors)
 end
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst
+lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample
 
 -- TODO If this works it should go to externals
   sem constructExternalMap : Expr -> Map String Name
@@ -356,6 +356,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       } in
       -- TODO(vipa, 2022-12-22): Info for semi?
       semi_ obs cont
+
+  | ResampleStmtTppl x ->
+    lam cont.
+      let res = TmResample { info = x.info, ty = tyunknown_ } in
+      semi_ res cont
 
   | AssignStmtTppl a ->
     lam cont. TmLet {
