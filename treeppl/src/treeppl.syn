@@ -164,6 +164,10 @@ prod Poisson: ExprTppl = "Poisson" "(" rate:ExprTppl ")"
 
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"
+prod Constructor: ExprTppl =
+  name:UName "{"
+  (fields:{key:LIdent ("=" value:ExprTppl)?} fields:{"," key:LIdent ("=" value:ExprTppl)?}*)?
+  "}"
 
 /----- Statements -----/
 prod ExprStmtTppl: StmtTppl = e:ExprTppl ";" -- Epxressions as statements

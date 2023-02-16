@@ -545,6 +545,15 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       ty = tyunknown_
     }
 
+  | ConstructorExprTppl x ->
+    let mkField : {key : {v:String, i:Info}, value : Option ExprTppl} -> (SID, Expr) = lam field.
+      let sid = stringToSid field.key.v in
+      let val = optionMapOr (withInfo field.key.i (var_ field.key.v)) compileExprTppl field.value in
+      (sid, val) in
+    let fields = mapFromSeq cmpSID (map mkField x.fields) in
+    let record = TmRecord { bindings = fields, ty = tyunknown_, info = x.info } in
+    TmConApp { ident = x.name.v, body = record, ty = tyunknown_, info = x.info }
+
   -- TODO(vipa, 2022-12-22): We want to pick the right one depending
   -- on the type of the expressions, but that requires
   -- inference/type-checking. This seems like a problem that should
