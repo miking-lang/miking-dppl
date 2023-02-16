@@ -5,7 +5,7 @@ src_path=${HOME}/.local/src/cppl/
 tppl_tmp_file := $(shell mktemp)
 build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
 	mi compile $(MCORE_STDLIB)/parser/tool.mc
-	./tool src/treeppl.syn src/treeppl-to-coreppl/treeppl-ast.mc
+	./tool src/treeppl.syn src/treeppl-ast.mc
 	time mi compile src/${tppl_name}.mc --output ${tppl_tmp_file}
 	mkdir -p build
 	cp ${tppl_tmp_file} build/${tppl_name}
@@ -20,4 +20,3 @@ uninstall:
 
 test: src/treeppl-to-coreppl/compile.mc
 	mi run src/treeppl-to-coreppl/compile.mc --test
-

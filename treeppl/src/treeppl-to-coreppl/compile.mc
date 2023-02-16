@@ -5,12 +5,12 @@ TreePPL Compiler and Unit Tests
 Viktor Senderov, Daniel Lundén, and Viktor Palmkvist (2022)
 
 Unit tests available via:
-  
+
   mi compile models/treeppl-to-coreppl/compile.mc --test
 
 -/
 
-include "treeppl-ast.mc"
+include "../treeppl-ast.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
@@ -59,7 +59,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   sem compile: Expr -> FileTppl -> Expr
 
   sem compile (input: Expr) =
-  | FileTppl x -> 
+  | FileTppl x ->
       let externals = parseMCoreFile "src/externals/ext.mc" in
       let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
       let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
@@ -74,21 +74,21 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
       let invocation = match findMap mInvocation x.decl with Some x
         then x
         else printLn "You need a model function"; never
-      in 
+      in
       bind_ input (TmRecLets {
         bindings = map (compileTpplDecl compileContext) x.decl,
         inexpr = invocation,
-        ty = tyunknown_, 
+        ty = tyunknown_,
         info = x.info
       })
 
   sem mInvocation: DeclTppl -> Option Expr
-  sem mInvocation = 
+  sem mInvocation =
 
   | _ -> None ()
 
   | FunDeclTppl (x & {model = Some _}) ->
-    let invar = TmVar { 
+    let invar = TmVar {
         ident = x.name.v,
         info = x.name.i,
         ty = tyunknown_,
@@ -100,37 +100,37 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
         lhs = f,
         rhs = parseArgument arg,
         ty = tyunknown_,
-        info = x.info  
+        info = x.info
       }
     in
     Some (foldl f invar x.args)
-  
+
   sem parseArgument: {name:{v:Name, i:Info}, ty:TypeTppl} -> Expr
-  sem parseArgument =  
+  sem parseArgument =
 
   | x -> TmVar {
       ident = x.name.v,
       ty = tyunknown_,
       info = x.name.i,
-      frozen = false 
-    } 
+      frozen = false
+    }
 
   sem compileTpplDecl: TpplCompileContext -> DeclTppl -> RecLetBinding
-  sem compileTpplDecl (context: TpplCompileContext) = 
+  sem compileTpplDecl (context: TpplCompileContext) =
 
   | FunDeclTppl f -> {
         ident = f.name.v,
         tyBody = tyunknown_,
-        body = 
-          foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),          
+        body =
+          foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
         info = f.info
-      }   
+      }
 
   sem compileFunArg: {name:{v:Name, i:Info}, ty:TypeTppl} -> (Expr -> Expr)
-  
+
   sem compileFunArg =
   | arg ->
-    lam cont. 
+    lam cont.
     TmLam {
       ident = arg.name.v,
       tyIdent = compileTypeTppl arg.ty,
@@ -157,12 +157,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
 
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
-  sem compileStmtTppl (context: TpplCompileContext) = 
+  sem compileStmtTppl (context: TpplCompileContext) =
 
-  | AssumeStmtTppl a -> 
+  | AssumeStmtTppl a ->
   lam cont. TmLet {
-    ident = a.randomVar.v, 
-    tyBody = tyunknown_, 
+    ident = a.randomVar.v,
+    tyBody = tyunknown_,
     body = TmAssume {
       dist = compileExprTppl a.dist,
       ty = tyunknown_,
@@ -172,11 +172,11 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
     ty = tyunknown_,
     info = a.info
   }
-  
+
   | AssignStmtTppl a ->
   lam cont. TmLet {
-    ident = a.var.v, 
-    tyBody = tyunknown_, 
+    ident = a.var.v,
+    tyBody = tyunknown_,
     body =  compileExprTppl a.val,
     inexpr = cont,
     ty = tyunknown_,
@@ -184,13 +184,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   }
 
   | WeightStmtTppl a ->
-  lam cont. 
+  lam cont.
 
   let cExpr: Expr = (compileExprTppl a.value) in
   let logExpr: Expr = withInfo a.info (app_ (nvar_ context.logName) cExpr) in
   let tmp = TmLet {
-    ident = nameNoSym "foo", 
-    tyBody = tyunknown_, 
+    ident = nameNoSym "foo",
+    tyBody = tyunknown_,
     body =  TmWeight {
       weight = logExpr,
       --weight = cExpr,
@@ -207,12 +207,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   /--
   To avoid code duplication.
   Intuition: compiling with continuations
-  Instead of 
-    a; cont 
+  Instead of
+    a; cont
   we do
     let c = lam x:(). cont in
     a; c()
-  
+
   Here c corresponds to contF.
   --/
   -- TODO for Daniel: have C compiler handle f()
@@ -230,8 +230,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
       inexpr = TmMatch {
         target = compileExprTppl a.condition,
         pat    = ptrue_,
-        thn    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts),		 
-        els    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts),	 
+        thn    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts),
+        els    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts),
         ty     = tyunknown_,
         info   = a.info
       }
@@ -258,7 +258,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
       ident = v.ident.v,
       ty = tyunknown_,
       info = v.info,
-      frozen = false 
+      frozen = false
     }
 
   | RealExprTppl r ->
@@ -328,4 +328,3 @@ utest compileTreePPL testInput testTpplProgram with testMCoreProgram using eqExp
 --utest compileTreePPLToString testInput testTpplProgram with (mexprPPLToString testMCoreProgram) using eqString in
 
 ()
-
