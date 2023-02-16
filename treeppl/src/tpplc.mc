@@ -57,11 +57,11 @@ if eqString backend "rootppl" then
 
 else -- defaulting to MExpr
   use TreePPLThings in
-  match argv with ![_, _, _] then -- TODO use argparse
+  match argv with ![_, _, _, _] then -- TODO use argparse
     printLn "-- Error: arguments";
-    printLn "-- Correct: tpplc program.tppl data.mc";
+    printLn "-- Correct: tpplc program.tppl data.mc output.mc";
     exit 0
-  else match argv with [_, filename, data] in
+  else match argv with [_, filename, data, outName] in
   use BootParser in
   let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true}
     data in
@@ -70,10 +70,8 @@ else -- defaulting to MExpr
 
     let corePplAst: Expr = compile input file in
     --dprint corePplAst;
-    --  TODO(vsenderov,2022-05-10): Maybe parse from the command line
-    let outName = "out.mc" in
-    let options = { default with method = "mexpr-is-lw" } in
-    --printLn (mexprPPLToString corePplAst);
+    let options = { default with method = "mexpr-is-lw", particles = 1 } in
+    -- printLn (mexprPPLToString corePplAst);
     --let prog = corePplAst in
     let prog: Expr = typeCheck corePplAst in
     let prog: Expr = lowerProj prog in
@@ -83,11 +81,12 @@ else -- defaulting to MExpr
     writeFile outName (use MExpr in concat "mexpr\n" (mexprToString ast));
 
     -- Output the compiled OCaml code (unless --skip-final is specified)
-    let xx = if options.skipFinal then
-      print (join ["Miking output written.\n", "To get an executable, compile with \n\n  mi compile ",outName, "\n\n"]);
-      ()
-    else sysRunCommand ["mi", "compile", outName] "" ".";
-      print (join ["Executable compiled.\n", "To run \n\n  ./out \n\n"]);
-      ()
-    in
-    use MExprPPL in print (concat (mexprPPLToString corePplAst) "\n\n"); ()
+    -- let xx = if options.skipFinal then
+    --   -- print (join ["Miking output written.\n", "To get an executable, compile with \n\n  mi compile ",outName, "\n\n"]);
+    --   ()
+    -- else sysRunCommand ["mi", "compile", outName] "" ".";
+    --   -- print (join ["Executable compiled.\n", "To run \n\n  ./out \n\n"]);
+    --   ()
+    -- in
+    -- print (concat (mexprPPLToString corePplAst) "\n\n");
+    ()
