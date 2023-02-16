@@ -119,6 +119,8 @@ prod Integer: ExprTppl = val:Integer
 prod String: ExprTppl = val:String
 prod Real: ExprTppl = val:Real
 prod Variable: ExprTppl = ident:LName
+prod True: ExprTppl = "true"
+prod False: ExprTppl = "false"
 
 
 -- infix left Addition: Expr = "+"
@@ -171,5 +173,8 @@ prod Assign: StmtTppl = "let" var:LName "=" val:ExprTppl ";"
 prod Observe: StmtTppl = "observe" value:ExprTppl "~" dist:ExprTppl ";"
 prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl* "}" ("else" "{" ifFalseStmts:StmtTppl* "}")?
 prod Weight: StmtTppl = "weight" value:ExprTppl ";"
+prod LogWeight: StmtTppl = "logWeight" value:ExprTppl ";"
 prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl+ "}"
 prod Return: StmtTppl = "return" return:ExprTppl? ";"
+
+prod Print: StmtTppl = "print" "(" real:ExprTppl ")" ";"

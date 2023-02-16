@@ -235,7 +235,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = x.info
     }) in
     let env = symEnvEmpty in
-    symbolizeExpr ({env with varEnv = mapInsert "exp" compileContext.expName env.varEnv}) complete
+    symbolizeExpr ({env with varEnv = mapInsert "log" compileContext.logName (mapInsert "exp" compileContext.expName env.varEnv)}) complete
 
   sem mInvocation: DeclTppl -> Option Expr
   sem mInvocation =
@@ -286,7 +286,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   | FunDeclTppl f -> Some {
       ident = f.name.v,
       tyBody = tyunknown_,
-      tyAnnot = tyunknown_,
+      tyAnnot = tyWithInfo f.name.i tyunknown_,
       body =
         foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
       info = f.info
@@ -355,7 +355,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         ty = tyunknown_
       } in
       -- TODO(vipa, 2022-12-22): Info for semi?
-      semi_ cont obs
+      semi_ obs cont
 
   | AssignStmtTppl a ->
     lam cont. TmLet {
@@ -388,6 +388,24 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = a.info
     } in
     --printLn (mexprPPLToString tmp);
+    tmp
+
+  | LogWeightStmtTppl a ->
+    lam cont.
+
+    let tmp = TmLet {
+      ident = nameNoSym "foo",
+      tyBody = tyunknown_,
+      tyAnnot = tyunknown_,
+      body =  TmWeight {
+        weight = compileExprTppl a.value,
+        ty = tyunknown_,
+        info = a.info
+      },
+      inexpr = cont,
+      ty = tyunknown_,
+      info = a.info
+    } in
     tmp
 
   /--
@@ -426,6 +444,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
 
   | ReturnStmtTppl r ->
     lam cont. match r.return with Some x then compileExprTppl x else unit_
+
+  | PrintStmtTppl x ->
+    lam cont.
+      let print = print_ (snoc_ (float2string_ (compileExprTppl x.real)) (char_ '\n')) in
+      let flush = flushStdout_ unit_ in
+      semi_ (semi_ print flush) cont
 
   sem compileExprTppl: ExprTppl -> Expr
 
@@ -483,6 +507,16 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     TmDist {
       dist = DExponential {
         rate = compileExprTppl d.rate
+      },
+      ty = tyunknown_,
+      info = d.info
+    }
+
+  | GammaExprTppl d ->
+    TmDist {
+      dist = DGamma {
+        k = compileExprTppl d.shape,
+        theta = compileExprTppl d.scale
       },
       ty = tyunknown_,
       info = d.info
@@ -568,6 +602,23 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       ty = tyunknown_
     }
 
+  | DivExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CDivf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
   | LessEqExprTppl x ->
     TmApp {
       info = x.info,
@@ -602,6 +653,23 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       ty = tyunknown_
     }
 
+  | EqualExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CEqf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
   | RealExprTppl r ->
     TmConst {
       val = CFloat { val = r.val.v },
@@ -612,6 +680,20 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   | IntegerExprTppl r ->
     TmConst {
       val = CInt { val = r.val.v },
+      ty = tyunknown_,
+      info = r.info
+    }
+
+  | TrueExprTppl r ->
+    TmConst {
+      val = CBool { val = true },
+      ty = tyunknown_,
+      info = r.info
+    }
+
+  | FalseExprTppl r ->
+    TmConst {
+      val = CBool { val = false },
       ty = tyunknown_,
       info = r.info
     }
