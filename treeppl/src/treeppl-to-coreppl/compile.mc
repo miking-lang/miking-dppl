@@ -18,6 +18,7 @@ include "mexpr/type-check.mc"
 include "sys.mc"
 
 include "../../../coreppl/src/coreppl-to-mexpr/compile.mc"
+include "../../../coreppl/src/coreppl-to-mexpr/runtimes.mc"
 include "../../../coreppl/src/coreppl-to-rootppl/compile.mc"
 include "../../../coreppl/src/coreppl.mc"
 include "../../../coreppl/src/parser.mc"
@@ -121,6 +122,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   | FunDeclTppl f -> {
         ident = f.name.v,
         tyBody = tyunknown_,
+        tyAnnot = tyunknown_,
         body =
           foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
         info = f.info
@@ -133,7 +135,8 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
     lam cont.
     TmLam {
       ident = arg.name.v,
-      tyIdent = compileTypeTppl arg.ty,
+      tyIdent = tyunknown_,
+      tyAnnot = compileTypeTppl arg.ty,
       body = cont,
       ty = tyunknown_,
       info = arg.name.i
@@ -163,6 +166,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   lam cont. TmLet {
     ident = a.randomVar.v,
     tyBody = tyunknown_,
+    tyAnnot = tyunknown_,
     body = TmAssume {
       dist = compileExprTppl a.dist,
       ty = tyunknown_,
@@ -177,6 +181,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   lam cont. TmLet {
     ident = a.var.v,
     tyBody = tyunknown_,
+    tyAnnot = tyunknown_,
     body =  compileExprTppl a.val,
     inexpr = cont,
     ty = tyunknown_,
@@ -191,6 +196,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   let tmp = TmLet {
     ident = nameNoSym "foo",
     tyBody = tyunknown_,
+    tyAnnot = tyunknown_,
     body =  TmWeight {
       weight = logExpr,
       --weight = cExpr,
@@ -225,6 +231,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
       ident = contName,
       body = contF,
       tyBody = tyunknown_,
+      tyAnnot = tyunknown_,
       ty = tyunknown_,
       info = a.info,
       inexpr = TmMatch {
