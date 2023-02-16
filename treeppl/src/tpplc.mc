@@ -58,7 +58,7 @@ else -- defaulting to MExpr
     exit 0
   else match argv with [_, filename, data] in
   use BootParser in
-  let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
+  let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true}
     data in
   let content = readFile filename in
   use TreePPLAst in
