@@ -61,27 +61,27 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
 
   sem compile (input: Expr) =
   | FileTppl x ->
-      let externals = parseMCoreFile "src/externals/ext.mc" in
-      let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
-      let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
-      let externals = symbolize externals in
-      let externalMap = constructExternalMap externals in
-      let compileContext: TpplCompileContext = {
-        logName = mapFindExn "externalLog" externalMap,
-        expName = mapFindExn "externalExp" externalMap
-      } in
-      let input = bind_ externals input in
-      --dprint x;
-      let invocation = match findMap mInvocation x.decl with Some x
-        then x
-        else printLn "You need a model function"; never
-      in
-      bind_ input (TmRecLets {
-        bindings = map (compileTpplDecl compileContext) x.decl,
-        inexpr = invocation,
-        ty = tyunknown_,
-        info = x.info
-      })
+    let externals = parseMCoreFile "src/externals/ext.mc" in
+    let exts = setOfSeq cmpString ["externalLog", "externalExp"] in
+    let externals = filterExternalMap exts externals in  -- strip everything but needed stuff from externals
+    let externals = symbolize externals in
+    let externalMap = constructExternalMap externals in
+    let compileContext: TpplCompileContext = {
+      logName = mapFindExn "externalLog" externalMap,
+      expName = mapFindExn "externalExp" externalMap
+    } in
+    let input = bind_ externals input in
+    --dprint x;
+    let invocation = match findMap mInvocation x.decl with Some x
+      then x
+      else printLn "You need a model function"; never
+    in
+    bind_ input (TmRecLets {
+      bindings = map (compileTpplDecl compileContext) x.decl,
+      inexpr = invocation,
+      ty = tyunknown_,
+      info = x.info
+    })
 
   sem mInvocation: DeclTppl -> Option Expr
   sem mInvocation =
@@ -120,13 +120,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   sem compileTpplDecl (context: TpplCompileContext) =
 
   | FunDeclTppl f -> {
-        ident = f.name.v,
-        tyBody = tyunknown_,
-        tyAnnot = tyunknown_,
-        body =
-          foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
-        info = f.info
-      }
+      ident = f.name.v,
+      tyBody = tyunknown_,
+      tyAnnot = tyunknown_,
+      body =
+        foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
+      info = f.info
+    }
 
   sem compileFunArg: {name:{v:Name, i:Info}, ty:TypeTppl} -> (Expr -> Expr)
 
@@ -146,69 +146,69 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
 
   sem compileTypeTppl =
   | TypeTppl x -> TyCon {
-    ident = x.name.v,
-    info = x.name.i
-  }
+      ident = x.name.v,
+      info = x.name.i
+    }
 
   | AtomicRealTypeTppl x -> TyFloat {
-    info = x.info
-  }
+      info = x.info
+    }
 
   | AtomicBoolTypeTppl x -> TyBool {
-    info = x.info
-  }
+      info = x.info
+    }
 
   sem compileStmtTppl: TpplCompileContext -> StmtTppl -> (Expr -> Expr)
 
   sem compileStmtTppl (context: TpplCompileContext) =
 
   | AssumeStmtTppl a ->
-  lam cont. TmLet {
-    ident = a.randomVar.v,
-    tyBody = tyunknown_,
-    tyAnnot = tyunknown_,
-    body = TmAssume {
-      dist = compileExprTppl a.dist,
+    lam cont. TmLet {
+      ident = a.randomVar.v,
+      tyBody = tyunknown_,
+      tyAnnot = tyunknown_,
+      body = TmAssume {
+        dist = compileExprTppl a.dist,
+        ty = tyunknown_,
+        info = a.info
+      },
+      inexpr = cont,
       ty = tyunknown_,
       info = a.info
-    },
-    inexpr = cont,
-    ty = tyunknown_,
-    info = a.info
-  }
+    }
 
   | AssignStmtTppl a ->
-  lam cont. TmLet {
-    ident = a.var.v,
-    tyBody = tyunknown_,
-    tyAnnot = tyunknown_,
-    body =  compileExprTppl a.val,
-    inexpr = cont,
-    ty = tyunknown_,
-    info = a.info
-  }
-
-  | WeightStmtTppl a ->
-  lam cont.
-
-  let cExpr: Expr = (compileExprTppl a.value) in
-  let logExpr: Expr = withInfo a.info (app_ (nvar_ context.logName) cExpr) in
-  let tmp = TmLet {
-    ident = nameNoSym "foo",
-    tyBody = tyunknown_,
-    tyAnnot = tyunknown_,
-    body =  TmWeight {
-      weight = logExpr,
-      --weight = cExpr,
+    lam cont. TmLet {
+      ident = a.var.v,
+      tyBody = tyunknown_,
+      tyAnnot = tyunknown_,
+      body =  compileExprTppl a.val,
+      inexpr = cont,
       ty = tyunknown_,
       info = a.info
-    },
-    inexpr = cont,
-    ty = tyunknown_,
-    info = a.info
-  } in
-  --printLn (mexprPPLToString tmp);
-  tmp
+    }
+
+  | WeightStmtTppl a ->
+    lam cont.
+
+    let cExpr: Expr = (compileExprTppl a.value) in
+    let logExpr: Expr = withInfo a.info (app_ (nvar_ context.logName) cExpr) in
+    let tmp = TmLet {
+      ident = nameNoSym "foo",
+      tyBody = tyunknown_,
+      tyAnnot = tyunknown_,
+      body =  TmWeight {
+        weight = logExpr,
+        --weight = cExpr,
+        ty = tyunknown_,
+        info = a.info
+      },
+      inexpr = cont,
+      ty = tyunknown_,
+      info = a.info
+    } in
+    --printLn (mexprPPLToString tmp);
+    tmp
 
   /--
   To avoid code duplication.
@@ -223,10 +223,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
   --/
   -- TODO for Daniel: have C compiler handle f()
   | IfStmtTppl a ->
-  lam cont.
-  let contName = nameSym "ifCont" in
-  let contF = lam_ "" tyint_ cont in -- continuation function
-  let cont: Expr = withInfo a.info (app_ (nvar_ contName) (int_ 0)) in
+    lam cont.
+    let contName = nameSym "ifCont" in
+    let contF = lam_ "" tyint_ cont in -- continuation function
+    let cont: Expr = withInfo a.info (app_ (nvar_ contName) (int_ 0)) in
     TmLet {
       ident = contName,
       body = contF,
@@ -245,7 +245,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
     }
 
   | ReturnStmtTppl r ->
-  lam cont. match r.return with Some x then compileExprTppl x else unit_
+    lam cont. match r.return with Some x then compileExprTppl x else unit_
 
   sem compileExprTppl: ExprTppl -> Expr
 
