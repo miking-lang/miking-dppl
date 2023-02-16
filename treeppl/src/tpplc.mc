@@ -14,7 +14,11 @@ lang CorePPLUsage =
   CPPLBackcompat + LoadRuntime +
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
-	PIMHMethod
+	PIMHMethod + ProjMatchPprint
+end
+
+lang TreePPLThings = TreePPLAst + TreePPLCompile
+  + LowerProjMatch + ProjMatchTypeCheck + ProjMatchPprint
 end
 
 mexpr
@@ -52,6 +56,7 @@ if eqString backend "rootppl" then
     print (concat (mexprPPLToString corePplAst) "\n\n")
 
 else -- defaulting to MExpr
+  use TreePPLThings in
   match argv with ![_, _, _] then -- TODO use argparse
     printLn "-- Error: arguments";
     printLn "-- Correct: tpplc program.tppl data.mc";
@@ -61,10 +66,8 @@ else -- defaulting to MExpr
   let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true}
     data in
   let content = readFile filename in
-  use TreePPLAst in
   match parseTreePPLExn filename content with  file in
 
-  use TreePPLCompile in
     let corePplAst: Expr = compile input file in
     --dprint corePplAst;
     --  TODO(vsenderov,2022-05-10): Maybe parse from the command line
@@ -73,6 +76,7 @@ else -- defaulting to MExpr
     --printLn (mexprPPLToString corePplAst);
     --let prog = corePplAst in
     let prog: Expr = typeCheck corePplAst in
+    let prog: Expr = lowerProj prog in
     match programModelTransform options prog with (runtimes, prog) in
     let runtimes = combineRuntimes options runtimes in
     let ast = mexprCompile options runtimes prog in

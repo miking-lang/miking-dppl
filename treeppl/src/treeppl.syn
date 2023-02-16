@@ -59,7 +59,7 @@ token {fragment = WhitespaceParser,}
 type FileTppl
 type DeclTppl
 type TypeTppl
---type Cons
+type Con
 type StmtTppl
 type ExprTppl { grouping = "(" ")", }
 
@@ -70,13 +70,13 @@ A TreePPL file consists of one more declarations.
 -/
 prod FileTppl: FileTppl = decl:DeclTppl+
 
-/- 
-Type usage 
+/-
+Type usage
 For now the type is only an Uppercase identifier, but in may
 be something else in the future (like with type parameters, etc.)
 Real
 Real[]
-Int[10] 
+Int[10]
 -/
 prod TypeTppl: TypeTppl = name:UName
 prod Sequence: TypeTppl = ty:TypeTppl "[" size:Integer? "]"
@@ -100,11 +100,14 @@ prod Fun: DeclTppl =
 A (type) constructor is similar to a function but needs to have at least one
 argument, and does not have the optional postfix :SomeType
 -/
--- prod Constructor: Cons =
---  name:UName "("( {args:LName ":" argsType:UName} ("," {args:LName ":" argsType:UName})*)? ")"
+prod Con: Con =
+ name:UName "{"( fields:{name:LIdent ":" ty:TypeTppl} ("," fields:{name:LIdent ":" ty:TypeTppl})*)? "}"
 
 /- Here is how you declare a type -/
--- prod TypeDeclaration: Decl = "type" name:UName "=" ("|"? cons:Cons) ("|" cons:Cons)*
+prod Type: DeclTppl =
+  "type" name:UName "="
+  ("|"? cons:Con)
+  ("|" cons:Con)*
 
 
 
@@ -141,31 +144,32 @@ prod left Unequal: ExprTppl = left:ExprTppl "!=" right:ExprTppl
 -- Function call as expression
 prod FunCall: ExprTppl = f:ExprTppl "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
 
+prod Projection: ExprTppl = target:ExprTppl "." field:LIdent
+
 precedence {
-  FunCall;
+  Projection FunCall;
   Mul Div;
   Add Sub;
+  ~Less Greater LessEq GreaterEq Equal Unequal;
 }
 
 -- Built-in distro keywords
 prod Bernoulli: ExprTppl = "Bernoulli" "(" prob:ExprTppl ")"
 prod Exponential: ExprTppl = "Exponential" "(" rate:ExprTppl ")"
 prod Gamma: ExprTppl = "Gamma" "(" shape:ExprTppl "," scale:ExprTppl ")"
+prod Gaussian: ExprTppl = "Gaussian" "(" mean:ExprTppl "," stdDev:ExprTppl ")"
+prod Poisson: ExprTppl = "Poisson" "(" rate:ExprTppl ")"
 
 
 prod Record: ExprTppl = "{" ((key:LName ("=" value:ExprTppl)?) ("," key:LName ("=" value:ExprTppl)?)*)? "}"
 
 /----- Statements -----/
-prod ExprStmt: StmtTppl = e:ExprTppl ";" -- Epxressions as statements
+prod ExprStmtTppl: StmtTppl = e:ExprTppl ";" -- Epxressions as statements
 prod Assume: StmtTppl = "assume" randomVar:LName "~" dist:ExprTppl ";"
 prod Assign: StmtTppl = "let" var:LName "=" val:ExprTppl ";"
 --prod Observe: StmtTppl = "observe" value:ExprTppl "~" distribution:UName "(" (args:ExprTppl ("," args:ExprTppl)*)? ")"
 prod Observe: StmtTppl = "observe" value:ExprTppl "~" dist:ExprTppl ";"
 prod If: StmtTppl = "if" condition:ExprTppl "{" ifTrueStmts:StmtTppl* "}" ("else" "{" ifFalseStmts:StmtTppl* "}")?
-prod Weight: StmtTppl = "weight" "(" value:ExprTppl ")" ";"?
+prod Weight: StmtTppl = "weight" value:ExprTppl ";"
 prod ForLoop: StmtTppl = "for" iterator:LName "in" range:ExprTppl "{" forStmts:StmtTppl+ "}"
-prod Return: StmtTppl = "return" "(" return:ExprTppl? ")" ";"?
-
-
-
-
+prod Return: StmtTppl = "return" return:ExprTppl? ";"

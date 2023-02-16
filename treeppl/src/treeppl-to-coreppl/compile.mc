@@ -31,7 +31,134 @@ let parseMCoreFile = lam filename.
       {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
         filename
 
-lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
+-- Pattern match over an algebraic type where each constructor carries
+-- a record, pulling out the field with the given name. Additionally,
+-- only pull out that field if the type agrees with `ty`. This last
+-- part is probably not optimal, but seems the easiest for now.
+lang ProjMatchAst = Ast
+  syn Expr =
+  | TmProjMatch {info : Info, target : Expr, field : SID, ty : Type, env : TCEnv}
+
+  sem infoTm =
+  | TmProjMatch x -> x.info
+
+  sem tyTm =
+  | TmProjMatch x -> x.ty
+
+  sem withInfo info =
+  | TmProjMatch x -> TmProjMatch {x with info = info}
+
+  sem withType ty =
+  | TmProjMatch x -> TmProjMatch {x with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmProjMatch x ->
+    match f acc x.target with (acc, target) in
+    (acc, TmProjMatch {x with target = target})
+end
+
+lang ProjMatchPprint = PrettyPrint + ProjMatchAst
+  sem isAtomic =
+  | TmProjMatch _ -> false
+
+  sem pprintCode indent env =
+  | TmProjMatch x ->
+    match printParen indent env x.target with (env, target) in
+    (env, join [target, ".", pprintLabelString x.field])
+end
+
+lang ProjMatchTypeCheck = TypeCheck + ProjMatchAst
+  sem typeCheckExpr env =
+  | TmProjMatch x ->
+    let target = typeCheckExpr env x.target in
+    let ty = newvar env.currentLvl x.info in
+    TmProjMatch {x with target = target, ty = ty, env = env}
+end
+
+lang PullName = AppTypeAst + ConTypeAst
+  sem pullName =
+  | TyApp x -> pullName x.lhs
+  | TyCon x -> Some x.ident
+  | _ -> None ()
+end
+
+lang PullNameFromConstructor = PullName + FunTypeAst + AllTypeAst
+  sem pullName =
+  | TyArrow x -> pullName x.to
+  | TyAll x -> pullName x.ty
+end
+
+lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordTypeAst + FunTypeAst + Eq + Unify + Generalize
+  sem lowerProj : Expr -> Expr
+  sem lowerProj =
+  | t -> smap_Expr_Expr lowerProj t
+  | TmProjMatch x ->
+    let targetTyName = match (use PullName in pullName) (tyTm x.target)
+      with Some ty then ty
+      else errorSingle [infoTm x.target] (join ["Could not infer this to be a variant type (found ", type2str (tyTm x.target), ")"])
+    in
+    let expectedResultTy = x.ty in
+    let filterConstructorNames : (Name, Type) -> Option (Name, Type) = lam pair.
+      match pair with (conName, conTy) in
+      let conTyName = match use PullNameFromConstructor in pullName conTy
+        with Some tyName then tyName
+        else error "Every constructor should end in a type that is named" in
+      -- TODO(vipa, 2023-01-30): We would actually like to unify and
+      -- then proceed *if it succeeds*, but we can't fail a
+      -- unification without ending the program presently
+      if nameEq targetTyName conTyName then
+        match inst x.info x.env.currentLvl conTy with TyArrow arr in
+        -- TODO(vipa, 2022-12-20): I'm not entirely sure we want to run
+        -- arbitrary type-checking stuff after the actual typechecking
+        -- phase, but I believe these uses are at least correct, and
+        -- should not leak any new types into the generated code.
+        unify [infoTm x.target] arr.to (tyTm x.target);
+        match arr.from with recTy & TyRecord rec then
+          match mapLookup x.field rec.fields with Some fieldTy then
+            if eqType fieldTy expectedResultTy
+            then Some (conName, recTy)
+            else None ()
+          else None ()
+        else None ()
+      else None ()
+    in
+    -- OPT(vipa, 2022-12-20): This potentially repeats a lot of work
+    let relevantConstructors = mapOption filterConstructorNames (mapBindings x.env.conEnv) in
+
+    -- TODO(vipa, 2022-12-20): Move these to ast-builder
+    let inpcon_ = lam i. lam n. lam p. withInfoPat i (npcon_ n p) in
+    let invar_ = lam i. lam n. withInfo i (nvar_ n) in
+    let imatch_ = lam i. lam s. lam p. lam t. lam e. withInfo i (match_ s p t e) in
+    let inpvar_ = lam i. lam n. withInfoPat i (npvar_ n) in
+
+    let iSidRecordProj_ = lam i. lam target. lam sid. lam recordTy.
+      let varName = nameSym "x" in
+      let pat = PatRecord
+        { bindings = mapInsert sid (inpvar_ i varName) (mapEmpty cmpSID)
+        , info = i
+        , ty = recordTy
+        } in
+      imatch_ i target pat (invar_ i varName) never_ in
+    let match_ = imatch_ x.info in
+    let npcon_ = inpcon_ x.info in
+    let nvar_ = invar_ x.info in
+    let npvar_ = inpvar_ x.info in
+    let varName = nameSym "target" in
+    let var = invar_ x.info varName in
+    let wrap : Expr -> (Name, Type) -> Expr = lam next. lam pair.
+      match pair with (conName, recTy) in
+      let xName = nameSym "x" in
+      match_ var (npcon_ conName (npvar_ xName))
+        (iSidRecordProj_ x.info (nvar_ xName) x.field recTy)
+        next
+    in
+    bind_
+      (nulet_ varName x.target)
+      (foldl wrap never_ relevantConstructors)
+end
+
+lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst
+
 -- TODO If this works it should go to externals
   sem constructExternalMap : Expr -> Map String Name
   sem constructExternalMap =
@@ -75,14 +202,40 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
     --dprint x;
     let invocation = match findMap mInvocation x.decl with Some x
       then x
-      else printLn "You need a model function"; never
+      else printLn "You need a model function!"; exit 1
     in
-    bind_ input (TmRecLets {
-      bindings = map (compileTpplDecl compileContext) x.decl,
+    let types = map (compileTpplTypeDecl compileContext) x.decl in
+    let typeNames = mapOption (lam x. x.0) types in
+    let constructors = join (map (lam x. x.1) types) in
+    let bindType = lam inexpr. lam name.
+      TmType {
+        ident = name.v,
+        params = [],
+        tyIdent = tyvariant_ [],
+        inexpr = inexpr,
+        ty = tyunknown_,
+        info = name.i  -- NOTE(vipa, 2022-12-22): This makes `type T in e` just point to `T`, which might not be desirable
+      }
+    in
+    let bindCon = lam inexpr. lam pair.
+      TmConDef {
+        ident = pair.0 .v,
+        tyIdent = pair.1,
+        inexpr = inexpr,
+        ty = tyunknown_,
+        info = pair.0 .i
+      }
+    in
+    let input = foldl bindCon input constructors in
+    let input = foldl bindType input typeNames in
+    let complete = bind_ input (TmRecLets {
+      bindings = mapOption (compileTpplFunction compileContext) x.decl,
       inexpr = invocation,
       ty = tyunknown_,
       info = x.info
-    })
+    }) in
+    let env = symEnvEmpty in
+    symbolizeExpr ({env with varEnv = mapInsert "exp" compileContext.expName env.varEnv}) complete
 
   sem mInvocation: DeclTppl -> Option Expr
   sem mInvocation =
@@ -117,10 +270,20 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
       frozen = false
     }
 
-  sem compileTpplDecl: TpplCompileContext -> DeclTppl -> RecLetBinding
-  sem compileTpplDecl (context: TpplCompileContext) =
+  sem compileTpplTypeDecl: TpplCompileContext -> DeclTppl -> (Option {v:Name, i:Info}, [({v:Name, i:Info}, Type)])
+  sem compileTpplTypeDecl context =
+  | TypeDeclTppl x ->
+    let f = lam c. match c with Con c in
+      let mkField = lam x. (x.name.v, compileTypeTppl x.ty) in
+      (c.name, tyarrow_ (tyrecord_ (map mkField c.fields)) (ntycon_ x.name.v))
+    in
+    (Some x.name, map f x.cons)
+  | _ -> (None (), [])
 
-  | FunDeclTppl f -> {
+  sem compileTpplFunction: TpplCompileContext -> DeclTppl -> Option RecLetBinding
+  sem compileTpplFunction (context: TpplCompileContext) =
+
+  | FunDeclTppl f -> Some {
       ident = f.name.v,
       tyBody = tyunknown_,
       tyAnnot = tyunknown_,
@@ -128,6 +291,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
         foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
       info = f.info
     }
+  | TypeDeclTppl _ -> None ()
 
   sem compileFunArg: {name:{v:Name, i:Info}, ty:TypeTppl} -> (Expr -> Expr)
 
@@ -163,6 +327,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
 
   sem compileStmtTppl (context: TpplCompileContext) =
 
+  | ExprStmtTppl x ->
+    -- TODO(vipa, 2022-12-22): Info field for the entire semi?
+    lam cont. semi_ (compileExprTppl x.e) cont
+
   | AssumeStmtTppl a ->
     lam cont. TmLet {
       ident = a.randomVar.v,
@@ -177,6 +345,17 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
       ty = tyunknown_,
       info = a.info
     }
+
+  | ObserveStmtTppl x ->
+    lam cont.
+      let obs = TmObserve {
+        info = x.info,
+        value = compileExprTppl x.value,
+        dist = compileExprTppl x.dist,
+        ty = tyunknown_
+      } in
+      -- TODO(vipa, 2022-12-22): Info for semi?
+      semi_ cont obs
 
   | AssignStmtTppl a ->
     lam cont. TmLet {
@@ -252,10 +431,58 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
 
   sem compileExprTppl =
 
+  | ProjectionExprTppl x ->
+    TmProjMatch {
+      info = x.info,
+      target = compileExprTppl x.target,
+      field = stringToSid x.field.v,
+      ty = tyunknown_,
+      env = _tcEnvEmpty  -- TODO(vipa, 2022-12-21): This is technically supposed to be private
+    }
+
+  | FunCallExprTppl x ->
+    let f = compileExprTppl x.f in
+    let app = lam f. lam arg.
+      TmApp {
+        info = x.info,
+        lhs = f,
+        rhs = compileExprTppl arg,
+        ty = tyunknown_
+      } in
+    foldl app f x.args
+
   | BernoulliExprTppl d ->
     TmDist {
       dist = DBernoulli {
         p = compileExprTppl d.prob
+      },
+      ty = tyunknown_,
+      info = d.info
+    }
+
+  | GaussianExprTppl d ->
+    TmDist {
+      dist = DGaussian {
+        mu = compileExprTppl d.mean,
+        sigma = compileExprTppl d.stdDev
+      },
+      ty = tyunknown_,
+      info = d.info
+    }
+
+  | PoissonExprTppl d ->
+    TmDist {
+      dist = DPoisson {
+        lambda = compileExprTppl d.rate
+      },
+      ty = tyunknown_,
+      info = d.info
+    }
+
+  | ExponentialExprTppl d ->
+    TmDist {
+      dist = DExponential {
+        rate = compileExprTppl d.rate
       },
       ty = tyunknown_,
       info = d.info
@@ -269,10 +496,122 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym
       frozen = false
     }
 
+  | IsExprTppl x ->
+    TmMatch {
+      info = x.info,
+      target = compileExprTppl x.thing, -- and constructor
+      pat = PatCon {
+        info = x.constructor.i,
+        ty = tyunknown_,
+        ident = x.constructor.v,
+        subpat = pvarw_
+      },
+      thn = true_,
+      els = false_,
+      ty = tyunknown_
+    }
+
+  -- TODO(vipa, 2022-12-22): We want to pick the right one depending
+  -- on the type of the expressions, but that requires
+  -- inference/type-checking. This seems like a problem that should
+  -- appear in many languages, i.e., we want a good way of supporting
+  -- it in MExpr. I guess a superset that includes some form of ad-hoc
+  -- overleading?
+  | AddExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CAddf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+  | SubExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CSubf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+  | MulExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CMulf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+  | LessEqExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CLeqf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
+  | GreaterExprTppl x ->
+    TmApp {
+      info = x.info,
+      lhs = TmApp {
+        info = x.info,
+        lhs = TmConst {
+          ty = tyunknown_,
+          info = x.info,
+          val = CGtf ()
+        },
+        rhs = compileExprTppl x.left,
+        ty = tyunknown_
+      },
+      rhs = compileExprTppl x.right,
+      ty = tyunknown_
+    }
+
   | RealExprTppl r ->
-    use FloatAst in
     TmConst {
       val = CFloat { val = r.val.v },
+      ty = tyunknown_,
+      info = r.info
+    }
+
+  | IntegerExprTppl r ->
+    TmConst {
+      val = CInt { val = r.val.v },
       ty = tyunknown_,
       info = r.info
     }
