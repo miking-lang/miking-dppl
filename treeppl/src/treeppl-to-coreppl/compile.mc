@@ -185,6 +185,14 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     expName: Name
   }
 
+  sem isemi_: Expr -> Expr -> Expr
+  sem isemi_ l =
+  | r ->
+    let info = match infoTm r with info & Info _
+      then info
+      else infoTm l
+    in withInfo info (semi_ l r)
+
   sem compile: Expr -> FileTppl -> Expr
 
   sem compile (input: Expr) =
@@ -211,7 +219,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       TmType {
         ident = name.v,
         params = [],
-        tyIdent = tyvariant_ [],
+        tyIdent = tyWithInfo name.i (tyvariant_ []),
         inexpr = inexpr,
         ty = tyunknown_,
         info = name.i  -- NOTE(vipa, 2022-12-22): This makes `type T in e` just point to `T`, which might not be desirable
@@ -275,7 +283,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
   | TypeDeclTppl x ->
     let f = lam c. match c with Con c in
       let mkField = lam x. (x.name.v, compileTypeTppl x.ty) in
-      (c.name, tyarrow_ (tyrecord_ (map mkField c.fields)) (ntycon_ x.name.v))
+      let tycon = tyWithInfo x.name.i (ntycon_ x.name.v) in
+      let record = tyWithInfo x.info (tyrecord_ (map mkField c.fields)) in
+      (c.name, tyWithInfo x.info (tyarrow_ record tycon))
     in
     (Some x.name, map f x.cons)
   | _ -> (None (), [])
@@ -288,7 +298,9 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       tyBody = tyunknown_,
       tyAnnot = tyWithInfo f.name.i tyunknown_,
       body =
-        foldr (lam f. lam e. f e) unit_ (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
+        foldr (lam f. lam e. f e)
+          (withInfo f.info unit_)
+          (concat (map compileFunArg f.args) (map (compileStmtTppl context) f.body)),
       info = f.info
     }
   | TypeDeclTppl _ -> None ()
@@ -329,7 +341,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
 
   | ExprStmtTppl x ->
     -- TODO(vipa, 2022-12-22): Info field for the entire semi?
-    lam cont. semi_ (compileExprTppl x.e) cont
+    lam cont. isemi_ (compileExprTppl x.e) cont
 
   | AssumeStmtTppl a ->
     lam cont. TmLet {
@@ -355,12 +367,12 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         ty = tyunknown_
       } in
       -- TODO(vipa, 2022-12-22): Info for semi?
-      semi_ obs cont
+      (isemi_ obs cont)
 
   | ResampleStmtTppl x ->
     lam cont.
       let res = TmResample { info = x.info, ty = tyunknown_ } in
-      semi_ res cont
+      isemi_ res cont
 
   | AssignStmtTppl a ->
     lam cont. TmLet {
@@ -377,7 +389,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     lam cont.
 
     let cExpr: Expr = (compileExprTppl a.value) in
-    let logExpr: Expr = withInfo a.info (app_ (nvar_ context.logName) cExpr) in
+    let logExpr: Expr = withInfo a.info (app_ (withInfo a.info (nvar_ context.logName)) cExpr) in
     let tmp = TmLet {
       ident = nameNoSym "foo",
       tyBody = tyunknown_,
@@ -439,7 +451,7 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
       info = a.info,
       inexpr = TmMatch {
         target = compileExprTppl a.condition,
-        pat    = ptrue_,
+        pat    = withInfoPat (get_ExprTppl_info a.condition) ptrue_,
         thn    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifTrueStmts),
         els    = foldr (lam f. lam e. f e) cont (map (compileStmtTppl context) a.ifFalseStmts),
         ty     = tyunknown_,
@@ -448,13 +460,13 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
     }
 
   | ReturnStmtTppl r ->
-    lam cont. match r.return with Some x then compileExprTppl x else unit_
+    lam cont. match r.return with Some x then compileExprTppl x else withInfo r.info unit_
 
   | PrintStmtTppl x ->
     lam cont.
       let print = print_ (snoc_ (float2string_ (compileExprTppl x.real)) (char_ '\n')) in
       let flush = flushStdout_ unit_ in
-      semi_ (semi_ print flush) cont
+      isemi_ (isemi_ print flush) cont
 
   sem compileExprTppl: ExprTppl -> Expr
 
@@ -543,10 +555,10 @@ lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym 
         info = x.constructor.i,
         ty = tyunknown_,
         ident = x.constructor.v,
-        subpat = pvarw_
+        subpat = withInfoPat x.info pvarw_
       },
-      thn = true_,
-      els = false_,
+      thn = withInfo x.info true_,
+      els = withInfo x.info false_,
       ty = tyunknown_
     }
 
