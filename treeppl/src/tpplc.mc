@@ -62,9 +62,10 @@ else -- defaulting to MExpr
     printLn "-- Correct: tpplc program.tppl data.mc output.mc";
     exit 0
   else match argv with [_, filename, data, outName] in
-  use BootParser in
-  let input = parseMCoreFile {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true}
-    data in
+  let input = use BootParser in
+    parseMCoreFile
+      {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false, allowFree = true}
+      data in
   let content = readFile filename in
   match parseTreePPLExn filename content with  file in
 
