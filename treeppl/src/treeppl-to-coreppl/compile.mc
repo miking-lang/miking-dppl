@@ -125,6 +125,16 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
     -- OPT(vipa, 2022-12-20): This potentially repeats a lot of work
     let relevantConstructors = mapOption filterConstructorNames (mapBindings x.env.conEnv) in
 
+    let errorMsg =
+      let msg = join ["Field '", sidToString x.field, "' not found"] in
+      match errorMsg [{errorDefault with info = x.info, msg = msg}] {single = "", multi = ""}
+      with (info, msg) in
+      let msg = infoErrorString info msg in
+      let print = print_ (str_ msg) in
+      let exit = exit_ (int_ 1) in
+      semi_ print exit
+    in
+
     -- TODO(vipa, 2022-12-20): Move these to ast-builder
     let inpcon_ = lam i. lam n. lam p. withInfoPat i (npcon_ n p) in
     let invar_ = lam i. lam n. withInfo i (nvar_ n) in
@@ -154,7 +164,7 @@ lang LowerProjMatch = ProjMatchAst + MatchAst + DataPat + RecordPat + RecordType
     in
     bind_
       (nulet_ varName x.target)
-      (foldl wrap never_ relevantConstructors)
+      (foldl wrap errorMsg relevantConstructors)
 end
 
 lang TreePPLCompile = TreePPLAst + MExprPPL + RecLetsAst + Externals + MExprSym + FloatAst + ProjMatchAst + Resample
