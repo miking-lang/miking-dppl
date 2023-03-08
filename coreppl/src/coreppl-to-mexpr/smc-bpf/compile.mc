@@ -1,5 +1,5 @@
 include "../dists.mc"
-include "../../inference-common/smc.mc"
+include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
@@ -91,9 +91,9 @@ lang MExprPPLBPF =
   sem compile options =
   | (_,t) ->
 
-    -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
-    -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
-    -- printLn (str);
+    printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
+    match pprintCode 0 pprintEnvEmpty t with (env,str) in
+    printLn (str);
 
     -- Static analysis and CPS transformation
     let t =
@@ -112,6 +112,10 @@ lang MExprPPLBPF =
       else
         error (join ["Invalid CPS option:", options.cps])
     in
+
+    printLn ""; printLn "--- BEFORE transformStopFirstAssume ---";
+    match pprintCode 0 env t with (env,str) in
+    printLn (str);
 
     -- Attempt to identify and stop at first assume to potentially reuse
     -- previous empirical distribution (see runtime)

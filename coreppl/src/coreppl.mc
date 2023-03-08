@@ -1,6 +1,6 @@
 -- CorePPL
 -- Note that we should NOT implement eval or compile functions for
--- CorePPL. Instead, we implement function 'toMExpr' which translates
+-- CorePPL. Instead, we implement a function which translates
 -- the core terms into an MExpr term. By doing so, we can use the
 -- standard eval and compile functions when running the inference.
 

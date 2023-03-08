@@ -7,8 +7,8 @@ include "sys.mc"
 include "map.mc"
 
 include "../coreppl.mc"
-include "../extract.mc"
-include "../inference-common/smc.mc"
+include "extract.mc"
+include "../inference/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
 include "../transformation.mc"
@@ -60,7 +60,7 @@ end
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
-  MExprANFAll
+  MExprANFAll + CPPLBackcompat
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -78,9 +78,42 @@ lang MExprCompile =
 
     ast
 
+  sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
+  sem mexprCpplCompile options noInfer =
+  | ast ->
+
+    -- Load the runtimes used in the provided AST, and collect identifiers of
+    -- common methods within the runtimes.
+    let runtimes = loadRuntimes options ast in
+
+    -- If no infers are found, the entire AST is the model code, so we transform
+    -- it as:
+    --
+    -- let d = infer <method> (lam. <model>) in
+    -- let printRes = ... in
+    -- printRes <pp> d
+    --
+    -- where <method> = inference method chosen according to options
+    --       <model> = the entire AST
+    --       <pp> = the pretty-print function used to print the result
+    match
+      if noInfer then programModelTransform options ast
+      else (runtimes, ast)
+    with (runtimes, ast) in
+
+    -- Combine the required runtime ASTs to one AST and eliminate duplicate
+    -- definitions due to files having common dependencies. The result is an
+    -- updated map of runtime entries, a combined runtime AST and a
+    -- symbolization environment.
+    let runtimes = combineRuntimes options runtimes in
+
+    mexprCompile options runtimes ast
+
+
   sem mexprCompile : Options -> Runtimes -> Expr -> Expr
   sem mexprCompile options runtimes =
   | corepplAst ->
+
     -- Symbolize and type-check the CorePPL AST.
     let corepplAst = symbolize corepplAst in
     let corepplAst = typeCheck corepplAst in

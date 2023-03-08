@@ -1,43 +1,43 @@
-include "../../coreppl.mc"
-include "../../dppl-arg.mc"
+include "../coreppl.mc"
+include "../dppl-arg.mc"
 
-lang APFMethod = MExprPPL
+lang BPFMethod = MExprPPL
   syn InferMethod =
-  | APF {particles : Expr}
+  | BPF {particles : Expr}
 
   sem pprintInferMethod indent env =
-  | APF {particles = particles} ->
+  | BPF {particles = particles} ->
     let i = pprintIncr indent in
     match pprintCode i env particles with (env, particles) in
-    (env, join ["APF {particles = ", particles, "}"])
+    (env, join ["BPF {particles = ", particles, "}"])
 
   sem inferMethodFromCon info bindings =
-  | "APF" ->
+  | "BPF" ->
     let expectedFields = [
       ("particles", int_ default.particles)
     ] in
     match getFields info bindings expectedFields with [particles] in
-    APF {particles = particles}
+    BPF {particles = particles}
 
   sem inferMethodFromOptions options =
-  | "mexpr-smc-apf" ->
-    APF {particles = int_ options.particles}
+  | "mexpr-smc-bpf" ->
+    BPF {particles = int_ options.particles}
 
   sem inferMethodConfig info =
-  | APF {particles = particles} ->
+  | BPF {particles = particles} ->
     fieldsToRecord info [("particles", particles)]
 
   sem typeCheckInferMethod env info =
-  | APF {particles = particles} ->
+  | BPF {particles = particles} ->
     let int = TyInt {info = info} in
     let particles = typeCheckExpr env particles in
     unify env [info, infoTm particles] int (tyTm particles);
-    APF {particles = particles}
+    BPF {particles = particles}
 
   sem symbolizeInferMethod env =
-  | APF r -> APF {r with particles = symbolizeExpr env r.particles}
+  | BPF r -> BPF {r with particles = symbolizeExpr env r.particles}
 
   sem setRuns expr =
-  | APF r -> APF {r with particles = expr}
+  | BPF r -> BPF {r with particles = expr}
 
 end

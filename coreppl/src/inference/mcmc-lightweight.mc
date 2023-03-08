@@ -1,5 +1,5 @@
-include "../../coreppl.mc"
-include "../../dppl-arg.mc"
+include "../coreppl.mc"
+include "../dppl-arg.mc"
 
 lang LightweightMCMCMethod = MExprPPL
   syn InferMethod =

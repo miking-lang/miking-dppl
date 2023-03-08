@@ -5,16 +5,16 @@ include "mexpr/builtin.mc"
 
 include "coreppl.mc"
 include "pgm.mc"
-include "inference-common/smc.mc"
+include "inference/smc.mc"
 
 -- Include the inference method definition definition files.
-include "coreppl-to-mexpr/smc-apf/method.mc"
-include "coreppl-to-mexpr/smc-bpf/method.mc"
-include "coreppl-to-mexpr/is-lw/method.mc"
-include "coreppl-to-mexpr/mcmc-lightweight/method.mc"
-include "coreppl-to-mexpr/mcmc-naive/method.mc"
-include "coreppl-to-mexpr/mcmc-trace/method.mc"
-include "coreppl-to-mexpr/pmcmc-pimh/method.mc"
+include "inference/smc-apf.mc"
+include "inference/smc-bpf.mc"
+include "inference/is-lw.mc"
+include "inference/mcmc-lightweight.mc"
+include "inference/mcmc-naive.mc"
+include "inference/mcmc-trace.mc"
+include "inference/pmcmc-pimh.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +

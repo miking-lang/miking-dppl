@@ -1,5 +1,5 @@
 include "../dists.mc"
-include "../../inference-common/smc.mc"
+include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"

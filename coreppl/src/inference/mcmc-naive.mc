@@ -1,54 +1,54 @@
-include "../../coreppl.mc"
-include "../../dppl-arg.mc"
+include "../coreppl.mc"
+include "../dppl-arg.mc"
 
-lang TraceMCMCMethod = MExprPPL
+lang NaiveMCMCMethod = MExprPPL
   syn InferMethod =
-  | TraceMCMC {
+  | NaiveMCMC {
       iterations : Expr -- Type Int
     }
 
   sem pprintInferMethod indent env =
-  | TraceMCMC t ->
+  | NaiveMCMC t ->
     let i = pprintIncr indent in
     match pprintCode i env t.iterations with (env, iterations) in
-    (env, join ["TraceMCMC {iterations = ", iterations, "}"])
+    (env, join ["NaiveMCMC {iterations = ", iterations, "}"])
 
   sem inferMethodFromCon info bindings =
-  | methodStr & "TraceMCMC" ->
+  | "NaiveMCMC" ->
     let expectedFields = [
       ("iterations", int_ default.particles)
     ] in
     match getFields info bindings expectedFields with [iterations] in
-    TraceMCMC { iterations = iterations }
+    NaiveMCMC { iterations = iterations }
 
   sem inferMethodFromOptions options =
-  | "mexpr-mcmc-trace" ->
-    TraceMCMC {
+  | "mexpr-mcmc-naive" ->
+    NaiveMCMC {
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name
       iterations = int_ options.particles
     }
 
   sem inferMethodConfig info =
-  | TraceMCMC t ->
+  | NaiveMCMC t ->
     fieldsToRecord info [
       ("iterations", t.iterations)
     ]
 
   sem typeCheckInferMethod env info =
-  | TraceMCMC t ->
+  | NaiveMCMC t ->
     let int = TyInt {info = info} in
     let iterations = typeCheckExpr env t.iterations in
     unify env [info, infoTm iterations] int (tyTm iterations);
-    TraceMCMC {
+    NaiveMCMC {
       iterations = iterations
     }
 
   sem symbolizeInferMethod env =
-  | TraceMCMC r ->
-    TraceMCMC {r with iterations = symbolizeExpr env r.iterations}
+  | NaiveMCMC r ->
+    NaiveMCMC {r with iterations = symbolizeExpr env r.iterations}
 
   sem setRuns expr =
-  | TraceMCMC r -> TraceMCMC {r with iterations = expr}
+  | NaiveMCMC r -> NaiveMCMC {r with iterations = expr}
 
 end

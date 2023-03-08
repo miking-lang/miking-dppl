@@ -5,7 +5,7 @@ include "../parser.mc"
 include "../dppl-arg.mc"
 include "../cfa.mc"
 
-include "../inference-common/smc.mc"
+include "../inference/smc.mc"
 
 include "rootppl.mc"
 
