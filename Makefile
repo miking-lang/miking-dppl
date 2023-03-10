@@ -47,6 +47,10 @@ install: build/${cppl_name}
 	cp -f $(rootppl_bin) $(rootppl_bin_path)
 	cp -rf $(rootppl_src) $(rootppl_src_path)
 
+# TreePPL
+	cp build/${tppl_name} ${bin_path}/${tppl_name}
+	chmod +x ${bin_path}/${tppl_name}
+
 uninstall:
 # CorePPL
 	rm -f ${bin_path}/${exec_name}
@@ -59,6 +63,18 @@ uninstall:
 	rm -rf $(rootppl_bin_path)
 	rm -rf $(rootppl_src_path)
 
+# TreePPL
+	rm -f ${bin_path}/${tppl_name}
+	
+install-coreppl: build/${cppl_name}
+	mkdir -p $(bin_path) $(src_path);
+	cp build/${cppl_name} ${bin_path}/${exec_name}
+	chmod +x ${bin_path}/${exec_name}
+	cp -rf $(cppl_src) $(src_path)
+
+uninstall-coreppl:
+	rm -f ${bin_path}/${exec_name}
+	rm -rf $(src_path)
 
 install-treeppl: build/${tppl_name}
 # TreePPL
