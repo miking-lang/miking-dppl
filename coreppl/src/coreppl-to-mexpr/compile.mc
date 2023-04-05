@@ -6,9 +6,6 @@ include "mexpr/utils.mc"
 include "sys.mc"
 include "map.mc"
 
-include "extract.mc"
-include "inline.mc"
-
 include "../coreppl.mc"
 include "../inference/smc.mc"
 include "../parser.mc"
@@ -16,6 +13,7 @@ include "../dppl-arg.mc"
 include "../transformation.mc"
 include "../src-location.mc"
 
+include "extract.mc"
 include "backcompat.mc"
 include "dists.mc"
 include "runtimes.mc"
@@ -60,9 +58,9 @@ end
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
 lang MExprCompile =
-  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + DPPLInline +
-  LoadRuntime + Transformation + DPPLKeywordReplace + DPPLTransformDist +
-  MExprSubstitute + MExprANFAll + CPPLBackcompat
+  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
+  Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
+  MExprANFAll + CPPLBackcompat
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -115,7 +113,6 @@ lang MExprCompile =
   sem mexprCompile : Options -> Runtimes -> Expr -> Expr
   sem mexprCompile options runtimes =
   | corepplAst ->
-
     -- Symbolize and type-check the CorePPL AST.
     let corepplAst = symbolize corepplAst in
     let corepplAst = typeCheck corepplAst in
@@ -240,15 +237,6 @@ lang MExprCompile =
 
     -- ANF
     let modelAst = normalizeTerm modelAst in
-
-    printLn "------ After ANF -------";
-    printLn (mexprPPLToString modelAst);
-
-    -- Inline
-    let modelAst = inlineSingleUseFun modelAst in
-
-    printLn "------ After Inline -------";
-    printLn (mexprPPLToString modelAst);
 
     -- ANF with higher-order intrinsics replaced with alternatives in
     -- seq-native.mc
