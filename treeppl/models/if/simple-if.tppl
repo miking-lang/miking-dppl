@@ -1,9 +1,0 @@
-model function simpleif(p: Real) {
-  assume test ~ Bernoulli(p);
-  if test {
-     assume one ~ Bernoulli(p);
-     return(test)
-  }
-
-  return(test)
-}

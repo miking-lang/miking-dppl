@@ -1,9 +1,12 @@
-
 .PHONY : all test test-boot clean install uninstall
+
+# ANSI escape sequence for red text
+RED=\033[0;31m
+# ANSI escape sequence for resetting text color
+RESET=\033[0m
 
 cppl_name=cppl
 exec_name=cppl
-tppl_name=tpplc
 plot_name=dppl-plot
 bin_path=${HOME}/.local/bin
 src_path=${HOME}/.local/src/coreppl/
@@ -37,6 +40,12 @@ install: build/${cppl_name}
 	cp build/${cppl_name} ${bin_path}/${exec_name}
 	chmod +x ${bin_path}/${exec_name}
 	cp -rf $(cppl_src) $(src_path)
+	@echo "\n${RED}Attention:${RESET}"
+	@echo "${cppl_name} has been installed to ${bin_path} and the CorePPL sources have been installed to $(src_path)."
+	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
+	@echo "E.g. under Bash:"
+	@echo 'export PATH=$$PATH:'"${bin_path}"
+	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"$(src_path)\n"
 
 # Scripts
 	cp -f scripts/${plot_name} ${bin_path}/.
@@ -46,10 +55,6 @@ install: build/${cppl_name}
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
 	cp -f $(rootppl_bin) $(rootppl_bin_path)
 	cp -rf $(rootppl_src) $(rootppl_src_path)
-
-# TreePPL
-	cp build/${tppl_name} ${bin_path}/${tppl_name}
-	chmod +x ${bin_path}/${tppl_name}
 
 uninstall:
 # CorePPL
@@ -62,28 +67,6 @@ uninstall:
 # RootPPL
 	rm -rf $(rootppl_bin_path)
 	rm -rf $(rootppl_src_path)
-
-# TreePPL
-	rm -f ${bin_path}/${tppl_name}
-	
-install-coreppl: build/${cppl_name}
-	mkdir -p $(bin_path) $(src_path);
-	cp build/${cppl_name} ${bin_path}/${exec_name}
-	chmod +x ${bin_path}/${exec_name}
-	cp -rf $(cppl_src) $(src_path)
-
-uninstall-coreppl:
-	rm -f ${bin_path}/${exec_name}
-	rm -rf $(src_path)
-
-install-treeppl: build/${tppl_name}
-# TreePPL
-	cp build/${tppl_name} ${bin_path}/${tppl_name}
-	chmod +x ${bin_path}/${tppl_name}
-
-uninstall-treeppl:
-# TreePPL
-	rm -f ${bin_path}/${tppl_name}
 
 clean:
 	rm -rf build
