@@ -71,7 +71,7 @@ else -- defaulting to MExpr
 
     let corePplAst: Expr = compile input file in
     --dprint corePplAst;
-    let options = { default with method = "mexpr-is-lw", particles = 1 } in
+    let options = { default with method = "mexpr-smc-bpf", particles = 1 } in
     -- printLn (mexprPPLToString corePplAst);
     --let prog = corePplAst in
     let prog: Expr = typeCheck corePplAst in
