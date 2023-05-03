@@ -1,0 +1,65 @@
+type Tree =
+  | Node {left: Tree, right: Tree, age: Real}
+  | Leaf {age: Real}
+
+function countLeaves(tree: Tree): Real {
+  if tree is Node {
+    return countLeaves(tree.left) + countLeaves(tree.right);
+  }
+  return 1.0;
+}
+
+function logFactorial(n: Real): Real {
+  if n <= 1.0 {
+    return 0.0;
+  }
+  return log(n) + logFactorial(n - 1.0);
+}
+
+function simulateSubtree(time: Real, lambda: Real, mu: Real, rho: Real) {
+  assume waitingTime ~ Exponential(lambda + mu);
+  if waitingTime > time {
+    assume detected ~ Bernoulli(rho);
+    if detected {
+      weight 0.0;
+      resample;
+    }
+  } else {
+    assume isSpeciation ~ Bernoulli(lambda / (lambda + mu));
+    if isSpeciation {
+      simulateSubtree(time - waitingTime, lambda, mu, rho);
+      simulateSubtree(time - waitingTime, lambda, mu, rho);
+    }
+  }
+}
+
+function walk(node: Tree, time:Real, lambda: Real, mu: Real, rho: Real) {
+  assume waitingTime ~ Exponential(lambda);
+  if time - waitingTime > node.age {
+    simulateSubtree(time - waitingTime, lambda, mu, rho);
+    weight 2.0;
+    observe 0 ~ Poisson(mu * waitingTime);
+    walk(node, time - waitingTime, lambda, mu, rho);
+  } else {
+    observe 0 ~ Poisson(mu * (time - node.age));
+    if node is Node {
+      observe 0.0 ~ Exponential(lambda);
+      resample;
+      walk(node.left, node.age, lambda, mu, rho);
+      walk(node.right, node.age, lambda, mu, rho);
+    } else {
+      observe true ~ Bernoulli(rho);
+      resample;
+    }
+  }
+}
+
+model function crbd(tree: Tree, rho: Real): Real {
+  assume lambda ~ Gamma(1.0, 1.0);
+  assume mu ~ Gamma(1.0, 0.5);
+  let leaves = countLeaves(tree);
+  logWeight log(2.0) * (leaves - 1.0) - logFactorial(leaves);
+  walk(tree.left, tree.age, lambda, mu, rho);
+  walk(tree.right, tree.age, lambda, mu, rho);
+  return lambda;
+}
