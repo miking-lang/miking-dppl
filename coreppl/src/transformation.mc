@@ -63,6 +63,12 @@ lang PBN
                           else match v1 with RandomVarNode t then
                             nameCmp t.ident v2.ident
                           else negi 1
+
+  sem cmprEdge (e1:(Vertex,Vertex,Label)) =
+  | (v1, v2, _) -> let cmprV1 = cmprVertex e1.0 v1 in
+                   if eqi cmprV1 0 then cmprVertex e1.1 v2 else cmprV1
+  | _ -> negi 1
+
   sem getId =
   | RandomVarNode v -> v.ident
   | CodeBlockNode v -> v.ident
@@ -83,10 +89,6 @@ lang PBN
     if null parent then None () else Some (get parent 0)
  | _ -> error "indexMultiplexer:given vertex is not a multiplexer"
 
-  sem cmprEdge (e1:(Vertex,Vertex,Label)) =
-  | (v1, v2, _) -> let cmprV1 = cmprVertex e1.0 v1 in
-                   if eqi cmprV1 0 then cmprVertex e1.1 v2 else cmprV1
-  | _ -> negi 1
 end
 
 -- for debug printing of vertices
@@ -107,7 +109,6 @@ use MExprPPL in
     let id = m.ident in join ["muxnode ", id.0 , " ",(int2string (sym2hash id.1)), mexprToString m.index]
     else never
 end
-
 
 lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBN
 
@@ -139,6 +140,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBN
   | [] -> commonDist
   | [t] ++ as -> None ()
 
+  -- given the likelihood,the prior and the observartion calculates the posterior
   -- (d1: likelihood, d2: prior)
   sem posterior (obs: Option Expr) (indices:Option (Expr,Expr))  =
   | (TmDist ({dist=DBernoulli d1}&t1),TmDist ({dist=DBeta d2}&t2)) ->
@@ -231,7 +233,6 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBN
 
   | TmDist ({dist=DDirichlet d1}&t1)->
     TmDist {t1 with dist=DDirichlet {d1 with a=nvar_ cbId}}
-
   | _ -> error "listParam:not supported"
 end
 
@@ -347,7 +348,7 @@ lang StaticAnalyzer = PBN + MExprAst + MExprPPL + ConjugatePrior
     let g = digraphAddEdges edges g in
     let targets = findRandomVariables m1 targets index in
     createPBN g targets m1 m2 env (None ()) t.inexpr
-
+/- not supported yet
   | TmLet ({body=TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CIter()}&c),rhs=lambda})&a1),rhs=lst}&a2)}&t) ->  print "gothca";  createPBN g targets m1 m2 env (None ()) t.inexpr
   | TmLet t ->
     let v =
@@ -374,7 +375,7 @@ lang StaticAnalyzer = PBN + MExprAst + MExprPPL + ConjugatePrior
     -- create the targets
     let targets = findRandomVariables m1 targets t.body in
     createPBN g targets m1 (mapInsert t.ident blockIdent m2) (mapInsert t.ident t.body env) (Some blockIdent) t.inexpr
- 
+ -/
   | TmRecLets t ->
     -- for each binding add the ident to the map
     let v =
@@ -1026,8 +1027,6 @@ end
 mexpr
 use Transformation in
 
--- return statements has to be in the end and the last statement? can return statement of a model be sth else than TmVar?
-
 let list1 =
   bindall_
   [ ulet_ "l1" (seq_ [(assume_ (gaussian_ (float_ 0.0) (float_ 1.0)))
@@ -1244,7 +1243,7 @@ let model1 =
  -- , ulet_ "t" (addf_ (var_ "z") (var_ "z"))
   , var_ "x"
   ] in
-
+/-
 let emptyGraph = digraphEmpty subi eqsym in
 let l1 = gensym () in
 let l2 = gensym () in
@@ -1253,7 +1252,7 @@ let g = digraphAddVertices [1,2,3] emptyGraph in
 let g = digraphAddEdges [(1,2,l1),(1,3,l2),(2,3,l3)] g in
 utest modifiedBFS 1 2 g with true in
 utest modifiedBFS 1 3 g with false in
-utest modifiedBFS 2 3 g with true in  
+utest modifiedBFS 2 3 g with true in  -/
 --map transformModel cases;
 --print (expr2str (transformModel list1));
 --print (expr2str (transformModel list2));
