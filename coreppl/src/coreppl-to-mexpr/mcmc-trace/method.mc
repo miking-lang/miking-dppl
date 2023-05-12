@@ -39,7 +39,7 @@ lang TraceMCMCMethod = MExprPPL
   | TraceMCMC t ->
     let int = TyInt {info = info} in
     let iterations = typeCheckExpr env t.iterations in
-    unify [info, infoTm iterations] (tyTm iterations) int;
+    unify env [info, infoTm iterations] int (tyTm iterations);
     TraceMCMC {
       iterations = iterations
     }

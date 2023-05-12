@@ -43,8 +43,8 @@ lang PIMHMethod = MExprPPL
     let int = TyInt {info = info} in
     let iterations = typeCheckExpr env iterations in
     let particles = typeCheckExpr env particles in
-    unify [info, infoTm iterations] (tyTm iterations) int;
-    unify [info, infoTm particles] (tyTm particles) int;
+    unify env [info, infoTm iterations] int (tyTm iterations);
+    unify env [info, infoTm particles] int (tyTm particles);
     PIMH {iterations = iterations, particles = particles}
 
   sem symbolizeInferMethod env =

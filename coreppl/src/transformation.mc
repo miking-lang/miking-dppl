@@ -953,8 +953,8 @@ let modifyGraph = use StaticAnalyzer in
 let analyze = lam prog.
   use StaticAnalyzer in
   let emptyG = digraphEmpty cmprVertex eqi in
-  let emptyM = mapEmpty nameCmp in
-  createPBN emptyG (setEmpty nameCmp) emptyM emptyM emptyM (None ()) prog
+  let emptyM = lam. mapEmpty nameCmp in
+  createPBN emptyG (setEmpty nameCmp) (emptyM ()) (emptyM ()) (emptyM ()) (None ()) prog
 
 let recreate = lam g:Digraph Vertex Label. lam m:Map Name Vertex.
   use StaticAnalyzer in

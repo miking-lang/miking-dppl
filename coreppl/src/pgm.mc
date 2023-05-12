@@ -5,7 +5,7 @@ include "name.mc"
 type Env = Map Name Expr
 let _emptyEnv = mapEmpty nameCmp
 
-lang Plate = Eq + Sym + TypeAnnot + ANF + PrettyPrint
+lang Plate = Eq + Sym + ANF + PrettyPrint
   syn Expr =
   | TmPlate { fun:Expr
             , lst:Expr
