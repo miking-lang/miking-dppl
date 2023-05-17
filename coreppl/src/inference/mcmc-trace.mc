@@ -22,7 +22,7 @@ lang TraceMCMCMethod = MExprPPL
     TraceMCMC { iterations = iterations }
 
   sem inferMethodFromOptions options =
-  | "mexpr-mcmc-trace" ->
+  | "mcmc-trace" ->
     TraceMCMC {
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name

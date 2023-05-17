@@ -400,6 +400,10 @@ let compilerLightweightMCMC = lam options. use MExprPPLLightweightMCMC in
       ("mcmc-lightweight/runtime-aligned.mc", compileAligned options)
     case (true,_) then
       ("mcmc-lightweight/runtime-aligned-cps.mc", compileAlignedCps options)
+    case (false,"none") then
+      ("mcmc-lightweight/runtime.mc", compile options)
     case (false,_) then
+      -- TODO(2023-05-17,dlunde): Currently the same as non-CPS. Switch to
+      -- CPS-version when implemented.
       ("mcmc-lightweight/runtime.mc", compile options)
   end

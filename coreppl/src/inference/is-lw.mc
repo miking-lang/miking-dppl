@@ -20,7 +20,7 @@ lang ImportanceSamplingMethod = MExprPPL
     Importance {particles = particles}
 
   sem inferMethodFromOptions options =
-  | "mexpr-is-lw" ->
+  | "is-lw" ->
     Importance {particles = int_ options.particles}
 
   sem inferMethodConfig info =

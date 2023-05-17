@@ -20,7 +20,7 @@ lang APFMethod = MExprPPL
     APF {particles = particles}
 
   sem inferMethodFromOptions options =
-  | "mexpr-smc-apf" ->
+  | "smc-apf" ->
     APF {particles = int_ options.particles}
 
   sem inferMethodConfig info =

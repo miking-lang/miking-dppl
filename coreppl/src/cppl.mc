@@ -56,7 +56,7 @@ match result with ParseOK r then
 
     let noInfer = not (hasInfer ast) in
 
-    if eqString options.method "rootppl-smc" then
+    if eqString options.target "rootppl" then
 
       ---------------------
       -- RootPPL backend --

@@ -33,7 +33,7 @@ lang LightweightMCMCMethod = MExprPPL
     }
 
   sem inferMethodFromOptions options =
-  | "mexpr-mcmc-lightweight" ->
+  | "mcmc-lightweight" ->
     LightweightMCMC {
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name

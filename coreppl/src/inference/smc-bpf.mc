@@ -20,7 +20,7 @@ lang BPFMethod = MExprPPL
     BPF {particles = particles}
 
   sem inferMethodFromOptions options =
-  | "mexpr-smc-bpf" ->
+  | "smc-bpf" ->
     BPF {particles = int_ options.particles}
 
   sem inferMethodConfig info =
