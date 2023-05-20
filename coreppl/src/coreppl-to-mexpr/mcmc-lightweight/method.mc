@@ -56,11 +56,11 @@ lang LightweightMCMCMethod = MExprPPL
     let bool = TyBool {info = info} in
     let float = TyFloat {info = info} in
     let iterations = typeCheckExpr env t.iterations in
-    unify [info, infoTm iterations] (tyTm iterations) int;
+    unify env [info, infoTm iterations] int (tyTm iterations);
     let aligned = typeCheckExpr env t.aligned in
-    unify [info, infoTm aligned] (tyTm aligned) bool;
+    unify env [info, infoTm aligned] bool (tyTm aligned);
     let globalProb = typeCheckExpr env t.globalProb in
-    unify [info, infoTm globalProb] (tyTm globalProb) float;
+    unify env [info, infoTm globalProb] float (tyTm globalProb);
     LightweightMCMC {
       iterations = iterations,
       aligned = aligned,

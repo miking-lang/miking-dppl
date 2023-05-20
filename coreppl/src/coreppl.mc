@@ -95,7 +95,7 @@ lang Infer =
     let model = typeCheckExpr env t.model in
     let method = typeCheckInferMethod env t.info t.method in
     let tyRes = newvar env.currentLvl t.info in
-    unify [infoTm model] (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes) (tyTm model);
+    unify env [infoTm model] (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes) (tyTm model);
     TmInfer { t with model = model, method = method,
                      ty = TyDist {info = t.info, ty = tyRes} }
 
@@ -171,7 +171,7 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   | TmAssume t ->
     let dist = typeCheckExpr env t.dist in
     let tyRes = newvar env.currentLvl t.info in
-    unify [infoTm dist] (TyDist { info = t.info, ty = tyRes }) (tyTm dist);
+    unify env [infoTm dist] (TyDist { info = t.info, ty = tyRes }) (tyTm dist);
     TmAssume {{ t with dist = dist }
                   with ty = tyRes }
 
@@ -253,8 +253,8 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
     let value = typeCheckExpr env t.value in
     let dist = typeCheckExpr env t.dist in
     let tyDistRes = newvar env.currentLvl t.info in
-    unify [infoTm dist] (TyDist { info = t.info, ty = tyDistRes }) (tyTm dist);
-    unify [infoTm value] tyDistRes (tyTm value);
+    unify env [infoTm dist] (TyDist { info = t.info, ty = tyDistRes }) (tyTm dist);
+    unify env [infoTm value] tyDistRes (tyTm value);
     TmObserve {{{ t with value = value }
                     with dist = dist }
                     with ty = tyWithInfo t.info tyunit_ }
@@ -337,7 +337,7 @@ lang Weight =
   sem typeCheckExpr (env : TCEnv) =
   | TmWeight t ->
     let weight = typeCheckExpr env t.weight in
-    unify [infoTm weight] (TyFloat { info = t.info }) (tyTm weight);
+    unify env [infoTm weight] (TyFloat { info = t.info }) (tyTm weight);
     TmWeight {{ t with weight = weight }
                   with ty = tyWithInfo t.info tyunit_ }
 

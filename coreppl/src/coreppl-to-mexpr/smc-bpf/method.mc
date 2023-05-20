@@ -31,7 +31,7 @@ lang BPFMethod = MExprPPL
   | BPF {particles = particles} ->
     let int = TyInt {info = info} in
     let particles = typeCheckExpr env particles in
-    unify [info, infoTm particles] (tyTm particles) int;
+    unify env [info, infoTm particles] int (tyTm particles);
     BPF {particles = particles}
 
   sem symbolizeInferMethod env =

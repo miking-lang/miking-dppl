@@ -31,7 +31,7 @@ lang APFMethod = MExprPPL
   | APF {particles = particles} ->
     let int = TyInt {info = info} in
     let particles = typeCheckExpr env particles in
-    unify [info, infoTm particles] (tyTm particles) int;
+    unify env [info, infoTm particles] int (tyTm particles);
     APF {particles = particles}
 
   sem symbolizeInferMethod env =

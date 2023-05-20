@@ -75,7 +75,7 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
       body = TmLam {
         ident = nameNoSym "",
         tyAnnot = tyunit_,
-        tyIdent = tyunit_,
+        tyParam = tyunit_,
         body = TmApp {
           lhs = t.model, rhs = unit_, ty = tyTm t.model, info = info},
         ty = tyarrow_ tyunit_ (tyTm t.model), info = info},
