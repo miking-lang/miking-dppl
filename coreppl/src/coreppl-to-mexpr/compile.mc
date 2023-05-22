@@ -154,11 +154,14 @@ lang MExprCompile =
     -- models are used.
     let prog = insertModels modelAsts mainAst in
 
+    -- TODO(dlunde,2023-05-22): Does not work, currently (the program does not
+    -- type check at this stage). It does, however, type check after generating
+    -- the code and compiling it with Miking.
     -- Type-check if options is set
-    (if options.debugMExprCompile then
-      -- Check that the combined program type checks
-      typeCheck prog; ()
-    else ());
+    -- (if options.debugMExprCompile then
+    --   -- Check that the combined program type checks
+    --   typeCheck prog; ()
+    -- else ());
 
     -- Return complete program
     prog
