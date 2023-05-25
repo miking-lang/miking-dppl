@@ -65,8 +65,11 @@ let emptyList = lam. toList []
 let countReuse = ref 0
 let countReuseUnaligned = ref 0
 
+-- NOTE(dlunde,2023-05-25): Fixed result type of the model. Assumes there is only _one_ model, problems with extract and infer?
+type Result = Unknown
+
 -- State (reused throughout inference)
-let state: State Unknown = {
+let state: State Result = {
   weight = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
@@ -97,12 +100,12 @@ let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
     (sample, wNew)
 
 -- Procedure at aligned samples
-let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Unknown)
-                         -> Unknown =
+let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Result)
+                         -> Result =
   lam f. lam dist. lam k.
 
     -- Snapshot that can later be used to resume execution from this sample.
-    let cont: Cont Unknown = {
+    let cont: Cont Result = {
       cont = unsafeCoerce k,
       weight = deref state.weight,
       dist = unsafeCoerce dist
@@ -125,7 +128,7 @@ let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Unknow
       (cons (sample.0, sample.1, cont) (deref state.alignedTrace));
     k (unsafeCoerce sample.0)
 
-let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown =
+let sampleAligned: all a. Dist a -> (a -> Result) -> Result =
   lam d. sampleAlignedBase (lam dist.
     let oldAlignedTrace: [(Any,Float)] = deref state.oldAlignedTrace in
     match oldAlignedTrace with [(sample,w)] ++ oldAlignedTrace then
@@ -137,7 +140,7 @@ let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown =
       newSample dist
   ) d
 
-let sampleAlignedForceNew: all a. Dist a -> (a -> Unknown) -> Unknown =
+let sampleAlignedForceNew: all a. Dist a -> (a -> Result) -> Result =
   lam d. sampleAlignedBase newSample d
 
 let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
@@ -163,7 +166,7 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: all a. (State a -> a) -> a = lam model.
+let runNext: (State Result -> Result) -> Result = lam model.
 
   -- Enable global modifications with probability gProb
   let gProb = compileOptions.mcmcLightweightGlobalProb in
@@ -181,9 +184,9 @@ let runNext: all a. (State a -> a) -> a = lam model.
     model state
   ) else
 
-    recursive let rec: Int -> [(Any,Float,Cont a)] -> [[(Any, Float, Int)]]
+    recursive let rec: Int -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
                            -> [(Any,Float)]        -> [[(Any, Float, Int)]]
-                           -> a =
+                           -> Result =
       lam i. lam alignedTrace. lam unalignedTraces.
       lam oldAlignedTrace. lam oldUnalignedTraces.
         match (alignedTrace,unalignedTraces)
@@ -226,10 +229,10 @@ let runNext: all a. (State a -> a) -> a = lam model.
       (emptyList ()) (emptyList ())
 
 -- General inference algorithm for aligned MCMC
-let run : all a. Unknown -> (State a -> a) -> Dist a =
+let run : Unknown -> (State Result -> Result) -> Dist Result =
   lam config. lam model.
 
-  recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
+  recursive let mh : [Float] -> [Result] -> Int -> ([Float], [Result]) =
     lam weights. lam samples. lam iter.
       if leqi iter 0 then (weights, samples)
       else
