@@ -91,7 +91,7 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   | ast ->
     let ast = extractAst (setOfSeq nameCmp [inferId]) ast in
     let ast = inlineInferBinding inferId ast in
-    printLn (mexprPPLToString ast);
+    -- printLn (mexprPPLToString ast);
     let ast = removeRedundantRec ast in
     -- NOTE(dlunde,2023-05-22): Call inlineSingleUse twice to further simplify
     -- some cases. We probably want to repeat it until fixpoint. Or, replace
@@ -100,7 +100,7 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
     let ast = inlineSingleUse ast in
     let ast = inlineSingleUse ast in
     ---
-    printLn (mexprPPLToString ast);
+    -- printLn (mexprPPLToString ast);
     ast
 
   -- Inlines the body of the infer binding without lambdas. This places the
