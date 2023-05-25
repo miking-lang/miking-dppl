@@ -50,7 +50,9 @@ type State = {
 
 -- NOTE(dlunde,2022-05-23): The below implementation does not
 -- work with ropes for some reason (segfaults). We must therefore use lists.
-let emptyList = toList []
+-- OPT(dlunde,2023-05-25): Wrap in lambda due to value restriction. Possible that the
+-- type checker can handle this in the future though.
+let emptyList = lam. toList []
 
 -- TODO: Remove me
 let countReuse = ref 0
@@ -61,11 +63,11 @@ let state: State = {
   weight = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
-  alignedTrace = ref emptyList,
-  unalignedTraces = ref (toList [emptyList]),
+  alignedTrace = ref (emptyList ()),
+  unalignedTraces = ref (toList [(emptyList ())]),
   reuseUnaligned = ref true,
-  oldAlignedTrace = ref emptyList,
-  oldUnalignedTraces = ref emptyList,
+  oldAlignedTrace = ref (emptyList ()),
+  oldUnalignedTraces = ref (emptyList ()),
   alignedTraceLength = ref (negi 1)
 }
 
@@ -111,7 +113,7 @@ let sampleAligned: all a. Dist a -> a = lam dist.
 
   -- Add new empty unaligned trace for next segment.
   let unalignedTraces: [[(Any, Float, Int)]] = deref state.unalignedTraces in
-  modref state.unalignedTraces (cons emptyList unalignedTraces);
+  modref state.unalignedTraces (cons (emptyList ()) unalignedTraces);
 
   -- Remove head of oldUnalignedTraces
   (match deref state.oldUnalignedTraces with [] then () else
@@ -164,13 +166,13 @@ let modTrace: () -> () = lam.
   let modGlobal: Bool = bernoulliSample gProb in
 
   if modGlobal then
-    modref state.oldAlignedTrace emptyList;
-    modref state.oldUnalignedTraces emptyList
+    modref state.oldAlignedTrace (emptyList ());
+    modref state.oldUnalignedTraces (emptyList ())
   else
     -- One index must always change
     let invalidIndex: Int = uniformDiscreteSample 0 (subi alignedTraceLength 1) in
     modref state.oldAlignedTrace
-      (rec invalidIndex (deref state.alignedTrace) emptyList);
+      (rec invalidIndex (deref state.alignedTrace) (emptyList ()));
 
     -- Also set correct old unaligned traces (always reused if possible, no
     -- invalidation)
@@ -197,8 +199,8 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         modref state.prevWeightReused 0.;
         modref state.weightReused 0.;
         modref state.reuseUnaligned true;
-        modref state.alignedTrace emptyList;
-        modref state.unalignedTraces (toList [emptyList]);
+        modref state.alignedTrace (emptyList ());
+        modref state.unalignedTraces (toList [(emptyList ())]);
         let sample = model state in
         -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";

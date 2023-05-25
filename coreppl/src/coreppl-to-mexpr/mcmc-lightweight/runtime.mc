@@ -64,7 +64,9 @@ let addrCmp : Address -> Address -> Int = lam a1. lam a2.
   else ndiff in
   res
 
-let emptyAddressMap = mapEmpty addrCmp
+-- OPT(dlunde,2023-05-25): Wrap in lambda due to value restriction. Possible
+-- that the type checker can handle this in the future though.
+let emptyAddressMap = lam. mapEmpty addrCmp
 
 let constructAddress: Address -> Int -> Address = lam prev. lam sym.
   (addi prev.0 1, cons sym prev.1)
@@ -74,9 +76,9 @@ let state: State = {
   weight = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
-  db = ref emptyAddressMap,
+  db = ref (emptyAddressMap ()),
   traceLength = ref 0,
-  oldDb = ref emptyAddressMap
+  oldDb = ref (emptyAddressMap ())
 }
 
 let updateWeight = lam v.
@@ -119,7 +121,7 @@ let modDb: () -> () = lam.
 
   if modGlobal then
     -- modref state.oldDb (mapMap (lam. None ()) db)
-    modref state.oldDb emptyAddressMap
+    modref state.oldDb (emptyAddressMap ())
   else
     -- One item in the db (chosen at random) must always change
     let invalidIndex: Int = uniformDiscreteSample 0 (subi (deref state.traceLength) 1) in
@@ -150,7 +152,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         modref state.weight 0.;
         modref state.weightReused 0.;
         modref state.prevWeightReused 0.;
-        modref state.db emptyAddressMap;
+        modref state.db (emptyAddressMap ());
         modref state.traceLength 0;
         let sample = model state in
         let traceLength = deref state.traceLength in
