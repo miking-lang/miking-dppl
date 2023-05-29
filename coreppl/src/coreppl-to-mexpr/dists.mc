@@ -70,6 +70,8 @@ lang TransformDist = MExprPPL
     i (conapp_
         "RuntimeDistElementary_DistUniform"
         (i (urecord_ [("a", a), ("b", b)])))
+  | DEmpirical { samples = samples } ->
+    i (app_ (var_ "RunDistEmpirical_constructDistEmpiricalHelper") samples)
 
   -- We need to replace occurrences of TyDist after transforming to MExpr
   -- distributions.

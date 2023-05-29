@@ -78,6 +78,12 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   | EmpNorm { normConst: Float }
   | EmpMCMC { acceptRate: Float }
 
+  sem constructDistEmpiricalHelper =
+  | samples ->
+    match unzip samples with (logWeights, samples) in
+    let extra = EmpNorm {normConst = 0.0} in
+    constructDistEmpirical samples logWeights extra
+
   -- DistEmpirical should always be created via this function
   sem constructDistEmpirical samples logWeights =
   | extra ->
