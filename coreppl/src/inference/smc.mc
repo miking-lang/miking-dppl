@@ -5,6 +5,8 @@ include "mexpr/type-check.mc"
 include "mexpr/anf.mc"
 include "mexpr/type-lift.mc"
 
+include "../coreppl.mc"
+
 -- Explicit resample inference annotation for SMC
 lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
 
@@ -64,6 +66,36 @@ end
 
 let resample_ = use Resample in
   TmResample { ty = tyunit_, info = NoInfo () }
+
+----------------------
+-- COMMON FUNCTIONS --
+----------------------
+
+lang SMCCommon = MExprPPL
+
+  -- Add resample after weights (given a predicate over identifiers, assumes
+  -- ANF). Used in SMC compilers for both the RootPPL and MExpr backends.
+  sem addResample: (Name -> Bool) -> Expr -> Expr
+  sem addResample pred =
+    | t ->
+      let t = smap_Expr_Expr (addResample pred) t in
+      match t
+      with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
+         | TmLet ({ ident = ident, body = TmObserve _, inexpr = inexpr } & r)
+      then
+        if pred ident then
+          let resample = withInfo r.info resample_ in
+          let l = nlet_ (nameSym "resample") tyunit_ resample in
+          let l = withInfo r.info l in
+          let inexpr = bind_ l inexpr in
+          TmLet { r with inexpr = inexpr }
+        else t
+      else t
+end
+
+-----------------------
+-- LANGUAGE FRAGMENT --
+-----------------------
 
 lang SMC = Resample
 end

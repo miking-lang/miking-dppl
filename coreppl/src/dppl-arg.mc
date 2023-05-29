@@ -3,6 +3,7 @@ include "arg.mc"
 -- Options type
 type Options = {
   method : String,
+  target : String,
   particles : Int,
   printModel: Bool,
   printMCore: Bool,
@@ -19,10 +20,10 @@ type Options = {
   -- Whether or not to print the actual result samples in compiled programs
   printSamples: Bool,
 
-  -- Option for the `rootppl-smc` method.
+  -- Option for the `rootppl` target.
   stackSize: Int,
 
-  -- Options for the `mexpr-*` methods.
+  -- Whether or not to apply CPS transformations
   cps: String,
 
   -- Whether or not to apply early stopping
@@ -47,7 +48,8 @@ type Options = {
 
 -- Default values for options
 let default = {
-  method = "",
+  method = "is-lw",
+  target = "mexpr",
   particles = 5000,
   resample = "manual",
   align = false,
@@ -72,9 +74,19 @@ let default = {
 let config = [
   -- TODO(dlunde,2022-11-14): Could we automatically generate the list of available inference algorithms instead of hardcoding it?
   ([("-m", " ", "<method>")],
-    "The selected inference method. The supported methods are: mexpr-is-lw, mexpr-smc-bpf, mexpr-smc-apf, mexpr-mcmc-lightweight, mexpr-mcmc-trace, mexpr-mcmc-naive, mexpr-pmcmc-pimh, rootppl-smc.",
+    join [
+      "The selected inference method. The supported methods are: is-lw, smc-bpf, smc-apf, mcmc-lightweight, mcmc-trace, mcmc-naive, pmcmc-pimh. Default: ",
+      default.method
+    ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
+  ([("-t", " ", "<target>")],
+    join [
+      "The compilation target. The supported targets are: mexpr, rootppl. Default: ",
+      default.target
+    ],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with target = argToString p}),
   ([("-p", " ", "<particles>")],
     join [
       "The number of particles (i.e., samples or iterations). The default is ", (int2string default.particles)
@@ -83,7 +95,8 @@ let config = [
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],
     join [
-      "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates), and manual (sample only at manually defined resampling locations). Default: ", default.resample, "."
+      "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates, forces --align), and manual (sample only at manually defined resampling locations). Default: ",
+      default.resample, "."
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with resample = argToString p}),
@@ -130,8 +143,8 @@ let config = [
     "Disables early stopping in certain inference algorithms.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with earlyStop = false}),
-  ([("--no-debug-mexpr-compile", "", "")],
-    "Turn on debugging for CorePPL to MExpr compiler.",
+  ([("--no-debug-compile", "", "")],
+    "Turn on debugging for the compiler.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugMExprCompile = false}),
   ([("--mcmc-lw-gprob", " ", "<value>")],
@@ -152,7 +165,7 @@ let config = [
     join [
       "The number of particles for the smc proposal computation. The default is ",
       (int2string default.pmcmcParticles),
-      ". This option is used if one of the following methods are used: mexpr-pmcmc-*."
+      ". This option is used if one of the following methods are used: pmcmc-*."
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with pmcmcParticles = argToIntMin p 1}),

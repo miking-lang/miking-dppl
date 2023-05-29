@@ -1,5 +1,5 @@
-include "../../coreppl.mc"
-include "../../dppl-arg.mc"
+include "../coreppl.mc"
+include "../dppl-arg.mc"
 
 lang NaiveMCMCMethod = MExprPPL
   syn InferMethod =
@@ -22,7 +22,7 @@ lang NaiveMCMCMethod = MExprPPL
     NaiveMCMC { iterations = iterations }
 
   sem inferMethodFromOptions options =
-  | "mexpr-mcmc-naive" ->
+  | "mcmc-naive" ->
     NaiveMCMC {
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name

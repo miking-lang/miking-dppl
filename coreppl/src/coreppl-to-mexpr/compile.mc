@@ -7,13 +7,13 @@ include "sys.mc"
 include "map.mc"
 
 include "../coreppl.mc"
-include "../extract.mc"
-include "../inference-common/smc.mc"
+include "../inference/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
 include "../transformation.mc"
 include "../src-location.mc"
 
+include "extract.mc"
 include "backcompat.mc"
 include "dists.mc"
 include "runtimes.mc"
@@ -60,7 +60,7 @@ end
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
-  MExprANFAll
+  MExprANFAll + CPPLBackcompat
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -77,6 +77,38 @@ lang MExprCompile =
     else ());
 
     ast
+
+  sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
+  sem mexprCpplCompile options noInfer =
+  | ast ->
+
+    -- Load the runtimes used in the provided AST, and collect identifiers of
+    -- common methods within the runtimes.
+    let runtimes = loadRuntimes options ast in
+
+    -- If no infers are found, the entire AST is the model code, so we transform
+    -- it as:
+    --
+    -- let d = infer <method> (lam. <model>) in
+    -- let printRes = ... in
+    -- printRes <pp> d
+    --
+    -- where <method> = inference method chosen according to options
+    --       <model> = the entire AST
+    --       <pp> = the pretty-print function used to print the result
+    match
+      if noInfer then programModelTransform options ast
+      else (runtimes, ast)
+    with (runtimes, ast) in
+
+    -- Combine the required runtime ASTs to one AST and eliminate duplicate
+    -- definitions due to files having common dependencies. The result is an
+    -- updated map of runtime entries, a combined runtime AST and a
+    -- symbolization environment.
+    let runtimes = combineRuntimes options runtimes in
+
+    mexprCompile options runtimes ast
+
 
   sem mexprCompile : Options -> Runtimes -> Expr -> Expr
   sem mexprCompile options runtimes =
@@ -122,11 +154,14 @@ lang MExprCompile =
     -- models are used.
     let prog = insertModels modelAsts mainAst in
 
+    -- TODO(dlunde,2023-05-22): Does not work, currently (the program does not
+    -- type check at this stage). It does, however, type check after generating
+    -- the code and compiling it with Miking.
     -- Type-check if options is set
-    (if options.debugMExprCompile then
-      -- Check that the combined program type checks
-      typeCheck prog; ()
-    else ());
+    -- (if options.debugMExprCompile then
+    --   -- Check that the combined program type checks
+    --   typeCheck prog; ()
+    -- else ());
 
     -- Return complete program
     prog
@@ -305,33 +340,33 @@ in
 
 -- Likelihood weighting
 utest compile {dummyOptions with cps = "none"}
-        "mexpr-is-lw" simple with () using truefn in
+        "is-lw" simple with () using truefn in
 utest compile {dummyOptions with cps = "partial"}
-        "mexpr-is-lw" simple with () using truefn in
+        "is-lw" simple with () using truefn in
 utest compile {dummyOptions with cps = "full"}
-        "mexpr-is-lw" simple with () using truefn in
+        "is-lw" simple with () using truefn in
 
 -- APF
-utest compile dummyOptions "mexpr-smc-apf" simple with () using truefn in
+utest compile dummyOptions "smc-apf" simple with () using truefn in
 
 -- BPF
-utest compile dummyOptions "mexpr-smc-bpf" simple with () using truefn in
+utest compile dummyOptions "smc-bpf" simple with () using truefn in
 
 -- Naive MCMC
-utest compile dummyOptions "mexpr-mcmc-naive" simple with () using truefn in
+utest compile dummyOptions "mcmc-naive" simple with () using truefn in
 
 -- Trace MCMC
-utest compile dummyOptions "mexpr-mcmc-trace" simple with () using truefn in
+utest compile dummyOptions "mcmc-trace" simple with () using truefn in
 
 -- Lightweight MCMC
-utest compile dummyOptions "mexpr-mcmc-lightweight" simple with () using truefn in
+utest compile dummyOptions "mcmc-lightweight" simple with () using truefn in
 utest compile {dummyOptions with align = true, cps = "none"}
-        "mexpr-mcmc-lightweight" simple with () using truefn in
+        "mcmc-lightweight" simple with () using truefn in
 utest compile {dummyOptions with align = true, cps = "partial"}
-        "mexpr-mcmc-lightweight" simple with () using truefn in
+        "mcmc-lightweight" simple with () using truefn in
 utest compile {dummyOptions with align = true, cps = "full"}
-        "mexpr-mcmc-lightweight" simple with () using truefn in
+        "mcmc-lightweight" simple with () using truefn in
 
-utest compile dummyOptions "mexpr-pmcmc-pimh" simple with () using truefn in
+utest compile dummyOptions "pmcmc-pimh" simple with () using truefn in
 
 ()

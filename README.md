@@ -3,7 +3,7 @@ Miking DPPL is a framework for developing probabilistic programming languages (P
 Currently, the framework includes the PPLs [CorePPL](#coreppl) and [RootPPL](#rootppl).
 
 ## Building and Installing
-The main binary for development in Miking DPPL is called `cppl`. Currently, this binary is built by running `make` in the project root, and installed to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) to build `cppl`.
+The main binary for development in Miking DPPL is called `cppl`. Currently, you build this binary by running `make` in the project root, and install it to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) to build `cppl`.
 The command `make test` executes a set of tests for various components in the Miking DPPL framework.
 
 ## CorePPL
@@ -16,18 +16,18 @@ x
 ```
 encodes a simple distribution for the bias of a coin, by setting a Beta prior for the probability of observing heads (i.e., `true`) for a single flip of the coin.
 
-Defining random variables in CorePPL is done by providing a probability distribution to the `assume` construct.
-Currently, there is no generated documentation for available distributions.
+You define random variables in CorePPL by providing a probability distribution to the `assume` construct.
+Currently, there is no generated documentation for available distributions (you have to look at the source code).
 
-Likelihood updating is done through the `weight` and `observe` constructs.
-With `weight`, the logarithm of the likelihood is updated directly (e.g., `weight (log 2)` multiplies the likelihood with 2).
-With `observe`, the likelihood is instead updated with the value of the pmf or pdf for the given distribution at the given observation.
+You can update the likelihood through the `weight` and `observe` constructs.
+With `weight`, you update the logarithm of the likelihood directly (e.g., `weight (log 2)` multiplies the likelihood with 2).
+With `observe`, you update the likelihood with the value of the pmf or pdf for the given distribution at the given observation.
 For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
 
 ## Compiling CorePPL to MExpr
 The default option for inferring the distribution encoded by a CorePPL program is to compile it to MExpr (which then compiles to OCaml).
-You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm prefixed with `mexpr-` (run the command `cppl` to see the current list of available algorithms).
-For example, `cppl -m mexpr-importance cpplprog.mc` compiles `cpplprog.mc` to a binary file `out` which you can subsequently run to produce samples from the distribution encoded by `cpplprog.mc`:
+You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm (run the command `cppl` to see the current list of available algorithms).
+For example, `cppl -m is-lw cpplprog.mc` compiles `cpplprog.mc` to a binary file `out` which you can subsequently run to produce likelihood-weighted samples from the distribution encoded by `cpplprog.mc`:
 ```
 $ ./out 10
 -0.290110454733
@@ -55,11 +55,11 @@ There are also some slides available at `coreppl/docs/coreppl-to-mexpr.pdf`
 ## Compiling CorePPL to RootPPL
 Another option to run inference over a CorePPL program is to compile it to RootPPL.
 This option potentially results in more efficient inference (due to the efficiency of RootPPL), but also has quite a lot of limitations (for example, RootPPL does not support automatic memory management or higher-order functions).
-A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `cppl -m rootppl-smc cpplprog.mc`.
+A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `cppl -t rootppl cpplprog.mc`.
+Currently, the only supported inference algorith in RootPPL is `smc-bpf` (the SMC bootstrap particle filter).
 The file `out.cu` can then be compiled using, e.g., `rootppl out.cu --stack_size 10000`.
 The stack size option is mandatory for compiling RootPPL programs compiled from CorePPL.
 More information about RootPPL can be found at [RootPPL](#rootppl).
-
 
 ## RootPPL
 RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. See examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language.

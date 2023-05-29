@@ -57,22 +57,27 @@ type State a = {
 
 -- NOTE(dlunde,2022-05-23): The below implementation does not
 -- work with ropes for some reason (segfaults). We must therefore use lists.
-let emptyList = toList []
+-- OPT(dlunde,2023-05-25): Wrap in lambda due to value restriction. Possible that the
+-- type checker can handle this in the future though.
+let emptyList = lam. toList []
 
 -- TODO: Remove me
 let countReuse = ref 0
 let countReuseUnaligned = ref 0
 
+-- NOTE(dlunde,2023-05-25): Fixed result type of the model. Assumes there is only _one_ model, problems with extract and infer?
+type Result = Unknown
+
 -- State (reused throughout inference)
-let state: State Unknown = {
+let state: State Result = {
   weight = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
-  alignedTrace = ref emptyList,
-  unalignedTraces = ref (toList [emptyList]),
+  alignedTrace = ref (emptyList ()),
+  unalignedTraces = ref (toList [(emptyList ())]),
   reuseUnaligned = ref true,
-  oldAlignedTrace = ref emptyList,
-  oldUnalignedTraces = ref emptyList,
+  oldAlignedTrace = ref (emptyList ()),
+  oldUnalignedTraces = ref (emptyList ()),
   alignedTraceLength = ref (negi 1)
 }
 
@@ -95,12 +100,12 @@ let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
     (sample, wNew)
 
 -- Procedure at aligned samples
-let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Unknown)
-                         -> Unknown =
+let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Result)
+                         -> Result =
   lam f. lam dist. lam k.
 
     -- Snapshot that can later be used to resume execution from this sample.
-    let cont: Cont Unknown = {
+    let cont: Cont Result = {
       cont = unsafeCoerce k,
       weight = deref state.weight,
       dist = unsafeCoerce dist
@@ -113,7 +118,7 @@ let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Unknow
 
     -- Add new empty unaligned trace for next segment.
     let unalignedTraces: [[(Any, Float, Int)]] = deref state.unalignedTraces in
-    modref state.unalignedTraces (cons emptyList unalignedTraces);
+    modref state.unalignedTraces (cons (emptyList ()) unalignedTraces);
 
     -- Remove head of oldUnalignedTraces
     (match deref state.oldUnalignedTraces with [] then () else
@@ -123,8 +128,8 @@ let sampleAlignedBase: all a. (Dist a -> (Any, Float)) -> Dist a -> (a -> Unknow
       (cons (sample.0, sample.1, cont) (deref state.alignedTrace));
     k (unsafeCoerce sample.0)
 
-let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown =
-  sampleAlignedBase (lam dist.
+let sampleAligned: all a. Dist a -> (a -> Result) -> Result =
+  lam d. sampleAlignedBase (lam dist.
     let oldAlignedTrace: [(Any,Float)] = deref state.oldAlignedTrace in
     match oldAlignedTrace with [(sample,w)] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
@@ -133,10 +138,10 @@ let sampleAligned: all a. Dist a -> (a -> Unknown) -> Unknown =
       reuseSample dist sample w
     else
       newSample dist
-  )
+  ) d
 
-let sampleAlignedForceNew: all a. Dist a -> (a -> Unknown) -> Unknown =
-  sampleAlignedBase newSample
+let sampleAlignedForceNew: all a. Dist a -> (a -> Result) -> Result =
+  lam d. sampleAlignedBase newSample d
 
 let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   let sample: (Any, Float) =
@@ -161,27 +166,27 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: all a. (State a -> a) -> a = lam model.
+let runNext: (State Result -> Result) -> Result = lam model.
 
   -- Enable global modifications with probability gProb
   let gProb = compileOptions.mcmcLightweightGlobalProb in
   let modGlobal: Bool = bernoulliSample gProb in
 
   if modGlobal then (
-    modref state.oldAlignedTrace emptyList;
-    modref state.oldUnalignedTraces emptyList;
+    modref state.oldAlignedTrace (emptyList ());
+    modref state.oldUnalignedTraces (emptyList ());
     modref state.weight 0.;
     modref state.prevWeightReused 0.;
     modref state.weightReused 0.;
     modref state.reuseUnaligned true;
-    modref state.alignedTrace emptyList;
-    modref state.unalignedTraces (toList [emptyList]);
+    modref state.alignedTrace (emptyList ());
+    modref state.unalignedTraces (toList [(emptyList ())]);
     model state
   ) else
 
-    recursive let rec: Int -> [(Any,Float,Cont a)] -> [[(Any, Float, Int)]]
+    recursive let rec: Int -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
                            -> [(Any,Float)]        -> [[(Any, Float, Int)]]
-                           -> a =
+                           -> Result =
       lam i. lam alignedTrace. lam unalignedTraces.
       lam oldAlignedTrace. lam oldUnalignedTraces.
         match (alignedTrace,unalignedTraces)
@@ -193,7 +198,7 @@ let runNext: all a. (State a -> a) -> a = lam model.
           else (
             let cont = s1.2 in
             modref state.oldAlignedTrace oldAlignedTrace;
-            modref state.oldUnalignedTraces (cons emptyList (cons (reverse s2) oldUnalignedTraces));
+            modref state.oldUnalignedTraces (cons (emptyList ()) (cons (reverse s2) oldUnalignedTraces));
             modref state.weight cont.weight;
             modref state.prevWeightReused 0.;
             modref state.weightReused 0.;
@@ -221,13 +226,13 @@ let runNext: all a. (State a -> a) -> a = lam model.
     -- printLn (join ["Unaligned traces length: ", int2string (length (deref state.unalignedTraces))]);
     -- printLn (join ["The invalid index is: ", int2string invalidIndex]);
     rec invalidIndex (deref state.alignedTrace) (deref state.unalignedTraces)
-      emptyList emptyList
+      (emptyList ()) (emptyList ())
 
 -- General inference algorithm for aligned MCMC
-let run : all a. Unknown -> (State a -> a) -> Dist a =
+let run : Unknown -> (State Result -> Result) -> Dist Result =
   lam config. lam model.
 
-  recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
+  recursive let mh : [Float] -> [Result] -> Int -> ([Float], [Result]) =
     lam weights. lam samples. lam iter.
       if leqi iter 0 then (weights, samples)
       else

@@ -3,7 +3,7 @@ include "mexpr/const-arity.mc"
 include "mexpr/cps.mc"
 
 include "../dists.mc"
-include "../../inference-common/smc.mc"
+include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
@@ -400,6 +400,10 @@ let compilerLightweightMCMC = lam options. use MExprPPLLightweightMCMC in
       ("mcmc-lightweight/runtime-aligned.mc", compileAligned options)
     case (true,_) then
       ("mcmc-lightweight/runtime-aligned-cps.mc", compileAlignedCps options)
+    case (false,"none") then
+      ("mcmc-lightweight/runtime.mc", compile options)
     case (false,_) then
+      -- TODO(2023-05-17,dlunde): Currently the same as non-CPS. Switch to
+      -- CPS-version when implemented.
       ("mcmc-lightweight/runtime.mc", compile options)
   end

@@ -1,5 +1,5 @@
-include "coreppl.mc"
-include "parser.mc"
+include "../coreppl.mc"
+include "../parser.mc"
 
 include "name.mc"
 include "mexpr/extract.mc"
@@ -90,7 +90,18 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
   sem extractInferAst inferId =
   | ast ->
     let ast = extractAst (setOfSeq nameCmp [inferId]) ast in
-    inlineInferBinding inferId ast
+    let ast = inlineInferBinding inferId ast in
+    -- printLn (mexprPPLToString ast);
+    let ast = removeRedundantRec ast in
+    -- NOTE(dlunde,2023-05-22): Call inlineSingleUse twice to further simplify
+    -- some cases. We probably want to repeat it until fixpoint. Or, replace
+    -- inlineSingleUse with something better. The current implementation is
+    -- quite hacky and have not been properly analyzed or tested.
+    let ast = inlineSingleUse ast in
+    let ast = inlineSingleUse ast in
+    ---
+    -- printLn (mexprPPLToString ast);
+    ast
 
   -- Inlines the body of the infer binding without lambdas. This places the
   -- model code in the top-level of the program.
@@ -169,6 +180,100 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
       else e
     else e
   | t -> smap_Expr_Expr (replaceInferApplication solutions inferData) t
+
+  -- Replaces recursive lets with regular lets where possible
+  sem removeRedundantRec : Expr -> Expr
+  sem removeRedundantRec =
+  | TmRecLets {bindings = bindings, inexpr = inexpr} & t ->
+    let bs = setOfSeq nameCmp (map (lam rlb. rlb.ident) bindings) in
+    let c = foldl (bindingsUsed bs) false (map (lam rlb. rlb.body) bindings) in
+    if c then t else (
+      let bindings = map (lam rlb.
+          withInfo rlb.info (nlet_ rlb.ident rlb.tyAnnot rlb.body)
+        ) bindings
+      in
+      let res = foldr bind_ inexpr bindings in
+      withInfo (infoTm t) (withType (tyTm t) res))
+
+  | expr -> smap_Expr_Expr removeRedundantRec expr
+
+  sem bindingsUsed : Set Name -> Bool -> Expr -> Bool
+  sem bindingsUsed bs acc =
+  | TmVar t -> if setMem t.ident bs then true else acc
+  | expr ->
+    if acc then acc else
+      sfold_Expr_Expr (bindingsUsed bs) acc expr
+
+  -- Assumes proper symbolization and ANF
+  sem inlineSingleUse : Expr -> Expr
+  sem inlineSingleUse =
+  | expr ->
+    -- Count uses of lambdas
+    let m = determineInline (mapEmpty nameCmp) expr in
+    -- printLn (strJoin ",\n" (map
+    --   (lam t. join [(nameGetStr t.0), "->", (bool2string t.1)])
+    --   (mapToSeq m)));
+
+    -- Inline functions
+    match inlineSingleUseH m (mapEmpty nameCmp) expr with (_,expr) in
+    expr
+
+  sem determineInline : Map Name Bool -> Expr -> Map Name Bool
+  sem determineInline m =
+  | TmLet t ->
+    let m = determineInline m t.body in
+    let m =
+      -- Only inline certain things. In particular, do not move constructs with
+      -- side-effects
+      match t.body with TmLam _ | TmVar _ then mapInsert t.ident false m
+      else m
+    in
+    determineInline m t.inexpr
+  | TmVar t ->
+    match mapLookup t.ident m with Some b then
+      if b then mapRemove t.ident m -- More than a single use
+      else mapInsert t.ident true m -- First use
+    else m
+  | expr -> sfold_Expr_Expr determineInline m expr
+
+  sem inlineSingleUseH : Map Name Bool
+                         -> Map Name Expr -> Expr -> (Map Name Expr, Expr)
+  sem inlineSingleUseH m me =
+  | TmLet t ->
+    match inlineSingleUseH m me t.body with (me,body) in
+    let inline = match mapLookup t.ident m with Some true then true else false in
+    let me = if inline then mapInsert t.ident body me else me in
+    match inlineSingleUseH m me t.inexpr with (me,inexpr) in
+    if inline then
+      match mapLookup t.ident me with None _ then
+        -- The function was inlined, remove it
+        (me, inexpr)
+      else
+        (me, TmLet {t with body = body, inexpr = inexpr})
+    else
+      (me, TmLet {t with body = body, inexpr = inexpr})
+  | TmApp t & tm ->
+    recursive let rec = lam me. lam expr.
+      match expr with TmApp t then
+        let rhs = inlineSingleUseH m me t.rhs in
+        match rec rhs.0 t.lhs with (ls, me, lhs) in
+        match lhs with TmLam tl then
+          let l = nlet_ tl.ident tl.tyAnnot rhs.1 in
+          (cons l ls, me, tl.body)
+        else (ls, me, TmApp {t with lhs = lhs, rhs = rhs.1})
+      else
+        match inlineSingleUseH m me expr with (me, expr) in
+        ([], me, expr)
+    in
+    match rec me tm with (ls, me, tm) in
+    (me, foldr bind_ tm (reverse ls))
+
+  | TmVar t ->
+    match mapLookup t.ident me with Some expr then (mapRemove t.ident me, expr)
+    else (me, TmVar t)
+
+  | expr -> smapAccumL_Expr_Expr (inlineSingleUseH m) me expr
+
 end
 
 let extractInfer = use DPPLExtract in extractInfer

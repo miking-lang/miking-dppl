@@ -40,12 +40,6 @@ install: build/${cppl_name}
 	cp build/${cppl_name} ${bin_path}/${exec_name}
 	chmod +x ${bin_path}/${exec_name}
 	cp -rf $(cppl_src) $(src_path)
-	@echo "\n${RED}Attention:${RESET}"
-	@echo "${cppl_name} has been installed to ${bin_path} and the CorePPL sources have been installed to $(src_path)."
-	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
-	@echo "E.g. under Bash:"
-	@echo 'export PATH=$$PATH:'"${bin_path}"
-	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"$(src_path)\n"
 
 # Scripts
 	cp -f scripts/${plot_name} ${bin_path}/.
@@ -55,6 +49,14 @@ install: build/${cppl_name}
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
 	cp -f $(rootppl_bin) $(rootppl_bin_path)
 	cp -rf $(rootppl_src) $(rootppl_src_path)
+
+# Information message
+	@echo "\n${RED}Attention:"
+	@echo "${cppl_name} has been installed to ${bin_path} and the CorePPL sources have been installed to $(src_path)."
+	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
+	@echo "E.g. under Bash:"
+	@echo 'export PATH=$$PATH:'"${bin_path}"
+	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"$(src_path)\n${RESET}"
 
 uninstall:
 # CorePPL

@@ -61,16 +61,16 @@ lang CPPLBackcompat = LoadRuntime
 
         ulet_ "" (
             match options.method with
-                "mexpr-is-lw"
-              | "mexpr-smc-bpf"
-              | "mexpr-smc-apf"
+                "is-lw"
+              | "smc-bpf"
+              | "smc-apf"
             then
               app_ (var_ "printNormConst") (var_ "d")
             else match options.method with
-                "mexpr-mcmc-naive"
-              | "mexpr-mcmc-trace"
-              | "mexpr-mcmc-lightweight"
-              | "mexpr-pmcmc-pimh"
+                "mcmc-naive"
+              | "mcmc-trace"
+              | "mcmc-lightweight"
+              | "pmcmc-pimh"
             then
               if options.printAcceptanceRate then
                 app_ (var_ "printAcceptRate") (var_ "d")

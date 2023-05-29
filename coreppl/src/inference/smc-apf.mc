@@ -1,5 +1,5 @@
-include "../../coreppl.mc"
-include "../../dppl-arg.mc"
+include "../coreppl.mc"
+include "../dppl-arg.mc"
 
 lang APFMethod = MExprPPL
   syn InferMethod =
@@ -20,7 +20,7 @@ lang APFMethod = MExprPPL
     APF {particles = particles}
 
   sem inferMethodFromOptions options =
-  | "mexpr-smc-apf" ->
+  | "smc-apf" ->
     APF {particles = int_ options.particles}
 
   sem inferMethodConfig info =

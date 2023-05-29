@@ -1,5 +1,5 @@
-include "../../coreppl.mc"
-include "../../dppl-arg.mc"
+include "../coreppl.mc"
+include "../dppl-arg.mc"
 
 lang PIMHMethod = MExprPPL
   syn InferMethod =
@@ -26,7 +26,7 @@ lang PIMHMethod = MExprPPL
     PIMH {particles = particles, iterations = iterations}
 
   sem inferMethodFromOptions options =
-  | "mexpr-pmcmc-pimh" ->
+  | "pmcmc-pimh" ->
     PIMH {
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name

@@ -5,7 +5,7 @@ include "../parser.mc"
 include "../dppl-arg.mc"
 include "../cfa.mc"
 
-include "../inference-common/smc.mc"
+include "../inference/smc.mc"
 
 include "rootppl.mc"
 
@@ -28,7 +28,7 @@ include "mexpr/pprint.mc"
 -----------------------------------------
 
 lang MExprPPLRootPPLCompile = MExprPPL + Resample + RootPPL + MExprCCompileAlloc
-  + SeqTypeNoStringTypeLift + MExprPPLCFA + MExprLambdaLift
+  + SeqTypeNoStringTypeLift + MExprPPLCFA + MExprLambdaLift + SMCCommon
 
   -- Compiler internals
   syn CExpr =
@@ -1334,22 +1334,6 @@ let rootPPLCompile: Options -> Expr -> RPProg =
   -- Resample at aligned weight if enabled
   let prog =
     -- Add resample after weights (given a predicate)
-    recursive let addResample: (Name -> Bool) -> Expr -> Expr =
-      lam pred. lam t.
-        let t = smap_Expr_Expr (addResample pred) t in
-        match t
-        with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
-           | TmLet ({ ident = ident, body = TmObserve _, inexpr = inexpr } & r)
-        then
-          if pred ident then
-            let resample = withInfo r.info resample_ in
-            let l = nlet_ (nameSym "resample") tyunit_ resample in
-            let l = withInfo r.info l in
-            let inexpr = bind_ l inexpr in
-            TmLet { r with inexpr = inexpr }
-          else t
-        else t
-    in
     match      options.resample with "likelihood" then addResample (lam. true) prog
     else match options.resample with "manual" then prog
     else match options.resample with "align"  then

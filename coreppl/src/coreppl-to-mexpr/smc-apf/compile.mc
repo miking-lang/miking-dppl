@@ -1,11 +1,12 @@
 include "../dists.mc"
-include "../../inference-common/smc.mc"
+include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 
 lang MExprPPLAPF =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
+  + SMCCommon
 
   -- CPS compile
   sem exprCps env k =
@@ -48,6 +49,22 @@ lang MExprPPLAPF =
   sem compile: Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (_,t) ->
+
+    -- Automatic resampling annotations
+    let t =
+      match options.resample with "likelihood" then addResample (lam. true) t
+      else match options.resample with "manual" then t
+      else match options.resample with "align"  then
+
+        -- Do static analysis for stochastic value flow and alignment
+        let unaligned: Set Name = extractUnaligned (alignCfa t) in
+        let isAligned: Name -> Bool = lam n. not (setMem n unaligned) in
+
+        addResample isAligned t
+
+      else error "Invalid resample option"
+    in
+
     -- Static analysis and CPS transformation
     let t =
       let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
