@@ -108,10 +108,6 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     let logWeights = map (lam lw. subf lw lse) logWeights in
     -- print "LOG-NORMALIZED: "; printLn (strJoin "," (map float2string logWeights));
 
-    -- Compute standard weights
-    let weights = map exp logWeights in
-    -- print "NORMALIZED: "; printLn (strJoin "," (map float2string weights));
-
     -- Computes cumulative (non-log) weights
     let f = lam acc. lam x.
       let acc = addf acc (exp x) in
