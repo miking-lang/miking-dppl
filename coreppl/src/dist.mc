@@ -97,7 +97,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
       eqTypeH typeEnv free l.ty r.ty
     else None ()
 
-  sem cmpTypeH : Type -> Type -> Int
+  sem cmpTypeH : (Type, Type) -> Int
   sem cmpTypeH =
   | (TyDist l, TyDist r) -> cmpType l.ty r.ty
 
