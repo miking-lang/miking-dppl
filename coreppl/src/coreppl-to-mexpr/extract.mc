@@ -2,11 +2,13 @@ include "../coreppl.mc"
 include "../parser.mc"
 
 include "name.mc"
+include "mexpr/demote-recursive.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "pmexpr/utils.mc"
 
-lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
+lang DPPLExtract =
+  DPPLParser + MExprExtract + MExprLambdaLift + MExprDemoteRecursive
   type ModelRepr = {
     ast : Expr,
     method : InferMethod,
@@ -92,7 +94,7 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
     let ast = extractAst (setOfSeq nameCmp [inferId]) ast in
     let ast = inlineInferBinding inferId ast in
     -- printLn (mexprPPLToString ast);
-    let ast = removeRedundantRec ast in
+    let ast = demoteRecursive ast in
     -- NOTE(dlunde,2023-05-22): Call inlineSingleUse twice to further simplify
     -- some cases. We probably want to repeat it until fixpoint. Or, replace
     -- inlineSingleUse with something better. The current implementation is
@@ -180,22 +182,6 @@ lang DPPLExtract = DPPLParser + MExprExtract + MExprLambdaLift
       else e
     else e
   | t -> smap_Expr_Expr (replaceInferApplication solutions inferData) t
-
-  -- Replaces recursive lets with regular lets where possible
-  sem removeRedundantRec : Expr -> Expr
-  sem removeRedundantRec =
-  | TmRecLets {bindings = bindings, inexpr = inexpr} & t ->
-    let bs = setOfSeq nameCmp (map (lam rlb. rlb.ident) bindings) in
-    let c = foldl (bindingsUsed bs) false (map (lam rlb. rlb.body) bindings) in
-    if c then t else (
-      let bindings = map (lam rlb.
-          withInfo rlb.info (nlet_ rlb.ident rlb.tyAnnot rlb.body)
-        ) bindings
-      in
-      let res = foldr bind_ inexpr bindings in
-      withInfo (infoTm t) (withType (tyTm t) res))
-
-  | expr -> smap_Expr_Expr removeRedundantRec expr
 
   sem bindingsUsed : Set Name -> Bool -> Expr -> Bool
   sem bindingsUsed bs acc =

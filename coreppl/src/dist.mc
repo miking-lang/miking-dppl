@@ -91,12 +91,15 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
   | TmDist r ->
     match lhs with TmDist l then eqExprHDist env free l.dist r.dist else None ()
 
-
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyDist r ->
     match unwrapType lhs with TyDist l then
       eqTypeH typeEnv free l.ty r.ty
     else None ()
+
+  sem cmpTypeH : (Type, Type) -> Int
+  sem cmpTypeH =
+  | (TyDist l, TyDist r) -> cmpType l.ty r.ty
 
   -- Symbolize
   sem symbolizeDist (env: SymEnv) =
