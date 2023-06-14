@@ -16,6 +16,8 @@ include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/const-arity.mc"
 
+include "peval/peval.mc"
+
 include "string.mc"
 
 include "dist.mc"
@@ -36,7 +38,7 @@ let _isUnitTy = use RecordTypeAst in lam ty.
 
 lang Infer =
   Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeCheck + ANF +
-  TypeLift + InferMethodBase
+  TypeLift + InferMethodBase + PEval
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
@@ -114,11 +116,21 @@ lang Infer =
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalIsValue =
+  | TmInfer _ -> false
+
+  sem pevalEval ctx k =
+  | TmInfer r ->
+    pevalBind ctx
+      (lam model. k (TmInfer {r with model = model}))
+      r.model
 end
 
 
 -- Assume defines a new random variable
-lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
+lang Assume =
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
 
   syn Expr =
   | TmAssume { dist: Expr,
@@ -190,11 +202,26 @@ lang Assume = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalIsValue =
+  | TmAssume _ -> false
+
+  sem pevalEval ctx k =
+  | TmAssume r ->
+    pevalBind ctx
+      (lam dist. k (TmAssume {r with dist = dist}))
+      r.dist
+  | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
+    pevalDistEval ctx
+      (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
+      dist
+
 end
 
 
 -- Observe gives a random variable conditioned on a specific value
-lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
+lang Observe =
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
 
   syn Expr =
   | TmObserve { value: Expr,
@@ -284,11 +311,37 @@ lang Observe = Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalIsValue =
+  | TmObserve _ -> false
+
+  sem pevalEval ctx k =
+  | TmObserve r ->
+    pevalBind ctx
+      (lam value.
+        pevalBind ctx
+          (lam dist. k (TmObserve {r with value=value, dist = dist}))
+          r.dist)
+      r.value
+  | TmObserve ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
+    pevalBind ctx
+      (lam value.
+        pevalDistEval ctx
+          (lam dist.
+             k (TmObserve {{ t with value = value }
+                               with dist = TmDist { td with dist = dist}}))
+          dist)
+      value
+
+  sem exprHasSideEffectH env lambdaCounting acc =
+  | TmObserve _ -> true
+
 end
 
 -- Defines a weight term
 lang Weight =
-  Ast + PrettyPrint + Eq + Sym + TypeCheck + FloatTypeAst + ANF + TypeLift
+  Ast + PrettyPrint + Eq + Sym + TypeCheck + FloatTypeAst + ANF + TypeLift +
+  PEval
   syn Expr =
   | TmWeight { weight: Expr, ty: Type, info: Info }
 
@@ -355,6 +408,19 @@ lang Weight =
                             with ty = ty })
       else never
     else never
+
+  -- Partial evaluation
+  sem pevalIsValue =
+  | TmWeight _ -> false
+
+  sem pevalEval ctx k =
+  | TmWeight r ->
+    pevalBind ctx
+      (lam weight. k (TmWeight {r with weight = weight}))
+      r.weight
+
+  sem exprHasSideEffectH env lambdaCounting acc =
+  | TmWeight _ -> true
 
 end
 
