@@ -98,6 +98,8 @@ lang DPPLExtract =
     let ast = inlineInferBinding inferId ast in
     -- printLn (mexprPPLToString ast);
     let ast = demoteRecursive ast in
+    -- TODO(2023-06-15,dlunde): Might need pattern lowering here before peval?
+    -- Suggestion by Johan and Oscar
     -- let ast = peval ast in
     -- printLn "-----------------------";
     -- printLn (mexprPPLToString ast);
