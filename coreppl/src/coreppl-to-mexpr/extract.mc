@@ -4,13 +4,14 @@ include "../parser.mc"
 include "name.mc"
 include "peval/peval.mc"
 include "mexpr/demote-recursive.mc"
+include "mexpr/shallow-patterns.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "pmexpr/utils.mc"
 
 lang DPPLExtract =
   DPPLParser + MExprExtract + MExprLambdaLift + MExprDemoteRecursive +
-  MExprPEval
+  MExprPEval + MExprLowerNestedPatterns
 
   type ModelRepr = {
     ast : Expr,
@@ -98,9 +99,9 @@ lang DPPLExtract =
     let ast = inlineInferBinding inferId ast in
     -- printLn (mexprPPLToString ast);
     let ast = demoteRecursive ast in
-    -- TODO(2023-06-15,dlunde): Might need pattern lowering here before peval?
-    -- Suggestion by Johan and Oscar
-    -- let ast = peval ast in
+    -- Suggestion by Johan and Oscar to do pattern lowering before peval
+    -- let ast = lowerAll ast in
+    let ast = peval ast in
     -- printLn "-----------------------";
     -- printLn (mexprPPLToString ast);
     ast
