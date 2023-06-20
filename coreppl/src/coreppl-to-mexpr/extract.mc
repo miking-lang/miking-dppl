@@ -1,5 +1,6 @@
 include "../coreppl.mc"
 include "../parser.mc"
+include "../dppl-arg.mc"
 
 include "name.mc"
 include "peval/peval.mc"
@@ -26,9 +27,9 @@ lang DPPLExtract =
   --    calls to the inference algorithms.
   -- 2. A map with an entry for each inference method. Every inference method
   --    is mapped to a sequence of records describing each model.
-  sem extractInfer : Map InferMethod RuntimeEntry -> Expr
+  sem extractInfer : Options -> Map InferMethod RuntimeEntry -> Expr
                   -> (Expr, Map Name ModelRepr)
-  sem extractInfer runtimes =
+  sem extractInfer options runtimes =
   | ast ->
     match bindInferExpressions runtimes ast with (data, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
@@ -38,7 +39,7 @@ lang DPPLExtract =
         (lam inferId. lam method.
           match mapLookup inferId solutions with Some paramMap then
             let params = mapBindings paramMap in
-            let ast = extractInferAst inferId ast in
+            let ast = extractInferAst options inferId ast in
             {ast = ast, method = method, params = params}
           else error "Lambda lifting was not correctly applied to infer")
         data in
@@ -92,16 +93,30 @@ lang DPPLExtract =
 
   -- Extracts an AST consisting of the model whose binding has the provided
   -- inference ID.
-  sem extractInferAst : Name -> Expr -> Expr
-  sem extractInferAst inferId =
+  sem extractInferAst : Options -> Name -> Expr -> Expr
+  sem extractInferAst options inferId =
   | ast ->
     let ast = extractAst (setOfSeq nameCmp [inferId]) ast in
     let ast = inlineInferBinding inferId ast in
     -- printLn (mexprPPLToString ast);
     let ast = demoteRecursive ast in
     -- Suggestion by Johan and Oscar to do pattern lowering before peval
-    -- let ast = lowerAll ast in
-    let ast = peval ast in
+    let ast = lowerAll ast in
+    let ast =
+      switch options.extractSimplification
+      case "none" then ast
+      case "inline" then
+        -- NOTE(dlunde,2023-05-22): Call inlineSingleUse twice to further simplify
+        -- some cases. We probably want to repeat it until fixpoint. Or, replace
+        -- inlineSingleUse with something better. The current implementation is
+        -- quite hacky and have not been properly analyzed or tested.
+        inlineSingleUse (inlineSingleUse ast)
+      case "peval" then peval ast
+      case _ then
+        error (join ["Unknown extract simplification: ",
+                     options.extractSimplification])
+      end
+    in
     -- printLn "-----------------------";
     -- printLn (mexprPPLToString ast);
     ast
@@ -183,6 +198,83 @@ lang DPPLExtract =
       else e
     else e
   | t -> smap_Expr_Expr (replaceInferApplication solutions inferData) t
+
+  sem bindingsUsed : Set Name -> Bool -> Expr -> Bool
+  sem bindingsUsed bs acc =
+  | TmVar t -> if setMem t.ident bs then true else acc
+  | expr ->
+    if acc then acc else
+      sfold_Expr_Expr (bindingsUsed bs) acc expr
+
+  -- Assumes proper symbolization and ANF
+  sem inlineSingleUse : Expr -> Expr
+  sem inlineSingleUse =
+  | expr ->
+    -- Count uses of lambdas
+    let m = determineInline (mapEmpty nameCmp) expr in
+    -- printLn (strJoin ",\n" (map
+    --   (lam t. join [(nameGetStr t.0), "->", (bool2string t.1)])
+    --   (mapToSeq m)));
+
+    -- Inline functions
+    match inlineSingleUseH m (mapEmpty nameCmp) expr with (_,expr) in
+    expr
+
+  sem determineInline : Map Name Bool -> Expr -> Map Name Bool
+  sem determineInline m =
+  | TmLet t ->
+    let m = determineInline m t.body in
+    let m =
+      -- Only inline certain things. In particular, do not move constructs with
+      -- side-effects
+      match t.body with TmLam _ | TmVar _ then mapInsert t.ident false m
+      else m
+    in
+    determineInline m t.inexpr
+  | TmVar t ->
+    match mapLookup t.ident m with Some b then
+      if b then mapRemove t.ident m -- More than a single use
+      else mapInsert t.ident true m -- First use
+    else m
+  | expr -> sfold_Expr_Expr determineInline m expr
+
+  sem inlineSingleUseH : Map Name Bool
+                         -> Map Name Expr -> Expr -> (Map Name Expr, Expr)
+  sem inlineSingleUseH m me =
+  | TmLet t ->
+    match inlineSingleUseH m me t.body with (me,body) in
+    let inline = match mapLookup t.ident m with Some true then true else false in
+    let me = if inline then mapInsert t.ident body me else me in
+    match inlineSingleUseH m me t.inexpr with (me,inexpr) in
+    if inline then
+      match mapLookup t.ident me with None _ then
+        -- The function was inlined, remove it
+        (me, inexpr)
+      else
+        (me, TmLet {t with body = body, inexpr = inexpr})
+    else
+      (me, TmLet {t with body = body, inexpr = inexpr})
+  | TmApp t & tm ->
+    recursive let rec = lam me. lam expr.
+      match expr with TmApp t then
+        let rhs = inlineSingleUseH m me t.rhs in
+        match rec rhs.0 t.lhs with (ls, me, lhs) in
+        match lhs with TmLam tl then
+          let l = nlet_ tl.ident tl.tyAnnot rhs.1 in
+          (cons l ls, me, tl.body)
+        else (ls, me, TmApp {t with lhs = lhs, rhs = rhs.1})
+      else
+        match inlineSingleUseH m me expr with (me, expr) in
+        ([], me, expr)
+    in
+    match rec me tm with (ls, me, tm) in
+    (me, foldr bind_ tm (reverse ls))
+
+  | TmVar t ->
+    match mapLookup t.ident me with Some expr then (mapRemove t.ident me, expr)
+    else (me, TmVar t)
+
+  | expr -> smapAccumL_Expr_Expr (inlineSingleUseH m) me expr
 
 end
 

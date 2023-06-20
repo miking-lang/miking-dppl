@@ -43,7 +43,10 @@ type Options = {
   pmcmcParticles: Int,
 
   -- The random seed to use
-  seed: Option Int
+  seed: Option Int,
+
+  -- (temporary option, the end-goal is that we should only ever use peval)
+  extractSimplification: String
 }
 
 -- Default values for options
@@ -67,7 +70,8 @@ let default = {
   mcmcLightweightReuseLocal = true,
   printAcceptanceRate = false,
   pmcmcParticles = 2,
-  seed = None ()
+  seed = None (),
+  extractSimplification = "inline"
 }
 
 -- Options configuration
@@ -172,7 +176,11 @@ let config = [
   ([("--seed", " ", "<seed>")],
     "The random seed to use. Initialized randomly if option is omitted.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with seed = Some (argToInt p)})
+      let o: Options = p.options in {o with seed = Some (argToInt p)}),
+  ([("--extract-simplification", " ", "<option>")],
+    join ["Temporary flag that decides the simplification approach after extraction in the MExpr compiler backend. The supported options are: none, inline, and peval. Default: ", default.extractSimplification, ". Eventually, we will remove this option and only use peval."],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with extractSimplification = argToString p})
 ]
 
 -- Menu
