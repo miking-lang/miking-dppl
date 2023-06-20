@@ -101,7 +101,6 @@ lang DPPLExtract =
     -- printLn (mexprPPLToString ast);
     let ast = demoteRecursive ast in
     -- Suggestion by Johan and Oscar to do pattern lowering before peval
-    let ast = lowerAll ast in
     let ast =
       switch options.extractSimplification
       case "none" then ast
@@ -111,7 +110,11 @@ lang DPPLExtract =
         -- inlineSingleUse with something better. The current implementation is
         -- quite hacky and have not been properly analyzed or tested.
         inlineSingleUse (inlineSingleUse ast)
-      case "peval" then peval ast
+      case "peval" then
+        -- NOTE(2023-06-20,dlunde): Suggestion by Oscar and Johan to use
+        -- pattern lowering here. Required even?
+        -- let ast = lowerAll ast in
+        peval ast
       case _ then
         error (join ["Unknown extract simplification: ",
                      options.extractSimplification])
