@@ -7,6 +7,8 @@ include "mexpr/type-check.mc"
 include "mexpr/anf.mc"
 include "mexpr/type-lift.mc"
 
+include "peval/peval.mc"
+
 include "string.mc"
 include "seq.mc"
 
