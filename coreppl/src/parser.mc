@@ -119,7 +119,6 @@ let parseMCorePPLFile = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config = {defaultBootParserParseMCoreFileArg with
-                  keepUtests = false,
                   keywords = pplKeywords,
                   allowFree = true,
                   builtin = builtin} in
@@ -131,7 +130,6 @@ let parseMCorePPLFileNoDeadCodeElimination = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config = {defaultBootParserParseMCoreFileArg with
-                   keepUtests = false,
                    keywords = pplKeywords,
                    eliminateDeadCode = false,
                    allowFree = true,
@@ -144,7 +142,6 @@ let parseMCorePPLFileLib = lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config = {defaultBootParserParseMCoreFileArg with
-                   keepUtests = false,
                    keywords = pplKeywords,
                    eliminateDeadCode = false,
                    allowFree = true,
