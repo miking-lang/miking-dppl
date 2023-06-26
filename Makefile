@@ -73,8 +73,13 @@ uninstall:
 clean:
 	rm -rf build
 
+test-all: test test-cppl
+
 test:
 	@$(MAKE) -s -f test.mk all
+
+test-cppl:
+	@$(MAKE) -s -f test-cppl.mk all
 
 test-boot:
 	@$(MAKE) -s -f test-boot.mk all
