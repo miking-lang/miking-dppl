@@ -7,10 +7,12 @@ include "mexpr/type-check.mc"
 include "mexpr/anf.mc"
 include "mexpr/type-lift.mc"
 
+include "peval/peval.mc"
+
 include "string.mc"
 include "seq.mc"
 
-lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
+lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
   syn Expr =
   | TmDist { dist: Dist,
              ty: Type,
@@ -156,6 +158,16 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift
       (env, TyDist {t with ty = ty})
     else never
 
+  -- Partial evaluation
+  sem pevalIsValue =
+  | TmDist _ -> false
+
+  sem pevalDistEval ctx k =
+  -- Intentionally left blank
+
+  sem pevalEval ctx k =
+  | TmDist t ->
+    pevalDistEval ctx (lam dist. k (TmDist { t with dist = dist }) ) t.dist
 
   -- Builtin operations on distributions
   syn Const =
@@ -248,6 +260,16 @@ lang UniformDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DUniform t ->
+    pevalBind ctx
+      (lam a.
+        pevalBind ctx
+          (lam b. k (DUniform {t with a=a, b=b}))
+          t.b)
+      t.a
+
 end
 
 
@@ -299,6 +321,12 @@ lang BernoulliDist = Dist + PrettyPrint + Eq + Sym + BoolTypeAst + FloatTypeAst
       (env, DBernoulli {t with p = p})
     else never
 
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DBernoulli t ->
+    pevalBind ctx
+      (lam p. k (DBernoulli {t with p=p}))
+      t.p
 end
 
 
@@ -347,6 +375,12 @@ lang PoissonDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + FloatTypeAst
     match typeLiftExpr env lambda with (env, lambda) then
       (env, DPoisson {t with lambda = lambda})
     else never
+
+  sem pevalDistEval ctx k =
+  | DPoisson t ->
+    pevalBind ctx
+      (lam lambda. k (DPoisson {t with lambda=lambda}))
+      t.lambda
 
 end
 
@@ -411,6 +445,16 @@ lang BetaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DBeta t ->
+    pevalBind ctx
+      (lam a.
+        pevalBind ctx
+          (lam b. k (DBeta {t with a=a, b=b}))
+          t.b)
+      t.a
+
 end
 
 
@@ -474,6 +518,16 @@ lang GammaDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DGamma t ->
+    pevalBind ctx
+      (lam k2.
+        pevalBind ctx
+          (lam theta. k (DGamma {t with k=k2, theta=theta}))
+          t.theta)
+      t.k
+
 end
 
 
@@ -531,6 +585,12 @@ lang CategoricalDist =
     match typeLiftExpr env p with (env, p) then
       (env, DCategorical {t with p = p})
     else never
+
+  sem pevalDistEval ctx k =
+  | DCategorical t ->
+    pevalBind ctx
+      (lam p. k (DCategorical {t with p=p}))
+      t.p
 
 end
 
@@ -596,6 +656,16 @@ lang MultinomialDist =
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DMultinomial t ->
+    pevalBind ctx
+      (lam n.
+        pevalBind ctx
+          (lam p. k (DMultinomial {t with n=n, p=p}))
+          t.p)
+      t.n
+
 end
 
 lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
@@ -647,6 +717,12 @@ lang DirichletDist = Dist + PrettyPrint + Eq + Sym + SeqTypeAst + FloatTypeAst
       (env, DDirichlet {t with a = a})
     else never
 
+  sem pevalDistEval ctx k =
+  | DDirichlet t ->
+    pevalBind ctx
+      (lam a. k (DDirichlet {t with a=a}))
+      t.a
+
 end
 
 lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
@@ -692,6 +768,12 @@ lang ExponentialDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
     match typeLiftExpr env rate with (env, rate) then
       (env, DExponential {t with rate = rate})
     else never
+
+  sem pevalDistEval ctx k =
+  | DExponential t ->
+    pevalBind ctx
+      (lam rate. k (DExponential {t with rate=rate}))
+      t.rate
 
 end
 
@@ -748,6 +830,12 @@ lang EmpiricalDist =
     match typeLiftExpr env samples with (env, samples) then
       (env, DEmpirical {t with samples = samples})
     else never
+
+  sem pevalDistEval ctx k =
+  | DEmpirical t ->
+    pevalBind ctx
+      (lam samples. k (DEmpirical {t with samples=samples}))
+      t.samples
 
 end
 
@@ -809,6 +897,16 @@ lang GaussianDist =
       else never
     else never
 
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DGaussian t ->
+    pevalBind ctx
+      (lam mu.
+        pevalBind ctx
+          (lam sigma. k (DGaussian {t with mu=mu, sigma=sigma}))
+          t.sigma)
+      t.mu
+
 end
 
 lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + BoolTypeAst + FloatTypeAst
@@ -868,6 +966,16 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
                           with p = p })
       else never
     else never
+
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DBinomial t ->
+    pevalBind ctx
+      (lam n.
+        pevalBind ctx
+          (lam p. k (DBinomial {t with n=n, p=p}))
+          t.p)
+      t.n
 
 end
 

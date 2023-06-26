@@ -1,14 +1,19 @@
 include "../coreppl.mc"
 include "../parser.mc"
+include "../dppl-arg.mc"
 
 include "name.mc"
+include "peval/peval.mc"
 include "mexpr/demote-recursive.mc"
+include "mexpr/shallow-patterns.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "pmexpr/utils.mc"
 
 lang DPPLExtract =
-  DPPLParser + MExprExtract + MExprLambdaLift + MExprDemoteRecursive
+  DPPLParser + MExprExtract + MExprLambdaLift + MExprDemoteRecursive +
+  MExprPEval + MExprLowerNestedPatterns
+
   type ModelRepr = {
     ast : Expr,
     method : InferMethod,
@@ -22,9 +27,9 @@ lang DPPLExtract =
   --    calls to the inference algorithms.
   -- 2. A map with an entry for each inference method. Every inference method
   --    is mapped to a sequence of records describing each model.
-  sem extractInfer : Map InferMethod RuntimeEntry -> Expr
+  sem extractInfer : Options -> Map InferMethod RuntimeEntry -> Expr
                   -> (Expr, Map Name ModelRepr)
-  sem extractInfer runtimes =
+  sem extractInfer options runtimes =
   | ast ->
     match bindInferExpressions runtimes ast with (data, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
@@ -34,7 +39,7 @@ lang DPPLExtract =
         (lam inferId. lam method.
           match mapLookup inferId solutions with Some paramMap then
             let params = mapBindings paramMap in
-            let ast = extractInferAst inferId ast in
+            let ast = extractInferAst options inferId ast in
             {ast = ast, method = method, params = params}
           else error "Lambda lifting was not correctly applied to infer")
         data in
@@ -88,20 +93,34 @@ lang DPPLExtract =
 
   -- Extracts an AST consisting of the model whose binding has the provided
   -- inference ID.
-  sem extractInferAst : Name -> Expr -> Expr
-  sem extractInferAst inferId =
+  sem extractInferAst : Options -> Name -> Expr -> Expr
+  sem extractInferAst options inferId =
   | ast ->
     let ast = extractAst (setOfSeq nameCmp [inferId]) ast in
     let ast = inlineInferBinding inferId ast in
     -- printLn (mexprPPLToString ast);
     let ast = demoteRecursive ast in
-    -- NOTE(dlunde,2023-05-22): Call inlineSingleUse twice to further simplify
-    -- some cases. We probably want to repeat it until fixpoint. Or, replace
-    -- inlineSingleUse with something better. The current implementation is
-    -- quite hacky and have not been properly analyzed or tested.
-    let ast = inlineSingleUse ast in
-    let ast = inlineSingleUse ast in
-    ---
+    -- Suggestion by Johan and Oscar to do pattern lowering before peval
+    let ast =
+      switch options.extractSimplification
+      case "none" then ast
+      case "inline" then
+        -- NOTE(dlunde,2023-05-22): Call inlineSingleUse twice to further simplify
+        -- some cases. We probably want to repeat it until fixpoint. Or, replace
+        -- inlineSingleUse with something better. The current implementation is
+        -- quite hacky and have not been properly analyzed or tested.
+        inlineSingleUse (inlineSingleUse ast)
+      case "peval" then
+        -- NOTE(2023-06-20,dlunde): Suggestion by Oscar and Johan to use
+        -- pattern lowering here. Required even?
+        -- let ast = lowerAll ast in
+        peval ast
+      case _ then
+        error (join ["Unknown extract simplification: ",
+                     options.extractSimplification])
+      end
+    in
+    -- printLn "-----------------------";
     -- printLn (mexprPPLToString ast);
     ast
 

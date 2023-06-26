@@ -122,7 +122,7 @@ lang MExprCompile =
     -- each infer is replaced with a call to the 'run' function provided by
     -- the chosen runtime. It also consists of one AST per inference method
     -- used in the program.
-    match extractInfer runtimes.entries corepplAst with (corepplAst, models) in
+    match extractInfer options runtimes.entries corepplAst with (corepplAst, models) in
 
     -- Compile the model ASTs.
     let modelAsts = compileModels options runtimes models in
