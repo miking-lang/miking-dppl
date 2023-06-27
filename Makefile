@@ -1,4 +1,4 @@
-.PHONY : all test test-boot clean install uninstall
+.PHONY : all test test-cppl clean install uninstall
 
 # ANSI escape sequence for red text
 RED=\033[0;31m
@@ -80,9 +80,6 @@ test:
 
 test-cppl:
 	@$(MAKE) -s -f test-cppl.mk all
-
-test-boot:
-	@$(MAKE) -s -f test-boot.mk all
 
 install-rootppl:
 	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
