@@ -20,8 +20,8 @@ in
 let trueMean = divf 12.0 23.0 in
 
 -- Test infers
-let d = infer (Importance {particles = 1000}) model in
-utest _test d with trueMean using eqfe in
+-- NOTE Currently gives error, problem with lambda lifting?
+utest _test (infer (Importance {particles = 1000}) model) with trueMean using eqfe in
 
 let d = infer (BPF {particles = 1000}) model in
 utest _test d with trueMean using eqfe in
