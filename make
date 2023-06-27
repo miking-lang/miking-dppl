@@ -7,7 +7,7 @@ testmi () {
   [ -z "$output" ] && output="$1 "
   compile_output=$($compile_cmd $1 2>&1)
   exit_code=$?
-  [ -n "$compile_output" ] && output="$output\n($compile_output)"
+  [ -n "$compile_output" ] && output="$output\n$compile_output"
   if [ $exit_code -eq 0 ]
   then
     output="$output$($binary 2>&1)"
@@ -31,13 +31,11 @@ testmi () {
 
 testcppl () {
   set +e
-  # TODO(dlunde,2023-06-26): Hardcoded, add support for temporary file in
-  # cppl-mc.
   compile_cmd="cppl --seed 0"
   output=$1
   compile_output=$($compile_cmd $1 2>&1)
   exit_code=$?
-  [ -n "$compile_output" ] && output="$output\n$($compile_output)"
+  [ -n "$compile_output" ] && output="$output\n$compile_output"
   if [ $exit_code -ne 0 ]
   then
     echo "$output"
@@ -46,10 +44,11 @@ testcppl () {
   fi
   set -e
 
-
   output="$output "
-  testmi "out.mc"
 
+  # TODO(dlunde,2023-06-26): "out.mc" hardcoded, add support for outputting to
+  # temporary file in cppl-mc.
+  testmi "out.mc"
   rm "out.mc"
 }
 
