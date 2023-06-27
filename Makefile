@@ -5,34 +5,16 @@ RED=\033[0;31m
 # ANSI escape sequence for resetting text color
 RESET=\033[0m
 
-cppl_name=cppl
-exec_name=cppl
-plot_name=dppl-plot
-bin_path=${HOME}/.local/bin
-src_path=${HOME}/.local/src/coreppl/
-cppl_src=coreppl/src/.
-
-rootppl_bin_path = $(HOME)/.local/bin/rppl
-rootppl_src_path=$(HOME)/.local/src/rootppl/
-rootppl_bin = rootppl/rppl
-rootppl_src = rootppl/src/.
+include vars.mk
 
 all: build/${cppl_name}
 
 cppl_tmp_file := $(shell mktemp)
-build/${cppl_name}: $(shell find . -name "*.mc")
+build/${cppl_name}: $(shell find coreppl/src -name "*.mc")
 	time mi compile coreppl/src/${cppl_name}.mc --output ${cppl_tmp_file}
 	mkdir -p build
 	cp ${cppl_tmp_file} build/${cppl_name}
 	rm ${cppl_tmp_file}
-
-tppl_tmp_file := $(shell mktemp)
-build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
-	mi syn treeppl/src/treeppl.syn treeppl/src/treeppl-ast.mc
-	time mi compile treeppl/src/${tppl_name}.mc --output ${tppl_tmp_file}
-	mkdir -p build
-	cp ${tppl_tmp_file} build/${tppl_name}
-	rm ${tppl_tmp_file}
 
 install: build/${cppl_name}
 # CorePPL
@@ -78,7 +60,7 @@ test-all: test test-cppl
 test:
 	@$(MAKE) -s -f test.mk all
 
-test-cppl:
+test-cppl: build/${cppl_name}
 	@$(MAKE) -s -f test-cppl.mk all
 
 install-rootppl:

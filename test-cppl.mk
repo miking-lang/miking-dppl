@@ -1,11 +1,18 @@
 .PHONY: all
 
-# Include test/**/*.mc files but ignore test.mc
-test-files=$(shell find coreppl/test -name "*.mc")
-test-files := $(filter-out coreppl/test/test.mc,$(test-files))
+include vars.mk
 
-all: ${test-files}
+# Include test/coreppl-to-mexpr/*.mc files
+test-mexpr-files=coreppl/test/coreppl-to-mexpr.mc
+test-rootppl-files=coreppl/test/coreppl-to-rootppl.mc
 
-${test-files}::
-	@./make test-cppl $@
+all: mexpr rootppl
 
+mexpr: ${test-mexpr-files}
+rootppl: ${test-rootppl-files}
+
+${test-mexpr-files}::
+	@./make test-cppl $@ "build/${cppl_name}"
+
+${test-rootppl-files}::
+	@./make test $@

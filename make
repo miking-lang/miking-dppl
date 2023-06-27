@@ -31,7 +31,7 @@ testmi () {
 
 testcppl () {
   set +e
-  compile_cmd="cppl --seed 0"
+  compile_cmd="$2 --seed 0 --skip-final"
   output=$1
   compile_output=$($compile_cmd $1 2>&1)
   exit_code=$?
@@ -57,7 +57,7 @@ case $1 in
     testmi "$2"
     ;;
   test-cppl)
-    testcppl "$2"
+    testcppl "$2" "$3"
     ;;
   *)
     >&2 echo "Incorrect argument"

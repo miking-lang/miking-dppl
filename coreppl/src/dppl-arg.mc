@@ -29,9 +29,6 @@ type Options = {
   -- Whether or not to apply early stopping
   earlyStop: Bool,
 
-  -- Debug compilation to MExpr
-  debugMExprCompile: Bool,
-
   -- Lightweight MCMC options
   mcmcLightweightGlobalProb: Float,
   mcmcLightweightReuseLocal: Bool, -- Currently has no effect
@@ -65,7 +62,6 @@ let default = {
   stackSize = 10000,
   cps = "partial",
   earlyStop = true,
-  debugMExprCompile = true,
   mcmcLightweightGlobalProb = 0.1,
   mcmcLightweightReuseLocal = true,
   printAcceptanceRate = false,
@@ -147,10 +143,6 @@ let config = [
     "Disables early stopping in certain inference algorithms.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with earlyStop = false}),
-  ([("--no-debug-compile", "", "")],
-    "Turn on debugging for the compiler.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with debugMExprCompile = false}),
   ([("--mcmc-lw-gprob", " ", "<value>")],
     join [
       "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: ",
