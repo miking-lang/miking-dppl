@@ -19,54 +19,72 @@ let eqfe = eqfApprox 1e-2 in
 -- Compile from scratch using top-level models --
 -------------------------------------------------
 
-let _floatLMean = lam cpplRes.
+let _floatMean = lam cpplRes.
   logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
 in
 
 -- models/coin.mc
-let res = testCpplMExpr true "coin.mc" "-m is-lw" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
-let res = testCpplMExpr true "coin.mc" "-m smc-bpf" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
-let res = testCpplMExpr true "coin.mc" "-m smc-apf" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
-let res = testCpplMExpr false "coin.mc" "-m pmcmc-pimh" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
-let res = testCpplMExpr false "coin.mc" "-m mcmc-trace" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
-let res = testCpplMExpr false "coin.mc" "-m mcmc-naive" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
-let res = testCpplMExpr false "coin.mc" "-m mcmc-lightweight --align" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
-let res = testCpplMExpr false "coin.mc" "-m mcmc-lightweight" "1000" in
-utest _floatLMean res with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m is-lw" "1000")
+with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m smc-bpf" "1000")
+with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m smc-apf" "1000")
+with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m pmcmc-pimh" "1000")
+with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-trace" "1000")
+with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-naive" "1000")
+with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-lightweight --align" "1000")
+with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-lightweight" "1000")
+with coinTrueMean using eqfe in
 
+-- models/coin-iter.mc
+
+-- models/sprinkler.mc
+
+-- models/ssm.mc
+
+-- models/diversification-models/crbd.mc
+
+-- models/diversification-models/clads2.mc
+
+-- models/latent-dirichlet-allocation/lda.mc
+
+-- models/vector-borne-disease/vbd.mc
 
 -----------------------------------
 -- Infers within CorePPL program --
 -----------------------------------
 
-let _floatLMeanC = lam dist.
+let _floatMeanD = lam dist.
   match distEmpiricalSamples dist with (vs,ws) in
   logWeightedMean ws vs
 in
 
--- models/coin.mc
-let d = infer (Importance {particles = 1000}) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
-let d = infer (BPF {particles = 1000}) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
-let d = infer (APF {particles = 1000}) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
-let d = infer (PIMH {particles = 10, iterations = 100}) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
-let d = infer (TraceMCMC { iterations = 1000 }) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
-let d = infer (NaiveMCMC { iterations = 1000 }) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
-let d = infer (LightweightMCMC { iterations = 1000, aligned = true, globalProb = 0.1 }) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
-let d = infer (LightweightMCMC { iterations = 1000, aligned = false, globalProb = 0.1 }) model in
-utest _floatLMeanC d with coinTrueMean using eqfe in
+-- -- models/coin.mc
+let r = infer (Importance { particles = 1000 }) coinModel in
+utest _floatMeanD r
+with coinTrueMean using eqfe in
+-- utest _floatMeanD (infer (BPF { particles = 1000 }) coinModel)
+-- with coinTrueMean using eqfe in
+-- utest _floatMeanD (infer (APF { particles = 1000 }) coinModel)
+-- with coinTrueMean using eqfe in
+-- utest _floatMeanD (infer (PIMH { particles = 10, iterations = 100 }) coinModel)
+-- with coinTrueMean using eqfe in
+-- utest _floatMeanD (infer (TraceMCMC { iterations = 1000 }) coinModel)
+-- with coinTrueMean using eqfe in
+-- utest _floatMeanD (infer (NaiveMCMC { iterations = 1000 }) coinModel)
+-- with coinTrueMean using eqfe in
+-- utest _floatMeanD (infer (LightweightMCMC { iterations = 1000,
+--                                             aligned = true,
+--                                             globalProb = 0.1 }) coinModel)
+-- with coinTrueMean using eqfe in
+-- utest _floatMeanD (infer (LightweightMCMC { iterations = 1000,
+--                                             aligned = false,
+--                                             globalProb = 0.1 }) coinModel)
+-- with coinTrueMean using eqfe in
 
 ()

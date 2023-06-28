@@ -41,21 +41,21 @@ RED=\033[0;31m
 RESET=\033[0m
 .PHONY: install-coreppl
 install-coreppl: build/${CPPL_NAME}
-	mkdir -p $(bin_path) $(src_path);
+	mkdir -p ${BIN_PATH} ${SRC_PATH};
 	cp build/${CPPL_NAME} ${BIN_PATH}/${EXEC_NAME}
 	chmod +x ${BIN_PATH}/${EXEC_NAME}
-	cp -rf $(cppl_src) $(src_path)
+	cp -rf ${CPPL_SRC} ${SRC_PATH}
 	@echo "\n${RED}Attention:"
-	@echo "${CPPL_NAME} has been installed to ${BIN_PATH} and the CorePPL sources have been installed to $(src_path)."
+	@echo "${CPPL_NAME} has been installed to ${BIN_PATH} and the CorePPL sources have been installed to ${SRC_PATH}."
 	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
 	@echo "E.g. under Bash:"
 	@echo 'export PATH=$$PATH:'"${BIN_PATH}"
-	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"$(src_path)\n${RESET}"
+	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"${SRC_PATH}\n${RESET}"
 
 .PHONY: uninstall-coreppl
 uninstall-coreppl:
 	rm -f ${BIN_PATH}/${EXEC_NAME}
-	rm -rf $(src_path)
+	rm -rf ${SRC_PATH}
 
 .PHONY: test-coreppl
 test-coreppl: test-cppl
