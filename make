@@ -31,7 +31,8 @@ testmi () {
 
 testcppl () {
   set +e
-  compile_cmd="$2 --seed 0 --output-mc --skip-final"
+  cpplout=$(mktemp)
+  compile_cmd="$2 --seed 0 --output $cpplout --output-mc --skip-final"
   output=$1
   compile_output=$($compile_cmd $1 2>&1)
   exit_code=$?
@@ -48,8 +49,8 @@ testcppl () {
 
   # TODO(dlunde,2023-06-26): "out.mc" hardcoded, add support for outputting to
   # temporary file in cppl-mc.
-  testmi "out.mc"
-  rm "out.mc"
+  testmi "$cpplout.mc"
+  rm "$cpplout.mc"
 }
 
 case $1 in
