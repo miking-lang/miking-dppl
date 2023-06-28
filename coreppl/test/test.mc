@@ -39,7 +39,7 @@ let testCpplMExpr: Bool -> String -> String -> String -> CpplRes =
   lam extra. lam model. lam compileArgs. lam runArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
-    let cmpl = sysRunCommand [cppl, compileArgs, m ] "" wd in
+    let cmpl = sysRunCommand [cppl, "--seed 0", compileArgs, m ] "" wd in
     let run = sysRunCommand [ "./out", runArgs ] "" wd in
     sysDeleteDir wd;
     parseRun extra run.stdout
@@ -48,3 +48,5 @@ let testCpplMExpr: Bool -> String -> String -> String -> CpplRes =
 -- models/coin.mc
 let coinTrueMean = divf 12.0 23.0
 
+-- models/sprinkler.mc
+let sprinklerTrueProb = divf 891. 2491.

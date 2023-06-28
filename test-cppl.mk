@@ -3,8 +3,8 @@
 include vars.mk
 
 # Include test/coreppl-to-mexpr/*.mc files
-test-mexpr-files=coreppl/test/coreppl-to-mexpr.mc
-test-rootppl-files=coreppl/test/coreppl-to-rootppl.mc
+test-mexpr-files=$(shell find coreppl/test/coreppl-to-mexpr -name "*.mc")
+test-rootppl-files=$(shell find coreppl/test/coreppl-to-rootppl -name "*.mc")
 
 all: mexpr rootppl
 

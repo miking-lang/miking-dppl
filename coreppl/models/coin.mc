@@ -1,4 +1,4 @@
-let coinModel = lam.
+let model = lam.
   let theta = assume (Beta 10.0 10.0) in
   observe true (Bernoulli theta);
   observe false (Bernoulli theta);
@@ -6,4 +6,4 @@ let coinModel = lam.
   theta
 
 mexpr
-coinModel ()
+model ()
