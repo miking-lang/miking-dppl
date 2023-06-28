@@ -68,8 +68,8 @@ in
 let r = infer (Importance { particles = 1000 }) coinModel in
 utest _floatMeanD r
 with coinTrueMean using eqfe in
--- utest _floatMeanD (infer (BPF { particles = 1000 }) coinModel)
--- with coinTrueMean using eqfe in
+utest _floatMeanD (infer (BPF { particles = 1000 }) coinModel)
+with coinTrueMean using eqfe in
 -- utest _floatMeanD (infer (APF { particles = 1000 }) coinModel)
 -- with coinTrueMean using eqfe in
 -- utest _floatMeanD (infer (PIMH { particles = 10, iterations = 100 }) coinModel)
