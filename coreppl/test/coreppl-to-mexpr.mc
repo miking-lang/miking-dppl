@@ -24,24 +24,19 @@ let _floatMean = lam cpplRes.
 in
 
 -- models/coin.mc
-utest _floatMean (testCpplMExpr true "coin.mc" "-m is-lw" "1000")
-with coinTrueMean using eqfe in
-utest _floatMean (testCpplMExpr true "coin.mc" "-m smc-bpf" "1000")
-with coinTrueMean using eqfe in
-utest _floatMean (testCpplMExpr true "coin.mc" "-m smc-apf" "1000")
-with coinTrueMean using eqfe in
-utest _floatMean (testCpplMExpr false "coin.mc" "-m pmcmc-pimh" "1000")
-with coinTrueMean using eqfe in
-utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-trace" "1000")
-with coinTrueMean using eqfe in
-utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-naive" "1000")
-with coinTrueMean using eqfe in
-utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-lightweight --align" "1000")
-with coinTrueMean using eqfe in
-utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-lightweight" "1000")
-with coinTrueMean using eqfe in
-
--- models/coin-iter.mc
+utest _floatMean (testCpplMExpr true "coin.mc" "-m is-lw --cps none" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m is-lw --cps partial" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m is-lw --cps partial --no-early-stop" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m is-lw --cps full" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m is-lw --cps full --no-early-stop" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m smc-bpf" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m smc-bpf" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr true "coin.mc" "-m smc-apf" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m pmcmc-pimh" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-trace" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-naive" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-lightweight --align" "1000") with coinTrueMean using eqfe in
+utest _floatMean (testCpplMExpr false "coin.mc" "-m mcmc-lightweight" "1000") with coinTrueMean using eqfe in
 
 -- models/sprinkler.mc
 

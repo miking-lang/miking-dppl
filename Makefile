@@ -5,7 +5,7 @@ include vars.mk
 #####################
 
 .PHONY: all
-all: ${CPPL_PATH}
+all: build/${CPPL_NAME}
 
 .PHONY: clean
 clean: clean-coreppl
