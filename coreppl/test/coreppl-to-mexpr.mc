@@ -3,6 +3,8 @@
 include "../models/coin.mc"
 include "test.mc"
 
+include "seq.mc"
+include "sys.mc"
 include "string.mc"
 include "common.mc"
 include "stats.mc"
@@ -43,5 +45,12 @@ let d = infer (LightweightMCMC { iterations = 1000, aligned = false, globalProb 
 utest _test d with coinTrueMean using eqfe in
 
 -- Test command line
-
+-- The makefile sets the MIDPPL_BASE and MIDPPL_SRC variables before running
+-- this file (so that they point to the local directory).
+let _cppl =
+  match sysGetEnv "CPPL_NAME" with Some cppl then concat "build/" cppl else
+  error "CPPL_NAME not defined"
+in
+let _m = lam name. join ["coreppl/models/", name] in
+let res = sysRunCommand [_cppl, _m "coin.mc", "--output ENFIL" ] "" "." in
 ()

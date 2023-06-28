@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
 
-# TODO Hard-coded location, not that elegant. Solutions? Maybe replace with sed
-# or add in install script?
-engine_src=~/.local/src/rootppl/
-
 # Runtime
 engine_build=build/
 
 # Argument parsing
 args=()
-flags="-I$engine_src -std=c++14 -O3"
+flags="-I$RPPL_ENGINE_SRC -std=c++14 -O3"
 while [[ $# -gt 0 ]]; do
   case $1 in
     -j|--jobs)

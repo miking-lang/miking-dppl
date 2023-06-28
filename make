@@ -31,7 +31,7 @@ testmi () {
 
 testcppl () {
   set +e
-  compile_cmd="$2 --seed 0 --skip-final"
+  compile_cmd="$2 --seed 0 --output-mc --skip-final"
   output=$1
   compile_output=$($compile_cmd $1 2>&1)
   exit_code=$?

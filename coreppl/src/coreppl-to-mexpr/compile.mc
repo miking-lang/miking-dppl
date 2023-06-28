@@ -332,7 +332,7 @@ let simple = symbolize simple in
 
 let truefn = lam. lam. true in
 
-let dummyOptions = {default with debugMExprCompile = true} in
+let dummyOptions = default in
 
 let compile = lam options. lam methodStr. lam ast.
   let options = {options with method = methodStr} in

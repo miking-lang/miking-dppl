@@ -2,13 +2,27 @@ include "arg.mc"
 
 -- Options type
 type Options = {
+
+  -- Inference algorithm
   method : String,
+
+  -- Backend
   target : String,
+
+  -- Number of samples/particles
   particles : Int,
+
+  -- General output and debug options
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
   skipFinal: Bool,
+  outputMc: Bool,
+  output: String,
+
+  -- Apply static delayed sampling transformation
+  -- TODO(2023-06-28,dlunde): Give a more descriptive name, transform is too
+  -- generic.
   transform: Bool,
 
   -- Where to resample in SMC
@@ -57,6 +71,8 @@ let default = {
   printMCore = false,
   exitBefore = false,
   skipFinal = false,
+  outputMc = false,
+  output = "out",
   transform = false,
   printSamples = true,
   stackSize = 10000,
@@ -120,6 +136,14 @@ let config = [
     "Do not perform the final compilation step (e.g., MExpr to OCaml).",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with skipFinal = true}),
+  ([("--output-mc", "", "")],
+    "Write intermediate MCore output to file when compiling",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with outputMc = true}),
+  ([("--output", " ", "<file>")],
+    "Write output to <file> when compiling",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with output = argToString p}),
   ([("--transform", "", "")],
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.
