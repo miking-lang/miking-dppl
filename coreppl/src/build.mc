@@ -42,5 +42,11 @@ let buildRootPPL = lam options. lam ast.
   if options.skipFinal then ()
   else
     let msg = "RootPPL compilation failed" in
-    let cmds = ["rppl", outName, "--stack-size" , int2string options.stackSize] in
+    let cmds = join [
+      ["rppl", outName],
+      ["--stack-size", int2string options.stackSize],
+      match options.seed with Some seed then
+        ["--seed", int2string seed]
+      else []
+    ] in
     runCommandWithError cmds msg

@@ -51,10 +51,18 @@ void initGen() {
     int maxThreads = omp_get_max_threads();
     genWrappers = new generator_wrapper[maxThreads];
     for(int i = 0; i < maxThreads; i++) {
+        #ifdef SEED
+        genWrappers[i].gen.seed(SEED + i);
+        #else
         genWrappers[i].gen.seed(time(NULL) + i);
+        #endif
     }
     #else
+    #ifdef SEED
+    gen.seed(SEED);
+    #else
     gen.seed(time(NULL));
+    #endif
     #endif
 }
 

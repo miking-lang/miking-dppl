@@ -16,7 +16,11 @@ __global__ void initCurandStates(curandState* randStates, int numThreads, int se
     // Double check this seed, need only to be unique over one inference, as time should vary between inferences.
     // curand_init(1234 + clock64(), seed * numThreads + i, 0, &particles->randStates[i]);
     curandState randStateLocal = randStates[i];
+    #ifdef SEED
+    curand_init(1234 + SEED, seed * numThreads + i, 0, &randStateLocal);
+    #else
     curand_init(1234 + clock64(), seed * numThreads + i, 0, &randStateLocal);
+    #endif
     randStates[i] = randStateLocal;
 }
 

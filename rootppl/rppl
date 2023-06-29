@@ -2,10 +2,11 @@
 
 # Runtime
 engine_build=build/
+engine_src=$RPPL_ENGINE_SRC
 
 # Argument parsing
 args=()
-flags="-I$RPPL_ENGINE_SRC -std=c++14 -O3"
+flags="-I$engine_src -std=c++14 -O3"
 while [[ $# -gt 0 ]]; do
   case $1 in
     -j|--jobs)
@@ -30,6 +31,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ess-threshold)
       flags+=" -D ESS_THRESHOLD=$2"
+      shift
+      shift
+      ;;
+    --seed)
+      flags+=" -D SEED=$2"
       shift
       shift
       ;;

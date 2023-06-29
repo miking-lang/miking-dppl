@@ -20,7 +20,11 @@ resampler_t initResampler(int numParticles, size_t progStateSize) {
     resampler_t resampler;
 
     #ifdef __NVCC__
+    #ifdef SEED
+    generatorRes.seed(SEED * 3); // Multiply by 3 to avoid same seed as distributions.
+    #else
     generatorRes.seed(time(NULL) * 3); // Multiply by 3 to avoid same seed as distributions.
+    #endif
     allocateMemory<floating_t>(&resampler.wSquared, numParticles);
     #endif
 
