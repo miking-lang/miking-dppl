@@ -1,4 +1,4 @@
-let model = lam.
+let model: () -> Bool = lam.
   let rain = assume (Bernoulli 0.2) in
   let sprinkler =
     if rain then assume (Bernoulli 0.01)

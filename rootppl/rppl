@@ -85,7 +85,7 @@ fi
 rm -f $new
 
 # Build RootPPL engine
-${engine_src}build.mk \
+${engine_src}/build.mk \
   $flag_jobs\
   SRC="$engine_src"\
   BUILD="$engine_build"\

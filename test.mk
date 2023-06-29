@@ -1,4 +1,4 @@
-.PHONY: all
+include vars.mk
 
 # Include all .mc files but ignore files under coreppl-to-mexpr that starts
 # with "runtime" (they cannot be executed standalone)
@@ -9,8 +9,39 @@ test-files+=coreppl/src/coreppl-to-mexpr/runtimes.mc
 test-files := $(filter-out coreppl/src/pgm.mc,$(test-files))
 test-files := $(filter-out coreppl/src/transformation.mc,$(test-files))
 
-all: ${test-files}
+
+test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
+test-cli-files=\
+  $(shell find coreppl/test/coreppl-to-mexpr/cli \
+               coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
+
+.PHONY: all
+all: ${test-files} ${test-infer-files} ${test-cli-files}
+
+
+####################################
+## Tests in compiler source files ##
+####################################
 
 ${test-files}::
 	@./make test $@
 
+
+###################
+## CorePPL tests ##
+###################
+
+export CPPL_NAME
+export MIDPPL_PATH=${CURDIR}
+export MIDPPL_SRC=${MIDPPL_PATH}/${CPPL_SRC}
+
+export ROOTPPL_BIN
+export RPPL_ENGINE_SRC=${MIDPPL_PATH}/${ROOTPPL_SRC}
+
+# Infer tests
+${test-infer-files}::
+	@./make test-cppl $@ "build/${CPPL_NAME}"
+
+# CLI tests
+${test-cli-files}::
+	@./make test $@

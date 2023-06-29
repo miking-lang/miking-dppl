@@ -58,13 +58,8 @@ uninstall-coreppl:
 	rm -rf ${SRC_PATH}
 
 .PHONY: test-coreppl
-test-coreppl: test-cppl
+test-coreppl: build/${CPPL_NAME}
 	@$(MAKE) -s -f test.mk all
-
-# Test the built cppl binary (both MExpr and RootPPL backends)
-.PHONY: test-cppl
-test-cppl: build/${CPPL_NAME}
-	@$(MAKE) -s -f test-cppl.mk all
 
 
 #############

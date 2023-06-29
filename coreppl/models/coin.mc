@@ -1,4 +1,4 @@
-let model = lam.
+let model: () -> Float = lam.
   let theta = assume (Beta 10.0 10.0) in
   observe true (Bernoulli theta);
   observe false (Bernoulli theta);

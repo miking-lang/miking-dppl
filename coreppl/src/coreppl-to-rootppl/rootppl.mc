@@ -211,7 +211,12 @@ lang RootPPL = CAst + CPrettyPrint
       match mapAccumL f env params with (env,params) then
         let params = strJoin ", " params in
         match printCType "" env ret with (env,ret) then
-          (env, join ["BBLOCK_HELPER_DECLARE(", id, ", ", ret, ", ", params, ");"])
+          (env, join (join [
+             ["BBLOCK_HELPER_DECLARE(", id, ", ", ret],
+             if null params then [] else [ ", ", params],
+             [");"]
+             ])
+          )
         else never
       else never
     else never
@@ -228,9 +233,15 @@ lang RootPPL = CAst + CPrettyPrint
         let params = strJoin ", " params in
         match printCType "" env ret with (env,ret) then
           match printCStmts ii env body with (env,body) then
-            (env, join ["BBLOCK_HELPER(", id, ", {",
-                        pprintNewline ii, body, pprintNewline i,
-                        "}, ", ret, ", ", params, ")"])
+            (env, join (join [
+               [
+                 "BBLOCK_HELPER(", id, ", {",
+                 pprintNewline ii, body, pprintNewline i, "}, ", ret
+               ],
+               if null params then [] else [", ", params],
+               [")"]
+               ])
+            )
           else never
         else never
       else never
