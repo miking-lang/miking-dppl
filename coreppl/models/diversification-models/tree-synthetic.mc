@@ -1,6 +1,6 @@
 -- Synthetic generated tree with true parameters lambda = 0.2 and mu = 0.1
 
-include "tree.mc"
+include "phylo.mc"
 
 let rho = 1.0
 

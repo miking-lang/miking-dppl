@@ -1,5 +1,6 @@
 -- Common functionality for the test suite
 
+include "math.mc"
 include "common.mc"
 include "option.mc"
 include "sys.mc"
@@ -24,10 +25,14 @@ let rppl =
   match sysGetEnv "ROOTPPL_BIN" with Some rppl then join [dpplPath, "/", rppl]
   else error "ROOTPPL_BIN not defined"
 
-let parseRun: Bool -> String -> CpplRes = lam extra. lam output.
+let parseRun: String -> CpplRes = lam output.
   let output = strSplit "\n" output in
-  let extra = if extra then Some (string2float (head output)) else None () in
-  let output = tail output in
+  let extra =
+    let lhead = head output in
+    if any (eqChar ' ') lhead then None ()
+    else Some (string2float lhead)
+  in
+  let output = match extra with Some _ then tail output else output in
   let res = foldl (lam acc. lam l.
       if eqi (length l) 0 then acc else
         let l = strSplit " " l in
@@ -38,26 +43,26 @@ let parseRun: Bool -> String -> CpplRes = lam extra. lam output.
   in
   { samples = res.0, lweights = res.1, extra = extra }
 
-let burn: Int -> CpplRes -> CpplRes = lam b. lam cpplRes.
-  let samples = subsequence cpplRes.samples b (length cpplRes.samples) in
-  let lweights =  subsequence cpplRes.lweights b (length cpplRes.lweights) in
+let burnCpplRes: Int -> CpplRes -> CpplRes = lam burn. lam cpplRes.
+  let samples = subsequence cpplRes.samples burn (length cpplRes.samples) in
+  let lweights =  subsequence cpplRes.lweights burn (length cpplRes.lweights) in
   {cpplRes with samples = samples, lweights = lweights}
 
 -- Compile and run CorePPL program and get back a list of weighted string
 -- samples. MExpr backend.
-let testCpplMExpr: Bool -> String -> String -> String -> CpplRes =
-  lam extra. lam model. lam compileArgs. lam runArgs.
+let testCpplMExpr: String -> Int -> Int -> String -> CpplRes =
+  lam model. lam samples. lam burn. lam compileArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
     sysRunCommand [cppl, "--seed 0", compileArgs, m ] "" wd;
-    let run = sysRunCommand [ "./out", runArgs ] "" wd in
+    let run = sysRunCommand [ "./out", (int2string samples) ] "" wd in
     sysDeleteDir wd;
-    parseRun extra run.stdout
+    burnCpplRes burn (parseRun run.stdout)
 
 -- Compile and run CorePPL program and get back a list of weighted string
 -- samples. RootPPL backend.
-let testCpplRootPPL: String -> String -> String -> String -> CpplRes =
-  lam model. lam cpplCompileArgs. lam rpplCompileArgs. lam runArgs.
+let testCpplRootPPL: String -> Int -> Int -> String -> String -> CpplRes =
+  lam model. lam samples. lam burn. lam cpplCompileArgs. lam rpplCompileArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
     sysRunCommand [
@@ -66,26 +71,65 @@ let testCpplRootPPL: String -> String -> String -> String -> CpplRes =
     sysRunCommand [
         rppl, "--seed 0", "--stack-size 10000", rpplCompileArgs, "out.cu"
       ] "" wd;
-    let run = sysRunCommand [ "./a.out", runArgs ] "" wd in
+    let run = sysRunCommand [ "./a.out", (int2string samples) ] "" wd in
     sysDeleteDir wd;
-    parseRun true run.stdout
+    burnCpplRes burn (parseRun run.stdout)
+
+-- Normalizing constant testing
+let resNormConst: CpplRes -> Float = lam cpplRes.
+  match cpplRes.extra with Some nc then nc else
+  error "Normalizing constant does not exist in cpplRes"
 
 -- models/coin.mc
-let coinTrueMean = divf 12.0 23.0
+let resCoin: CpplRes -> Float = lam cpplRes.
+  logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
+let coinTruth: Float = divf 12.0 23.0
+let eqCoin: Float -> Float -> Float -> Bool = eqfApprox
 
 -- models/sprinkler.mc
-let sprinklerTrueProb = divf 891. 2491.
-let sprinklerProb: [Bool] -> [Float] -> Float = lam samples. lam lweights.
+let resSprinkler: CpplRes -> Float = lam cpplRes.
   let samples: [Float] =
-    map (lam b. if b then 1. else 0.) samples in
-  logWeightedMean lweights samples
+    map (lam s. if eqString "true" s then 1. else 0.) cpplRes.samples in
+  logWeightedMean cpplRes.lweights samples
+let resSprinklerInt: CpplRes -> Float = lam cpplRes.
+  let samples: [Float] =
+    map (compose int2float string2int) cpplRes.samples in
+  logWeightedMean cpplRes.lweights samples
+let sprinklerTruth = divf 891. 2491.
+let eqSprinkler: Float -> Float -> Float -> Bool = eqfApprox
 
 -- models/regression.mc
-let regressionApproxTrue = (0.43,0.621)
-let regressionMean: [Float] -> [String] -> (Float,Float) =
-  lam lweights. lam samples.
-    let samples = map (strSplit " ") samples in
-    (
-      logWeightedMean lweights (map (lam t. string2float (get t 0)) samples),
-      logWeightedMean lweights (map (lam t. string2float (get t 1)) samples)
-    )
+let resRegression: CpplRes -> (Float, Float) = lam cpplRes.
+  let samples = map (strSplit " ") cpplRes.samples in
+  let lweights = cpplRes.lweights in
+  (
+    logWeightedMean lweights (map (lam t. string2float (get t 0)) samples),
+    logWeightedMean lweights (map (lam t. string2float (get t 1)) samples)
+  )
+let regressionTruth = (0.43,0.621)
+let eqRegression: Float -> Float -> (Float, Float) -> (Float,Float) -> Bool =
+  lam s1. lam s2. lam t1. lam t2.
+    if eqfApprox s1 t1.0 t2.0 then eqfApprox s2 t1.1 t2.1 else false
+
+-- models/diversification-models/crbd*.mc
+type CRBDSyntheticRes = { mean: Float, normConst: Float }
+let resCrbdSynthetic: CpplRes -> CRBDSyntheticRes = lam cpplRes. {
+  mean = logWeightedMean cpplRes.lweights (map string2float cpplRes.samples),
+  normConst = match cpplRes.extra with Some nc then nc else nan
+}
+let crbdSyntheticTruth = {
+  mean = 0.34,
+  normConst = negf 16.0669187911
+}
+let eqCrbdSynthetic:
+  Float -> Float -> CRBDSyntheticRes -> CRBDSyntheticRes -> Bool =
+  lam s1. lam s2. lam v1. lam v2.
+    if eqfApprox s1 v1.mean v2.mean then
+      eqfApprox s2 v1.normConst v2.normConst
+    else false
+let eqCrbdSyntheticMean:
+  Float -> CRBDSyntheticRes -> CRBDSyntheticRes -> Bool =
+  lam s1. lam v1. lam v2. eqfApprox s1 v1.mean v2.mean
+
+let crbdAlcedinidaeTruth = negf 304.75
+let eqCrbdAlcedinidae = eqfApprox

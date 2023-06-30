@@ -1,8 +1,8 @@
 include "tree-synthetic.mc"
-include "crbd.mc"
+include "clads2.mc"
 
 let model: () -> Float = lam.
-  crbd tree rho
+  clads2 tree rho
 
 mexpr
 model ()

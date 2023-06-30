@@ -1,7 +1,8 @@
 include "phylo.mc"
 include "math.mc"
 
-let model: Tree -> Float -> () -> Float = lam tree. lam rho. lam.
+let crbd: Tree -> Float -> Float = lam tree. lam rho.
+
   -- Priors
   let lambda = assume (Gamma 1.0 1.0) in
   let mu = assume (Gamma 1.0 0.5) in
@@ -20,23 +21,24 @@ let model: Tree -> Float -> () -> Float = lam tree. lam rho. lam.
         false
   in
 
+  recursive let simHiddenSpeciation = lam nodeAge. lam tBeg.
+    let t = subf tBeg (assume (Exponential lambda)) in
+    if gtf t nodeAge then
+      if survives t then
+        -- NOTE: We bind weights and observes to wX (where X is an integer)
+        -- just for identification purposes when testing the alignment
+        -- analysis.
+        let w1 = weight (negf inf) in
+        w1
+      else
+        let w2 = weight (log 2.) in
+        simHiddenSpeciation nodeAge t
+    else ()
+  in
+
   recursive let walk = lam node. lam parentAge.
     let nodeAge = getAge node in
-    recursive let simHiddenSpeciation = lam tBeg.
-      let t = subf tBeg (assume (Exponential lambda)) in
-      if gtf t nodeAge then
-        if survives t then
-          -- NOTE: We bind weights and observes to wX (where X is an integer)
-          -- just for identification purposes when testing the alignment
-          -- analysis.
-          let w1 = weight (negf inf) in
-          w1
-        else
-          let w2 = weight (log 2.) in
-          simHiddenSpeciation t
-      else ()
-    in
-    simHiddenSpeciation parentAge;
+    simHiddenSpeciation nodeAge parentAge;
     let w3 = observe 0 (Poisson (mulf mu (subf parentAge nodeAge))) in
     match node with Node n then
       let w4 = observe 0. (Exponential lambda) in
@@ -54,3 +56,4 @@ let model: Tree -> Float -> () -> Float = lam tree. lam rho. lam.
   walk root.left root.age;
   walk root.right root.age;
   lambda
+
