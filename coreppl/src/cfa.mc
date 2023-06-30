@@ -959,6 +959,31 @@ utest _test false t ["t1", "t2", "res"] with [
   ("res", true)
 ] using eqTest in
 
+-- Test in `models/coreppl/crbd/crbd-unaligned.mc`
+let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    let cfaDebug = alignCfaDebug in
+    let cfa = alignCfa in
+    match _testBase cfaDebug cfa env tANF with (env, cfaRes) in
+    let aRes: Set Name = extractUnaligned cfaRes in
+    let sSet: Set String = setFold
+      (lam acc. lam n. setInsert (nameGetStr n) acc)
+      (setEmpty cmpString) aRes in
+    map (lam var: String. (var, not (setMem var sSet))) vars
+in
+let t = symbolizeExpr symEnvEmpty
+          (parseMCorePPLFile "coreppl/models/diversification-models/crbd.mc") in
+utest _testWithSymbolize false t ["w1","w2","w3", "w4", "w5"] with [
+  ("w1", false),
+  ("w2", false),
+  ("w3", true),
+  ("w4", true),
+  ("w5", true)
+]
+using eqTest in
+
 ----------------------
 -- CHECKPOINT TESTS --
 ----------------------

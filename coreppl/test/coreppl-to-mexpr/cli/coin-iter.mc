@@ -12,7 +12,7 @@ mexpr
 let eqfe = eqfApprox 2e-2 in
 
 let _test = lam smc. lam compileArgs.
-  let cpplRes = testCpplMExpr smc "coin.mc" compileArgs "1000" in
+  let cpplRes = testCpplMExpr smc "coin-iter.mc" compileArgs "1000" in
   logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
 in
 

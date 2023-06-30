@@ -11,8 +11,7 @@ mexpr
 -- Determines unit test sensitivity
 let eqfe = eqfApprox 1e-1 in
 
-let _test =
-  lam smc. lam compileArgs.
+let _test = lam smc. lam compileArgs.
   let cpplRes = testCpplMExpr smc "sprinkler.mc" compileArgs "1000" in
   sprinklerProb (map string2bool cpplRes.samples) cpplRes.lweights
 in
@@ -34,10 +33,13 @@ utest _test true "-m smc-apf --cps partial --resample likelihood" with sprinkler
 utest _test true "-m smc-apf --cps full --resample manual" with sprinklerTrueProb using eqfe in
 utest _test true "-m smc-apf --cps full --resample align" with sprinklerTrueProb using eqfe in
 utest _test true "-m smc-apf --cps full --resample likelihood" with sprinklerTrueProb using eqfe in
-utest _test false "-m pmcmc-pimh" with sprinklerTrueProb using eqfe in
+utest _test false "-m pmcmc-pimh --cps partial" with sprinklerTrueProb using eqfe in
+utest _test false "-m pmcmc-pimh --cps full" with sprinklerTrueProb using eqfe in
 utest _test false "-m mcmc-trace" with sprinklerTrueProb using eqfe in
 utest _test false "-m mcmc-naive" with sprinklerTrueProb using eqfe in
-utest _test false "-m mcmc-lightweight --align" with sprinklerTrueProb using eqfe in
+utest _test false "-m mcmc-lightweight --align --cps none" with sprinklerTrueProb using eqfe in
+utest _test false "-m mcmc-lightweight --align --cps partial" with sprinklerTrueProb using eqfe in
+utest _test false "-m mcmc-lightweight --align --cps full" with sprinklerTrueProb using eqfe in
 utest _test false "-m mcmc-lightweight" with sprinklerTrueProb using eqfe in
 
 ()

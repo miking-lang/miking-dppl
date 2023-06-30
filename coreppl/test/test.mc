@@ -31,12 +31,17 @@ let parseRun: Bool -> String -> CpplRes = lam extra. lam output.
   let res = foldl (lam acc. lam l.
       if eqi (length l) 0 then acc else
         let l = strSplit " " l in
-        let sample: String = join (init l) in
+        let sample: String = strJoin " " (init l) in
         let lweight: Float = string2float (last l) in
         (snoc acc.0 sample, snoc acc.1 lweight)
     ) ([],[]) output
   in
   { samples = res.0, lweights = res.1, extra = extra }
+
+let burn: Int -> CpplRes -> CpplRes = lam b. lam cpplRes.
+  let samples = subsequence cpplRes.samples b (length cpplRes.samples) in
+  let lweights =  subsequence cpplRes.lweights b (length cpplRes.lweights) in
+  {cpplRes with samples = samples, lweights = lweights}
 
 -- Compile and run CorePPL program and get back a list of weighted string
 -- samples. MExpr backend.
@@ -75,3 +80,12 @@ let sprinklerProb: [Bool] -> [Float] -> Float = lam samples. lam lweights.
     map (lam b. if b then 1. else 0.) samples in
   logWeightedMean lweights samples
 
+-- models/regression.mc
+let regressionApproxTrue = (0.43,0.621)
+let regressionMean: [Float] -> [String] -> (Float,Float) =
+  lam lweights. lam samples.
+    let samples = map (strSplit " ") samples in
+    (
+      logWeightedMean lweights (map (lam t. string2float (get t 0)) samples),
+      logWeightedMean lweights (map (lam t. string2float (get t 1)) samples)
+    )

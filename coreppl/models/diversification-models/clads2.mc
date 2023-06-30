@@ -55,12 +55,10 @@ recursive let walk = lam node. lam parentAge. lam multiplier.
   let multiplier = simHiddenSpeciation parentAge multiplier in
   match node with Node n then
     observe 0. (Exponential (mulf multiplier lambda));
-    resample;
     walk n.left nodeAge multiplier;
     walk n.right nodeAge multiplier
   else match node with Leaf _ then
     observe true (Bernoulli rho);
-    resample
   else never
 in
 

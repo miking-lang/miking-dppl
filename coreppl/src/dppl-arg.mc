@@ -83,7 +83,7 @@ let default = {
   printAcceptanceRate = false,
   pmcmcParticles = 2,
   seed = None (),
-  extractSimplification = "inline"
+  extractSimplification = "none"
 }
 
 -- Options configuration

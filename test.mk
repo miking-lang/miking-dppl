@@ -16,12 +16,15 @@ test-cli-files=\
                coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
 
 .PHONY: all
-all: ${test-files} ${test-infer-files} ${test-cli-files}
+all: compiler cppl
 
 
 ####################################
 ## Tests in compiler source files ##
 ####################################
+
+.PHONY: compiler
+compiler: ${test-files}
 
 ${test-files}::
 	@./make test $@
@@ -30,6 +33,9 @@ ${test-files}::
 ###################
 ## CorePPL tests ##
 ###################
+
+.PHONY: cppl
+cppl: ${test-infer-files} ${test-cli-files}
 
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}
