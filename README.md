@@ -24,6 +24,30 @@ With `weight`, you update the logarithm of the likelihood directly (e.g., `weigh
 With `observe`, you update the likelihood with the value of the pmf or pdf for the given distribution at the given observation.
 For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
 
+### Limitations of `infer`
+The `infer` keyword currently has a few limitations on how it can be used:
+
+* The second argument to `infer` must be provided inline. That is, we cannot store the argument in a let-binding to reuse it. We have to write it out explicitly for each case:
+```
+let d = infer (Importance {particles = 1000}) model in -- OK
+
+let args = Importance {particles = 1000} in
+let d = infer args model in -- ERROR
+```
+* The definition of the model function must be visible from the `infer`. We cannot use a higher-order function as the model, as the lambda variable hides the definition from our transformation.
+```
+let f = lam. ... in
+let d = infer (Importance {particles = 1000}) f in -- OK
+
+let d = infer (Importance {particles = 1000}) (lam. ...) in -- OK
+
+let g = lam f.
+  ...
+  let d = infer (Importance {particles = 1000}) f in -- ERROR
+  ...
+in
+```
+
 ## Compiling CorePPL to MExpr
 The default option for inferring the distribution encoded by a CorePPL program is to compile it to MExpr (which then compiles to OCaml).
 You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm (run the command `cppl` to see the current list of available algorithms).
