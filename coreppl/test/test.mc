@@ -156,3 +156,7 @@ let eqCladsSyntheticMean:
 
 let cladsAlcedinidaeTruth = negf 308.755153131
 let eqCladsAlcedinidae = eqfApprox
+
+-- models/vector-borne-disease/vbd.mc
+let vbdTruth = negf 368.174997594
+let eqVbd = eqfApprox
