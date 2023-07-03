@@ -8,34 +8,6 @@ include "stats.mc"
 
 mexpr
 
---------------------
--- models/coin.mc --
---------------------
-let s = 2e-2 in
-let e = eqCoin s in
-let rhs = coinTruth in
-let r = resCoin in
-let t = testCpplRootPPL "coin.mc" 1000 0 in
-utest r (t "--resample manual" "") with rhs using e in
-utest r (t "--resample likelihood" "") with rhs using e in
-utest r (t "--resample align" "") with rhs using e in
-
--------------------------
--- models/sprinkler.mc --
--------------------------
-let s = 1e-1 in
-let e = eqSprinkler s in
-let rhs = sprinklerTruth in
-let r = resSprinklerInt in
-let t = testCpplRootPPL "sprinkler.mc" 1000 0 in
-utest r (t "--resample manual" "") with rhs using e in
-utest r (t "--resample likelihood" "") with rhs using e in
-utest r (t "--resample align" "") with rhs using e in
-
---------------------------------------------
--- models/diversification-models/crbd*.mc --
---------------------------------------------
-
 -- Synthetic
 -- NOTE(2023-06-30,dlunde): SMC with '--resample likelihood' peforms really
 -- poorly for this model, which is why we simply give lam. lam. true as the

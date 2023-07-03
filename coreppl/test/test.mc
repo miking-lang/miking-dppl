@@ -133,3 +133,26 @@ let eqCrbdSyntheticMean:
 
 let crbdAlcedinidaeTruth = negf 304.75
 let eqCrbdAlcedinidae = eqfApprox
+
+-- models/diversification-models/clads*.mc
+type CLADSSyntheticRes = { mean: Float, normConst: Float }
+let resCladsSynthetic: CpplRes -> CLADSSyntheticRes = lam cpplRes. {
+  mean = logWeightedMean cpplRes.lweights (map string2float cpplRes.samples),
+  normConst = match cpplRes.extra with Some nc then nc else nan
+}
+let cladsSyntheticTruth = {
+  mean = 1.02987310776,
+  normConst = negf 15.4824162848
+}
+let eqCladsSynthetic:
+  Float -> Float -> CLADSSyntheticRes -> CLADSSyntheticRes -> Bool =
+  lam s1. lam s2. lam v1. lam v2.
+    if eqfApprox s1 v1.mean v2.mean then
+      eqfApprox s2 v1.normConst v2.normConst
+    else false
+let eqCladsSyntheticMean:
+  Float -> CLADSSyntheticRes -> CLADSSyntheticRes -> Bool =
+  lam s1. lam v1. lam v2. eqfApprox s1 v1.mean v2.mean
+
+let cladsAlcedinidaeTruth = negf 308.755153131
+let eqCladsAlcedinidae = eqfApprox

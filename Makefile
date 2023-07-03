@@ -59,7 +59,7 @@ uninstall-coreppl:
 
 .PHONY: test-coreppl
 test-coreppl: build/${CPPL_NAME}
-	@$(MAKE) -s -f test.mk all
+	@$(MAKE) -s -f test-coreppl.mk all
 
 
 #############
