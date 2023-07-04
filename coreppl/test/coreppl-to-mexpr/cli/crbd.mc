@@ -42,9 +42,9 @@ utest r (t 1000 500 "-m pmcmc-pimh --cps partial"                  ) with rhs us
 utest r (t 1000 500 "-m pmcmc-pimh --cps full"                     ) with rhs using e in
 utest r (t 10000 500 "-m mcmc-trace"                               ) with rhs using e in
 utest r (t 1000 500 "-m mcmc-naive"                                ) with rhs using e in
-utest r (t 1000 500 "-m mcmc-lightweight --align --cps none"       ) with rhs using e in
-utest r (t 1000 500 "-m mcmc-lightweight --align --cps partial"    ) with rhs using e in
-utest r (t 1000 500 "-m mcmc-lightweight --align --cps full"       ) with rhs using e in
+utest r (t 3000 500 "-m mcmc-lightweight --align --cps none"       ) with rhs using e in
+utest r (t 3000 500 "-m mcmc-lightweight --align --cps partial"    ) with rhs using e in
+utest r (t 3000 500 "-m mcmc-lightweight --align --cps full"       ) with rhs using e in
 utest r (t 1000 500 "-m mcmc-lightweight"                          ) with rhs using e in
 
 

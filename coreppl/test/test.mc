@@ -112,6 +112,12 @@ let eqRegression: Float -> Float -> (Float, Float) -> (Float,Float) -> Bool =
   lam s1. lam s2. lam t1. lam t2.
     if eqfApprox s1 t1.0 t2.0 then eqfApprox s2 t1.1 t2.1 else false
 
+-- models/ssm.mc
+let resSsm: CpplRes -> Float = lam cpplRes.
+  logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
+let ssmTruth: Float = 3060.
+let eqSsm: Float -> Float -> Float -> Bool = eqfApprox
+
 -- models/diversification-models/crbd*.mc
 type CRBDSyntheticRes = { mean: Float, normConst: Float }
 let resCrbdSynthetic: CpplRes -> CRBDSyntheticRes = lam cpplRes. {

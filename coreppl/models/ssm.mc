@@ -4,15 +4,16 @@
 
 include "math.mc"
 
+-- Noisy satellite observations of position (accuracy is improved
+-- at higher altitude)
+let data: [Float] = [
+  603.57, 860.42, 1012.07,
+  1163.53, 1540.29, 1818.10,
+  2045.38, 2363.49, 2590.77,
+  2801.91
+]
+
 let model: () -> Float = lam.
-  -- Noisy satellite observations of position (accuracy is improved
-  -- at higher altitude)
-  let data: [Float] = [
-    603.57, 860.42, 1012.07,
-    1163.53, 1540.29, 1818.10,
-    2045.38, 2363.49, 2590.77,
-    2801.91
-  ] in
 
   let holdingAltitude = 35000. in
   let altitudeRange = 100. in
@@ -61,7 +62,6 @@ let model: () -> Float = lam.
   in
 
   simulate 0 position altitude
-
 
 mexpr
 model ()
