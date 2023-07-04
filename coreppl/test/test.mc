@@ -1,5 +1,6 @@
 -- Common functionality for the test suite
 
+include "seq.mc"
 include "math.mc"
 include "common.mc"
 include "option.mc"
@@ -160,3 +161,17 @@ let eqCladsAlcedinidae = eqfApprox
 -- models/vector-borne-disease/vbd.mc
 let vbdTruth = negf 368.174997594
 let eqVbd = eqfApprox
+
+-- models/latent-dirichlet-allocation/lda.mc
+let resLda: CpplRes -> [Float] = lam cpplRes.
+  let samples = map (lam s. map string2float (strSplit " " s)) cpplRes.samples in
+  let theta0 = map (lam t. get t 0) samples in
+  let theta1 = map (lam t. get t 1) samples in
+  let theta2 = map (lam t. get t 2) samples in
+  [
+    logWeightedMean cpplRes.lweights theta0,
+    logWeightedMean cpplRes.lweights theta1,
+    logWeightedMean cpplRes.lweights theta2
+  ]
+let ldaTruth: [Float] = [0.5,0.5,0.5]
+let eqLda: Float -> [Float] -> [Float] -> Bool = lam s. eqSeq (eqfApprox s)

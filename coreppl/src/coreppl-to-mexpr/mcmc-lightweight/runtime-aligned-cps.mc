@@ -166,10 +166,11 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: (State Result -> Result) -> Result = lam model.
+let runNext: Unknown -> (State Result -> Result) -> Result =
+  lam config. lam model.
 
   -- Enable global modifications with probability gProb
-  let gProb = compileOptions.mcmcLightweightGlobalProb in
+  let gProb = config.globalProb in
   let modGlobal: Bool = bernoulliSample gProb in
 
   if modGlobal then (
@@ -240,7 +241,7 @@ let run : Unknown -> (State Result -> Result) -> Dist Result =
         let prevUnalignedTraces = deref state.unalignedTraces in
         let prevSample = head samples in
         let prevWeight = head weights in
-        let sample = runNext model in
+        let sample = runNext config model in
         -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
