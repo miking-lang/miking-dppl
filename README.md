@@ -20,7 +20,7 @@ The RootPPL compiler `rppl` is a `g++`/`nvcc` wrapper `sh` script and requires n
 
 In addition to building `cppl`, there are three additional make targets:
 #### `make install`
-Installs `cppl`, `rppl`, and scripts (e.g., `dppl-plot`) to `$HOME/.local/bin` (according to the [systemd file system hierarchy](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html)).
+Installs `cppl`, `rppl`, and scripts (e.g., `dppl-plot`) to `$HOME/.local/bin`, and also source dependencies to `$HOME/.local/src` (according to the [systemd file system hierarchy](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html)).
 Install individual components using the `install-coreppl`, `install-rootppl`, and `install-scripts` targets.
 
 #### `make uninstall`
@@ -48,7 +48,7 @@ With `observe`, you update the likelihood with the value of the pmf or pdf for t
 For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
 
 The default option for inferring the distribution encoded by a CorePPL program is to compile it to MExpr (which then compiles to OCaml).
-You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm (run the command `cppl` to see the current list of available algorithms).
+You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm (run the command `cppl` without any arguments to see the current list of available algorithms).
 For example, `cppl -m is-lw cpplprog.mc` compiles `cpplprog.mc` to a binary file `out` which you can subsequently run to produce likelihood-weighted samples from the distribution encoded by `cpplprog.mc`:
 ```
 $ ./out 10
@@ -64,9 +64,12 @@ $ ./out 10
 0.675965445901 -0.391613319777
 0.826919003807 -0.190048528529
 ```
-The argument is the number of samples.
+The argument to `out` is the number of samples.
 The first row prints the log of the normalizing constant, and the subsequent rows the samples.
 The first column is the sample, and the second its log-weight.
+To visualize the distribution induced by the samples, pipe the output to `dppl-plot`: `./out 10 | dppl-plot` (currently only supports float samples).
+Run `dppl-plot --help` for more advice.
+
 For more help and options, run the `cppl` command without any arguments.
 
 ### Example Models
@@ -86,6 +89,9 @@ You compile and run the above models with the `cppl` command, and the models are
 
 ### The `infer` Keyword and its Limitations
 The experimental `infer` keyword in CorePPL allows users to apply inference algorithms within CorePPL programs.
+For examples showing how to use `infer`, see `coreppl/models/infer-loop.mc` and `coreppl/models/infer-test.mc`
+To see the available inference algorithms and their parameters for use with `infer`, you must currently consult the source code under `coreppl/src/inference`.
+
 If a CorePPL program contains no applications of `infer`, the entire program encodes one single inference problem.
 However, if the program contains one or more `infer` applications, the program may encode one or more inference problems simultaneously.
 
@@ -116,9 +122,10 @@ The `infer` keyword currently has a few limitations on how it can be used:
 ### Compiling CorePPL to RootPPL
 By default, `cppl` compiles CorePPL to MExpr—the language of the Miking framework.
 Another option is to compile CorePPL to RootPPL.
-This option potentially results in more efficient inference (due to the efficiency of RootPPL), but also has quite a lot of limitations (for example, RootPPL does not support automatic memory management or higher-order functions).
+This option potentially results in more efficient inference due to the efficiency of RootPPL, but also has quite a lot of limitations.
+For example, RootPPL does not support automatic memory management or higher-order functions.
 A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `cppl -t rootppl cpplprog.mc`.
-Currently, the only supported inference algorithm in RootPPL is `smc-bpf` (the SMC bootstrap particle filter).
+Currently, the only supported inference algorithm in RootPPL is `-m smc-bpf` (the SMC bootstrap particle filter).
 
 ### Implementing New Inference Algorithms
 The CorePPL to MExpr compiler is organized to make it easy to implement new inference algorithms.
