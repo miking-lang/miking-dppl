@@ -47,10 +47,10 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
     let res: ((), Dist) = smapAccumLDist_Expr_Expr (lam. lam a. ((), f a)) () p in
     res.1
 
-  sem sfoldDist_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem sfoldDist_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Dist -> acc
   sem sfoldDist_Expr_Expr f acc =
   | p ->
-    let res: (acc, Expr) = smapAccumLDist_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
+    let res: (acc, Dist) = smapAccumLDist_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
   sem smapAccumL_Expr_Expr f acc =

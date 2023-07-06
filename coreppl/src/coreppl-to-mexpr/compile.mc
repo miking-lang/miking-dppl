@@ -290,7 +290,12 @@ lang MExprCompile =
     else TmRecLets {t with inexpr = insertModels models t.inexpr}
   | TmType t -> TmType {t with inexpr = insertModels models t.inexpr}
   | TmConDef t -> TmConDef {t with inexpr = insertModels models t.inexpr}
-  | TmUtest t -> TmUtest {t with next = insertModels models t.next}
+  | TmUtest t ->
+    if or (modelUsedInBody models false t.test)
+          (modelUsedInBody models false t.expected) then
+      bindall_ (snoc (mapValues models) (TmUtest t))
+    else
+      TmUtest {t with next = insertModels models t.next}
   | TmExt t -> TmExt {t with inexpr = insertModels models t.inexpr}
   | t -> bindall_ (snoc (mapValues models) t)
 
@@ -327,7 +332,7 @@ let simple = symbolize simple in
 
 let truefn = lam. lam. true in
 
-let dummyOptions = {default with debugMExprCompile = true} in
+let dummyOptions = default in
 
 let compile = lam options. lam methodStr. lam ast.
   let options = {options with method = methodStr} in

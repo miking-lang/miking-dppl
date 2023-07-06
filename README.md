@@ -1,10 +1,33 @@
 # Miking DPPL
 Miking DPPL is a framework for developing probabilistic programming languages (PPLs) using [Miking](https://github.com/miking-lang/miking).
 Currently, the framework includes the PPLs [CorePPL](#coreppl) and [RootPPL](#rootppl).
+There is also a convenience Python plotting script available named `dppl-plot`.
 
-## Building and Installing
-The main binary for development in Miking DPPL is called `cppl`. Currently, you build this binary by running `make` in the project root, and install it to `$HOME/.local/bin` with `make install` (uninstall is also possible through `make uninstall`). You must have [Miking](https://github.com/miking-lang/miking) installed (the `mi` command must be globally available) to build `cppl`.
-The command `make test` executes a set of tests for various components in the Miking DPPL framework.
+## Dependencies
+Miking DPPL currently depends on:
+- [Miking](https://github.com/miking-lang/miking)
+- [Owl](https://ocaml.xyz/). Essentially, `opam install owl`.
+- A reasonably recent version of [GCC](https://gcc.gnu.org/).
+
+Optional dependencies for RootPPL are:
+- A CUDA NVIDIA GPU and the [CUDA Toolkit](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html) to run RootPPL in parallel on the GPU.
+- [OpenMP](https://www.openmp.org/resources/openmp-compilers-tools/) to run RootPPL in parallel on the CPU (included in most recent versions of GCC).
+
+## Building, Installing, and Running Tests
+To build the CorePPL compiler `cppl`, simply run `make` in the project root, which produces the binary in `build/cppl`.
+To remove the binary, run `make clean`.
+The RootPPL compiler `rppl` is a `g++`/`nvcc` wrapper `sh` script and requires no build.
+
+In addition to building `cppl`, there are three additional make targets:
+#### `make install`
+Installs `cppl`, `rppl`, and scripts (e.g., `dppl-plot`) to `$HOME/.local/bin`, and also source dependencies to `$HOME/.local/src` (according to the [systemd file system hierarchy](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html)).
+Install individual components using the `install-coreppl`, `install-rootppl`, and `install-scripts` targets.
+
+#### `make uninstall`
+Uninstalls everything installed by `make install`.
+
+#### `make test`
+Runs a comprehensive test suite for CorePPL. Currently, `make test` does not run any RootPPL tests.
 
 ## CorePPL
 CorePPL extends MExpr (see [Miking](https://github.com/miking-lang/miking)) with probabilistic constructs for defining random variables and for likelihood updating. For example, the program
@@ -24,9 +47,8 @@ With `weight`, you update the logarithm of the likelihood directly (e.g., `weigh
 With `observe`, you update the likelihood with the value of the pmf or pdf for the given distribution at the given observation.
 For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
 
-## Compiling CorePPL to MExpr
 The default option for inferring the distribution encoded by a CorePPL program is to compile it to MExpr (which then compiles to OCaml).
-You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm (run the command `cppl` to see the current list of available algorithms).
+You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm (run the command `cppl` without any arguments to see the current list of available algorithms).
 For example, `cppl -m is-lw cpplprog.mc` compiles `cpplprog.mc` to a binary file `out` which you can subsequently run to produce likelihood-weighted samples from the distribution encoded by `cpplprog.mc`:
 ```
 $ ./out 10
@@ -42,56 +64,89 @@ $ ./out 10
 0.675965445901 -0.391613319777
 0.826919003807 -0.190048528529
 ```
-The argument is the number of samples.
+The argument to `out` is the number of samples.
 The first row prints the log of the normalizing constant, and the subsequent rows the samples.
 The first column is the sample, and the second its log-weight.
+To visualize the distribution induced by the samples, pipe the output to `dppl-plot`: `./out 10 | dppl-plot` (currently only supports float samples).
+Run `dppl-plot --help` for more advice.
+
 For more help and options, run the `cppl` command without any arguments.
+
+### Example Models
+The directory `coreppl/models` contains a set of example CorePPL programs.
+A brief overview:
+- `coin.mc`: The "Hello, world!" of probabilistic programming (similar to the example above)
+- `coin-iter.mc`: The same example implemented with the higher-order `iter` function.
+- `sprinkler.mc`: The classical sprinkler model often used to illustrate Bayesian inference.
+- `regression.mc`: Bayesian linear regression for a simple data set.
+- `ssm.mc`: A fairly simple state-space positioning model for a single data set.
+- `diversification-models/crbd*.mc`: Constant rate birth-death model from evolutionary biology for two data sets.
+- `diversification-models/clads*.mc`: Cladogenetic diversification rate shift model from evolutionary biology for the same two data sets.
+- `latent-dirichlet-allocation/lda*.mc`: Latent dirichlet allocation for some simple synthetic data sets.
+- `vector-borne-disease/vbd.mc`: An SEIR model for a single data set.
+
+You compile and run the above models with the `cppl` command, and the models are also the basis for the test suite run as part of `make test`. See the test files under `coreppl/test` for suitable inference algorithms and parameters.
+
+### The `infer` Keyword and its Limitations
+The experimental `infer` keyword in CorePPL allows users to apply inference algorithms within CorePPL programs.
+For examples showing how to use `infer`, see `coreppl/models/infer-loop.mc` and `coreppl/models/infer-test.mc`
+To see the available inference algorithms and their parameters for use with `infer`, you must currently consult the source code under `coreppl/src/inference`.
+
+If a CorePPL program contains no applications of `infer`, the entire program encodes one single inference problem.
+However, if the program contains one or more `infer` applications, the program may encode one or more inference problems simultaneously.
+
+The `infer` keyword currently has a few limitations on how it can be used:
+
+* The second argument to `infer` must be provided inline. That is, we cannot store the argument in a let-binding to reuse it. We have to write it out explicitly for each case: 
+    ```
+    let d = infer (Importance {particles = 1000}) model in -- OK
+    
+    let args = Importance {particles = 1000} in
+    let d = infer args model in -- ERROR
+    ```
+
+* The definition of the model function must be visible from the `infer`. We cannot use a higher-order function as the model, as the lambda variable hides the definition from our transformation.
+    ```
+    let f = lam. ... in
+    let d = infer (Importance {particles = 1000}) f in -- OK
+    
+    let d = infer (Importance {particles = 1000}) (lam. ...) in -- OK
+    
+    let g = lam f.
+      ...
+      let d = infer (Importance {particles = 1000}) f in -- ERROR
+      ...
+    in
+    ```
+
+### Compiling CorePPL to RootPPL
+By default, `cppl` compiles CorePPL to MExpr—the language of the Miking framework.
+Another option is to compile CorePPL to RootPPL.
+This option potentially results in more efficient inference due to the efficiency of RootPPL, but also has quite a lot of limitations.
+For example, RootPPL does not support automatic memory management or higher-order functions.
+A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `cppl -t rootppl cpplprog.mc`.
+Currently, the only supported inference algorithm in RootPPL is `-m smc-bpf` (the SMC bootstrap particle filter).
 
 ### Implementing New Inference Algorithms
 The CorePPL to MExpr compiler is organized to make it easy to implement new inference algorithms.
 Currently, the best way to understand the framework is to look at the source code.
 There are also some slides available at `coreppl/docs/coreppl-to-mexpr.pdf`
 
-## Compiling CorePPL to RootPPL
-Another option to run inference over a CorePPL program is to compile it to RootPPL.
-This option potentially results in more efficient inference (due to the efficiency of RootPPL), but also has quite a lot of limitations (for example, RootPPL does not support automatic memory management or higher-order functions).
-A CorePPL program in a file `cpplprog.mc` can be compiled to a RootPPL file `out.cu` using the command `cppl -t rootppl cpplprog.mc`.
-Currently, the only supported inference algorith in RootPPL is `smc-bpf` (the SMC bootstrap particle filter).
-The file `out.cu` can then be compiled using, e.g., `rootppl out.cu --stack_size 10000`.
-The stack size option is mandatory for compiling RootPPL programs compiled from CorePPL.
-More information about RootPPL can be found at [RootPPL](#rootppl).
-
 ## RootPPL
-RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. See examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language.
+RootPPL is an intermediate language for representing probabilistic models and comes with a framework that performs inference on the GPU in these models. See examples in the folder `rootppl/models`. The idea is that high-level Miking probabilistic programming languages should be compiled to this intermediate language. An experimental CorePPL-to-RootPPL compiler is currently available (see [Compiling CorePPL to RootPPL](#compiling-coreppl-to-rootppl)).
 
 ### Getting Started
 The instructions below are tested on Ubuntu 18.04 but should work for other Unix-like systems.
 
-#### Prerequisites
-Before building RootPPL programs, a C++/CUDA compiler is required. RootPPL works on CPU and Nvidia GPU:s. For the CPU version, a C++ compiler should suffice, e.g. g++.  In
-order to build for GPU, CUDA must be installed. See
-CUDA installation guides: [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/ "CUDA Installation Guide Linux"),
-[Mac](https://docs.nvidia.com/cuda/cuda-installation-guide-mac-os-x/index.html "CUDA Installation Guide Mac").
-
-To run the CPU version in parallel, [OpenMP](https://www.openmp.org/resources/openmp-compilers-tools/) must be installed.
-OpenMP comes with recent gcc versions. However, OpenMP is not necessary if one does not want to execute programs in parallel on the CPU.
-
-#### Install `rootppl`
-To install `rootppl` for the current user, first clone this repository and change directory to the `rootppl` folder. Then run:
-```
-make install
-```
-This will install `rootppl` to `$HOME/.local/bin` and inference engine sources to `$HOME/.local/src/rootppl`. Some systems, e.g. Mac OS, will require manually adding `$HOME/.local/bin` to `$PATH`.
-
-#### Build
+#### Using `rppl`
 To compile a model and build an executable:
 ```
-rootppl path/to/model.cu
+rppl path/to/model.cu
 ```
 This will compile the model along with the inference framework for CPU. The inference framework build products are placed under `build/`.
-The `rootppl` command wraps `g++`/`nvcc`, and you may supply options used for `g++` and/or `nvcc` to `rootppl`.
+The `rppl` command wraps `g++`/`nvcc`, and you may supply options used for `g++` and/or `nvcc` to `rppl`.
 These options will be used when compiling the supplied models, but not when compiling the inference framework.
-One limitation is that it is currently only possible to supply source file(s) to `rootppl`.
+One limitation is that it is currently only possible to supply source file(s) to `rppl`.
 Object/library files are not supported (for this, you must write your own custom build script).
 
 To compile for GPU, add your GPU:s compute capability to the `--target` option.
@@ -99,19 +154,19 @@ You can find your GPU:s compute capability in the [Wikipedia table](https://en.w
 Here is an example that will compile the airplane example for a GPU with a minimum compute capability of 7.5
 (simply remove `--target sm_75` to compile for CPU):
 ```
-rootppl models/airplane/airplane.cu --target sm_75 -j 5
+rppl models/airplane/airplane.cu --target sm_75 -j 5
 ```
 The optional argument `-j x` speeds up the compilation process by spawning `x` jobs, allowing for parallel compilation.
 The corresponding parallel CPU (OpenMP) example is:
 ```
-rootppl models/airplane/airplane.cu --target omp -j 5
+rppl models/airplane/airplane.cu --target omp -j 5
 ```
 Alternatively, the c++ compiler can be specified with CXX. This is often required on Mac OS to enable OpenMP, by using g++ instead of the default clang. On Mac OS, g++ can be installed with e.g. `brew install gcc`. Then, assuming the version installed was `gcc-10`:
 ```
-rootppl models/airplane/airplane.cu --target omp -j 5 --cxx g++-10
+rppl models/airplane/airplane.cu --target omp -j 5 --cxx g++-10
 ```
 
-The first build will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run `rootppl` with the `-j num_threads` to use multiple threads and speed up the build). The inference framework is recompiled whenever options such as `--target` are modified between runs of `rootppl`.
+The first build will compile the entire inference framework and can take 20 seconds or so when building for GPU. (Run `rppl` with the `-j num_threads` to use multiple threads and speed up the build). The inference framework is recompiled whenever options such as `--target` are modified between runs of `rppl`.
 
 Any of the above commands should generate an executable named `a.out` (add `-o <exec_name>` to name it differently). Execute it with `./a.out num_particles`. For example:
 ```
@@ -225,7 +280,7 @@ This example can be found in
 [`rootppl/models/simple-examples/coin_flip_mean.cu`](rootppl/models/simple-examples/coin_flip_mean.cu)
 and, being in the `rootppl` directory, compiled with:
 ```
-rootppl models/simple-examples/coin_flip_mean.cu
+rppl models/simple-examples/coin_flip_mean.cu
 ```
 
 Then it can be executed with the executable followed by the
@@ -350,7 +405,7 @@ a parallel implementation for the GPU, and a sequential and parallel implementat
 
 #### Compile with the built-in stack
 To compile with the `progStateStack_t` program state, the macro `INIT_MODEL_STACK(num_bblocks)` should be used instead of `INIT_MODEL(progState_t, num_bblocks)`.
-Then the stack size is specified in bytes with `--stack_size num_bytes`, e.g. `rootppl my_stack_model.cu --stack_size 10000`.
+Then the stack size is specified in bytes with `--stack_size num_bytes`, e.g. `rppl my_stack_model.cu --stack_size 10000`.
 
 #### Building a more interesting model
 TODO, stuff not yet demonstrated explicitly in README:

@@ -974,11 +974,13 @@ let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
     map (lam var: String. (var, not (setMem var sSet))) vars
 in
 let t = symbolizeExpr symEnvEmpty
-          (parseMCorePPLFile "coreppl/models/crbd/crbd-unaligned.mc") in
-utest _testWithSymbolize false t ["w1","w2","w3"] with [
+          (parseMCorePPLFile "coreppl/models/diversification-models/crbd-synthetic.mc") in
+utest _testWithSymbolize false t ["w1","w2","w3", "w4", "w5"] with [
   ("w1", false),
   ("w2", false),
-  ("w3", true)
+  ("w3", true),
+  ("w4", true),
+  ("w5", true)
 ]
 using eqTest in
 

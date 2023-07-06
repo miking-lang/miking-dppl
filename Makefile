@@ -1,89 +1,101 @@
-.PHONY : all test test-boot clean install uninstall
+include vars.mk
+
+#####################
+## General targets ##
+#####################
+
+.PHONY: all
+all: build/${CPPL_NAME}
+
+.PHONY: clean
+clean: clean-coreppl
+
+.PHONY: install
+install: install-coreppl install-rootppl install-scripts
+
+.PHONY: uninstall
+uninstall: uninstall-coreppl uninstall-rootppl uninstall-scripts
+
+.PHONY: test
+test: test-coreppl test-rootppl
+
+
+#############
+## CorePPL ##
+#############
+
+cppl_tmp_file := $(shell mktemp)
+build/${CPPL_NAME}: $(shell find coreppl/src -name "*.mc")
+	time mi compile coreppl/src/${CPPL_NAME}.mc --output ${cppl_tmp_file}
+	mkdir -p build
+	cp ${cppl_tmp_file} build/${CPPL_NAME}
+	rm ${cppl_tmp_file}
+
+.PHONY: clean-coreppl
+clean-coreppl:
+	rm -rf build
 
 # ANSI escape sequence for red text
 RED=\033[0;31m
 # ANSI escape sequence for resetting text color
 RESET=\033[0m
-
-cppl_name=cppl
-exec_name=cppl
-plot_name=dppl-plot
-bin_path=${HOME}/.local/bin
-src_path=${HOME}/.local/src/coreppl/
-cppl_src=coreppl/src/.
-
-rootppl_bin_path = $(HOME)/.local/bin/rppl
-rootppl_src_path=$(HOME)/.local/src/rootppl/
-rootppl_bin = rootppl/rppl
-rootppl_src = rootppl/src/.
-
-all: build/${cppl_name}
-
-cppl_tmp_file := $(shell mktemp)
-build/${cppl_name}: $(shell find . -name "*.mc")
-	time mi compile coreppl/src/${cppl_name}.mc --output ${cppl_tmp_file}
-	mkdir -p build
-	cp ${cppl_tmp_file} build/${cppl_name}
-	rm ${cppl_tmp_file}
-
-tppl_tmp_file := $(shell mktemp)
-build/${tppl_name}: $(shell find . -name "*.mc" -o -name "*.syn")
-	mi syn treeppl/src/treeppl.syn treeppl/src/treeppl-ast.mc
-	time mi compile treeppl/src/${tppl_name}.mc --output ${tppl_tmp_file}
-	mkdir -p build
-	cp ${tppl_tmp_file} build/${tppl_name}
-	rm ${tppl_tmp_file}
-
-install: build/${cppl_name}
-# CorePPL
-	mkdir -p $(bin_path) $(src_path);
-	cp build/${cppl_name} ${bin_path}/${exec_name}
-	chmod +x ${bin_path}/${exec_name}
-	cp -rf $(cppl_src) $(src_path)
-
-# Scripts
-	cp -f scripts/${plot_name} ${bin_path}/.
-	chmod +x ${bin_path}/${plot_name}
-
-# RootPPL
-	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
-	cp -f $(rootppl_bin) $(rootppl_bin_path)
-	cp -rf $(rootppl_src) $(rootppl_src_path)
-
-# Information message
+.PHONY: install-coreppl
+install-coreppl: build/${CPPL_NAME}
+	mkdir -p ${BIN_PATH} ${SRC_PATH};
+	cp build/${CPPL_NAME} ${BIN_PATH}/${EXEC_NAME}
+	chmod +x ${BIN_PATH}/${EXEC_NAME}
+	cp -rf ${CPPL_SRC} ${SRC_PATH}
 	@echo "\n${RED}Attention:"
-	@echo "${cppl_name} has been installed to ${bin_path} and the CorePPL sources have been installed to $(src_path)."
+	@echo "${CPPL_NAME} has been installed to ${BIN_PATH} and the CorePPL sources have been installed to ${SRC_PATH}."
 	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
 	@echo "E.g. under Bash:"
-	@echo 'export PATH=$$PATH:'"${bin_path}"
-	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"$(src_path)\n${RESET}"
+	@echo 'export PATH=$$PATH:'"${BIN_PATH}"
+	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"${SRC_PATH}\n${RESET}"
 
-uninstall:
-# CorePPL
-	rm -f ${bin_path}/${exec_name}
-	rm -rf $(src_path)
+.PHONY: uninstall-coreppl
+uninstall-coreppl:
+	rm -f ${BIN_PATH}/${EXEC_NAME}
+	rm -rf ${SRC_PATH}
 
-# Scripts
-	rm -f ${bin_path}/${plot_name}
+.PHONY: test-coreppl
+test-coreppl: build/${CPPL_NAME}
+	@$(MAKE) -s -f test-coreppl.mk all
 
-# RootPPL
-	rm -rf $(rootppl_bin_path)
-	rm -rf $(rootppl_src_path)
 
-clean:
-	rm -rf build
+#############
+## RootPPL ##
+#############
 
-test:
-	@$(MAKE) -s -f test.mk all
-
-test-boot:
-	@$(MAKE) -s -f test-boot.mk all
-
+.PHONY: install-rootppl
 install-rootppl:
-	mkdir -p $(dir $(rootppl_bin_path)) $(rootppl_src_path);
-	cp -f $(rootppl_bin) $(rootppl_bin_path)
-	cp -rf $(rootppl_src) $(rootppl_src_path)
+	mkdir -p $(dir ${ROOTPPL_BIN_PATH}) ${ROOTPPL_SRC_PATH};
+	sed 's\$$RPPL_ENGINE_SRC\${ROOTPPL_SRC_PATH}\g' ${ROOTPPL_BIN} > ${ROOTPPL_BIN_PATH}
+	chmod +x ${ROOTPPL_BIN_PATH}
+	cp -rfT ${ROOTPPL_SRC} ${ROOTPPL_SRC_PATH}
 
+.PHONY: uninstall-rootppl
 uninstall-rootppl:
-	rm -rf $(rootppl_bin_path)
-	rm -rf $(rootppl_src_path)
+	rm -rf ${ROOTPPL_BIN_PATH}
+	rm -rf ${ROOTPPL_SRC_PATH}
+
+# TODO(2023-06-28,dlunde): Currently no pure RootPPL tests (although we test
+# the RootPPL backend of cppl as part of test-cppl). There seem to be some
+# tests under rootppl/, but I do not know their dependencies (seem to be some R
+# stuff there, for example) and how to run them from this makefile.
+.PHONY: test-rootppl
+test-rootppl:
+
+
+#############
+## Scripts ##
+#############
+
+.PHONY: install-scripts
+install-scripts:
+	cp -f scripts/${PLOT_NAME} ${BIN_PATH}/.
+	chmod +x ${BIN_PATH}/${PLOT_NAME}
+
+.PHONY: uninstall-scripts
+uninstall-scripts:
+	rm -f ${BIN_PATH}/${PLOT_NAME}
+

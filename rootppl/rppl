@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 
-# TODO Hard-coded location, not that elegant. Solutions? Maybe replace with sed
-# or add in install script?
-engine_src=~/.local/src/rootppl/
-
 # Runtime
 engine_build=build/
+engine_src=$RPPL_ENGINE_SRC
 
 # Argument parsing
 args=()
@@ -34,6 +31,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ess-threshold)
       flags+=" -D ESS_THRESHOLD=$2"
+      shift
+      shift
+      ;;
+    --seed)
+      flags+=" -D SEED=$2"
       shift
       shift
       ;;
@@ -83,7 +85,7 @@ fi
 rm -f $new
 
 # Build RootPPL engine
-${engine_src}build.mk \
+${engine_src}/build.mk \
   $flag_jobs\
   SRC="$engine_src"\
   BUILD="$engine_build"\

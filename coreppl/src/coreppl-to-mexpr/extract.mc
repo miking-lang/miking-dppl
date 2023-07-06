@@ -198,7 +198,7 @@ lang DPPLExtract =
         appf2_ (nvar_ entry.runId)
           (inferMethodConfig info method)
           (appSeq_ (nvar_ id) args)
-      else e
+      else smap_Expr_Expr (replaceInferApplication solutions inferData) e
     else e
   | t -> smap_Expr_Expr (replaceInferApplication solutions inferData) t
 

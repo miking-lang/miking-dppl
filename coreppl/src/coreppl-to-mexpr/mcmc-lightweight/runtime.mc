@@ -111,12 +111,12 @@ let sample: all a. Address -> Dist a -> a = lam addr. lam dist.
   unsafeCoerce (sample.0)
 
 -- Function to propose db changes between MH iterations.
-let modDb: () -> () = lam.
+let modDb: Unknown -> () = lam config.
 
   let db = deref state.db in
 
   -- Enable global modifications with probability gProb
-  let gProb = compileOptions.mcmcLightweightGlobalProb in
+  let gProb = config.globalProb in
   let modGlobal: Bool = bernoulliSample gProb in
 
   if modGlobal then
@@ -148,7 +148,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         let prevSample = head samples in
         let prevTraceLength = deref state.traceLength in
         let prevWeight = head weights in
-        modDb ();
+        modDb config;
         modref state.weight 0.;
         modref state.weightReused 0.;
         modref state.prevWeightReused 0.;

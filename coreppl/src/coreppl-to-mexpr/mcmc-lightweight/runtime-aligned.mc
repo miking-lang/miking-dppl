@@ -145,7 +145,7 @@ let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
   unsafeCoerce sample
 
 -- Function to propose aligned trace changes between MH iterations.
-let modTrace: () -> () = lam.
+let modTrace: Unknown -> () = lam config.
 
   let alignedTraceLength: Int = deref state.alignedTraceLength in
 
@@ -162,7 +162,7 @@ let modTrace: () -> () = lam.
   in
 
   -- Enable global modifications with probability gProb
-  let gProb = compileOptions.mcmcLightweightGlobalProb in
+  let gProb = config.globalProb in
   let modGlobal: Bool = bernoulliSample gProb in
 
   if modGlobal then
@@ -194,7 +194,7 @@ let run : all a. Unknown -> (State -> a) -> Dist a =
         let prevUnalignedTraces = deref state.unalignedTraces in
         let prevSample = head samples in
         let prevWeight = head weights in
-        modTrace ();
+        modTrace config;
         modref state.weight 0.;
         modref state.prevWeightReused 0.;
         modref state.weightReused 0.;
