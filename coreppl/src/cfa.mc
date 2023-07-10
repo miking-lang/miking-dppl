@@ -337,15 +337,24 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
-  | TmLet { ident = ident, body = TmConst { val = c, info = info } }  ->
-    if isHigherOrderFunType (tyConst c) then
-      -- TODO(dlunde,2022-09-19): Add support for higher-order constant functions
-      errorSingle [info]
-        "Higher-order constant functions not yet supported in alignment analysis"
-    else []
+
+  -- Alignment propagation for higher-order constant functions
+  sem propagateAlignConstraintConst res args =
+  | CFoldl _ ->
+    [Cstr{}]
+
+  | CFoldr _ ->
+  | CMap _ ->
+
+  | CTensorCreateInt _ ->
+  | CTensorCreateFloat _ ->
+  | CTensorCreate _ ->
+  | CTensorIterSlice _ ->
 
   sem addAlignConstraints (graph: CFAGraph) =
   | t ->
+    let graph =
+      {graph with cpfs = cons propagateAlignConstraintConst graph.cpfs} in
     let cgfs: [Expr -> [Constraint]] = [ generateAlignConstraints graph.im ] in
     let cstrs: [Constraint] = collectConstraints cgfs [] t in
     foldl initConstraint graph cstrs
@@ -853,14 +862,18 @@ let t = _parse "
                     if ltf e 0.2 then assume (Bernoulli e)
                     else false) 0. ls
   in
+  let t4 = tensorCreateDense [3,3] (lam. assume (Bernoulli 0.5)) in
+  let t5 = tensorGetExn t4 [0,0] in
   ()
 ------------------------" in
-utest _test false t ["p","ls","t1","t2","t3"] with [
+utest _test false t ["p","ls","t1","t2","t3","t4","t5"] with [
   ("p",  false),
   ("ls", false),
   ("t1", false),
   ("t2", true),
-  ("t3", true)
+  ("t3", true),
+  ("t4", false),
+  ("t5", true)
 ] using eqTest in
 
 ---------------------
@@ -979,9 +992,11 @@ utest _test false t ["t1", "t2", "res"] with [
   ("res", true)
 ] using eqTest in
 
--- Higher-order constants
+---- Higher-order constants
 --let t = _parse "
-
+--  map
+--  foldl
+--  tensorCreate
 --------------------------" in
 --utest _test false t ["t1", "t2", "res"] with [
 --  ("t1", false),
