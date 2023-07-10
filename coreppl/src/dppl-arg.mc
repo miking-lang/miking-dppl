@@ -9,6 +9,9 @@ type Options = {
   -- Backend
   target : String,
 
+  -- Whether or not to include utests
+  test : Bool,
+
   -- Number of samples/particles
   particles : Int,
 
@@ -64,6 +67,7 @@ type Options = {
 let default = {
   method = "is-lw",
   target = "mexpr",
+  test = false,
   particles = 5000,
   resample = "manual",
   align = false,
@@ -96,6 +100,10 @@ let config = [
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
+  ([("--test", "", "")],
+    "Include utests",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with test = true}),
   ([("-t", " ", "<target>")],
     join [
       "The compilation target. The supported targets are: mexpr, rootppl. Default: ",

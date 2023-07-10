@@ -843,6 +843,26 @@ utest _test false t ["t", "res"] with [
   ("res",true)
 ] using eqTest in
 
+-- Stochastic higher-order constants
+let t = _parse "
+  let f = lam p. assume (Bernoulli p) in
+  let ls = [0.1,0.2,0.3] in
+  let t1 = map f ls in
+  let t2 = get t1 0 in
+  let t3 = foldl (lam acc. lam e.
+                    if ltf e 0.2 then assume (Bernoulli e)
+                    else false) 0. ls
+  in
+  ()
+------------------------" in
+utest _test false t ["p","ls","t1","t2","t3"] with [
+  ("p",  false),
+  ("ls", false),
+  ("t1", false),
+  ("t2", true),
+  ("t3", true)
+] using eqTest in
+
 ---------------------
 -- ALIGNMENT TESTS --
 ---------------------
@@ -959,7 +979,17 @@ utest _test false t ["t1", "t2", "res"] with [
   ("res", true)
 ] using eqTest in
 
--- Test in `models/coreppl/crbd/crbd-unaligned.mc`
+-- Higher-order constants
+--let t = _parse "
+
+--------------------------" in
+--utest _test false t ["t1", "t2", "res"] with [
+--  ("t1", false),
+--  ("t2", false),
+--  ("res", true)
+-- ] using eqTest in
+
+-- Test in `coreppl/models/diversification-models/crbd-synthetic.mc`
 let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
   lam debug. lam t. lam vars.
     let tANF = normalizeTerm t in
@@ -974,7 +1004,7 @@ let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
     map (lam var: String. (var, not (setMem var sSet))) vars
 in
 let t = symbolizeExpr symEnvEmpty
-          (parseMCorePPLFile "coreppl/models/diversification-models/crbd-synthetic.mc") in
+          (parseMCorePPLFile false "coreppl/models/diversification-models/crbd-synthetic.mc") in
 utest _testWithSymbolize false t ["w1","w2","w3", "w4", "w5"] with [
   ("w1", false),
   ("w2", false),
