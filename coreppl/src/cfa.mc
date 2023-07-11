@@ -62,6 +62,11 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     let cstrs = collectConstraints cgfs [] t in
     foldl initConstraint graph cstrs
 
+  -- Ensure new abstract constants added by generateConstAllConstraints do not
+  -- cause errors in the default propagateConstraintConst
+  sem propagateConstraintConst res args =
+  | _ -> []
+
 end
 
 lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
@@ -102,7 +107,6 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
   | rhs -> CstrDirectAv {
       lhs = lhs, lhsav = AVStoch {}, rhs = rhs, rhsav = AVStoch {}
     }
-
   sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
     match update.1 with AVConst _ then
@@ -113,12 +117,10 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
       initConstraint graph (cstrStochDirect rhs res)
     else graph
 
-  -- This function is called from the base Miking CFA fragment when the
-  -- constant application is complete (all arguments have been given).
-  -- For the stochastic value flow, this is uninteresting. Consequently, as a
-  -- default, we simply do nothing.
-  sem propagateConstraintConst res args graph =
-  | c -> graph
+  -- We need special constraints for higher-order functions
+  sem propagateStochConstraintConst res args =
+  -- TODO
+  | _ -> []
 
   sem constraintToString im (env: PprintEnv) =
   | CstrConstStochApp { lhs = lhs, rhs = rhs, res = res } ->
@@ -197,6 +199,8 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
 
   sem addStochConstraints (graph: CFAGraph) =
   | t ->
+    let graph =
+      {graph with cpfs = cons propagateStochConstraintConst graph.cpfs} in
     let cgfs: [Expr -> [Constraint]] = [ generateStochConstraints graph.im ] in
     let cstrs: [Constraint] = collectConstraints cgfs [] t in
     foldl initConstraint graph cstrs
@@ -245,6 +249,17 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x
   | CstrAlignLamApp { lhs: IName }
+  -- {lam y1. lhs2} ⊆ lhs1 ⇒
+  --   ({stoch} ⊆ lhs1 ⇒ {unaligned} ⊆ y1) and
+  --   ({unaligned} ⊆ x ⇒ {unaligned} ⊆ y1)
+  --   ({lam y2. lhs3} ⊆ lhs2 ⇒
+  --     ({stoch} ⊆ lhs2 ⇒ {unaligned} ⊆ y2) and
+  --     ({unaligned} ⊆ x ⇒ {unaligned} ⊆ y2)
+  --     ...
+  --       ({lam yn. _} ⊆ lhsn ⇒
+  --         ({stoch} ⊆ lhsn ⇒ {unaligned} ⊆ yn) and
+  --         ({unaligned} ⊆ x ⇒ {unaligned} ⊆ yn)
+  -- | CstrAlignConstApp { x: IName, lhs: IName, arity: Int }
 
   sem cmpConstraintH =
   | (CstrAlignLamApp { lhs = lhs1 }, CstrAlignLamApp { lhs = lhs2 }) ->
@@ -340,16 +355,24 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
 
   -- Alignment propagation for higher-order constant functions
   sem propagateAlignConstraintConst res args =
-  | CFoldl _ ->
-    [Cstr{}]
+  -- TODO
+  | CFoldl _ -> []
+  | CFoldr _ -> []
+  | CMap _ -> []
+  | CMapi _ -> []
+  | CIter _ -> []
+  | CIteri _ -> []
+  | CCreate _ -> []
+  | CCreateList _ -> []
+  | CCreateRope _ -> []
+  | CTensorCreateInt _ -> []
+  | CTensorCreateFloat _ -> []
+  | CTensorCreate _ -> []
+  | CTensorIterSlice _ -> []
+  | _ -> []
+  -- Stochastic values are already handled correctly as part of standard constraints
+  -- We need to deal with alignment constraints
 
-  | CFoldr _ ->
-  | CMap _ ->
-
-  | CTensorCreateInt _ ->
-  | CTensorCreateFloat _ ->
-  | CTensorCreate _ ->
-  | CTensorIterSlice _ ->
 
   sem addAlignConstraints (graph: CFAGraph) =
   | t ->
@@ -457,6 +480,11 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
     match update.1 with AVConst { id = id } then
       addData graph (AVCheckpoint {}) id
     else graph
+
+  -- We need special constraints for higher-order functions
+  sem propagateCheckpointConstraintConst res args =
+  -- TODO
+  | _ -> []
 
   sem constraintToString im (env: PprintEnv) =
   | CstrCheckpointLamApp { lhs = lhs, res = res } ->
@@ -566,15 +594,11 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
         ]
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
-  | TmLet { ident = ident, body = TmConst { val = c, info = info } }  ->
-    if isHigherOrderFunType (tyConst c) then
-      -- TODO(dlunde,2022-09-19): Add support for higher-order constant functions
-      errorSingle [info]
-        "Higher-order constant functions not yet supported in checkpoint analysis"
-    else []
 
   sem addCheckpointConstraints (checkpoint: Expr -> Bool) (graph: CFAGraph) =
   | t ->
+    let graph =
+      {graph with cpfs = cons propagateCheckpointConstraintConst graph.cpfs} in
     let cgfs: [Expr -> [Constraint]] = [
       generateCheckpointInitConstraints checkpoint graph.im,
       generateCheckpointConstraints checkpoint graph.im
@@ -864,16 +888,20 @@ let t = _parse "
   in
   let t4 = tensorCreateDense [3,3] (lam. assume (Bernoulli 0.5)) in
   let t5 = tensorGetExn t4 [0,0] in
+  let t6 = if assume (Bernoulli p) then (lam x. 1.0) else (lam y. 2.0) in
+  let t7 = foldl (lam acc. t6) 0. ls in
   ()
 ------------------------" in
-utest _test false t ["p","ls","t1","t2","t3","t4","t5"] with [
+utest _test false t ["p","ls","t1","t2","t3","t4","t5","t6","t7"] with [
   ("p",  false),
   ("ls", false),
   ("t1", false),
   ("t2", true),
   ("t3", true),
   ("t4", false),
-  ("t5", true)
+  ("t5", true),
+  ("t6", true),
+  ("t7", true)
 ] using eqTest in
 
 ---------------------
