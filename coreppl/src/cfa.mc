@@ -85,6 +85,18 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
   | CstrConstStochApp { lhs: IName, rhs: IName, res: IName }
   -- {ext} ⊆ lhs ⇒ ({stoch} ⊆ rhs ⇒ {stoch} ⊆ res)
   | CstrExtStochApp { lhs: IName, rhs: IName, res: IName }
+  -- TODO
+  -- (stoch in lhs1 ⇒ stoch in x) and
+  -- {lam _. lhs2} ⊆ lhs1 ⇒
+  --   (stoch in lhs2 ⇒ stoch in x) and
+  --   {lam _. lhs3} ⊆ lhs2 ⇒
+  --     (stoch in lhs3 ⇒ stoch in x) and
+  --     {lam _. lhs4} ⊆ lhs3 ⇒
+  --     ...
+  --       (stoch in lhs(n-1) ⇒ stoch in x) and
+  --       {lam _. lhsn} ⊆ lhs(n-1) ⇒
+  --         (stoch in lhsn ⇒ stoch in x)
+  -- | CstrStochConstInnerApp { lhs: IName, x: IName, arity: Int }
 
   sem cmpConstraintH =
   | (CstrConstStochApp { lhs = lhs1, rhs = rhs1, res = res1 },
@@ -249,6 +261,7 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ {unaligned} ⊆ x
   | CstrAlignLamApp { lhs: IName }
+  -- TODO
   -- {lam y1. lhs2} ⊆ lhs1 ⇒
   --   ({stoch} ⊆ lhs1 ⇒ {unaligned} ⊆ y1) and
   --   ({unaligned} ⊆ x ⇒ {unaligned} ⊆ y1)
@@ -259,7 +272,7 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   --       ({lam yn. _} ⊆ lhsn ⇒
   --         ({stoch} ⊆ lhsn ⇒ {unaligned} ⊆ yn) and
   --         ({unaligned} ⊆ x ⇒ {unaligned} ⊆ yn)
-  -- | CstrAlignConstApp { x: IName, lhs: IName, arity: Int }
+  -- | CstrAlignConstInnerApp { lhs: IName, x: IName, arity: Int }
 
   sem cmpConstraintH =
   | (CstrAlignLamApp { lhs = lhs1 }, CstrAlignLamApp { lhs = lhs2 }) ->
