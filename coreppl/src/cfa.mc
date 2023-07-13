@@ -59,6 +59,96 @@ lang ConstAllCFA = MExprCFA + MExprPPL
   sem propagateConstraintConst res args intermediates =
   | _ -> []
 
+  -- Given a function that adds constraints for an application, apply it
+  -- correctly within all higher-order intrinsics.
+  sem propagateConstraintHigherOrderConst appConstraints res args intermediates =
+  | CFoldl _ ->
+    utest length args with 3 in
+    let seq = get args 2 in
+    let f = head args in
+    let acc = get args 1 in
+    match intermediates with [li,a1,a2,a3] in
+    join [
+      appConstraints f acc a1,
+      appConstraints a1 li a2,
+      appConstraints f a2 a3,
+      appConstraints a3 li res
+    ]
+  | CFoldr _ ->
+    utest length args with 3 in
+    let seq = get args 2 in
+    let f = head args in
+    let acc = get args 1 in
+    match intermediates with [li,a1,a2] in
+    join [
+      appConstraints f li a1,
+      appConstraints a1 acc a2,
+      appConstraints a1 a2 res
+    ]
+  | CMap _ ->
+    utest length args with 2 in
+    let seq = get args 1 in
+    let f = head args in
+    match intermediates with [li,a1] in
+    join [
+      appConstraints f li a1
+    ]
+  | CMapi _ ->
+    utest length args with 2 in
+    let seq = get args 1 in
+    let f = head args in
+    match intermediates with [li,i,a1,a2] in
+    join [
+      appConstraints f i a1,
+      appConstraints a1 li a2
+    ]
+  | CIter _ ->
+    utest length args with 2 in
+    let seq = get args 1 in
+    let f = head args in
+    match intermediates with [li,empty] in
+    join [
+      appConstraints f li empty
+    ]
+  | CIteri _ ->
+    utest length args with 2 in
+    let seq = get args 1 in
+    let f = head args in
+    match intermediates with [li,i,a1,empty] in
+    join [
+      appConstraints f i a1,
+      appConstraints a1 li empty
+    ]
+  | ( CCreate _
+    | CCreateList _
+    | CCreateRope _
+    ) ->
+    utest length args with 2 in
+    let f = get args 1 in
+    match intermediates with [i,a1] in
+    join [
+      appConstraints f i a1
+    ]
+  | ( CTensorCreateInt _
+    | CTensorCreateFloat _
+    | CTensorCreate _ ) ->
+    utest length args with 2 in
+    let f = get args 1 in
+    match intermediates with [i,a1] in
+    join [
+      appConstraints f i a1
+    ]
+  | CTensorIterSlice _ ->
+    utest length args with 2 in
+    let f = get args 0 in
+    let tensor = get args 1 in
+    match intermediates with [ti,i,a1,empty] in
+    join [
+      appConstraints f i a1,
+      appConstraints a1 ti empty
+    ]
+  | _ -> []
+
 end
 
 lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
@@ -148,96 +238,6 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
-  -- We need special constraints for higher-order functions
-  sem propagateStochConstraintConst res args intermediates =
-  | CFoldl _ ->
-    utest length args with 3 in
-    let seq = get args 2 in
-    let f = head args in
-    let acc = get args 1 in
-    match intermediates with [li,a1,a2,a3] in
-    join [
-      appStochConstraints f acc a1,
-      appStochConstraints a1 li a2,
-      appStochConstraints f a2 a3,
-      appStochConstraints a3 li res
-    ]
-  | CFoldr _ ->
-    utest length args with 3 in
-    let seq = get args 2 in
-    let f = head args in
-    let acc = get args 1 in
-    match intermediates with [li,a1,a2] in
-    join [
-      appStochConstraints f li a1,
-      appStochConstraints a1 acc a2,
-      appStochConstraints a1 a2 res
-    ]
-  | CMap _ ->
-    utest length args with 2 in
-    let seq = get args 1 in
-    let f = head args in
-    match intermediates with [li,a1] in
-    join [
-      appStochConstraints f li a1
-    ]
-  | CMapi _ ->
-    utest length args with 2 in
-    let seq = get args 1 in
-    let f = head args in
-    match intermediates with [li,i,a1,a2] in
-    join [
-      appStochConstraints f i a1,
-      appStochConstraints a1 li a2
-    ]
-  | CIter _ ->
-    utest length args with 2 in
-    let seq = get args 1 in
-    let f = head args in
-    match intermediates with [li,empty] in
-    join [
-      appStochConstraints f li empty
-    ]
-  | CIteri _ ->
-    utest length args with 2 in
-    let seq = get args 1 in
-    let f = head args in
-    match intermediates with [li,i,a1,empty] in
-    join [
-      appStochConstraints f i a1,
-      appStochConstraints a1 li empty
-    ]
-  | ( CCreate _
-    | CCreateList _
-    | CCreateRope _
-    ) ->
-    utest length args with 2 in
-    let f = get args 1 in
-    match intermediates with [i,a1] in
-    join [
-      appStochConstraints f i a1
-    ]
-  | ( CTensorCreateInt _
-    | CTensorCreateFloat _
-    | CTensorCreate _ ) ->
-    utest length args with 2 in
-    let f = get args 1 in
-    match intermediates with [i,a1] in
-    join [
-      appStochConstraints f i a1
-    ]
-  | CTensorIterSlice _ ->
-    utest length args with 2 in
-    let f = get args 0 in
-    let tensor = get args 1 in
-    match intermediates with [ti,i,a1,empty] in
-    join [
-      appStochConstraints f i a1,
-      appStochConstraints a1 ti empty
-    ]
-  | _ -> []
-
-
   -- Whether a pattern can fail
   sem patFail =
   | ( PatSeqTot _
@@ -282,6 +282,8 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
 
   sem addStochConstraints (graph: CFAGraphInit) =
   | t ->
+    let propagateStochConstraintConst =
+      propagateConstraintHigherOrderConst appStochConstraints in
     let graph =
       {graph with cpfs = cons propagateStochConstraintConst graph.cpfs} in
     let cgfs: [GenFun] = [ generateStochConstraints ] in
@@ -381,6 +383,18 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   | TmExt t -> exprUnalignedNamesAcc acc t.inexpr
   | t -> errorSingle [infoTm t] "Error in exprUnalignedNames for CFA"
 
+  sem appAlignConstraints lhs =
+  | res -> [
+      CstrDirectAvCstrs {
+        lhs = res, lhsav = AVUnaligned {},
+        rhs = [CstrAlignLamApp { lhs = lhs }]
+      },
+      CstrDirectAvCstrs {
+        lhs = lhs, lhsav = AVStoch {},
+        rhs = [CstrAlignLamApp { lhs = lhs }]
+      }
+    ]
+
   sem generateAlignConstraints graph =
   | _ -> graph
   | TmLet ({ ident = ident, body = TmLam t } & b) ->
@@ -422,43 +436,18 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   | TmLet ({ ident = ident, body = TmApp app } & b) ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar _ then
-        let cstrs = [
-          CstrDirectAvCstrs {
-            lhs = name2intAcc graph.ia b.info ident, lhsav = AVUnaligned {},
-            rhs = [CstrAlignLamApp { lhs = name2intAcc graph.ia l.info l.ident }]
-          },
-          CstrDirectAvCstrs {
-            lhs = name2intAcc graph.ia b.info l.ident, lhsav = AVStoch {},
-            rhs = [CstrAlignLamApp { lhs = name2intAcc graph.ia l.info l.ident }]
-          }
-        ] in
+        let res = name2intAcc graph.ia b.info ident in
+        let lhs = name2intAcc graph.ia l.info l.ident in
+        let cstrs = appAlignConstraints lhs res in
         { graph with cstrs = concat cstrs graph.cstrs }
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
-  -- Alignment propagation for higher-order constant functions
-  sem propagateAlignConstraintConst res args intermediates =
-  -- TODO
-  | CFoldl _ -> []
-  | CFoldr _ -> []
-  | CMap _ -> []
-  | CMapi _ -> []
-  | CIter _ -> []
-  | CIteri _ -> []
-  | CCreate _ -> []
-  | CCreateList _ -> []
-  | CCreateRope _ -> []
-  | CTensorCreateInt _ -> []
-  | CTensorCreateFloat _ -> []
-  | CTensorCreate _ -> []
-  | CTensorIterSlice _ -> []
-  | _ -> []
-  -- Stochastic values are already handled correctly as part of standard constraints
-  -- We need to deal with alignment constraints
-
-
   sem addAlignConstraints (graph: CFAGraphInit) =
   | t ->
+    let propagateAlignConstraintConst =
+      propagateConstraintHigherOrderConst
+        (lam lhs. lam. appAlignConstraints lhs) in
     let graph =
       {graph with cpfs = cons propagateAlignConstraintConst graph.cpfs} in
     let cgfs: [GenFun] = [ generateAlignConstraints ] in
@@ -564,24 +553,6 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
       addData graph (AVCheckpoint {}) id
     else graph
 
-  -- We need special constraints for higher-order functions
-  sem propagateCheckpointConstraintConst res args intermediates =
-  -- TODO
-  | CFoldl _ -> []
-  | CFoldr _ -> []
-  | CMap _ -> []
-  | CMapi _ -> []
-  | CIter _ -> []
-  | CIteri _ -> []
-  | CCreate _ -> []
-  | CCreateList _ -> []
-  | CCreateRope _ -> []
-  | CTensorCreateInt _ -> []
-  | CTensorCreateFloat _ -> []
-  | CTensorCreate _ -> []
-  | CTensorIterSlice _ -> []
-  | _ -> []
-
   sem constraintToString im (env: PprintEnv) =
   | CstrCheckpointLamApp { lhs = lhs, res = res } ->
     match pprintVarIName im env lhs with (env,lhs) in
@@ -642,6 +613,23 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
   | TmExt t -> exprCheckpointNamesAcc checkpoint acc t.inexpr
   | t -> errorSingle [infoTm t] "Error in exprCheckpointNames for CFA"
 
+  sem appCheckpointConstraints lhs =
+  | res -> [
+      CstrCheckpointLamApp { lhs = lhs, res = res },
+      CstrCheckpointConstApp { lhs = lhs, res = res },
+
+      -- {checkpoint} ⊆ res ⇒
+      --   ({lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
+      --   AND const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id)
+      CstrDirectAvCstrs {
+        lhs = res, lhsav = AVCheckpoint (),
+        rhs = [
+          CstrCheckpointLam { lhs = lhs },
+          CstrCheckpointConst { lhs = lhs }
+        ]
+      }
+    ]
+
   sem generateCheckpointConstraints :
     (Expr -> Bool) -> CFAGraphInit -> Expr -> CFAGraphInit
   sem generateCheckpointConstraints checkpoint graph =
@@ -685,29 +673,16 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
       match app.rhs with TmVar _ then
         let ident = name2intAcc graph.ia b.info ident in
         let lident = name2intAcc graph.ia l.info l.ident in
-        let cstrs =
-          [
-            CstrCheckpointLamApp { lhs = lident, res = ident },
-            CstrCheckpointConstApp { lhs = lident, res = ident },
-
-            -- {checkpoint} ⊆ res ⇒
-            --   ({lam x. b} ⊆ lhs ⇒ {checkpoint} ⊆ x
-            --   AND const<id> ⊆ lhs ⇒ {checkpoint} ⊆ id)
-            CstrDirectAvCstrs {
-              lhs = ident, lhsav = AVCheckpoint (),
-              rhs = [
-                CstrCheckpointLam { lhs = lident },
-                CstrCheckpointConst { lhs = lident }
-              ]
-            }
-          ]
-        in
+        let cstrs = appCheckpointConstraints lident ident in
         { graph with cstrs = concat cstrs graph.cstrs }
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
   sem addCheckpointConstraints (checkpoint: Expr -> Bool) (graph: CFAGraphInit) =
   | t ->
+    let propagateCheckpointConstraintConst =
+      propagateConstraintHigherOrderConst
+        (lam lhs. lam rhs. appCheckpointConstraints lhs) in
     let graph =
       {graph with cpfs = cons propagateCheckpointConstraintConst graph.cpfs} in
     let cgfs: [GenFun] = [
@@ -987,7 +962,7 @@ utest _test false t ["t", "res"] with [
   ("res",true)
 ] using eqTest in
 
--- Stochastic higher-order constants
+-- Stochastic values and higher-order constants
 let t = _parse "
   let f = lam p. assume (Bernoulli p) in
   let ls = [0.1,0.2,0.3] in
@@ -1006,10 +981,22 @@ let t = _parse "
   let t10 = tensorCreateCArrayFloat [3,3] (lam. assume (Exponential 0.5)) in
   let t11 = tensorGetExn t10 [0,0] in
   let t12 = tensorIterSlice (lam. lam e. let t13 = e in ()) t10 in
+  let t13 = foldr (lam e2. lam acc2.
+                    if ltf e2 0.2 then assume (Bernoulli e2)
+                    else false) 0. ls
+  in
+  let t14 = head (head (map (mapi (lam. f)) [ls,ls,ls])) in
+  let t15 = head (head (map (map (lam. 1)) [ls,ls,ls])) in
+  let dc1 = iter (lam t16. 1) [f 0.1] in
+  let dc2 = iteri (lam. lam t17. 1) [0.1] in
+  let t18 = head (create 1 f) in
+  let t19 = head (createList 2 (lam. 1)) in
+  let t20 = head (createRope 3 f) in
   ()
 ------------------------" in
 utest _test false t ["p","ls","t1","t2","t3","t4","t5",
-                     "t6","t7","t8","t9","t10","t11","t12","t13"]
+                     "t6","t7","t8","t9","t10","t11","t12","t13",
+                     "t14","t15","t16","t17","t18","t19","t20"]
 with [
   ("p",  false),
   ("ls", false),
@@ -1025,7 +1012,14 @@ with [
   ("t10", false),
   ("t11", true),
   ("t12", false),
-  ("t13", true)
+  ("t13", true),
+  ("t14", true),
+  ("t15", false),
+  ("t16", true),
+  ("t17", false),
+  ("t18", true),
+  ("t19", false),
+  ("t20", true)
 ] using eqTest in
 
 ---------------------
@@ -1142,17 +1136,42 @@ utest _test false t ["t1", "t2", "res"] with [
   ("res", true)
 ] using eqTest in
 
----- Higher-order constants
---let t = _parse "
---  map
---  foldl
---  tensorCreate
---------------------------" in
---utest _test false t ["t1", "t2", "res"] with [
---  ("t1", false),
---  ("t2", false),
---  ("res", true)
--- ] using eqTest in
+-- Alignment and higher-order constants
+-- TODO Add tests for missing constants
+let t = _parse "
+  let fs = lam f.
+    if assume (Bernoulli 0.5) then (lam a1. f (); a1)
+                              else (lam a2. f (); a2)
+  in
+  let fu = lam g.
+    if assume (Bernoulli 0.5) then let x = g () in ()
+    else ()
+  in
+  let ls = [lam x1. x1, lam x2. x2, lam x3. x3] in
+  let dc1 = foldl (lam dc11. fs (lam dc12. let t1 = () in ())) 0 ls in
+  let dc2 = fu (lam z1. foldl (lam dc21. lam dc22. let t2 = () in ()) 0 ls) in
+  let dc3 = foldl (lam dc31. lam dc32. let t3 = () in ()) 0 ls in
+  -- foldr
+  -- map
+  -- mapi
+  -- iter
+  -- iteri
+  -- create
+  -- createList
+  -- createRope
+  -- tensorcreateDense
+  -- tensorCreateCArrayInt
+  -- tensorCreateCArrayFloat
+  -- tensorIterSlice
+  ()
+------------------------" in
+utest _test false t [
+  "t1","t2","t3"
+] with [
+  ("t1", false),
+  ("t2", false),
+  ("t3", true)
+] using eqTest in
 
 -- Test in `coreppl/models/diversification-models/crbd-synthetic.mc`
 let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
@@ -1375,6 +1394,14 @@ utest _test false t [
   ("fa2", true),
   ("app2", true)
 ] using eqTest in
+
+-- Checkpoints and higher-order constants
+-- TODO Add tests for missing constants
+--let t = _parse "
+--------------------------" in
+--utest _test false t [
+--] with [
+--] using eqTest in
 
 ()
 
