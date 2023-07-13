@@ -1037,6 +1037,25 @@ let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
     map (lam var: String. (var, not (setMem (nameNoSym var) aRes))) vars
 in
 
+let _testSymbolized: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    let cfaDebug = alignCfaDebug in
+    let cfa = alignCfa in
+    match _testBase cfaDebug cfa env tANF with (env, cfaRes) in
+    let aRes: Set Name = extractUnaligned cfaRes in
+    let sSet: Set String = setFold
+      (lam acc. lam n. setInsert (nameGetStr n) acc)
+      (setEmpty cmpString) aRes in
+    map (lam var: String. (var, not (setMem var sSet))) vars
+in
+
+let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+  let t = symbolizeExpr symEnvEmpty t in
+  _testSymbolized debug t vars
+in
 
 let t = _parse "
   let x = assume (Bernoulli 0.5) in
@@ -1141,16 +1160,16 @@ utest _test false t ["t1", "t2", "res"] with [
 let t = _parse "
   let fs = lam f.
     if assume (Bernoulli 0.5) then (lam a1. f (); a1)
-                              else (lam a2. f (); a2)
+                              else (lam a2. a2)
   in
   let fu = lam g.
     if assume (Bernoulli 0.5) then let x = g () in ()
     else ()
   in
   let ls = [lam x1. x1, lam x2. x2, lam x3. x3] in
-  let dc1 = foldl (lam dc11. fs (lam dc12. let t1 = () in ())) 0 ls in
-  let dc2 = fu (lam z1. foldl (lam dc21. lam dc22. let t2 = () in ()) 0 ls) in
-  let dc3 = foldl (lam dc31. lam dc32. let t3 = () in ()) 0 ls in
+  foldl (lam. fs (lam. let t1 = () in ())) 0 ls;
+  fu (lam z1. foldl (lam. lam. let t2 = () in ()) 0 ls);
+  foldl (lam. lam. let t3 = () in ()) 0 ls;
   -- foldr
   -- map
   -- mapi
@@ -1165,7 +1184,7 @@ let t = _parse "
   -- tensorIterSlice
   ()
 ------------------------" in
-utest _test false t [
+utest _testWithSymbolize false t [
   "t1","t2","t3"
 ] with [
   ("t1", false),
@@ -1174,22 +1193,9 @@ utest _test false t [
 ] using eqTest in
 
 -- Test in `coreppl/models/diversification-models/crbd-synthetic.mc`
-let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
-  lam debug. lam t. lam vars.
-    let tANF = normalizeTerm t in
-    let env = if debug then Some pprintEnvEmpty else None () in
-    let cfaDebug = alignCfaDebug in
-    let cfa = alignCfa in
-    match _testBase cfaDebug cfa env tANF with (env, cfaRes) in
-    let aRes: Set Name = extractUnaligned cfaRes in
-    let sSet: Set String = setFold
-      (lam acc. lam n. setInsert (nameGetStr n) acc)
-      (setEmpty cmpString) aRes in
-    map (lam var: String. (var, not (setMem var sSet))) vars
-in
-let t = symbolizeExpr symEnvEmpty
-          (parseMCorePPLFile false "coreppl/models/diversification-models/crbd-synthetic.mc") in
-utest _testWithSymbolize false t ["w1","w2","w3", "w4", "w5"] with [
+let t = parseMCorePPLFile false
+          "coreppl/models/diversification-models/crbd-synthetic.mc" in
+utest _testSymbolized false t ["w1","w2","w3", "w4", "w5"] with [
   ("w1", false),
   ("w2", false),
   ("w3", true),
