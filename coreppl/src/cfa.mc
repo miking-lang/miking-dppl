@@ -1180,7 +1180,6 @@ utest _test false t ["t1", "t2", "res"] with [
 ] using eqTest in
 
 -- Alignment and higher-order constants
--- TODO Add tests for missing constants
 let t = _parse "
   let fs = lam f.
     if assume (Bernoulli 0.5) then (lam a1. f (); a1)
@@ -1288,6 +1287,26 @@ let _test: Bool -> Expr -> [String] -> [([Char], Bool)] =
     match _testBase cfaDebug cfa env tANF with (env, cfaRes) in
     let aRes: Set Name = extractCheckpoint cfaRes in
     map (lam var: String. (var, setMem (nameNoSym var) aRes)) vars
+in
+
+let _testSymbolized: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+    let tANF = normalizeTerm t in
+    let env = if debug then Some pprintEnvEmpty else None () in
+    let cfaDebug = checkpointCfaDebug checkpoint in
+    let cfa = checkpointCfa checkpoint in
+    match _testBase cfaDebug cfa env tANF with (env, cfaRes) in
+    let aRes: Set Name = extractCheckpoint cfaRes in
+    let sSet: Set String = setFold
+      (lam acc. lam n. setInsert (nameGetStr n) acc)
+      (setEmpty cmpString) aRes in
+    map (lam var: String. (var, setMem var sSet)) vars
+in
+
+let _testWithSymbolize: Bool -> Expr -> [String] -> [([Char], Bool)] =
+  lam debug. lam t. lam vars.
+  let t = symbolizeExpr symEnvEmpty t in
+  _testSymbolized debug t vars
 in
 
 let t = _parse "
@@ -1463,12 +1482,58 @@ utest _test false t [
 ] using eqTest in
 
 -- Checkpoints and higher-order constants
--- TODO Add tests for missing constants
---let t = _parse "
---------------------------" in
---utest _test false t [
---] with [
---] using eqTest in
+let t = _parse "
+  let ls = [lam x1. x1, lam x2. x2, lam x3. x3] in
+  let s1 = foldl (lam s2. lam. weight 1.0) 0 ls in
+  let s3 = foldl (lam. lam. ()) 0 ls in
+  let s4 = foldr (lam s5. lam. weight 1.0) 0 ls in
+  let s6 = foldr (lam. lam. ()) 0 ls in
+  let s7 = map (lam. weight 1.0) ls in
+  let s8 = map (lam. ()) ls in
+  let s9 = map (map (lam. weight 1.0)) [ls,ls,ls] in
+  let s10 = mapi (lam s11. lam. weight 1.0) ls in
+  let s12 = mapi (lam. lam. ()) ls in
+  let s13 = iter (lam. weight 1.0) ls in
+  let s14 = iter (lam. ()) ls in
+  let s15 = iter (iter (lam. weight 1.0)) [ls,ls,ls] in
+  let s16 = iteri (lam s17. lam. weight 1.0) ls in
+  let s18 = iteri (lam. lam. ()) ls in
+  let s19 = create 3 (lam. weight 1.0) in
+  let s20 = create 3 (lam. ()) in
+  let s21 = createList 3 (lam. weight 1.0) in
+  let s22 = createList 3 (lam. ()) in
+  let s23 = createRope 3 (lam. weight 1.0) in
+  let s24 = createRope 3 (lam. ()) in
+  let s25 = tensorCreateDense [3,3] (lam. weight 1.0) in
+  let s26 = tensorCreateDense [3,3] (lam. ()) in
+  let s27 = tensorCreateCArrayInt [3,3] (lam. weight 1.0; 1) in
+  let s28 = tensorCreateCArrayInt [3,3] (lam. 1) in
+  let s29 = tensorCreateCArrayFloat [3,3] (lam. weight 1.0; 1.0) in
+  let s30 = tensorCreateCArrayFloat [3,3] (lam. 1.0) in
+  let tensor = s26 in
+  let s31 = tensorIterSlice (lam s32. lam. weight 1.0) tensor in
+  let s33 = tensorIterSlice (lam. lam. ()) tensor in
+  ()
+------------------------" in
+utest _testWithSymbolize false t [
+  "s1","s2","s3","s4","s5","s6","s7","s8","s9",
+  "s10","s11","s12","s13","s14","s15","s16","s17","s18","s19","s20",
+  "s21","s22","s23","s24","s25","s26","s27","s28","s29","s30", "s31","s32","s33"
+] with [
+  ("s1", true), ("s2", true), ("s3", false),
+  ("s4", true), ("s5", true), ("s6", false),
+  ("s7", true), ("s8", false), ("s9", true),
+  ("s10", true), ("s11", true), ("s12", false),
+  ("s13", true), ("s14", false), ("s15", true),
+  ("s16", true), ("s17", true), ("s18", false),
+  ("s19", true), ("s20", false),
+  ("s21", true), ("s22", false),
+  ("s23", true), ("s24", false),
+  ("s25", true), ("s26", false),
+  ("s27", true), ("s28", false),
+  ("s29", true), ("s30", false),
+  ("s31", true), ("s32", true), ("s33", false)
+] using eqTest in
 
 ()
 
