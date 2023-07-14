@@ -72,7 +72,11 @@ lang ConstAllCFA = MExprCFA + MExprPPL
       appConstraints f acc a1,
       appConstraints a1 li a2,
       appConstraints f a2 a3,
-      appConstraints a3 li res
+      appConstraints a3 li res,
+      -- All internal applications can affect res as well
+      appConstraints f acc res,
+      appConstraints a1 li res,
+      appConstraints f a2 res
     ]
   | CFoldr _ ->
     utest length args with 3 in
@@ -83,7 +87,10 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     join [
       appConstraints f li a1,
       appConstraints a1 acc a2,
-      appConstraints a1 a2 res
+      appConstraints a1 a2 res,
+      -- All internal applications can affect res as well
+      appConstraints f li res,
+      appConstraints a1 acc res
     ]
   | CMap _ ->
     utest length args with 2 in
@@ -91,7 +98,9 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     let f = head args in
     match intermediates with [li,a1] in
     join [
-      appConstraints f li a1
+      appConstraints f li a1,
+      -- All internal applications can affect res as well
+      appConstraints f li res
     ]
   | CMapi _ ->
     utest length args with 2 in
@@ -100,7 +109,10 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     match intermediates with [li,i,a1,a2] in
     join [
       appConstraints f i a1,
-      appConstraints a1 li a2
+      appConstraints a1 li a2,
+      -- All internal applications can affect res as well
+      appConstraints f i res,
+      appConstraints a1 li res
     ]
   | CIter _ ->
     utest length args with 2 in
@@ -108,7 +120,9 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     let f = head args in
     match intermediates with [li,empty] in
     join [
-      appConstraints f li empty
+      appConstraints f li empty,
+      -- All internal applications can affect res as well
+      appConstraints f li res
     ]
   | CIteri _ ->
     utest length args with 2 in
@@ -117,7 +131,10 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     match intermediates with [li,i,a1,empty] in
     join [
       appConstraints f i a1,
-      appConstraints a1 li empty
+      appConstraints a1 li empty,
+      -- All internal applications can affect res as well
+      appConstraints f i res,
+      appConstraints a1 li res
     ]
   | ( CCreate _
     | CCreateList _
@@ -127,7 +144,9 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     let f = get args 1 in
     match intermediates with [i,a1] in
     join [
-      appConstraints f i a1
+      appConstraints f i a1,
+      -- All internal applications can affect res as well
+      appConstraints f i res
     ]
   | ( CTensorCreateInt _
     | CTensorCreateFloat _
@@ -136,7 +155,9 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     let f = get args 1 in
     match intermediates with [i,a1] in
     join [
-      appConstraints f i a1
+      appConstraints f i a1,
+      -- All internal applications can affect res as well
+      appConstraints f i res
     ]
   | CTensorIterSlice _ ->
     utest length args with 2 in
@@ -145,7 +166,10 @@ lang ConstAllCFA = MExprCFA + MExprPPL
     match intermediates with [ti,i,a1,empty] in
     join [
       appConstraints f i a1,
-      appConstraints a1 ti empty
+      appConstraints a1 ti empty,
+      -- All internal applications can affect res as well
+      appConstraints f i res,
+      appConstraints a1 ti res
     ]
   | _ -> []
 
@@ -1167,29 +1191,66 @@ let t = _parse "
     else ()
   in
   let ls = [lam x1. x1, lam x2. x2, lam x3. x3] in
-  foldl (lam. fs (lam. let t1 = () in ())) 0 ls;
-  fu (lam z1. foldl (lam. lam. let t2 = () in ()) 0 ls);
-  foldl (lam. lam. let t3 = () in ()) 0 ls;
-  -- foldr
-  -- map
-  -- mapi
-  -- iter
-  -- iteri
-  -- create
-  -- createList
-  -- createRope
-  -- tensorcreateDense
-  -- tensorCreateCArrayInt
-  -- tensorCreateCArrayFloat
-  -- tensorIterSlice
+  foldl (lam. fs (lam. let s1 = () in ())) 0 ls;
+  fu (lam. foldl (lam. lam. let s2 = () in ()) 0 ls);
+  foldl (lam. lam. let s3 = () in ()) 0 ls;
+  foldr (lam. fs (lam. let s4 = () in ())) 0 ls;
+  fu (lam. foldr (lam. lam. let s5 = () in ()) 0 ls);
+  foldr (lam. lam. let s6 = () in ()) 0 ls;
+  map (fs (lam. let s7 = () in ())) ls;
+  fu (lam. map (lam. let s8 = () in ()) ls);
+  map (lam. let s9 = () in ()) ls;
+  mapi (lam. fs (lam. let s10 = () in ())) ls;
+  fu (lam. mapi (lam. lam.let s11 = () in ()) ls);
+  mapi (lam. lam. let s12 = () in ()) ls;
+  iter (fs (lam. let s13 = () in ())) ls;
+  fu (lam. iter (lam. let s14 = () in ()) ls);
+  iter (lam. let s15 = () in ()) ls;
+  iteri (lam. fs (lam. let s16 = () in ())) ls;
+  fu (lam. iteri (lam. lam.let s17 = () in ()) ls);
+  iteri (lam. lam. let s18 = () in ()) ls;
+  create 3 (fs (lam. let s19 = () in ()));
+  fu (lam. create 3 (lam. let s20 = () in ()));
+  create 3 (lam. let s21 = () in ());
+  createList 3 (fs (lam. let s22 = () in ()));
+  fu (lam. createList 3 (lam. let s23 = () in ()));
+  createList 3 (lam. let s24 = () in ());
+  createRope 3 (fs (lam. let s25 = () in ()));
+  fu (lam. createRope 3 (lam. let s26 = () in ()));
+  createRope 3 (lam. let s27 = () in ());
+  tensorCreateDense [3,3] (fs (lam. let s28 = () in ()));
+  fu (lam. tensorCreateDense [3,3] (lam. let s29 = () in ()));
+  tensorCreateDense [3,3] (lam. let s30 = () in ());
+  tensorCreateCArrayInt [3,3] (fs (lam. let s31 = () in 1));
+  fu (lam. tensorCreateCArrayInt [3,3] (lam. let s32 = () in 1));
+  tensorCreateCArrayInt [3,3] (lam. let s33 = () in 1);
+  tensorCreateCArrayFloat [3,3] (fs (lam. let s34 = () in 1.));
+  fu (lam. tensorCreateCArrayFloat [3,3] (lam. let s35 = () in 1.));
+  let tensor = tensorCreateCArrayFloat [3,3] (lam. let s36 = () in 1.) in
+  tensorIterSlice (lam. fs (lam. let s37 = () in ())) tensor;
+  fu (lam. tensorIterSlice (lam. lam. let s38 = () in ()) tensor);
+  tensorIterSlice (lam. lam. let s39 = () in ()) tensor;
   ()
 ------------------------" in
 utest _testWithSymbolize false t [
-  "t1","t2","t3"
+  "s1","s2","s3","s4","s5","s6","s7","s8","s9", "s10",
+  "s11","s12","s13","s14","s15","s16","s17","s18","s19","s20",
+  "s21","s22","s23","s24","s25","s26","s27","s28","s29","s30",
+  "s31","s32","s33","s34","s35","s36","s37","s38","s39"
 ] with [
-  ("t1", false),
-  ("t2", false),
-  ("t3", true)
+  ("s1", false), ("s2", false), ("s3", true),
+  ("s4", false), ("s5", false), ("s6", true),
+  ("s7", false), ("s8", false), ("s9", true),
+  ("s10", false), ("s11", false), ("s12", true),
+  ("s13", false), ("s14", false), ("s15", true),
+  ("s16", false), ("s17", false), ("s18", true),
+  ("s19", false), ("s20", false), ("s21", true),
+  ("s22", false), ("s23", false), ("s24", true),
+  ("s25", false), ("s26", false), ("s27", true),
+  ("s28", false), ("s29", false), ("s30", true),
+  ("s31", false), ("s32", false), ("s33", true),
+  ("s34", false), ("s35", false), ("s36", true),
+  ("s37", false), ("s38", false), ("s39", true)
 ] using eqTest in
 
 -- Test in `coreppl/models/diversification-models/crbd-synthetic.mc`

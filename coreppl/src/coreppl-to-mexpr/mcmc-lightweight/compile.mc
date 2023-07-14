@@ -25,7 +25,7 @@ lang MExprPPLLightweightMCMC =
   -------------------------
   sem compileAligned : Options -> (Expr,Expr) -> Expr
   sem compileAligned options =
-  | (_,t) ->
+  | (t,_) ->
 
     -- Alignment analysis
     let alignRes = alignCfa t in
