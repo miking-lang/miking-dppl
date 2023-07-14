@@ -48,7 +48,8 @@ lang CPPLBackcompat = LoadRuntime
       let tyPrintFun = getTypePrintFunction runtimeEntry resTy in
 
       let top =
-        parseMCorePPLFileLib (join [corepplSrcLoc, "/coreppl-to-mexpr/top.mc"])
+        parseMCorePPLFileLib options.test
+          (join [corepplSrcLoc, "/coreppl-to-mexpr/top.mc"])
       in
 
       -- We do not use the -p cppl option to determine the number of iterations

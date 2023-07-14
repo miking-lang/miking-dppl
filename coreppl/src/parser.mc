@@ -115,37 +115,27 @@ let builtin = use MExprPPL in concat
   , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
   ] builtin
 
-let parseMCorePPLFile = lam filename.
+let defaultBootParserParseCorePPLFileArg =
+  {defaultBootParserParseMCoreFileArg with
+     keywords = pplKeywords,
+     allowFree = true,
+     builtin = builtin}
+
+let parseMCorePPLFile = lam keepUtests. lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {defaultBootParserParseMCoreFileArg with
-                  keywords = pplKeywords,
-                  allowFree = true,
-                  builtin = builtin} in
+  let config =
+    {defaultBootParserParseCorePPLFileArg with keepUtests = keepUtests} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
   makeKeywords ast
 
-let parseMCorePPLFileNoDeadCodeElimination = lam filename.
+let parseMCorePPLFileLib = lam keepUtests. lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
-  let config = {defaultBootParserParseMCoreFileArg with
-                   keywords = pplKeywords,
-                   eliminateDeadCode = false,
-                   allowFree = true,
-                   builtin = builtin} in
-  let ast = parseMCoreFile config filename in
-  let ast = symbolizeAllowFree ast in
-  makeKeywords ast
-
-let parseMCorePPLFileLib = lam filename.
-  use DPPLParser in
-  -- Read and parse the mcore file
-  let config = {defaultBootParserParseMCoreFileArg with
-                   keywords = pplKeywords,
-                   eliminateDeadCode = false,
-                   allowFree = true,
-                   builtin = builtin} in
+  let config = {defaultBootParserParseCorePPLFileArg with
+                  keepUtests = keepUtests,
+                  eliminateDeadCode = false} in
   let ast = parseMCoreFile config filename in
   makeKeywords ast
 

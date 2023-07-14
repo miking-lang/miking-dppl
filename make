@@ -32,7 +32,7 @@ testmi () {
 testcppl () {
   set +e
   cpplout=$(mktemp)
-  compile_cmd="$2 --seed 0 --output $cpplout --output-mc --skip-final"
+  compile_cmd="$2 --seed 0 --test --output $cpplout --output-mc --skip-final"
   output=$1
   compile_output=$($compile_cmd $1 2>&1)
   exit_code=$?
