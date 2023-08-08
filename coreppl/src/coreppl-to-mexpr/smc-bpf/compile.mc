@@ -32,6 +32,13 @@ lang MExprPPLBPF =
     in
       i (appf1_ (i (var_ "resample")) k)
 
+  -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
+  -- transformed versions are removed when removing duplicate code.
+  -- Therefore, we have to simply replace TyCon and TyApp with Unknown here.
+  sem tyCps env =
+  | (TyCon { info = info } | TyApp { info = info } ) ->
+    let i = tyWithInfo info in i tyunknown_
+
   sem transformStopFirstAssume: Expr -> Option Expr
   sem transformStopFirstAssume =
 

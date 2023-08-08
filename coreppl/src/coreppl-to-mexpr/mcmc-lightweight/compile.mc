@@ -245,19 +245,22 @@ lang MExprPPLLightweightMCMC =
       else errorSingle [r.info]
         "Error in mcmc-lightweight compile: Problem with TmConDef in exprTyTransform"
     in smap_Expr_Type rec t
-
   -- Don't touch the types of externals
   | TmExt r -> TmExt r
 
   sem tyTransform =
   | t -> smap_Type_Type tyTransform t
-  -- Function type a -> b becomes [Int] -> a -> b
-  | TyArrow r ->
+  | TyArrow r & t ->
     let i = tyWithInfo r.info in
     let from = tyTransform r.from in
     let to = tyTransform r.to in
     (i (tyarrow_ (i (tycon_ "Address"))
         (TyArrow { r with from = from, to = to })))
+  -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
+  -- transformed versions are removed when removing duplicate code.
+  -- Therefore, we have to simply replace TyCon and TyApp with Unknown here.
+  | (TyCon { info = info } | TyApp { info = info } ) ->
+    let i = tyWithInfo info in i tyunknown_
 
   -------------------------------
   -- STATIC ALIGNED MCMC (CPS) --
@@ -297,6 +300,13 @@ lang MExprPPLLightweightMCMC =
     TmLet { t with inexpr = exprCps env k t.inexpr }
   | TmLet ({ body = TmObserve _ } & t) ->
     TmLet { t with inexpr = exprCps env k t.inexpr }
+
+  -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
+  -- transformed versions are removed when removing duplicate code.
+  -- Therefore, we have to simply replace TyCon and TyApp with Unknown here.
+  sem tyCps env =
+  | (TyCon { info = info } | TyApp { info = info } ) ->
+    let i = tyWithInfo info in i tyunknown_
 
   sem transformPreAlignedCps unalignedNames =
   | TmLet ({ ident = ident, body = TmAssume r} & b) & t ->
