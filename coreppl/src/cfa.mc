@@ -2,7 +2,6 @@
 
 include "coreppl.mc"
 include "parser.mc"
-include "dppl-arg.mc"
 
 include "mexpr/cfa.mc"
 include "mexpr/type.mc"
@@ -764,7 +763,7 @@ mexpr
 use Test in
 
 -- Test functions --
-let _parse = parseMExprPPLString default in
+let _parse = parseMExprPPLString in
 let _testBase:
   (PprintEnv -> Expr -> (PprintEnv, CFAGraph))
   -> (Expr -> CFAGraph)
@@ -1254,7 +1253,7 @@ utest _testWithSymbolize false t [
 ] using eqTest in
 
 -- Test in `coreppl/models/diversification-models/crbd-synthetic.mc`
-let t = parseMCorePPLFile { default with test = false }
+let t = parseMCorePPLFile false
           "coreppl/models/diversification-models/crbd-synthetic.mc" in
 utest _testSymbolized false t ["w1","w2","w3", "w4", "w5"] with [
   ("w1", false),

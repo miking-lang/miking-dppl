@@ -82,6 +82,9 @@ lang MExprCompile =
   sem mexprCpplCompile options noInfer =
   | ast ->
 
+    -- First translate all Default {} inference methods
+    let ast = replaceDefaultInferMethod options ast in
+
     -- Load the runtimes used in the provided AST, and collect identifiers of
     -- common methods within the runtimes.
     let runtimes = loadRuntimes options ast in
@@ -318,7 +321,7 @@ mexpr
 
 use TestCompileLang in
 
-let parse = parseMExprPPLString default in
+let parse = parseMExprPPLString in
 
 -- TODO(dlunde,2022-10-19): We should also add a `simpleInfer` test that uses
 -- the new infer keyword.

@@ -132,29 +132,26 @@ let defaultBootParserParseCorePPLFileArg =
      allowFree = true,
      builtin = builtin}
 
-let parseMCorePPLFile = lam options. lam filename.
+let parseMCorePPLFile = lam keepUtests. lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config =
-    {defaultBootParserParseCorePPLFileArg with keepUtests = options.test} in
+    {defaultBootParserParseCorePPLFileArg with keepUtests = keepUtests} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
-  let ast = makeKeywords ast in
-  replaceDefaultInferMethod options ast
+  makeKeywords ast
 
-let parseMCorePPLFileLib = lam options. lam filename.
+let parseMCorePPLFileLib = lam keepUtests. lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config = {defaultBootParserParseCorePPLFileArg with
-                  keepUtests = options.test,
+                  keepUtests = keepUtests,
                   eliminateDeadCode = false} in
   let ast = parseMCoreFile config filename in
-  let ast = makeKeywords ast in
-  replaceDefaultInferMethod options ast
+  makeKeywords ast
 
 -- Similar to getAst, but calls parseMExprString instead
-let parseMExprPPLString = lam options. lam cpplstr.
+let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
   let ast = parseMExprStringKeywords pplKeywords cpplstr in
-  let ast = makeKeywords ast in
-  replaceDefaultInferMethod options ast
+  makeKeywords ast
