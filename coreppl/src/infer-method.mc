@@ -105,6 +105,8 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
 
   -- Symbolizes infer methods.
   sem symbolizeInferMethod : SymEnv -> InferMethod -> InferMethod
+  sem symbolizeInferMethod env =
+  | Default {} -> Default {}
 
   -- Overrides the number of runs/iterations/particles in the InferMethod
   sem setRuns : Expr -> InferMethod -> InferMethod
