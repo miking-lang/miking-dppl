@@ -32,6 +32,17 @@ lang DPPLParser =
     inferMethodFromCon info bindings (nameGetStr ident)
   | t -> errorSingle [infoTm t] "Expected a constructor application"
 
+
+  sem replaceDefaultInferMethod : Options -> Expr -> Expr
+  sem replaceDefaultInferMethod options =
+  | expr ->
+    let mf = lam expr.
+      match expr with TmInfer ({ method = Default _ } & t) then
+        TmInfer {t with method = inferMethodFromOptions options options.method }
+      else expr
+    in
+    mapPre_Expr_Expr mf expr
+
   -- Keyword maker
   sem isKeyword =
   | TmAssume _ -> true
@@ -121,26 +132,29 @@ let defaultBootParserParseCorePPLFileArg =
      allowFree = true,
      builtin = builtin}
 
-let parseMCorePPLFile = lam keepUtests. lam filename.
+let parseMCorePPLFile = lam options. lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config =
-    {defaultBootParserParseCorePPLFileArg with keepUtests = keepUtests} in
+    {defaultBootParserParseCorePPLFileArg with keepUtests = options.test} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
-  makeKeywords ast
+  let ast = makeKeywords ast in
+  replaceDefaultInferMethod options ast
 
-let parseMCorePPLFileLib = lam keepUtests. lam filename.
+let parseMCorePPLFileLib = lam options. lam filename.
   use DPPLParser in
   -- Read and parse the mcore file
   let config = {defaultBootParserParseCorePPLFileArg with
-                  keepUtests = keepUtests,
+                  keepUtests = options.test,
                   eliminateDeadCode = false} in
   let ast = parseMCoreFile config filename in
-  makeKeywords ast
+  let ast = makeKeywords ast in
+  replaceDefaultInferMethod options ast
 
 -- Similar to getAst, but calls parseMExprString instead
-let parseMExprPPLString = lam cpplstr.
+let parseMExprPPLString = lam options. lam cpplstr.
   use DPPLParser in
   let ast = parseMExprStringKeywords pplKeywords cpplstr in
-  makeKeywords ast
+  let ast = makeKeywords ast in
+  replaceDefaultInferMethod options ast

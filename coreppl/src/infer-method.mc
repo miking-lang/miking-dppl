@@ -70,6 +70,7 @@ end
 -- 5. typeCheckInferMethod
 lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   syn InferMethod =
+  | Default {}
 
   -- NOTE(larshum, 2022-10-11): Compares the inference methods tags only.
   sem cmpInferMethod : InferMethod -> InferMethod -> Int
@@ -85,6 +86,7 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   -- Constructs an inference method from the arguments of a TmConApp.
   sem inferMethodFromCon : Info -> Map SID Expr -> String -> InferMethod
   sem inferMethodFromCon info bindings =
+  | "Default" -> Default {}
   | s -> errorSingle [info] (concat "Unknown inference method: " s)
 
   -- Constructs an inference method from command-line options.

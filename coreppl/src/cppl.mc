@@ -52,7 +52,7 @@ match result with ParseOK r then
 
     -- Read and parse the file
     let filename = head r.strings in
-    let ast = parseMCorePPLFile options.test filename in
+    let ast = parseMCorePPLFile options filename in
 
     let noInfer = not (hasInfer ast) in
 

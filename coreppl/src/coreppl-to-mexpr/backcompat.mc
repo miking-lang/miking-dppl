@@ -48,7 +48,7 @@ lang CPPLBackcompat = LoadRuntime
       let tyPrintFun = getTypePrintFunction runtimeEntry resTy in
 
       let top =
-        parseMCorePPLFileLib options.test
+        parseMCorePPLFileLib options
           (join [corepplSrcLoc, "/coreppl-to-mexpr/top.mc"])
       in
 

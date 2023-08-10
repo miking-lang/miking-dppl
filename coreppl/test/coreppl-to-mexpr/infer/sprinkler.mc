@@ -16,9 +16,10 @@ let rhs = sprinklerTruth in
 let r = resSprinkler in
 let c = cpplResOfDist bool2string in
 
-utest r (c 0 (infer (Importance { particles = 1000 }) model))                                          with rhs using e in
-utest r (c 0 (infer (BPF { particles = 1000 }) model))                                                 with rhs using e in
-utest r (c 0 (infer (APF { particles = 1000 }) model))                                                 with rhs using e in
+utest r (c 0 (infer (Default {}) model))                                                                 with rhs using e in
+utest r (c 0 (infer (Importance { particles = 1000 }) model))                                            with rhs using e in
+utest r (c 0 (infer (BPF { particles = 1000 }) model))                                                   with rhs using e in
+utest r (c 0 (infer (APF { particles = 1000 }) model))                                                   with rhs using e in
 utest r (c 500 (infer (PIMH { particles = 10, iterations = 100 }) model))                                with rhs using e in
 utest r (c 500 (infer (TraceMCMC { iterations = 1000 }) model))                                          with rhs using e in
 utest r (c 500 (infer (NaiveMCMC { iterations = 1000 }) model))                                          with rhs using e in

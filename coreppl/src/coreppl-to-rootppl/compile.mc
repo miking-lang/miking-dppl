@@ -1389,7 +1389,7 @@ mexpr
 use Test in
 
 let test = lam options. lam cpplstr.
-  let cppl = parseMExprPPLString cpplstr in
+  let cppl = parseMExprPPLString options cpplstr in
   let rppl = rootPPLCompile options cppl in
   printCompiledRPProg rppl
 in

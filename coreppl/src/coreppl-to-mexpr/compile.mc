@@ -318,7 +318,7 @@ mexpr
 
 use TestCompileLang in
 
-let parse = parseMExprPPLString in
+let parse = parseMExprPPLString default in
 
 -- TODO(dlunde,2022-10-19): We should also add a `simpleInfer` test that uses
 -- the new infer keyword.
