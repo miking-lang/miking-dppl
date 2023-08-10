@@ -82,6 +82,13 @@ lang MExprPPLImportance =
     let weight = i (appf2_ (i (var_ "logObserve")) dist value) in
     i (appf2_ (i (var_ "updateWeight")) weight k)
 
+  -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
+  -- transformed versions are removed when removing duplicate code.
+  -- Therefore, we have to simply replace TyCon and TyApp with Unknown here.
+  sem tyCps env =
+  | (TyCon { info = info } | TyApp { info = info } ) ->
+    let i = tyWithInfo info in i tyunknown_
+
   sem transformProbCps =
   | TmAssume t ->
     let i = withInfo t.info in

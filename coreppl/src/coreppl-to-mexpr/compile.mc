@@ -82,6 +82,9 @@ lang MExprCompile =
   sem mexprCpplCompile options noInfer =
   | ast ->
 
+    -- First translate all Default {} inference methods
+    let ast = replaceDefaultInferMethod options ast in
+
     -- Load the runtimes used in the provided AST, and collect identifiers of
     -- common methods within the runtimes.
     let runtimes = loadRuntimes options ast in

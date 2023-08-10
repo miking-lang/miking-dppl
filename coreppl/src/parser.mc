@@ -32,6 +32,17 @@ lang DPPLParser =
     inferMethodFromCon info bindings (nameGetStr ident)
   | t -> errorSingle [infoTm t] "Expected a constructor application"
 
+
+  sem replaceDefaultInferMethod : Options -> Expr -> Expr
+  sem replaceDefaultInferMethod options =
+  | expr ->
+    let mf = lam expr.
+      match expr with TmInfer ({ method = Default _ } & t) then
+        TmInfer {t with method = inferMethodFromOptions options options.method }
+      else expr
+    in
+    mapPre_Expr_Expr mf expr
+
   -- Keyword maker
   sem isKeyword =
   | TmAssume _ -> true

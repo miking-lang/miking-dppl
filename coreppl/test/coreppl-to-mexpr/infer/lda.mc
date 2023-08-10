@@ -21,12 +21,13 @@ let f = lam sample: [[Float]].
 in
 let c = cpplResOfDist f in
 
-utest r (c 0   (infer (Importance { particles = 30000 }) model))           with rhs using e in
-utest r (c 0   (infer (BPF { particles = 30000 }) model))                  with rhs using e in
-utest r (c 0   (infer (APF { particles = 30000 }) model))                  with rhs using e in
+utest r (c 0   (infer (Default {}) model))                                  with rhs using e in
+utest r (c 0   (infer (Importance { particles = 30000 }) model))            with rhs using e in
+utest r (c 0   (infer (BPF { particles = 30000 }) model))                   with rhs using e in
+utest r (c 0   (infer (APF { particles = 30000 }) model))                   with rhs using e in
 utest r (c 500 (infer (PIMH { particles = 10, iterations = 30000 }) model)) with rhs using e in
-utest r (c 500 (infer (TraceMCMC { iterations = 50000 }) model))           with rhs using e in
-utest r (c 500 (infer (NaiveMCMC { iterations = 50000 }) model))           with rhs using e in
+utest r (c 500 (infer (TraceMCMC { iterations = 50000 }) model))            with rhs using e in
+utest r (c 500 (infer (NaiveMCMC { iterations = 50000 }) model))            with rhs using e in
 
 -- We need to increase the global step probability. Otherwise, lightweight MCMC
 -- easily gets stuck in a single mode.
