@@ -9,7 +9,7 @@ lang ImportanceSamplingMethod = MExprPPL
   | Importance {particles = particles} ->
     let i = pprintIncr indent in
     match pprintCode i env particles with (env, particles) in
-    (env, join ["Importance {particles = ", particles, "}"])
+    (env, join ["(Importance {particles = ", particles, "})"])
 
   sem inferMethodFromCon info bindings =
   | "Importance" ->

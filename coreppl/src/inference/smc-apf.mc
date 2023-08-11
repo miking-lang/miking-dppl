@@ -9,7 +9,7 @@ lang APFMethod = MExprPPL
   | APF {particles = particles} ->
     let i = pprintIncr indent in
     match pprintCode i env particles with (env, particles) in
-    (env, join ["APF {particles = ", particles, "}"])
+    (env, join ["(APF {particles = ", particles, "})"])
 
   sem inferMethodFromCon info bindings =
   | "APF" ->

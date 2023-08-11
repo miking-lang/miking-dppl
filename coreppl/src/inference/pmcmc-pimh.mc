@@ -14,7 +14,7 @@ lang PIMHMethod = MExprPPL
     match pprintCode i env particles with (env, particles) in
     match pprintCode i env iterations with (env, iterations) in
     (env, join [
-      "PIMH {interations = ", iterations, "particles = ", particles, "}"])
+      "(PIMH {interations = ", iterations, "particles = ", particles, "})"])
 
   sem inferMethodFromCon info bindings =
   | "PIMH" ->

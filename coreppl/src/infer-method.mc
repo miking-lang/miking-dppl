@@ -83,7 +83,7 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
 
   sem pprintInferMethod : Int -> PprintEnv -> InferMethod -> (PprintEnv, String)
   sem pprintInferMethod indent env =
-  | Default {} -> (env, join ["Default {}"])
+  | Default {} -> (env, join ["(Default {})"])
 
   -- Constructs an inference method from the arguments of a TmConApp.
   sem inferMethodFromCon : Info -> Map SID Expr -> String -> InferMethod
