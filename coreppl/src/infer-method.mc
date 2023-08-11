@@ -82,6 +82,8 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   | rhs -> eqi (cmpInferMethod lhs rhs) 0
 
   sem pprintInferMethod : Int -> PprintEnv -> InferMethod -> (PprintEnv, String)
+  sem pprintInferMethod indent env =
+  | Default {} -> (env, join ["Default {}"])
 
   -- Constructs an inference method from the arguments of a TmConApp.
   sem inferMethodFromCon : Info -> Map SID Expr -> String -> InferMethod
@@ -98,6 +100,8 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   -- the inference method. This record is passed to the inference runtime
   -- function.
   sem inferMethodConfig : Info -> InferMethod -> Expr
+  sem inferMethodConfig info =
+  | Default {} -> fieldsToRecord info []
 
   -- Type checks the inference method. This ensures that the provided arguments
   -- have the correct types.
