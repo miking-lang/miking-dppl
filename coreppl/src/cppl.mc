@@ -47,7 +47,7 @@ match result with ParseOK r then
   -- Print menu if not exactly one file argument
   if neqi (length r.strings) 1 then
     print (menu ());
-    exit 0
+    if gti (length r.strings) 1 then exit 1 else exit 0
   else
 
     -- Read and parse the file
