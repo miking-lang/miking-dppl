@@ -37,8 +37,9 @@ lang DPPLParser =
   sem replaceDefaultInferMethod options =
   | expr ->
     let mf = lam expr.
-      match expr with TmInfer ({ method = Default _ } & t) then
-        TmInfer {t with method = inferMethodFromOptions options options.method }
+      match expr with TmInfer ({ method = Default d } & t) then
+        TmInfer { t with method = setRuns d.runs
+                          (inferMethodFromOptions options options.method) }
       else expr
     in
     mapPre_Expr_Expr mf expr

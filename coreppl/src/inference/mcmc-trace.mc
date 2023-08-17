@@ -11,7 +11,7 @@ lang TraceMCMCMethod = MExprPPL
   | TraceMCMC t ->
     let i = pprintIncr indent in
     match pprintCode i env t.iterations with (env, iterations) in
-    (env, join ["TraceMCMC {iterations = ", iterations, "}"])
+    (env, join ["(TraceMCMC {iterations = ", iterations, "})"])
 
   sem inferMethodFromCon info bindings =
   | methodStr & "TraceMCMC" ->

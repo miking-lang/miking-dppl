@@ -9,7 +9,7 @@ lang BPFMethod = MExprPPL
   | BPF {particles = particles} ->
     let i = pprintIncr indent in
     match pprintCode i env particles with (env, particles) in
-    (env, join ["BPF {particles = ", particles, "}"])
+    (env, join ["(BPF {particles = ", particles, "})"])
 
   sem inferMethodFromCon info bindings =
   | "BPF" ->

@@ -11,7 +11,7 @@ lang NaiveMCMCMethod = MExprPPL
   | NaiveMCMC t ->
     let i = pprintIncr indent in
     match pprintCode i env t.iterations with (env, iterations) in
-    (env, join ["NaiveMCMC {iterations = ", iterations, "}"])
+    (env, join ["(NaiveMCMC {iterations = ", iterations, "})"])
 
   sem inferMethodFromCon info bindings =
   | "NaiveMCMC" ->

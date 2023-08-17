@@ -7,7 +7,7 @@ include "mexpr/type-check.mc"
 
 include "dppl-arg.mc"
 
-lang InferMethodHelper = MExprAst
+lang InferMethodHelper = MExprAst + MExprSym
   -- Extracts the fields corresponding to the provided sequence of strings, and
   -- ensures that no additional fields have been defined.
   sem getFields : Info -> Map SID Expr -> [(String, Expr)] -> [Expr]
@@ -70,7 +70,7 @@ end
 -- 5. typeCheckInferMethod
 lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   syn InferMethod =
-  | Default {}
+  | Default { runs: Expr }
 
   -- NOTE(larshum, 2022-10-11): Compares the inference methods tags only.
   sem cmpInferMethod : InferMethod -> InferMethod -> Int
@@ -82,11 +82,21 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   | rhs -> eqi (cmpInferMethod lhs rhs) 0
 
   sem pprintInferMethod : Int -> PprintEnv -> InferMethod -> (PprintEnv, String)
+  sem pprintInferMethod indent env =
+  | Default { runs = runs } ->
+    let i = pprintIncr indent in
+    match pprintCode i env runs with (env, runs) in
+    (env, join ["(Default {runs = ", runs, "})"])
 
   -- Constructs an inference method from the arguments of a TmConApp.
   sem inferMethodFromCon : Info -> Map SID Expr -> String -> InferMethod
   sem inferMethodFromCon info bindings =
-  | "Default" -> Default {}
+  | "Default" ->
+    let expectedFields = [
+      ("runs", int_ default.particles)
+    ] in
+    match getFields info bindings expectedFields with [runs] in
+    Default { runs = runs }
   | s -> errorSingle [info] (concat "Unknown inference method: " s)
 
   -- Constructs an inference method from command-line options.
@@ -98,15 +108,23 @@ lang InferMethodBase = PrettyPrint + TypeCheck + InferMethodHelper
   -- the inference method. This record is passed to the inference runtime
   -- function.
   sem inferMethodConfig : Info -> InferMethod -> Expr
+  sem inferMethodConfig info =
+  | Default { runs = runs } -> fieldsToRecord info [("runs", runs)]
 
   -- Type checks the inference method. This ensures that the provided arguments
   -- have the correct types.
   sem typeCheckInferMethod : TCEnv -> Info -> InferMethod -> InferMethod
+  sem typeCheckInferMethod env info =
+  | Default { runs = runs } ->
+    let int = TyInt {info = info} in
+    let runs = typeCheckExpr env runs in
+    unify env [info, infoTm runs] int (tyTm runs);
+    Default { runs = runs }
 
   -- Symbolizes infer methods.
   sem symbolizeInferMethod : SymEnv -> InferMethod -> InferMethod
   sem symbolizeInferMethod env =
-  | Default {} -> Default {}
+  | Default r -> Default {r with runs = symbolizeExpr env r.runs}
 
   -- Overrides the number of runs/iterations/particles in the InferMethod
   sem setRuns : Expr -> InferMethod -> InferMethod

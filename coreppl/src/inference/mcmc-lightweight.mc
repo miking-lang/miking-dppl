@@ -13,8 +13,8 @@ lang LightweightMCMCMethod = MExprPPL
     let i = pprintIncr indent in
     match pprintCode i env t.iterations with (env, iterations) in
     match pprintCode i env t.globalProb with (env, globalProb) in
-    (env, join ["LightweightMCMC {iterations = ", iterations,
-                "globalProb =", globalProb, "}"])
+    (env, join ["(LightweightMCMC {iterations = ", iterations,
+                "globalProb =", globalProb, "})"])
 
   sem inferMethodFromCon info bindings =
   | "LightweightMCMC" ->
