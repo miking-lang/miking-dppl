@@ -123,8 +123,9 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
     unify env [t.info] innerTyDistVar innerTyDist;
     TmDist {{ t with dist = dist }
                 with ty = TyDist { info = t.info, ty = innerTyDistVar } }
-  sem unifyBase (env : UnifyEnv) =
-  | (TyDist t1, TyDist t2) -> unifyTypes env (t1.ty, t2.ty)
+  sem unifyBase: all u. Unifier u -> UnifyEnv -> (Type, Type) -> u
+  sem unifyBase u env =
+  | (TyDist t1, TyDist t2) -> unifyTypes u env (t1.ty, t2.ty)
 
   -- ANF
   sem normalizeDist (k : Dist -> Expr) =
