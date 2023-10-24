@@ -23,6 +23,8 @@ type Options = {
   outputMc: Bool,
   output: String,
 
+  -- For the runtime counter example
+  counter:Bool,
   -- Apply static delayed sampling transformation
   -- TODO(2023-06-28,dlunde): Give a more descriptive name, transform is too
   -- generic.
@@ -77,6 +79,7 @@ let default = {
   skipFinal = false,
   outputMc = false,
   output = "out",
+  counter = false,
   transform = false,
   printSamples = true,
   stackSize = 10000,
@@ -152,6 +155,10 @@ let config = [
     "Write output to <file> when compiling",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with output = argToString p}),
+  ([("--counter", "", "")],
+    "Add the counter example",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with counter = true}),
   ([("--transform", "", "")],
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.

@@ -16,14 +16,16 @@ include "inference/mcmc-naive.mc"
 include "inference/mcmc-trace.mc"
 include "inference/pmcmc-pimh.mc"
 
+include "runtimes/counter.mc"
+
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
   ProbabilisticGraphicalModel + KeywordMaker +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
-	PIMHMethod
-
+	PIMHMethod +
+  CounterMethod
   -- Interprets the argument to infer which encodes the inference method and
   -- its configuration parameters.
   sem interpretInferMethod : Expr -> InferMethod

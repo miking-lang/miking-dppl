@@ -17,7 +17,8 @@ include "extract.mc"
 include "backcompat.mc"
 include "dists.mc"
 include "runtimes.mc"
-
+include "runtimeR.mc"
+include "../runtime-method.mc"
 lang DPPLKeywordReplace = DPPLParser
   sem _makeError : Info -> String -> Expr
   sem _makeError info =
@@ -58,7 +59,7 @@ end
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
 lang MExprCompile =
-  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
+  MExprPPL + RuntimeMethodBase + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime + LoadRuntimeR +
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat
 
@@ -88,7 +89,12 @@ lang MExprCompile =
     -- Load the runtimes used in the provided AST, and collect identifiers of
     -- common methods within the runtimes.
     let runtimes = loadRuntimes options ast in
-
+    let runtimesR = mapEmpty cmpRuntimeRMethod in
+    let runtimesR =
+      if options.counter then
+        let method = Counter {m="counter"} in
+        mapInsert method (loadRuntimeREntry method "counter/runtime.mc") runtimesR
+      else runtimesR in
     -- If no infers are found, the entire AST is the model code, so we transform
     -- it as:
     --
@@ -110,11 +116,11 @@ lang MExprCompile =
     -- symbolization environment.
     let runtimes = combineRuntimes options runtimes in
 
-    mexprCompile options runtimes ast
+    mexprCompile options runtimes runtimesR ast
 
 
-  sem mexprCompile : Options -> Runtimes -> Expr -> Expr
-  sem mexprCompile options runtimes =
+  sem mexprCompile : Options -> Runtimes -> Map RuntimeMethod RuntimeREntry -> Expr -> Expr
+  sem mexprCompile options runtimes runtimesR =
   | corepplAst ->
     -- Symbolize and type-check the CorePPL AST.
     let corepplAst = symbolize corepplAst in
@@ -128,7 +134,7 @@ lang MExprCompile =
     match extractInfer options runtimes.entries corepplAst with (corepplAst, models) in
 
     -- Compile the model ASTs.
-    let modelAsts = compileModels options runtimes models in
+    let modelAsts = compileModels options runtimes runtimesR models in
 
     -- Transform distributions in the CorePPL AST to use MExpr code.
     let corepplAst = transformDistributions corepplAst in
@@ -136,6 +142,8 @@ lang MExprCompile =
     -- Symbolize any free occurrences in the CorePPL AST and in any of the
     -- models using the symbolization environment of the runtime AST.
     let runtimeSymEnv = addTopNames symEnvEmpty runtimes.ast in
+    let asts = foldl (lam acc. lam e. bind_ acc e.ast) unit_ (mapValues runtimesR) in
+    let runtimeRSymEnv = addTopNames runtimeSymEnv asts in
     let corepplAst = symbolizeExpr runtimeSymEnv corepplAst in
 
     -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
@@ -146,7 +154,7 @@ lang MExprCompile =
 
     -- Combine the CorePPL AST with the runtime AST, after extracting the
     -- models, and eliminate duplicate code due to common dependencies.
-    let mainAst = bind_ runtimes.ast corepplAst in
+    let mainAst = bindall_ [asts, runtimes.ast, corepplAst] in
     match eliminateDuplicateCodeWithSummary mainAst with (replaced, mainAst) in
 
     -- Apply the replacements performed by the duplicate code elimination on
@@ -169,16 +177,16 @@ lang MExprCompile =
     -- Return complete program
     prog
 
-  sem compileModels : Options -> Runtimes -> Map Name ModelRepr -> Map Name Expr
-  sem compileModels options runtimes =
+  sem compileModels : Options -> Runtimes -> Map RuntimeMethod RuntimeREntry -> Map Name ModelRepr -> Map Name Expr
+  sem compileModels options runtimes runtimesR =
   | models ->
     mapMapWithKey
       (lam id. lam model.
-        match model with {ast = ast, method = method, params = params} in
+        match model with {ast = ast, method = method, methodsR = methodsR, params = params} in
         match loadCompiler options method with (_, compile) in
         match mapLookup method runtimes.entries with Some entry then
           let ast = transformModelAst options ast in
-          let ast = compileModel compile entry id {model with ast = ast} in
+          let ast = compileModel compile entry runtimesR id {model with ast = ast} in
           removeModelDefinitions ast
         else
           match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in
@@ -236,9 +244,9 @@ lang MExprCompile =
       { symEnvEmpty with allowFree = true, ignoreExternals = true } t
     in
     t
-
-  sem compileModel : ((Expr,Expr) -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
-  sem compileModel compile entry modelId =
+  
+  sem compileModel : ((Expr,Expr) -> Expr) -> RuntimeEntry -> Map RuntimeMethod RuntimeREntry -> Name -> ModelRepr -> Expr
+  sem compileModel compile entry runtimesR modelId =
   | {ast = modelAst, params = modelParams} ->
 
     -- ANF
@@ -252,13 +260,16 @@ lang MExprCompile =
 
     -- Apply inference-specific transformation
     let ast = compile (modelAst, modelAstNoHigherOrderConstants) in
-
+    
     -- Bind the model code in a let-expression, which we can insert in the main
     -- AST.
     let stateVarId = nameNoSym "state" in
+    let recordVarId = nameNoSym "r" in
+    let recordType = tyrecord_ (map (lam e. e.runtimeParam) (mapValues runtimesR)) in
+    let params = snoc modelParams (stateVarId, entry.stateType) in
+    let params = snoc params (recordVarId, recordType) in
     let ast =
-      nulet_ modelId
-        (nlams_ (snoc modelParams (stateVarId, entry.stateType)) ast) in
+      nulet_ modelId (nlams_ params ast) in
 
     -- Replace any occurrences of TyDist in the program with the runtime
     -- distribution type. This needs to be performed after the previous step as

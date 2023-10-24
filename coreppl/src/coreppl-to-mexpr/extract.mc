@@ -17,6 +17,7 @@ lang DPPLExtract =
   type ModelRepr = {
     ast : Expr,
     method : InferMethod,
+    methodsR : [RuntimeMethod],
     params : [(Name, Type)]
   }
 
@@ -40,7 +41,7 @@ lang DPPLExtract =
           match mapLookup inferId solutions with Some paramMap then
             let params = mapBindings paramMap in
             let ast = extractInferAst options inferId ast in
-            {ast = ast, method = method, params = params}
+            {ast = ast, method = method, params = params,methodsR=[]}
           else error "Lambda lifting was not correctly applied to infer")
         data in
 

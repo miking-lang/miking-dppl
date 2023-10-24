@@ -14,6 +14,9 @@ include "mcmc-trace/compile.mc"
 include "mcmc-lightweight/compile.mc"
 include "pmcmc-pimh/compile.mc"
 
+-- Runtime methods
+-- include "counter/compile.mc"
+
 lang LoadRuntime =
   DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode
 
