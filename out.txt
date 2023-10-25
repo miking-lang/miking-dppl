@@ -1,0 +1,8157 @@
+let model: () -> Float =
+  lam #var"1": ().
+    let #var"2" =
+      incrementCounter
+        counter
+    in
+    let theta =
+      assume
+        (Beta
+           10.
+           10.)
+    in
+    let #var"3" =
+      observe
+        true
+        (Bernoulli
+           theta)
+    in
+    let #var"4" =
+      observe
+        false
+        (Bernoulli
+           theta)
+    in
+    let #var"5" =
+      observe
+        true
+        (Bernoulli
+           theta)
+    in
+    theta
+in
+let ast =
+  lam #var"": ().
+    model
+      {}
+in
+ast
+  {}
+let not: Bool -> Bool =
+  lam a156.
+    match
+      a156
+    with
+      true
+    then
+      false
+    else
+      true
+in
+let and: Bool -> Bool -> Bool =
+  lam a155.
+    lam b56.
+      match
+        a155
+      with
+        true
+      then
+        b56
+      else
+        false
+in
+let or: Bool -> Bool -> Bool =
+  lam a154.
+    lam b55.
+      match
+        a154
+      with
+        true
+      then
+        true
+      else
+        b55
+in
+let xor: Bool -> Bool -> Bool =
+  lam a153.
+    lam b54.
+      match
+        a153
+      with
+        true
+      then
+        not
+          b54
+      else
+        b54
+in
+let xnor: Bool -> Bool -> Bool =
+  lam a152.
+    lam b53.
+      not
+        (xor
+           a152
+           b53)
+in
+let eqBool: Bool -> Bool -> Bool =
+  lam b112: Bool.
+    lam b211: Bool.
+      match
+        b112
+      with
+        true
+      then
+        b211
+      else
+        match
+          b211
+        with
+          true
+        then
+          false
+        else
+          true
+in
+let cmpBool: Bool -> Bool -> Int =
+  lam b111: Bool.
+    lam b210: Bool.
+      match
+        b111
+      with
+        true
+      then
+        match
+          b210
+        with
+          true
+        then
+          0
+        else
+          1
+      else
+        match
+          b210
+        with
+          true
+        then
+          negi
+            1
+        else
+          0
+in
+let bool2string: Bool -> [Char] =
+  lam b52.
+    match
+      b52
+    with
+      true
+    then
+      "true"
+    else
+      "false"
+in
+let string2bool: [Char] -> Bool =
+  lam s57.
+    match
+      s57
+    with
+      "true"
+    then
+      true
+    else
+      match
+        s57
+      with
+        "false"
+      then
+        false
+      else
+        error
+          (concat
+             "Cannot convert string "
+             (concat
+                s57
+                " to Bool."))
+in
+type Option a
+in
+con Some: all a1. a1 -> Option a1 in
+con None: all a2. () -> Option a2 in
+let optionEq: all a151. all b51. (a151 -> b51 -> Bool) -> Option a151 -> Option b51 -> Bool =
+  lam eq10.
+    lam o110.
+      lam o28.
+        match
+          (o110, o28)
+        with
+          (Some v13, Some v23)
+        then
+          eq10
+            v13
+            v23
+        else
+          match
+            (o110, o28)
+          with
+            (None {}, None {})
+          then
+            true
+          else
+            false
+in
+let optionMap: all a150. all b50. (a150 -> b50) -> Option a150 -> Option b50 =
+  lam f71.
+    lam o20.
+      match
+        o20
+      with
+        Some t215
+      then
+        Some
+          (f71
+             t215)
+      else
+        None
+          {}
+in
+let optionMapAccum: all a148. all b48. all acc73. (acc73 -> a148 -> (acc73, b48)) -> acc73 -> Option a148 -> (acc73, Option b48) =
+  lam f70.
+    lam acc74.
+      lam o19.
+        match
+          o19
+        with
+          Some a149
+        then
+          match
+            f70
+              acc74
+              a149
+          with
+            (acc75, b49)
+          in
+          (acc75, Some
+              b49)
+        else
+          (acc74, None
+            {})
+in
+let optionJoin: all a147. Option (Option a147) -> Option a147 =
+  lam o18.
+    match
+      o18
+    with
+      Some t214
+    then
+      t214
+    else
+      None
+        {}
+in
+let optionBind: all a146. all b47. Option a146 -> (a146 -> Option b47) -> Option b47 =
+  lam o17.
+    lam f69.
+      optionJoin
+        (optionMap
+           f69
+           o17)
+in
+let optionCompose: all a145. all b46. all c46. (b46 -> Option c46) -> (a145 -> Option b46) -> a145 -> Option c46 =
+  lam f68.
+    lam g5.
+      lam x92.
+        optionBind
+          (g5
+             x92)
+          f68
+in
+let optionZipWith: all a144. all b45. all c45. (a144 -> b45 -> c45) -> Option a144 -> Option b45 -> Option c45 =
+  lam f67.
+    lam o16.
+      lam o27.
+        match
+          (o16, o27)
+        with
+          (Some v12, Some v22)
+        then
+          Some
+            (f67
+               v12
+               v22)
+        else
+          None
+            {}
+in
+let optionZipWithOrElse: all a143. all b44. all c44. (() -> c44) -> (a143 -> b44 -> c44) -> Option a143 -> Option b44 -> c44 =
+  lam d9.
+    lam f66.
+      lam o15.
+        lam o26.
+          match
+            (o15, o26)
+          with
+            (Some v11, Some v21)
+          then
+            f66
+              v11
+              v21
+          else
+            d9
+              {}
+in
+let optionZipWithOr: all a142. all b43. all c43. c43 -> (a142 -> b43 -> c43) -> Option a142 -> Option b43 -> c43 =
+  lam v6.
+    optionZipWithOrElse
+      (lam #var"75".
+         v6)
+in
+let optionGetOrElse: all a141. (() -> a141) -> Option a141 -> a141 =
+  lam d8.
+    lam o14.
+      match
+        o14
+      with
+        Some t209
+      then
+        t209
+      else
+        d8
+          {}
+in
+let optionGetOr: all a140. a140 -> Option a140 -> a140 =
+  lam d7.
+    optionGetOrElse
+      (lam #var"74".
+         d7)
+in
+let optionMapOrElse: all a139. all b42. (() -> b42) -> (a139 -> b42) -> Option a139 -> b42 =
+  lam d6.
+    lam f65.
+      lam o10.
+        optionGetOrElse
+          d6
+          (optionMap
+             f65
+             o10)
+in
+let optionMapOr: all a138. all b41. b41 -> (a138 -> b41) -> Option a138 -> b41 =
+  lam d5.
+    lam f64.
+      lam o9.
+        optionGetOr
+          d5
+          (optionMap
+             f64
+             o9)
+in
+let optionMapM: all a137. all b40. (a137 -> Option b40) -> [a137] -> Option [b40] =
+  lam f63.
+    lam l26.
+      recursive
+        let g4 =
+          lam l27.
+            lam acc72.
+              match
+                l27
+              with
+                [ hd1 ] ++ rest3 ++ ""
+              then
+                match
+                  f63
+                    hd1
+                with
+                  Some x91
+                then
+                  g4
+                    rest3
+                    (snoc
+                       acc72
+                       x91)
+                else
+                  None
+                    {}
+              else
+                Some
+                  acc72
+      in
+      g4
+        l26
+        ""
+in
+let optionFoldlM: all a134. all b38. (a134 -> b38 -> Option a134) -> a134 -> [b38] -> Option a134 =
+  lam f62.
+    recursive
+      let recur6 =
+        lam a135.
+          lam bs4.
+            match
+              bs4
+            with
+              [ b39 ] ++ bs5 ++ ""
+            then
+              let res12 =
+                f62
+                  a135
+                  b39
+              in
+              match
+                res12
+              with
+                Some a136
+              then
+                recur6
+                  a136
+                  bs5
+              else
+                match
+                  res12
+                with
+                  None {}
+                in
+                None
+                    {}
+            else
+              match
+                bs4
+              with
+                ""
+              in
+              Some
+                  a135
+    in
+    recur6
+in
+let optionContains: all a133. Option a133 -> (a133 -> Bool) -> Bool =
+  lam o8.
+    lam p15.
+      optionMapOr
+        false
+        p15
+        o8
+in
+let optionIsSome: all a132. Option a132 -> Bool =
+  lam o7.
+    optionContains
+      o7
+      (lam #var"73".
+         true)
+in
+let optionIsNone: all a131. Option a131 -> Bool =
+  lam o6.
+    not
+      (optionIsSome
+         o6)
+in
+let optionAnd: all a130. Option a130 -> Option a130 -> Option a130 =
+  lam o13.
+    lam o25.
+      match
+        (o13, o25)
+      with
+        (Some _, Some _)
+      then
+        o13
+      else
+        None
+          {}
+in
+let optionFilter: all a129. (a129 -> Bool) -> Option a129 -> Option a129 =
+  lam p14.
+    lam o5.
+      match
+        optionContains
+          o5
+          p14
+      with
+        true
+      then
+        o5
+      else
+        None
+          {}
+in
+let optionOrElse: all a128. (() -> Option a128) -> Option a128 -> Option a128 =
+  lam f61.
+    lam o4.
+      optionGetOrElse
+        f61
+        (optionMap
+           (lam x90.
+              Some
+                x90)
+           o4)
+in
+let optionOr: all a127. Option a127 -> Option a127 -> Option a127 =
+  lam o12.
+    lam o24.
+      optionOrElse
+        (lam #var"72".
+           o24)
+        o12
+in
+let optionXor: all a126. Option a126 -> Option a126 -> Option a126 =
+  lam o11.
+    lam o23.
+      match
+        (o11, o23)
+      with
+        (Some _, None {})
+      then
+        o11
+      else
+        match
+          (o11, o23)
+        with
+          (None {}, Some _)
+        then
+          o23
+        else
+          None
+            {}
+in
+let make: all a125. Int -> a125 -> [a125] =
+  lam n30.
+    lam v5.
+      create
+        n30
+        (lam #var"71".
+           v5)
+in
+let last: all a124. [a124] -> a124 =
+  lam seq50.
+    get
+      seq50
+      (subi
+         (length
+            seq50)
+         1)
+in
+let init: all a123. [a123] -> [a123] =
+  lam seq49.
+    subsequence
+      seq49
+      0
+      (subi
+         (length
+            seq49)
+         1)
+in
+let eqSeq: all a122. all b37. (a122 -> b37 -> Bool) -> [a122] -> [b37] -> Bool =
+  lam eq9.
+    lam s120.
+      lam s219.
+        recursive
+          let work27 =
+            lam s121.
+              lam s220.
+                match
+                  (s121, s220)
+                with
+                  ([ h15 ] ++ t1101 ++ "", [ h25 ] ++ t213 ++ "")
+                then
+                  match
+                    eq9
+                      h15
+                      h25
+                  with
+                    true
+                  then
+                    work27
+                      t1101
+                      t213
+                  else
+                    false
+                else
+                  true
+        in
+        let n111 =
+          length
+            s120
+        in
+        let n211 =
+          length
+            s219
+        in
+        let ndiff1 =
+          subi
+            n111
+            n211
+        in
+        match
+          eqi
+            ndiff1
+            0
+        with
+          true
+        then
+          work27
+            s120
+            s219
+        else
+          false
+in
+let toRope =
+  lam seq48.
+    createRope
+      (length
+         seq48)
+      (lam i34.
+         get
+           seq48
+           i34)
+in
+let toList =
+  lam seq47.
+    createList
+      (length
+         seq47)
+      (lam i33.
+         get
+           seq47
+           i33)
+in
+let mapOption: all a120. all b35. (a120 -> Option b35) -> [a120] -> [b35] =
+  lam f60.
+    recursive
+      let work26 =
+        lam as5.
+          match
+            as5
+          with
+            [ a121 ] ++ as6 ++ ""
+          then
+            match
+              f60
+                a121
+            with
+              Some b36
+            then
+              cons
+                b36
+                (work26
+                   as6)
+            else
+              work26
+                as6
+          else
+            ""
+    in
+    work26
+in
+let for_: all a119. [a119] -> (a119 -> ()) -> () =
+  lam xs16.
+    lam f59.
+      iter
+        f59
+        xs16
+in
+let mapReverse: all a118. all b34. (a118 -> b34) -> [a118] -> [b34] =
+  lam f58.
+    lam lst1.
+      foldl
+        (lam acc71.
+           lam x89.
+             cons
+               (f58
+                  x89)
+               acc71)
+        (toList
+           "")
+        lst1
+in
+let foldl1: all a117. (a117 -> a117 -> a117) -> [a117] -> a117 =
+  lam f57.
+    lam l25.
+      foldl
+        f57
+        (head
+           l25)
+        (tail
+           l25)
+in
+let foldr1: all a116. (a116 -> a116 -> a116) -> [a116] -> a116 =
+  lam f56.
+    lam seq46.
+      foldr
+        f56
+        (last
+           seq46)
+        (init
+           seq46)
+in
+recursive
+  let unfoldr: all a115. all c42. (a115 -> Option (c42, a115)) -> a115 -> [c42] =
+    lam f55.
+      lam b0.
+        let fb =
+          f55
+            b0
+        in
+        match
+          fb
+        with
+          None _
+        then
+          ""
+        else
+          match
+            fb
+          with
+            Some (x88, b110)
+          in
+          cons
+              x88
+              (unfoldr
+                 f55
+                 b110)
+in
+let range: Int -> Int -> Int -> [Int] =
+  lam s56.
+    lam e13.
+      lam by1.
+        unfoldr
+          (lam b33.
+             match
+               leqi
+                 e13
+                 b33
+             with
+               true
+             then
+               None
+                 {}
+             else
+               Some
+                 (b33, addi
+                   b33
+                   by1))
+          s56
+in
+recursive
+  let foldl21: all a114. all b32. all c41. (a114 -> b32 -> c41 -> a114) -> a114 -> [b32] -> [c41] -> a114 =
+    lam f54.
+      lam acc66.
+        lam seq113.
+          lam seq213.
+            let g3 =
+              lam acc69: (a114, [b32]).
+                lam x213.
+                  match
+                    acc69
+                  with
+                    (acc70, [ x113 ] ++ xs15 ++ "")
+                  in
+                  (f54
+                      acc70
+                      x113
+                      x213, xs15)
+            in
+            match
+              geqi
+                (length
+                   seq113)
+                (length
+                   seq213)
+            with
+              true
+            then
+              match
+                foldl
+                  g3
+                  (acc66, seq113)
+                  seq213
+              with
+                (acc67, _)
+              in
+              acc67
+            else
+              foldl21
+                (lam acc68.
+                   lam x112.
+                     lam x212.
+                       f54
+                         acc68
+                         x212
+                         x112)
+                acc66
+                seq213
+                seq113
+in
+let foldli: all a113. all b31. (a113 -> Int -> b31 -> a113) -> a113 -> [b31] -> a113 =
+  lam fn1.
+    lam initAcc.
+      lam seq45.
+        recursive
+          let work25 =
+            lam acc65.
+              lam i32.
+                lam s55.
+                  match
+                    s55
+                  with
+                    [ e10 ] ++ rest2 ++ ""
+                  then
+                    work25
+                      (fn1
+                         acc65
+                         i32
+                         e10)
+                      (addi
+                         i32
+                         1)
+                      rest2
+                  else
+                    acc65
+        in
+        work25
+          initAcc
+          0
+          seq45
+in
+let mapK: all a112. all b30. all c40. (a112 -> (b30 -> c40) -> c40) -> [a112] -> ([b30] -> c40) -> c40 =
+  lam f53.
+    lam seq44.
+      lam k19.
+        foldl
+          (lam k20.
+             lam x86.
+               lam xs14.
+                 f53
+                   x86
+                   (lam x87.
+                      k20
+                        (snoc
+                           xs14
+                           x87)))
+          k19
+          (reverse
+             seq44)
+          ""
+in
+let mapiK: all a111. all b29. all c39. (Int -> a111 -> (b29 -> c39) -> c39) -> [a111] -> ([b29] -> c39) -> c39 =
+  lam f52.
+    lam seq43.
+      lam k17.
+        (foldl
+           (lam ik1.
+              match
+                ik1
+              with
+                (i31, k18)
+              in
+              lam x84.
+                  (subi
+                    i31
+                    1, lam xs13.
+                    f52
+                      i31
+                      x84
+                      (lam x85.
+                         k18
+                           (snoc
+                              xs13
+                              x85))))
+           (subi
+             (length
+                seq43)
+             1, k17)
+           (reverse
+              seq43)).1
+          ""
+in
+let foldlK =
+  lam f51.
+    lam acc62.
+      lam seq41.
+        lam k15.
+          recursive
+            let recur5 =
+              lam acc63.
+                lam seq42.
+                  lam k16.
+                    match
+                      null
+                        seq42
+                    with
+                      true
+                    then
+                      k16
+                        acc63
+                    else
+                      f51
+                        acc63
+                        (head
+                           seq42)
+                        (lam acc64.
+                           recur5
+                             acc64
+                             (tail
+                                seq42)
+                             k16)
+          in
+          recur5
+            acc62
+            seq41
+            k15
+in
+let zipWith: all a109. all b28. all c38. (a109 -> b28 -> c38) -> [a109] -> [b28] -> [c38] =
+  lam f50.
+    foldl21
+      (lam acc61.
+         lam x111.
+           lam x211.
+             snoc
+               acc61
+               (f50
+                  x111
+                  x211))
+      ""
+in
+let zipWithIndex: all a108. all b27. all c37. (Int -> a108 -> b27 -> c37) -> [a108] -> [b27] -> [c37] =
+  lam f49.
+    lam a110.
+      lam a210.
+        recursive
+          let work24 =
+            lam acc60.
+              lam i30.
+                lam seq112.
+                  lam seq212.
+                    match
+                      seq112
+                    with
+                      [ e12 ] ++ seq1tail1 ++ ""
+                    then
+                      match
+                        seq212
+                      with
+                        [ e21 ] ++ seq2tail1 ++ ""
+                      then
+                        work24
+                          (cons
+                             (f49
+                                i30
+                                e12
+                                e21)
+                             acc60)
+                          (addi
+                             i30
+                             1)
+                          seq1tail1
+                          seq2tail1
+                      else
+                        reverse
+                          acc60
+                    else
+                      reverse
+                        acc60
+        in
+        work24
+          (toList
+             "")
+          0
+          a110
+          a210
+in
+let zip: all a107. all b26. [a107] -> [b26] -> [(a107, b26)] =
+  lam l110.
+    lam l24.
+      zipWith
+        (lam x83.
+           lam y14.
+             (x83, y14))
+        l110
+        l24
+in
+let mapAccumL: all a106. all b25. all c36. (a106 -> b25 -> (a106, c36)) -> a106 -> [b25] -> (a106, [c36]) =
+  lam f48: a106 -> b25 -> (a106, c36).
+    lam acc58.
+      lam seq40.
+        foldl
+          (lam tacc3: (a106, [c36]).
+             lam x82.
+               match
+                 f48
+                   tacc3.0
+                   x82
+               with
+                 (acc59, y13)
+               in
+               (acc59, snoc
+                   tacc3.1
+                   y13))
+          (acc58, "")
+          seq40
+in
+let mapAccumR: all a105. all b24. all c35. (a105 -> b24 -> (a105, c35)) -> a105 -> [b24] -> (a105, [c35]) =
+  lam f47: a105 -> b24 -> (a105, c35).
+    lam acc56.
+      lam seq39.
+        foldr
+          (lam x81.
+             lam tacc2: (a105, [c35]).
+               match
+                 f47
+                   tacc2.0
+                   x81
+               with
+                 (acc57, y12)
+               in
+               (acc57, cons
+                   y12
+                   tacc2.1))
+          (acc56, "")
+          seq39
+in
+let unzip: all a104. all b23. [(a104, b23)] -> ([a104], [b23]) =
+  lam l22.
+    mapAccumL
+      (lam l23.
+         lam p13: (a104, b23).
+           (snoc
+             l23
+             p13.0, p13.1))
+      ""
+      l22
+in
+let iter2: all a103. all b22. (a103 -> b22 -> ()) -> [a103] -> [b22] -> () =
+  lam f45.
+    lam seq111.
+      lam seq211.
+        let f46 =
+          lam x80: (a103, b22).
+            match
+              x80
+            with
+              (x110, x210)
+            in
+            f45
+                x110
+                x210
+        in
+        iter
+          f46
+          (zip
+             seq111
+             seq211)
+in
+recursive
+  let any: all a102. (a102 -> Bool) -> [a102] -> Bool =
+    lam p12.
+      lam seq38.
+        match
+          null
+            seq38
+        with
+          true
+        then
+          false
+        else
+          match
+            p12
+              (head
+                 seq38)
+          with
+            true
+          then
+            true
+          else
+            any
+              p12
+              (tail
+                 seq38)
+in
+recursive
+  let forAll: all a101. (a101 -> Bool) -> [a101] -> Bool =
+    lam p11.
+      lam seq37.
+        match
+          null
+            seq37
+        with
+          true
+        then
+          true
+        else
+          match
+            p11
+              (head
+                 seq37)
+          with
+            true
+          then
+            forAll
+              p11
+              (tail
+                 seq37)
+          else
+            false
+in
+let join: all a100. [[a100]] -> [a100] =
+  lam seqs.
+    foldl
+      concat
+      ""
+      seqs
+in
+let seqLiftA2: all a98. all b21. all c34. (a98 -> b21 -> c34) -> [a98] -> [b21] -> [c34] =
+  lam f44.
+    lam as4.
+      lam bs3.
+        join
+          (map
+             (lam a99.
+                map
+                  (f44
+                     a99)
+                  bs3)
+             as4)
+in
+let seqMapM: all a96. all b20. (a96 -> [b20]) -> [a96] -> [[b20]] =
+  lam f43.
+    foldr
+      (lam a97.
+         lam acc55.
+           seqLiftA2
+             cons
+             (f43
+                a97)
+             acc55)
+      [ "" ]
+in
+recursive
+  let filter: all a95. (a95 -> Bool) -> [a95] -> [a95] =
+    lam p10.
+      lam seq36.
+        match
+          null
+            seq36
+        with
+          true
+        then
+          ""
+        else
+          match
+            p10
+              (head
+                 seq36)
+          with
+            true
+          then
+            cons
+              (head
+                 seq36)
+              (filter
+                 p10
+                 (tail
+                    seq36))
+          else
+            filter
+              p10
+              (tail
+                 seq36)
+in
+recursive
+  let filterOption: all a94. [Option a94] -> [a94] =
+    lam optSeq.
+      match
+        optSeq
+      with
+        [ Some x79 ] ++ optSeq1 ++ ""
+      then
+        cons
+          x79
+          (filterOption
+             optSeq1)
+      else
+        match
+          optSeq
+        with
+          [ None _ ] ++ optSeq2 ++ ""
+        then
+          filterOption
+            optSeq2
+        else
+          ""
+in
+recursive
+  let find: all a93. (a93 -> Bool) -> [a93] -> Option a93 =
+    lam p9.
+      lam seq35.
+        match
+          null
+            seq35
+        with
+          true
+        then
+          None
+            {}
+        else
+          match
+            p9
+              (head
+                 seq35)
+          with
+            true
+          then
+            Some
+              (head
+                 seq35)
+          else
+            find
+              p9
+              (tail
+                 seq35)
+in
+recursive
+  let findMap: all a92. all b19. (a92 -> Option b19) -> [a92] -> Option b19 =
+    lam f42.
+      lam seq34.
+        match
+          seq34
+        with
+          [ h6 ] ++ t208 ++ ""
+        then
+          match
+            f42
+              h6
+          with
+            Some x78
+          then
+            Some
+              x78
+          else
+            findMap
+              f42
+              t208
+        else
+          None
+            {}
+in
+let lowerBoundBinarySearch: all a91. (a91 -> Int) -> [a91] -> Option Int =
+  lam f41.
+    lam s54.
+      recursive
+        let work23 =
+          lam first1.
+            lam count1.
+              match
+                gti
+                  count1
+                  0
+              with
+                true
+              then
+                let step2 =
+                  divi
+                    count1
+                    2
+                in
+                let idx4 =
+                  addi
+                    first1
+                    step2
+                in
+                match
+                  lti
+                    (f41
+                       (get
+                          s54
+                          idx4))
+                    0
+                with
+                  true
+                then
+                  work23
+                    (addi
+                       first1
+                       (addi
+                          step2
+                          1))
+                    (subi
+                       count1
+                       (addi
+                          step2
+                          1))
+                else
+                  work23
+                    first1
+                    step2
+              else
+                first1
+      in
+      let idx3 =
+        work23
+          0
+          (length
+             s54)
+      in
+      match
+        eqi
+          idx3
+          (length
+             s54)
+      with
+        true
+      then
+        None
+          {}
+      else
+        Some
+          idx3
+in
+let s =
+  [ 0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9 ]
+in
+let partition: all a90. (a90 -> Bool) -> [a90] -> ([a90], [a90]) =
+  lam p8.
+    lam seq31.
+      recursive
+        let work22 =
+          lam l21.
+            lam r16.
+              lam seq32.
+                match
+                  seq32
+                with
+                  ""
+                then
+                  (l21, r16)
+                else
+                  match
+                    seq32
+                  with
+                    [ s53 ] ++ seq33 ++ ""
+                  in
+                  match
+                      p8
+                        s53
+                    with
+                      true
+                    then
+                      work22
+                        (cons
+                           s53
+                           l21)
+                        r16
+                        seq33
+                    else
+                      work22
+                        l21
+                        (cons
+                           s53
+                           r16)
+                        seq33
+      in
+      work22
+        ""
+        ""
+        (reverse
+           seq31)
+in
+let distinct: all a89. (a89 -> a89 -> Bool) -> [a89] -> [a89] =
+  lam eq8.
+    lam seq30.
+      recursive
+        let work21 =
+          lam seq110.
+            lam seq210.
+              match
+                seq110
+              with
+                [ h5 ] ++ t207 ++ ""
+              then
+                match
+                  find
+                    (eq8
+                       h5)
+                    seq210
+                with
+                  Some _
+                then
+                  work21
+                    t207
+                    seq210
+                else
+                  cons
+                    h5
+                    (work21
+                       t207
+                       (cons
+                          h5
+                          seq210))
+              else
+                ""
+      in
+      work21
+        seq30
+        ""
+in
+let distinctSorted: all a88. (a88 -> a88 -> Bool) -> [a88] -> [a88] =
+  lam eq7.
+    lam s51.
+      recursive
+        let work20 =
+          lam acc54.
+            lam s52.
+              match
+                s52
+              with
+                [ h14 ] ++ t206 ++ ""
+              then
+                match
+                  acc54
+                with
+                  [ h24 ] ++ _ ++ ""
+                then
+                  match
+                    eq7
+                      h14
+                      h24
+                  with
+                    true
+                  then
+                    work20
+                      acc54
+                      t206
+                  else
+                    work20
+                      (cons
+                         h14
+                         acc54)
+                      t206
+                else
+                  work20
+                    [ h14 ]
+                    t206
+              else
+                acc54
+      in
+      reverse
+        (work20
+           ""
+           s51)
+in
+recursive
+  let quickSort: all a87. (a87 -> a87 -> Int) -> [a87] -> [a87] =
+    lam cmp15.
+      lam seq29.
+        match
+          null
+            seq29
+        with
+          true
+        then
+          seq29
+        else
+          let h4 =
+            head
+              seq29
+          in
+          let t205 =
+            tail
+              seq29
+          in
+          let lr1 =
+            partition
+              (lam x77.
+                 lti
+                   (cmp15
+                      x77
+                      h4)
+                   0)
+              t205
+          in
+          concat
+            (quickSort
+               cmp15
+               lr1.0)
+            (cons
+               h4
+               (quickSort
+                  cmp15
+                  lr1.1))
+in
+recursive
+  let merge: all a86. (a86 -> a86 -> Int) -> [a86] -> [a86] -> [a86] =
+    lam cmp14.
+      lam l20.
+        lam r15.
+          match
+            l20
+          with
+            ""
+          then
+            r15
+          else
+            match
+              r15
+            with
+              ""
+            then
+              l20
+            else
+              match
+                (l20, r15)
+              with
+                ([ x76 ] ++ xs12 ++ "", [ y11 ] ++ ys1 ++ "")
+              in
+              match
+                  leqi
+                    (cmp14
+                       x76
+                       y11)
+                    0
+                with
+                  true
+                then
+                  cons
+                    x76
+                    (merge
+                       cmp14
+                       xs12
+                       r15)
+                else
+                  cons
+                    y11
+                    (merge
+                       cmp14
+                       l20
+                       ys1)
+in
+recursive
+  let mergeSort: all a85. (a85 -> a85 -> Int) -> [a85] -> [a85] =
+    lam cmp13.
+      lam seq28.
+        match
+          seq28
+        with
+          ""
+        then
+          ""
+        else
+          match
+            seq28
+          with
+            [ x75 ]
+          then
+            [ x75 ]
+          else
+            let lr =
+              splitAt
+                seq28
+                (divi
+                   (length
+                      seq28)
+                   2)
+            in
+            merge
+              cmp13
+              (mergeSort
+                 cmp13
+                 lr.0)
+              (mergeSort
+                 cmp13
+                 lr.1)
+in
+let sort =
+  quickSort
+in
+let minIdx: all a84. (a84 -> a84 -> Int) -> [a84] -> Option (Int, a84) =
+  lam cmp12: a84 -> a84 -> Int.
+    lam seq27: [a84].
+      match
+        null
+          seq27
+      with
+        true
+      then
+        None
+          {}
+      else
+        match
+          foldl
+            (lam acc53: (Int, Int, a84).
+               lam e9: a84.
+                 match
+                   acc53
+                 with
+                   (curi1, mini2, m5)
+                 in
+                 match
+                     lti
+                       (cmp12
+                          m5
+                          e9)
+                       0
+                   with
+                     true
+                   then
+                     (addi
+                       curi1
+                       1, mini2, m5)
+                   else
+                     (addi
+                       curi1
+                       1, curi1, e9))
+            (1, 0, head
+              seq27)
+            (tail
+               seq27)
+        with
+          (_, i29, m6)
+        in
+        Some
+            (i29, m6)
+in
+let min: all a83. (a83 -> a83 -> Int) -> [a83] -> Option a83 =
+  lam cmp11.
+    lam seq26.
+      optionMap
+        (lam r14.
+           match
+             r14
+           with
+             (_, m4)
+           in
+           m4)
+        (minIdx
+           cmp11
+           seq26)
+in
+let max: all a82. (a82 -> a82 -> Int) -> [a82] -> Option a82 =
+  lam cmp10.
+    min
+      (lam l19.
+         lam r13.
+           cmp10
+             r13
+             l19)
+in
+let minOrElse: all a81. (() -> a81) -> (a81 -> a81 -> Int) -> [a81] -> a81 =
+  lam d4.
+    lam cmp9.
+      lam seq25.
+        optionGetOrElse
+          d4
+          (min
+             cmp9
+             seq25)
+in
+let maxOrElse: all a80. (() -> a80) -> (a80 -> a80 -> Int) -> [a80] -> a80 =
+  lam d3.
+    lam cmp8.
+      minOrElse
+        d3
+        (lam l18.
+           lam r12.
+             cmp8
+               r12
+               l18)
+in
+let index: all a79. (a79 -> Bool) -> [a79] -> Option Int =
+  lam pred7.
+    lam seq23.
+      recursive
+        let index_rechelper1 =
+          lam i28.
+            lam pred8.
+              lam seq24.
+                match
+                  null
+                    seq24
+                with
+                  true
+                then
+                  None
+                    {}
+                else
+                  match
+                    pred8
+                      (head
+                         seq24)
+                  with
+                    true
+                  then
+                    Some
+                      i28
+                  else
+                    index_rechelper1
+                      (addi
+                         i28
+                         1)
+                      pred8
+                      (tail
+                         seq24)
+      in
+      index_rechelper1
+        0
+        pred7
+        seq23
+in
+let lastIndex: all a78. (a78 -> Bool) -> [a78] -> Option Int =
+  lam pred5.
+    lam seq19.
+      recursive
+        let lastIndex_rechelper1 =
+          lam i27.
+            lam acc52.
+              lam pred6.
+                lam seq20.
+                  match
+                    null
+                      seq20
+                  with
+                    true
+                  then
+                    acc52
+                  else
+                    match
+                      pred6
+                        (head
+                           seq20)
+                    with
+                      true
+                    then
+                      lastIndex_rechelper1
+                        (addi
+                           i27
+                           1)
+                        (Some
+                           i27)
+                        pred6
+                        (tail
+                           seq20)
+                    else
+                      lastIndex_rechelper1
+                        (addi
+                           i27
+                           1)
+                        acc52
+                        pred6
+                        (tail
+                           seq20)
+      in
+      lastIndex_rechelper1
+        0
+        (None
+           {})
+        pred5
+        seq19
+in
+let indices: all a77. (a77 -> Bool) -> [a77] -> [Int] =
+  lam pred4.
+    lam seq17.
+      recursive
+        let rec15 =
+          lam i26.
+            lam acc51.
+              lam seq18.
+                match
+                  null
+                    seq18
+                with
+                  true
+                then
+                  acc51
+                else
+                  match
+                    pred4
+                      (head
+                         seq18)
+                  with
+                    true
+                  then
+                    rec15
+                      (addi
+                         i26
+                         1)
+                      (cons
+                         i26
+                         acc51)
+                      (tail
+                         seq18)
+                  else
+                    rec15
+                      (addi
+                         i26
+                         1)
+                      acc51
+                      (tail
+                         seq18)
+      in
+      reverse
+        (rec15
+           0
+           ""
+           seq17)
+in
+recursive
+  let isPrefix: all a76. all b18. (a76 -> b18 -> Bool) -> [a76] -> [b18] -> Bool =
+    lam eq6.
+      lam s119.
+        lam s218.
+          match
+            null
+              s119
+          with
+            true
+          then
+            true
+          else
+            match
+              null
+                s218
+            with
+              true
+            then
+              false
+            else
+              and
+                (eq6
+                   (head
+                      s119)
+                   (head
+                      s218))
+                (isPrefix
+                   eq6
+                   (tail
+                      s119)
+                   (tail
+                      s218))
+in
+let isSuffix: all a75. all b17. (a75 -> b17 -> Bool) -> [a75] -> [b17] -> Bool =
+  lam eq5.
+    lam s118.
+      lam s217.
+        isPrefix
+          eq5
+          (reverse
+             s118)
+          (reverse
+             s217)
+in
+let seqCmp: all a74. (a74 -> a74 -> Int) -> [a74] -> [a74] -> Int =
+  lam cmp7.
+    lam s116.
+      lam s215.
+        recursive
+          let work19 =
+            lam s117.
+              lam s216.
+                match
+                  (s117, s216)
+                with
+                  ([ h13 ] ++ t1100 ++ "", [ h23 ] ++ t212 ++ "")
+                then
+                  let c33 =
+                    cmp7
+                      h13
+                      h23
+                  in
+                  match
+                    eqi
+                      c33
+                      0
+                  with
+                    true
+                  then
+                    work19
+                      t1100
+                      t212
+                  else
+                    c33
+                else
+                  0
+        in
+        let n110 =
+          length
+            s116
+        in
+        let n210 =
+          length
+            s215
+        in
+        let ndiff =
+          subi
+            n110
+            n210
+        in
+        match
+          eqi
+            ndiff
+            0
+        with
+          true
+        then
+          work19
+            s116
+            s215
+        else
+          ndiff
+in
+let randIndex: all a73. [a73] -> Option Int =
+  lam seq16.
+    match
+      seq16
+    with
+      ""
+    then
+      None
+        {}
+    else
+      Some
+        (randIntU
+           0
+           (length
+              seq16))
+in
+let randElem: all a72. [a72] -> Option a72 =
+  lam seq15.
+    optionMap
+      (get
+         seq15)
+      (randIndex
+         seq15)
+in
+let permute: all a71. [a71] -> [Int] -> [a71] =
+  lam elems.
+    lam permutation.
+      match
+        eqi
+          (length
+             elems)
+          (length
+             permutation)
+      with
+        true
+      then
+        let ordered =
+          sort
+            (lam x74: (a71, Int).
+               lam y10: (a71, Int).
+                 subi
+                   x74.1
+                   y10.1)
+            (zip
+               elems
+               permutation)
+        in
+        match
+          unzip
+            ordered
+        with
+          (orderedElems, _)
+        in
+        orderedElems
+      else
+        error
+          "Expected sequences of equal length"
+in
+recursive
+  let seqJoin: all a70. [a70] -> [[a70]] -> [a70] =
+    lam delim2.
+      lam ss4.
+        match
+          null
+            ss4
+        with
+          true
+        then
+          ""
+        else
+          match
+            eqi
+              (length
+                 ss4)
+              1
+          with
+            true
+          then
+            head
+              ss4
+          else
+            concat
+              (concat
+                 (head
+                    ss4)
+                 delim2)
+              (seqJoin
+                 delim2
+                 (tail
+                    ss4))
+in
+let subseqReplace: all a69. (a69 -> a69 -> Bool) -> [a69] -> [a69] -> [a69] -> [a69] =
+  lam eq4.
+    lam check1.
+      lam replacement1.
+        lam seq14.
+          match
+            null
+              check1
+          with
+            true
+          then
+            seq14
+          else
+            recursive
+              let work18 =
+                lam checkIdx1.
+                  lam seqIdx2.
+                    lam acc50.
+                      match
+                        eqi
+                          checkIdx1
+                          (length
+                             check1)
+                      with
+                        true
+                      then
+                        work18
+                          0
+                          seqIdx2
+                          (concat
+                             acc50
+                             replacement1)
+                      else
+                        match
+                          eqi
+                            seqIdx2
+                            (length
+                               seq14)
+                        with
+                          true
+                        then
+                          concat
+                            acc50
+                            (subsequence
+                               seq14
+                               (subi
+                                  seqIdx2
+                                  checkIdx1)
+                               (addi
+                                  checkIdx1
+                                  1))
+                        else
+                          let eCheck1 =
+                            get
+                              check1
+                              checkIdx1
+                          in
+                          let eSeq1 =
+                            get
+                              seq14
+                              seqIdx2
+                          in
+                          match
+                            eq4
+                              eCheck1
+                              eSeq1
+                          with
+                            true
+                          then
+                            work18
+                              (addi
+                                 checkIdx1
+                                 1)
+                              (addi
+                                 seqIdx2
+                                 1)
+                              acc50
+                          else
+                            let seqIdx3 =
+                              subi
+                                seqIdx2
+                                checkIdx1
+                            in
+                            work18
+                              0
+                              (addi
+                                 seqIdx3
+                                 1)
+                              (snoc
+                                 acc50
+                                 (get
+                                    seq14
+                                    seqIdx3))
+            in
+            work18
+              0
+              0
+              ""
+in
+let identity =
+  lam x73.
+    x73
+in
+let const =
+  lam x72.
+    lam #var"70".
+      x72
+in
+let apply =
+  lam f40.
+    lam x71.
+      f40
+        x71
+in
+let compose =
+  lam f39.
+    lam g2.
+      lam x70.
+        f39
+          (g2
+             x70)
+in
+let curry =
+  lam f38.
+    lam x69.
+      lam y9.
+        f38
+          (x69, y9)
+in
+let uncurry: all a68. all b16. all c32. (a68 -> b16 -> c32) -> (a68, b16) -> c32 =
+  lam f37.
+    lam t204: (a68, b16).
+      f37
+        t204.0
+        t204.1
+in
+let flip =
+  lam f36.
+    lam x68.
+      lam y8.
+        f36
+          y8
+          x68
+in
+let printLn =
+  lam s50.
+    let #var"69" =
+      print
+        (concat
+           s50
+           "\n")
+    in
+    flushStdout
+      {}
+in
+let printSeq =
+  lam s49.
+    print
+      (join
+         s49)
+in
+let printSeqLn =
+  lam s48.
+    let #var"67" =
+      printSeq
+        s48
+    in
+    let #var"68" =
+      print
+        "\n"
+    in
+    flushStdout
+      {}
+in
+let dprintLn =
+  lam x67.
+    let #var"66" =
+      dprint
+        x67
+    in
+    printLn
+      ""
+in
+recursive
+  let fix: all a67. all b15. ((a67 -> b15) -> a67 -> b15) -> a67 -> b15 =
+    lam f35.
+      lam e8.
+        f35
+          (fix
+             f35)
+          e8
+in
+let repeat: (() -> ()) -> Int -> () =
+  lam f34.
+    lam n28.
+      recursive
+        let rec14 =
+          lam n29.
+            match
+              leqi
+                n29
+                0
+            with
+              true
+            then
+              {}
+            else
+              let #var"65" =
+                f34
+                  {}
+              in
+              rec14
+                (subi
+                   n29
+                   1)
+      in
+      rec14
+        n28
+in
+let repeati: (Int -> ()) -> Int -> () =
+  lam f33.
+    lam n27.
+      recursive
+        let rec13 =
+          lam i25.
+            match
+              geqi
+                i25
+                n27
+            with
+              true
+            then
+              {}
+            else
+              let #var"64" =
+                f33
+                  i25
+              in
+              rec13
+                (addi
+                   i25
+                   1)
+      in
+      rec13
+        0
+in
+let fixMutual: all a66. all b14. [[a66 -> b14] -> a66 -> b14] -> [a66 -> b14] =
+  lam l15.
+    let l16 =
+      map
+        (lam li3.
+           (li3,))
+        l15
+    in
+    fix
+      (lam self2.
+         lam l17.
+           map
+             (lam li2: ([a66 -> b14] -> a66 -> b14,).
+                lam x66.
+                  li2.0
+                    (self2
+                       l17)
+                    x66)
+             l17)
+      l16
+in
+let incrementCounter =
+  lam c31.
+    modref
+      c31
+      (addi
+         (deref
+            c31)
+         1)
+in
+let printCounter =
+  lam c30.
+    print
+      (int2string1
+         (deref
+            c30))
+in
+let compileOptions =
+  { earlyStop =
+      true,
+    printSamples =
+      true,
+    seedIsSome =
+      false,
+    seed =
+      0,
+    resample =
+      "manual",
+    cps =
+      "partial",
+    mcmcLightweightGlobalProb =
+      0.1,
+    mcmcLightweightReuseLocal =
+      true,
+    printAcceptanceRate =
+      false }
+in
+type EmpiricalExtra
+in
+type Dist a0
+in
+let maxf: Float -> Float -> Float =
+  lam r11.
+    lam l14.
+      match
+        gtf
+          r11
+          l14
+      with
+        true
+      then
+        r11
+      else
+        l14
+in
+let absf: Float -> Float =
+  lam f32.
+    maxf
+      f32
+      (negf
+         f32)
+in
+let eqfApprox =
+  lam epsilon1.
+    lam r10.
+      lam l13.
+        match
+          leqf
+            (absf
+               (subf
+                  r10
+                  l13))
+            epsilon1
+        with
+          true
+        then
+          true
+        else
+          false
+in
+let _eqf =
+  eqfApprox
+    1e-15
+in
+external externalExp : Float -> Float
+in
+let exp =
+  lam x65: Float.
+    externalExp
+      x65
+in
+external externalLog : Float -> Float
+in
+let log =
+  lam x64: Float.
+    externalLog
+      x64
+in
+external externalAtan : Float -> Float
+in
+let atan =
+  lam x63: Float.
+    externalAtan
+      x63
+in
+let pi =
+  mulf
+    4.
+    (atan
+       1.)
+in
+external externalSin : Float -> Float
+in
+let sin =
+  lam x62: Float.
+    externalSin
+      x62
+in
+external externalCos : Float -> Float
+in
+let cos =
+  lam x61: Float.
+    externalCos
+      x61
+in
+external externalAtan2 : Float -> Float -> Float
+in
+let atan2 =
+  lam x60: Float.
+    lam y7: Float.
+      externalAtan2
+        x60
+        y7
+in
+external externalPow : Float -> Float -> Float
+in
+let pow =
+  lam x59: Float.
+    lam y6: Float.
+      externalPow
+        x59
+        y6
+in
+external externalSqrt : Float -> Float
+in
+let sqrt: Float -> Float =
+  lam x58.
+    externalSqrt
+      x58
+in
+let inf =
+  divf
+    1.
+    0.
+in
+let nan =
+  mulf
+    0.
+    inf
+in
+let minf: Float -> Float -> Float =
+  lam r9.
+    lam l12.
+      match
+        ltf
+          r9
+          l12
+      with
+        true
+      then
+        r9
+      else
+        l12
+in
+let maxf1: Float -> Float -> Float =
+  lam r8.
+    lam l11.
+      match
+        gtf
+          r8
+          l11
+      with
+        true
+      then
+        r8
+      else
+        l11
+in
+let cmpfApprox: Float -> Float -> Float -> Int =
+  lam epsilon.
+    lam l10.
+      lam r7.
+        match
+          eqfApprox
+            epsilon
+            l10
+            r7
+        with
+          true
+        then
+          0
+        else
+          match
+            ltf
+              l10
+              r7
+          with
+            true
+          then
+            subi
+              0
+              1
+          else
+            1
+in
+let logFactorial: Int -> Float =
+  lam n25.
+    recursive
+      let work17 =
+        lam acc49.
+          lam n26.
+            match
+              gti
+                n26
+                0
+            with
+              true
+            then
+              work17
+                (addf
+                   (log
+                      (int2float
+                         n26))
+                   acc49)
+                (subi
+                   n26
+                   1)
+            else
+              acc49
+    in
+    work17
+      0.
+      n25
+in
+let maxi =
+  lam r6.
+    lam l9.
+      match
+        gti
+          r6
+          l9
+      with
+        true
+      then
+        r6
+      else
+        l9
+in
+let mini =
+  lam r5.
+    lam l8.
+      match
+        lti
+          r5
+          l8
+      with
+        true
+      then
+        r5
+      else
+        l8
+in
+let absi =
+  lam i24.
+    maxi
+      i24
+      (negi
+         i24)
+in
+let succ =
+  lam x57.
+    addi
+      x57
+      1
+in
+let pred =
+  lam x56.
+    subi
+      x56
+      1
+in
+let isEven: Int -> Bool =
+  lam n24.
+    eqi
+      (modi
+         n24
+         2)
+      0
+in
+let eqSign: Int -> Int -> Bool =
+  lam a65.
+    lam b13.
+      match
+        lti
+          a65
+          0
+      with
+        true
+      then
+        lti
+          b13
+          0
+      else
+        match
+          gti
+            a65
+            0
+        with
+          true
+        then
+          gti
+            b13
+            0
+        else
+          eqi
+            b13
+            0
+in
+let neqSign: Int -> Int -> Bool =
+  lam a64.
+    lam b12.
+      not
+        (eqSign
+           a64
+           b12)
+in
+let fact: Int -> Int =
+  lam n20.
+    match
+      lti
+        n20
+        0
+    with
+      true
+    then
+      error
+        "fact: undefined"
+    else
+      recursive
+        let recur4 =
+          lam acc48.
+            lam n23.
+              match
+                lti
+                  n23
+                  2
+              with
+                true
+              then
+                acc48
+              else
+                recur4
+                  (muli
+                     acc48
+                     n23)
+                  (pred
+                     n23)
+      in
+      recur4
+        1
+        n20
+in
+let binomial: Int -> Int -> Int =
+  lam n19.
+    lam k14.
+      match
+        or
+          (or
+             (lti
+                n19
+                0)
+             (lti
+                k14
+                0))
+          (gti
+             k14
+             n19)
+      with
+        true
+      then
+        0
+      else
+        divi
+          (fact
+             n19)
+          (muli
+             (fact
+                k14)
+             (fact
+                (subi
+                   n19
+                   k14)))
+in
+let pascal: Int -> [[Int]] =
+  lam n17.
+    let nextRow =
+      lam row2.
+        recursive
+          let recur3 =
+            lam acc47.
+              lam cs.
+                let #var"X" =
+                  cs
+                in
+                match
+                  #var"X"
+                with
+                  ""
+                then
+                  [ 1 ]
+                else
+                  match
+                    #var"X"
+                  with
+                    [ 1 ]
+                  then
+                    [ 1,
+                      1 ]
+                  else
+                    match
+                      #var"X"
+                    with
+                      [ c117,
+                        c28 ]
+                    then
+                      snoc
+                        (cons
+                           1
+                           (snoc
+                              acc47
+                              (addi
+                                 c117
+                                 c28)))
+                        1
+                    else
+                      match
+                        #var"X"
+                      with
+                        [ c118,
+                          c29 ] ++ cs1 ++ ""
+                      in
+                      recur3
+                          (snoc
+                             acc47
+                             (addi
+                                c118
+                                c29))
+                          (cons
+                             c29
+                             cs1)
+        in
+        recur3
+          ""
+          row2
+    in
+    recursive
+      let recur2 =
+        lam acc46.
+          lam prow.
+            lam n18.
+              match
+                lti
+                  n18
+                  0
+              with
+                true
+              then
+                acc46
+              else
+                let row1 =
+                  nextRow
+                    prow
+                in
+                recur2
+                  (snoc
+                     acc46
+                     row1)
+                  row1
+                  (pred
+                     n18)
+    in
+    recur2
+      ""
+      ""
+      (pred
+         n17)
+in
+let pascalrow: Int -> [Int] =
+  lam n16.
+    match
+      lti
+        n16
+        0
+    with
+      true
+    then
+      ""
+    else
+      let k13 =
+        divi
+          n16
+          2
+      in
+      let row =
+        create
+          (succ
+             k13)
+          (binomial
+             n16)
+      in
+      let rrow =
+        reverse
+          row
+      in
+      match
+        isEven
+          n16
+      with
+        true
+      then
+        concat
+          row
+          (tail
+             rrow)
+      else
+        concat
+          row
+          rrow
+in
+external externalGammaLogPdf : Float -> Float -> Float -> Float
+in
+external externalGammaSample! : Float -> Float -> Float
+in
+let gammaPdf =
+  lam shape2: Float.
+    lam scale2: Float.
+      lam x55: Float.
+        exp
+          (externalGammaLogPdf
+             x55
+             shape2
+             scale2)
+in
+let gammaLogPdf =
+  lam shape1: Float.
+    lam scale1: Float.
+      lam x54: Float.
+        externalGammaLogPdf
+          x54
+          shape1
+          scale1
+in
+let gammaSample =
+  lam shape: Float.
+    lam scale: Float.
+      externalGammaSample
+        shape
+        scale
+in
+external externalBinomialLogPmf : Int -> Float -> Int -> Float
+in
+external externalBinomialSample! : Float -> Int -> Int
+in
+let binomialPmf =
+  lam p7: Float.
+    lam n15: Int.
+      lam x53: Int.
+        exp
+          (externalBinomialLogPmf
+             x53
+             p7
+             n15)
+in
+let binomialLogPmf =
+  lam p6: Float.
+    lam n14: Int.
+      lam x52: Int.
+        externalBinomialLogPmf
+          x52
+          p6
+          n14
+in
+let binomialSample =
+  lam p5: Float.
+    lam n13: Int.
+      externalBinomialSample
+        p5
+        n13
+in
+let bernoulliPmf =
+  lam p4: Float.
+    lam x51: Bool.
+      match
+        x51
+      with
+        true
+      then
+        p4
+      else
+        subf
+          1.
+          p4
+in
+let bernoulliLogPmf =
+  lam p3: Float.
+    lam x50: Bool.
+      log
+        (bernoulliPmf
+           p3
+           x50)
+in
+let bernoulliSample =
+  lam p2: Float.
+    match
+      eqi
+        1
+        (externalBinomialSample
+           p2
+           1)
+    with
+      true
+    then
+      true
+    else
+      false
+in
+external externalBetaLogPdf : Float -> Float -> Float -> Float
+in
+external externalBetaSample! : Float -> Float -> Float
+in
+let betaPdf =
+  lam a63: Float.
+    lam b11: Float.
+      lam x49: Float.
+        exp
+          (externalBetaLogPdf
+             x49
+             a63
+             b11)
+in
+let betaLogPdf =
+  lam a62: Float.
+    lam b10: Float.
+      lam x48: Float.
+        externalBetaLogPdf
+          x48
+          a62
+          b10
+in
+let betaSample =
+  lam a61: Float.
+    lam b9: Float.
+      externalBetaSample
+        a61
+        b9
+in
+external externalGaussianLogPdf : Float -> Float -> Float -> Float
+in
+external externalGaussianSample! : Float -> Float -> Float
+in
+let gaussianPdf =
+  lam mu2: Float.
+    lam sigma2: Float.
+      lam x47: Float.
+        exp
+          (externalGaussianLogPdf
+             x47
+             mu2
+             sigma2)
+in
+let gaussianLogPdf =
+  lam mu1: Float.
+    lam sigma1: Float.
+      lam x46: Float.
+        externalGaussianLogPdf
+          x46
+          mu1
+          sigma1
+in
+let gaussianSample =
+  lam mu: Float.
+    lam sigma: Float.
+      externalGaussianSample
+        mu
+        sigma
+in
+external externalMultinomialLogPmf : [Int] -> [Float] -> Float
+in
+external externalMultinomialSample! : Int -> [Float] -> [Int]
+in
+external externalCategoricalSample! : [Float] -> Int
+in
+let multinomialLogPmf: [Float] -> [Int] -> Float =
+  lam ps5.
+    lam ns2.
+      externalMultinomialLogPmf
+        ns2
+        ps5
+in
+let multinomialPmf: [Float] -> [Int] -> Float =
+  lam ps4.
+    lam ns1.
+      exp
+        (externalMultinomialLogPmf
+           ns1
+           ps4)
+in
+let categoricalLogPmf: [Float] -> Int -> Float =
+  lam ps3.
+    lam x45.
+      log
+        (get
+           ps3
+           x45)
+in
+let categoricalPmf: [Float] -> Int -> Float =
+  lam ps2.
+    lam x44.
+      get
+        ps2
+        x44
+in
+let multinomialSample: [Float] -> Int -> [Int] =
+  lam ps1.
+    lam n12.
+      externalMultinomialSample
+        n12
+        ps1
+in
+let categoricalSample: [Float] -> Int =
+  lam ps.
+    externalCategoricalSample
+      ps
+in
+external externalDirichletLogPdf : [Float] -> [Float] -> Float
+in
+external externalDirichletSample : [Float] -> [Float]
+in
+let dirichletLogPdf: [Float] -> [Float] -> Float =
+  lam alpha2.
+    lam xs10.
+      match
+        eqfApprox
+          1e-15
+          (foldl
+             addf
+             0.
+             xs10)
+          1.
+      with
+        true
+      then
+        externalDirichletLogPdf
+          xs10
+          alpha2
+      else
+        negf
+          inf
+in
+let dirichletPdf: [Float] -> [Float] -> Float =
+  lam alpha1.
+    lam xs9.
+      exp
+        (externalDirichletLogPdf
+           xs9
+           alpha1)
+in
+let dirichletSample: [Float] -> [Float] =
+  lam alpha.
+    externalDirichletSample
+      alpha
+in
+external externalUniformContinuousSample! : Float -> Float -> Float
+in
+let uniformContinuousSample =
+  lam a60.
+    lam b8.
+      externalUniformContinuousSample
+        a60
+        b8
+in
+let uniformContinuousLogPdf =
+  lam a59.
+    lam b7.
+      lam x43.
+        match
+          geqf
+            x43
+            a59
+        with
+          true
+        then
+          match
+            leqf
+              x43
+              b7
+          with
+            true
+          then
+            subf
+              (log
+                 1.)
+              (log
+                 (subf
+                    b7
+                    a59))
+          else
+            0.
+        else
+          0.
+in
+let uniformContinuousPdf =
+  lam a58.
+    lam b6.
+      lam x42.
+        match
+          geqf
+            x42
+            a58
+        with
+          true
+        then
+          match
+            leqf
+              x42
+              b6
+          with
+            true
+          then
+            divf
+              1.
+              (subf
+                 b6
+                 a58)
+          else
+            0.
+        else
+          0.
+in
+let uniformSample: () -> Float =
+  lam #var"63".
+    uniformContinuousSample
+      0.
+      1.
+in
+external externalUniformDiscreteSample! : Int -> Int -> Int
+in
+let uniformDiscreteSample =
+  lam a57: Int.
+    lam b5: Int.
+      externalUniformDiscreteSample
+        a57
+        b5
+in
+let uniformDiscreteLogPdf: Int -> Int -> Int -> Float =
+  lam a56.
+    lam b4.
+      lam x41.
+        match
+          geqi
+            x41
+            a56
+        with
+          true
+        then
+          match
+            leqi
+              x41
+              b4
+          with
+            true
+          then
+            subf
+              (log
+                 1.)
+              (log
+                 (int2float
+                    (addi
+                       1
+                       (subi
+                          b4
+                          a56))))
+          else
+            0.
+        else
+          0.
+in
+let uniformDiscretePdf: Int -> Int -> Int -> Float =
+  lam a55.
+    lam b3.
+      lam x40.
+        match
+          geqi
+            x40
+            a55
+        with
+          true
+        then
+          match
+            leqi
+              x40
+              b3
+          with
+            true
+          then
+            divf
+              1.
+              (int2float
+                 (addi
+                    1
+                    (subi
+                       b3
+                       a55)))
+          else
+            0.
+        else
+          0.
+in
+let poissonLogPmf =
+  lam lambda5: Float.
+    lam x39: Int.
+      subf
+        (subf
+           (mulf
+              (int2float
+                 x39)
+              (log
+                 lambda5))
+           lambda5)
+        (logFactorial
+           x39)
+in
+let poissonPmf =
+  lam lambda4: Float.
+    lam x38: Int.
+      exp
+        (poissonLogPmf
+           lambda4
+           x38)
+in
+let poissonSample =
+  lam lambda3: Float.
+    let enlam =
+      exp
+        (negf
+           lambda3)
+    in
+    let x36 =
+      0
+    in
+    let prod =
+      1.
+    in
+    recursive
+      let rec12 =
+        lam x37.
+          lam prod1.
+            let u1 =
+              uniformSample
+                {}
+            in
+            let prod2 =
+              mulf
+                prod1
+                u1
+            in
+            match
+              gtf
+                prod2
+                enlam
+            with
+              true
+            then
+              rec12
+                (addi
+                   x37
+                   1)
+                prod2
+            else
+              x37
+    in
+    rec12
+      x36
+      prod
+in
+external externalExponentialSample! : Float -> Float
+in
+let exponentialSample =
+  lam lambda2: Float.
+    externalExponentialSample
+      lambda2
+in
+let exponentialLogPdf: Float -> Float -> Float =
+  lam lambda1.
+    lam x35.
+      subf
+        (log
+           lambda1)
+        (mulf
+           lambda1
+           x35)
+in
+let exponentialPdf: Float -> Float -> Float =
+  lam lambda.
+    lam x34.
+      exp
+        (exponentialLogPdf
+           lambda
+           x34)
+in
+external externalSetSeed! : Int -> ()
+in
+let setSeed: Int -> () =
+  lam seed.
+    let #var"62" =
+      randSetSeed
+        seed
+    in
+    externalSetSeed
+      seed
+in
+let eqChar =
+  lam c116.
+    lam c27.
+      eqc
+        c116
+        c27
+in
+let neqChar =
+  lam c115.
+    lam c26.
+      not
+        (eqc
+           c115
+           c26)
+in
+let ltChar =
+  lam c114.
+    lam c25.
+      lti
+        (char2int
+           c114)
+        (char2int
+           c25)
+in
+let gtChar =
+  lam c113.
+    lam c24.
+      gti
+        (char2int
+           c113)
+        (char2int
+           c24)
+in
+let leqChar =
+  lam c112.
+    lam c23.
+      leqi
+        (char2int
+           c112)
+        (char2int
+           c23)
+in
+let geqChar =
+  lam c111.
+    lam c22.
+      geqi
+        (char2int
+           c111)
+        (char2int
+           c22)
+in
+let cmpChar =
+  lam c110.
+    lam c21.
+      subi
+        (char2int
+           c110)
+        (char2int
+           c21)
+in
+let _escapes =
+  [ ('\n', "\\n"),
+    ('\t', "\\t"),
+    ('\r', "\\r"),
+    ('\\', "\\\\"),
+    ('\"', "\\\""),
+    ('\'', "\\\'") ]
+in
+let escapeChar =
+  lam c20.
+    match
+      find
+        (lam e7: (Char, [Char]).
+           eqChar
+             c20
+             e7.0)
+        _escapes
+    with
+      Some n10
+    then
+      let n11: (Char, [Char]) =
+        n10
+      in
+      n11.1
+    else
+      [ c20 ]
+in
+let showChar =
+  lam c19.
+    join
+      [ "\'",
+        escapeChar
+          c19,
+        "\'" ]
+in
+let char2upper =
+  lam c18.
+    match
+      and
+        (geqChar
+           c18
+           'a')
+        (leqChar
+           c18
+           'z')
+    with
+      true
+    then
+      int2char
+        (subi
+           (char2int
+              c18)
+           32)
+    else
+      c18
+in
+let char2lower =
+  lam c17.
+    match
+      and
+        (geqChar
+           c17
+           'A')
+        (leqChar
+           c17
+           'Z')
+    with
+      true
+    then
+      int2char
+        (addi
+           (char2int
+              c17)
+           32)
+    else
+      c17
+in
+let isWhitespace =
+  lam c16.
+    any
+      (eqChar
+         c16)
+      " \n\t\r"
+in
+let isLowerAlpha =
+  lam c15.
+    let i23 =
+      char2int
+        c15
+    in
+    match
+      leqi
+        (char2int
+           'a')
+        i23
+    with
+      true
+    then
+      leqi
+        i23
+        (char2int
+           'z')
+    else
+      false
+in
+let isUpperAlpha =
+  lam c14.
+    let i22 =
+      char2int
+        c14
+    in
+    match
+      leqi
+        (char2int
+           'A')
+        i22
+    with
+      true
+    then
+      leqi
+        i22
+        (char2int
+           'Z')
+    else
+      false
+in
+let isAlpha =
+  lam c13.
+    match
+      isLowerAlpha
+        c13
+    with
+      true
+    then
+      true
+    else
+      isUpperAlpha
+        c13
+in
+let isLowerAlphaOrUnderscore =
+  lam c12.
+    match
+      isLowerAlpha
+        c12
+    with
+      true
+    then
+      true
+    else
+      eqChar
+        c12
+        '_'
+in
+let isAlphaOrUnderscore =
+  lam c11.
+    match
+      isAlpha
+        c11
+    with
+      true
+    then
+      true
+    else
+      eqChar
+        c11
+        '_'
+in
+let isDigit =
+  lam c10.
+    let i21 =
+      char2int
+        c10
+    in
+    match
+      leqi
+        (char2int
+           '0')
+        i21
+    with
+      true
+    then
+      leqi
+        i21
+        (char2int
+           '9')
+    else
+      false
+in
+let isAlphanum =
+  lam c9.
+    match
+      isAlpha
+        c9
+    with
+      true
+    then
+      true
+    else
+      isDigit
+        c9
+in
+let randAlphanum: () -> Char =
+  lam #var"61".
+    let r4 =
+      randIntU
+        0
+        62
+    in
+    match
+      lti
+        r4
+        10
+    with
+      true
+    then
+      int2char
+        (addi
+           r4
+           48)
+    else
+      match
+        lti
+          r4
+          36
+      with
+        true
+      then
+        int2char
+          (addi
+             r4
+             55)
+      else
+        int2char
+          (addi
+             r4
+             61)
+in
+let emptyStr: [Char] =
+  ""
+in
+let escapeString =
+  lam s47.
+    join
+      (map
+         escapeChar
+         s47)
+in
+let eqString =
+  lam s115.
+    lam s214.
+      eqSeq
+        eqc
+        s115
+        s214
+in
+let neqString =
+  lam s114.
+    lam s213.
+      not
+        (eqString
+           s114
+           s213)
+in
+let eqStringSlice =
+  lam s113.
+    lam s212.
+      lam o22.
+        lam n22.
+          recursive
+            let work16 =
+              lam i20.
+                match
+                  eqi
+                    i20
+                    n22
+                with
+                  true
+                then
+                  true
+                else
+                  match
+                    eqc
+                      (get
+                         s113
+                         i20)
+                      (get
+                         s212
+                         (addi
+                            o22
+                            i20))
+                  with
+                    true
+                  then
+                    work16
+                      (addi
+                         i20
+                         1)
+                  else
+                    false
+          in
+          match
+            eqi
+              (length
+                 s113)
+              n22
+          with
+            true
+          then
+            work16
+              0
+          else
+            false
+in
+recursive
+  let ltString: [Char] -> [Char] -> Bool =
+    lam s112.
+      lam s211.
+        match
+          null
+            s211
+        with
+          true
+        then
+          false
+        else
+          match
+            null
+              s112
+          with
+            true
+          then
+            true
+          else
+            match
+              eqChar
+                (head
+                   s112)
+                (head
+                   s211)
+            with
+              true
+            then
+              ltString
+                (tail
+                   s112)
+                (tail
+                   s211)
+            else
+              ltChar
+                (head
+                   s112)
+                (head
+                   s211)
+in
+let gtString: [Char] -> [Char] -> Bool =
+  lam s111.
+    lam s210.
+      ltString
+        s210
+        s111
+in
+let cmpString: [Char] -> [Char] -> Int =
+  seqCmp
+    cmpChar
+in
+let str2upper =
+  lam s46.
+    map
+      char2upper
+      s46
+in
+let str2lower =
+  lam s45.
+    map
+      char2lower
+      s45
+in
+let string2int =
+  lam s43.
+    recursive
+      let string2int_rechelper1 =
+        lam s44.
+          lam acc45.
+            match
+              null
+                s44
+            with
+              true
+            then
+              acc45
+            else
+              let fsd1 =
+                subi
+                  (char2int
+                     (head
+                        s44))
+                  (char2int
+                     '0')
+              in
+              string2int_rechelper1
+                (tail
+                   s44)
+                (addi
+                   (muli
+                      10
+                      acc45)
+                   fsd1)
+    in
+    match
+      s43
+    with
+      ""
+    then
+      0
+    else
+      match
+        eqChar
+          '-'
+          (head
+             s43)
+      with
+        true
+      then
+        negi
+          (string2int_rechelper1
+             (tail
+                s43)
+             0)
+      else
+        string2int_rechelper1
+          s43
+          0
+in
+let digit2char =
+  lam d2.
+    int2char
+      (addi
+         d2
+         (char2int
+            '0'))
+in
+let int2string =
+  lam n8.
+    recursive
+      let int2string_rechelper1 =
+        lam n9.
+          lam acc44.
+            match
+              lti
+                n9
+                10
+            with
+              true
+            then
+              cons
+                (digit2char
+                   n9)
+                acc44
+            else
+              int2string_rechelper1
+                (divi
+                   n9
+                   10)
+                (cons
+                   (digit2char
+                      (modi
+                         n9
+                         10))
+                   acc44)
+    in
+    match
+      lti
+        n8
+        0
+    with
+      true
+    then
+      cons
+        '-'
+        (int2string_rechelper1
+           (negi
+              n8)
+           "")
+    else
+      int2string_rechelper1
+        n8
+        ""
+in
+let stringIsInt: [Char] -> Bool =
+  lam s42.
+    eqString
+      s42
+      (int2string
+         (string2int
+            s42))
+in
+let strIndex =
+  lam c7.
+    lam s40.
+      recursive
+        let strIndex_rechelper1 =
+          lam i19.
+            lam c8.
+              lam s41.
+                match
+                  null
+                    s41
+                with
+                  true
+                then
+                  None
+                    {}
+                else
+                  match
+                    eqChar
+                      c8
+                      (head
+                         s41)
+                  with
+                    true
+                  then
+                    Some
+                      i19
+                  else
+                    strIndex_rechelper1
+                      (addi
+                         i19
+                         1)
+                      c8
+                      (tail
+                         s41)
+      in
+      strIndex_rechelper1
+        0
+        c7
+        s40
+in
+let strLastIndex =
+  lam c5.
+    lam s38.
+      recursive
+        let strLastIndex_rechelper1 =
+          lam i18.
+            lam acc43.
+              lam c6.
+                lam s39.
+                  match
+                    null
+                      s39
+                  with
+                    true
+                  then
+                    match
+                      eqi
+                        acc43
+                        (negi
+                           1)
+                    with
+                      true
+                    then
+                      None
+                        {}
+                    else
+                      Some
+                        acc43
+                  else
+                    match
+                      eqChar
+                        c6
+                        (head
+                           s39)
+                    with
+                      true
+                    then
+                      strLastIndex_rechelper1
+                        (addi
+                           i18
+                           1)
+                        i18
+                        c6
+                        (tail
+                           s39)
+                    else
+                      strLastIndex_rechelper1
+                        (addi
+                           i18
+                           1)
+                        acc43
+                        c6
+                        (tail
+                           s39)
+      in
+      strLastIndex_rechelper1
+        0
+        (negi
+           1)
+        c5
+        s38
+in
+let strSplit =
+  lam delim1.
+    lam s37.
+      let n7 =
+        length
+          s37
+      in
+      let m3 =
+        length
+          delim1
+      in
+      recursive
+        let work15 =
+          lam acc42.
+            lam lastMatch1.
+              lam i17.
+                match
+                  lti
+                    (subi
+                       n7
+                       m3)
+                    i17
+                with
+                  true
+                then
+                  snoc
+                    acc42
+                    (subsequence
+                       s37
+                       lastMatch1
+                       n7)
+                else
+                  match
+                    eqStringSlice
+                      delim1
+                      s37
+                      i17
+                      m3
+                  with
+                    true
+                  then
+                    let nexti1 =
+                      addi
+                        i17
+                        m3
+                    in
+                    work15
+                      (snoc
+                         acc42
+                         (subsequence
+                            s37
+                            lastMatch1
+                            (subi
+                               i17
+                               lastMatch1)))
+                      nexti1
+                      nexti1
+                  else
+                    work15
+                      acc42
+                      lastMatch1
+                      (addi
+                         i17
+                         1)
+      in
+      match
+        null
+          delim1
+      with
+        true
+      then
+        [ s37 ]
+      else
+        work15
+          ""
+          0
+          0
+in
+let strTrim =
+  lam s35.
+    recursive
+      let strTrim_init1 =
+        lam s36.
+          match
+            eqString
+              s36
+              ""
+          with
+            true
+          then
+            s36
+          else
+            match
+              isWhitespace
+                (head
+                   s36)
+            with
+              true
+            then
+              strTrim_init1
+                (tail
+                   s36)
+            else
+              s36
+    in
+    reverse
+      (strTrim_init1
+         (reverse
+            (strTrim_init1
+               s35)))
+in
+let stringIsInt1 =
+  lam s33.
+    match
+      null
+        s33
+    with
+      true
+    then
+      false
+    else
+      let s34 =
+        match
+          eqChar
+            (get
+               s33
+               0)
+            '-'
+        with
+          true
+        then
+          tail
+            s33
+        else
+          s33
+      in
+      forAll
+        isDigit
+        s34
+in
+let strJoin: [Char] -> [[Char]] -> [Char] =
+  seqJoin
+in
+let strReplace: [Char] -> [Char] -> [Char] -> [Char] =
+  subseqReplace
+    eqChar
+in
+type WriteChannel
+in
+type ReadChannel
+in
+external fileExists1! : [Char] -> Bool
+in
+external deleteFile1! : [Char] -> ()
+in
+let deleteFile2 =
+  lam s32.
+    match
+      fileExists1
+        s32
+    with
+      true
+    then
+      deleteFile1
+        s32
+    else
+      {}
+in
+external fileSize! : [Char] -> Int
+in
+external writeOpen! : [Char] -> (WriteChannel, Bool)
+in
+let writeOpen1: [Char] -> Option WriteChannel =
+  lam name1.
+    match
+      writeOpen
+        name1
+    with
+      (wc, true)
+    then
+      Some
+        wc
+    else
+      None
+        {}
+in
+external writeString! : WriteChannel -> [Char] -> ()
+in
+let writeString1: WriteChannel -> [Char] -> () =
+  lam c4.
+    lam s31.
+      writeString
+        c4
+        s31
+in
+external writeFlush! : WriteChannel -> ()
+in
+external writeClose! : WriteChannel -> ()
+in
+external readOpen! : [Char] -> (ReadChannel, Bool)
+in
+let readOpen1: [Char] -> Option ReadChannel =
+  lam name.
+    match
+      readOpen
+        name
+    with
+      (rc1, true)
+    then
+      Some
+        rc1
+    else
+      None
+        {}
+in
+external readLine1! : ReadChannel -> ([Char], Bool)
+in
+let readLine2: ReadChannel -> Option [Char] =
+  lam rc.
+    match
+      readLine1
+        rc
+    with
+      (s30, false)
+    then
+      Some
+        s30
+    else
+      None
+        {}
+in
+external readString! : ReadChannel -> [Char]
+in
+external readClose! : ReadChannel -> ()
+in
+external stdin! : ReadChannel
+in
+external stdout! : WriteChannel
+in
+external stderr! : WriteChannel
+in
+type Res a3 =
+  ([Float], [a3])
+in
+type ResOption a4 =
+  ([Float], [Option a4])
+in
+(match
+     compileOptions.seedIsSome
+   with
+     true
+   then
+     setSeed
+       compileOptions.seed
+   else
+     {})
+; let negInf =
+  divf
+    (negf
+       1.)
+    0.
+in
+let numarg =
+  lam #var"59".
+    match
+      neqi
+        (length
+           argv)
+        2
+    with
+      true
+    then
+      let #var"60" =
+        writeString1
+          stderr
+          "The number of particles/points need to be given as a program argument.\n"
+      in
+      exit
+        1
+    else
+      string2int
+        (get
+           argv
+           1)
+in
+let saveCSV =
+  lam res11.
+    lam names4.
+      lam filename.
+        lam expOnLogWeights1.
+          match
+            writeOpen1
+              filename
+          with
+            Some ch
+          then
+            let #var"55" =
+              writeString1
+                ch
+                (strJoin
+                   ","
+                   names4)
+            in
+            let #var"56" =
+              writeString1
+                ch
+                "\n"
+            in
+            let #var"57" =
+              iter
+                (lam lst.
+                   let #var"58" =
+                     writeString1
+                       ch
+                       (strJoin
+                          ","
+                          (map
+                             float2string
+                             lst))
+                   in
+                   writeString1
+                     ch
+                     "\n")
+                (expOnLogWeights1
+                   res11)
+            in
+            writeClose
+              ch
+          else
+            writeString1
+              stderr
+              (join
+                 [ "Cannot write to file ",
+                   filename,
+                   "\n" ])
+in
+let printStatistics =
+  lam res10.
+    lam names2.
+      lam normConst4.
+        lam expVals2.
+          lam varianceVals1.
+            let pad =
+              18
+            in
+            let padPrint =
+              lam s29.
+                lam n6.
+                  match
+                    geqi
+                      n6
+                      (length
+                         s29)
+                  with
+                    true
+                  then
+                    let #var"53" =
+                      print
+                        s29
+                    in
+                    print
+                      (create
+                         (subi
+                            n6
+                            (length
+                               s29))
+                         (lam #var"54".
+                            ' '))
+                  else
+                    print
+                      s29
+            in
+            let #var"41" =
+              padPrint
+                "Variable"
+                14
+            in
+            let #var"42" =
+              padPrint
+                "Expected Value"
+                pad
+            in
+            let #var"43" =
+              padPrint
+                "Variance"
+                pad
+            in
+            let #var"44" =
+              padPrint
+                "Standard Deviation"
+                pad
+            in
+            let #var"45" =
+              print
+                "\n"
+            in
+            recursive
+              let work14 =
+                lam names3.
+                  lam ev.
+                    lam vv.
+                      match
+                        (names3, ev, vv)
+                      with
+                        ([ n5 ] ++ ns ++ "", [ e6 ] ++ es1 ++ "", [ v4 ] ++ vs ++ "")
+                      then
+                        match
+                          isPrefix
+                            eqChar
+                            "#"
+                            n5
+                        with
+                          true
+                        then
+                          work14
+                            ns
+                            ev
+                            vv
+                        else
+                          let #var"48" =
+                            padPrint
+                              n5
+                              14
+                          in
+                          let #var"49" =
+                            padPrint
+                              (float2string
+                                 e6)
+                              pad
+                          in
+                          let #var"50" =
+                            padPrint
+                              (float2string
+                                 v4)
+                              pad
+                          in
+                          let #var"51" =
+                            padPrint
+                              (float2string
+                                 (sqrt
+                                    v4))
+                              pad
+                          in
+                          let #var"52" =
+                            print
+                              "\n"
+                          in
+                          work14
+                            ns
+                            es1
+                            vs
+                      else
+                        {}
+            in
+            let #var"46" =
+              work14
+                names2
+                expVals2
+                varianceVals1
+            in
+            let #var"47" =
+              print
+                "\n"
+            in
+            print
+              (join
+                 [ "Normalization constant: ",
+                   float2string
+                     normConst4,
+                   "\n" ])
+in
+let systematicSample: all a54. [a54] -> [Float] -> Float -> Int -> [a54] =
+  lam seq10.
+    lam weights10.
+      lam weightSum.
+        lam sampleCount.
+          let step1 =
+            divf
+              weightSum
+              (int2float
+                 sampleCount)
+          in
+          recursive
+            let systematicSampleRec =
+              lam seq13.
+                lam weights11.
+                  lam u.
+                    lam out.
+                      match
+                        null
+                          weights11
+                      with
+                        true
+                      then
+                        out
+                      else
+                        match
+                          ltf
+                            u
+                            (head
+                               weights11)
+                        with
+                          true
+                        then
+                          systematicSampleRec
+                            seq13
+                            weights11
+                            (addf
+                               u
+                               step1)
+                            (cons
+                               (head
+                                  seq13)
+                               out)
+                        else
+                          systematicSampleRec
+                            (tail
+                               seq13)
+                            (tail
+                               weights11)
+                            (subf
+                               u
+                               (head
+                                  weights11))
+                            out
+          in
+          systematicSampleRec
+            seq10
+            weights10
+            (uniformContinuousSample
+               0.
+               step1)
+            (toList
+               "")
+in
+let normConstant: [Float] -> Float =
+  lam res9.
+    let max1 =
+      foldl
+        (lam acc41.
+           lam x33.
+             match
+               geqf
+                 x33
+                 acc41
+             with
+               true
+             then
+               x33
+             else
+               acc41)
+        negInf
+        res9
+    in
+    match
+      eqf
+        max1
+        negInf
+    with
+      true
+    then
+      negInf
+    else
+      let sum1 =
+        foldl
+          (lam acc40.
+             lam x32.
+               addf
+                 (exp
+                    (subf
+                       x32
+                       max1))
+                 acc40)
+          0.
+          res9
+      in
+      subf
+        (addf
+           max1
+           (log
+              sum1))
+        (log
+           (int2float
+              (length
+                 res9)))
+in
+let expectedValues =
+  lam res8: [[Float]].
+    lam normConst3.
+      foldl
+        (lam acc38.
+           lam t203.
+             let w3 =
+               exp
+                 (subf
+                    (head
+                       t203)
+                    normConst3)
+             in
+             let ys =
+               tail
+                 t203
+             in
+             recursive
+               let work13 =
+                 lam acc39.
+                   lam xs7.
+                     match
+                       (acc39, xs7)
+                     with
+                       ([ a53 ] ++ as3 ++ "", [ x31 ] ++ xs8 ++ "")
+                     then
+                       cons
+                         (addf
+                            (mulf
+                               x31
+                               w3)
+                            a53)
+                         (work13
+                            as3
+                            xs8)
+                     else
+                       ""
+             in
+             work13
+               acc38
+               ys)
+        (create
+           (subi
+              (length
+                 (head
+                    res8))
+              1)
+           (lam #var"40".
+              0.))
+        res8
+in
+let variance =
+  lam res7.
+    lam expVals1.
+      let sum =
+        foldl
+          (lam acc36.
+             lam t202.
+               recursive
+                 let work12 =
+                   lam acc37.
+                     lam xs5.
+                       lam expv.
+                         match
+                           (acc37, xs5, expv)
+                         with
+                           ([ a52 ] ++ as2 ++ "", [ x30 ] ++ xs6 ++ "", [ e5 ] ++ es ++ "")
+                         then
+                           let v3 =
+                             subf
+                               x30
+                               e5
+                           in
+                           cons
+                             (addf
+                                a52
+                                (mulf
+                                   v3
+                                   v3))
+                             (work12
+                                as2
+                                xs6
+                                es)
+                         else
+                           ""
+               in
+               work12
+                 acc36
+                 (tail
+                    t202)
+                 expVals1)
+          (create
+             (subi
+                (length
+                   (head
+                      res7))
+                1)
+             (lam #var"39".
+                0.))
+          res7
+      in
+      let dval =
+        int2float
+          (length
+             res7)
+      in
+      map
+        (lam x29.
+           divf
+             x29
+             dval)
+        sum
+in
+let expOnLogWeights =
+  lam res6.
+    mapReverse
+      (lam t201.
+         match
+           t201
+         with
+           [ x28 ] ++ xs4 ++ ""
+         in
+         cons
+             (exp
+                x28)
+             xs4)
+      res6
+in
+let output =
+  lam res5: [[Float]].
+    lam names: [[Char]].
+      let names1 =
+        cons
+          "#"
+          names
+      in
+      let nc =
+        normConstant
+          (map
+             head
+             res5)
+      in
+      let expVals =
+        expectedValues
+          res5
+          nc
+      in
+      let varianceVals =
+        variance
+          res5
+          expVals
+      in
+      let #var"38" =
+        printStatistics
+          res5
+          names1
+          nc
+          expVals
+          varianceVals
+      in
+      saveCSV
+        res5
+        names1
+        "data.csv"
+        expOnLogWeights
+in
+let printSamples: all a51. (a51 -> [Char]) -> [Float] -> [a51] -> () =
+  lam printFun3.
+    lam weights7.
+      lam samples12.
+        recursive
+          let rec11: [Float] -> [a51] -> () =
+            lam weights8.
+              lam samples13.
+                match
+                  null
+                    weights8
+                with
+                  true
+                then
+                  {}
+                else
+                  let w2 =
+                    head
+                      weights8
+                  in
+                  let weights9 =
+                    tail
+                      weights8
+                  in
+                  let s28 =
+                    head
+                      samples13
+                  in
+                  let samples14 =
+                    tail
+                      samples13
+                  in
+                  let #var"34" =
+                    print
+                      (printFun3
+                         s28)
+                  in
+                  let #var"35" =
+                    print
+                      " "
+                  in
+                  let #var"36" =
+                    print
+                      (float2string
+                         w2)
+                  in
+                  let #var"37" =
+                    print
+                      "\n"
+                  in
+                  rec11
+                    weights9
+                    samples14
+        in
+        match
+          compileOptions.printSamples
+        with
+          true
+        then
+          rec11
+            weights7
+            samples12
+        else
+          {}
+in
+let printSamplesOption: all a50. (a50 -> [Char]) -> [Float] -> [Option a50] -> () =
+  lam printFun2.
+    lam weights4.
+      lam samples9.
+        recursive
+          let rec10: [Float] -> [Option a50] -> () =
+            lam weights5.
+              lam samples10.
+                match
+                  null
+                    weights5
+                with
+                  true
+                then
+                  {}
+                else
+                  let w1 =
+                    head
+                      weights5
+                  in
+                  let weights6 =
+                    tail
+                      weights5
+                  in
+                  let s26 =
+                    head
+                      samples10
+                  in
+                  let samples11 =
+                    tail
+                      samples10
+                  in
+                  let #var"30" =
+                    match
+                      s26
+                    with
+                      Some s27
+                    then
+                      print
+                        (printFun2
+                           s27)
+                    else
+                      print
+                        "."
+                  in
+                  let #var"31" =
+                    print
+                      " "
+                  in
+                  let #var"32" =
+                    print
+                      (float2string
+                         w1)
+                  in
+                  let #var"33" =
+                    print
+                      "\n"
+                  in
+                  rec10
+                    weights6
+                    samples11
+        in
+        match
+          compileOptions.printSamples
+        with
+          true
+        then
+          rec10
+            weights4
+            samples9
+        else
+          {}
+in
+let _mcmcAccepts =
+  ref
+    0
+in
+let _mcmcSamples =
+  ref
+    (negi
+       1)
+in
+let mcmcAcceptInit =
+  lam n4.
+    let #var"29" =
+      modref
+        _mcmcSamples
+        n4
+    in
+    modref
+      _mcmcAccepts
+      0
+in
+let mcmcAccept =
+  lam #var"28".
+    modref
+      _mcmcAccepts
+      (addi
+         (deref
+            _mcmcAccepts)
+         1)
+in
+let mcmcAcceptRate =
+  lam #var"27".
+    divf
+      (int2float
+         (deref
+            _mcmcAccepts))
+      (int2float
+         (deref
+            _mcmcSamples))
+in
+recursive
+  let #var"RuntimeDistBase_sample": all a48. Dist a48 -> a48 =
+    lam __sem_target18.
+      let _18 =
+        dprint
+          __sem_target18
+      in
+      error
+        "No matching case for function sample"
+  let #var"RuntimeDistBase_logObserve": all a49. Dist a49 -> a49 -> Float =
+    lam __sem_target19.
+      let _19 =
+        dprint
+          __sem_target19
+      in
+      error
+        "No matching case for function logObserve"
+in
+con RuntimeDistElementary_DistGamma: all a5. {scale: Float, shape: Float} -> Dist a5 in
+con RuntimeDistElementary_DistExponential: all a6. {rate: Float} -> Dist a6 in
+con RuntimeDistElementary_DistPoisson: all a7. {lambda: Float} -> Dist a7 in
+con RuntimeDistElementary_DistBinomial: all a8. {n: Int, p: Float} -> Dist a8 in
+con RuntimeDistElementary_DistBernoulli: all a9. {p: Float} -> Dist a9 in
+con RuntimeDistElementary_DistBeta: all a10. {a: Float, b: Float} -> Dist a10 in
+con RuntimeDistElementary_DistGaussian: all a11. {mu: Float, sigma: Float} -> Dist a11 in
+con RuntimeDistElementary_DistMultinomial: all a12. {n: Int, p: [Float]} -> Dist a12 in
+con RuntimeDistElementary_DistCategorical: all a13. {p: [Float]} -> Dist a13 in
+con RuntimeDistElementary_DistDirichlet: all a14. {a: [Float]} -> Dist a14 in
+con RuntimeDistElementary_DistUniform: all a15. {a: Float, b: Float} -> Dist a15 in
+recursive
+  let #var"RuntimeDistElementary_sample": all a46. Dist a46 -> a46 =
+    lam __sem_target16.
+      match
+        __sem_target16
+      with
+        RuntimeDistElementary_DistGamma t179
+      then
+        unsafeCoerce
+          (gammaSample
+             t179.shape
+             t179.scale)
+      else
+        match
+          __sem_target16
+        with
+          RuntimeDistElementary_DistExponential t180
+        then
+          unsafeCoerce
+            (exponentialSample
+               t180.rate)
+        else
+          match
+            __sem_target16
+          with
+            RuntimeDistElementary_DistPoisson t181
+          then
+            unsafeCoerce
+              (poissonSample
+                 t181.lambda)
+          else
+            match
+              __sem_target16
+            with
+              RuntimeDistElementary_DistBinomial t182
+            then
+              unsafeCoerce
+                (binomialSample
+                   t182.p
+                   t182.n)
+            else
+              match
+                __sem_target16
+              with
+                RuntimeDistElementary_DistBernoulli t183
+              then
+                unsafeCoerce
+                  (bernoulliSample
+                     t183.p)
+              else
+                match
+                  __sem_target16
+                with
+                  RuntimeDistElementary_DistBeta t184
+                then
+                  unsafeCoerce
+                    (betaSample
+                       t184.a
+                       t184.b)
+                else
+                  match
+                    __sem_target16
+                  with
+                    RuntimeDistElementary_DistGaussian t185
+                  then
+                    unsafeCoerce
+                      (gaussianSample
+                         t185.mu
+                         t185.sigma)
+                  else
+                    match
+                      __sem_target16
+                    with
+                      RuntimeDistElementary_DistMultinomial t186
+                    then
+                      unsafeCoerce
+                        (multinomialSample
+                           t186.p
+                           t186.n)
+                    else
+                      match
+                        __sem_target16
+                      with
+                        RuntimeDistElementary_DistCategorical t187
+                      then
+                        unsafeCoerce
+                          (categoricalSample
+                             t187.p)
+                      else
+                        match
+                          __sem_target16
+                        with
+                          RuntimeDistElementary_DistDirichlet t188
+                        then
+                          unsafeCoerce
+                            (dirichletSample
+                               t188.a)
+                        else
+                          match
+                            __sem_target16
+                          with
+                            RuntimeDistElementary_DistUniform t189
+                          then
+                            unsafeCoerce
+                              (uniformContinuousSample
+                                 t189.a
+                                 t189.b)
+                          else
+                            let _16 =
+                              dprint
+                                __sem_target16
+                            in
+                            error
+                              "No matching case for function sample"
+  let #var"RuntimeDistElementary_logObserve": all a47. Dist a47 -> a47 -> Float =
+    lam __sem_target17.
+      match
+        __sem_target17
+      with
+        RuntimeDistElementary_DistGamma t190
+      then
+        unsafeCoerce
+          (gammaLogPdf
+             t190.shape
+             t190.scale)
+      else
+        match
+          __sem_target17
+        with
+          RuntimeDistElementary_DistExponential t191
+        then
+          unsafeCoerce
+            (exponentialLogPdf
+               t191.rate)
+        else
+          match
+            __sem_target17
+          with
+            RuntimeDistElementary_DistPoisson t192
+          then
+            unsafeCoerce
+              (poissonLogPmf
+                 t192.lambda)
+          else
+            match
+              __sem_target17
+            with
+              RuntimeDistElementary_DistBinomial t193
+            then
+              unsafeCoerce
+                (binomialLogPmf
+                   t193.p
+                   t193.n)
+            else
+              match
+                __sem_target17
+              with
+                RuntimeDistElementary_DistBernoulli t194
+              then
+                unsafeCoerce
+                  (bernoulliLogPmf
+                     t194.p)
+              else
+                match
+                  __sem_target17
+                with
+                  RuntimeDistElementary_DistBeta t195
+                then
+                  unsafeCoerce
+                    (betaLogPdf
+                       t195.a
+                       t195.b)
+                else
+                  match
+                    __sem_target17
+                  with
+                    RuntimeDistElementary_DistGaussian t196
+                  then
+                    unsafeCoerce
+                      (gaussianLogPdf
+                         t196.mu
+                         t196.sigma)
+                  else
+                    match
+                      __sem_target17
+                    with
+                      RuntimeDistElementary_DistMultinomial t197
+                    then
+                      unsafeCoerce
+                        (lam o3.
+                           match
+                             eqi
+                               t197.n
+                               (foldl1
+                                  addi
+                                  o3)
+                           with
+                             true
+                           then
+                             multinomialLogPmf
+                               t197.p
+                               o3
+                           else
+                             negf
+                               inf)
+                    else
+                      match
+                        __sem_target17
+                      with
+                        RuntimeDistElementary_DistCategorical t198
+                      then
+                        unsafeCoerce
+                          (categoricalLogPmf
+                             t198.p)
+                      else
+                        match
+                          __sem_target17
+                        with
+                          RuntimeDistElementary_DistDirichlet t199
+                        then
+                          unsafeCoerce
+                            (dirichletLogPdf
+                               t199.a)
+                        else
+                          match
+                            __sem_target17
+                          with
+                            RuntimeDistElementary_DistUniform t200
+                          then
+                            unsafeCoerce
+                              (uniformContinuousLogPdf
+                                 t200.a
+                                 t200.b)
+                          else
+                            let _17 =
+                              dprint
+                                __sem_target17
+                            in
+                            error
+                              "No matching case for function logObserve"
+in
+con RuntimeDistEmpirical_EmpNorm: {normConst: Float} -> EmpiricalExtra in
+con RuntimeDistEmpirical_EmpMCMC: {acceptRate: Float} -> EmpiricalExtra in
+con RuntimeDistEmpirical_DistEmpirical: all a16. {extra: EmpiricalExtra, samples: [a16], degenerate: Bool, logWeights: [Float], cumulativeWeights: [Float]} -> Dist a16 in
+recursive
+  let #var"RuntimeDistEmpirical_sample": all a44. Dist a44 -> a44 =
+    lam __sem_target8.
+      match
+        __sem_target8
+      with
+        RuntimeDistEmpirical_DistEmpirical t173
+      then
+        let x26 =
+          uniformContinuousSample
+            0.
+            (last
+               t173.cumulativeWeights)
+        in
+        let cmp6 =
+          lam y5.
+            match
+              ltf
+                (subf
+                   y5
+                   x26)
+                0.
+            with
+              true
+            then
+              negi
+                1
+            else
+              0
+        in
+        match
+          lowerBoundBinarySearch
+            cmp6
+            t173.cumulativeWeights
+        with
+          Some idx2
+        then
+          unsafeCoerce
+            (get
+               t173.samples
+               idx2)
+        else
+          error
+            "Sampling from empirical distribution failed"
+      else
+        let _8 =
+          dprint
+            __sem_target8
+        in
+        error
+          "No matching case for function sample"
+  let #var"RuntimeDistEmpirical_logObserve": all a45. Dist a45 -> a45 -> Float =
+    lam __sem_target9.
+      match
+        __sem_target9
+      with
+        RuntimeDistEmpirical_DistEmpirical t174
+      then
+        error
+          "Log observe not supported for empirical distribution"
+      else
+        let _9 =
+          dprint
+            __sem_target9
+        in
+        error
+          "No matching case for function logObserve"
+  let #var"RuntimeDistEmpirical_empiricalSamples" =
+    lam __sem_target10.
+      match
+        __sem_target10
+      with
+        RuntimeDistEmpirical_DistEmpirical t175
+      then
+        (t175.samples, t175.logWeights)
+      else
+        match
+          __sem_target10
+        with
+          _
+        then
+          ("", "")
+        else
+          let _10 =
+            dprint
+              __sem_target10
+          in
+          error
+            "No matching case for function empiricalSamples"
+  let #var"RuntimeDistEmpirical_empiricalNormConst" =
+    lam __sem_target11.
+      match
+        __sem_target11
+      with
+        RuntimeDistEmpirical_DistEmpirical t176
+      then
+        match
+          t176.extra
+        with
+          RuntimeDistEmpirical_EmpNorm {normConst = normConst2}
+        then
+          normConst2
+        else
+          nan
+      else
+        match
+          __sem_target11
+        with
+          _
+        then
+          nan
+        else
+          let _11 =
+            dprint
+              __sem_target11
+          in
+          error
+            "No matching case for function empiricalNormConst"
+  let #var"RuntimeDistEmpirical_empiricalAcceptRate" =
+    lam __sem_target12.
+      match
+        __sem_target12
+      with
+        RuntimeDistEmpirical_DistEmpirical t177
+      then
+        match
+          t177.extra
+        with
+          RuntimeDistEmpirical_EmpMCMC {acceptRate = acceptRate1}
+        then
+          acceptRate1
+        else
+          nan
+      else
+        match
+          __sem_target12
+        with
+          _
+        then
+          nan
+        else
+          let _12 =
+            dprint
+              __sem_target12
+          in
+          error
+            "No matching case for function empiricalAcceptRate"
+  let #var"RuntimeDistEmpirical_empiricalDegenerate" =
+    lam __sem_target13.
+      match
+        __sem_target13
+      with
+        RuntimeDistEmpirical_DistEmpirical t178
+      then
+        t178.degenerate
+      else
+        match
+          __sem_target13
+        with
+          _
+        then
+          false
+        else
+          let _13 =
+            dprint
+              __sem_target13
+          in
+          error
+            "No matching case for function empiricalDegenerate"
+  let #var"RuntimeDistEmpirical_constructDistEmpirical" =
+    lam samples6.
+      lam logWeights3.
+        lam __sem_target14.
+          match
+            __sem_target14
+          with
+            extra2
+          then
+            let maxLogWeight1 =
+              foldl
+                (lam acc35.
+                   lam lw5.
+                     match
+                       geqf
+                         lw5
+                         acc35
+                     with
+                       true
+                     then
+                       lw5
+                     else
+                       acc35)
+                (negf
+                   inf)
+                logWeights3
+            in
+            let degenerate1 =
+              eqf
+                maxLogWeight1
+                (negf
+                   inf)
+            in
+            let lse1 =
+              addf
+                maxLogWeight1
+                (log
+                   (foldl
+                      (lam acc34.
+                         lam lw4.
+                           addf
+                             acc34
+                             (exp
+                                (subf
+                                   lw4
+                                   maxLogWeight1)))
+                      0.
+                      logWeights3))
+            in
+            let logWeights4 =
+              map
+                (lam lw3.
+                   subf
+                     lw3
+                     lse1)
+                logWeights3
+            in
+            let f31 =
+              lam acc32.
+                lam x27.
+                  let acc33 =
+                    addf
+                      acc32
+                      (exp
+                         x27)
+                  in
+                  (acc33, acc33)
+            in
+            match
+              mapAccumL
+                f31
+                0.
+                logWeights4
+            with
+              (_, cumulativeWeights1)
+            in
+            RuntimeDistEmpirical_DistEmpirical
+                { extra =
+                    extra2,
+                  samples =
+                    samples6,
+                  degenerate =
+                    degenerate1,
+                  logWeights =
+                    logWeights4,
+                  cumulativeWeights =
+                    cumulativeWeights1 }
+          else
+            let _14 =
+              dprint
+                __sem_target14
+            in
+            error
+              "No matching case for function constructDistEmpirical"
+  let #var"RuntimeDistEmpirical_constructDistEmpiricalHelper" =
+    lam __sem_target15.
+      match
+        __sem_target15
+      with
+        samples7
+      then
+        match
+          unzip
+            samples7
+        with
+          (logWeights5, samples8)
+        in
+        let extra3 =
+            RuntimeDistEmpirical_EmpNorm
+              { normConst =
+                  0. }
+          in
+          #var"RuntimeDistEmpirical_constructDistEmpirical"
+            samples8
+            logWeights5
+            extra3
+      else
+        let _15 =
+          dprint
+            __sem_target15
+        in
+        error
+          "No matching case for function constructDistEmpiricalHelper"
+in
+recursive
+  let #var"RuntimeDist_sample": all a42. Dist a42 -> a42 =
+    lam __sem_target.
+      match
+        __sem_target
+      with
+        RuntimeDistEmpirical_DistEmpirical t145
+      then
+        let x20 =
+          uniformContinuousSample
+            0.
+            (last
+               t145.cumulativeWeights)
+        in
+        let cmp5 =
+          lam y4.
+            match
+              ltf
+                (subf
+                   y4
+                   x20)
+                0.
+            with
+              true
+            then
+              negi
+                1
+            else
+              0
+        in
+        match
+          lowerBoundBinarySearch
+            cmp5
+            t145.cumulativeWeights
+        with
+          Some idx1
+        then
+          unsafeCoerce
+            (get
+               t145.samples
+               idx1)
+        else
+          error
+            "Sampling from empirical distribution failed"
+      else
+        match
+          __sem_target
+        with
+          RuntimeDistElementary_DistGamma t146
+        then
+          unsafeCoerce
+            (gammaSample
+               t146.shape
+               t146.scale)
+        else
+          match
+            __sem_target
+          with
+            RuntimeDistElementary_DistExponential t147
+          then
+            unsafeCoerce
+              (exponentialSample
+                 t147.rate)
+          else
+            match
+              __sem_target
+            with
+              RuntimeDistElementary_DistPoisson t148
+            then
+              unsafeCoerce
+                (poissonSample
+                   t148.lambda)
+            else
+              match
+                __sem_target
+              with
+                RuntimeDistElementary_DistBinomial t149
+              then
+                unsafeCoerce
+                  (binomialSample
+                     t149.p
+                     t149.n)
+              else
+                match
+                  __sem_target
+                with
+                  RuntimeDistElementary_DistBernoulli t150
+                then
+                  unsafeCoerce
+                    (bernoulliSample
+                       t150.p)
+                else
+                  match
+                    __sem_target
+                  with
+                    RuntimeDistElementary_DistBeta t151
+                  then
+                    unsafeCoerce
+                      (betaSample
+                         t151.a
+                         t151.b)
+                  else
+                    match
+                      __sem_target
+                    with
+                      RuntimeDistElementary_DistGaussian t152
+                    then
+                      unsafeCoerce
+                        (gaussianSample
+                           t152.mu
+                           t152.sigma)
+                    else
+                      match
+                        __sem_target
+                      with
+                        RuntimeDistElementary_DistMultinomial t153
+                      then
+                        unsafeCoerce
+                          (multinomialSample
+                             t153.p
+                             t153.n)
+                      else
+                        match
+                          __sem_target
+                        with
+                          RuntimeDistElementary_DistCategorical t154
+                        then
+                          unsafeCoerce
+                            (categoricalSample
+                               t154.p)
+                        else
+                          match
+                            __sem_target
+                          with
+                            RuntimeDistElementary_DistDirichlet t155
+                          then
+                            unsafeCoerce
+                              (dirichletSample
+                                 t155.a)
+                          else
+                            match
+                              __sem_target
+                            with
+                              RuntimeDistElementary_DistUniform t156
+                            then
+                              unsafeCoerce
+                                (uniformContinuousSample
+                                   t156.a
+                                   t156.b)
+                            else
+                              let #var"_" =
+                                dprint
+                                  __sem_target
+                              in
+                              error
+                                "No matching case for function sample"
+  let #var"RuntimeDist_logObserve": all a43. Dist a43 -> a43 -> Float =
+    lam __sem_target1.
+      match
+        __sem_target1
+      with
+        RuntimeDistEmpirical_DistEmpirical t157
+      then
+        error
+          "Log observe not supported for empirical distribution"
+      else
+        match
+          __sem_target1
+        with
+          RuntimeDistElementary_DistGamma t158
+        then
+          unsafeCoerce
+            (gammaLogPdf
+               t158.shape
+               t158.scale)
+        else
+          match
+            __sem_target1
+          with
+            RuntimeDistElementary_DistExponential t159
+          then
+            unsafeCoerce
+              (exponentialLogPdf
+                 t159.rate)
+          else
+            match
+              __sem_target1
+            with
+              RuntimeDistElementary_DistPoisson t160
+            then
+              unsafeCoerce
+                (poissonLogPmf
+                   t160.lambda)
+            else
+              match
+                __sem_target1
+              with
+                RuntimeDistElementary_DistBinomial t161
+              then
+                unsafeCoerce
+                  (binomialLogPmf
+                     t161.p
+                     t161.n)
+              else
+                match
+                  __sem_target1
+                with
+                  RuntimeDistElementary_DistBernoulli t162
+                then
+                  unsafeCoerce
+                    (bernoulliLogPmf
+                       t162.p)
+                else
+                  match
+                    __sem_target1
+                  with
+                    RuntimeDistElementary_DistBeta t163
+                  then
+                    unsafeCoerce
+                      (betaLogPdf
+                         t163.a
+                         t163.b)
+                  else
+                    match
+                      __sem_target1
+                    with
+                      RuntimeDistElementary_DistGaussian t164
+                    then
+                      unsafeCoerce
+                        (gaussianLogPdf
+                           t164.mu
+                           t164.sigma)
+                    else
+                      match
+                        __sem_target1
+                      with
+                        RuntimeDistElementary_DistMultinomial t165
+                      then
+                        unsafeCoerce
+                          (lam o1.
+                             match
+                               eqi
+                                 t165.n
+                                 (foldl1
+                                    addi
+                                    o1)
+                             with
+                               true
+                             then
+                               multinomialLogPmf
+                                 t165.p
+                                 o1
+                             else
+                               negf
+                                 inf)
+                      else
+                        match
+                          __sem_target1
+                        with
+                          RuntimeDistElementary_DistCategorical t166
+                        then
+                          unsafeCoerce
+                            (categoricalLogPmf
+                               t166.p)
+                        else
+                          match
+                            __sem_target1
+                          with
+                            RuntimeDistElementary_DistDirichlet t167
+                          then
+                            unsafeCoerce
+                              (dirichletLogPdf
+                                 t167.a)
+                          else
+                            match
+                              __sem_target1
+                            with
+                              RuntimeDistElementary_DistUniform t168
+                            then
+                              unsafeCoerce
+                                (uniformContinuousLogPdf
+                                   t168.a
+                                   t168.b)
+                            else
+                              let _1 =
+                                dprint
+                                  __sem_target1
+                              in
+                              error
+                                "No matching case for function logObserve"
+  let #var"RuntimeDist_empiricalSamples" =
+    lam __sem_target2.
+      match
+        __sem_target2
+      with
+        RuntimeDistEmpirical_DistEmpirical t169
+      then
+        (t169.samples, t169.logWeights)
+      else
+        match
+          __sem_target2
+        with
+          _
+        then
+          ("", "")
+        else
+          let _2 =
+            dprint
+              __sem_target2
+          in
+          error
+            "No matching case for function empiricalSamples"
+  let #var"RuntimeDist_empiricalNormConst" =
+    lam __sem_target3.
+      match
+        __sem_target3
+      with
+        RuntimeDistEmpirical_DistEmpirical t170
+      then
+        match
+          t170.extra
+        with
+          RuntimeDistEmpirical_EmpNorm {normConst = normConst1}
+        then
+          normConst1
+        else
+          nan
+      else
+        match
+          __sem_target3
+        with
+          _
+        then
+          nan
+        else
+          let _3 =
+            dprint
+              __sem_target3
+          in
+          error
+            "No matching case for function empiricalNormConst"
+  let #var"RuntimeDist_empiricalAcceptRate" =
+    lam __sem_target4.
+      match
+        __sem_target4
+      with
+        RuntimeDistEmpirical_DistEmpirical t171
+      then
+        match
+          t171.extra
+        with
+          RuntimeDistEmpirical_EmpMCMC {acceptRate = acceptRate}
+        then
+          acceptRate
+        else
+          nan
+      else
+        match
+          __sem_target4
+        with
+          _
+        then
+          nan
+        else
+          let _4 =
+            dprint
+              __sem_target4
+          in
+          error
+            "No matching case for function empiricalAcceptRate"
+  let #var"RuntimeDist_empiricalDegenerate" =
+    lam __sem_target5.
+      match
+        __sem_target5
+      with
+        RuntimeDistEmpirical_DistEmpirical t172
+      then
+        t172.degenerate
+      else
+        match
+          __sem_target5
+        with
+          _
+        then
+          false
+        else
+          let _5 =
+            dprint
+              __sem_target5
+          in
+          error
+            "No matching case for function empiricalDegenerate"
+  let #var"RuntimeDist_constructDistEmpirical" =
+    lam samples3.
+      lam logWeights.
+        lam __sem_target6.
+          match
+            __sem_target6
+          with
+            extra
+          then
+            let maxLogWeight =
+              foldl
+                (lam acc31.
+                   lam lw2.
+                     match
+                       geqf
+                         lw2
+                         acc31
+                     with
+                       true
+                     then
+                       lw2
+                     else
+                       acc31)
+                (negf
+                   inf)
+                logWeights
+            in
+            let degenerate =
+              eqf
+                maxLogWeight
+                (negf
+                   inf)
+            in
+            let lse =
+              addf
+                maxLogWeight
+                (log
+                   (foldl
+                      (lam acc30.
+                         lam lw1.
+                           addf
+                             acc30
+                             (exp
+                                (subf
+                                   lw1
+                                   maxLogWeight)))
+                      0.
+                      logWeights))
+            in
+            let logWeights1 =
+              map
+                (lam lw.
+                   subf
+                     lw
+                     lse)
+                logWeights
+            in
+            let f30 =
+              lam acc28.
+                lam x25.
+                  let acc29 =
+                    addf
+                      acc28
+                      (exp
+                         x25)
+                  in
+                  (acc29, acc29)
+            in
+            match
+              mapAccumL
+                f30
+                0.
+                logWeights1
+            with
+              (_, cumulativeWeights)
+            in
+            RuntimeDistEmpirical_DistEmpirical
+                { extra =
+                    extra,
+                  samples =
+                    samples3,
+                  degenerate =
+                    degenerate,
+                  logWeights =
+                    logWeights1,
+                  cumulativeWeights =
+                    cumulativeWeights }
+          else
+            let _6 =
+              dprint
+                __sem_target6
+            in
+            error
+              "No matching case for function constructDistEmpirical"
+  let #var"RuntimeDist_constructDistEmpiricalHelper" =
+    lam __sem_target7.
+      match
+        __sem_target7
+      with
+        samples4
+      then
+        match
+          unzip
+            samples4
+        with
+          (logWeights2, samples5)
+        in
+        let extra1 =
+            RuntimeDistEmpirical_EmpNorm
+              { normConst =
+                  0. }
+          in
+          #var"RuntimeDist_constructDistEmpirical"
+            samples5
+            logWeights2
+            extra1
+      else
+        let _7 =
+          dprint
+            __sem_target7
+        in
+        error
+          "No matching case for function constructDistEmpiricalHelper"
+in
+let distEmpiricalSamples: all a41. Dist a41 -> ([a41], [Float]) =
+  #var"RuntimeDist_empiricalSamples"
+in
+let distEmpiricalDegenerate: all a40. Dist a40 -> Bool =
+  #var"RuntimeDist_empiricalDegenerate"
+in
+let distEmpiricalNormConst: all a39. Dist a39 -> Float =
+  #var"RuntimeDist_empiricalNormConst"
+in
+let distEmpiricalAcceptRate: all a38. Dist a38 -> Float =
+  #var"RuntimeDist_empiricalAcceptRate"
+in
+let sample: all a37. Dist a37 -> a37 =
+  #var"RuntimeDist_sample"
+in
+let logObserve: all a36. Dist a36 -> a36 -> Float =
+  #var"RuntimeDist_logObserve"
+in
+type Stop a17
+in
+con Checkpoint: all a18. {k: () -> Stop a18, weight: Float} -> Stop a18 in
+con End: all a19. a19 -> Stop a19 in
+type State =
+  Ref Float
+in
+let updateWeight =
+  lam weight4.
+    lam k12.
+      Checkpoint
+        { k =
+            k12,
+          weight =
+            weight4 }
+in
+let importance: all a33. (State -> Stop a33) -> State -> Option a33 =
+  lam model2.
+    lam state1.
+      let res2: Stop a33 =
+        model2
+          state1
+      in
+      recursive
+        let recEarlyStop: Stop a33 -> Option a33 =
+          lam res4.
+            match
+              res4
+            with
+              Checkpoint {k = k11, weight = weight3}
+            then
+              let #var"26" =
+                modref
+                  state1
+                  (addf
+                     (deref
+                        state1)
+                     weight3)
+              in
+              match
+                eqf
+                  (deref
+                     state1)
+                  (negf
+                     inf)
+              with
+                true
+              then
+                None
+                  {}
+              else
+                recEarlyStop
+                  (k11
+                     {})
+            else
+              match
+                res4
+              with
+                End a35
+              in
+              Some
+                  a35
+      in
+      recursive
+        let rec9: Stop a33 -> Option a33 =
+          lam res3.
+            match
+              res3
+            with
+              Checkpoint {k = k10, weight = weight2}
+            then
+              let #var"25" =
+                modref
+                  state1
+                  (addf
+                     (deref
+                        state1)
+                     weight2)
+              in
+              rec9
+                (k10
+                   {})
+            else
+              match
+                res3
+              with
+                End a34
+              in
+              Some
+                  a34
+      in
+      match
+        compileOptions.earlyStop
+      with
+        true
+      then
+        recEarlyStop
+          res2
+      else
+        rec9
+          res2
+in
+let filterNone: all a32. ([Float], [a32]) -> Float -> Option a32 -> ([Float], [a32]) =
+  lam acc27.
+    lam weight1.
+      lam o.
+        match
+          o
+        with
+          Some v2
+        then
+          match
+            acc27
+          with
+            (weightsAcc, resAcc)
+          in
+          (cons
+              weight1
+              weightsAcc, cons
+              v2
+              resAcc)
+        else
+          acc27
+in
+let run: all a31. Unknown -> (State -> Stop a31) -> Dist a31 =
+  lam config.
+    lam model1.
+      let particles2 =
+        config.particles
+      in
+      let weightInit: Float =
+        0.
+      in
+      let states =
+        createList
+          particles2
+          (lam #var"24".
+             ref
+               weightInit)
+      in
+      let res1 =
+        mapReverse
+          (importance
+             model1)
+          states
+      in
+      let weights3 =
+        mapReverse
+          deref
+          states
+      in
+      let normConst =
+        normConstant
+          weights3
+      in
+      match
+        foldl21
+          filterNone
+          ("", "")
+          weights3
+          res1
+      with
+        (weightsRev, resRev)
+      in
+      #var"RuntimeDist_constructDistEmpirical"
+          resRev
+          weightsRev
+          (RuntimeDistEmpirical_EmpNorm
+             { normConst =
+                 normConst })
+in
+let model: () -> Float =
+  lam #var"4": ().
+    let theta =
+      error
+        "Cannot use assume outside of inferred model"
+    in
+    let #var"6" =
+      error
+        "Cannot use observe outside of inferred model"
+    in
+    let #var"7" =
+      error
+        "Cannot use observe outside of inferred model"
+    in
+    let #var"8" =
+      error
+        "Cannot use observe outside of inferred model"
+    in
+    theta
+in
+let ast =
+  lam #var"3": ().
+    model
+      {}
+in
+let particles =
+  5000
+in
+let t =
+  lam v1.
+    lam #var"23".
+      v1
+in
+let t1 =
+  lam d1.
+    lam #var"22".
+      d1
+in
+recursive
+  let g1 =
+    lam f29: Unknown -> Option Unknown.
+      lam l7.
+        lam acc26.
+          match
+            l7
+          with
+            [ hd ] ++ rest1 ++ ""
+          then
+            match
+              f29
+                hd
+            with
+              Some x19
+            then
+              g1
+                f29
+                rest1
+                (snoc
+                   acc26
+                   x19)
+            else
+              None
+                {}
+          else
+            Some
+              acc26
+in
+recursive
+  let recur1 =
+    lam f28: Unknown -> Unknown -> Option Unknown.
+      lam a29.
+        lam bs1.
+          match
+            bs1
+          with
+            [ b2 ] ++ bs2 ++ ""
+          then
+            let res =
+              f28
+                a29
+                b2
+            in
+            match
+              res
+            with
+              Some a30
+            then
+              recur1
+                f28
+                a30
+                bs2
+            else
+              match
+                res
+              with
+                None {}
+              in
+              None
+                  {}
+          else
+            match
+              bs1
+            with
+              ""
+            in
+            Some
+                a29
+in
+let t2 =
+  lam #var"21".
+    true
+in
+let t3 =
+  lam x18.
+    Some
+      x18
+in
+let t4 =
+  lam o21: Option Unknown.
+    lam #var"20".
+      o21
+in
+let t5 =
+  lam v.
+    lam #var"19".
+      v
+in
+recursive
+  let work11 =
+    lam eq3: Unknown -> Unknown -> Bool.
+      lam s110.
+        lam s25.
+          match
+            (s110, s25)
+          with
+            ([ h12 ] ++ t144 ++ "", [ h22 ] ++ t211 ++ "")
+          then
+            match
+              eq3
+                h12
+                h22
+            with
+              true
+            then
+              work11
+                eq3
+                t144
+                t211
+            else
+              false
+          else
+            true
+in
+let t6 =
+  lam seq9: [Unknown].
+    lam i16.
+      get
+        seq9
+        i16
+in
+let t7 =
+  lam seq8: [Unknown].
+    lam i15.
+      get
+        seq8
+        i15
+in
+recursive
+  let work10 =
+    lam f27: Unknown -> Option Unknown.
+      lam as.
+        match
+          as
+        with
+          [ a28 ] ++ as1 ++ ""
+        then
+          match
+            f27
+              a28
+          with
+            Some b1
+          then
+            cons
+              b1
+              (work10
+                 f27
+                 as1)
+          else
+            work10
+              f27
+              as1
+        else
+          ""
+in
+let t8 =
+  lam f26: Unknown -> Unknown.
+    lam acc25.
+      lam x17.
+        cons
+          (f26
+             x17)
+          acc25
+in
+let t9 =
+  lam e4: Int.
+    lam by: Int.
+      lam b.
+        match
+          leqi
+            e4
+            b
+        with
+          true
+        then
+          None
+            {}
+        else
+          Some
+            (b, addi
+              b
+              by)
+in
+recursive
+  let g =
+    lam f24: Unknown -> Unknown -> Unknown -> Unknown.
+      lam acc22: (Unknown, [Unknown]).
+        lam x23.
+          match
+            acc22
+          with
+            (acc23, [ x15 ] ++ xs11 ++ "")
+          in
+          (f24
+              acc23
+              x15
+              x23, xs11)
+  let t143 =
+    lam f25: Unknown -> Unknown -> Unknown -> Unknown.
+      lam acc24.
+        lam x16.
+          lam x24.
+            f25
+              acc24
+              x24
+              x16
+in
+recursive
+  let work9 =
+    lam fn: Unknown -> Int -> Unknown -> Unknown.
+      lam acc21.
+        lam i14.
+          lam s24.
+            match
+              s24
+            with
+              [ e3 ] ++ rest ++ ""
+            then
+              work9
+                fn
+                (fn
+                   acc21
+                   i14
+                   e3)
+                (addi
+                   i14
+                   1)
+                rest
+            else
+              acc21
+in
+let t10 =
+  lam k9: [Unknown] -> Unknown.
+    lam xs3: [Unknown].
+      lam x14.
+        k9
+          (snoc
+             xs3
+             x14)
+in
+let t11 =
+  lam f23: Unknown -> (Unknown -> Unknown) -> Unknown.
+    lam k8.
+      lam x13.
+        lam xs2.
+          f23
+            x13
+            (t10
+               k8
+               xs2)
+in
+let t12 =
+  lam k7: [Unknown] -> Unknown.
+    lam xs1: [Unknown].
+      lam x10.
+        k7
+          (snoc
+             xs1
+             x10)
+in
+let t13 =
+  lam f22: Int -> Unknown -> (Unknown -> Unknown) -> Unknown.
+    lam i13: Int.
+      lam k6: [Unknown] -> Unknown.
+        lam x9.
+          lam xs.
+            f22
+              i13
+              x9
+              (t12
+                 k6
+                 xs)
+in
+let t14 =
+  lam f21: Int -> Unknown -> (Unknown -> Unknown) -> Unknown.
+    lam i12: Int.
+      lam k5: [Unknown] -> Unknown.
+        lam x8.
+          (subi
+            i12
+            1, t13
+            f21
+            i12
+            k5
+            x8)
+in
+let t15 =
+  lam f20: Int -> Unknown -> (Unknown -> Unknown) -> Unknown.
+    lam ik.
+      match
+        ik
+      with
+        (i11, k4)
+      in
+      t14
+          f20
+          i11
+          k4
+in
+recursive
+  let t142 =
+    lam f18: Unknown -> Unknown -> (Unknown -> Unknown) -> Unknown.
+      lam seq6: [Unknown].
+        lam k2: Unknown -> Unknown.
+          lam acc19.
+            recur
+              f18
+              acc19
+              (tail
+                 seq6)
+              k2
+  let recur =
+    lam f19: Unknown -> Unknown -> (Unknown -> Unknown) -> Unknown.
+      lam acc20.
+        lam seq7.
+          lam k3.
+            match
+              null
+                seq7
+            with
+              true
+            then
+              k3
+                acc20
+            else
+              f19
+                acc20
+                (head
+                   seq7)
+                (t142
+                   f19
+                   seq7
+                   k3)
+in
+let t16 =
+  lam f17: Unknown -> Unknown -> Unknown.
+    lam acc18.
+      lam x12.
+        lam x22.
+          snoc
+            acc18
+            (f17
+               x12
+               x22)
+in
+recursive
+  let work8 =
+    lam f16: Int -> Unknown -> Unknown -> Unknown.
+      lam acc17.
+        lam i10.
+          lam seq12.
+            lam seq22.
+              match
+                seq12
+              with
+                [ e11 ] ++ seq1tail ++ ""
+              then
+                match
+                  seq22
+                with
+                  [ e2 ] ++ seq2tail ++ ""
+                then
+                  work8
+                    f16
+                    (cons
+                       (f16
+                          i10
+                          e11
+                          e2)
+                       acc17)
+                    (addi
+                       i10
+                       1)
+                    seq1tail
+                    seq2tail
+                else
+                  reverse
+                    acc17
+              else
+                reverse
+                  acc17
+in
+let t17 =
+  lam x7.
+    lam y3.
+      (x7, y3)
+in
+let t18 =
+  lam f15: Unknown -> Unknown -> (Unknown, Unknown).
+    lam tacc1: (Unknown, [Unknown]).
+      lam x6.
+        match
+          f15
+            tacc1.0
+            x6
+        with
+          (acc16, y2)
+        in
+        (acc16, snoc
+            tacc1.1
+            y2)
+in
+let t19 =
+  lam f14: Unknown -> Unknown -> (Unknown, Unknown).
+    lam x5.
+      lam tacc: (Unknown, [Unknown]).
+        match
+          f14
+            tacc.0
+            x5
+        with
+          (acc15, y1)
+        in
+        (acc15, cons
+            y1
+            tacc.1)
+in
+let t20 =
+  lam l6.
+    lam p1: (Unknown, Unknown).
+      (snoc
+        l6
+        p1.0, p1.1)
+in
+let f =
+  lam f13: Unknown -> Unknown -> ().
+    lam x4: (Unknown, Unknown).
+      match
+        x4
+      with
+        (x11, x21)
+      in
+      f13
+          x11
+          x21
+in
+let t21 =
+  lam f12: Unknown -> Unknown -> Unknown.
+    lam bs: [Unknown].
+      lam a27.
+        map
+          (f12
+             a27)
+          bs
+in
+let t22 =
+  lam f11: Unknown -> [Unknown].
+    lam a26.
+      lam acc14.
+        seqLiftA2
+          cons
+          (f11
+             a26)
+          acc14
+in
+recursive
+  let work7 =
+    lam f10: Unknown -> Int.
+      lam s23: [Unknown].
+        lam first.
+          lam count.
+            match
+              gti
+                count
+                0
+            with
+              true
+            then
+              let step =
+                divi
+                  count
+                  2
+              in
+              let idx =
+                addi
+                  first
+                  step
+              in
+              match
+                lti
+                  (f10
+                     (get
+                        s23
+                        idx))
+                  0
+              with
+                true
+              then
+                work7
+                  f10
+                  s23
+                  (addi
+                     first
+                     (addi
+                        step
+                        1))
+                  (subi
+                     count
+                     (addi
+                        step
+                        1))
+              else
+                work7
+                  f10
+                  s23
+                  first
+                  step
+            else
+              first
+in
+recursive
+  let work6 =
+    lam p: Unknown -> Bool.
+      lam l5.
+        lam r3.
+          lam seq4.
+            match
+              seq4
+            with
+              ""
+            then
+              (l5, r3)
+            else
+              match
+                seq4
+              with
+                [ s20 ] ++ seq5 ++ ""
+              in
+              match
+                  p
+                    s20
+                with
+                  true
+                then
+                  work6
+                    p
+                    (cons
+                       s20
+                       l5)
+                    r3
+                    seq5
+                else
+                  work6
+                    p
+                    l5
+                    (cons
+                       s20
+                       r3)
+                    seq5
+in
+recursive
+  let work5 =
+    lam eq2: Unknown -> Unknown -> Bool.
+      lam seq11.
+        lam seq21.
+          match
+            seq11
+          with
+            [ h3 ] ++ t141 ++ ""
+          then
+            match
+              find
+                (eq2
+                   h3)
+                seq21
+            with
+              Some _
+            then
+              work5
+                eq2
+                t141
+                seq21
+            else
+              cons
+                h3
+                (work5
+                   eq2
+                   t141
+                   (cons
+                      h3
+                      seq21))
+          else
+            ""
+in
+recursive
+  let work4 =
+    lam eq1: Unknown -> Unknown -> Bool.
+      lam acc13.
+        lam s19.
+          match
+            s19
+          with
+            [ h11 ] ++ t140 ++ ""
+          then
+            match
+              acc13
+            with
+              [ h21 ] ++ _ ++ ""
+            then
+              match
+                eq1
+                  h11
+                  h21
+              with
+                true
+              then
+                work4
+                  eq1
+                  acc13
+                  t140
+              else
+                work4
+                  eq1
+                  (cons
+                     h11
+                     acc13)
+                  t140
+            else
+              work4
+                eq1
+                [ h11 ]
+                t140
+          else
+            acc13
+in
+recursive
+  let t139 =
+    lam cmp4: Unknown -> Unknown -> Int.
+      lam h.
+        lam x3.
+          lti
+            (cmp4
+               x3
+               h)
+            0
+in
+let t23 =
+  lam cmp3: Unknown -> Unknown -> Int.
+    lam acc12: (Int, Int, Unknown).
+      lam e1.
+        match
+          acc12
+        with
+          (curi, mini1, m2)
+        in
+        match
+            lti
+              (cmp3
+                 m2
+                 e1)
+              0
+          with
+            true
+          then
+            (addi
+              curi
+              1, mini1, m2)
+          else
+            (addi
+              curi
+              1, curi, e1)
+in
+let t24 =
+  lam r2.
+    match
+      r2
+    with
+      (_, m1)
+    in
+    m1
+in
+let t25 =
+  lam cmp2: Unknown -> Unknown -> Int.
+    lam l4.
+      lam r1.
+        cmp2
+          r1
+          l4
+in
+let t26 =
+  lam cmp1: Unknown -> Unknown -> Int.
+    lam l3.
+      lam r.
+        cmp1
+          r
+          l3
+in
+recursive
+  let index_rechelper =
+    lam i9.
+      lam pred3.
+        lam seq3.
+          match
+            null
+              seq3
+          with
+            true
+          then
+            None
+              {}
+          else
+            match
+              pred3
+                (head
+                   seq3)
+            with
+              true
+            then
+              Some
+                i9
+            else
+              index_rechelper
+                (addi
+                   i9
+                   1)
+                pred3
+                (tail
+                   seq3)
+in
+recursive
+  let lastIndex_rechelper =
+    lam i8.
+      lam acc11.
+        lam pred2.
+          lam seq2.
+            match
+              null
+                seq2
+            with
+              true
+            then
+              acc11
+            else
+              match
+                pred2
+                  (head
+                     seq2)
+              with
+                true
+              then
+                lastIndex_rechelper
+                  (addi
+                     i8
+                     1)
+                  (Some
+                     i8)
+                  pred2
+                  (tail
+                     seq2)
+              else
+                lastIndex_rechelper
+                  (addi
+                     i8
+                     1)
+                  acc11
+                  pred2
+                  (tail
+                     seq2)
+in
+recursive
+  let rec8 =
+    lam pred1: Unknown -> Bool.
+      lam i7.
+        lam acc10.
+          lam seq1.
+            match
+              null
+                seq1
+            with
+              true
+            then
+              acc10
+            else
+              match
+                pred1
+                  (head
+                     seq1)
+              with
+                true
+              then
+                rec8
+                  pred1
+                  (addi
+                     i7
+                     1)
+                  (cons
+                     i7
+                     acc10)
+                  (tail
+                     seq1)
+              else
+                rec8
+                  pred1
+                  (addi
+                     i7
+                     1)
+                  acc10
+                  (tail
+                     seq1)
+in
+recursive
+  let work3 =
+    lam cmp: Unknown -> Unknown -> Int.
+      lam s18.
+        lam s22.
+          match
+            (s18, s22)
+          with
+            ([ h1 ] ++ t138 ++ "", [ h2 ] ++ t210 ++ "")
+          then
+            let c3 =
+              cmp
+                h1
+                h2
+            in
+            match
+              eqi
+                c3
+                0
+            with
+              true
+            then
+              work3
+                cmp
+                t138
+                t210
+            else
+              c3
+          else
+            0
+in
+let t27 =
+  lam x2: (Unknown, Int).
+    lam y: (Unknown, Int).
+      subi
+        x2.1
+        y.1
+in
+recursive
+  let work2 =
+    lam eq: Unknown -> Unknown -> Bool.
+      lam check: [Unknown].
+        lam replacement: [Unknown].
+          lam seq: [Unknown].
+            lam checkIdx.
+              lam seqIdx.
+                lam acc9.
+                  match
+                    eqi
+                      checkIdx
+                      (length
+                         check)
+                  with
+                    true
+                  then
+                    work2
+                      eq
+                      check
+                      replacement
+                      seq
+                      0
+                      seqIdx
+                      (concat
+                         acc9
+                         replacement)
+                  else
+                    match
+                      eqi
+                        seqIdx
+                        (length
+                           seq)
+                    with
+                      true
+                    then
+                      concat
+                        acc9
+                        (subsequence
+                           seq
+                           (subi
+                              seqIdx
+                              checkIdx)
+                           (addi
+                              checkIdx
+                              1))
+                    else
+                      let eCheck =
+                        get
+                          check
+                          checkIdx
+                      in
+                      let eSeq =
+                        get
+                          seq
+                          seqIdx
+                      in
+                      match
+                        eq
+                          eCheck
+                          eSeq
+                      with
+                        true
+                      then
+                        work2
+                          eq
+                          check
+                          replacement
+                          seq
+                          (addi
+                             checkIdx
+                             1)
+                          (addi
+                             seqIdx
+                             1)
+                          acc9
+                      else
+                        let seqIdx1 =
+                          subi
+                            seqIdx
+                            checkIdx
+                        in
+                        work2
+                          eq
+                          check
+                          replacement
+                          seq
+                          0
+                          (addi
+                             seqIdx1
+                             1)
+                          (snoc
+                             acc9
+                             (get
+                                seq
+                                seqIdx1))
+in
+let t28 =
+  lam c2: Char.
+    lam e: (Char, [Char]).
+      eqChar
+        c2
+        e.0
+in
+recursive
+  let work1 =
+    lam s17: [Char].
+      lam s21: [Char].
+        lam o2: Int.
+          lam n21: Int.
+            lam i6.
+              match
+                eqi
+                  i6
+                  n21
+              with
+                true
+              then
+                true
+              else
+                match
+                  eqc
+                    (get
+                       s17
+                       i6)
+                    (get
+                       s21
+                       (addi
+                          o2
+                          i6))
+                with
+                  true
+                then
+                  work1
+                    s17
+                    s21
+                    o2
+                    n21
+                    (addi
+                       i6
+                       1)
+                else
+                  false
+in
+recursive
+  let string2int_rechelper =
+    lam s16.
+      lam acc8.
+        match
+          null
+            s16
+        with
+          true
+        then
+          acc8
+        else
+          let fsd =
+            subi
+              (char2int
+                 (head
+                    s16))
+              (char2int
+                 '0')
+          in
+          string2int_rechelper
+            (tail
+               s16)
+            (addi
+               (muli
+                  10
+                  acc8)
+               fsd)
+in
+recursive
+  let int2string_rechelper =
+    lam n3.
+      lam acc7.
+        match
+          lti
+            n3
+            10
+        with
+          true
+        then
+          cons
+            (digit2char
+               n3)
+            acc7
+        else
+          int2string_rechelper
+            (divi
+               n3
+               10)
+            (cons
+               (digit2char
+                  (modi
+                     n3
+                     10))
+               acc7)
+in
+recursive
+  let strIndex_rechelper =
+    lam i5.
+      lam c1.
+        lam s15.
+          match
+            null
+              s15
+          with
+            true
+          then
+            None
+              {}
+          else
+            match
+              eqChar
+                c1
+                (head
+                   s15)
+            with
+              true
+            then
+              Some
+                i5
+            else
+              strIndex_rechelper
+                (addi
+                   i5
+                   1)
+                c1
+                (tail
+                   s15)
+in
+recursive
+  let strLastIndex_rechelper =
+    lam i4.
+      lam acc6.
+        lam c.
+          lam s14.
+            match
+              null
+                s14
+            with
+              true
+            then
+              match
+                eqi
+                  acc6
+                  (negi
+                     1)
+              with
+                true
+              then
+                None
+                  {}
+              else
+                Some
+                  acc6
+            else
+              match
+                eqChar
+                  c
+                  (head
+                     s14)
+              with
+                true
+              then
+                strLastIndex_rechelper
+                  (addi
+                     i4
+                     1)
+                  i4
+                  c
+                  (tail
+                     s14)
+              else
+                strLastIndex_rechelper
+                  (addi
+                     i4
+                     1)
+                  acc6
+                  c
+                  (tail
+                     s14)
+in
+recursive
+  let work =
+    lam delim: [Char].
+      lam s13: [Char].
+        lam n2: Int.
+          lam m: Int.
+            lam acc5.
+              lam lastMatch.
+                lam i3.
+                  match
+                    lti
+                      (subi
+                         n2
+                         m)
+                      i3
+                  with
+                    true
+                  then
+                    snoc
+                      acc5
+                      (subsequence
+                         s13
+                         lastMatch
+                         n2)
+                  else
+                    match
+                      eqStringSlice
+                        delim
+                        s13
+                        i3
+                        m
+                    with
+                      true
+                    then
+                      let nexti =
+                        addi
+                          i3
+                          m
+                      in
+                      work
+                        delim
+                        s13
+                        n2
+                        m
+                        (snoc
+                           acc5
+                           (subsequence
+                              s13
+                              lastMatch
+                              (subi
+                                 i3
+                                 lastMatch)))
+                        nexti
+                        nexti
+                    else
+                      work
+                        delim
+                        s13
+                        n2
+                        m
+                        acc5
+                        lastMatch
+                        (addi
+                           i3
+                           1)
+in
+recursive
+  let strTrim_init =
+    lam s12.
+      match
+        eqString
+          s12
+          ""
+      with
+        true
+      then
+        s12
+      else
+        match
+          isWhitespace
+            (head
+               s12)
+        with
+          true
+        then
+          strTrim_init
+            (tail
+               s12)
+        else
+          s12
+in
+recursive
+  let rec7 =
+    lam f9: () -> ().
+      lam n1.
+        match
+          leqi
+            n1
+            0
+        with
+          true
+        then
+          {}
+        else
+          let #var"18" =
+            f9
+              {}
+          in
+          rec7
+            f9
+            (subi
+               n1
+               1)
+in
+recursive
+  let rec6 =
+    lam f8: Int -> ().
+      lam n: Int.
+        lam i2.
+          match
+            geqi
+              i2
+              n
+          with
+            true
+          then
+            {}
+          else
+            let #var"17" =
+              f8
+                i2
+            in
+            rec6
+              f8
+              n
+              (addi
+                 i2
+                 1)
+in
+let t29 =
+  lam li1.
+    (li1,)
+in
+let t30 =
+  lam self1: [([Unknown -> Unknown] -> Unknown -> Unknown,)] -> [Unknown -> Unknown].
+    lam l2: [([Unknown -> Unknown] -> Unknown -> Unknown,)].
+      lam li: ([Unknown -> Unknown] -> Unknown -> Unknown,).
+        lam x1.
+          li.0
+            (self1
+               l2)
+            x1
+in
+let t31 =
+  lam self.
+    lam l1.
+      map
+        (t30
+           self
+           l1)
+        l1
+in
+recursive
+  let rec5 =
+    lam printFun1: Unknown -> [Char].
+      lam weights1.
+        lam samples1.
+          match
+            (weights1, samples1)
+          with
+            ([ w ] ++ weights2 ++ "", [ s11 ] ++ samples2 ++ "")
+          then
+            let #var"13" =
+              print
+                (printFun1
+                   s11)
+            in
+            let #var"14" =
+              print
+                " "
+            in
+            let #var"15" =
+              print
+                (float2string
+                   w)
+            in
+            let #var"16" =
+              print
+                "\n"
+            in
+            rec5
+              printFun1
+              weights2
+              samples2
+          else
+            {}
+in
+let printSamples1 =
+  lam printFun.
+    lam dist2.
+      match
+        distEmpiricalSamples
+          dist2
+      with
+        (samples, weights)
+      in
+      rec5
+          printFun
+          weights
+          samples
+in
+let printNormConst =
+  lam dist1.
+    let #var"12" =
+      print
+        (float2string
+           (distEmpiricalNormConst
+              dist1))
+    in
+    print
+      "\n"
+in
+let printAcceptRate =
+  lam dist.
+    let #var"11" =
+      print
+        (float2string
+           (distEmpiricalAcceptRate
+              dist))
+    in
+    print
+      "\n"
+in
+let particles1 =
+  match
+    leqi
+      (length
+         argv)
+      1
+  with
+    true
+  then
+    particles
+  else
+    string2int
+      (get
+         argv
+         1)
+in
+let sweeps =
+  match
+    leqi
+      (length
+         argv)
+      2
+  with
+    true
+  then
+    1
+  else
+    string2int
+      (get
+         argv
+         2)
+in
+let t32 =
+  lam state: State.
+    lam counter.
+      let map1 =
+        lam f7.
+          let t124 =
+            lam s9.
+              recursive
+                let rec4 =
+                  lam s10.
+                    let t126 =
+                      match
+                        s10
+                      with
+                        ""
+                      then
+                        let t127 =
+                          ""
+                        in
+                        t127
+                      else
+                        let t128 =
+                          match
+                            s10
+                          with
+                            [ a24 ]
+                          then
+                            let t129 =
+                              f7
+                                a24
+                            in
+                            let t130 =
+                              [ t129 ]
+                            in
+                            t130
+                          else
+                            let t131 =
+                              match
+                                s10
+                              with
+                                [ a25 ] ++ ss3 ++ ""
+                              then
+                                let t132 =
+                                  cons
+                                in
+                                let t133 =
+                                  f7
+                                    a25
+                                in
+                                let t134 =
+                                  t132
+                                    t133
+                                in
+                                let t135 =
+                                  rec4
+                                    ss3
+                                in
+                                let t136 =
+                                  t134
+                                    t135
+                                in
+                                t136
+                              else
+                                let t137 =
+                                  never
+                                in
+                                t137
+                            in
+                            t131
+                        in
+                        t128
+                    in
+                    t126
+              in
+              let t125 =
+                rec4
+                  s9
+              in
+              t125
+          in
+          t124
+      in
+      let iter1 =
+        lam f6.
+          let t121 =
+            lam s8.
+              let t122 =
+                map1
+                  f6
+              in
+              let #var"10" =
+                t122
+                  s8
+              in
+              let t123 =
+                {}
+              in
+              t123
+          in
+          t121
+      in
+      let mapi1 =
+        lam f5.
+          let t97 =
+            lam s6.
+              recursive
+                let rec3 =
+                  lam i1.
+                    let t101 =
+                      lam s7.
+                        let t102 =
+                          match
+                            s7
+                          with
+                            ""
+                          then
+                            let t103 =
+                              ""
+                            in
+                            t103
+                          else
+                            let t104 =
+                              match
+                                s7
+                              with
+                                [ a22 ]
+                              then
+                                let t105 =
+                                  f5
+                                    i1
+                                in
+                                let t106 =
+                                  t105
+                                    a22
+                                in
+                                let t107 =
+                                  [ t106 ]
+                                in
+                                t107
+                              else
+                                let t108 =
+                                  match
+                                    s7
+                                  with
+                                    [ a23 ] ++ ss2 ++ ""
+                                  then
+                                    let t109 =
+                                      cons
+                                    in
+                                    let t110 =
+                                      f5
+                                        i1
+                                    in
+                                    let t111 =
+                                      t110
+                                        a23
+                                    in
+                                    let t112 =
+                                      t109
+                                        t111
+                                    in
+                                    let t113 =
+                                      addi
+                                    in
+                                    let t114 =
+                                      t113
+                                        i1
+                                    in
+                                    let t115 =
+                                      1
+                                    in
+                                    let t116 =
+                                      t114
+                                        t115
+                                    in
+                                    let t117 =
+                                      rec3
+                                        t116
+                                    in
+                                    let t118 =
+                                      t117
+                                        ss2
+                                    in
+                                    let t119 =
+                                      t112
+                                        t118
+                                    in
+                                    t119
+                                  else
+                                    let t120 =
+                                      never
+                                    in
+                                    t120
+                                in
+                                t108
+                            in
+                            t104
+                        in
+                        t102
+                    in
+                    t101
+              in
+              let t98 =
+                0
+              in
+              let t99 =
+                rec3
+                  t98
+              in
+              let t100 =
+                t99
+                  s6
+              in
+              t100
+          in
+          t97
+      in
+      let iteri1 =
+        lam f4.
+          let t94 =
+            lam s5.
+              let t95 =
+                mapi1
+                  f4
+              in
+              let #var"9" =
+                t95
+                  s5
+              in
+              let t96 =
+                {}
+              in
+              t96
+          in
+          t94
+      in
+      let foldl2 =
+        lam f3.
+          let t82 =
+            lam acc3.
+              let t83 =
+                lam s3.
+                  recursive
+                    let rec2 =
+                      lam acc4.
+                        let t86 =
+                          lam s4.
+                            let t87 =
+                              match
+                                s4
+                              with
+                                ""
+                              then
+                                acc4
+                              else
+                                let t88 =
+                                  match
+                                    s4
+                                  with
+                                    [ a21 ] ++ ss1 ++ ""
+                                  then
+                                    let t89 =
+                                      f3
+                                        acc4
+                                    in
+                                    let t90 =
+                                      t89
+                                        a21
+                                    in
+                                    let t91 =
+                                      rec2
+                                        t90
+                                    in
+                                    let t92 =
+                                      t91
+                                        ss1
+                                    in
+                                    t92
+                                  else
+                                    let t93 =
+                                      never
+                                    in
+                                    t93
+                                in
+                                t88
+                            in
+                            t87
+                        in
+                        t86
+                  in
+                  let t84 =
+                    rec2
+                      acc3
+                  in
+                  let t85 =
+                    t84
+                      s3
+                  in
+                  t85
+              in
+              t83
+          in
+          t82
+      in
+      let foldr2 =
+        lam f2.
+          let t70 =
+            lam acc1.
+              let t71 =
+                lam s1.
+                  recursive
+                    let rec1 =
+                      lam acc2.
+                        let t74 =
+                          lam s2.
+                            let t75 =
+                              match
+                                s2
+                              with
+                                ""
+                              then
+                                acc2
+                              else
+                                let t76 =
+                                  match
+                                    s2
+                                  with
+                                    [ a20 ] ++ ss ++ ""
+                                  then
+                                    let t77 =
+                                      f2
+                                        a20
+                                    in
+                                    let t78 =
+                                      rec1
+                                        acc2
+                                    in
+                                    let t79 =
+                                      t78
+                                        ss
+                                    in
+                                    let t80 =
+                                      t77
+                                        t79
+                                    in
+                                    t80
+                                  else
+                                    let t81 =
+                                      never
+                                    in
+                                    t81
+                                in
+                                t76
+                            in
+                            t75
+                        in
+                        t74
+                  in
+                  let t72 =
+                    rec1
+                      acc1
+                  in
+                  let t73 =
+                    t72
+                      s1
+                  in
+                  t73
+              in
+              t71
+          in
+          t70
+      in
+      let create1 =
+        lam l.
+          let t46 =
+            lam f1.
+              recursive
+                let rec =
+                  lam i.
+                    let t54 =
+                      lam acc.
+                        let t55 =
+                          geqi
+                        in
+                        let t56 =
+                          t55
+                            i
+                        in
+                        let t57 =
+                          0
+                        in
+                        let t58 =
+                          t56
+                            t57
+                        in
+                        let t59 =
+                          match
+                            t58
+                          with
+                            true
+                          then
+                            let t60 =
+                              subi
+                            in
+                            let t61 =
+                              t60
+                                i
+                            in
+                            let t62 =
+                              1
+                            in
+                            let t63 =
+                              t61
+                                t62
+                            in
+                            let t64 =
+                              rec
+                                t63
+                            in
+                            let t65 =
+                              cons
+                            in
+                            let t66 =
+                              f1
+                                i
+                            in
+                            let t67 =
+                              t65
+                                t66
+                            in
+                            let t68 =
+                              t67
+                                acc
+                            in
+                            let t69 =
+                              t64
+                                t68
+                            in
+                            t69
+                          else
+                            acc
+                        in
+                        t59
+                    in
+                    t54
+              in
+              let t47 =
+                subi
+              in
+              let t48 =
+                t47
+                  l
+              in
+              let t49 =
+                1
+              in
+              let t50 =
+                t48
+                  t49
+              in
+              let t51 =
+                rec
+                  t50
+              in
+              let t52 =
+                ""
+              in
+              let t53 =
+                t51
+                  t52
+              in
+              t53
+          in
+          t46
+      in
+      let t34 =
+        {}
+      in
+      let model =
+        lam k1.
+          lam #var"4": ().
+            let #var"5" =
+              incrementCounter
+                counter
+            in
+            let t37 =
+              10.
+            in
+            let t38 =
+              10.
+            in
+            let t39 =
+              RuntimeDistElementary_DistBeta
+                { a =
+                    t37,
+                  b =
+                    t38 }
+            in
+            let theta =
+              sample
+                t39
+            in
+            let t40 =
+              true
+            in
+            let t41 =
+              RuntimeDistElementary_DistBernoulli
+                { p =
+                    theta }
+            in
+            updateWeight
+              (logObserve
+                 t41
+                 t40)
+              (lam #var"6".
+                 let t42 =
+                   false
+                 in
+                 let t43 =
+                   RuntimeDistElementary_DistBernoulli
+                     { p =
+                         theta }
+                 in
+                 updateWeight
+                   (logObserve
+                      t43
+                      t42)
+                   (lam #var"7".
+                      let t44 =
+                        true
+                      in
+                      let t45 =
+                        RuntimeDistElementary_DistBernoulli
+                          { p =
+                              theta }
+                      in
+                      updateWeight
+                        (logObserve
+                           t45
+                           t44)
+                        (lam #var"8".
+                           k1
+                             theta)))
+      in
+      let ast =
+        lam k.
+          lam #var"3": ().
+            let t36 =
+              {}
+            in
+            model
+              k
+              t36
+      in
+      let t35 =
+        {}
+      in
+      ast
+        (lam x.
+           End
+             x)
+        t35
+in
+let t33 =
+  lam #var"1".
+    let d =
+      run
+        { particles =
+            particles1 }
+        t32
+    in
+    let #var"2" =
+      printNormConst
+        d
+    in
+    printSamples1
+      float2string
+      d
+in
+repeat
+  t33
+  sweeps

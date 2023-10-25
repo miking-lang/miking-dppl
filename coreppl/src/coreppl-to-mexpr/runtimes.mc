@@ -57,6 +57,18 @@ lang LoadRuntime =
   | PIMH _ -> compilerPIMH options
   | _ -> error "Unsupported CorePPL to MExpr inference method"
 
+  sem loadCounterRuntime: String -> Expr
+  sem loadCounterRuntime =
+  | runtime ->  let parse = use BootParser in parseMCoreFile {
+      defaultBootParserParseMCoreFileArg with
+        eliminateDeadCode = false,
+        allowFree = true
+      }
+    in
+    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
+    let runtime = symbolizeAllowFree runtime in
+    runtime
+
   sem loadRuntimes : Options -> Expr -> Map InferMethod RuntimeEntry
   sem loadRuntimes options =
   | ast -> loadRuntimesH options (mapEmpty cmpInferMethod) ast

@@ -62,6 +62,16 @@ lang MExprCompile =
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat
 
+
+  sem counterTransform =
+  | TmLet ({body = TmAssume _} &t) -> let i = withInfo t.info in
+    let code = ulet_ "" (appf1_ (var_ "incrementCounter") (var_ "counter")) in
+   -- let code2 = ulet_ "" (appf1_ (var_ "printCounter") (var_ "counter")) in
+   -- let code = bind_ code code2 in
+    bind_ code (TmLet t)
+
+  | t -> smap_Expr_Expr counterTransform t
+
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
   | modelAst ->
@@ -70,7 +80,9 @@ lang MExprCompile =
       if options.transform then
         transform modelAst
       else modelAst in
-
+    let ast = if options.counter then
+        counterTransform ast
+      else ast in
     -- Optionally print the model AST
     (if options.printModel then
       printLn (mexprPPLToString ast)
@@ -125,17 +137,19 @@ lang MExprCompile =
     -- each infer is replaced with a call to the 'run' function provided by
     -- the chosen runtime. It also consists of one AST per inference method
     -- used in the program.
+    
     match extractInfer options runtimes.entries corepplAst with (corepplAst, models) in
-
+    let counterRt = loadCounterRuntime "counter/runtime.mc" in
     -- Compile the model ASTs.
-    let modelAsts = compileModels options runtimes models in
-
+    let modelAsts = compileModels options runtimes counterRt models in
     -- Transform distributions in the CorePPL AST to use MExpr code.
     let corepplAst = transformDistributions corepplAst in
 
     -- Symbolize any free occurrences in the CorePPL AST and in any of the
     -- models using the symbolization environment of the runtime AST.
-    let runtimeSymEnv = addTopNames symEnvEmpty runtimes.ast in
+    let runtimeSymEnv = addTopNames symEnvEmpty runtimes.ast in    /-printLn (mexprPPLToString counterRt);
+    printLn "sth";-/
+    let runtimeSymEnv = if options.counter then addTopNames runtimeSymEnv counterRt else runtimeSymEnv in
     let corepplAst = symbolizeExpr runtimeSymEnv corepplAst in
 
     -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
@@ -147,6 +161,8 @@ lang MExprCompile =
     -- Combine the CorePPL AST with the runtime AST, after extracting the
     -- models, and eliminate duplicate code due to common dependencies.
     let mainAst = bind_ runtimes.ast corepplAst in
+    
+    let mainAst = if options.counter then bind_ counterRt mainAst else mainAst in
     match eliminateDuplicateCodeWithSummary mainAst with (replaced, mainAst) in
 
     -- Apply the replacements performed by the duplicate code elimination on
@@ -156,7 +172,7 @@ lang MExprCompile =
     -- Insert all models into the main AST at the first point where any of the
     -- models are used.
     let prog = insertModels modelAsts mainAst in
-
+  print (mexprPPLToString prog);
     -- TODO(dlunde,2023-05-22): Does not work, currently (the program does not
     -- type check at this stage). It does, however, type check after generating
     -- the code and compiling it with Miking.
@@ -169,8 +185,8 @@ lang MExprCompile =
     -- Return complete program
     prog
 
-  sem compileModels : Options -> Runtimes -> Map Name ModelRepr -> Map Name Expr
-  sem compileModels options runtimes =
+  sem compileModels : Options -> Runtimes -> Expr -> Map Name ModelRepr -> Map Name Expr
+  sem compileModels options runtimes counterAst =
   | models ->
     mapMapWithKey
       (lam id. lam model.
@@ -178,7 +194,7 @@ lang MExprCompile =
         match loadCompiler options method with (_, compile) in
         match mapLookup method runtimes.entries with Some entry then
           let ast = transformModelAst options ast in
-          let ast = compileModel compile entry id {model with ast = ast} in
+          let ast = compileModel compile entry counterAst id {model with ast = ast} in
           removeModelDefinitions ast
         else
           match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in
@@ -237,8 +253,8 @@ lang MExprCompile =
     in
     t
 
-  sem compileModel : ((Expr,Expr) -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
-  sem compileModel compile entry modelId =
+  sem compileModel : ((Expr,Expr) -> Expr) -> RuntimeEntry -> Expr ->  Name -> ModelRepr -> Expr
+  sem compileModel compile entry counterAst modelId =
   | {ast = modelAst, params = modelParams} ->
 
     -- ANF
@@ -256,9 +272,12 @@ lang MExprCompile =
     -- Bind the model code in a let-expression, which we can insert in the main
     -- AST.
     let stateVarId = nameNoSym "state" in
+    let counterVarId = nameNoSym "counter" in
+    let params = snoc modelParams (stateVarId, entry.stateType) in
+    let params = snoc params (counterVarId, tyunknown_) in
     let ast =
       nulet_ modelId
-        (nlams_ (snoc modelParams (stateVarId, entry.stateType)) ast) in
+        (nlams_ params ast) in
 
     -- Replace any occurrences of TyDist in the program with the runtime
     -- distribution type. This needs to be performed after the previous step as
@@ -268,7 +287,8 @@ lang MExprCompile =
     -- Symbolize the AST using the symbolization environment of the runtime
     -- corresponding to the inference method used for this model. This ensures
     -- that we refer to the functions defined in that particular runtime.
-    symbolizeExpr entry.topSymEnv ast
+    let topSymEnv = addTopNames entry.topSymEnv counterAst in
+    symbolizeExpr topSymEnv ast
 
   sem replaceIdentifiers : Map Name Name -> Map Name Expr -> Map Name Expr
   sem replaceIdentifiers replaced =
