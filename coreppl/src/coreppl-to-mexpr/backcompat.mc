@@ -40,7 +40,7 @@ lang CPPLBackcompat = LoadRuntime
       let inferMethod = inferMethodFromOptions options options.method in
 
       match loadCompiler options inferMethod with (runtime, _) in
-
+print "hello";
       let runtimeEntry = loadRuntimeEntry inferMethod runtime in
       let runtimes = mapFromSeq cmpInferMethod [(inferMethod, runtimeEntry)] in
 

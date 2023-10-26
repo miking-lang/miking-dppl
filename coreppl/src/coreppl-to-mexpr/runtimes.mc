@@ -27,6 +27,9 @@ lang LoadRuntime =
     -- The type for which State is an alias for this runtime.
     stateType : Type,
 
+    cRunId: Name,
+    counterType : Type,
+
     -- A symbolization environment containing the identifiers defined in the
     -- top-level of the runtime program. This environment is used to symbolize
     -- the model AST so that it refers to definitions in its corresponding
@@ -57,17 +60,23 @@ lang LoadRuntime =
   | PIMH _ -> compilerPIMH options
   | _ -> error "Unsupported CorePPL to MExpr inference method"
 
-  sem loadCounterRuntime: String -> Expr
-  sem loadCounterRuntime =
-  | runtime ->  let parse = use BootParser in parseMCoreFile {
+  sem loadCounterRuntime: InferMethod -> Name -> Type -> String -> RuntimeEntry
+  sem loadCounterRuntime method runId stateType =
+  | runtime ->
+    let parse = use BootParser in parseMCoreFile {
       defaultBootParserParseMCoreFileArg with
         eliminateDeadCode = false,
-        allowFree = true
-      }
+        allowFree = true }
     in
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
     let runtime = symbolizeAllowFree runtime in
-    runtime
+    let ids = findNamesOfStrings ["runC","Counter"] runtime in
+    match ids with [Some cRunId, Some counterId] in 
+    let counterType = findStateType method counterId runtime in
+    let counterEntry = {ast = runtime, runId=runId, stateType=stateType
+    , counterType = counterType, cRunId = cRunId, topSymEnv= addTopNames symEnvEmpty runtime} in
+    counterEntry
+
 
   sem loadRuntimes : Options -> Expr -> Map InferMethod RuntimeEntry
   sem loadRuntimes options =
@@ -99,8 +108,15 @@ lang LoadRuntime =
     let runtime = symbolizeAllowFree runtime in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
     let stateType = findStateType method stateId runtime in
-    { ast = runtime, runId = runId, stateType = stateType
-    , topSymEnv = addTopNames symEnvEmpty runtime }
+    let topSymEnv = addTopNames symEnvEmpty runtime in
+    let cEntry = loadCounterRuntime method runId stateType "counter/runtime.mc" in
+    let rEntry = { ast = runtime, runId = runId, stateType = stateType
+    , counterType = cEntry.counterType, cRunId = cEntry.cRunId
+    , topSymEnv = topSymEnv} in
+    let ast = bind_ cEntry.ast runtime in
+    match eliminateDuplicateCodeWithSummary ast with (replacements, ast) in
+    {{rEntry with ast = ast} with topSymEnv=addTopNames symEnvEmpty ast}
+        
 
   -- Finds a pre-defined list of identifiers in the given runtime AST, which
   -- are assumed to be present in all runtimes.
