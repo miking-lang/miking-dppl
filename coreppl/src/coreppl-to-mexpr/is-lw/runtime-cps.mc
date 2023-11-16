@@ -51,7 +51,7 @@ let filterNone : all a. ([Float], [a]) -> Float -> Option a -> ([Float], [a]) =
   else acc
 
 -- General inference algorithm for importance sampling
-let run : all a. Unknown -> (State -> Stop a) -> Dist a = lam config. lam model.
+let run : all a. Unknown -> (State -> Stop a) -> use RuntimeDistBase in Dist a = lam config. lam model.
   use RuntimeDist in
 
   let particles = config.particles in
