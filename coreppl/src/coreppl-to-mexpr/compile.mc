@@ -270,6 +270,13 @@ lang MExprCompile =
     -- captured parameters may have type TyDist.
     let ast = replaceTyDist ast in
 
+    let #var"" =
+      printLn "printing environment:";
+      mapFoldWithKey (lam. lam k: String. lam v: Name.
+        printLn (join ["    ", k, "<", nameGetStr v, " | ", sym2hash (optionGetOr _noSymbol (nameGetSym v)), ">"])
+      ) () entry.topSymEnv.tyConEnv
+    in
+
     -- Symbolize the AST using the symbolization environment of the runtime
     -- corresponding to the inference method used for this model. This ensures
     -- that we refer to the functions defined in that particular runtime.
