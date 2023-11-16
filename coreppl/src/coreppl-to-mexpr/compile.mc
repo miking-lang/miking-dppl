@@ -118,7 +118,9 @@ lang MExprCompile =
   | corepplAst ->
     -- Symbolize and type-check the CorePPL AST.
     let corepplAst = symbolize corepplAst in
+    printLn "--------------------";printLn (expr2str corepplAst);
     let corepplAst = typeCheck corepplAst in
+    printLn "--------------------";printLn (expr2str corepplAst);
 
     -- Extract the infer expressions to separate ASTs, one per inference
     -- method. The result consists of the provided AST, updated such that
@@ -132,17 +134,20 @@ lang MExprCompile =
 
     -- Transform distributions in the CorePPL AST to use MExpr code.
     let corepplAst = transformDistributions corepplAst in
+    printLn "--------------------";printLn (expr2str corepplAst);
 
     -- Symbolize any free occurrences in the CorePPL AST and in any of the
     -- models using the symbolization environment of the runtime AST.
     let runtimeSymEnv = addTopNames symEnvEmpty runtimes.ast in
     let corepplAst = symbolizeExpr runtimeSymEnv corepplAst in
+    printLn "--------------------";printLn (expr2str corepplAst);
 
     -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
     -- with errors. This code is unreachable unless the inferred models are
     -- also used outside of infers, which is an error.
     -- TODO(larshum, 2022-10-07): Detect such errors statically.
     let corepplAst = replaceDpplKeywords corepplAst in
+    printLn "--------------------";printLn (expr2str corepplAst);
 
     -- Combine the CorePPL AST with the runtime AST, after extracting the
     -- models, and eliminate duplicate code due to common dependencies.
