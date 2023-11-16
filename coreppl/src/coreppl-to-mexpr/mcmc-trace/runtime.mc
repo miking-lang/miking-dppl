@@ -46,7 +46,7 @@ let updateWeight = lam v.
   let weight = state.weight in
   modref weight (addf (deref weight) v)
 
-let sampleMH: all a. Dist a -> a = lam dist.
+let sampleMH: all a. use RuntimeDistBase in Dist a -> a = lam dist.
   use RuntimeDist in
   let traceLength = deref state.traceLength in
   let cut = deref state.cut in
@@ -63,7 +63,7 @@ let sampleMH: all a. Dist a -> a = lam dist.
   unsafeCoerce sample
 
 -- General inference algorithm for trace MCMC
-let run : all a. Unknown -> (State -> a) -> Dist a =
+let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
   use RuntimeDist in
 

@@ -74,12 +74,12 @@ let state: State = {
 let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
 
-let newSample: all a. Dist a -> (Any,Float) = lam dist.
+let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
   let s = use RuntimeDist in sample dist in
   let w = use RuntimeDist in logObserve dist s in
   (unsafeCoerce s, w)
 
-let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
+let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
   lam dist. lam sample. lam w.
     let s: a = unsafeCoerce sample in
     let wNew = use RuntimeDist in logObserve dist s in
@@ -90,7 +90,7 @@ let reuseSample: all a. Dist a -> Any -> Float -> (Any, Float) =
     (sample, wNew)
 
 -- Procedure at aligned samples
-let sampleAligned: all a. Dist a -> a = lam dist.
+let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
   let oldAlignedTrace: [Option (Any,Float)] = deref state.oldAlignedTrace in
   let sample: (Any, Float) =
     match oldAlignedTrace with [sample] ++ oldAlignedTrace then
@@ -122,7 +122,7 @@ let sampleAligned: all a. Dist a -> a = lam dist.
   modref state.alignedTrace (cons sample (deref state.alignedTrace));
   unsafeCoerce (sample.0)
 
-let sampleUnaligned: all a. Int -> Dist a -> a = lam i. lam dist.
+let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. lam dist.
   let sample: (Any, Float) =
     if deref state.reuseUnaligned then
       let oldUnalignedTraces = deref state.oldUnalignedTraces in
@@ -183,7 +183,7 @@ let modTrace: Unknown -> () = lam config.
     ()
 
 -- General inference algorithm for aligned MCMC
-let run : all a. Unknown -> (State -> a) -> Dist a =
+let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
 
   recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
