@@ -176,31 +176,28 @@ lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical
 end
 
 
-type Dist a = use RuntimeDist in Dist a
-
-
 -- We include the below definitions to produce non-mangled functions, which we
 -- can refer to in the runtime handler without hard-coding the mangled prefix.
-let distEmpiricalSamples : all a. Dist a -> ([a], [Float]) =
+let distEmpiricalSamples : all a. use RuntimeDist in Dist a -> ([a], [Float]) =
   use RuntimeDist in
   empiricalSamples
 
-let distEmpiricalDegenerate : all a. Dist a -> Bool =
+let distEmpiricalDegenerate : all a. use RuntimeDist in Dist a -> Bool =
   use RuntimeDist in
   empiricalDegenerate
 
-let distEmpiricalNormConst : all a. Dist a -> Float =
+let distEmpiricalNormConst : all a. use RuntimeDist in Dist a -> Float =
   use RuntimeDist in
   empiricalNormConst
 
-let distEmpiricalAcceptRate : all a. Dist a -> Float =
+let distEmpiricalAcceptRate : all a. use RuntimeDist in Dist a -> Float =
   use RuntimeDist in
   empiricalAcceptRate
 
-let sample : all a. Dist a -> a =
+let sample : all a. use RuntimeDist in Dist a -> a =
   use RuntimeDist in
   sample
 
-let logObserve : all a. Dist a -> a -> Float =
+let logObserve : all a. use RuntimeDist in Dist a -> a -> Float =
   use RuntimeDist in
   logObserve

@@ -177,7 +177,6 @@ lang MExprCompile =
   sem compileModels : Options -> Runtimes -> Map Name ModelRepr -> Map Name Expr
   sem compileModels options runtimes =
   | models ->
-    printLn "ASDF----------------ASDF";
     mapMapWithKey
       (lam id. lam model.
         match model with {ast = ast, method = method, params = params} in
