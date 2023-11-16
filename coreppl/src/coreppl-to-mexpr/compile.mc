@@ -273,7 +273,7 @@ lang MExprCompile =
     let #var"" =
       printLn "printing environment:";
       mapFoldWithKey (lam. lam k: String. lam v: Name.
-        printLn (join ["    ", k, "<", nameGetStr v, " | ", sym2hash (optionGetOr _noSymbol (nameGetSym v)), ">"])
+        printLn (join ["    ", k, "<", nameGetStr v, " | ", int2string (sym2hash (optionGetOr _noSymbol (nameGetSym v))), ">"])
       ) () entry.topSymEnv.tyConEnv
     in
 
