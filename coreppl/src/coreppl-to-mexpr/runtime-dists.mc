@@ -90,6 +90,9 @@ lang RuntimeDistEmpirical = RuntimeDistBase
 
     -- print "INPUT: "; printLn (strJoin "," (map float2string logWeights));
 
+    let samples = toRope samples in
+    let logWeights = toRope logWeights in
+
     -- Compute LSE
     let maxLogWeight = foldl (lam acc. lam lw. if geqf lw acc then lw else acc)
                          (negf inf) logWeights in
@@ -115,6 +118,11 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     in
     match mapAccumL f 0.0 logWeights with (_, cumulativeWeights) in
     -- print "CUMULATIVE NORMALIZED: "; printLn (strJoin "," (map float2string cumulativeWeights));
+
+    -- NOTE(larshum, 2023-10-24): Apply a map to flatten the cumulative
+    -- weights, to ensure accessing it (when sampling) is a constant-time
+    -- operation.
+    map (lam. ()) cumulativeWeights;
 
     DistEmpirical {
       cumulativeWeights = cumulativeWeights, logWeights = logWeights,
