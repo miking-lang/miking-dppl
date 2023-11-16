@@ -175,6 +175,10 @@ end
 lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical
 end
 
+
+type Dist a = use RuntimeDist in Dist a
+
+
 -- We include the below definitions to produce non-mangled functions, which we
 -- can refer to in the runtime handler without hard-coding the mangled prefix.
 let distEmpiricalSamples : all a. Dist a -> ([a], [Float]) =

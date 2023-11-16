@@ -8,7 +8,7 @@ include "mexpr/type-lift.mc"
 include "../coreppl.mc"
 
 -- Explicit resample inference annotation for SMC
-lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift
+lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift + TypeCheck
 
   syn Expr =
   | TmResample { ty: Type, info: Info }

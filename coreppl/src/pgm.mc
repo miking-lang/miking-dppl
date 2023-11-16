@@ -2,7 +2,7 @@ include "mexpr/ast.mc"
 include "coreppl.mc"
 include "name.mc"
 
-type Env = Map Name Expr
+type Env = use Ast in Map Name Expr
 let _emptyEnv = mapEmpty nameCmp
 
 lang Plate = Eq + Sym + ANF + PrettyPrint

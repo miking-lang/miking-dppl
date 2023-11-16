@@ -2,11 +2,12 @@ include "digraph.mc"
 include "name.mc"
 include "coreppl.mc"
 include "ext/math-ext.mc"
+include "mexpr/ast.mc"
 include "mexpr/anf.mc"
 
 type Label = Int
 
-lang PBN
+lang PBN = Ast
   syn Vertex =
   | RandomVarNode {ident:Name,
                     val:Option Expr,
@@ -905,6 +906,8 @@ let graft = use PBNTransformer in
   else error "t is not a random variable node\n"
 
 end
+
+type Vertex = use PBN in Vertex
 
 let getRoots = lam g:Digraph Vertex Label.
   let vertices = digraphVertices g in
