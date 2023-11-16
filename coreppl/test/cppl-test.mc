@@ -1,4 +1,5 @@
 include "test.mc"
+include "../src/coreppl-to-mexpr/runtime-dists.mc"
 
 let cpplResOfDist: all a. (a -> String) -> Int -> use RuntimeDistBase in Dist a -> CpplRes =
   lam f. lam burn. lam dist.
