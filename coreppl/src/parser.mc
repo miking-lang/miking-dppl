@@ -140,7 +140,8 @@ let parseMCorePPLFile = lam keepUtests. lam filename.
     {defaultBootParserParseCorePPLFileArg with keepUtests = keepUtests} in
   let ast = parseMCoreFile config filename in
   let ast = symbolizeAllowFree ast in
-  makeKeywords ast
+  let ast = makeKeywords ast in
+  ast
 
 let parseMCorePPLFileLib = lam keepUtests. lam filename.
   use DPPLParser in

@@ -88,7 +88,7 @@ let incrTraceLength: () -> () = lam.
   modref state.traceLength (addi (deref state.traceLength) 1)
 
 -- Procedure at samples
-let sample: all a. Address -> Dist a -> a = lam addr. lam dist.
+let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam dist.
   use RuntimeDist in
   let oldDb: Map Address (Option (Any,Float)) = deref state.oldDb in
   let newSample: () -> (Any,Float) = lam.
@@ -136,7 +136,7 @@ let modDb: Unknown -> () = lam config.
          sample
       ) db)
 
-let run : all a. Unknown -> (State -> a) -> Dist a =
+let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
   use RuntimeDist in
 

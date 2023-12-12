@@ -69,7 +69,7 @@ test-coreppl: build/${CPPL_NAME}
 .PHONY: install-rootppl
 install-rootppl:
 	mkdir -p $(dir ${ROOTPPL_BIN_PATH}) ${ROOTPPL_SRC_PATH};
-	sed 's\$$RPPL_ENGINE_SRC\${ROOTPPL_SRC_PATH}\g' ${ROOTPPL_BIN} > ${ROOTPPL_BIN_PATH}
+	sed 's|$$RPPL_ENGINE_SRC|${ROOTPPL_SRC_PATH}|g' ${ROOTPPL_BIN} > ${ROOTPPL_BIN_PATH}
 	chmod +x ${ROOTPPL_BIN_PATH}
 	cp -rfT ${ROOTPPL_SRC} ${ROOTPPL_SRC_PATH}
 

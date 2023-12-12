@@ -116,6 +116,8 @@ end
 -- ROOTPPL COMPILER --
 ----------------------
 
+type RPProg = use RootPPL in RPProg
+
 -- Generate code for compiled RootPPL AST
 let printCompiledRPProg: RPProg -> String = use MExprPPLRootPPLCompile in
   lam rpprog: RPProg.
@@ -163,6 +165,9 @@ let nameStackPtr = nameSym "stackPtr"
 let nameRet = nameSym "ret"
 let nameGlobalTy = nameSym "GLOBAL"
 let nameStartBlock = nameSym "start"
+
+type Expr = use MExprPPLRootPPLCompile in Expr
+type Type = use MExprPPLRootPPLCompile in Type
 
 -- Strip unnecessary lets. Leaves lets around TmApps when they are returned from
 -- functions rather than bound in a let, to allow for correct stack handling.

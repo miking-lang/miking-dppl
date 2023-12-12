@@ -6,13 +6,16 @@ include "mexpr/eq.mc"
 include "mexpr/type-check.mc"
 include "mexpr/anf.mc"
 include "mexpr/type-lift.mc"
+include "mexpr/const-arity.mc"
+include "mexpr/const-types.mc"
 
 include "peval/peval.mc"
 
 include "string.mc"
 include "seq.mc"
 
-lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
+            TyConst + ConstPrettyPrint + ConstArity
   syn Expr =
   | TmDist { dist: Dist,
              ty: Type,

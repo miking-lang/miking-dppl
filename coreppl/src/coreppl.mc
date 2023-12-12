@@ -341,7 +341,7 @@ end
 -- Defines a weight term
 lang Weight =
   Ast + PrettyPrint + Eq + Sym + TypeCheck + FloatTypeAst + ANF + TypeLift +
-  PEval
+  PEval + Dist
   syn Expr =
   | TmWeight { weight: Expr, ty: Type, info: Info }
 

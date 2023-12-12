@@ -23,8 +23,8 @@ let stopInit = lam cont. (None (), cont)
 
 -- WARNING: As of now, particles must be started and propagated sequentially (they cannot run in parallel)!
 let run : all a. all b. Unknown
-                 -> (State -> (Option (Dist b), b -> Checkpoint a))
-                 -> Dist a =
+                 -> (State -> (Option (use RuntimeDistBase in Dist b), b -> Checkpoint a))
+                 -> use RuntimeDistBase in Dist a =
   lam config. lam model.
   use RuntimeDist in
 

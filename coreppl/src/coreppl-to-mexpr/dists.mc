@@ -71,7 +71,7 @@ lang TransformDist = MExprPPL
         "RuntimeDistElementary_DistUniform"
         (i (urecord_ [("a", a), ("b", b)])))
   | DEmpirical { samples = samples } ->
-    i (app_ (var_ "RuntimeDistEmpirical_constructDistEmpiricalHelper") samples)
+    i (app_ (var_ "vRuntimeDistEmpirical_constructDistEmpiricalHelper") samples)
 
   -- We need to replace occurrences of TyDist after transforming to MExpr
   -- distributions.
@@ -88,7 +88,8 @@ lang TransformDist = MExprPPL
   sem toRuntimeTyDist =
   | TyDist t ->
     TyApp {
-      lhs = TyCon {ident = nameNoSym "Dist", info = t.info},
+      lhs = TyCon {ident = nameNoSym "RuntimeDistBase_Dist", info = t.info},
+      --lhs = TyCon {ident = nameNoSym "Dist", info = t.info},
       rhs = t.ty,
       info = t.info}
   | ty -> smap_Type_Type toRuntimeTyDist ty

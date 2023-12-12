@@ -15,7 +15,7 @@ type State = Ref Float
 let updateWeight = lam v. lam state. modref state (addf (deref state) v)
 
 -- General inference algorithm for naive MCMC
-let run : all a. Unknown -> (State -> a) -> Dist a =
+let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
   use RuntimeDist in
 
