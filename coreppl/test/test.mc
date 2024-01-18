@@ -7,7 +7,7 @@ include "option.mc"
 include "sys.mc"
 include "string.mc"
 include "stats.mc"
-
+include "char.mc"
 type CpplRes = {
   samples: [String],
   lweights: [Float],
@@ -30,7 +30,7 @@ let parseRun: String -> CpplRes = lam output.
   let output = strSplit "\n" output in
   let extra =
     let lhead = head output in
-    if any (eqChar ' ') lhead then None ()
+    if (any (eqChar ' ') lhead) then None ()
     else Some (string2float lhead)
   in
   let output = match extra with Some _ then tail output else output in
@@ -45,7 +45,7 @@ let parseRun: String -> CpplRes = lam output.
   { samples = res.0, lweights = res.1, extra = extra }
 
 let burnCpplRes: Int -> CpplRes -> CpplRes = lam burn. lam cpplRes.
-  let samples = subsequence cpplRes.samples burn (length cpplRes.samples) in
+    let samples = subsequence cpplRes.samples burn (length cpplRes.samples) in
   let lweights =  subsequence cpplRes.lweights burn (length cpplRes.lweights) in
   {cpplRes with samples = samples, lweights = lweights}
 
@@ -55,7 +55,8 @@ let testCpplMExpr: String -> Int -> Int -> String -> CpplRes =
   lam model. lam samples. lam burn. lam compileArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
-    sysRunCommand [cppl, "--seed 0", compileArgs, m ] "" wd;
+    let run = sysRunCommand [cppl, "--seed 0", compileArgs, m ] "" wd in
+    utest run.returncode with 0 using eqi else lam. lam. run.stderr in
     let run = sysRunCommand [ "./out", (int2string samples) ] "" wd in
     sysDeleteDir wd;
     burnCpplRes burn (parseRun run.stdout)
@@ -120,7 +121,9 @@ let eqSsm: Float -> Float -> Float -> Bool = eqfApprox
 
 -- models/diversification-models/crbd*.mc
 type CRBDSyntheticRes = { mean: Float, normConst: Float }
-let resCrbdSynthetic: CpplRes -> CRBDSyntheticRes = lam cpplRes. {
+let resCrbdSynthetic: CpplRes -> CRBDSyntheticRes = lam cpplRes.
+if any (lam c. not (stringIsFloat c)) cpplRes.samples then error ((foldl (lam acc. lam s. join [acc," ",s]) "CONTENT:" cpplRes.samples))
+else {
   mean = logWeightedMean cpplRes.lweights (map string2float cpplRes.samples),
   normConst = match cpplRes.extra with Some nc then nc else nan
 }
