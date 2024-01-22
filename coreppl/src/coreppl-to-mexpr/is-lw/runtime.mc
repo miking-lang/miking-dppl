@@ -19,7 +19,7 @@ let unwrapOpt : all a. Option a -> a = lam o.
   else error "Could not unwrap option"
 
 -- General inference algorithm for importance sampling
-let run : all a. Unknown -> (State -> a) -> Dist a = lam config. lam model.
+let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a = lam config. lam model.
   use RuntimeDist in
 
   let particles = config.particles in
