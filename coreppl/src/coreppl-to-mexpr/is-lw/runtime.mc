@@ -1,6 +1,4 @@
-
 include "common.mc"
-
 include "ext/dist-ext.mc"
 include "ext/math-ext.mc"
 include "seq.mc"

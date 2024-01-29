@@ -27,7 +27,7 @@ type Options = {
   -- TODO(2023-06-28,dlunde): Give a more descriptive name, transform is too
   -- generic.
   transform: Bool,
-
+  counter: Bool,
   -- Where to resample in SMC
   resample: String,
 
@@ -68,6 +68,7 @@ let default = {
   method = "is-lw",
   target = "mexpr",
   test = false,
+  counter = false,
   particles = 5000,
   resample = "manual",
   align = false,
@@ -156,6 +157,10 @@ let config = [
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with transform = true}),
+  ([("--counter", "", "")],
+    "The runtime counter example.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with counter = true}),
   ([("--no-print-samples", "", "")],
     "Do not print the final samples in the compiled program.",
     lam p: ArgPart Options.
