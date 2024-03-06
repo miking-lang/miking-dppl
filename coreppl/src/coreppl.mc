@@ -117,8 +117,8 @@ lang Infer =
     else never
 
   -- Partial evaluation
-  sem pevalIsValue =
-  | TmInfer _ -> false
+  sem pevalBindThis =
+  | TmInfer _ -> true
 
   sem pevalEval ctx k =
   | TmInfer r ->
@@ -203,8 +203,8 @@ lang Assume =
     else never
 
   -- Partial evaluation
-  sem pevalIsValue =
-  | TmAssume _ -> false
+  sem pevalBindThis =
+  | TmAssume _ -> true
 
   sem pevalEval ctx k =
   | TmAssume r ->
@@ -312,8 +312,8 @@ lang Observe =
     else never
 
   -- Partial evaluation
-  sem pevalIsValue =
-  | TmObserve _ -> false
+  sem pevalBindThis =
+  | TmObserve _ -> true
 
   sem pevalEval ctx k =
   | TmObserve r ->
@@ -410,8 +410,8 @@ lang Weight =
     else never
 
   -- Partial evaluation
-  sem pevalIsValue =
-  | TmWeight _ -> false
+  sem pevalBindThis =
+  | TmWeight _ -> true
 
   sem pevalEval ctx k =
   | TmWeight r ->
