@@ -15,9 +15,8 @@ include "mexpr/anf.mc"
 include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/const-arity.mc"
-
 include "peval/peval.mc"
-
+include "ext/dist-ext.mc"
 include "string.mc"
 
 include "dist.mc"
@@ -425,7 +424,7 @@ lang Weight =
 end
 
 -- Translations in between weight and observe terms
-lang ObserveWeightTranslation = Observe + Weight
+lang ObserveWeightTranslation = Observe + Weight + DistAll
 /-
   -- Translates ALL observe terms into weight terms.
   sem observeToWeight =
@@ -437,6 +436,326 @@ lang ObserveWeightTranslation = Observe + Weight
 -/
 end
 
+lang Prune =
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+
+  syn Expr =
+  | TmPrune { dist: Expr,
+              ty: Type,
+              info: Info }
+
+  syn Type =
+  | TyPruneInt { info : Info }
+
+  sem infoTm =
+  | TmPrune t -> t.info
+
+  sem tyTm =
+  | TmPrune t -> t.ty
+
+  sem withInfo (info: Info) =
+  | TmPrune t -> TmPrune { t with info = info }
+
+  sem withType (ty: Type) =
+  | TmPrune t -> TmPrune {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmPrune t ->
+    match f acc t.dist with (acc,dist) in
+    (acc, TmPrune { t with dist = dist })
+
+  sem smapAccumL_Expr_Type f acc =
+  | TmPrune t ->
+    match f acc t.ty with (acc,ty) in
+    (acc, TmPrune {t with ty = ty })
+
+  sem infoTy =
+  | TyPruneInt t -> t.info
+
+  sem unifyBase u env =
+  | (TyPruneInt _, TyPruneInt _) -> u.empty
+  sem tyWithInfo (info: Info) =
+  | TyPruneInt t -> TyPruneInt {t with info = info}
+
+  sem getTypeStringCode (indent: Int) (env: PprintEnv) =
+  | TyPruneInt t ->
+    (env, join ["PruneInt"])
+
+  sem isAtomic =
+  | TmPrune _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmPrune t ->
+    let i = pprintIncr indent in
+    match printParen i env t.dist with (env,dist) then
+      (env, join ["prune", pprintNewline i, dist])
+    else never
+
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmPrune r ->
+    match lhs with TmPrune l then
+      eqExprH env free l.dist r.dist
+    else None ()
+
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | TyPruneInt r ->
+    match unwrapType lhs with TyPruneInt _ then
+      Some free
+    else None ()
+  
+  sem symbolizeExpr (env: SymEnv) =
+  | TmPrune t ->
+    TmPrune {{ t with dist = symbolizeExpr env t.dist}
+                    with ty = symbolizeType env t.ty}
+
+  sem typeCheckExpr (env : TCEnv) =
+  | TmPrune t ->
+    let dist = typeCheckExpr env t.dist in
+    let ty =
+        match (inspectType (tyTm dist)) with TyDist ({ty=ty}&d) then
+        switch inspectType ty
+        case TyInt _ then
+          TyPruneInt { info = t.info }
+        case _ then
+          error "invalid Type for prune"
+        end
+      else error "invalid Type for prune"
+    in
+    TmPrune {t with dist = dist, ty = ty}
+
+  sem normalize (k : Expr -> Expr) =
+  | TmPrune ({dist= dist} & t) ->
+    normalizeName (lam dist. k (TmPrune { t with dist=dist})) dist
+
+  sem typeLiftExpr (env:TypeLiftEnv) =
+  | TmPrune t ->
+    match typeLiftExpr env t.dist with (env, dist) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmPrune {{t with dist = dist}
+                          with ty = ty})
+      else never
+    else never
+
+  sem pevalIsValue =
+  | TmPrune _ -> false
+
+  sem pevalEval ctx k =
+  | TmPrune r ->
+    pevalBind ctx
+      (lam dist. k (TmPrune { r with dist = dist})) r.dist
+  | TmPrune ( {dist = TmDist ({dist = dist} & td)} & t) ->
+    pevalDistEval ctx
+      (lam dist. k (TmPrune { t with dist= TmDist { td with dist = dist} } )) dist
+
+end
+
+lang Pruned = Prune
+
+  syn Expr =
+  | TmPruned { prune: Expr,
+              ty: Type,
+              info: Info }
+
+  sem infoTm =
+  | TmPruned t -> t.info
+
+  sem tyTm =
+  | TmPruned t -> t.ty
+
+  sem withInfo (info: Info) =
+  | TmPruned t -> TmPruned { t with info = info }
+
+  sem withType (ty: Type) =
+  | TmPruned t -> TmPruned {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmPruned t ->
+    match f acc t.prune with (acc,prune) in
+    (acc, TmPruned { t with prune = prune })
+
+  sem isAtomic =
+  | TmPruned _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmPruned t ->
+    let i = pprintIncr indent in
+    match printParen i env t.prune with (env,prune) then
+      (env, join ["pruned", pprintNewline i, prune])
+    else never
+
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmPruned r ->
+    match lhs with TmPruned l then
+      eqExprH env free l.prune r.prune
+    else None ()
+
+  sem symbolizeExpr (env: SymEnv) =
+  | TmPruned t ->
+    TmPruned {{ t with prune = symbolizeExpr env t.prune}
+                    with ty = symbolizeType env t.ty}
+
+   -- CPS
+  sem cpsCont k =
+  | TmLet ({ body = TmPruned _ } & t) ->
+    TmLet { t with inexpr = cpsCont k t.inexpr }
+
+  sem typeCheckExpr (env : TCEnv) =
+  | TmPruned t ->
+    let prune = typeCheckExpr env t.prune in
+    let ty =
+        switch inspectType (tyTm prune)
+        case TyPruneInt _ then
+          TyInt { info = t.info }
+        case _ then
+          error "invalid Type for pruned"
+        end
+    in
+    TmPruned {t with prune = prune, ty = ty}
+
+  sem normalize (k : Expr -> Expr) =
+  | TmPruned ({prune = prune} & t) ->
+    normalizeName (lam prune. k (TmPruned { t with prune = prune})) prune
+
+  sem typeLiftExpr (env:TypeLiftEnv) =
+  | TmPruned t ->
+    match typeLiftExpr env t.prune with (env, prune) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmPruned {{t with prune = prune}
+                          with ty = ty})
+      else never
+    else never
+
+  sem pevalIsValue =
+  | TmPruned _ -> false
+
+  sem pevalEval ctx k =
+  | TmPruned r ->
+    pevalBind ctx
+      (lam prune. k (TmPruned { r with prune = prune})) r.prune
+
+end
+
+lang Cancel = Observe
+  syn Expr =
+  | TmCancel {dist: Expr,
+              value: Expr,
+              ty: Type,
+              info: Info }
+
+  sem infoTm =
+  | TmCancel t -> t.info
+
+  sem tyTm =
+  | TmCancel t -> t.ty
+
+  sem withInfo (info: Info) =
+  | TmCancel t -> TmCancel { t with info = info }
+
+  sem withType (ty: Type) =
+  | TmCancel t -> TmCancel {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmCancel t ->
+    match f acc t.value with (acc,value) in
+    match f acc t.dist with (acc,dist) in
+
+    (acc, TmCancel {{ t with value = value } with dist = dist})
+
+  sem isAtomic =
+  | TmCancel _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmCancel t ->
+    let i = pprintIncr indent in
+    match pprintCode i env (TmObserve {dist=t.dist,value=t.value,ty=t.ty,info=t.info}) with (env,args) then
+      (env, join ["cancel", pprintNewline i,
+       args ])
+    else never
+  
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmCancel r ->
+    match lhs with TmCancel l then
+      match eqExprH env free l.value r.value with Some free then
+        eqExprH env free l.dist r.dist
+      else None ()
+    else None ()
+
+  -- Symbolize
+  sem symbolizeExpr (env: SymEnv) =
+  | TmCancel t ->
+    TmCancel {{{ t with value = symbolizeExpr env t.value }
+                    with dist = symbolizeExpr env t.dist }
+                    with ty = symbolizeType env t.ty }
+
+  -- Type check
+  sem typeCheckExpr (env : TCEnv) =
+  | TmCancel t ->
+    let value = typeCheckExpr env t.value in
+    let dist = typeCheckExpr env t.dist in
+    let tyDistRes = newvar env.currentLvl t.info in
+    unify env [infoTm dist] (TyDist { info = t.info, ty = tyDistRes }) (tyTm dist);
+    unify env [infoTm value] tyDistRes (tyTm value);
+    TmCancel {{{ t with value = value }
+                    with dist = dist }
+                    with ty = tyWithInfo t.info tyunit_ }
+
+  -- ANF
+  sem normalize (k : Expr -> Expr) =
+  | TmCancel ({ value = value, dist = dist } & t) ->
+    normalizeName
+      (lam value.
+        normalizeName
+          (lam dist.
+            k (TmCancel {{ t with value = value }
+                              with dist = dist }))
+          dist)
+      value
+
+  -- Type lift
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmCancel t ->
+    match typeLiftExpr env t.value with (env, value) then
+      match typeLiftExpr env t.dist with (env, dist) then
+        match typeLiftType env t.ty with (env, ty) then
+          (env, TmCancel {{{ t with value = value }
+                                with dist = dist }
+                                with ty = ty })
+        else never
+      else never
+    else never
+
+  -- Partial evaluation
+  sem pevalIsValue =
+  | TmCancel _ -> false
+
+  sem pevalEval ctx k =
+  | TmCancel r ->
+    pevalBind ctx
+      (lam value.
+        pevalBind ctx
+          (lam dist. k (TmCancel {r with value=value, dist = dist}))
+          r.dist)
+      r.value
+  | TmCancel ({ value = value, dist = TmDist ({ dist = dist } & td) } & t) ->
+    pevalBind ctx
+      (lam value.
+        pevalDistEval ctx
+          (lam dist.
+             k (TmCancel {{ t with value = value }
+                               with dist = TmDist { td with dist = dist}}))
+          dist)
+      value
+
+  sem exprHasSideEffectH env lambdaCounting acc =
+  | TmCancel _ -> true
+
+  sem getValueCancel =
+  | TmObserve t -> t.value
+  
+  sem getDistCancel =
+  | TmObserve t -> t.dist
+
+end
 
 -----------------
 -- AST BUILDER --
@@ -456,21 +775,27 @@ let observe_ = use Observe in
 let weight_ = use Weight in
   lam w. TmWeight {weight = w, ty = tyunknown_, info = NoInfo ()}
 
+let prune_ = use Prune in
+  lam d. TmPrune {dist = d, ty = tyunknown_ , info = NoInfo ()}
 
+let pruned_ = use Pruned in
+  lam p. TmPruned {prune = p, ty = tyunknown_ , info = NoInfo ()}
 
+let cancel_ = use Cancel in
+  lam o. TmCancel {obs = o, ty = tyunknown_ , info = NoInfo ()}
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
 ---------------------------
 
 lang CorePPL =
-  Ast + Assume + Observe + Weight + Infer + ObserveWeightTranslation + DistAll
+  Ast + Assume + Observe + Weight + Infer + ObserveWeightTranslation + DistAll + Pruned + Cancel
 end
 
 let pplKeywords = [
-  "assume", "observe", "weight", "resample", "plate", "Uniform", "Bernoulli",
-  "Poisson", "Beta", "Gamma", "Categorical", "Multinomial", "Dirichlet",
-  "Exponential", "Empirical", "Gaussian", "Binomial"
-]
+  "assume", "observe", "weight", "resample", "prune", "pruned", "cancel",
+  "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
+  "Multinomial", "Dirichlet", "Exponential", "Empirical", "Gaussian",
+  "Binomial"]
 
 let mexprPPLKeywords = concat mexprKeywords pplKeywords
 

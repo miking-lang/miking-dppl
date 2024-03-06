@@ -12,6 +12,7 @@ include "../parser.mc"
 include "../dppl-arg.mc"
 include "../transformation.mc"
 include "../src-location.mc"
+include "pruning/compile.mc"
 
 include "extract.mc"
 include "backcompat.mc"
@@ -60,8 +61,22 @@ end
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
-  MExprANFAll + CPPLBackcompat
+  MExprANFAll + CPPLBackcompat + DPPLPruning
 
+  sem replaceCancel =
+  | (TmCancel t) ->
+    let i = withInfo t.info in
+    TmWeight { weight = negf_ (appf2_ (i (var_ "logObserve")) t.dist t.value),
+               info = t.info,
+               ty = t.ty}
+  | t -> smap_Expr_Expr replaceCancel t
+
+  sem removePrunes =
+  | TmPrune _ -> unit_
+  | TmPruned _ -> unit_
+  | t -> smap_Expr_Expr removePrunes t
+
+ --TODO should remove the types as well
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
   | modelAst ->
@@ -70,12 +85,15 @@ lang MExprCompile =
       if options.transform then
         transform modelAst
       else modelAst in
-
+    let ast =
+      if options.prune then
+        prune ast
+      else ast in
     -- Optionally print the model AST
     (if options.printModel then
       printLn (mexprPPLToString ast)
     else ());
-
+    let ast = replaceCancel ast in
     ast
 
   sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
@@ -130,8 +148,9 @@ lang MExprCompile =
     -- Compile the model ASTs.
     let modelAsts = compileModels options runtimes models in
 
+    let corepplAst = replaceTyPruneInt (removePrunes ((replaceCancel corepplAst))) in
     -- Transform distributions in the CorePPL AST to use MExpr code.
-    let corepplAst = transformDistributions corepplAst in
+    let corepplAst = transformDistributions  corepplAst in
 
     -- Symbolize any free occurrences in the CorePPL AST and in any of the
     -- models using the symbolization environment of the runtime AST.
@@ -156,7 +175,6 @@ lang MExprCompile =
     -- Insert all models into the main AST at the first point where any of the
     -- models are used.
     let prog = insertModels modelAsts mainAst in
-
     -- TODO(dlunde,2023-05-22): Does not work, currently (the program does not
     -- type check at this stage). It does, however, type check after generating
     -- the code and compiling it with Miking.
