@@ -16,7 +16,6 @@ include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/const-arity.mc"
 include "peval/peval.mc"
-include "ext/dist-ext.mc"
 include "string.mc"
 
 include "dist.mc"
@@ -424,7 +423,7 @@ lang Weight =
 end
 
 -- Translations in between weight and observe terms
-lang ObserveWeightTranslation = Observe + Weight + DistAll
+lang ObserveWeightTranslation = Observe + Weight
 /-
   -- Translates ALL observe terms into weight terms.
   sem observeToWeight =

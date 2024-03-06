@@ -76,7 +76,6 @@ lang MExprCompile =
   | TmPruned _ -> unit_
   | t -> smap_Expr_Expr removePrunes t
 
- --TODO should remove the types as well
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
   | modelAst ->
