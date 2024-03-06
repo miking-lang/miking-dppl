@@ -155,5 +155,5 @@ let parseMCorePPLFileLib = lam keepUtests. lam filename.
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
   use DPPLParser in
-  let ast = parseMExprStringKeywords pplKeywords cpplstr in
+  let ast = parseMExprStringKeywordsExn pplKeywords cpplstr in
   makeKeywords ast
