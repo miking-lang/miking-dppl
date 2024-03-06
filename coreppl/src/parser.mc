@@ -52,6 +52,7 @@ lang DPPLParser =
   | TmInfer _ -> true
   | TmDist _ -> true
   | TmPlate _ -> true
+  | TmSolveODE _ -> true
 
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
@@ -110,6 +111,11 @@ lang DPPLParser =
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
+  | "solveode" -> Some (3, lam lst. TmSolveODE {model = get lst 0,
+                                             init = get lst 1,
+                                             endTime = get lst 2,
+                                             ty = TyUnknown {info = info},
+                                             info = info})
 
   sem isTypeKeyword =
   | TyDist _ -> true
