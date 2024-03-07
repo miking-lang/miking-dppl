@@ -1,6 +1,6 @@
 #python scripts/run-plot-transform-results-cppl.py coreppl/models/diversification-models/crbd-synthetic.mc --datasetName syntheticSmall --lstPT 1000 10000 100000 --lstP 1000 10000 100000
 #python scripts/run-plot-transform-results-cppl.py coreppl/models/diversification-models/crbd-synthetic.mc --datasetName synthetic --lstPT 1000 10000 100000 --lstP 1000 10000 100000
-#python scripts/run-plot-transform-results-cppl.py coreppl/models/ --datasetName syntheticSmall --lstPT 10 100 1000 --lstP 10 100 1000
+#python scripts/run-plot-transform-results-cppl.py coreppl/models/ --datasetName tree-inference --lstPT 10 100 1000 10000 --lstP 10 100 1000 10000
 
 #python scripts/run-plot-transform-results-cppl.py coreppl/models/paperExperiment/lda-lw.mc --datasetName lw --lstPT 100 1000 10000 --lstP 100 1000 10000 100000 1000000
 #python scripts/run-plot-transform-results-cppl.py coreppl/models/paperExperiment/lda-c3.mc --datasetName c3 --lstPT 100 1000 10000 --lstP 100 1000 10000 100000 1000000
@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser(description=
 parser.add_argument('filepath', nargs='*', type=str,help= "File path of the model to be sampled")
 parser.add_argument('--mean', action='store_true')
 # parser.add_argument('--maxnumparticles',  type=int, default=1000)
-parser.add_argument('--numruns',  type=int, default=10)
+parser.add_argument('--numruns',  type=int, default=100)
 parser.add_argument('--datasetName',  type=str, default="default")
 # Add a list argument using 'nargs' parameter
 parser.add_argument('--lstPT', nargs='+', type=int, default=[100,1000,10000,100000,1000000],help='A list of particles')
@@ -86,7 +86,7 @@ norm_transformed = []
 for i,p in enumerate(numparticlesTransformed):
      # compile from coreppl to rootppl with transformation
     p = numparticlesTransformed[i]
-    subprocess.run(['cppl',  "coreppl/models/tree-inference-user.mc", '--no-print-samples','--prune', '--cps','none'])
+    subprocess.run(['cppl',  "coreppl/models/tree-inference-user.mc", '--no-print-samples','--prune', '-m','smc-apf'])
     # Record the starting time
     start_time = time.time()
     result = subprocess.run(['./out', str(p), str(args.numruns)], stdout=subprocess.PIPE)
@@ -115,7 +115,7 @@ norm_nontransformed = []
 for i,p in enumerate(numparticlesNontransformed):
     p = numparticlesNontransformed[i]
     # compile from coreppl to rootppl without transformation
-    subprocess.run(['cppl',  "coreppl/models/tree-inference.mc", '--no-print-samples','--cps','none'])    # run the rootppl
+    subprocess.run(['cppl',  "coreppl/models/tree-inference.mc", '--no-print-samples','-m','smc-apf'])    # run the rootppl
     start_time = time.time()
     result = subprocess.run(['./out', str(p), str(args.numruns)], stdout=subprocess.PIPE)
     # Record the ending time
