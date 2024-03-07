@@ -88,7 +88,7 @@ lang TransformDist = MExprPPL
   sem toRuntimeTyDist =
   | TyDist t ->
     TyApp {
-      lhs = TyCon {ident = nameNoSym "RuntimeDistBase_Dist", info = t.info},
+      lhs = TyCon {ident = nameNoSym "RuntimeDistBase_Dist", info = t.info, data = tyunknown_},
       --lhs = TyCon {ident = nameNoSym "Dist", info = t.info},
       rhs = t.ty,
       info = t.info}

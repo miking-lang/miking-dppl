@@ -189,7 +189,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
   sem _tydist =
   | a -> TyDist {info = NoInfo (), ty = a}
 
-  sem tyConst =
+  sem tyConstBase d =
   | CDistEmpiricalSamples _ ->
     tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a"))
                   (tytuple_ [tyseq_ (tyvar_ "a"), tyseq_ tyfloat_]))
