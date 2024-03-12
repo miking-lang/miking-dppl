@@ -58,12 +58,12 @@ lang LightweightMCMCMethod = MExprPPL
       globalProb = globalProb
     }
 
-  sem symbolizeInferMethod env =
+  sem inferSmapAccumL_Expr_Expr f acc =
   | LightweightMCMC r ->
-    LightweightMCMC {r with
-      iterations = symbolizeExpr env r.iterations,
-      globalProb = symbolizeExpr env r.globalProb
-    }
+    match f acc r.iterations with (acc, iterations) in
+    match f acc r.globalProb with (acc, globalProb) in
+    (acc,
+     LightweightMCMC {r with iterations = iterations, globalProb = globalProb})
 
   sem setRuns expr =
   | LightweightMCMC r -> LightweightMCMC {r with iterations = expr}

@@ -34,8 +34,10 @@ lang APFMethod = MExprPPL
     unify env [info, infoTm particles] int (tyTm particles);
     APF {particles = particles}
 
-  sem symbolizeInferMethod env =
-  | APF r -> APF {r with particles = symbolizeExpr env r.particles}
+  sem inferSmapAccumL_Expr_Expr f acc =
+  | APF r ->
+    match f acc r.particles with (acc, particles) in
+    (acc, APF {r with particles = particles})
 
   sem setRuns expr =
   | APF r -> APF {r with particles = expr}

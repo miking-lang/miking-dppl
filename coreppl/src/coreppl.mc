@@ -62,8 +62,9 @@ lang Infer =
 
   sem smapAccumL_Expr_Expr f acc =
   | TmInfer t ->
+    match inferSmapAccumL_Expr_Expr f acc t.method with (acc,method) in
     match f acc t.model with (acc,model) in
-    (acc, TmInfer { t with model = model })
+    (acc, TmInfer { t with method = method, model = model })
 
   -- Pretty printing
   sem isAtomic =
@@ -84,13 +85,6 @@ lang Infer =
         eqExprH env free l.model r.model
       else None ()
     else None ()
-
-  -- Symbolize
-  sem symbolizeExpr (env: SymEnv) =
-  | TmInfer t ->
-    TmInfer {{{ t with model = symbolizeExpr env t.model }
-                  with ty = symbolizeType env t.ty }
-                  with method = symbolizeInferMethod env t.method }
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =
@@ -172,12 +166,6 @@ lang Assume =
     match lhs with TmAssume l then
       eqExprH env free l.dist r.dist
     else None ()
-
-  -- Symbolize
-  sem symbolizeExpr (env: SymEnv) =
-  | TmAssume t ->
-    TmAssume {{ t with dist = symbolizeExpr env t.dist }
-                  with ty = symbolizeType env t.ty }
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =
@@ -267,13 +255,6 @@ lang Observe =
         eqExprH env free l.dist r.dist
       else None ()
     else None ()
-
-  -- Symbolize
-  sem symbolizeExpr (env: SymEnv) =
-  | TmObserve t ->
-    TmObserve {{{ t with value = symbolizeExpr env t.value }
-                    with dist = symbolizeExpr env t.dist }
-                    with ty = symbolizeType env t.ty }
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =
@@ -380,12 +361,6 @@ lang Weight =
     match lhs with TmWeight l then
       eqExprH env free l.weight r.weight
     else None ()
-
-  -- Symbolize
-  sem symbolizeExpr (env: SymEnv) =
-  | TmWeight t ->
-    TmWeight {{ t with weight = symbolizeExpr env t.weight }
-                  with ty = symbolizeType env t.ty }
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =

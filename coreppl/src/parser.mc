@@ -22,15 +22,20 @@ lang DPPLParser =
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
-	PIMHMethod
+  PIMHMethod
+
+  sem _interpretMethod : Expr -> (Info, String, Map SID Expr)
+  sem _interpretMethod =
+  | TmConApp {ident = ident, body = TmRecord r, info = info} ->
+    (info, nameGetStr ident, r.bindings)
+  | t -> errorSingle [infoTm t] "Expected a constructor application"
 
   -- Interprets the argument to infer which encodes the inference method and
   -- its configuration parameters.
   sem interpretInferMethod : Expr -> InferMethod
-  sem interpretInferMethod =
-  | TmConApp {ident = ident, body = TmRecord {bindings = bindings}, info = info} ->
-    inferMethodFromCon info bindings (nameGetStr ident)
-  | t -> errorSingle [infoTm t] "Expected a constructor application"
+  sem interpretInferMethod =| tm ->
+    match _interpretMethod tm with (info, ident, bindings) in
+    inferMethodFromCon info bindings ident
 
 
   sem replaceDefaultInferMethod : Options -> Expr -> Expr
