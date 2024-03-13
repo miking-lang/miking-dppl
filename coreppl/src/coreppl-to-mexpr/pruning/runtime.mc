@@ -5,7 +5,7 @@ lang PruneGraph = MExprAst + RuntimeDistElementary
   syn PruneVar =
   | PruneRVar { dist: [Float]
               , likelihood: Ref ([Float])
-              , incomingMessages: Ref [([Float],Bool)]
+              , incomingMessages: Ref [[Float]]
               , states: [Int]
               , lastWeight: Ref Float
               }
@@ -22,11 +22,11 @@ lang PruneGraph = MExprAst + RuntimeDistElementary
   | PrunedValue PruneVar
   | IntValue Int
 
-  sem getIncomingMsgs: PruneVar -> [([Float],Bool)]
+  sem getIncomingMsgs: PruneVar -> [[Float]]
   sem getIncomingMsgs =
   | PruneRVar v -> deref v.incomingMessages
 
-  sem addMsgToPruneVar: ([Float],Bool) -> PruneVar -> ()
+  sem addMsgToPruneVar: [Float] -> PruneVar -> ()
   sem addMsgToPruneVar msg =
   | PruneRVar v -> modref v.incomingMessages (cons msg (deref v.incomingMessages))
 
@@ -37,6 +37,7 @@ lang PruneGraph = MExprAst + RuntimeDistElementary
   | SeqFParam f -> range 0 (length f) 1
   | PruneFParam f -> match f with PruneFVar f in
       range 0 (length f.values) 1
+
   sem zip x =
   | y -> mapi (lam i. lam e. (get x i, e)) y
 
@@ -68,35 +69,29 @@ lang PrunedSampling = PruneGraph
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip p likelihood) in
     if cancel then negf (log w) else log w
   | PruneFParam (PruneFVar v) ->
-    let msg = calculateMsg likelihood (PruneFVar v) in
+    let msg = calculateMsg cancel likelihood (PruneFVar v) in
     let input = (deref v.input) in
-    let unw = unweightPrune input in
-    addMsgToPruneVar (msg,cancel) input;
-    let w = weightPrune input in
-    addf unw w
+    addMsgToPruneVar msg input;
+    weightPrune input
 
   sem calculateLogWeight =
   | PruneRVar p -> match deref p.incomingMessages with msgs in
-    let acc = make (length (head msgs).0) 1. in
-    let msgMul = foldl (lam acc. lam m.
-      if m.1 then map (lam m. divf m.0 m.1) (zip acc m.0)
-      else map (lam m. mulf m.0 m.1) (zip acc m.0)
-      ) acc msgs in
+    let acc = make (length (head msgs)) 1. in
+    let msgMul = foldl (lam acc. lam m. map (lam m. mulf m.0 m.1) (zip acc m)) acc msgs in
     modref p.likelihood (msgMul);
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul p.dist) in log w
 
   sem weightPrune =
   | PruneRVar p ->
+    let uw = (negf (deref p.lastWeight)) in
     let w = (calculateLogWeight (PruneRVar p)) in
-    modref p.lastWeight w; w
-
-  sem unweightPrune =
-  | PruneRVar p -> negf (deref p.lastWeight)
+    modref p.lastWeight w;
+    addf uw w
 
   -- [p(d|e=0), p(d|e=1), p(d|e=2),p(d|e=1)]
-  sem calculateMsg: [Float] -> PruneVar -> [Float]
-  sem calculateMsg lh =
-  | PruneFVar v ->  map (lam p. foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip p lh)) v.values
+  sem calculateMsg: Bool -> [Float] -> PruneVar -> [Float]
+  sem calculateMsg cancel lh =
+  | PruneFVar v ->  map (lam p. let t = foldl (lam acc. lam x. addf acc (mulf x.0 x.1))  0. (zip p lh) in if cancel then divf 1. t else t) v.values
 
 end
 
