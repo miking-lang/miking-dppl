@@ -45,9 +45,9 @@ let p1 = ctmc (pruned d_seq) q (subf age a_age) in--in
 observe (getSeq a) (Categorical p1);
 
 let b_age = getAge b in
-let p2 =  ctmc (pruned d_seq) q (subf age b_age)  in --q (subf age b_age)  in
+let p2 =  ctmc (pruned d_seq) q (subf age b_age)  in 
 observe (getSeq b) (Categorical p2);
-cancel (observe (pruned d_seq) (Categorical [0.25,0.25,0.25,0.25]));
+
 let maxAge = age in
 
 --- second iteration ---
@@ -63,13 +63,8 @@ let d_age = getAge d in
 let p1 = ctmc  (pruned e_seq)  q (subf age d_age) in
 
 observe (pruned d_seq) (Categorical p1);
-
---weight (negf (categoricalLogPmf [0.25,0.25,0.25,0.25] (pruned (getSeq d))));
-
+cancel (observe (pruned d_seq) (Categorical [0.25,0.25,0.25,0.25])
+);
 let c_age = getAge c in
 let p2 = ctmc (pruned e_seq) q (subf age c_age)  in
-observe (getSeq c) (Categorical p2);
-e;
-
-()
-
+observe (getSeq c) (Categorical p2)

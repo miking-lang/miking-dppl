@@ -51,8 +51,7 @@ let b_age = getAge b in
 
 let p2 =  ctmc (d_seq) q (subf age b_age)  in
 observe (getSeq b) (Categorical p2);
-weight (negf (categoricalLogPmf [0.25,0.25,0.25,0.25] (getSeq d)));
-
+--
 let maxAge = age in
 
 --- second iteration ---
@@ -66,6 +65,7 @@ let d_age = getAge d in
 let p1 = ctmc (e_seq) q (subf age d_age)  in
 
 observe (getSeq d) (Categorical p1);
+weight (negf (categoricalLogPmf [0.25,0.25,0.25,0.25] (getSeq d)));
 
 let c_age = getAge c in
 let p2 = ctmc ( e_seq) q (subf age c_age)  in
