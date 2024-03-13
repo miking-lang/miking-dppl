@@ -112,9 +112,9 @@ let calculateObservedLH = lam d. lam v.
   use PrunedSampling in
   calculateObservedLH d v
 
-let observePrune = lam c. lam o.
+let observePrune = lam c. lam l. lam d.
   use PrunedSampling in
-  observePrune c o
+  observePrune c l d
 
 
 
