@@ -45,15 +45,15 @@ end
 
 lang PrunedSampling = PruneGraph
 
-  sem createPruneRVar:[Float] -> PruneVar
-  sem createPruneRVar =
+  sem initializePruneRVar:[Float] -> PruneVar
+  sem initializePruneRVar =
   | d -> PruneRVar { dist = d
                    , likelihood = ref ((make (length d) 1.))
                    , incomingMessages = ref []
                    , states = range 0 (length d) 1
                    , lastWeight = ref 0.}
 
-  sem createPruneFVar f =
+  sem initializePruneFVar f =
   | PruneRVar p -> PruneFVar {values=map f p.states, input = ref (PruneRVar p)}
 
   sem calculateObservedLH d =
@@ -96,13 +96,13 @@ lang PrunedSampling = PruneGraph
 
 end
 
-let createPruneRVar = lam d.
+let initializePruneRVar = lam d.
   use PrunedSampling in
-  createPruneRVar d
+  initializePruneRVar d
 
-let createPruneFVar = lam f. lam p.
+let initializePruneFVar = lam f. lam p.
   use PrunedSampling in
-  createPruneFVar f p
+  initializePruneFVar f p
 
 let observePrune = lam c. lam v. lam d.
   use PrunedSampling in

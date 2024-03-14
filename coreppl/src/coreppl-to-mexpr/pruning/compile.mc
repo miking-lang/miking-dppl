@@ -149,7 +149,7 @@ lang DPPLPruningTransform = TransformPruningDist
     checkValidPrune env (TmPrune p);
     --let dst = transformTmDistDs env.env p.dist in
     match p.dist with TmDist ({dist=DCategorical ({p=p}&d)}&t) in
-    appf1_ (var_ "createPruneRVar") p
+    appf1_ (var_ "initializePruneRVar") p
   | TmLet ({body=TmPruned p} &t) ->
     let prunedEnv = mapInsert t.ident p.prune env.prunedEnv in
     (replaceTmPrunes {env with prunedEnv=prunedEnv} t.inexpr)
@@ -174,8 +174,8 @@ lang DPPLPruningTransform = TransformPruningDist
         let lamBody = TmApp {a with rhs=nvar_ lamId} in
         let tbody = match inspectType (tyTm (t.body)) with TyArrow _ then
           (nulam_ lamId lamBody)
-        else appf2_ (var_ "createPruneFVar") (nulam_ lamId lamBody) prune in
-        let tbodyd = appf2_ (var_ "createPruneFVar") (nulam_ lamId lamBody) prune in
+        else appf2_ (var_ "initializePruneFVar") (nulam_ lamId lamBody) prune in
+        let tbodyd = appf2_ (var_ "initializePruneFVar") (nulam_ lamId lamBody) prune in
         let prunedFEnv = mapInsert t.ident tbodyd env.prunedFEnv in
         TmLet {{t with body = tbody} with inexpr=(replaceTmPrunes {env with prunedFEnv=prunedFEnv} t.inexpr)}
     else
