@@ -187,12 +187,10 @@ lang DPPLPruningTransform = TransformPruningDist
     if not (prunedObserve env t) then t else
       let value = match mapLookup v.ident env.prunedEnv with Some prune then prune else TmVar v in
       let value = match assignValueCons env.valueEnv value with Some x then x else error "wrong type at observe value field" in
-      let id = nameSym "lh" in
       let param = extractParam env.env (TmDist d) in
-      let createO = nulet_ id (appf2_ (var_ "calculateObservedLH") param value) in
       match t with TmObserve _ then
-        bind_ createO (weight_ (appf3_ (var_ "observePrune") false_ (nvar_ id) param))
-      else bind_ createO (weight_ (appf3_ (var_ "observePrune") true_ (nvar_ id) param))
+        ulet_ "" (weight_ (appf3_ (var_ "observePrune") false_ value param))
+      else ulet_ "" (weight_ (appf3_ (var_ "observePrune") true_ value param))
   | t -> smap_Expr_Expr (replaceTmPrunes env) t
 
   sem prunedObserve env =

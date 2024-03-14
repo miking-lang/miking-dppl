@@ -64,11 +64,13 @@ lang PrunedSampling = PruneGraph
     mapi (lam i. lam. if eqi obs i then 1. else 0.) states
 
    -- to calculate the likelihood of depending functions
-  sem observePrune cancel likelihood =
-  | SeqFParam p ->
+  sem observePrune cancel value =
+  | (SeqFParam p) & d ->
+    let likelihood = calculateObservedLH d value in
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip p likelihood) in
     if cancel then negf (log w) else log w
-  | PruneFParam (PruneFVar v) ->
+  | (PruneFParam (PruneFVar v)) & d ->
+    let likelihood = calculateObservedLH d value in
     let msg = calculateMsg cancel likelihood (PruneFVar v) in
     let input = (deref v.input) in
     addMsgToPruneVar msg input;
@@ -76,8 +78,7 @@ lang PrunedSampling = PruneGraph
 
   sem calculateLogWeight =
   | PruneRVar p -> match deref p.incomingMessages with msgs in
-    let acc = make (length (head msgs)) 1. in
-    let msgMul = foldl (lam acc. lam m. map (lam m. mulf m.0 m.1) (zip acc m)) acc msgs in
+    let msgMul = foldl (lam acc. lam m. map (lam m. mulf m.0 m.1) (zip acc m)) (head msgs) (tail msgs) in
     modref p.likelihood (msgMul);
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul p.dist) in log w
 
@@ -103,13 +104,9 @@ let createPruneFVar = lam f. lam p.
   use PrunedSampling in
   createPruneFVar f p
 
-let calculateObservedLH = lam d. lam v.
+let observePrune = lam c. lam v. lam d.
   use PrunedSampling in
-  calculateObservedLH d v
-
-let observePrune = lam c. lam l. lam d.
-  use PrunedSampling in
-  observePrune c l d
+  observePrune c v d
 
 
 
