@@ -85,10 +85,24 @@ lang LoadRuntime =
     in
     let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
     let runtime = symbolizeAllowFree runtime in
+    let pruningRuntime = loadPruningRuntime "pruning/runtime.mc" in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
     let stateType = findStateType method stateId runtime in
-    { ast = runtime, runId = runId, stateType = stateType
-    , topSymEnv = addTopNames symEnvEmpty runtime }
+    let runtime = bind_ pruningRuntime runtime in
+    match eliminateDuplicateCodeWithSummary runtime with (replacements, ast) in
+    { ast = ast, runId = runId, stateType = stateType
+    , topSymEnv = addTopNames symEnvEmpty ast }
+
+  sem loadPruningRuntime: String -> Expr
+  sem loadPruningRuntime =
+  | runtime ->
+    let parse = use BootParser in parseMCoreFile {
+      defaultBootParserParseMCoreFileArg with
+        eliminateDeadCode = false,
+        allowFree = true}
+    in
+    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
+    symbolizeAllowFree runtime
 
   -- Finds a pre-defined list of identifiers in the given runtime AST, which
   -- are assumed to be present in all runtimes.
