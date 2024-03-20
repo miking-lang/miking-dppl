@@ -18,7 +18,7 @@ lang LoadRuntime =
   DPPLParser +
   MExprSym + MExprFindSym + MExprSubstitute + MExprEliminateDuplicateCode
 
-  type RuntimeEntry = {
+  type InferRuntimeEntry = {
     -- An AST representation of the runtime
     ast : Expr,
 
@@ -36,10 +36,10 @@ lang LoadRuntime =
 
   }
 
-  type Runtimes = {
+  type InferRuntimes = {
     -- Maps each kind of infer method (ignoring configuration parameters) to
     -- information about the runtime it uses.
-    entries : Map InferMethod RuntimeEntry,
+    entries : Map InferMethod InferRuntimeEntry,
 
     -- A combined AST containing the code of all runtimes, after eliminating
     -- duplicates found in multiple of them.
@@ -58,12 +58,12 @@ lang LoadRuntime =
   | PIMH _ -> compilerPIMH options
   | _ -> error "Unsupported CorePPL to MExpr inference method"
 
-  sem loadRuntimes : Options -> Expr -> Map InferMethod RuntimeEntry
+  sem loadRuntimes : Options -> Expr -> Map InferMethod InferRuntimeEntry
   sem loadRuntimes options =
   | ast -> loadRuntimesH options (mapEmpty cmpInferMethod) ast
 
-  sem loadRuntimesH : Options -> Map InferMethod RuntimeEntry -> Expr
-                   -> Map InferMethod RuntimeEntry
+  sem loadRuntimesH : Options -> Map InferMethod InferRuntimeEntry -> Expr
+                   -> Map InferMethod InferRuntimeEntry
   sem loadRuntimesH options acc =
   | TmInfer t ->
     if mapMem t.method acc then acc
@@ -86,7 +86,7 @@ lang LoadRuntime =
     in
     parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime])
 
-  sem loadRuntimeEntry : InferMethod -> String -> RuntimeEntry
+  sem loadRuntimeEntry : InferMethod -> String -> InferRuntimeEntry
   sem loadRuntimeEntry method =
   | runtime ->
     let runtime = symbolizeAllowFree (loadRuntime false runtime) in
@@ -156,7 +156,7 @@ lang LoadRuntime =
   -- Combines non-inference runtime with an inference runtime (from left to
   -- right). Duplicated code is removed from the combined runtime and all
   -- references are updated in the term `tm`.
-  sem combineRuntimeWithInferRuntime 
+  sem combineRuntimeWithInferRuntime
     : Expr -> InferRuntime -> Expr -> (InferRuntime, Expr)
   sem combineRuntimeWithInferRuntime runtime inferRuntime =| tm ->
     match
@@ -170,7 +170,8 @@ lang LoadRuntime =
      substituteIdentifiers replacements tm)
 
   -- Combines inference runtimes, removing duplicate code.
-  sem combineInferRuntimes : Options -> Map InferMethod RuntimeEntry -> Runtimes
+  sem combineInferRuntimes
+    : Options -> Map InferMethod InferRuntimeEntry -> InferRuntimes
   sem combineInferRuntimes options =
   | entries ->
     -- Construct record accessible at runtime
@@ -203,8 +204,8 @@ lang LoadRuntime =
     {entries = _updateRuntimeEntriesSymEnv replacements entries, ast = ast}
 
   sem _updateRuntimeEntriesSymEnv
-    : Map Name Name -> Map InferMethod RuntimeEntry
-      -> Map InferMethod RuntimeEntry
+    : Map Name Name -> Map InferMethod InferRuntimeEntry
+      -> Map InferMethod InferRuntimeEntry
   sem _updateRuntimeEntriesSymEnv replacements =| entries ->
     mapMapWithKey
       (lam. lam entry.

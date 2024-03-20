@@ -154,7 +154,7 @@ lang MExprCompile =
     mexprCompile options inferRuntimes ast
 
 
-  sem mexprCompile : Options -> Runtimes -> Expr -> Expr
+  sem mexprCompile : Options -> InferRuntimes -> Expr -> Expr
   sem mexprCompile options runtimes =
   | corepplAst ->
     -- Symbolize and type-check the CorePPL AST.
@@ -212,7 +212,8 @@ lang MExprCompile =
     -- Return complete program
     prog
 
-  sem compileModels : Options -> Runtimes -> Map Name ModelRepr -> Map Name Expr
+  sem compileModels
+    : Options -> InferRuntimes -> Map Name ModelRepr -> Map Name Expr
   sem compileModels options runtimes =
   | models ->
     mapMapWithKey
@@ -274,7 +275,8 @@ lang MExprCompile =
     in
     t
 
-  sem compileModel : ((Expr,Expr) -> Expr) -> RuntimeEntry -> Name -> ModelRepr -> Expr
+  sem compileModel
+    : ((Expr,Expr) -> Expr) -> InferRuntimeEntry -> Name -> ModelRepr -> Expr
   sem compileModel compile entry modelId =
   | {ast = modelAst, params = modelParams} ->
 

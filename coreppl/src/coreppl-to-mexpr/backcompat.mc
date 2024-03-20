@@ -7,7 +7,7 @@ lang CPPLBackcompat = LoadRuntime
   -- TODO(larshum, 2022-10-21): Add support for printing int and bool types.
   -- This is problematic as their pretty-print functions are not built-in, nor
   -- are they guaranteed to be included in the user code.
-  sem getTypePrintFunction : RuntimeEntry -> Type -> Expr
+  sem getTypePrintFunction : InferRuntimeEntry -> Type -> Expr
   sem getTypePrintFunction runtimeEntry =
   | TyInt _ -> var_ "int2string"
   | TyBool _ -> var_ "bool2string"
@@ -34,7 +34,7 @@ lang CPPLBackcompat = LoadRuntime
 
   -- Applies a transformation on full-program models, that allows them to be
   -- compiled in the same way as programs that use infer.
-  sem programModelTransform : Options -> Expr -> (Map InferMethod RuntimeEntry, Expr)
+  sem programModelTransform : Options -> Expr -> (Map InferMethod InferRuntimeEntry, Expr)
   sem programModelTransform options =
   | ast ->
       let inferMethod = inferMethodFromOptions options options.method in

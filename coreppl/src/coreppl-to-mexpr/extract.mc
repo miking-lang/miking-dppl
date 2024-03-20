@@ -27,7 +27,7 @@ lang DPPLExtract =
   --    calls to the inference algorithms.
   -- 2. A map with an entry for each inference method. Every inference method
   --    is mapped to a sequence of records describing each model.
-  sem extractInfer : Options -> Map InferMethod RuntimeEntry -> Expr
+  sem extractInfer : Options -> Map InferMethod InferRuntimeEntry -> Expr
                   -> (Expr, Map Name ModelRepr)
   sem extractInfer options runtimes =
   | ast ->
@@ -46,7 +46,7 @@ lang DPPLExtract =
 
     -- Construct a map from the identifier of an infer binding to its
     -- corresponding inference method configuration and a runtime entry.
-    let inferData : Map Name (InferMethod, RuntimeEntry) =
+    let inferData : Map Name (InferMethod, InferRuntimeEntry) =
       mapMapWithKey
         (lam. lam model.
           match model with {method = method} in
@@ -63,12 +63,12 @@ lang DPPLExtract =
   -- an expression 'infer e' is rewritten as 'let t = e in t'. The result is
   -- the updated AST, and a map from the newly introduced identifiers to the
   -- inference method they involve.
-  sem bindInferExpressions : Map InferMethod RuntimeEntry -> Expr
+  sem bindInferExpressions : Map InferMethod InferRuntimeEntry -> Expr
                           -> (Map Name InferMethod, Expr)
   sem bindInferExpressions runtimes =
   | ast -> bindInferExpressionsH runtimes (mapEmpty nameCmp) ast
 
-  sem bindInferExpressionsH : Map InferMethod RuntimeEntry
+  sem bindInferExpressionsH : Map InferMethod InferRuntimeEntry
                            -> Map Name InferMethod
                            -> Expr -> (Map Name InferMethod, Expr)
   sem bindInferExpressionsH runtimes acc =
@@ -156,7 +156,7 @@ lang DPPLExtract =
   | t -> withType (TyUnknown {info = infoTm t}) t
 
   sem removeInfers : Map Name (Map Name Type)
-                  -> Map Name (InferMethod, RuntimeEntry) -> Expr -> Expr
+                  -> Map Name (InferMethod, InferRuntimeEntry) -> Expr -> Expr
   sem removeInfers solutions inferData =
   | ast ->
     let ast = removeInferBindings inferData ast in
@@ -166,7 +166,8 @@ lang DPPLExtract =
   -- expressions from the AST. Note that lambda lifting ensures all bindings
   -- are on top-level, so we do not need to consider the bodies of
   -- let-expressions.
-  sem removeInferBindings : Map Name (InferMethod, RuntimeEntry) -> Expr -> Expr
+  sem removeInferBindings
+    : Map Name (InferMethod, InferRuntimeEntry) -> Expr -> Expr
   sem removeInferBindings inferData =
   | TmLet t ->
     if mapMem t.ident inferData then removeInferBindings inferData t.inexpr
@@ -183,7 +184,7 @@ lang DPPLExtract =
   -- Replaces the application of the infer binding with a call to the run
   -- function of the corresponding runtime.
   sem replaceInferApplication : Map Name (Map Name Type)
-                              -> Map Name (InferMethod, RuntimeEntry)
+                              -> Map Name (InferMethod, InferRuntimeEntry)
                               -> Expr -> Expr
   sem replaceInferApplication solutions inferData =
   | e & (TmVar _ | TmApp _) ->
