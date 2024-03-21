@@ -15,7 +15,7 @@ include "dppl-arg.mc"
 -- functions must be implemented for the constructor.
 lang ODESolverMethodBase = PrettyPrint + TypeCheck + Sym + MethodHelper
   syn ODESolverMethod =
-  | Default { stepSize: Expr }
+  | ODESolverDefault { stepSize: Expr }
 
   -- NOTE(oerikss, 2024-03-08): Compares the inference methods tags only.
   sem cmpODESolverMethod : ODESolverMethod -> ODESolverMethod -> Int
@@ -26,43 +26,57 @@ lang ODESolverMethodBase = PrettyPrint + TypeCheck + Sym + MethodHelper
   sem eqODESolverMethod lhs =
   | rhs -> eqi (cmpODESolverMethod lhs rhs) 0
 
+  sem odeSolverMethodToString : ODESolverMethod -> String
+  sem odeSolverMethodToString =
+  | ODESolverDefault _ -> "Default"
+
   sem pprintODESolverMethod
     : Int -> PprintEnv -> ODESolverMethod -> (PprintEnv, String)
   sem pprintODESolverMethod indent env =
-  | Default { stepSize = stepSize } ->
+  | ODESolverDefault { stepSize = stepSize } ->
     let i = pprintIncr indent in
     match pprintCode i env stepSize with (env, stepSize) in
-    (env, join ["(Default {stepSize = ", stepSize, "})"])
+    (env, join ["(ODESolverDefault {stepSize = ", stepSize, "})"])
 
   -- Constructs an ODE solver method from the arguments of a TmConApp.
-  sem inferMethodFromCon : Info -> Map SID Expr -> String -> ODESolverMethod
-  sem inferMethodFromCon info bindings =
+  sem odeSolverMethodFromCon : Info -> Map SID Expr -> String -> ODESolverMethod
+  sem odeSolverMethodFromCon info bindings =
   | "Default" ->
     let expectedFields = [
       ("stepSize", float_ default.stepSize)
     ] in
     match getFields info bindings expectedFields with [stepSize] in
-    Default { stepSize = stepSize }
+    ODESolverDefault { stepSize = stepSize }
   | s -> errorSingle [info] (concat "Unknown ODE solver method: " s)
 
   -- Produces a record expression containing the configuration parameters of the
   -- ODE solver method. This record is passed to the inference runtime function.
   sem odeSolverMethodConfig : Info -> ODESolverMethod -> Expr
   sem odeSolverMethodConfig info =
-  | Default { stepSize = stepSize } -> fieldsToRecord info [("stepSize", stepSize)]
+  | ODESolverDefault { stepSize = stepSize } ->
+    fieldsToRecord info [("stepSize", stepSize)]
+
+  -- Constructs a ODE solver method from command-line options.
+  sem odeSolverMethodFromOptions : Options -> Expr -> String -> ODESolverMethod
+  sem odeSolverMethodFromOptions options stepSize =
+  | s -> error (concat "Unknown ODE solver method string: " s)
 
   -- Type checks the ODE solver method. This ensures that the provided arguments
   -- have the correct types.
-  sem typeCheckODESolverMethod : TCEnv -> Info -> ODESolverMethod -> ODESolverMethod
+  sem typeCheckODESolverMethod
+    : TCEnv -> Info -> ODESolverMethod -> ODESolverMethod
   sem typeCheckODESolverMethod env info =
-  | Default { stepSize = stepSize } ->
+  | ODESolverDefault { stepSize = stepSize } ->
     let float = TyFloat {info = info} in
     let stepSize = typeCheckExpr env stepSize in
     unify env [info, infoTm stepSize] float (tyTm stepSize);
-    Default { stepSize = stepSize }
+    ODESolverDefault { stepSize = stepSize }
 
-  -- Symbolizes infer methods.
-  sem symbolizeODESolverMethod : SymEnv -> ODESolverMethod -> ODESolverMethod
-  sem symbolizeODESolverMethod env =
-  | Default r -> Default {r with stepSize = symbolizeExpr env r.stepSize}
+  -- Map/Accum over expressions in ODE solver method.
+  sem odeSolverMethodSmapAccumL_Expr_Expr
+    : all a. (a -> Expr -> (a, Expr)) -> a -> ODESolverMethod -> (a, ODESolverMethod)
+  sem odeSolverMethodSmapAccumL_Expr_Expr f acc =
+  | ODESolverDefault r ->
+    match f acc r.stepSize with (acc, stepSize) in
+    (acc, ODESolverDefault {r with stepSize = stepSize})
 end

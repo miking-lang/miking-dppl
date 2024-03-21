@@ -54,13 +54,50 @@ lang DPPLTransformDist = DPPLParser + TransformDist
     replaceTyDist t
 end
 
+lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
+  -- Make transformations related to solveode. This pass removes all solveode
+  -- terms and returns a transformed term and an ODE related runtime. the
+  -- tranformed program can be treated like a normal probabilistic program.
+  sem odeTransform : Options -> Expr -> (Expr, Expr)
+  sem odeTransform options =| tm ->
+    -- translate all Default { ... } ODE solve methods
+    let tm = replaceDefaultODESolverMethod options tm in
+
+    -- extract ODE solve methods
+    match extractSolveODE tm with (methods, tm) in
+
+    -- load ODE solver runtime
+    let runtime =
+      symbolizeAllowFree (loadRuntime true "runtime-ode-wrapper.mc")
+    in
+
+    -- collect the names of used ODE solvers runtime names and make sure they
+    -- refer to their implementation.
+    match unzip (mapBindings methods) with (to, from) in
+    let to = map odeODESolverMethodToRuntimeName to in
+    let to = findNamesOfStringsExn to runtime in
+    let tm = substituteIdentifiers (mapFromSeq nameCmp (zip from to)) tm in
+    (runtime, tm)
+
+  -- Maps ODE solver methods to the name bound to their implementation in
+  -- the runtime.
+  sem odeODESolverMethodToRuntimeName : ODESolverMethod -> String
+  sem odeODESolverMethodToRuntimeName =
+  | RK4 _ -> "odeSolverRK4Solve"
+  | method -> error (join [
+    odeSolverMethodToString method,
+    " does not have an implementation in the ODE solver runtime"
+  ])
+end
+
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
-  MExprANFAll + CPPLBackcompat
+  MExprANFAll + CPPLBackcompat +
+  ODETransform
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -81,13 +118,12 @@ lang MExprCompile =
   sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
   sem mexprCpplCompile options noInfer =
   | ast ->
-
     -- First translate all Default {} inference methods
     let ast = replaceDefaultInferMethod options ast in
 
-    -- Load the runtimes used in the provided AST, and collect identifiers of
-    -- common methods within the runtimes.
-    let runtimes = loadRuntimes options ast in
+    -- Load the inference runtimes used in the provided AST, and collect
+    -- identifiers of common methods within the runtimes.
+    let inferRuntimes = loadRuntimes options ast in
 
     -- If no infers are found, the entire AST is the model code, so we transform
     -- it as:
@@ -101,16 +137,21 @@ lang MExprCompile =
     --       <pp> = the pretty-print function used to print the result
     match
       if noInfer then programModelTransform options ast
-      else (runtimes, ast)
-    with (runtimes, ast) in
+      else (inferRuntimes, ast)
+    with (inferRuntimes, ast) in
 
     -- Combine the required runtime ASTs to one AST and eliminate duplicate
     -- definitions due to files having common dependencies. The result is an
     -- updated map of runtime entries, a combined runtime AST and a
     -- symbolization environment.
-    let runtimes = combineRuntimes options runtimes in
+    let inferRuntimes = combineInferRuntimes options inferRuntimes in
 
-    mexprCompile options runtimes ast
+    -- Transform solveode terms and add the ODE solver runtime code and add it
+    -- to the program.
+    match odeTransform options ast with (odeRuntime, ast) in
+    let ast = eliminateDuplicateCode (bind_ odeRuntime ast) in
+
+    mexprCompile options inferRuntimes ast
 
 
   sem mexprCompile : Options -> Runtimes -> Expr -> Expr
@@ -125,7 +166,9 @@ lang MExprCompile =
     -- each infer is replaced with a call to the 'run' function provided by
     -- the chosen runtime. It also consists of one AST per inference method
     -- used in the program.
-    match extractInfer options runtimes.entries corepplAst with (corepplAst, models) in
+    match extractInfer options runtimes.entries corepplAst with
+      (corepplAst, models)
+    in
 
     -- Compile the model ASTs.
     let modelAsts = compileModels options runtimes models in
@@ -223,13 +266,7 @@ lang MExprCompile =
   sem replaceHigherOrderConstants =
   | t ->
     let t = mapPre_Expr_Expr _replaceHigherOrderConstantExpr t in
-    let replacements =
-      parseMCoreFile {
-        defaultBootParserParseMCoreFileArg with
-          eliminateDeadCode = false,
-          allowFree = true
-        } (join [corepplSrcLoc, "/coreppl-to-mexpr/runtime-const.mc"])
-    in
+    let replacements = loadRuntime false "runtime-const.mc" in
     let replacements = normalizeTerm replacements in
     let t = bind_ replacements t in
     let t = symbolizeExpr
@@ -340,7 +377,7 @@ let dummyOptions = default in
 let compile = lam options. lam methodStr. lam ast.
   let options = {options with method = methodStr} in
   match programModelTransform options ast with (runtimes, ast) in
-  let runtimeData = combineRuntimes options runtimes in
+  let runtimeData = combineInferRuntimes options runtimes in
   mexprCompile options runtimeData ast
 in
 

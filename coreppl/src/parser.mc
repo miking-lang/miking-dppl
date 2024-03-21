@@ -15,6 +15,7 @@ include "inference/mcmc-lightweight.mc"
 include "inference/mcmc-naive.mc"
 include "inference/mcmc-trace.mc"
 include "inference/pmcmc-pimh.mc"
+include "solveode/rk4.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
@@ -22,7 +23,9 @@ lang DPPLParser =
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
-  PIMHMethod
+  PIMHMethod +
+
+  RK4Method
 
   sem _interpretMethod : Expr -> (Info, String, Map SID Expr)
   sem _interpretMethod =
@@ -37,6 +40,12 @@ lang DPPLParser =
     match _interpretMethod tm with (info, ident, bindings) in
     inferMethodFromCon info bindings ident
 
+  -- Interprets the argument to solveode which encodes the solver method and
+  -- its configuration parameters.
+  sem interpretODESolverMethod : Expr -> ODESolverMethod
+  sem interpretODESolverMethod =| tm ->
+    match _interpretMethod tm with (info, ident, bindings) in
+    odeSolverMethodFromCon info bindings ident
 
   sem replaceDefaultInferMethod : Options -> Expr -> Expr
   sem replaceDefaultInferMethod options =
@@ -45,6 +54,24 @@ lang DPPLParser =
       match expr with TmInfer ({ method = Default d } & t) then
         TmInfer { t with method = setRuns d.runs
                           (inferMethodFromOptions options options.method) }
+      else expr
+    in
+    mapPre_Expr_Expr mf expr
+
+  sem replaceDefaultODESolverMethod : Options -> Expr -> Expr
+  sem replaceDefaultODESolverMethod options =
+  | expr ->
+    let mf = lam expr.
+      match expr with TmSolveODE ({ method = ODESolverDefault d } & r) then
+        TmSolveODE {
+          r with
+          method =
+            odeSolverMethodFromOptions
+              options d.stepSize options.odeSolverMethod,
+          model = replaceDefaultODESolverMethod options r.model,
+          init = replaceDefaultODESolverMethod options r.model,
+          endTime = replaceDefaultODESolverMethod options r.endTime
+        }
       else expr
     in
     mapPre_Expr_Expr mf expr
@@ -116,9 +143,10 @@ lang DPPLParser =
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
-  | "solveode" -> Some (3, lam lst. TmSolveODE {model = get lst 0,
-                                             init = get lst 1,
-                                             endTime = get lst 2,
+  | "solveode" -> Some (4, lam lst. TmSolveODE {method = interpretODESolverMethod (get lst 0),
+                                             model = get lst 1,
+                                             init = get lst 2,
+                                             endTime = get lst 3,
                                              ty = TyUnknown {info = info},
                                              info = info})
 

@@ -182,3 +182,17 @@ let resLda: CpplRes -> [Float] = lam cpplRes.
   ]
 let ldaTruth: [Float] = [0.5,0.5,0.5]
 let eqLda: Float -> [Float] -> [Float] -> Bool = lam s. eqSeq (eqfApprox s)
+
+--models/ode-harmonic.mc
+let tend = 3.
+let resODEHarmonic: CpplRes -> [Float] = lam cpplRes.
+  let samples = map (lam s. map string2float (strSplit " " s)) cpplRes.samples in
+  let x = map (lam t. get t 0) samples in
+  let v = map (lam t. get t 1) samples in
+  [
+    logWeightedMean cpplRes.lweights x,
+    logWeightedMean cpplRes.lweights v
+  ]
+let odeHarmonicTruth: [Float] = (lam t. [cos t, negf (sin t)]) tend
+let eqODEHarmonic: Float -> [Float] -> [Float] -> Bool =
+  lam eps. eqSeq (eqfApprox eps)

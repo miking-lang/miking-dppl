@@ -15,7 +15,8 @@ include "mcmc-lightweight/compile.mc"
 include "pmcmc-pimh/compile.mc"
 
 lang LoadRuntime =
-  DPPLParser + MExprSym + MExprFindSym + MExprEliminateDuplicateCode
+  DPPLParser +
+  MExprSym + MExprFindSym + MExprSubstitute + MExprEliminateDuplicateCode
 
   type RuntimeEntry = {
     -- An AST representation of the runtime
@@ -74,17 +75,21 @@ lang LoadRuntime =
       mapInsert t.method (loadRuntimeEntry t.method runtime) acc
   | t -> sfold_Expr_Expr (loadRuntimesH options) acc t
 
-  sem loadRuntimeEntry : InferMethod -> String -> RuntimeEntry
-  sem loadRuntimeEntry method =
+  sem loadRuntime : Bool -> String -> Expr
+  sem loadRuntime eliminateDeadCode =
   | runtime ->
     let parse = use BootParser in parseMCoreFile {
       defaultBootParserParseMCoreFileArg with
-        eliminateDeadCode = false,
+        eliminateDeadCode = eliminateDeadCode,
         allowFree = true
       }
     in
-    let runtime = parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime]) in
-    let runtime = symbolizeAllowFree runtime in
+    parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime])
+
+  sem loadRuntimeEntry : InferMethod -> String -> RuntimeEntry
+  sem loadRuntimeEntry method =
+  | runtime ->
+    let runtime = symbolizeAllowFree (loadRuntime false runtime) in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
     let stateType = findStateType method stateId runtime in
     { ast = runtime, runId = runId, stateType = stateType
@@ -137,9 +142,37 @@ lang LoadRuntime =
     else findStateTypeH stateId acc inexpr
   | t -> sfold_Expr_Expr (findStateTypeH stateId) acc t
 
-  sem combineRuntimes : Options -> Map InferMethod RuntimeEntry -> Runtimes
-  sem combineRuntimes options =
-  | runtimes ->
+  -- Combines a sequence `runtimes` of runtime terms which are combined from
+  -- left to right, discarding the final "inexpr" term. Duplicated code is
+  -- removed from the combined runtime and all references are updated in the
+  -- term `tm`. This function assumes that all terms are symbolized.
+  sem combineRuntimes : [Expr] -> Expr -> (Expr, Expr)
+  sem combineRuntimes runtimes =| tm ->
+    match eliminateDuplicateCodeWithSummary (bindall_ runtimes)
+      with (replacements, runtime)
+    in
+    (runtime, substituteIdentifiers replacements tm)
+
+  -- Combines non-inference runtime with an inference runtime (from left to
+  -- right). Duplicated code is removed from the combined runtime and all
+  -- references are updated in the term `tm`.
+  sem combineRuntimeWithInferRuntime 
+    : Expr -> InferRuntime -> Expr -> (InferRuntime, Expr)
+  sem combineRuntimeWithInferRuntime runtime inferRuntime =| tm ->
+    match
+      eliminateDuplicateCodeWithSummary (bindall_ [runtime, inferRuntime.ast])
+      with (replacements, runtime)
+    in
+    ({
+      entries = _updateRuntimeEntriesSymEnv replacements inferRuntime.entries,
+      ast = runtime
+    },
+     substituteIdentifiers replacements tm)
+
+  -- Combines inference runtimes, removing duplicate code.
+  sem combineInferRuntimes : Options -> Map InferMethod RuntimeEntry -> Runtimes
+  sem combineInferRuntimes options =
+  | entries ->
     -- Construct record accessible at runtime
     -- NOTE(dlunde,2022-06-28): It would be nice if we automatically lift the
     -- options variable here to an Expr.
@@ -159,7 +192,7 @@ lang LoadRuntime =
 
     ]) in
 
-    let runtimeAsts = map (lam entry. entry.ast) (mapValues runtimes) in
+    let runtimeAsts = map (lam entry. entry.ast) (mapValues entries) in
 
     -- Concatenate the runtime record and the runtime ASTs.
     let ast = bindall_ (join [[pre], runtimeAsts]) in
@@ -167,16 +200,20 @@ lang LoadRuntime =
     -- Eliminate duplicate code in the combined AST of all runtimes, and update
     -- the symbolization environments of the individual runtimes accordingly.
     match eliminateDuplicateCodeWithSummary ast with (replacements, ast) in
-    let runtimes =
-      mapMapWithKey
-        (lam. lam runtime. updateSymEnv replacements runtime)
-        runtimes in
+    {entries = _updateRuntimeEntriesSymEnv replacements entries, ast = ast}
 
-    {entries = runtimes, ast = ast}
+  sem _updateRuntimeEntriesSymEnv
+    : Map Name Name -> Map InferMethod RuntimeEntry
+      -> Map InferMethod RuntimeEntry
+  sem _updateRuntimeEntriesSymEnv replacements =| entries ->
+    mapMapWithKey
+      (lam. lam entry.
+        {entry with topSymEnv = _updateSymEnv replacements entry.topSymEnv})
+      entries
 
-  sem updateSymEnv : Map Name Name -> RuntimeEntry -> RuntimeEntry
-  sem updateSymEnv replacements =
-  | entry ->
+  sem _updateSymEnv : Map Name Name -> SymEnv -> SymEnv
+  sem _updateSymEnv replacements =
+  | symEnv ->
     let replaceId = lam id.
       optionGetOrElse (lam. id) (mapLookup id replacements)
     in
@@ -186,5 +223,5 @@ lang LoadRuntime =
                    conEnv = replaceInEnv symEnv.conEnv,
                    tyConEnv = replaceInEnv symEnv.tyConEnv}
     in
-    {entry with topSymEnv = replaceInSymEnv entry.topSymEnv}
+    replaceInSymEnv symEnv
 end

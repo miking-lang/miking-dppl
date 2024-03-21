@@ -23,6 +23,7 @@ include "utest.mc"
 
 include "dist.mc"
 include "infer-method.mc"
+include "ode-solver-method.mc"
 
 -------------
 -- HELPERS --
@@ -414,10 +415,12 @@ lang ObserveWeightTranslation = Observe + Weight
 end
 
 lang SolveODE =
-  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
+  ODESolverMethodBase
 
   syn Expr =
-  | TmSolveODE { model: Expr,
+  | TmSolveODE { method: ODESolverMethod,
+                 model: Expr,
                  init: Expr,
                  endTime: Expr,
                  ty: Type,
@@ -437,10 +440,15 @@ lang SolveODE =
 
   sem smapAccumL_Expr_Expr f acc =
   | TmSolveODE t ->
+    match
+      odeSolverMethodSmapAccumL_Expr_Expr f acc t.method with (acc, method)
+    in
     match f acc t.model with (acc, model) in
     match f acc t.init with (acc, init) in
     match f acc t.endTime with (acc, endTime) in
-    (acc, TmSolveODE { t with model = model, init = init, endTime = endTime })
+    (acc, TmSolveODE {
+      t with method = method, model = model, init = init, endTime = endTime
+    })
 
   -- Pretty printing
   sem isAtomic =
@@ -466,15 +474,6 @@ lang SolveODE =
       optionFoldlM (lam free. uncurry (eqExprH free env)) free
         [(l.model, r.model), (l.init, r.init), (l.endTime, r.endTime)]
     else None ()
-
-  -- Symbolize
-  sem symbolizeExpr (env: SymEnv) =
-  | TmSolveODE t ->
-    TmSolveODE { t with
-                 model = symbolizeExpr env t.model,
-                 init = symbolizeExpr env t.init,
-                 endTime = symbolizeExpr env t.endTime,
-                 ty = symbolizeType env t.ty }
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =
