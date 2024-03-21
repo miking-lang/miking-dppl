@@ -58,7 +58,7 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
   -- Make transformations related to solveode. This pass removes all solveode
   -- terms and returns a transformed term and an ODE related runtime. the
   -- tranformed program can be treated like a normal probabilistic program.
-  sem odeTransform : Options -> Expr -> (Expr, Expr)
+  sem odeTransform : Options -> Expr -> (Option Expr, Expr)
   sem odeTransform options =| tm ->
     -- translate all Default { ... } ODE solve methods
     let tm = replaceDefaultODESolverMethod options tm in
@@ -66,18 +66,22 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
     -- extract ODE solve methods
     match extractSolveODE tm with (methods, tm) in
 
-    -- load ODE solver runtime
-    let runtime =
-      symbolizeAllowFree (loadRuntime true "runtime-ode-wrapper.mc")
-    in
+    if mapIsEmpty methods then
+      -- There are no solveode terms in the term.
+      (None (), tm)
+    else
+      -- load ODE solver runtime
+      let runtime =
+        symbolizeAllowFree (loadRuntime true "runtime-ode-wrapper.mc")
+      in
 
-    -- collect the names of used ODE solvers runtime names and make sure they
-    -- refer to their implementation.
-    match unzip (mapBindings methods) with (to, from) in
-    let to = map odeODESolverMethodToRuntimeName to in
-    let to = findNamesOfStringsExn to runtime in
-    let tm = substituteIdentifiers (mapFromSeq nameCmp (zip from to)) tm in
-    (runtime, tm)
+      -- collect the names of used ODE solvers runtime names and make sure they
+      -- refer to their implementation.
+      match unzip (mapBindings methods) with (to, from) in
+      let to = map odeODESolverMethodToRuntimeName to in
+      let to = findNamesOfStringsExn to runtime in
+      let tm = substituteIdentifiers (mapFromSeq nameCmp (zip from to)) tm in
+      (Some runtime, tm)
 
   -- Maps ODE solver methods to the name bound to their implementation in
   -- the runtime.
@@ -148,8 +152,13 @@ lang MExprCompile =
 
     -- Transform solveode terms and add the ODE solver runtime code and add it
     -- to the program.
-    match odeTransform options ast with (odeRuntime, ast) in
-    let ast = eliminateDuplicateCode (bind_ odeRuntime ast) in
+    let ast =
+      switch odeTransform options ast
+      case (Some odeRuntime, ast) then
+        eliminateDuplicateCode (bind_ odeRuntime ast)
+      case (None _, ast) then ast
+      end
+    in
 
     mexprCompile options inferRuntimes ast
 
