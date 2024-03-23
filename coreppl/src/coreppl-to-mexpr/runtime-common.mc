@@ -162,3 +162,6 @@ let mcmcAcceptInit = lam n. modref _mcmcSamples n; modref _mcmcAccepts 0
 let mcmcAccept = lam. modref _mcmcAccepts (addi (deref _mcmcAccepts) 1)
 let mcmcAcceptRate = lam.
   divf (int2float (deref _mcmcAccepts)) (int2float (deref _mcmcSamples))
+
+let seqToStr = lam elToStr. lam seq.
+  join ["[", strJoin "," (map elToStr seq), "]"]

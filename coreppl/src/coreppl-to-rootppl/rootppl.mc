@@ -364,7 +364,6 @@ lang RootPPL = CAst + CPrettyPrint
       else never
     else never
 
-
   sem printRPProg (nameInit: [Name]) =
   | RPProg {
       includes = includes,
