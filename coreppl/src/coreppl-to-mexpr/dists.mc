@@ -69,7 +69,10 @@ lang TransformDist = MExprPPL
   | DUniform { a = a, b = b } ->
     i (conapp_
         "RuntimeDistElementary_DistUniform"
-        (i (urecord_ [("a", a), ("b", b)])))
+         (i (urecord_ [("a", a), ("b", b)])))
+  | DWiener {} ->
+    i (conapp_
+         "RuntimeDistElementary_DistWiener" (i unit_))
   | DEmpirical { samples = samples } ->
     i (app_ (var_ "vRuntimeDistEmpirical_constructDistEmpiricalHelper") samples)
 
