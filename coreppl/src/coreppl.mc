@@ -469,7 +469,7 @@ end
 let pplKeywords = [
   "assume", "observe", "weight", "resample", "plate", "Uniform", "Bernoulli",
   "Poisson", "Beta", "Gamma", "Categorical", "Multinomial", "Dirichlet",
-  "Exponential", "Empirical", "Gaussian", "Binomial"
+  "Exponential", "Empirical", "Gaussian", "Binomial", "Wiener"
 ]
 
 let mexprPPLKeywords = concat mexprKeywords pplKeywords
