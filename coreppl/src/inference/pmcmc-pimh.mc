@@ -47,11 +47,11 @@ lang PIMHMethod = MExprPPL
     unify env [info, infoTm particles] int (tyTm particles);
     PIMH {iterations = iterations, particles = particles}
 
-  sem symbolizeInferMethod env =
-  | PIMH r -> PIMH {r with
-      iterations = symbolizeExpr env r.iterations,
-      particles = symbolizeExpr env r.particles
-    }
+  sem inferSmapAccumL_Expr_Expr f acc =
+  | PIMH r ->
+    match f acc r.iterations with (acc, iterations) in
+    match f acc r.particles with (acc, particles) in
+    (acc, PIMH {r with iterations = iterations, particles = particles})
 
   sem setRuns expr =
   | PIMH r -> PIMH {r with iterations = expr}

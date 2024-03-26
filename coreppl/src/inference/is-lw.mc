@@ -34,8 +34,10 @@ lang ImportanceSamplingMethod = MExprPPL
     unify env [info, infoTm particles] int (tyTm particles);
     Importance {particles = particles}
 
-  sem symbolizeInferMethod env =
-  | Importance r -> Importance {r with particles = symbolizeExpr env r.particles}
+  sem inferSmapAccumL_Expr_Expr f acc =
+  | Importance r ->
+    match f acc r.particles with (acc, particles) in
+    (acc, Importance {r with particles = particles})
 
   sem setRuns expr =
   | Importance r -> Importance {r with particles = expr}

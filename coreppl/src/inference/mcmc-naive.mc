@@ -44,9 +44,10 @@ lang NaiveMCMCMethod = MExprPPL
       iterations = iterations
     }
 
-  sem symbolizeInferMethod env =
+  sem inferSmapAccumL_Expr_Expr f acc =
   | NaiveMCMC r ->
-    NaiveMCMC {r with iterations = symbolizeExpr env r.iterations}
+    match f acc r.iterations with (acc, iterations) in
+    (acc, NaiveMCMC {r with iterations = iterations})
 
   sem setRuns expr =
   | NaiveMCMC r -> NaiveMCMC {r with iterations = expr}
