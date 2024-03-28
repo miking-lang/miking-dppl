@@ -170,6 +170,15 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   sem logObserve =
   -- TODO(dlunde,2022-10-18): Implement this?
   | DistEmpirical t -> error "Log observe not supported for empirical distribution"
+
+  -- TODO(vsenderov,2024-03-19): Implement for n != 1
+  sem constructDistEmpiricalSimplified n samples logWeights =
+  | extra ->
+    let d = constructDistEmpirical samples logWeights extra in
+    let s = [sample d] in
+    let l = [0.0] in
+    constructDistEmpirical s l extra
+    
 end
 
 lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical

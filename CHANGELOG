@@ -1,0 +1,9 @@
+# CHANGELOG.md
+
+## Support for subsampling of the posterior distribution to save memory
+
+  - addresses https://github.com/treeppl/treeppl/issues/47
+
+If you compile an SMC model with the flag `--subsample` and do not use
+`--no-print-samples`, the program produces only one sample.
+  
