@@ -95,5 +95,9 @@ let run : all a. all b. Unknown
   match runRec particles with (weights, samples) in
 
   -- Return
+  if compileOptions.subsample then
+    constructDistEmpiricalSubsample compileOptions.subsampleSize samples weights
+      (EmpNorm {normConst = normConstant weights})
+  else
   constructDistEmpirical samples weights
     (EmpNorm {normConst = normConstant weights})
