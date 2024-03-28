@@ -93,9 +93,10 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> use RuntimeDistBase in Di
   in
   let particles = start () in
   match runRec particles with (weights,samples) in
+
   -- Return
   if compileOptions.subsample then
-    constructDistEmpiricalSimplified 1 samples weights
+    constructDistEmpiricalSubsample compileOptions.subsampleSize samples weights
       (EmpNorm {normConst = normConstant weights})
   else
     constructDistEmpirical samples weights

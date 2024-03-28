@@ -186,6 +186,7 @@ lang LoadRuntime =
       ("mcmcLightweightReuseLocal", bool_ options.mcmcLightweightReuseLocal),
       ("printAcceptanceRate", bool_ options.printAcceptanceRate),
       ("subsample", bool_ options.subsample),
+      ("subsampleSize", int_ options.subsampleSize),
 
       -- NOTE(dlunde,2022-11-04): Emulating option type
       ("seedIsSome",

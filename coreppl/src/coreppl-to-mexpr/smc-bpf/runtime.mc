@@ -96,7 +96,7 @@ let run : all a. all b. Unknown
 
   -- Return
   if compileOptions.subsample then
-    constructDistEmpiricalSimplified 1 samples weights
+    constructDistEmpiricalSubsample compileOptions.subsampleSize samples weights
       (EmpNorm {normConst = normConstant weights})
   else
   constructDistEmpirical samples weights
