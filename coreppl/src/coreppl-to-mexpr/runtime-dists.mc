@@ -170,6 +170,24 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   sem logObserve =
   -- TODO(dlunde,2022-10-18): Implement this?
   | DistEmpirical t -> error "Log observe not supported for empirical distribution"
+
+  -- Creates an empirical distribution with a subsample of size n
+  -- NOTE(vsenderov, 2024-03-28): 
+  -- The log-weights are not normalized here. First, normalization in the 
+  -- returned sub-sample from the program is not strictly desirable.
+  -- In addition, as of now, constructDistEmpirical will normalize the weights,
+  -- anyway.  For reference, with comments I show how to normalize the weights. 
+  sem constructDistEmpiricalSubsample n samples logWeights =
+  | extra ->
+    let d = constructDistEmpirical samples logWeights extra in
+    let s = create n (lam. sample d) in
+    -- without normalizing the sample weights
+    let l = make n 0.0 in
+    -- with normalizing
+    --let w = negf (log (int2float n)) in
+    --let l = make n w in
+    constructDistEmpirical s l extra
+    
 end
 
 lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical

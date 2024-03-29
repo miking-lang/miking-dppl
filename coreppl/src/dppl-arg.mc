@@ -66,7 +66,14 @@ type Options = {
   odeSolverMethod: String,
 
   -- Size of fixed step-size ODE solvers
-  stepSize: Float
+  stepSize: Float,
+  
+  -- Whether to subsample the posterior distribution
+  -- used in conjuction with smc-apf and smc-bpf and without no-print-samples
+  subsample: Bool,
+
+  -- Used in conjuction with subsample, how many subsamples to take
+  subsampleSize: Int
 }
 
 -- Default values for options
@@ -95,7 +102,9 @@ let default = {
   seed = None (),
   extractSimplification = "none",
   odeSolverMethod = "rk4",
-  stepSize = 1e-3
+  stepSize = 1e-3,
+  subsample = false,
+  subsampleSize = 1
 }
 
 -- Options configuration
@@ -225,7 +234,20 @@ let config = [
      "The step-size for fixed step-size ODE solvers. Default: ",
      float2string default.stepSize, "."
    ],
-   lam p : ArgPart Options. let o : Options = p.options in {o with stepSize = argToFloatMin p 0. })
+   lam p : ArgPart Options. let o : Options = p.options in {o with stepSize = argToFloatMin p 0. }),
+
+  ([("--subsample", "", "")],
+    "Whether to subsample the posterior distribution. Use in conjuction with -m smc-apf or smc-bpf and without --no-print-samples",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with subsample = true}),
+
+  ([("-n", " ", "<subsample size>")],
+   join [
+        "The number of subsamples to draw if --subsample is selected. Default: ",
+    int2string default.subsampleSize, "."
+       ],
+       lam p: ArgPart Options.
+        let o: Options = p.options in {o with subsampleSize = argToIntMin p 1})
 ]
 
 -- Menu
