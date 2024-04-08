@@ -558,8 +558,14 @@ let weight_ = use Weight in
 
 let solveode_ = use SolveODE in
   lam m. lam i. lam t.
-    TmSolveODE
-      { model = m, init = i, endTime = t, ty = tyunknown_, info = NoInfo () }
+    TmSolveODE {
+      method = ODESolverDefault { stepSize = float_ 0.01 },
+      model = m,
+      init = i,
+      endTime = t,
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
 
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
@@ -726,7 +732,7 @@ utest smap_Expr_Expr mapVar tmSolveODE
   using eqExpr else _toStr
 in
 utest sfold_Expr_Expr foldToSeq [] tmSolveODE
-with [ tmTEnd, tmX0, tmODE ] using eqSeq eqExpr else _seqToStr in
+with [ tmTEnd, tmX0, tmODE, float_ 0.01 ] using eqSeq eqExpr else _seqToStr in
 
 ---------------------
 -- SYMBOLIZE TESTS --
