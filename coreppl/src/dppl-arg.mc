@@ -28,6 +28,9 @@ type Options = {
   -- generic.
   transform: Bool,
 
+  -- Prune algorithm
+  prune: Bool,
+
   -- Where to resample in SMC
   resample: String,
 
@@ -91,6 +94,7 @@ let default = {
   outputMc = false,
   output = "out",
   transform = false,
+  prune = false,
   printSamples = true,
   stackSize = 10000,
   cps = "partial",
@@ -171,6 +175,10 @@ let config = [
       let o: Options = p.options in {o with output = argToString p}),
   ([("--transform", "", "")],
     "The model is transformed to an efficient representation if possible.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with transform = true}),
+  ([("--prune", "", "")],
+    "The model is pruned if possible.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with transform = true}),
   ([("--no-print-samples", "", "")],

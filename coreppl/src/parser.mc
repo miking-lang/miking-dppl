@@ -4,7 +4,6 @@ include "mexpr/keyword-maker.mc"
 include "mexpr/builtin.mc"
 
 include "coreppl.mc"
-include "pgm.mc"
 include "inference/smc.mc"
 
 -- Include the inference method definition definition files.
@@ -19,7 +18,7 @@ include "solveode/rk4.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
-  ProbabilisticGraphicalModel + KeywordMaker +
+  KeywordMaker +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
@@ -83,8 +82,10 @@ lang DPPLParser =
   | TmWeight _ -> true
   | TmInfer _ -> true
   | TmDist _ -> true
-  | TmPlate _ -> true
   | TmSolveODE _ -> true
+  | TmPrune _ -> true
+  | TmPruned _ -> true
+  | TmCancel _ -> true
 
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
@@ -101,10 +102,6 @@ lang DPPLParser =
                                                 info = info})
   | "infer" -> Some (2, lam lst. TmInfer {method = interpretInferMethod (get lst 0),
                                           model = get lst 1,
-                                          ty = TyUnknown {info = info},
-                                          info = info})
-  | "plate" -> Some (2, lam lst. TmPlate {fun = get lst 0,
-                                          lst = get lst 1,
                                           ty = TyUnknown {info = info},
                                           info = info})
   | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
@@ -149,12 +146,24 @@ lang DPPLParser =
                                              endTime = get lst 3,
                                              ty = TyUnknown {info = info},
                                              info = info})
+  | "prune" -> Some (1, lam lst. TmPrune {dist = get lst 0,
+                                          ty = TyUnknown {info = info},
+                                          info = info})
+  | "pruned" -> Some (1, lam lst. TmPruned {prune = get lst 0,
+                                          ty = TyUnknown {info = info},
+                                          info = info})
+  | "cancel" -> Some (1, lam lst. TmCancel {dist = getDistCancel (get lst 0),
+                                          value = getValueCancel (get lst 0),
+                                          ty = TyUnknown {info = info},
+                                          info = info})
 
   sem isTypeKeyword =
   | TyDist _ -> true
+  | TyPruneInt _ -> true
 
   sem matchTypeKeywordString (info: Info) =
   | "Dist" -> Some(1, lam lst. TyDist { info = info, ty = get lst 0 })
+  | "PruneInt" -> Some(0, lam lst. TyPruneInt { info = info})
 
 end
 
