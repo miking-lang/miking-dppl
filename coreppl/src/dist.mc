@@ -1320,9 +1320,9 @@ utest _anf tmMultinomial with bindall_ [
 ] using eqExpr in
 utest _anf tmExponential with bind_ (ulet_ "t" tmExponential) (var_ "t") using eqExpr in
 utest _anf tmEmpirical with bindall_ [
-  ulet_ "t" (utuple_ [float_ 3.0, float_ 1.3]),
-  ulet_ "t1" (utuple_ [float_ 1.0, float_ 1.5]),
-  ulet_ "t2" (seq_ [(var_ "t1"), (var_ "t")]),
+  ulet_ "t" (utuple_ [float_ 1.0, float_ 1.5]),
+  ulet_ "t1" (utuple_ [float_ 3.0, float_ 1.3]),
+  ulet_ "t2" (seq_ [(var_ "t"), (var_ "t1")]),
   ulet_ "t3" (empirical_ (var_ "t2")),
   var_ "t3"
 ] using eqExpr in
