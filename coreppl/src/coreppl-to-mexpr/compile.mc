@@ -18,6 +18,8 @@ include "backcompat.mc"
 include "dists.mc"
 include "runtimes.mc"
 
+include "pruning/compile.mc"
+
 lang DPPLKeywordReplace = DPPLParser
   sem _makeError : Info -> String -> Expr
   sem _makeError info =
@@ -94,6 +96,17 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
   ])
 end
 
+lang DPPLTransformCancel = DPPLParser
+  sem replaceCancel =
+  | (TmCancel t) ->
+    let i = withInfo t.info in
+    TmWeight { weight = negf_ (appf2_ (i (var_ "logObserve")) t.dist t.value),
+               info = t.info,
+               ty = t.ty}
+  | t -> smap_Expr_Expr replaceCancel t
+end
+
+
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
 -- or similar.
@@ -101,7 +114,7 @@ lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat +
-  ODETransform
+  ODETransform + DPPLTransformCancel + DPPLPruning
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -111,7 +124,11 @@ lang MExprCompile =
       if options.transform then
         transform modelAst
       else modelAst in
-
+    -- Apply pruning to the model AST, if the flag is set
+    let ast = 
+      if options.prune then
+        prune ast
+      else ast in
     -- Optionally print the model AST
     (if options.printModel then
       printLn (mexprPPLToString ast)
@@ -159,7 +176,6 @@ lang MExprCompile =
       case (None _, ast) then ast
       end
     in
-
     mexprCompile options inferRuntimes ast
 
 
@@ -169,7 +185,6 @@ lang MExprCompile =
     -- Symbolize and type-check the CorePPL AST.
     let corepplAst = symbolize corepplAst in
     let corepplAst = typeCheck corepplAst in
-
     -- Extract the infer expressions to separate ASTs, one per inference
     -- method. The result consists of the provided AST, updated such that
     -- each infer is replaced with a call to the 'run' function provided by
@@ -183,6 +198,7 @@ lang MExprCompile =
     let modelAsts = compileModels options runtimes models in
 
     -- Transform distributions in the CorePPL AST to use MExpr code.
+    let corepplAst = replaceTyPruneInt (removePrunes ((replaceCancel corepplAst))) in
     let corepplAst = transformDistributions corepplAst in
 
     -- Symbolize any free occurrences in the CorePPL AST and in any of the
