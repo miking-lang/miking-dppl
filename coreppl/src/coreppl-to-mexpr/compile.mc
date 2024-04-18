@@ -129,6 +129,7 @@ lang MExprCompile =
       if options.prune then
         prune ast
       else ast in
+    let ast = replaceCancel ast in
     -- Optionally print the model AST
     (if options.printModel then
       printLn (mexprPPLToString ast)
