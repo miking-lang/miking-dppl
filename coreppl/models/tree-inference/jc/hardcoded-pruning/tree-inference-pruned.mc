@@ -16,12 +16,6 @@ let matrixGet = lam row. lam col. lam tensor.
   tensorGetExn tensor [row, col]
 
 recursive
-let pickpairH = lam i. lam p.
-  let j = assume (Categorical p) in
-  if eqi i j then pickpairH i p else j
-end
-
-recursive
 let foldl2 =
   lam f. lam acc. lam seq1. lam seq2.
     let g = lam acc. lam x2.
@@ -34,10 +28,12 @@ let foldl2 =
 end
 
 let pickpair = lam n.
-  let p = make n (divf 1. (int2float n)) in
+  let p = make (subi n 1) (divf 1. (int2float (subi n 1))) in
   let i = assume (Categorical p) in
-  let j = pickpairH i p in
-  (i,j) 
+  let i = addi i 2 in
+  let p = make (subi i 1) (divf 1. (int2float (subi i 1))) in
+  let j = assume (Categorical p) in
+  (subi i 1,j) 
 
 let iid = lam f. lam p. lam n.
   let params = make n p in
@@ -58,9 +54,6 @@ let getLogLikes = lam msg.
 let sapply = lam x. lam f.
   map f x
 
-let sapply1 = lam x. lam f. lam a.
-  map (lam e. f e a) x
-
 let ctmc = lam i. lam qt:Tensor[Float]. 
   [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
 
@@ -73,7 +66,6 @@ let buildForest =  lam data. lam forest:[Tree]. lam index. lam data_len. lam seq
       newForest
     ) [] data 
 end
-
 
 recursive
 let cluster = lam q. lam trees:[Tree]. lam maxAge.

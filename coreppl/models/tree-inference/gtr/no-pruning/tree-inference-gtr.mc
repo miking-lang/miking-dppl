@@ -2,7 +2,6 @@ include "matrix.mc"
 include "ext/matrix-ext.mc"
 include "ext/dist-ext.mc"
 
-
 con Node : {age: Float, seq: [Int], left: Tree, right: Tree} -> Tree
 let getAge = lam n. match n with Node r then r.age else match n with Leaf r then r.age else never 
 let getLeafSeq = lam n. match n with Leaf r then r.seq else never
@@ -20,26 +19,17 @@ let matrixGet = lam row. lam col. lam tensor.
 let ctmc = lam i. lam qt:Tensor[Float]. --lam t:Float.
   [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
 
-recursive
-let pickpairH = lam i. lam p.
-  let j = assume (Categorical p) in
-  if eqi i j then pickpairH i p else j
-end
-
 let pickpair = lam n.
-  let p = make n (divf 1. (int2float n)) in
+  let p = make (subi n 1) (divf 1. (int2float (subi n 1))) in
   let i = assume (Categorical p) in
-  let j = pickpairH i p in
-  (i,j) 
+  let i = addi i 2 in
+  let p = make (subi i 1) (divf 1. (int2float (subi i 1))) in
+  let j = assume (Categorical p) in
+  (subi i 1,j) 
 
 let iid = lam f. lam p. lam n.
   let params = make n p in
   map f params 
-
-recursive let for = lam i. lam n. lam f. 
-  if geqi i n then ()
-  else f i; for (addi i 1) n f
-end
 
 recursive
 let cluster = lam q. lam trees. lam maxAge. lam seqLen.
@@ -56,7 +46,6 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen.
   
   let leftChildAge = getAge leftChild in
   let rightChildAge = getAge rightChild in
-  
   let qtL = (matrixExponential (matrixMulFloat (subf age leftChildAge) q)) in
   let qtR = (matrixExponential (matrixMulFloat (subf age rightChildAge) q)) in
  
@@ -66,7 +55,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen.
     (match leftChild with Node _ then
       let lc = get (getNodeSeq leftChild) i in
       observe lc (Categorical p1);
-      cancel (observe lc (Categorical [0.25,0.25,0.25,0.25] ))
+      cancel (observe lc (Categorical [0.25,0.25,0.25,0.25]))
     else 
       let lc = get (getLeafSeq leftChild) i in
       (if lti lc 4 then observe lc (Categorical p1)
@@ -76,7 +65,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen.
     (match rightChild with Node _ then
       let rc = get (getNodeSeq rightChild) i in
       observe rc (Categorical p2);
-      cancel (observe rc (Categorical [0.25,0.25,0.25,0.25] ))
+      cancel (observe rc (Categorical [0.25,0.25,0.25,0.25]))
     else 
       let rc = get (getLeafSeq rightChild) i in
       (if lti rc 4 then observe rc (Categorical p2)

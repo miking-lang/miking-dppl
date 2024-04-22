@@ -19,17 +19,13 @@ let matrixGet = lam row. lam col. lam tensor.
 let ctmc = lam i. lam qt:Tensor[Float]. --lam t:Float.
   [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
 
-recursive
-let pickpairH = lam i. lam p.
-  let j = assume (Categorical p) in
-  if eqi i j then pickpairH i p else j
-end
-
 let pickpair = lam n.
-  let p = make n (divf 1. (int2float n)) in
+  let p = make (subi n 1) (divf 1. (int2float (subi n 1))) in
   let i = assume (Categorical p) in
-  let j = pickpairH i p in
-  (i,j)
+  let i = addi i 2 in
+  let p = make (subi i 1) (divf 1. (int2float (subi i 1))) in
+  let j = assume (Categorical p) in
+  (subi i 1,j) 
 
 let iid = lam f. lam p. lam n.
   let params = make n p in
