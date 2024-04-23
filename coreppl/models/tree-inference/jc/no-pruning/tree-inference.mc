@@ -55,7 +55,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen.
     (match leftChild with Node _ then
       let lc = get (getNodeSeq leftChild) i in
       observe lc (Categorical p1);
-      cancel (observe (pruned lc) (Categorical [0.25,0.25,0.25,0.25]))
+      cancel (observe lc (Categorical [0.25,0.25,0.25,0.25]))
     else 
       let lc = get (getLeafSeq leftChild) i in
       (if lti lc 4 then observe lc (Categorical p1)
@@ -65,7 +65,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen.
     (match rightChild with Node _ then
       let rc = get (getNodeSeq rightChild) i in
       observe rc (Categorical p2);
-      cancel (observe (pruned rc) (Categorical [0.25,0.25,0.25,0.25]))
+      cancel (observe rc (Categorical [0.25,0.25,0.25,0.25]))
     else 
       let rc = get (getLeafSeq rightChild) i in
       (if lti rc 4 then observe rc (Categorical p2)
