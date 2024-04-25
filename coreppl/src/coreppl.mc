@@ -15,10 +15,12 @@ include "mexpr/anf.mc"
 include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/const-arity.mc"
+include "mexpr/cfa.mc"
 
 include "peval/peval.mc"
 
 include "string.mc"
+include "math.mc"
 include "utest.mc"
 
 include "dist.mc"
@@ -32,6 +34,76 @@ include "ode-solver-method.mc"
 let _isUnitTy = use RecordTypeAst in lam ty.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields
   else false
+
+
+--------------------------
+-- Elementary Functions --
+--------------------------
+
+lang ElementaryFunctions =
+  FloatAst +
+  TyConst +
+  ConstArity +
+  ConstPrettyPrint +
+  ConstDelta +
+  ConstSideEffectBase +
+  ConstCFA
+
+  -- NOTE(oerikss, 2024-04-12): We extend constants with additional elementary
+  -- functions that are typically implemented as externals in the runtime.
+  -- However, we need to treat these as builtin constants in the AD
+  -- transformation. In addition they will allow us to better partially
+  -- evaluate.
+  syn Const =
+  | CSin {}
+  | CCos {}
+  | CSqrt {}
+  | CExp {}
+  | CLog {}
+  | CPow {}
+
+  sem tyConst =
+  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ -> tyarrows_ [tyfloat_, tyfloat_]
+  | CPow _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
+
+  sem tyConstBase d =
+  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ -> tyarrows_ [tyfloat_, tyfloat_]
+  | CPow _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
+
+  sem constArity =
+  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ -> 1
+  | CPow _ -> 2
+
+  sem getConstStringCode (indent : Int) =
+  | CSin _ -> "sin"
+  | CCos _ -> "cos"
+  | CSqrt _ -> "sqrt"
+  | CExp _ -> "exp"
+  | CLog _ -> "log"
+  | CPow _ -> "pow"
+
+  sem delta info =
+  | (CSin _, [TmConst (cr & {val = CFloat fr})]) ->
+    TmConst { cr with val = CFloat { fr with val = sin fr.val }, info = info }
+  | (CCos _, [TmConst (cr & {val = CFloat fr})]) ->
+    TmConst { cr with val = CFloat { fr with val = cos fr.val }, info = info }
+  | (CSqrt _, [TmConst (cr & {val = CFloat fr})]) ->
+    TmConst { cr with val = CFloat { fr with val = sqrt fr.val }, info = info }
+  | (CExp _, [TmConst (cr & {val = CFloat fr})]) ->
+    TmConst { cr with val = CFloat { fr with val = exp fr.val }, info = info }
+  | (CLog _, [TmConst (cr & {val = CFloat fr})]) ->
+    TmConst { cr with val = CFloat { fr with val = log fr.val }, info = info }
+  | (CPow _, [TmConst (cr & {val = CFloat fr1}), TmConst {val = CFloat fr2}]) ->
+    TmConst {
+      cr with val = CFloat { fr2 with val = pow fr1.val fr2.val }, info = info
+    }
+
+  sem constHasSideEffect =
+  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ | CPow _ -> false
+
+  sem generateConstraintsConst graph info ident =
+  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ | CPow _ -> graph
+end
 
 
 -----------
@@ -923,7 +995,7 @@ let dplKeywords = [
 let mexprPPLKeywords = join [mexprKeywords, pplKeywords, dplKeywords]
 
 lang MExprPPL =
-  CorePPL + CoreDPL +
+  CorePPL + CoreDPL + ElementaryFunctions +
   MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
   MExprTypeCheck + MExprTypeLift + MExprArity
 

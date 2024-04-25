@@ -106,6 +106,53 @@ lang DPPLTransformCancel = DPPLParser
   | t -> smap_Expr_Expr replaceCancel t
 end
 
+-- Provides runtime implementations for elementary functions that are not MExpr
+-- intrisics.
+lang ElementaryFunctionsTransform = ElementaryFunctions + LoadRuntime
+
+  -- `elementaryFunctionsTransform options tm` returns a tuple where the first
+  -- element contains runt-time implementations (typically in the form of
+  -- external) for elementary functions that are not part of MExpr. The second
+  -- element is the term `tm` where elementary function constants are replaced
+  -- by variables referencing implementations in the runtime.
+  sem elementaryFunctionsTransform : Options -> Expr -> (Expr, Expr)
+  sem elementaryFunctionsTransform options =| tm ->
+    let runtimeFile = "runtime-elementary-wrapper.mc" in
+
+    -- load elementary functions runtime
+    let runtime = symbolize (loadRuntime true runtimeFile) in
+
+    -- Define function that maps string identifiers to names
+    let stringToName =
+      makeRuntimeNameMap runtime (_elementaryFunctionsTransformRuntimeIds ())
+    in
+
+    (runtime, elementaryFunctionsTransformExpr stringToName tm)
+
+  sem elementaryFunctionsTransformExpr : (String -> Name) -> Expr -> Expr
+  sem elementaryFunctionsTransformExpr stringToName =
+  | tm & TmConst r -> elementaryFunctionsTransformConst stringToName tm r.val
+  | tm -> smap_Expr_Expr (elementaryFunctionsTransformExpr stringToName) tm
+
+  sem elementaryFunctionsTransformConst : (String -> Name) -> Expr -> Const -> Expr
+  sem elementaryFunctionsTransformConst stringToName tm =
+  | CSin _ -> withInfo (infoTm tm) (nvar_ (stringToName "sin"))
+  | CCos _ -> withInfo (infoTm tm) (nvar_ (stringToName "cos"))
+  | CSqrt _ -> withInfo (infoTm tm) (nvar_ (stringToName "sqrt"))
+  | CExp _ -> withInfo (infoTm tm) (nvar_ (stringToName "exp"))
+  | CLog _ -> withInfo (infoTm tm) (nvar_ (stringToName "log"))
+  | CPow _ -> withInfo (infoTm tm) (nvar_ (stringToName "pow"))
+  | _ -> tm
+
+  sem _elementaryFunctionsTransformRuntimeIds =| _ -> [
+    "sin",
+    "cos",
+    "sqrt",
+    "exp",
+    "log",
+    "pow"
+  ]
+end
 
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
@@ -114,7 +161,8 @@ lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat +
-  ODETransform + DPPLTransformCancel + DPPLPruning
+  ODETransform + DPPLTransformCancel + DPPLPruning +
+  ElementaryFunctionsTransform
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -140,7 +188,11 @@ lang MExprCompile =
   sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
   sem mexprCpplCompile options noInfer =
   | ast ->
-    -- First translate all Default {} inference methods
+    -- First replace externals that implements elementary functions with
+    -- appropriate constants
+    let ast = replaceExternalElementaryFunctions ast in
+
+    -- Secondly translate all Default {} inference methods
     let ast = replaceDefaultInferMethod options ast in
 
     -- Load the inference runtimes used in the provided AST, and collect
@@ -236,6 +288,13 @@ lang MExprCompile =
     --   -- Check that the combined program type checks
     --   typeCheck prog; ()
     -- else ());
+
+    -- Finally we provide runtime implementations for elementary functions that
+    -- are not MExpr intrinsics.
+    match elementaryFunctionsTransform options prog with
+      (elementaryRuntime, prog)
+    in
+    let prog = eliminateDuplicateExternals (bind_ elementaryRuntime prog) in
 
     -- Return complete program
     prog
