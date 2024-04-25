@@ -116,6 +116,7 @@ lang DPPLParser =
   | TmPrune _ -> true
   | TmPruned _ -> true
   | TmCancel _ -> true
+  | TmDiff _ -> true
 
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
@@ -169,7 +170,7 @@ lang DPPLParser =
                                         info = info})
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
-                                         info = info})
+                                        info = info})
   | "Wiener" -> Some (1, lam lst. TmDist {dist = DWiener {},
                                        ty = TyUnknown {info = info},
                                        info = info})
@@ -179,6 +180,10 @@ lang DPPLParser =
                                              endTime = get lst 3,
                                              ty = TyUnknown {info = info},
                                              info = info})
+  | "diff" -> Some (2, lam lst. TmDiff {fn = get lst 0,
+                                     arg = get lst 1,
+                                     ty = TyUnknown {info = info},
+                                     info = info})
   | "prune" -> Some (1, lam lst. TmPrune {dist = get lst 0,
                                           ty = TyUnknown {info = info},
                                           info = info})
