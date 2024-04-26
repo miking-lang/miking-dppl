@@ -2,7 +2,46 @@
 
 include "math.mc"
 include "seq.mc"
+include "map.mc"
+include "float.mc"
 include "ext/dist-ext.mc"
+
+-- Weiner process
+let wienerSample : () -> (Float -> Float) = lam.
+  -- TODO(oerikss, 2024-03-20): We save the observed trace of the process in a
+  -- map. This is ofcourse limiting in the sense that we need to keep the
+  -- observed traces of all Wiener process in memory. In the futurue we want to
+  -- store the trace to disk if it gets too big.
+
+  -- Adapted from:
+  -- https://github.com/lazyppl-team/lazyppl/blob/89f162641a27e2db3c8632f9ae32c33b78db5ea2/src/WienerDemo.lhs#L70
+  let trace = ref (mapSingleton cmpf 0. 0.) in
+  lam t.
+    let tr = deref trace in
+    mapFindOrElse
+      (lam.
+        let w =
+          -- Brownian bridge: https://en.wikipedia.org/wiki/Brownian_bridge
+          switch (mapFindLower t tr, mapFindUpper t tr)
+          case (None _, None _) then
+            error "impossible, trace should always be initialized with { 0 => 0 }"
+          case (Some (t1, a), None _) then gaussianSample a (sqrt (subf t t1))
+          case (None _, Some (t2, b)) then gaussianSample b (sqrt (subf t2 t))
+          case (Some (t1, a), Some (t2, b)) then
+            let mu =
+              (addf
+                 a
+                 (mulf (subf t t1) (divf (subf b a) (subf t2 t1))))
+            in
+            let sigma =
+              sqrt (mulf (subf t2 t) (divf (subf t1 t) (subf t2 t1)))
+            in
+            gaussianSample mu sigma
+          end
+        in
+        modref trace (mapInsert t w tr); w)
+      t
+      tr
 
 -- Base interface
 lang RuntimeDistBase
@@ -27,6 +66,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical {p : [Float]}
   | DistDirichlet {a : [Float]}
   | DistUniform {a : Float, b : Float}
+  | DistWiener {}
 
   sem sample =
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
@@ -40,6 +80,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
+  | DistWiener _ -> unsafeCoerce (wienerSample ())
 
   sem logObserve =
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
@@ -56,6 +97,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
+  | DistWiener _ -> error "logObserve undefined for the Wiener process"
 end
 
 -- Empirical distribution

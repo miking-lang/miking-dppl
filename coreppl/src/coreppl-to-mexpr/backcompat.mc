@@ -2,6 +2,17 @@ include "runtimes.mc"
 
 let errMsgPrintFunction = "Return type cannot be printed"
 
+let _seqToStrTm = use BootParser in
+    parseMExprStringExn (_defaultBootParserParseMExprStringArg ())
+      "
+lam f . lam xs.
+  let join = foldl concat \"\" in
+  switch xs
+  case [] then \"[]\"
+  case [x] ++ xs then join [\"[\", f x, join (map (cons ',') (map f xs)), \"]\"]
+  end
+      "
+
 lang CPPLBackcompat = LoadRuntime
   -- Generates an AST node for the function used to print a sampled value.
   -- TODO(larshum, 2022-10-21): Add support for printing int and bool types.
@@ -15,6 +26,7 @@ lang CPPLBackcompat = LoadRuntime
   -- TODO(dlunde,2022-10-28): For some reason, the versions below using ulam_
   -- do not seem to work.
   | TySeq {ty = TyChar _} -> ulam_ "x" (var_ "x")
+  | TySeq r -> app_ _seqToStrTm (getTypePrintFunction runtimeEntry r.ty)
   | TyChar _ -> ulam_ "x" (seq_ [(var_ "x")])
   | TyRecord r ->
     if mapIsEmpty r.fields then ulam_ "" (str_ "()")

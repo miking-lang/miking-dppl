@@ -139,7 +139,10 @@ lang DPPLParser =
                                         info = info})
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
-                                        info = info})
+                                         info = info})
+  | "Wiener" -> Some (1, lam lst. TmDist {dist = DWiener {},
+                                       ty = TyUnknown {info = info},
+                                       info = info})
   | "solveode" -> Some (4, lam lst. TmSolveODE {method = interpretODESolverMethod (get lst 0),
                                              model = get lst 1,
                                              init = get lst 2,

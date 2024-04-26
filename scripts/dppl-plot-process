@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+
+import matplotlib.pyplot as plt
+import sys
+import math
+import argparse
+import numpy as np
+
+
+parser = argparse.ArgumentParser(
+    description="Plot Miking DPPL stochastic process from standard input. The samples are assumed to be on the form [[t1, x1], [t1, x2], ..., [tn, xn]], where ti are timestamps and xi the value at this time."
+)
+
+parser.add_argument("-m", "--mean", action="store_true", help="Plot mean")
+parser.add_argument("-e", "--median", action="store_true", help="Plot median")
+parser.add_argument(
+    "-d",
+    "--std",
+    action="store_true",
+    help="Plot standard deviation",
+)
+parser.add_argument(
+    "-l",
+    "--lines",
+    action="store_true",
+    help="Plot all trace samples as lines. More computationally heavy for large samples sizes.",
+)
+parser.add_argument(
+    "-a",
+    "--alpha-scale",
+    type=float,
+    default=10,
+    help="The alpha for each sample line is computed as alpha-scale*prob(sample). Default is 10",
+)
+parser.add_argument(
+    "file",
+    nargs="?",
+    type=argparse.FileType("r"),
+    default=sys.stdin,
+    help="File with samples (default: standard input)",
+)
+
+args = parser.parse_args()
+
+with args.file as file:
+    line_number = 0
+    traces = []
+    lws = []
+    for line in file:
+        line_number += 1
+
+        if line_number > 1:
+            data, lw = line.split(" ")
+            nested_array_str = data.strip("[]")
+            inner_arrays = nested_array_str.split("],[")
+            nested_array = [
+                [float(num) for num in inner.split(",")]
+                for inner in inner_arrays
+            ]
+            arr = np.asarray(nested_array)
+
+            if line_number == 2:
+                ts = arr[:, 0]
+
+            traces.append(arr[:, 1])
+            lws.append(float(lw))
+
+    traces = np.vstack(traces)
+    lws = np.asarray(lws)
+
+    if args.lines:
+        for i, trace in enumerate(traces):
+            plt.plot(
+                ts,
+                trace,
+                color="blue",
+                alpha=args.alpha_scale * np.exp(lws[i]),
+                label=None,
+            )
+
+    else:
+        # finding percentiles
+        pcts = np.array([45, 40, 35, 30, 25, 20, 15, 10, 5])
+        layers = np.empty([len(ts), len(pcts), 2])
+        for t in range(len(ts)):
+            for p in range(len(pcts)):
+                layers[t, p] = np.percentile(
+                    traces[:, t], [100 - pcts[p], pcts[p]]
+                )
+
+        # plot the layers
+        for i in range(len(pcts)):
+            if i == 0:
+                plt.fill_between(
+                    ts,
+                    layers[:, i, 0],
+                    layers[:, i, 1],
+                    color="blue",
+                    alpha=pcts[i] * 0.01,
+                    label=f"{pcts[i]}%",
+                )
+            else:
+                plt.fill_between(
+                    ts,
+                    layers[:, i - 1, 0],
+                    layers[:, i, 0],
+                    color="blue",
+                    alpha=pcts[i] * 0.01,
+                    label=f"{pcts[i]}%",
+                )
+                plt.fill_between(
+                    ts,
+                    layers[:, i - 1, 1],
+                    layers[:, i, 1],
+                    color="blue",
+                    alpha=pcts[i] * 0.01,
+                )
+
+    # Plot median
+    if args.median:
+        plt.plot(
+            ts,
+            np.median(traces, axis=0),
+            color="purple",
+            linestyle="-",
+            label="median",
+        )
+
+    # Plot mean
+    if args.mean:
+        plt.plot(
+            ts,
+            np.mean(traces, axis=0),
+            color="red",
+            linestyle="-",
+            label="mean",
+        )
+
+    # Plot standard deviation
+    if args.std:
+        std = np.std(traces, axis=0)
+        plt.plot(ts, std, color="red", linestyle="--", alpha=0.5, label="std")
+
+    plt.legend()
+    plt.xlabel("t")
+
+    plt.grid(
+        True,
+        which="major",
+        linestyle="-",
+        linewidth=0.5,
+        color="gray",
+        alpha=0.5,
+    )
+
+    plt.grid(
+        True,
+        which="minor",
+        linestyle="--",
+        linewidth=0.5,
+        color="gray",
+        alpha=0.2,
+    )
+
+    plt.minorticks_on()
+    plt.show()

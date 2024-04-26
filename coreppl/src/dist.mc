@@ -13,6 +13,7 @@ include "peval/peval.mc"
 
 include "string.mc"
 include "seq.mc"
+include "utest.mc"
 
 lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
             TyConst + ConstPrettyPrint + ConstArity
@@ -42,7 +43,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
 
   sem smapAccumLDist_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Dist -> (acc, Dist)
   sem smapAccumLDist_Expr_Expr f acc =
-  -- Intentionally left blank
+  | dist -> (acc, dist)
 
   sem smapDist_Expr_Expr : (Expr -> Expr) -> Dist -> Dist
   sem smapDist_Expr_Expr f =
@@ -983,6 +984,45 @@ lang BinomialDist = Dist + PrettyPrint + Eq + Sym + IntTypeAst + SeqTypeAst + Bo
 
 end
 
+
+
+lang WienerDist = Dist + PrettyPrint + Eq + Sym + FloatTypeAst
+  syn Dist =
+  | DWiener {}
+
+  -- Pretty printing
+  sem pprintDist (indent: Int) (env: PprintEnv) =
+  | DWiener t -> (env, "Wiener ()")
+
+  -- Equality
+  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
+  | DWiener r ->
+    match lhs with DWiener l then Some free
+    else None ()
+
+  -- Symbolize
+  sem symbolizeDist (env: SymEnv) =
+  | DWiener t -> DWiener t
+
+  -- Type Check
+  sem typeCheckDist (env: TCEnv) (info: Info) =
+  | DWiener t ->
+    let tyfloat = TyFloat { info = info } in
+    ityarrow_ info tyfloat tyfloat
+
+  -- ANF
+  sem normalizeDist (k : Dist -> Expr) =
+  | DWiener t -> k (DWiener t)
+
+  -- Type lift
+  sem typeLiftDist (env : TypeLiftEnv) =
+  | DWiener t -> (env, DWiener t)
+
+  -- Partial evaluation
+  sem pevalDistEval ctx k =
+  | DWiener t -> k (DWiener t)
+end
+
 -----------------
 -- AST BUILDER --
 -----------------
@@ -1029,6 +1069,8 @@ let gaussian_ = use GaussianDist in
 let binomial_ = use BinomialDist in
   lam n. lam p. dist_ (DBinomial {n = n, p = p})
 
+let wiener_ = use WienerDist in dist_ (DWiener {})
+
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
 ---------------------------
@@ -1036,7 +1078,7 @@ let binomial_ = use BinomialDist in
 lang DistAll =
   UniformDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
-  EmpiricalDist + GaussianDist + BinomialDist
+  EmpiricalDist + GaussianDist + BinomialDist + WienerDist
 end
 
 lang Test =
@@ -1066,6 +1108,7 @@ let tmEmpirical = empirical_ (seq_ [
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
+let tmWiener = wiener_ in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -1144,6 +1187,9 @@ utest mexprToString tmBinomial with strJoin "\n" [
   "  0.5"
 ] using eqString in
 
+utest mexprToString tmWiener with "Wiener ()"
+using eqString in
+
 --------------------
 -- EQUALITY TESTS --
 --------------------
@@ -1202,6 +1248,9 @@ utest eqExpr tmGaussian
 
 utest tmBinomial with tmBinomial using eqExpr in
 utest eqExpr tmBinomial (binomial_ (int_ 4) (float_ 0.5)) with false in
+
+utest tmWiener with tmWiener using eqExpr in
+utest eqExpr tmWiener tmBinomial with false in
 
 ----------------------
 -- SMAP/SFOLD TESTS --
@@ -1296,10 +1345,15 @@ utest tyTm (typeCheck tmEmpirical) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
 utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_)
+  using eqType
+in
 
 ---------------
 -- ANF TESTS --
 ---------------
+
+let toStr = utestDefaultToString expr2str expr2str in
 
 let _anf = compose normalizeTerm symbolize in
 
@@ -1325,7 +1379,7 @@ utest _anf tmEmpirical with bindall_ [
   ulet_ "t2" (seq_ [(var_ "t"), (var_ "t1")]),
   ulet_ "t3" (empirical_ (var_ "t2")),
   var_ "t3"
-] using eqExpr in
+] using eqExpr else toStr in
 -- print (mexprToString (_anf tmEmpirical)); print "\n";
 utest _anf tmDirichlet with bindall_ [
   ulet_ "t" (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]),
@@ -1334,6 +1388,7 @@ utest _anf tmDirichlet with bindall_ [
 ] using eqExpr in
 utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
 utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
+utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --
@@ -1351,6 +1406,7 @@ utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
 utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
+utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 
 ()
 
