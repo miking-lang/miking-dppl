@@ -16,7 +16,7 @@ test-cli-files=\
                coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
 
 .PHONY: all
-all: cppl compiler
+all: compiler cppl
 
 
 ############################################
