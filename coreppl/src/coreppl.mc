@@ -165,7 +165,8 @@ lang Infer =
     let model = typeCheckExpr env t.model in
     let method = typeCheckInferMethod env t.info t.method in
     let tyRes = newvar env.currentLvl t.info in
-    unify env [infoTm model] (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes) (tyTm model);
+    unify env [infoTm model]
+      (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes) (tyTm model);
     TmInfer { t with model = model, method = method,
                      ty = TyDist {info = t.info, ty = tyRes} }
 
@@ -335,7 +336,8 @@ lang Observe =
     let value = typeCheckExpr env t.value in
     let dist = typeCheckExpr env t.dist in
     let tyDistRes = newvar env.currentLvl t.info in
-    unify env [infoTm dist] (TyDist { info = t.info, ty = tyDistRes }) (tyTm dist);
+    unify env [infoTm dist]
+      (TyDist { info = t.info, ty = tyDistRes }) (tyTm dist);
     unify env [infoTm value] tyDistRes (tyTm value);
     TmObserve {{{ t with value = value }
                     with dist = dist }
@@ -678,7 +680,7 @@ lang Prune =
     match unwrapType lhs with TyPruneInt _ then
       Some free
     else None ()
-  
+
   sem symbolizeExpr (env: SymEnv) =
   | TmPrune t ->
     TmPrune {{ t with dist = symbolizeExpr env t.dist}
@@ -843,11 +845,15 @@ lang Cancel = Observe
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmCancel t ->
     let i = pprintIncr indent in
-    match pprintCode i env (TmObserve {dist=t.dist,value=t.value,ty=t.ty,info=t.info}) with (env,args) then
+    match
+      pprintCode i env
+        (TmObserve {dist=t.dist,value=t.value,ty=t.ty,info=t.info})
+      with (env,args)
+    then
       (env, join ["cancel", pprintNewline i,
        "(", args ,")"])
     else never
-  
+
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmCancel r ->
     match lhs with TmCancel l then
@@ -869,7 +875,8 @@ lang Cancel = Observe
     let value = typeCheckExpr env t.value in
     let dist = typeCheckExpr env t.dist in
     let tyDistRes = newvar env.currentLvl t.info in
-    unify env [infoTm dist] (TyDist { info = t.info, ty = tyDistRes }) (tyTm dist);
+    unify env [infoTm dist]
+      (TyDist { info = t.info, ty = tyDistRes }) (tyTm dist);
     unify env [infoTm value] tyDistRes (tyTm value);
     TmCancel {{{ t with value = value }
                     with dist = dist }
@@ -927,7 +934,7 @@ lang Cancel = Observe
 
   sem getValueCancel =
   | TmObserve t -> t.value
-  
+
   sem getDistCancel =
   | TmObserve t -> t.dist
 end
@@ -1089,13 +1096,15 @@ let diff_ = use Diff in
 ---------------------------
 
 lang CorePPL =
-  Ast + Assume + Observe + Weight + Infer + ObserveWeightTranslation + DistAll + Pruned + Cancel 
+  Ast + Assume + Observe + Weight + Infer + ObserveWeightTranslation + DistAll +
+  Pruned + Cancel
 end
 
 let pplKeywords = [
-  "assume", "observe", "weight", "resample", "prune", "pruned", "cancel", "Uniform", "Bernoulli",
-  "Poisson", "Beta", "Gamma", "Categorical", "Multinomial", "Dirichlet",
-  "Exponential", "Empirical", "Gaussian", "Binomial", "Wiener"
+  "assume", "observe", "weight", "resample", "prune", "pruned", "cancel",
+  "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
+  "Multinomial", "Dirichlet", "Exponential", "Empirical", "Gaussian",
+  "Binomial", "Wiener"
 ]
 
 lang CoreDPL = Ast + SolveODE + Diff end
@@ -1136,8 +1145,12 @@ in
 let tmX0 = seq_ [float_ 1., float_ 0.] in
 let tmTEnd = float_ 1. in
 let tmSolveODE = solveode_ tmODE tmX0 tmTEnd in
-let tmPrune = prune_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2])) in
-let tmPrune2 = prune_ (categorical_ (seq_ [float_ 0.4,float_ 0.4,float_ 0.2])) in
+let tmPrune =
+  prune_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]))
+in
+let tmPrune2 =
+  prune_ (categorical_ (seq_ [float_ 0.4,float_ 0.4,float_ 0.2]))
+in
 let tmPruned = pruned_ tmPrune in
 let tmPruned2 = pruned_ tmPrune2 in
 let tmCancel = cancel_ (bern_ (float_ 0.7)) true_ in
@@ -1299,10 +1312,14 @@ with [ tmTEnd, tmX0, tmODE, float_ 0.01 ] using eqSeq eqExpr else _seqToStr in
 
 
 utest sfold_Expr_Expr foldToSeq [] tmPrune
-with [ categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]) ] using eqSeq eqExpr else _seqToStr in
+  with [ categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]) ]
+  using eqSeq eqExpr else _seqToStr
+in
 
 utest sfold_Expr_Expr foldToSeq [] tmPruned
-with [ prune_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2])) ] using eqSeq eqExpr else _seqToStr in
+  with [ prune_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2])) ]
+  using eqSeq eqExpr else _seqToStr
+in
 
 utest sfold_Expr_Expr foldToSeq [] tmCancel
 with [ bern_ (float_ 0.7), true_ ] using eqSeq eqExpr else _seqToStr in
