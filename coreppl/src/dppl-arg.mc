@@ -180,7 +180,7 @@ let config = [
   ([("--prune", "", "")],
     "The model is pruned if possible.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with transform = true}),
+      let o: Options = p.options in {o with prune = true}),
   ([("--no-print-samples", "", "")],
     "Do not print the final samples in the compiled program.",
     lam p: ArgPart Options.
