@@ -197,12 +197,14 @@ lang MExprCompile =
     let corepplAst = replaceDpplKeywords corepplAst in
 
     -- Combine the CorePPL AST with the runtime AST, after extracting the
-    -- models, and eliminate duplicate code due to common dependencies.
+    -- models, and eliminate duplicated external definitions.
     let mainAst = bind_ runtimes.ast corepplAst in
-    match eliminateDuplicateCodeWithSummary mainAst with (replaced, mainAst) in
+    match eliminateDuplicateExternalsWithSummary mainAst
+      with (replaced, mainAst)
+    in
 
-    -- Apply the replacements performed by the duplicate code elimination on
-    -- the model ASTs.
+    -- Apply the replacements performed by the duplicate duplicated external
+    -- elimination on the model ASTs.
     let modelAsts = replaceIdentifiers replaced modelAsts in
 
     -- Insert all models into the main AST at the first point where any of the
