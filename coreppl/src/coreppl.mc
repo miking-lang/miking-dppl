@@ -492,7 +492,7 @@ end
 
 lang SolveODE =
   Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
-  ODESolverMethodBase
+  ODESolverMethod
 
   syn Expr =
   | TmSolveODE { method: ODESolverMethod,
