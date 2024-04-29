@@ -225,6 +225,11 @@ utest nder 0 (lam x. muln x x) (_num2) with _num4 using dualnumEq eqf
 utest nder 1 (lam x. muln x x) (_num4) with _num8 using dualnumEq eqf
 utest nder 2 (lam x. muln x x) (_num4) with _num2 using dualnumEq eqf
 
+-- Computes the total derivative
+let total : ([DualNum] -> [DualNum]) -> [DualNum] -> ([DualNum] -> [DualNum]) =
+  lam f. lam x. lam v.
+  let e = _genEpsilon () in
+  map (_pertubation e) (f (zipWith (_dnum e) x v))
 
 -------------------------------------
 -- REAMINING ARITHMETIC OPERATORS  --
@@ -440,3 +445,34 @@ end
 
 utest sqrtn (Primal 9.) with _num3 using eqnEps
 utest der sqrtn (Primal 9.) with divn _num1 _num6 using eqnEps
+
+mexpr
+
+-----------------------
+-- DERIVATIVE TESTS  --
+-----------------------
+
+let f = lam k. lam xs. match xs with [x1, x2] in [x2, negn (muln k x1)] in
+let df = lam k. lam xs. lam vs.
+  match k with Primal k in
+  match xs with [Primal x1, Primal x2] in
+  match vs with [Primal v1, Primal v2] in
+  [
+    Primal v2,
+    Primal (subf (negf (mulf k v1)) x1)
+  ]
+in
+
+let k = Primal 2. in
+let xs = [Primal 2., Primal 3.] in
+let vs = [Primal 4., Primal 5.] in
+
+utest
+  zipWith
+    addn
+    (total (f k) xs vs)
+    (total (lam ks. f (head ks) xs) [k] [Primal 1.])
+  with df k xs vs using eqSeq eqnEps
+in
+
+()
