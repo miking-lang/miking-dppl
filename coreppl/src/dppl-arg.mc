@@ -70,7 +70,7 @@ type Options = {
 
   -- Size of fixed step-size ODE solvers
   stepSize: Float,
-  
+
   -- Whether to subsample the posterior distribution
   -- used in conjuction with smc-apf and smc-bpf and without no-print-samples
   subsample: Bool,

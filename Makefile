@@ -61,6 +61,9 @@ uninstall-coreppl:
 test-coreppl: build/${CPPL_NAME}
 	@$(MAKE) -s -f test-coreppl.mk all
 
+.PHONY: test-coreppl-compiler
+test-coreppl-compiler:
+	@$(MAKE) -s -f test-coreppl.mk compiler
 
 #############
 ## RootPPL ##

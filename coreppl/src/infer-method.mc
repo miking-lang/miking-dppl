@@ -18,7 +18,9 @@ include "dppl-arg.mc"
 -- 4. inferMethodConfig
 -- 5. typeCheckInferMethod
 -- 6. inferSmapAccumL
-lang InferMethodBase = PrettyPrint + TypeCheck + Sym + MethodHelper
+lang InferMethodBase =
+  PrettyPrint + TypeCheck + Sym + MethodHelper
+
   syn InferMethod =
   | Default { runs: Expr }
 
@@ -81,4 +83,8 @@ lang InferMethodBase = PrettyPrint + TypeCheck + Sym + MethodHelper
   | Default r ->
     match f acc r.runs with (acc, runs) in (acc, Default {r with runs = runs})
   | m -> printLn (pprintInferMethod 0 pprintEnvEmpty m).1; error "fail"
+
+  sem inferSmap_Expr_Expr : all a. (Expr -> Expr) -> InferMethod -> InferMethod
+  sem inferSmap_Expr_Expr f =| m ->
+    (inferSmapAccumL_Expr_Expr (lam. lam tm. ((), f tm)) () m).1
 end

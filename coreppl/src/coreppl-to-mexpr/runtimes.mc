@@ -86,6 +86,31 @@ lang LoadRuntime =
     in
     parse (join [corepplSrcLoc, "/coreppl-to-mexpr/", runtime])
 
+  -- `makeRuntimeNameMap runtime ids` creates a map from string representations
+  -- of identifiers in the runtime `runtime` to their corresponding name in the
+  -- runtime. The domain of this map is the seqence of identifiers `ids`.
+  sem makeRuntimeNameMap : Expr -> [String] -> (String -> Name)
+  sem makeRuntimeNameMap runtime =| ids ->
+    let names = findNamesOfStrings ids runtime in
+    let names =
+      zipWith
+        (lam id. lam name.
+          optionGetOrElse
+            (lam. error (join [
+              "Did not find \"", id, "\" in the runtime.\n",
+              "Make sure it is not removed by dead code elimination."
+            ]))
+            name)
+        ids names
+    in
+    let idNameMap = mapFromSeq cmpString (zip ids names) in
+    lam str.
+      mapFindOrElse
+        (lam. error (join [
+          "\"", str, "\" is not in the domain of this runtime name map"
+        ]))
+        str idNameMap
+
   sem loadRuntimeEntry : InferMethod -> String -> InferRuntimeEntry
   sem loadRuntimeEntry method =
   | runtime ->
