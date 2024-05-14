@@ -1,4 +1,4 @@
-include "../../../models/ode-harmonic.mc"
+include "../../../models/ode/harmonic.mc"
 include "../../cppl-test.mc"
 include "../../test.mc"
 

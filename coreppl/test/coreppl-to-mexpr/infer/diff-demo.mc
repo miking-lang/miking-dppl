@@ -1,4 +1,4 @@
-include "../../../models/diff-demo.mc"
+include "../../../models/diff/demo.mc"
 
 mexpr
 -- This model is deterministic and the tests consists of assertions in the model

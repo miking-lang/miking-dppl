@@ -1,4 +1,4 @@
-include "../../../models/diff-confusion.mc"
+include "../../../models/diff/confusion.mc"
 include "../../cppl-test.mc"
 include "../../test.mc"
 
