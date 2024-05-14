@@ -256,9 +256,9 @@ recursive let subn = lam p1. lam p2.
   switch (p1, p2)
   case (Primal p1, Primal p2) then Primal (subf p1 p2)
   case (Primal _, Dual r) then
-    Dual { r with x = subn p1 r.x }
+    Dual { r with x = subn p1 r.x, xp = negn r.xp }
   case(Dual r, Primal _) then
-    Dual { r with x = subn r.x p2, xp = negn r.xp }
+    Dual { r with x = subn r.x p2 }
   case (Dual r1, Dual r2) then
     if _ltE r1.e r2.e then
       Dual { r2 with x = subn p1 r2.x }
@@ -271,14 +271,14 @@ end
 
 utest subn _num2 _num1 with _num1 using dualnumEq _eqfApprox
 utest subn _dnum020 _num1 with _dnum0 _num1 _num0 using dualnumEq _eqfApprox
-utest subn _dnum021 _num1 with _dnum0 _num1 (Primal (negf 1.))
+utest subn _dnum021 _num1 with _dnum0 _num1 _num1
   using dualnumEq _eqfApprox
 utest subn _dnum022 _dnum011 with _dnum011 using dualnumEq _eqfApprox
 
 utest
   let r = subn _dnum122 _dnum011 in
   dualnumPrimal _e1 r
-with _dnum011 using dualnumEq _eqfApprox
+with _dnum0 _num1 (Primal -1.) using dualnumEq _eqfApprox
 
 
 -- lifted abs

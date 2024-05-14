@@ -3,7 +3,7 @@ include "dual-tree.mc"
 type DualNum = Dual Float
 
 let dualnumGenEpsilon : () -> Eps = lam. dualGenEpsilon ()
-let dualnumLtEpsilon : Eps -> Eps -> Bool = lam l. lam r. dualGenEpsilon l r
+let dualnumLtEpsilon : Eps -> Eps -> Bool = lam l. lam r. dualLtE l r
 let dualnumIsDualNum : DualNum -> Bool = lam x. dualIsDual x
 let dualnumEpsilon : DualNum -> Eps = lam x. dualEpsilon x
 let dualnumCreatePrimal : Float -> DualNum = lam x. Primal x
