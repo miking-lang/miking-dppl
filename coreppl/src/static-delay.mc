@@ -1,6 +1,6 @@
 /-
--
--
+- 
+- The tests for --static-delay can be run via `make -s -f test-coreppl.mk static-delay`
 -/
 
 include "digraph.mc"
@@ -9,7 +9,6 @@ include "dist.mc"
 include "ext/math-ext.mc"
 include "mexpr/shallow-patterns.mc"
 
--- make -s -f test-coreppl.mk static-delay
 let debug = false
 -- This part is for the ANF transformation for not to ANF distributions with assume and observe but only the parameters
 lang MExprPPLStaticDelayedANF = MExprPPL + MExprANFAll
@@ -591,10 +590,10 @@ lang RecreateProg = PBNGraph + MExprAst + MExprPPL
             foldl (lam g:Digraph Vertex Label. lam i:Vertex.
                     let edges = digraphEdgesTo i g in
                     digraphMaybeAddEdges (map (lam e. (e.0,l,e.2)) edges) g) g r.items) g lists in
-    /-let g = foldl (lam g. lam v. 
+    let g = foldl (lam g. lam v. 
       match v with (PlateNode _ | FoldNode _) then g else
       match getPlateId v with Some pid then let pv = mapLookupOrElse (lam. error "not found") pid pbn.m in
-      digraphMaybeAddEdge v pv 0 g else g) g (digraphVertices g) in -/
+      digraphMaybeAddEdge v pv 0 g else g) g (digraphVertices g) in 
     {pbn with g=g}
 
   sem recreateCode plateVertices pbn =
@@ -862,16 +861,19 @@ lang TransformPBN = ConjugatePrior
     else None ()
 
   sem propagateThroughPlates pbn initParam innerAccID newParamId v acc =
-  | (Some targetPID, None ())  -> 
+  | (Some targetPID, ppid)  -> 
     (if debug then print (join ["propagateThroughPlates",v2str v.0,"\n"]) else ());
       match mapLookup targetPID pbn.m with Some container in 
       match (getPlateId container) with Some pid then 
-        let gpContainer = mapLookupOrElse (lam. error "") pid pbn.m in
-        let index = match gpContainer with PlateNode _ then 0 else match gpContainer with FoldNode l in mapSize (deref l.vToIndex) in
-        let outerAccId = match gpContainer with FoldNode gp then gp.lamAccId else (nameSym "outerParam") in
-        let param = tupleproj_ index (nvar_ outerAccId)  in
-        match createFoldNode pbn param newParamId innerAccID targetPID v container with (pbn, (FoldNode fl), index) & res in
-        propagateThroughPlates pbn initParam innerAccID (Some outerAccId) v (Some res) (deref fl.plateId, None ()) 
+        let res = match ppid with Some ppid then 
+          if nameEq pid ppid then Some (createFoldNode pbn (initParam) newParamId innerAccID targetPID v container)
+        else None () else None () in match res with Some _ then res
+        else let gpContainer = mapLookupOrElse (lam. error "") pid pbn.m in
+          let index = match gpContainer with PlateNode _ then 0 else match gpContainer with FoldNode l in mapSize (deref l.vToIndex) in
+          let outerAccId = match gpContainer with FoldNode gp then gp.lamAccId else (nameSym "outerParam") in
+          let param = tupleproj_ index (nvar_ outerAccId)  in
+          match createFoldNode pbn param newParamId innerAccID targetPID v container with (pbn, (FoldNode fl), index) & res in
+          propagateThroughPlates pbn initParam innerAccID (Some outerAccId) v (Some res) (deref fl.plateId, None ()) 
       else Some (createFoldNode pbn (initParam) newParamId innerAccID targetPID v container)
   | _ -> acc
 
