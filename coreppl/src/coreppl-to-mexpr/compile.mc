@@ -10,7 +10,7 @@ include "../coreppl.mc"
 include "../inference/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
-include "../transformation.mc"
+include "../static-delay.mc"
 include "../src-location.mc"
 
 include "extract.mc"
@@ -112,7 +112,7 @@ end
 -- or similar.
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
-  Transformation + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
+  StaticDelay + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat +
   ODETransform + DPPLTransformCancel + DPPLPruning
 
@@ -121,11 +121,11 @@ lang MExprCompile =
   | modelAst ->
     -- Transform the model AST, if the flag is set
     let ast =
-      if options.transform then
-        transform modelAst
+      if options.staticDelay then
+        staticDelay modelAst
       else modelAst in
     -- Apply pruning to the model AST, if the flag is set
-    let ast = 
+    let ast =
       if options.prune then
         prune ast
       else ast in
