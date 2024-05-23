@@ -1,5 +1,5 @@
 /-
-- 
+- MExprPPLStaticDelayedANF: normalizes the terms; however, apply special conditions to terms that create the vertices 
 - The tests for --static-delay can be run via `make -s -f test-coreppl.mk static-delay`
 -/
 
@@ -34,7 +34,6 @@ lang MExprPPLStaticDelayedANF = MExprPPL + MExprANFAll
              k (TmApp {{a1 with lhs= TmApp {{a2 with lhs=TmConst c} with rhs=seq}} with rhs=ind}))
           ind)
       seq
-  -- normalizeTerm lmb body
   | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CCreate ()}&c),rhs=rep}&a2),rhs=TmLam l}&a1) ->
     k (TmApp a1)
   | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CIter ()}&c),rhs=TmLam l}&a2),rhs=lst}&a1) ->
@@ -51,21 +50,20 @@ lang MExprPPLStaticDelayedANF = MExprPPL + MExprANFAll
       lst
 end
 
--- PBN tuple
 lang PBNGraph = MExprAst + MExprPPL 
 
   type Label = Int
   -- m: a mapping from a vertex ident to a corresponding vertex
   type PBN = {
-    g:Digraph Vertex Label,
-    m:Map Name Vertex,
-    targets:[Name]
+    g:Digraph Vertex Label, -- a graph to keep the dependencies
+    m:Map Name Vertex, -- a mapping from vertex id to vertex 
+    targets:[Name] -- targets to be sampled at runtime
   }
   -- different types of vertices
   syn Vertex =
   | RandomVarNode {ident:Name,
                     val:Option Expr,
-                    color:Ref Int, -- 0:blue (assume), 1:red (stable)
+                    state:Ref Int, -- 0:blue (assume), 1:red (stable)
                     dist:Ref Dist,
                     mDist:Ref (Option Dist),
                     listId:Ref (Option Name),
@@ -105,7 +103,7 @@ lang PBNGraph = MExprAst + MExprPPL
   | RandomVarNode v -> let id = v.ident in 
                       let plateStr = match deref v.plateId with Some id then join ["(", id.0, ", ",(int2string (sym2hash id.1)), ")"] else "-" in
                        join ["\nRandomVarNode ident: (", id.0, ", ",(int2string (sym2hash id.1)), ")",
-                       "\n state:", if eqi (deref v.color) 0 then "initialized" else if eqi (deref v.color) 1 then "marginalized" else "stabilized"
+                       "\n state:", if eqi (deref v.state) 0 then "initialized" else if eqi (deref v.state) 1 then "marginalized" else "stabilized"
                        ,"\n dist " , (mexprToString (dist_ (deref v.dist)))
                        ,"\n val " , match v.val with Some val then mexprToString val else "-"
                        ,"\nplateId: ", plateStr]
@@ -175,6 +173,7 @@ lang PBNGraph = MExprAst + MExprPPL
   sem getDist =
   | RandomVarNode l -> deref l.dist
 
+  -- remove a vertex from PBN
   sem removeVertexPBN: PBN -> Vertex -> PBN
   sem removeVertexPBN pbn =
   | v -> let g = digraphRemoveVertex v pbn.g in
@@ -182,7 +181,7 @@ lang PBNGraph = MExprAst + MExprPPL
     let pbn = {{pbn with m=m} with g=g} in
     pbn
     
-  -- to add a vertex to a PBN
+  -- add a vertex to a PBN
   sem addVertexPBN: PBN -> Vertex -> PBN
   sem addVertexPBN pbn =
   | v -> 
@@ -382,12 +381,9 @@ lang CreatePBN = ConjugatePrior
   sem emptyCreateAcc =
   | _ -> { m=mapEmpty nameCmp, blockIdent=(None ()), plateId=None (), vertexId=None (), isRet=false }
 
-  -- a mapping of types for each function
-  -- name:create --
   sem createM : Expr -> PBN
   sem createM =
-  | prog -> let res = createPBN {g=digraphEmpty cmprVertex eqi,targets=[],m=mapEmpty nameCmp} (emptyCreateAcc ()) prog in
-    res.0
+  | prog -> match createPBN {g=digraphEmpty cmprVertex eqi,targets=[],m=mapEmpty nameCmp} (emptyCreateAcc ()) prog with (pbn,_) in pbn
 
   -- create edges based on the dependencies of vertex v
   sem createEdges: Vertex -> PBN -> CreateAcc -> Set (Vertex,Vertex,Label) -> Expr -> Set (Vertex,Vertex,Label)
@@ -418,12 +414,10 @@ lang CreatePBN = ConjugatePrior
   sem createCodeBlock: PBN -> CreateAcc -> Expr -> (Option Name, Option Name) -> (Vertex,Name)
   sem createCodeBlock pbn cAcc t =
   -- merge with a previously created block with ident 'bid'
-  | (Some id, Some bid) -> let vertex = mapLookupOrElse (lam. error "createCodeBlock:Lookup failed") bid pbn.m in
-                           match vertex with CodeBlockNode c in
+  | (Some id, Some bid) -> match mapLookupOrElse (lam. error "createCodeBlock:Lookup failed") bid pbn.m with CodeBlockNode c in
                            let v = CodeBlockNode {c with code=bind_ c.code (nulet_ id t)} in
                            (v,bid)
-  | (Some id, None ()) -> let v = CodeBlockNode {ident=id,code=(nulet_ id t),ret=false, plateId=ref cAcc.plateId} in
-                          (v,id)
+  | (Some id, None ()) -> let v = CodeBlockNode {ident=id,code=(nulet_ id t),ret=false, plateId=ref cAcc.plateId} in (v,id)
   | _ -> let ident = nameSym "" in
       let isRet = match cAcc.plateId with Some _ then false else cAcc.isRet in
       let v = CodeBlockNode {ident=ident,code=t,ret=isRet, plateId=ref cAcc.plateId} in
@@ -462,8 +456,8 @@ lang CreatePBN = ConjugatePrior
     let id = match cAcc.vertexId with Some id then id else nameSym "rv" in
     -- if an observe then get its value
     let val = match t with TmObserve t then Some t.value else None () in
-    -- create an initialized (color 0) vertex 
-    let v = RandomVarNode {ident = id, val = val, color = ref 0, dist = ref dist, mDist = ref (None ()), plateId=ref cAcc.plateId, listId=ref (None ())} in
+    -- create an initialized (state 0) vertex 
+    let v = RandomVarNode {ident = id, val = val, state = ref 0, dist = ref dist, mDist = ref (None ()), plateId=ref cAcc.plateId, listId=ref (None ())} in
     -- add the vertex to the graph and to the context
     match addVertex pbn cAcc (v,id) with (pbn,cAcc) in
     -- if it is an observe, add it to the targets to be conditioned
@@ -539,7 +533,7 @@ lang CreatePBN = ConjugatePrior
   sem createPBNGeneric pbn cAcc =
   | t ->
     let t = match t with TmVar v then
-      match mapLookup v.ident pbn.m with Some (PlateNode p) then unit_ else t else t in --?
+      match mapLookup v.ident pbn.m with Some (PlateNode p) then unit_ else t else t in
     let v = createCodeBlock pbn cAcc t (cAcc.vertexId,cAcc.blockIdent) in
     let id = match cAcc.vertexId with Some id then id else v.1 in
     match addVertex pbn cAcc (v.0,id) with (pbn,cAcc) in
@@ -664,6 +658,7 @@ let modifiedBFS : all v. all l. v -> v -> Digraph v l -> Bool
 
 lang TransformPBN = ConjugatePrior
 
+  -- accumulator for the transformation part
   type TAcc =
   {
     accName:Map Name Name,
@@ -686,8 +681,8 @@ lang TransformPBN = ConjugatePrior
 
   sem transformPBN: (PBN,TAcc) -> PBN
   sem transformPBN =
-  | (pbn,tAcc) -> --transformPBNH pbn tAcc 0 pbn.targets
-  let plates = filter (lam v. match v with PlateNode _ then true else false) (digraphVertices pbn.g) in
+  | (pbn,tAcc) -> 
+    let plates = filter (lam v. match v with PlateNode _ then true else false) (digraphVertices pbn.g) in
     let plateIds = (map getId plates) in
     let orderedPlates = orderPlates pbn [] plates in
     let plateTargets = map (lam p. 
@@ -717,21 +712,22 @@ lang TransformPBN = ConjugatePrior
 
   sem isStabilized: PBN -> Vertex -> Bool
   sem isStabilized pbn =
-  | RandomVarNode v -> if eqi (deref v.color) 2 then true else false
+  | RandomVarNode v -> if eqi (deref v.state) 2 then true else false
   | MultiplexerNode m -> match m.list with ListNode l in
     foldl (lam acc. lam i. or acc (isStabilized pbn i)) false l.items
   
+  -- set its state as marginalized
   sem addToMarginalized: Dist -> Vertex -> ()
   sem addToMarginalized q = 
-  | RandomVarNode v -> modref v.color 1; modref v.mDist (Some q)
+  | RandomVarNode v -> modref v.state 1; modref v.mDist (Some q)
 
-  sem isConnectedPl: PBN -> Name -> Name -> Bool
-  sem isConnectedPl pbn parentPID = 
-  | childPID -> match mapLookupOrElse (lam. error "isConnectedPl:Lookup failed.") childPID pbn.m with 
+  -- check whether childPID plate is nested in the parentPID plate
+  sem isNestedPl: PBN -> Name -> Name -> Bool
+  sem isNestedPl pbn parentPID = 
+  | childPID -> match mapLookupOrElse (lam. error "isNestedPl:Lookup failed.") childPID pbn.m with 
     (PlateNode {plateId=pid}|FoldNode {plateId=pid}) in
     match deref pid with Some pid then -- if child's one of outer plates is parent plate
-      or (nameEq pid parentPID) (isConnectedPl pbn parentPID pid)
-    else false
+      or (nameEq pid parentPID) (isNestedPl pbn parentPID pid) else false
 
   -- (child, parent)
   sem createMParameter: PBN -> TAcc -> (Vertex,Vertex) -> Option (PBN,TAcc,Vertex,Dist)        
@@ -747,13 +743,20 @@ lang TransformPBN = ConjugatePrior
   | (None (), None (), None ()) -> createMParameterNP pbn tAcc t
   | (Some pid, None (), None ()) -> createMParameterTDP pbn tAcc t 
   | (Some pid, Some pid2, None ()) -> if nameEq pid pid2 then createMParameterNP pbn tAcc t else
-    if isConnectedPl pbn pid2 pid then
+    if isNestedPl pbn pid2 pid then
       createMParameterTDP pbn tAcc t else None ()
   | (Some pid, Some pid2, Some pid3) ->
     if nameEq pid pid2 then
       if nameEq pid2 pid3 then (createMParameterNP pbn tAcc t)
-      else if nameEq pid2 pid3 then None () else None () else None ()
-  | (Some pid, None (), Some pid2) -> if nameEq pid pid2 then createMParameterTDP pbn tAcc t else None ()
+      else None ()
+    else if nameEq pid2 pid3 then
+          if isNestedPl pbn pid3 pid then
+              createMParameterTDP pbn tAcc t
+          else None ()
+          else None ()
+  | (Some pid, None (), Some pid2) -> if nameEq pid pid2 then createMParameterTDP pbn tAcc t else 
+    if isNestedPl pbn pid2 pid then
+      createMParameterTDP pbn tAcc t else None ()
   | _ -> None ()
 
   sem createMarginalizedListParam pbn = 
@@ -926,7 +929,7 @@ lang TransformPBN = ConjugatePrior
   | fromV ->
     -- get the codeblock parents and stabilized nodes of t
     let parents = filter (lam v. match v with CodeBlockNode _ then true
-                            else match v with RandomVarNode r then eqi (deref r.color) 2
+                            else match v with RandomVarNode r then eqi (deref r.state) 2
                             else false) (digraphPredeccessors fromV pbn.g) in
     let g = foldl (lam acc. lam gp. digraphMaybeAddEdge gp toV 0 acc) pbn.g parents in
     {pbn with g=g}
@@ -958,12 +961,12 @@ lang TransformPBN = ConjugatePrior
   sem graft:PBN -> TAcc -> Vertex -> (PBN, TAcc)
   sem graft pbn tAcc =
   | (RandomVarNode v) & t ->     
-    if eqi (deref v.color) 2 then (pbn, tAcc) -- if is stabilized, do nothing
+    if eqi (deref v.state) 2 then (pbn, tAcc) -- if is stabilized, do nothing
     else (if debug then print (join ["Graft(", v2str t,")\n"]) else ());
-      if eqi (deref v.color) 1 then -- if it is marginalized
+      if eqi (deref v.state) 1 then -- if it is marginalized
         (if debug then print "Graft: RV t is already marginalized\n" else ());
         -- get its marginalized random variable child if any
-        let child = filter (lam u. match u with RandomVarNode u then eqi (deref u.color) 1 else false) (digraphSuccessors t pbn.g) in
+        let child = filter (lam u. match u with RandomVarNode u then eqi (deref u.state) 1 else false) (digraphSuccessors t pbn.g) in
         -- if it does not have a marginalized child, then return the graph
         (if null child then (pbn,tAcc)
         else -- it cannot have more than one marginalized child, throw error
@@ -996,10 +999,10 @@ lang TransformPBN = ConjugatePrior
   sem pruneD: PBN -> TAcc -> Vertex -> (PBN,TAcc)
   sem pruneD pbn tAcc =
   | (RandomVarNode v) & t -> (if debug then print (join ["Prune(", v2str t,")\n"]) else ());
-    if neqi (deref v.color) 1 then error "Prune: t is not marginalized"
+    if neqi (deref v.state) 1 then error "Prune: t is not marginalized"
     else
       -- get its marginalized child if any
-      let children = filter (lam u. match u with RandomVarNode u then eqi (deref u.color) 1 else false) (digraphSuccessors t pbn.g) in
+      let children = filter (lam u. match u with RandomVarNode u then eqi (deref u.state) 1 else false) (digraphSuccessors t pbn.g) in
       -- if it does not have a marginalized child then reorder the vertex t.
       (if null children then reorder pbn tAcc t
       else match eqi (length children) 1 with false then error "Prune: t has more than one marginalized child" else
@@ -1023,21 +1026,24 @@ lang TransformPBN = ConjugatePrior
   | (None (), None (), None ()) -> createRParameterNP pbn tAcc (None ()) t
   | (Some pid, None (), None ()) -> createRParameterTDP pbn tAcc t 
   | (Some pid, Some pid2, None ()) -> if nameEq pid pid2 then
-      createRParameterNP pbn tAcc (None ()) t else if isConnectedPl pbn pid2 pid then
+      createRParameterNP pbn tAcc (None ()) t else if isNestedPl pbn pid2 pid then
       createRParameterTDP pbn tAcc t else never
   | (Some pid, Some pid2, Some pid3) -> 
     if nameEq pid pid2 then
       if nameEq pid2 pid3 then (createRParameterNP pbn tAcc (None ()) t) else never else never
   | (Some pid, None (), Some pid2) -> if nameEq pid pid2 then 
       match createRParameterTDP pbn tAcc t with (pbn,tAcc) in 
-      let pbn = removeVertexPBN pbn t.1 in (pbn, tAcc) else never
+      let pbn = removeVertexPBN pbn t.1 in (pbn, tAcc) else 
+      if isNestedPl pbn pid2 pid then
+      match createRParameterTDP pbn tAcc t with (pbn,tAcc) in 
+      let pbn = removeVertexPBN pbn t.1 in (pbn, tAcc) else  never
   | _ -> never
 
   sem inheritRDependencies: PBN -> TAcc -> (Vertex, Vertex, Vertex) -> PBN
   sem inheritRDependencies pbn tAcc =
   | (t, p, rho) -> 
     let filterC = (lam v. match v with CodeBlockNode _ then true
-                                else match v with RandomVarNode r then neqi (deref r.color) 1
+                                else match v with RandomVarNode r then neqi (deref r.state) 1
                                 else false) in
     let parentsT = filter filterC (digraphPredeccessors t pbn.g) in
     -- get the codeblock parents and stabilized nodes of p
@@ -1246,16 +1252,16 @@ lang TransformPBN = ConjugatePrior
   sem reorder pbn tAcc =
   | (RandomVarNode v) & t -> (if debug then print (join ["Reorder ", v2str t, "\n"]) else ());
     -- already stabilized, return the graph
-    if eqi (deref v.color) 2 then (pbn,tAcc) else
+    if eqi (deref v.state) 2 then (pbn,tAcc) else
     let parents = filter (lam v. 
                           match v with (RandomVarNode _ | MultiplexerNode _) then
                             not (isStabilized pbn v)
                           else false) (digraphPredeccessors t pbn.g) in
     if null parents then --if it has no rv parents then directly stabilize the node
       (if debug then print ("Random variable has no parents so directly stabilize") else ());
-      -- change its color from 0 to 1 [from assumed to stabilized]
+      -- change its state from 0 to 1 [from assumed to stabilized]
       -- set its distribution as its marginalized distribution
-      modref v.color 2;
+      modref v.state 2;
       match deref v.mDist with Some mDist in
       modref v.dist mDist;
       (pbn, tAcc)
@@ -1263,7 +1269,7 @@ lang TransformPBN = ConjugatePrior
       let parent = get parents 0 in
       let pbn = {pbn with g=digraphRemoveEdge parent t 0 pbn.g} in
       match createRParameter pbn tAcc (t,parent) with (pbn,tAcc) in
-      modref v.color 2;
+      modref v.state 2;
       match deref v.mDist with Some mDist in
       modref v.dist mDist;
       (pbn, tAcc)
