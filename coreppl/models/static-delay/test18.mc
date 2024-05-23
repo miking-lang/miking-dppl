@@ -14,5 +14,4 @@ iter (lam doc.
     let z = assume (Categorical theta) in
     let phi = get phi z in
     observe w (Categorical phi)
-  ) ([0,1,2,4])
-  ) docs
+  ) doc.1 ) docs
