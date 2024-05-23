@@ -7,6 +7,9 @@ lang RK4Method = ODESolverMethodBase
   sem odeSolverMethodToString =
   | RK4 _ -> "RK4"
 
+  sem eqODESolverMethod env free =
+  | RK4 r -> eqExprH env free r.stepSize
+
   sem pprintODESolverMethod indent env =
   | RK4 { stepSize = stepSize } ->
     let i = pprintIncr indent in

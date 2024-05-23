@@ -1,3 +1,6 @@
+include "mexpr/externals.mc"
+
+include "../../parser.mc"
 include "../dists.mc"
 
 -- ANF for pruning --

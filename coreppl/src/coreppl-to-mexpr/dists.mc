@@ -3,11 +3,12 @@
 -- common/dists.mc
 
 include "../coreppl.mc"
+include "../ad.mc"
 include "mexpr/ast-builder.mc"
 
 -- TODO(dlunde,2022-05-11): The common case where the user writes, e.g., assume
 -- (Bernoulli x), can also be optimized to not create an intermediate record.
-lang TransformDist = MExprPPL
+lang TransformDist = MExprPPL + DualNumDist
   sem transformTmDist: Expr -> Expr
   sem transformTmDist =
   | TmDist t -> transformDist (withInfo t.info) t.dist
@@ -75,6 +76,8 @@ lang TransformDist = MExprPPL
          "RuntimeDistElementary_DistWiener" (i unit_))
   | DEmpirical { samples = samples } ->
     i (app_ (var_ "vRuntimeDistEmpirical_constructDistEmpiricalHelper") samples)
+  | DDual d ->
+    i (conapp_ "RuntimeDistElementaryDual_DistDual" (transformDist i d))
 
   -- We need to replace occurrences of TyDist after transforming to MExpr
   -- distributions.

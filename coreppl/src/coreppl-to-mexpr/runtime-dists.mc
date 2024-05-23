@@ -5,6 +5,7 @@ include "seq.mc"
 include "map.mc"
 include "float.mc"
 include "ext/dist-ext.mc"
+include "ad/dualnum.mc"
 
 -- Weiner process
 let wienerSample : () -> (Float -> Float) = lam.
@@ -98,6 +99,40 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
   | DistWiener _ -> error "logObserve undefined for the Wiener process"
+end
+
+-- Elementary distributions with samples lifted to dual numbers
+lang RuntimeDistElementaryDual = RuntimeDistElementary
+  syn Dist a =
+  | DistDual (Dist a)
+
+  sem sample =
+  | DistDual (d &
+    (DistGamma _
+   | DistExponential _
+   | DistBeta _
+   | DistGaussian _
+   | DistUniform _)) ->
+    unsafeCoerce (Primal (sample d))
+  | DistDual (d & (DistDirichlet _ )) ->
+    unsafeCoerce map (lam x. Primal x) (sample d)
+  | DistDual (d & (DistWiener _)) ->
+    unsafeCoerce
+      (let f = unsafeCoerce (sample d) in lam x. Primal (f (dualPrimalRec x)))
+  | DistDual d -> sample d
+
+  sem logObserve =
+  | DistDual (d &
+    (DistGamma _
+   | DistExponential _
+   | DistBeta _
+   | DistGaussian _
+   | DistUniform _)) ->
+    unsafeCoerce (lam x. logObserve d (dualPrimalRec x))
+  | DistDual (d & (DistDirichlet _ )) ->
+    unsafeCoerce logObserve d (map (lam x. dualPrimalRec x))
+  | DistDual (d & (DistWiener _)) -> unsafeCoerce (logObserve d)
+  | DistDual d -> logObserve d
 end
 
 -- Empirical distribution
@@ -214,11 +249,11 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   | DistEmpirical t -> error "Log observe not supported for empirical distribution"
 
   -- Creates an empirical distribution with a subsample of size n
-  -- NOTE(vsenderov, 2024-03-28): 
-  -- The log-weights are not normalized here. First, normalization in the 
+  -- NOTE(vsenderov, 2024-03-28):
+  -- The log-weights are not normalized here. First, normalization in the
   -- returned sub-sample from the program is not strictly desirable.
   -- In addition, as of now, constructDistEmpirical will normalize the weights,
-  -- anyway.  For reference, with comments I show how to normalize the weights. 
+  -- anyway.  For reference, with comments I show how to normalize the weights.
   sem constructDistEmpiricalSubsample n samples logWeights =
   | extra ->
     let d = constructDistEmpirical samples logWeights extra in
@@ -229,12 +264,13 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     --let w = negf (log (int2float n)) in
     --let l = make n w in
     constructDistEmpirical s l extra
-    
 end
 
-lang RuntimeDist = RuntimeDistElementary + RuntimeDistEmpirical
+lang RuntimeDist =
+  RuntimeDistElementary +
+  RuntimeDistElementaryDual +
+  RuntimeDistEmpirical
 end
-
 
 -- We include the below definitions to produce non-mangled functions, which we
 -- can refer to in the runtime handler without hard-coding the mangled prefix.

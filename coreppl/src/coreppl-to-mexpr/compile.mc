@@ -3,15 +3,18 @@ include "mexpr/externals.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type.mc"
 include "mexpr/utils.mc"
+include "mexpr/free-vars.mc"
 include "sys.mc"
 include "map.mc"
 
+include "../ad.mc"
 include "../coreppl.mc"
 include "../inference/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
 include "../static-delay.mc"
 include "../src-location.mc"
+
 
 include "extract.mc"
 include "backcompat.mc"
@@ -106,6 +109,171 @@ lang DPPLTransformCancel = DPPLParser
   | t -> smap_Expr_Expr replaceCancel t
 end
 
+lang ADTransform =
+  DPPLParser +
+  LoadRuntime +
+  DualNumRuntimeBase +
+  DualNumLift
+
+  sem adHasDiff : Expr -> Bool
+  sem adHasDiff =| tm -> adHasDiffExpr false tm
+
+  sem adHasDiffExpr : Bool -> Expr -> Bool
+  sem adHasDiffExpr hasDiff =
+  | TmDiff _ -> true
+  | tm -> sfold_Expr_Expr adHasDiffExpr hasDiff tm
+
+  type ADTransformEnv = {
+    lty : Type -> Type,
+    s2n : String -> Name
+  }
+
+  syn DualNumRuntimeEnv =
+  | Env ADTransformEnv
+
+  sem adProvideRuntimeImplementation : Options -> Expr -> (Expr, Expr)
+  sem adProvideRuntimeImplementation options =| tm ->
+    let runtimeFile = "runtime-ad-wrapper.mc" in
+
+    -- load AD runtime
+    let runtime = symbolize (loadRuntime true runtimeFile) in
+
+    -- Define function that maps string identifiers to names
+    let s2n = makeRuntimeNameMap runtime (_adTransformRuntimeIds ()) in
+
+    -- Define function that constructs dual number types
+    let tyDualName = s2n "Dual" in
+    let lty = lam ty. TyApp {
+      lhs = TyCon { ident = tyDualName, data = tyunknown_, info = infoTy ty },
+      rhs = ty,
+      info = infoTy ty
+    } in
+
+    let tm = dualnumTransformAPIExpr (Env { lty = lty, s2n = s2n }) tm in
+
+    (runtime, tm)
+
+  sem dualnumTransformAPIConst env tm =
+  | CGenEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumGenEpsilon")
+  | CLtEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumLtEpsilon")
+  | CCreatePrimal _ -> withInfo (infoTm tm) (_var env "dualnumCreatePrimal")
+  | CCreateDual _ -> withInfo (infoTm tm) (_var env "dualnumCreateDual")
+  | CIsDualNum _ -> withInfo (infoTm tm) (_var env "dualnumIsDualNum")
+  | CEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumEpsilon")
+  | CPrimal _ -> withInfo (infoTm tm) (_var env "dualnumPrimal")
+  | CPrimalRec _ -> withInfo (infoTm tm) (_var env "dualnumPrimalRec")
+  | CPertubation _ -> withInfo (infoTm tm) (_var env "dualnumPertubation")
+  | CLifted (CFloat r) ->
+    let i = withInfo (infoTm tm) in
+    withInfo (infoTm tm) (nconapp_ (_name env "Primal") (i (float_ r.val)))
+  | CLifted (CAddf _) -> withInfo (infoTm tm) (_var env "addn")
+  | CLifted (CMulf _) -> withInfo (infoTm tm) (_var env "muln")
+  | CLifted (CNegf _) -> withInfo (infoTm tm) (_var env "negn")
+  | CLifted (CSubf _) -> withInfo (infoTm tm) (_var env "subn")
+  | CLifted (CDivf _) -> withInfo (infoTm tm) (_var env "divn")
+  | CLifted (CEqf _) -> withInfo (infoTm tm) (_var env "eqn")
+  | CLifted (CNeqf _) -> withInfo (infoTm tm) (_var env "neqn")
+  | CLifted (CLtf _) -> withInfo (infoTm tm) (_var env "ltn")
+  | CLifted (CLeqf _) -> withInfo (infoTm tm) (_var env "leqn")
+  | CLifted (CGtf _) -> withInfo (infoTm tm) (_var env "gtn")
+  | CLifted (CGeqf _) -> withInfo (infoTm tm) (_var env "geqn")
+  | CLifted (CSin _) -> withInfo (infoTm tm) (_var env "sinn")
+  | CLifted (CCos _) -> withInfo (infoTm tm) (_var env "cosn")
+  | CLifted (CSqrt _) -> withInfo (infoTm tm) (_var env "sqrtn")
+  | CLifted (CExp _) -> withInfo (infoTm tm) (_var env "expn")
+  | CLifted (CLog _) -> withInfo (infoTm tm) (_var env "logn")
+  | CLifted (CPow _) -> withInfo (infoTm tm) (_var env "pown")
+  | CLifted const -> withInfo (infoTm tm) (uconst_ const)
+  | _ -> tm
+
+  sem dualnumTransformTypeAPI env =
+  | TyDualNum r -> match env with Env env in env.lty (TyFloat r)
+
+  sem _name : DualNumRuntimeEnv -> String -> Name
+  sem _name env =| str ->
+    match env with Env env in env.s2n str
+
+  sem _var : DualNumRuntimeEnv -> String -> Expr
+  sem _var env =| str -> nvar_ (_name env str)
+
+  sem _adTransformRuntimeIds =| _ -> [
+    "Dual",
+    "Primal",
+    "dualnumCreatePrimal",
+    "dualnumCreateDual",
+    "dualnumIsDualNum",
+    "dualnumLtEpsilon",
+    "dualnumGenEpsilon",
+    "dualnumPrimal",
+    "dualnumPrimalRec",
+    "dualnumPertubation",
+    "addn",
+    "muln",
+    "eqn",
+    "neqn",
+    "ltn",
+    "leqn",
+    "gtn",
+    "geqn",
+    "negn",
+    "subn",
+    "divn",
+    "sinn",
+    "cosn",
+    "sqrtn",
+    "expn",
+    "logn",
+    "pown"
+  ]
+end
+
+-- Provides runtime implementations for elementary functions that are not MExpr
+-- intrisics.
+lang ElementaryFunctionsTransform = ElementaryFunctions + LoadRuntime
+
+  -- `elementaryFunctionsTransform options tm` returns a tuple where the first
+  -- element contains runt-time implementations (typically in the form of
+  -- external) for elementary functions that are not part of MExpr. The second
+  -- element is the term `tm` where elementary function constants are replaced
+  -- by variables referencing implementations in the runtime.
+  sem elementaryFunctionsTransform : Options -> Expr -> (Expr, Expr)
+  sem elementaryFunctionsTransform options =| tm ->
+    let runtimeFile = "runtime-elementary-wrapper.mc" in
+
+    -- load elementary functions runtime
+    let runtime = symbolize (loadRuntime true runtimeFile) in
+
+    -- Define function that maps string identifiers to names
+    let stringToName =
+      makeRuntimeNameMap runtime (_elementaryFunctionsTransformRuntimeIds ())
+    in
+
+    (runtime, elementaryFunctionsTransformExpr stringToName tm)
+
+  sem elementaryFunctionsTransformExpr : (String -> Name) -> Expr -> Expr
+  sem elementaryFunctionsTransformExpr stringToName =
+  | tm & TmConst r -> elementaryFunctionsTransformConst stringToName tm r.val
+  | tm -> smap_Expr_Expr (elementaryFunctionsTransformExpr stringToName) tm
+
+  sem elementaryFunctionsTransformConst : (String -> Name) -> Expr -> Const -> Expr
+  sem elementaryFunctionsTransformConst stringToName tm =
+  | CSin _ -> withInfo (infoTm tm) (nvar_ (stringToName "sin"))
+  | CCos _ -> withInfo (infoTm tm) (nvar_ (stringToName "cos"))
+  | CSqrt _ -> withInfo (infoTm tm) (nvar_ (stringToName "sqrt"))
+  | CExp _ -> withInfo (infoTm tm) (nvar_ (stringToName "exp"))
+  | CLog _ -> withInfo (infoTm tm) (nvar_ (stringToName "log"))
+  | CPow _ -> withInfo (infoTm tm) (nvar_ (stringToName "pow"))
+  | _ -> tm
+
+  sem _elementaryFunctionsTransformRuntimeIds =| _ -> [
+    "sin",
+    "cos",
+    "sqrt",
+    "exp",
+    "log",
+    "pow"
+  ]
+end
 
 -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
 -- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
@@ -114,7 +282,9 @@ lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   StaticDelay + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat +
-  ODETransform + DPPLTransformCancel + DPPLPruning
+  ODETransform + DPPLTransformCancel + DPPLPruning +
+  ElementaryFunctionsTransform
+  + ADTransform
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -140,7 +310,11 @@ lang MExprCompile =
   sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
   sem mexprCpplCompile options noInfer =
   | ast ->
-    -- First translate all Default {} inference methods
+    -- First replace externals that implements elementary functions with
+    -- appropriate constants
+    let ast = replaceExternalElementaryFunctions ast in
+
+    -- Secondly translate all Default {} inference methods
     let ast = replaceDefaultInferMethod options ast in
 
     -- Load the inference runtimes used in the provided AST, and collect
@@ -168,15 +342,6 @@ lang MExprCompile =
     -- symbolization environment.
     let inferRuntimes = combineInferRuntimes options inferRuntimes in
 
-    -- Transform solveode terms and add the ODE solver runtime code and add it
-    -- to the program.
-    let ast =
-      switch odeTransform options ast
-      case (Some odeRuntime, ast) then
-        eliminateDuplicateCode (bind_ odeRuntime ast)
-      case (None _, ast) then ast
-      end
-    in
     mexprCompile options inferRuntimes ast
 
 
@@ -186,6 +351,26 @@ lang MExprCompile =
     -- Symbolize and type-check the CorePPL AST.
     let corepplAst = symbolize corepplAst in
     let corepplAst = typeCheck corepplAst in
+
+    -- Transform solveode terms and add the ODE solver runtime code and add it
+    -- to the program.
+    let corepplAst =
+      switch odeTransform options corepplAst
+      case (Some odeRuntime, corepplAst) then
+        eliminateDuplicateExternals (bind_ odeRuntime corepplAst)
+      case (None _, corepplAst) then corepplAst
+      end
+    in
+
+    -- Does the program contain differentiation?
+    let hasDiff = adHasDiff corepplAst in
+
+    -- Transform diff terms and lift to dual numbers if necessary.
+    let corepplAst =
+      if hasDiff then dualnumLiftExpr corepplAst
+      else corepplAst
+    in
+
     -- Extract the infer expressions to separate ASTs, one per inference
     -- method. The result consists of the provided AST, updated such that
     -- each infer is replaced with a call to the 'run' function provided by
@@ -236,6 +421,23 @@ lang MExprCompile =
     --   -- Check that the combined program type checks
     --   typeCheck prog; ()
     -- else ());
+
+    -- Provide a dual number runtime implementations
+    let prog =
+      if hasDiff then
+        match adProvideRuntimeImplementation options prog with
+          (adRuntime, prog)
+        in
+        eliminateDuplicateExternals (bind_ adRuntime prog)
+      else prog
+    in
+
+    -- Finally we provide runtime implementations for elementary functions that
+    -- are not MExpr intrinsics.
+    match elementaryFunctionsTransform options prog with
+      (elementaryRuntime, prog)
+    in
+    let prog = eliminateDuplicateExternals (bind_ elementaryRuntime prog) in
 
     -- Return complete program
     prog
