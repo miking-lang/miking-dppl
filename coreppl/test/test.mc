@@ -196,3 +196,15 @@ let resODEHarmonic: CpplRes -> [Float] = lam cpplRes.
 let odeHarmonicTruth: [Float] = (lam t. [cos t, negf (sin t)]) tend
 let eqODEHarmonic: Float -> [Float] -> [Float] -> Bool =
   lam eps. eqSeq (eqfApprox eps)
+
+-- models/diff-regression.mc
+let resDiffReg: CpplRes -> Float = lam cpplRes.
+  logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
+let diffRegTruth: Float = 1.
+let eqDiffReg: Float -> Float -> Float -> Bool = eqfApprox
+
+-- models/diff-confusion.mc
+let resDiffConf: CpplRes -> Float = lam cpplRes.
+  logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
+let diffConfTruth: Float = 2.
+let eqDiffConf: Float -> Float -> Float -> Bool = eqfApprox

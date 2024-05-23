@@ -75,6 +75,36 @@ lang DPPLParser =
     in
     mapPre_Expr_Expr mf expr
 
+  -- Replaces elementary external functions with their corresponding constant.
+  sem replaceExternalElementaryFunctions : Expr -> Expr
+  sem replaceExternalElementaryFunctions =| tm ->
+    replaceExternalElementaryFunctionsExpr (mapEmpty nameCmp) tm
+
+  sem replaceExternalElementaryFunctionsExpr : Map Name Const -> Expr -> Expr
+  sem replaceExternalElementaryFunctionsExpr env =
+  | TmExt r ->
+    optionMapOrElse
+      (lam. TmExt {
+        r with inexpr = replaceExternalElementaryFunctionsExpr env r.inexpr
+      })
+      (lam const.
+        replaceExternalElementaryFunctionsExpr
+          (mapInsert r.ident const env)
+          r.inexpr)
+      (externalIdentToConst (nameGetStr r.ident))
+  | tm & TmVar r -> optionMapOr tm uconst_ (mapLookup r.ident env)
+  | tm -> smap_Expr_Expr (replaceExternalElementaryFunctionsExpr env) tm
+
+  sem externalIdentToConst : String -> Option Const
+  sem externalIdentToConst =
+  | "externalSin" -> Some (CSin ())
+  | "externalCos" -> Some (CCos ())
+  | "externalSqrt" -> Some (CSqrt ())
+  | "externalExp" -> Some (CExp ())
+  | "externalLog" -> Some (CLog ())
+  | "externalPow" -> Some (CPow ())
+  | _ -> None ()
+
   -- Keyword maker
   sem isKeyword =
   | TmAssume _ -> true
@@ -86,6 +116,7 @@ lang DPPLParser =
   | TmPrune _ -> true
   | TmPruned _ -> true
   | TmCancel _ -> true
+  | TmDiff _ -> true
 
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
@@ -139,7 +170,7 @@ lang DPPLParser =
                                         info = info})
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
-                                         info = info})
+                                        info = info})
   | "Wiener" -> Some (1, lam lst. TmDist {dist = DWiener {},
                                        ty = TyUnknown {info = info},
                                        info = info})
@@ -149,6 +180,10 @@ lang DPPLParser =
                                              endTime = get lst 3,
                                              ty = TyUnknown {info = info},
                                              info = info})
+  | "diff" -> Some (2, lam lst. TmDiff {fn = get lst 0,
+                                     arg = get lst 1,
+                                     ty = TyUnknown {info = info},
+                                     info = info})
   | "prune" -> Some (1, lam lst. TmPrune {dist = get lst 0,
                                           ty = TyUnknown {info = info},
                                           info = info})
@@ -176,6 +211,13 @@ let builtin = use MExprPPL in concat
   , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
   , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
   , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
+    -- External elementary functions
+  , ("sin", CSin ())
+  , ("cos", CCos ())
+  , ("sqrt", CSqrt ())
+  , ("exp", CExp ())
+  , ("log", CLog ())
+  , ("pow", CPow ())
   ] builtin
 
 let defaultBootParserParseCorePPLFileArg =

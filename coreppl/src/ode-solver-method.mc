@@ -4,6 +4,7 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "mexpr/type-check.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/eq.mc"
 
 include "method-helper.mc"
 include "dppl-arg.mc"
@@ -13,7 +14,7 @@ include "dppl-arg.mc"
 --
 -- To define a new ODE solver method constructor, the following semantic
 -- functions must be implemented for the constructor.
-lang ODESolverMethodBase = PrettyPrint + TypeCheck + Sym + MethodHelper
+lang ODESolverMethodBase = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
   syn ODESolverMethod =
   | ODESolverDefault { stepSize: Expr }
 
@@ -22,9 +23,10 @@ lang ODESolverMethodBase = PrettyPrint + TypeCheck + Sym + MethodHelper
   sem cmpODESolverMethod lhs =
   | rhs -> subi (constructorTag lhs) (constructorTag rhs)
 
-  sem eqODESolverMethod : ODESolverMethod -> ODESolverMethod -> Bool
-  sem eqODESolverMethod lhs =
-  | rhs -> eqi (cmpODESolverMethod lhs rhs) 0
+  sem eqODESolverMethod
+    : EqEnv -> EqEnv -> ODESolverMethod -> ODESolverMethod -> Option EqEnv
+  sem eqODESolverMethod env free =
+  | ODESolverDefault r -> eqExprH env free r.stepSize
 
   sem odeSolverMethodToString : ODESolverMethod -> String
   sem odeSolverMethodToString =

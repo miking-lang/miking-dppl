@@ -9,6 +9,9 @@ test-files+=coreppl/src/coreppl-to-mexpr/runtimes.mc
 test-files := $(filter-out coreppl/src/pgm.mc,$(test-files))
 test-files := $(filter-out coreppl/src/transformation.mc,$(test-files))
 
+# NOTE(oerikss, 2024-04-08): Filter out the main file as it it print to standard
+# out and it is compiled anyways when doing the inference tests.
+test-files := $(filter-out coreppl/src/cppl.mc,$(test-files))
 
 test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
 test-cli-files=\
@@ -16,7 +19,7 @@ test-cli-files=\
                coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
 
 .PHONY: all
-all: cppl compiler
+all: compiler cppl
 
 
 ############################################
@@ -28,7 +31,6 @@ compiler: ${test-files}
 
 ${test-files}::
 	@./make test $@
-
 
 ###################
 ## CorePPL tests ##
