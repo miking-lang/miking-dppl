@@ -402,12 +402,13 @@ lang CreatePBN = ConjugatePrior
   sem findTargetRVs: PBN -> Expr -> PBN
   sem findTargetRVs pbn =
   | TmVar t -> 
-    let v = mapLookup t.ident pbn.m in
-    match v with Some (RandomVarNode _) then {pbn with targets=cons t.ident pbn.targets} else
-    -- if a multiplexer is returned, every item becomes target
-    match v with Some (MultiplexerNode v) then
-      match v.list with ListNode l in
-      {pbn with targets=foldl (lam ids. lam r. cons (getId r) ids) pbn.targets l.items}
+    match mapLookup t.ident pbn.m with Some v then
+      match v with (RandomVarNode _) then {pbn with targets=cons t.ident pbn.targets} else
+      -- if a multiplexer is returned, every item becomes target
+      match v with (MultiplexerNode v) then
+        match v.list with ListNode l in
+        {pbn with targets=foldl (lam ids. lam r. cons (getId r) ids) pbn.targets l.items}
+      else pbn
     else pbn
   | t -> sfold_Expr_Expr findTargetRVs pbn t
 
@@ -1306,15 +1307,28 @@ lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
   | TmVar t -> match mapLookup t.ident env with Some id then nvar_ id else TmVar t
   | t -> smap_Expr_Expr (removeAlias env) t
 
-  sem transform: Expr -> Expr
-  sem transform =
-  | prog ->
+  sem transformModel =
+  | prog -> 
     let model = use MExprPPLStaticDelayedANF in (normalizeTerm prog) in
     let model = removeAlias (mapEmpty nameCmp) model in
     let pbn = createM model in
     let pbn = transformPBN ({pbn with targets=(distinct nameEq pbn.targets)},(emptyTAcc ())) in
-    let rProg = recreate pbn in
-    rProg
+    recreate pbn
+
+  sem transformLam: Expr -> Expr
+  sem transformLam =
+  | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CCreate ()}&c),rhs=rep}&a2),rhs=TmLam l}&a1) -> TmApp a1
+  | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CIter ()}&c),rhs=TmLam l}&a2),rhs=lst}&a1) -> TmApp a1
+  | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CIteri ()}&c),rhs=TmLam ({body=TmLam l2}&l1)}&a2),rhs=lst}&a1) ->
+   TmApp a1
+  | TmLam l -> let res = TmLam {l with body=transformModel l.body} in
+    smap_Expr_Expr transformLam res
+  | t -> smap_Expr_Expr transformLam t
+
+  sem transform: Expr -> Expr
+  sem transform =
+  | prog -> 
+    transformModel (transformLam prog)
 end
 
 
