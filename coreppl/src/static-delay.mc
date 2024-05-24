@@ -484,7 +484,6 @@ lang CreatePBN = ConjugatePrior
     match addVertex v.1 cAcc (v.0,id) with (pbn,cAcc) in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
     (pbn,{cAcc with blockIdent=blockIdent} ,Some v.0)
-    -- TODO this needs to be fixed
     | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CCreate()}&c),rhs=TmConst ({val=CInt {val=i}}&tc)})&a1),
               rhs=TmLam ({body=TmAssume {dist=TmDist {dist=dist}}}&l)}&a2) ->
     let id = match cAcc.vertexId with Some id then id else nameSym "create" in
@@ -662,13 +661,12 @@ lang TransformPBN = ConjugatePrior
   type TAcc =
   {
     accName:Map Name Name,
-    isConj:Bool,
     plateTBR:Set Name
   }
 
   sem emptyTAcc: () -> TAcc
   sem emptyTAcc = 
-  | _ -> {accName=mapEmpty nameCmp,isConj=true,plateTBR=setEmpty nameCmp}
+  | _ -> {accName=mapEmpty nameCmp,plateTBR=setEmpty nameCmp}
 
 
   sem orderPlates pbn order =
@@ -693,9 +691,7 @@ lang TransformPBN = ConjugatePrior
       match acc with (pbn,tAcc) in
       match transformPBNH pbn tAcc targets with (pbn,tAcc) in
       match transformPBNH pbn tAcc (setToSeq tAcc.plateTBR) with (pbn,tAcc) in
-      (pbn,tAcc)
-      /-if tAcc.isConj then res
-      else acc-/) (pbn,tAcc) plateTargets  with (pbn,tAcc) in
+      (pbn,tAcc)) (pbn,tAcc) plateTargets  with (pbn,tAcc) in
     let plateIdsSet = setOfSeq nameCmp plateIds in
     let otherTargets = filter (lam t. not (mapMem t plateIdsSet)) pbn.targets in
     (transformPBNH pbn tAcc otherTargets).0
@@ -951,11 +947,11 @@ lang TransformPBN = ConjugatePrior
       else match createMParameter pbn tAcc (t, parent) with Some (pbn,tAcc,rho,q) then
           addToMarginalized q t; 
           let g = digraphMaybeAddEdge rho t 0 pbn.g in
-          ({pbn with g=g}, {tAcc with isConj=true})
+          ({pbn with g=g}, tAcc)
         else (if debug then print "Marginalize: no conjugate prior rel\n" else ());
           match reorder pbn tAcc parent with (pbn, tAcc) in
           match marginalize pbn tAcc t with (pbn, tAcc) in
-          (pbn, {tAcc with isConj=false})
+          (pbn, tAcc)
   
   -- the target can be a random variable or a list
   sem graft:PBN -> TAcc -> Vertex -> (PBN, TAcc)
