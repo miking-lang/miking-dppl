@@ -466,7 +466,7 @@ lang CreatePBN = ConjugatePrior
     let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) t) in
     let g = digraphMaybeAddEdges edges pbn.g in
     ({{pbn with targets=targets} with g=g},{cAcc with blockIdent=None()} ,Some v)
-  | TmVar t -> print (mexprPPLToString (TmVar t));print "\n";if cAcc.isRet then createPBNGeneric pbn cAcc (TmVar t) else never -- aliases are removed
+  | TmVar t -> if cAcc.isRet then createPBNGeneric pbn cAcc (TmVar t) else never -- aliases are removed
   | TmSeq t ->
     -- get the ident if it comes from a let expression
     let id = match cAcc.vertexId with Some id then id else nameSym "seq" in
@@ -515,7 +515,7 @@ lang CreatePBN = ConjugatePrior
     createPlate pbn cAcc [l.ident] l.body lst.ident (TmApp a2)
   | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CIteri()}&c),rhs=TmLam ({body=TmLam l2}&l1)})&a1),rhs=TmVar lst}&a2) ->
     createPlate pbn cAcc [l1.ident,l2.ident] l2.body lst.ident (TmApp a2)
-  | t-> createPBNGeneric pbn cAcc t
+  | t -> createPBNGeneric pbn cAcc t
 
   sem createPlate: PBN -> CreateAcc -> [Name] -> Expr -> Name -> Expr -> (PBN,CreateAcc,Option Vertex)
   sem createPlate pbn cAcc idents body iterlId =
@@ -538,7 +538,7 @@ lang CreatePBN = ConjugatePrior
     match addVertex pbn cAcc (v.0,id) with (pbn,cAcc) in
     let edges = setToSeq (createEdges v.0 pbn cAcc (setEmpty cmprEdge) t) in
     let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-    let pbn = findTargetRVs pbn t in
+   -- let pbn = findTargetRVs pbn t in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
     (pbn,{cAcc with blockIdent=blockIdent}, Some v.0)
 
