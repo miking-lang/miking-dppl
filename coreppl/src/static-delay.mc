@@ -441,7 +441,12 @@ lang CreatePBN = ConjugatePrior
   sem createPBN pbn cAcc =
   | TmLet t ->
     let res = createPBNH pbn {{cAcc with vertexId=(Some t.ident)} with isRet=false} t.body in
-    createPBN res.0 res.1 t.inexpr
+    print "\nBLABLA\n";
+    print (mexprPPLToString (t.body));
+    print "\nBLABLA\n";
+    let res = createPBN res.0 res.1 t.inexpr in
+    print "debug";
+    res
   -- all other with inexpr
   | (TmRecLets {inexpr=inexpr} | TmType {inexpr=inexpr} | TmExt {inexpr=inexpr} | TmConDef {inexpr=inexpr}) & t -> 
     let res = createPBNH pbn {{cAcc with isRet=false} with vertexId=None ()} (replaceInexpr t) in
@@ -466,7 +471,7 @@ lang CreatePBN = ConjugatePrior
     let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) t) in
     let g = digraphMaybeAddEdges edges pbn.g in
     ({{pbn with targets=targets} with g=g},{cAcc with blockIdent=None()} ,Some v)
-  | TmVar t -> if cAcc.isRet then createPBNGeneric pbn cAcc (TmVar t) else never -- aliases are removed
+  | TmVar t -> print (mexprPPLToString (TmVar t));print "\n";if cAcc.isRet then createPBNGeneric pbn cAcc (TmVar t) else never -- aliases are removed
   | TmSeq t ->
     -- get the ident if it comes from a let expression
     let id = match cAcc.vertexId with Some id then id else nameSym "seq" in
@@ -1306,7 +1311,7 @@ lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
   | TmVar t -> match mapLookup t.ident env with Some id then nvar_ id else TmVar t
   | t -> smap_Expr_Expr (removeAlias env) t
 
-  -- make sure to get the length for create
+ /- -- make sure to get the length for create
   sem constantFoldCreate: Map Name Expr -> Expr -> Expr
   sem constantFoldCreate env =
   | TmLet ({body=TmApp ({lhs=TmApp ({lhs=TmConst ({val=CCreate ()}&c),rhs=TmVar r}&a2),rhs=l}&a1)}&t) ->
@@ -1317,14 +1322,14 @@ lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
       TmLet {t with inexpr=constantFoldCreate (mapInsert v.ident expr env) t.inexpr}
     else TmLet {t with inexpr=constantFoldCreate env t.inexpr}
   | TmLet t -> TmLet {t with inexpr=constantFoldCreate (mapInsert t.ident t.body env) t.inexpr}
-  | t -> smap_Expr_Expr (constantFoldCreate env) t
+  | t -> smap_Expr_Expr (constantFoldCreate env) t-/
 
   sem transform: Expr -> Expr
   sem transform =
   | prog ->
-    let prog = removeAlias (mapEmpty nameCmp) prog in
     let model = use MExprPPLStaticDelayedANF in (normalizeTerm prog) in
-    let model = constantFoldCreate (mapEmpty nameCmp) model in
+    let model = removeAlias (mapEmpty nameCmp) model in
+    print (mexprPPLToString model);
     let pbn = createM model in
     let pbn = transformPBN ({pbn with targets=(distinct nameEq pbn.targets)},(emptyTAcc ())) in
     let rProg = recreate pbn in
