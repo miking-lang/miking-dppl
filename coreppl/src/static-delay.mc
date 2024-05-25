@@ -110,7 +110,7 @@ lang PBNGraph = MExprAst + MExprPPL
   | CodeBlockNode v -> let id = v.ident in 
                       let plateStr =match deref v.plateId with Some id then join ["(", id.0, ", ",(int2string (sym2hash id.1)), ")"] else "-" in                       let ret = if v.ret then " true" else " false" in
                       join ["\nCodeBlockNode ident: (", id.0, ", ",(int2string (sym2hash id.1)), ")",
-                          -- "\nCode:",expr2str v.code,
+                           "\nCode:",expr2str v.code,
                             "\nIsRet:",ret,
                             "\nplateId: ", plateStr,"\n"]
   | ListNode v -> let id = v.ident in
@@ -485,12 +485,12 @@ lang CreatePBN = ConjugatePrior
     match addVertex v.1 cAcc (v.0,id) with (pbn,cAcc) in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
     (pbn,{cAcc with blockIdent=blockIdent} ,Some v.0)
-    | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CCreate()}&c),rhs=TmConst ({val=CInt {val=i}}&tc)})&a1),
+    | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CCreate()}&c),rhs=rep})&a1),
               rhs=TmLam ({body=TmAssume {dist=TmDist {dist=dist}}}&l)}&a2) ->
     let id = match cAcc.vertexId with Some id then id else nameSym "create" in
     let accH = {{{cAcc with blockIdent=None()} with vertexId=None()} with isRet=false} in
     match createPBNH pbn accH l.body with (pbn, cAcc, Some item) in
-    let v = ListNode {ident=id,items=[item],plateId=ref cAcc.plateId,dist=getDist item,lamParam=ref (Some (nameSym "p")), outParam=ref (None ()),create=Some (TmConst tc)} in
+    let v = ListNode {ident=id,items=[item],plateId=ref cAcc.plateId,dist=getDist item,lamParam=ref (Some (nameSym "p")), outParam=ref (None ()),create=Some rep} in
     let pbn =addVertexPBN pbn item in
     match addVertex pbn cAcc (v,id) with (pbn,cAcc) in
     let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) (TmApp a2)) in
@@ -539,7 +539,7 @@ lang CreatePBN = ConjugatePrior
     match addVertex pbn cAcc (v.0,id) with (pbn,cAcc) in
     let edges = setToSeq (createEdges v.0 pbn cAcc (setEmpty cmprEdge) t) in
     let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-   -- let pbn = findTargetRVs pbn t in
+   let pbn = findTargetRVs pbn t in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
     (pbn,{cAcc with blockIdent=blockIdent}, Some v.0)
 
@@ -877,8 +877,7 @@ lang TransformPBN = ConjugatePrior
       else Some (createFoldNode pbn (initParam) newParamId innerAccID targetPID v container)
   | _ -> acc
 
-  -- TODO: 
-  -- here if already in fold parameters then do not add
+  -- TODO: here if already in fold parameters then do not add
   sem createFoldNode pbn param newParamId innerAccID targetPID v =
   | PlateNode pl ->
     (if debug then print (join ["createFoldNode-plate",v2str v.0,"\n"]) else ());
@@ -1074,13 +1073,10 @@ lang TransformPBN = ConjugatePrior
     let i = nameSym "i" in
     let e = nameSym "e" in
     let params = match l.create with Some rep then
-      match deref l.outParam with Some outParam then
-       (nvar_ outParam)
-      else 
-        match get l.items 0 with RandomVarNode v in 
+      match deref l.outParam with Some outParam then (nvar_ outParam)
+      else match get l.items 0 with RandomVarNode v in 
         match deref (v.mDist) with Some pMarginalizedDist in create_ rep (ulam_ "" (getParams pMarginalizedDist)) 
-    else
-      seq_ (map (lam i. match i with RandomVarNode v in match (deref v.mDist) with Some md in getParams md) l.items) in
+    else seq_ (map (lam i. match i with RandomVarNode v in match (deref v.mDist) with Some md in getParams md) l.items) in
     let code = mapi_ (nulam_ i 
       (nulam_ e 
         (if_ (eqi_ (nvar_ i) (nvar_ p.indexId)) reorderedParam (nvar_ e)))) (params) in
@@ -1120,7 +1116,6 @@ lang TransformPBN = ConjugatePrior
       match res with (pbn, _) in
     (pbn, tAcc)
 
-    -- TODO fix the code explosion
   sem createRParameterTDPH: PBN -> TAcc -> (Name, Vertex) -> Option (Name, Expr) -> (Vertex, Vertex) -> (PBN, TAcc, Name, Vertex, Option Vertex)
   sem createRParameterTDPH pbn tAcc out indices =
   | (RandomVarNode t, RandomVarNode p)&v ->
@@ -1230,6 +1225,7 @@ lang TransformPBN = ConjugatePrior
     let pbn = addVertexPBN pbn outBlock in
     match createRParameterTDPH pbn tAcc (outName,outBlock) (None ()) v with (pbn, tAcc, paramName, paramBlock) in
 
+    -- here should get the return value as the marginalized
     let res = match mapLookup f.retBlockId pbn.m with Some (CodeBlockNode rt) then
       addParam pbn (nvar_ paramName) (CodeBlockNode rt)
     else
