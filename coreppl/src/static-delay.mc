@@ -91,6 +91,7 @@ lang PBNGraph = MExprAst + MExprPPL
   | FoldNode {ident:Name,
                varIds:[Name], -- variables introduced got from plate 
                lamAccId:Name, -- new lam acc id for updated parameters
+               --margPIdM:Ref (Map Name Name), -- keep track of the marginalized parameters of the outside values, normally we would acces the params by their distribution but we cannot do that since we assign fold's return value as the marginlaized parameter to the outside dist 
                vToIndex:Ref (Map Name Int), -- parameters tag in the accumulated record
                iterlId:Name, -- name of the observations to iterate over
                plateId:Ref (Option Name),
@@ -539,7 +540,7 @@ lang CreatePBN = ConjugatePrior
     match addVertex pbn cAcc (v.0,id) with (pbn,cAcc) in
     let edges = setToSeq (createEdges v.0 pbn cAcc (setEmpty cmprEdge) t) in
     let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-   let pbn = findTargetRVs pbn t in
+    --let pbn = findTargetRVs pbn t in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
     (pbn,{cAcc with blockIdent=blockIdent}, Some v.0)
 
@@ -886,6 +887,7 @@ lang TransformPBN = ConjugatePrior
     let retBId = nameSym "r" in
     let cbInitParam = CodeBlockNode {ident = accAppId, code = nulet_ accAppId (utuple_ [param]), ret=false, plateId=pl.plateId} in
     let pbn = addVertexPBN pbn cbInitParam in
+    let pbn = inheritMDependencies pbn cbInitParam v.1 in
     let index = 0 in
     let vToIndex = mapInsert (getId v.1) index (mapEmpty nameCmp) in
     let f = FoldNode {ident = pl.ident, varIds=pl.varIds, plateId=pl.plateId, lamAccId=lamAccId, accId=accAppId, iterlId=pl.iterlId, retBlockId=retBId, vToIndex=ref vToIndex} in
