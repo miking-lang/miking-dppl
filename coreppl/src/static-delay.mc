@@ -284,7 +284,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let rho = CodeBlockNode {ident=tName, code=code, ret=false,plateId=ref plateId} in
     let paramNames = [muName,sigmaName] in
     (rho, DGaussian {{d2 with mu= nvar_ muName} with sigma= nvar_ sigmaName},paramNames)
-  | (DCategorical d1,DDirichlet d2) ->
+  | (DCategorical d1, DDirichlet d2) ->
     let val = match obs with Some val then val else never in
     let aName = nameSym "postA" in
     let postA = nulet_ aName (mapi_ ( ulam_ "i" (ulam_ "e" (if_ (eqi_ (var_ "i") val) (addf_ (var_ "e") (float_ 1.0)) (var_ "e")))) d2.a) in
@@ -303,7 +303,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   -- output (rho:Vertex, q:Expr)
   sem posteriorPredictive: Option Name -> (Dist,Dist) -> Option (Vertex,Dist)
   sem posteriorPredictive plateId =
-  | (DBernoulli d1,DBeta d2) ->
+  | (DBernoulli d1, DBeta d2) ->
     let postP = divf_ d2.a (addf_ d2.a d2.b) in
     let tName = nameSym "param" in
     let pName = nameSym "margP" in
@@ -324,12 +324,13 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     Some (rho, DGaussian {{d1 with mu=nvar_ mName} with sigma=nvar_ sName})
 
   | (DCategorical d1,DDirichlet d2) ->
-    let sumai = foldl_ (ulam_ "acc" (ulam_ "i" (addf_ (var_ "acc") (var_ "i")))) (float_ 0.0) (d2.a) in
-    let postP = map_ (ulam_ "ai" (divf_ (var_ "ai") sumai)) d2.a in
+    let sumName = nameSym "sum" in
+    let sumai = nulet_ sumName (foldl_ (ulam_ "acc" (ulam_ "i" (addf_ (var_ "acc") (var_ "i")))) (float_ 0.0) (d2.a)) in
+    let postP = map_ (ulam_ "ai" (divf_ (var_ "ai") (nvar_ sumName))) d2.a in
     let tName = nameSym "param" in
     let pName = nameSym "margP" in
     let letT = nulet_ pName postP in
-    let rho = CodeBlockNode {ident=tName, code=letT, ret=false,plateId=ref plateId} in
+    let rho = CodeBlockNode {ident=tName, code=bind_ sumai letT, ret=false,plateId=ref plateId} in
     Some (rho, DCategorical {d1 with p=nvar_ pName})
   | _ -> None ()
 
@@ -1325,8 +1326,7 @@ lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
 
   sem transform: Expr -> Expr
   sem transform =
-  | prog -> 
-    transformModel (transformLam prog)
+  | prog -> transformModel (transformLam prog)
 end
 
 
