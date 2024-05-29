@@ -14,6 +14,7 @@ test-files := $(filter-out coreppl/src/transformation.mc,$(test-files))
 test-files := $(filter-out coreppl/src/cppl.mc,$(test-files))
 
 test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
+test-staticdelay-files=$(shell find coreppl/test/coreppl-to-mexpr/static-delay -name "*.mc")
 test-cli-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/cli \
                coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
@@ -37,7 +38,10 @@ ${test-files}::
 ###################
 
 .PHONY: cppl
-cppl: ${test-infer-files} ${test-cli-files}
+cppl: ${test-staticdelay-files} ${test-infer-files} ${test-cli-files} 
+
+.PHONY: static-delay
+static-delay: ${test-staticdelay-files}
 
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}
@@ -52,4 +56,8 @@ ${test-infer-files}::
 
 # CLI tests
 ${test-cli-files}::
+	@./make test $@
+
+# Static delay tests
+${test-staticdelay-files}::
 	@./make test $@

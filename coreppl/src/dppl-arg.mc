@@ -24,9 +24,7 @@ type Options = {
   output: String,
 
   -- Apply static delayed sampling transformation
-  -- TODO(2023-06-28,dlunde): Give a more descriptive name, transform is too
-  -- generic.
-  transform: Bool,
+  staticDelay: Bool,
 
   -- Prune algorithm
   prune: Bool,
@@ -93,7 +91,7 @@ let default = {
   skipFinal = false,
   outputMc = false,
   output = "out",
-  transform = false,
+  staticDelay = false,
   prune = false,
   printSamples = true,
   stackSize = 10000,
@@ -173,10 +171,10 @@ let config = [
     "Write output to <file> when compiling",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with output = argToString p}),
-  ([("--transform", "", "")],
+  ([("--static-delay", "", "")],
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with transform = true}),
+      let o: Options = p.options in {o with staticDelay = true}),
   ([("--prune", "", "")],
     "The model is pruned if possible.",
     lam p: ArgPart Options.

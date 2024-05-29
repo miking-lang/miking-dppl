@@ -5,7 +5,7 @@
 
 
 include "parser.mc"
-include "transformation.mc"
+include "static-delay.mc"
 include "dppl-arg.mc"
 include "build.mc"
 include "src-location.mc"
@@ -65,7 +65,7 @@ match result with ParseOK r then
       -- Handle the RootPPL backend in the old way, without using infers.
       if noInfer then
         let ast =
-          if options.transform then transform ast
+          if options.staticDelay then staticDelay ast
           else ast
         in
         let ast = rootPPLCompile options ast in
