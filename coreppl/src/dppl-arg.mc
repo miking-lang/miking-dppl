@@ -25,6 +25,7 @@ type Options = {
 
   -- Apply static delayed sampling transformation
   staticDelay: Bool,
+  staticDelayRef: Bool,
 
   -- Prune algorithm
   prune: Bool,
@@ -92,6 +93,7 @@ let default = {
   outputMc = false,
   output = "out",
   staticDelay = false,
+  staticDelayRef = false,
   prune = false,
   printSamples = true,
   stackSize = 10000,
@@ -171,6 +173,10 @@ let config = [
     "Write output to <file> when compiling",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with output = argToString p}),
+  ([("--static-delay-ref", "", "")],
+    "The model is transformed to an efficient representation if possible using references.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with staticDelayRef = true}),
   ([("--static-delay", "", "")],
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.

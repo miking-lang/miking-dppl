@@ -13,6 +13,7 @@ include "../inference/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
 include "../static-delay.mc"
+include "../static-delay-ref.mc"
 include "../src-location.mc"
 
 
@@ -280,7 +281,7 @@ end
 -- or similar.
 lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
-  StaticDelay + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
+  DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat +
   ODETransform + DPPLTransformCancel + DPPLPruning +
   ElementaryFunctionsTransform
@@ -292,7 +293,9 @@ lang MExprCompile =
     -- Transform the model AST, if the flag is set
     let ast =
       if options.staticDelay then
-        staticDelay modelAst
+        use StaticDelay in staticDelay modelAst
+      else if options.staticDelayRef then
+        use StaticDelayRef in staticDelayRef modelAst
       else modelAst in
     -- Apply pruning to the model AST, if the flag is set
     let ast =
