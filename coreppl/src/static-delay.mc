@@ -503,11 +503,11 @@ lang CreatePBN = ConjugatePrior
     let pbn = findTargetRVs pbn (TmVar ind) in
     let v =
       -- if there is no such list node created, create a codeblock
-      match mapLookup seq.ident pbn.m with None () then
-        (createCodeBlock pbn cAcc (TmApp a) (cAcc.vertexId,cAcc.blockIdent)).0
-      else -- there is a list node created which consists of valid items
+      match mapLookup seq.ident pbn.m with Some (ListNode _) then -- there is a list node created which consists of valid items
         let lst = mapLookupOrElse (lam. error "not found") seq.ident pbn.m in
         MultiplexerNode {ident=id,indexId=ind.ident,list=lst,plateId=ref cAcc.plateId,mDist=ref (None ())}
+      else 
+        (createCodeBlock pbn cAcc (TmApp a) (cAcc.vertexId,cAcc.blockIdent)).0
     in
     match addVertex pbn cAcc (v,id) with (pbn,cAcc) in
     let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) (TmApp a)) in
@@ -847,8 +847,8 @@ lang TransformPBN = ConjugatePrior
     let selectedBlock = CodeBlockNode {ident=nameSym "", code=pMarginalizedDistParam, ret=false, plateId=t.plateId} in
     let pbn = addVertexPBN pbn selectedBlock in
 
-    match get l.items 0 with RandomVarNode a in 
     let pbn = {pbn with g=digraphMaybeAddEdge cb selectedBlock 0 pbn.g} in
+    match get l.items 0 with RandomVarNode a in 
     match deref a.mDist with Some mdist in
     let pbn = inheritMDependencies pbn selectedBlock (MultiplexerNode p) in
     let pMarginalizedDist = changeParams selectedParamId mdist in
@@ -1151,11 +1151,6 @@ lang TransformPBN = ConjugatePrior
     let e = nameSym "e" in
     let index = mapLookupOrElse (lam. error "") (getId v.1) (deref f.vToIndex) in
     let params = tupleproj_ index (nvar_ f.lamAccId)  in
-    let code = match l.create with Some rep then
-      match deref l.outParam with Some outParam then (nvar_ outParam)
-      else match get l.items 0 with RandomVarNode v in 
-        match deref (v.mDist) with Some pMarginalizedDist in create_ rep (ulam_ "" (getParams pMarginalizedDist)) 
-    else seq_ (map (lam i. match i with RandomVarNode v in match (deref v.mDist) with Some md in getParams md) l.items) in
     let code = mapi_ (nulam_ i 
       (nulam_ e 
         (if_ (eqi_ (nvar_ i) (nvar_ p.indexId)) reorderedParam (nvar_ e)))) (params) in
