@@ -250,9 +250,9 @@ lang LoadRuntime =
     in
     let replaceInEnv = lam env. mapMapWithKey (lam. lam id. replaceId id) env in
     let replaceInSymEnv = lam symEnv.
-      {symEnv with varEnv = replaceInEnv symEnv.varEnv,
-                   conEnv = replaceInEnv symEnv.conEnv,
-                   tyConEnv = replaceInEnv symEnv.tyConEnv}
+      let symEnv = symbolizeUpdateVarEnv synEnv (replaceInEnv symEnv.currentEnv.varEnv) in
+      let symEnv = symbolizeUpdateConEnv synEnv (replaceInEnv symEnv.currentEnv.conEnv) in
+      let symEnv = symbolizeUpdateTyConEnv synEnv (replaceInEnv symEnv.currentEnv.tyConEnv) in
     in
     replaceInSymEnv symEnv
 end
