@@ -1238,6 +1238,7 @@ lang TransformPBN = ConjugatePrior
     -- create the outblock that gets the result from foldnode
     let outName = nameSym "postParam" in
     let vId = match v.1 with MultiplexerNode l then (getId l.list) else (getId v.1) in
+    let pAccE = match mapLookup vId (deref f.margPIdM) with Some id then Some id else None () in
     let index = mapLookupOrElse (lam. error "index not found") vId (deref f.vToIndex) in
     let ppid = match v.1 with MultiplexerNode m then match m.list with ListNode l in l.plateId
       else match v.1 with RandomVarNode p then p.plateId else never in
@@ -1247,7 +1248,7 @@ lang TransformPBN = ConjugatePrior
     match createRParameterTDPH pbn tAcc (outName,outBlock) (None ()) v with (pbn, tAcc, paramName, paramBlock) in
     -- here should get the return value as the marginalized
     let res = match mapLookup f.retBlockId pbn.m with Some (CodeBlockNode rt) then
-      match mapLookup vId (deref f.margPIdM) with Some id then
+      match pAccE with Some id then
           let updatedB = CodeBlockNode {rt with code=(nulet_ f.retBlockId (utuple_ [nvar_ paramName]))} in
          (addVertexPBN pbn updatedB, updatedB)
       else addParam pbn (nvar_ paramName) (CodeBlockNode rt)
