@@ -818,6 +818,7 @@ lang TransformPBN = ConjugatePrior
       let v = mapLookupOrElse (lam. error "lookup failed") id pbn.m in
       {pbn with g=digraphAddEdge v derefCB 0 pbn.g} else pbn in
     let pbn = inheritMDependencies pbn paramCB v.1 in
+    match (deref p.mDist) with Some pMarginalizedDist in
     modref p.mDist (Some (changeParams mParamId pMarginalizedDist));
     createMParameterNP pbn tAcc v
   | (RandomVarNode t, MultiplexerNode p)&v -> --(pbn, tAcc)
