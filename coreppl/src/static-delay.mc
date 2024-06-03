@@ -111,7 +111,7 @@ lang PBNGraph = MExprAst + MExprPPL
   | CodeBlockNode v -> let id = v.ident in 
                       let plateStr =match deref v.plateId with Some id then join ["(", id.0, ", ",(int2string (sym2hash id.1)), ")"] else "-" in                       let ret = if v.ret then " true" else " false" in
                       join ["\nCodeBlockNode ident: (", id.0, ", ",(int2string (sym2hash id.1)), ")",
-                          -- "\nCode:",expr2str v.code,
+                           "\nCode:",expr2str v.code,
                             "\nIsRet:",ret,
                             "\nplateId: ", plateStr,"\n"]
   | ListNode v -> let id = v.ident in
@@ -470,6 +470,15 @@ lang CreatePBN = ConjugatePrior
     let g = digraphMaybeAddEdges edges pbn.g in
     ({{pbn with targets=targets} with g=g},{cAcc with blockIdent=None()} ,Some v)
   | TmVar t -> if cAcc.isRet then createPBNGeneric pbn cAcc (TmVar t) else never -- aliases are removed
+  | TmRecLets t -> match createPBNGeneric pbn cAcc (TmRecLets t) with (pbn,cAcc,Some v) in
+    let blockIdent = match v with CodeBlockNode c then c.ident else never in
+    let res = foldl (lam acc. lam b. match acc with (pbn,cAcc) in
+      let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) b.body) in
+      let g = digraphMaybeAddEdges edges pbn.g in
+      ({{pbn with g=g} with m =mapInsert b.ident v pbn.m}, {cAcc with m =mapInsert b.ident blockIdent cAcc.m})
+      ) (pbn,cAcc) t.bindings
+    in match res with (pbn,cAcc) in
+    (pbn,cAcc,Some v)
   | TmSeq t ->
     -- get the ident if it comes from a let expression
     let id = match cAcc.vertexId with Some id then id else nameSym "seq" in
@@ -477,14 +486,14 @@ lang CreatePBN = ConjugatePrior
     let items = map (lam v. match v with TmVar v in mapLookup v.ident pbn.m) t.tms in
     let v = if validList pbn items then
       let items = map (lam r. match r with Some (RandomVarNode r) in modref r.listId (Some id);RandomVarNode r) items in
-      (ListNode {ident=id, items=items,plateId=ref cAcc.plateId,create=None (),dist=getDist (get items 0),lamParam=ref (None ()), outParam=ref (None ())},pbn)
+      (ListNode {ident=id, items=items,plateId=ref cAcc.plateId,create=None (),dist=getDist (get items 0),lamParam=ref (None ()), outParam=ref (None ())},pbn,cAcc)
     else -- if items are not valid, then this should be code block so no transformation will be performed
         let res = createCodeBlock pbn cAcc (TmSeq t) (cAcc.vertexId,cAcc.blockIdent) in
         let edges = setToSeq (createEdges res.0 pbn cAcc (setEmpty cmprEdge) (TmSeq t)) in
         let g = digraphMaybeAddEdges edges pbn.g in
-        (res.0,{pbn with g=g})
+        (res.0,{pbn with g=g}, {cAcc with vertexId=Some id})
     in
-    match addVertex v.1 cAcc (v.0,id) with (pbn,cAcc) in
+    match addVertex v.1 v.2 (v.0,id) with (pbn,cAcc) in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
     (pbn,{cAcc with blockIdent=blockIdent} ,Some v.0)
     | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CCreate()}&c),rhs=rep})&a1),
@@ -543,7 +552,7 @@ lang CreatePBN = ConjugatePrior
     let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
     --let pbn = findTargetRVs pbn t in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
-    (pbn,{cAcc with blockIdent=blockIdent}, Some v.0)
+    (pbn,{{cAcc with blockIdent=blockIdent} with vertexId=Some id}, Some v.0)
 
 end
 
@@ -1329,12 +1338,10 @@ lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
 
   sem transformModel =
   | prog -> 
-    let model = use MExprPPLStaticDelayedANF in (normalizeTerm prog) in
+    let model = use MExprPPLStaticDelayedANF in (normalizeTerm prog) in 
     let model = removeAlias (mapEmpty nameCmp) model in
     let pbn = createM model in
-
     let pbn = transformPBN ({pbn with targets=(distinct nameEq pbn.targets)},(emptyTAcc ())) in
-    print (digraphToDot v2str int2string pbn.g);
     recreate pbn
 
   sem transformLam: Expr -> Expr
