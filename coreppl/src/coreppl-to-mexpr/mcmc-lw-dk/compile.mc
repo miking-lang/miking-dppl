@@ -408,13 +408,13 @@ let compilerDkMCMC = lam options. use MExprPPLDkMCMC in
 
   switch (options.align, options.cps)
     case (true,"none") then
-      ("mcmc-lightweight/runtime-aligned.mc", compileAligned options)
+      ("mcmc-lw-dk/runtime-aligned.mc", compileAligned options)
     case (true,_) then
-      ("mcmc-lightweight/runtime-aligned-cps.mc", compileAlignedCps options)
+      ("mcmc-lw-dk/runtime-aligned-cps.mc", compileAlignedCps options)
     case (false,"none") then
-      ("mcmc-lightweight/runtime.mc", compile options)
+      ("mcmc-lw-dk/runtime.mc", compile options)
     case (false,_) then
       -- TODO(2023-05-17,dlunde): Currently the same as non-CPS. Switch to
       -- CPS-version when implemented.
-      ("mcmc-lightweight/runtime.mc", compile options)
+      ("mcmc-lw-dk/runtime.mc", compile options)
   end

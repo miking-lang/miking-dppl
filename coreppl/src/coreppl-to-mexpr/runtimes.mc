@@ -217,6 +217,7 @@ lang LoadRuntime =
       ("printAcceptanceRate", bool_ options.printAcceptanceRate),
       ("subsample", bool_ options.subsample),
       ("subsampleSize", int_ options.subsampleSize),
+      ("driftScale", float_ options.driftScale),
 
       -- NOTE(dlunde,2022-11-04): Emulating option type
       ("seedIsSome",

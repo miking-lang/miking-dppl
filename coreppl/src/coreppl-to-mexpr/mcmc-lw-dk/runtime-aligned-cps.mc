@@ -85,6 +85,9 @@ let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
 
 let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
+  --We have access here to the driftScale parameter
+  --printLn (float2string compileOptions.driftScale);
+
   let s = use RuntimeDist in sample dist in
   let w = use RuntimeDist in logObserve dist s in
   (unsafeCoerce s, w)
