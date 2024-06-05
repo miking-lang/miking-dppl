@@ -51,8 +51,9 @@ type State a = {
   oldUnalignedTraces: Ref [[(Any, Float, Int)]],
 
   -- Aligned trace length (a constant, determined at the first run)
-  alignedTraceLength: Ref Int
+  alignedTraceLength: Ref Int,
 
+  prevValue: Ref Any
 }
 
 -- NOTE(dlunde,2022-05-23): The below implementation does not
@@ -78,19 +79,29 @@ let state: State Result = {
   reuseUnaligned = ref true,
   oldAlignedTrace = ref (emptyList ()),
   oldUnalignedTraces = ref (emptyList ()),
-  alignedTraceLength = ref (negi 1)
+  alignedTraceLength = ref (negi 1),
+  prevValue = ref (None)
 }
 
 let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
 
-let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
+let newSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float) = lam dist. lam sample.
   --We have access here to the driftScale parameter
-  --printLn (float2string compileOptions.driftScale);
-
-  let s = use RuntimeDist in sample dist in
-  let w = use RuntimeDist in logObserve dist s in
-  (unsafeCoerce s, w)
+  use RuntimeDistElementary in
+  match dist with DistGamma d then
+    let s: Float = unsafeCoerce sample in
+    let kernelGaussian = DistGaussian {
+      mu = s,
+      sigma = compileOptions.driftScale
+      } in
+    let s = use RuntimeDist in sample kernelGaussian in
+    let w = use RuntimeDist in logObserve kernelGaussian s in
+    (unsafeCoerce s, w)
+  else
+    let s = use RuntimeDist in sample dist in
+    let w = use RuntimeDist in logObserve dist s in
+    (unsafeCoerce s, w)
 
 let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
   lam dist. lam sample. lam w.
@@ -140,11 +151,13 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> (a -> Result) -> Resu
       -- print "Aligned ";
       reuseSample dist sample w
     else
-      newSample dist
+      let prev = deref state.prevSample in
+      newSample dist prev
   ) d
 
 let sampleAlignedForceNew: all a. use RuntimeDistBase in Dist a -> (a -> Result) -> Result =
-  lam d. sampleAlignedBase newSample d
+  let prev = deref state.prevSample in
+  lam d. sampleAlignedBase newSample d prev
 
 let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. lam dist.
   let sample: (Any, Float) =
@@ -157,11 +170,14 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
           -- print "Unaligned ";
           reuseSample dist sample w
         else
-          modref state.reuseUnaligned false; newSample dist
+          let prev = deref state.prevSample in
+          modref state.reuseUnaligned false; newSample dist prev
       else
-        newSample dist
+        let prev = deref state.prevSample in
+        newSample dist prev
     else
-      newSample dist
+      let prev = deref state.prevSample in
+      newSample dist prev
   in
   match deref state.unalignedTraces with [current] ++ rest in
   match sample with (sample,w) in
@@ -243,6 +259,8 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
         let prevSample = head samples in
+        -- Save the previous sample
+        modref state.prevSample (Some prevSample);
         let prevWeight = head weights in
         let sample = runNext config model in
         -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
