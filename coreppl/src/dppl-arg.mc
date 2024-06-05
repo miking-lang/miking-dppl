@@ -114,7 +114,7 @@ let config = [
   -- TODO(dlunde,2022-11-14): Could we automatically generate the list of available inference algorithms instead of hardcoding it?
   ([("-m", " ", "<method>")],
     join [
-      "The selected inference method. The supported methods are: is-lw, smc-bpf, smc-apf, mcmc-lightweight, mcmc-trace, mcmc-naive, pmcmc-pimh. Default: ",
+      "The selected inference method. The supported methods are: is-lw, smc-bpf, smc-apf, mcmc-lightweight, mcmc-lw-dk, mcmc-trace, mcmc-naive, pmcmc-pimh. Default: ",
       default.method
     ],
     lam p: ArgPart Options.

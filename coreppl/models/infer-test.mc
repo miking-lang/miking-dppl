@@ -60,6 +60,9 @@ printDist dist;
 let dist = infer (LightweightMCMC {iterations = p}) (lam. model alpha beta) in
 printDist dist;
 
+let dist = infer (DkMCMC {iterations = p}) (lam. model alpha beta) in
+printDist dist;
+
 let dist = infer (NaiveMCMC {iterations = p}) (lam. model alpha beta) in
 printDist dist;
 
