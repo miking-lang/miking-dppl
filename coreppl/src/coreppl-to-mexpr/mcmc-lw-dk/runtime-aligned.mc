@@ -40,7 +40,7 @@ type State = {
   reuseUnaligned: Ref Bool,
 
   -- The previous aligned trace, with potentially invalidated samples
-  oldAlignedTrace: Ref [Option (Any, Float)],
+  oldAlignedTrace: Ref [Option (Any, Float, Bool)],
   -- The previous unaligned traces in between the aligned traces, including
   -- their syntactic ID for matching.
   oldUnalignedTraces: Ref [[(Any, Float, Int)]],
@@ -80,7 +80,7 @@ let updateWeight = lam v.
 let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float,Bool) = lam dist.
   let s = use RuntimeDist in sample dist in
   let w = use RuntimeDist in logObserve dist s in
-  (unsafeCoerce s, w, False)
+  (unsafeCoerce s, w, false)
 
 
 -- This is the drift kernel function
@@ -97,11 +97,11 @@ let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) 
       } in
     let s = use RuntimeDist in sample kernelGaussian in
     let w = use RuntimeDist in logObserve kernelGaussian s in
-    (unsafeCoerce s, w,False)
-  else
-    let s = use RuntimeDist in sample dist in
-    let w = use RuntimeDist in logObserve dist s in
-    (unsafeCoerce s, w,False)
+    (unsafeCoerce s, w,false)
+  else -- TODO match more distributions here
+  -- Finally we counldn't find a match, so we resample
+  -- printLn "Couldn't auto move, redrawing";
+    newSample dist
 
 let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float, Bool) =
   lam dist. lam sample. lam w.
@@ -111,7 +111,7 @@ let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, F
     -- printLn (join ["Mod prevWeightReused: ", float2string w]);
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
-    (sample, wNew, False)
+    (sample, wNew, false)
 
 -- Procedure at aligned samples
 let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
@@ -120,12 +120,13 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
     match oldAlignedTrace with [sample] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
       match sample with Some (sample,w,move) then
-        if move then
+        --printLn (bool2string move);
+        if (not move) then
           modref countReuse (addi 1 (deref countReuse));
-          -- print "Aligned ";
+          --print "Aligned ";
           reuseSample dist sample w
         else
-          -- printLn "Not reused!";
+          --printLn "Moving invalidated aligned sample!";
           moveSample dist sample
       else
         never -- existing samples should always have the structure (Any,Float,Bool)
@@ -179,12 +180,10 @@ let modTrace: Unknown -> () = lam config.
   recursive let rec: Int -> [(Any,Float,Bool)] -> [Option (Any,Float,Bool)]
                        -> [Option (Any,Float,Bool)] =
     lam i. lam samples. lam acc.
-      match samples with [sample] ++ samples then
+      match samples with [(s,w,m)] ++ samples then
         -- Invalidate sample if it has the invalid index
-        let acc: [Option (Any, Float)] =
-          cons (if eqi i 0 then 
-            match sample with (s,w,m) then (s,w,True) else never
-          else Some sample) acc in
+        let acc: [Option (Any, Float, Bool)] =
+          cons (if eqi i 0 then Some (s,w,true) else Some (s,w,m)) acc in
         rec (subi i 1) samples acc
 
       else acc
