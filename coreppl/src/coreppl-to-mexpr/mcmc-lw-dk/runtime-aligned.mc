@@ -29,7 +29,9 @@ type State = {
   -- in _reverse_ order (unlike oldAlignedTrace and oldUnalignedTraces that are
   -- stored in the actual order)
   -- The aligned trace for this execution.
-  alignedTrace: Ref [(Any, Float)],
+  -- NOTE(vsenderov, 2024-06-06): We introduce the Bool to the aligned trace
+  -- to indicate whether the particular sample should be moved with a drift kernel
+  alignedTrace: Ref [(Any, Float, Bool)],
   -- The unaligned traces in between the aligned traces, including their
   -- syntactic ID for matching.
   unalignedTraces: Ref [[(Any, Float, Int)]],
@@ -74,12 +76,34 @@ let state: State = {
 let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
 
-let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
+-- NOTE(vsenderov, 2024-06-06): Changed the type signature of the trace
+let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float,Bool) = lam dist.
   let s = use RuntimeDist in sample dist in
   let w = use RuntimeDist in logObserve dist s in
-  (unsafeCoerce s, w)
+  (unsafeCoerce s, w, False)
 
-let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
+
+-- This is the drift kernel function
+-- TODO(vsenderov, 2024-06-06): Change to do more distributions, for Tim
+let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) = 
+  lam dist. lam prev.
+  --We have access here to the driftScale parameter
+  use RuntimeDistElementary in
+  match dist with DistGamma d then
+    let s: Float = unsafeCoerce prev in
+    let kernelGaussian = DistGaussian {
+      mu = s,
+      sigma = compileOptions.driftScale
+      } in
+    let s = use RuntimeDist in sample kernelGaussian in
+    let w = use RuntimeDist in logObserve kernelGaussian s in
+    (unsafeCoerce s, w,False)
+  else
+    let s = use RuntimeDist in sample dist in
+    let w = use RuntimeDist in logObserve dist s in
+    (unsafeCoerce s, w,False)
+
+let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float, Bool) =
   lam dist. lam sample. lam w.
     let s: a = unsafeCoerce sample in
     let wNew = use RuntimeDist in logObserve dist s in
@@ -87,21 +111,24 @@ let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, F
     -- printLn (join ["Mod prevWeightReused: ", float2string w]);
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
-    (sample, wNew)
+    (sample, wNew, False)
 
 -- Procedure at aligned samples
 let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
-  let oldAlignedTrace: [Option (Any,Float)] = deref state.oldAlignedTrace in
-  let sample: (Any, Float) =
+  let oldAlignedTrace: [Option (Any,Float,Bool)] = deref state.oldAlignedTrace in
+  let sample: (Any, Float, Bool) =
     match oldAlignedTrace with [sample] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
-      match sample with Some (sample,w) then
-        modref countReuse (addi 1 (deref countReuse));
-        -- print "Aligned ";
-        reuseSample dist sample w
+      match sample with Some (sample,w,move) then
+        if move then
+          modref countReuse (addi 1 (deref countReuse));
+          -- print "Aligned ";
+          reuseSample dist sample w
+        else
+          -- printLn "Not reused!";
+          moveSample dist sample
       else
-        -- printLn "Not reused!";
-        newSample dist
+        never -- existing samples should always have the structure (Any,Float,Bool)
     else
       -- This case should only happen in the first run when there is no
       -- previous aligned trace, or when we take a global step
@@ -149,13 +176,15 @@ let modTrace: Unknown -> () = lam config.
 
   let alignedTraceLength: Int = deref state.alignedTraceLength in
 
-  recursive let rec: Int -> [(Any,Float)] -> [Option (Any,Float)]
-                       -> [Option (Any,Float)] =
+  recursive let rec: Int -> [(Any,Float,Bool)] -> [Option (Any,Float,Bool)]
+                       -> [Option (Any,Float,Bool)] =
     lam i. lam samples. lam acc.
       match samples with [sample] ++ samples then
         -- Invalidate sample if it has the invalid index
         let acc: [Option (Any, Float)] =
-          cons (if eqi i 0 then None () else Some sample) acc in
+          cons (if eqi i 0 then 
+            match sample with (s,w,m) then (s,w,True) else never
+          else Some sample) acc in
         rec (subi i 1) samples acc
 
       else acc
