@@ -47,6 +47,8 @@ utest r (t 1000 500 "-m mcmc-lightweight --align --cps partial"    ) with rhs us
 utest r (t 1000 500 "-m mcmc-lightweight --align --cps full"       ) with rhs using e in
 utest r (t 1000 500 "-m mcmc-lightweight"                          ) with rhs using e in
 
+utest r (t 1000 500 "-m mcmc-lw-dk --align --cps none --drift 0.1"       ) with rhs using e in
+
 
 -----------------
 -- Alcedinidae --

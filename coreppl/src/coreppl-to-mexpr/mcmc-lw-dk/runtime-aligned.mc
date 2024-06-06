@@ -151,7 +151,7 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
   unsafeCoerce (sample.0)
 
 let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. lam dist.
-  let sample: (Any, Float) =
+  let sample: (Any, Float, Bool) =
     if deref state.reuseUnaligned then
       let oldUnalignedTraces = deref state.oldUnalignedTraces in
       match oldUnalignedTraces with [[(sample,w,iOld)] ++ samples] ++ rest then
@@ -168,7 +168,7 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
       newSample dist
   in
   match deref state.unalignedTraces with [current] ++ rest in
-  match sample with (sample,w) in
+  match sample with (sample,w,m) in
   modref state.unalignedTraces (cons (cons (sample,w,i) current) rest);
   unsafeCoerce sample
 
