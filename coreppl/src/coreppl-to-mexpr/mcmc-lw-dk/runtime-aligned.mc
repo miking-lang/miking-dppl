@@ -83,24 +83,70 @@ let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float,Bool) = lam di
   (unsafeCoerce s, w, false)
 
 
--- This is the drift kernel function
--- TODO(vsenderov, 2024-06-06): Change to do more distributions, for Tim
+-- Drift Kernel Function
+-- We have access here to the driftScale parameter compileOptions.driftScale
 let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) = 
   lam dist. lam prev.
-  --We have access here to the driftScale parameter
   use RuntimeDistElementary in
-  match dist with DistGamma d then
-    let s: Float = unsafeCoerce prev in
-    let kernelGaussian = DistGaussian {
-      mu = s,
+  match dist with DistGamma d then 
+    --printLn "Gamma match";
+    -- NOTE(vsenderov, 2024-Jun-10): 
+    -- Possible alternatives here:
+    --   - use a log-normal proposal (need to pay attention to Jacobian weight!)
+    --   - use the Gamma dist itself by adjust its scale (or shape),
+    --     but potentially this will lead to very local proposals if rate goes down
+    
+    -- 1. Log Transformation
+    let x: Float = unsafeCoerce prev in
+    let logX = log x in
+
+    -- 2. Sampling in Log-Space using Normal Distribution
+    let kernel = DistGaussian {
+      mu = logX,
       sigma = compileOptions.driftScale
-      } in
-    let s = use RuntimeDist in sample kernelGaussian in
-    let w = use RuntimeDist in logObserve kernelGaussian s in
-    (unsafeCoerce s, w,false)
-  else -- TODO match more distributions here
+    } in
+    let logXp = use RuntimeDist in sample kernel in
+
+    -- 3. Exponential Transformation to Original Space
+    let xp = unsafeCoerce (exp logXp) in
+
+    -- 4. Correcting the Weight with the Jacobian Term
+    let kernelWeight = subf (use RuntimeDist in logObserve kernel logXp) logXp in -- correct
+    -- let kernelWeight = (use RuntimeDist in logObserve kernel logXp) in  -- TEST ERROR, don't uncomment unless testing
+
+    -- 5. Computing the prior weight of the proposal, not needed with the correct weight
+    let priorWeight = use RuntimeDist in logObserve dist xp in
+
+    -- 6. Putting it all together
+    let w = subf priorWeight kernelWeight  in 
+    -- let w = subf kernelWeight priorWeight in -
+    -- let w = kernelWeight in 
+    (unsafeCoerce xp, w,false)
+    
+  -- TODO match more distributions here, next attempt at Poisson:
+  -- The shift on Poisson has no parameters yet, everything hard-coded
+  --   else match dist with DistPoisson d then
+  --     --printLn "Poisson match";
+  -- --      --newSample dist   -- early abort
+  --     if (bernoulliSample 0.5) then
+  --       --printLn "Flipping";
+  --       newSample dist
+  --     else
+    -- ? reuseSample dist sample w -- but we do not have w
+  --       let s = unsafeCoerce prev in
+  --       let w = use RuntimeDist in logObserve dist s in
+  --       (unsafeCoerce s, w ,false)
+  -- --   if eqi st 0 then 
+  -- --     (unsafeCoerce 1,0.,false)
+  --   else
+  --     let kernelChoice = DistBernoulli { p = 0.5 } in
+  --     let increase = use RuntimeDist in sample kernelChoice in
+  --     let s = if increase then addi st 1 else subi st 1 in
+  --     let w = negf 0.30102999566 in -- log 0.5
+  --     (unsafeCoerce s,w,false)
+
+  else 
   -- Finally we counldn't find a match, so we resample
-  -- printLn "Couldn't auto move, redrawing";
     newSample dist
 
 let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float, Bool) =
@@ -189,13 +235,38 @@ let modTrace: Unknown -> () = lam config.
       else acc
   in
 
+  recursive let invalidateAll: [(Any,Float,Bool)] -> [Option (Any,Float,Bool)]
+                       -> [Option (Any,Float,Bool)] =
+    lam samples. lam acc.
+      match samples with [(s,w,m)] ++ samples then
+        -- Invalidate samples
+        let acc: [Option (Any, Float, Bool)] =
+          cons (Some (s,w,true)) acc in
+        invalidateAll samples acc
+      else acc
+  in
+
   -- Enable global modifications with probability gProb
   let gProb = config.globalProb in
   let modGlobal: Bool = bernoulliSample gProb in
 
   if modGlobal then
+    -- In case of a truly global move, redraw everything
     modref state.oldAlignedTrace (emptyList ());
     modref state.oldUnalignedTraces (emptyList ())
+  -- The following is probably correct (global local move),
+  -- but I haven't tested it
+  -- else if (bernoulliSample 0.5) then
+  --   -- TODO command line argument here
+  --   -- flip a coin and invalidate all samples 
+  --   -- for a global move with drift kerneles
+  --   --printLn "global move";
+  --   -- TODO instead of emptying the list here for the aligned trace
+  --   -- invalidate them with (_,_,false) so that they are _moved_
+  --   -- and not redrawn
+  --   modref state.oldAlignedTrace
+  --     (invalidateAll (deref state.alignedTrace) (emptyList ()));
+  --   modref state.oldUnalignedTraces (emptyList ())
   else
     -- One index must always change
     let invalidIndex: Int = uniformDiscreteSample 0 (subi alignedTraceLength 1) in
@@ -250,12 +321,14 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
         -- printLn "-----";
         let iter = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then
+          --printLn "accept";
           mcmcAccept ();
           mh
             (cons weight weights)
             (cons sample samples)
             iter
         else
+          --printLn "reject";
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
           -- as we reject and reuse the old sample.
           modref state.alignedTrace prevAlignedTrace;

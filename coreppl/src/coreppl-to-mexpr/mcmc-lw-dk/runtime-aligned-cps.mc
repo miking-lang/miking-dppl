@@ -265,12 +265,14 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
         -- printLn "-----";
         let iter = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then
+          printLn "Accept";
           mcmcAccept ();
           mh
             (cons weight weights)
             (cons sample samples)
             iter
         else
+          printLn "Reject";
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
           -- as we reject and reuse the old sample.
           modref state.alignedTrace prevAlignedTrace;
