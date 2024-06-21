@@ -83,13 +83,14 @@ let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float,Bool) = lam di
   (unsafeCoerce s, w, false)
 
 
+
 -- Drift Kernel Function
 -- We have access here to the driftScale parameter compileOptions.driftScale
-let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) = 
+let moveSampleOld: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) = 
   lam dist. lam prev.
   use RuntimeDistElementary in
   match dist with DistGamma d then 
-    --printLn "Gamma match";
+    -- printLn "Gamma match";
     -- NOTE(vsenderov, 2024-Jun-10): 
     -- Possible alternatives here:
     --   - use a log-normal proposal (need to pay attention to Jacobian weight!)
@@ -99,6 +100,8 @@ let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) 
     -- 1. Log Transformation
     let x: Float = unsafeCoerce prev in
     let logX = log x in
+
+    printLn (float2string x);
 
     -- 2. Sampling in Log-Space using Normal Distribution
     let kernel = DistGaussian {
@@ -118,9 +121,9 @@ let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) 
     let priorWeight = use RuntimeDist in logObserve dist xp in
 
     -- 6. Putting it all together
-    let w = subf priorWeight kernelWeight  in 
+    -- let w = subf priorWeight kernelWeight  in 
     -- let w = subf kernelWeight priorWeight in -
-    -- let w = kernelWeight in 
+    let w = kernelWeight in 
     (unsafeCoerce xp, w,false)
     
   -- TODO match more distributions here, next attempt at Poisson:
@@ -133,6 +136,79 @@ let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> (Any,Float,Bool) 
   --       newSample dist
   --     else
     -- ? reuseSample dist sample w -- but we do not have w
+  --       let s = unsafeCoerce prev in
+  --       let w = use RuntimeDist in logObserve dist s in
+  --       (unsafeCoerce s, w ,false)
+  -- --   if eqi st 0 then 
+  -- --     (unsafeCoerce 1,0.,false)
+  --   else
+  --     let kernelChoice = DistBernoulli { p = 0.5 } in
+  --     let increase = use RuntimeDist in sample kernelChoice in
+  --     let s = if increase then addi st 1 else subi st 1 in
+  --     let w = negf 0.30102999566 in -- log 0.5
+  --     (unsafeCoerce s,w,false)
+
+  else 
+  -- Finally we counldn't find a match, so we resample
+    newSample dist
+
+
+
+-- Drift Kernel Function
+-- - we have access here to the driftScale parameter compileOptions.driftScale
+-- - modeled on reuseSample
+let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float, Bool) = 
+  lam dist. lam prev. lam w.
+  use RuntimeDistElementary in
+  match dist with DistGamma d then 
+    -- printLn "Gamma match";
+    -- NOTE(vsenderov, 2024-Jun-10): Possible alternatives here:
+    -- - use a log-normal proposal (need to pay attention to Jacobian weight!)
+    -- - use the Gamma dist itself by adjust its scale (or shape),  but potentially this will lead to very local proposals if rate goes down
+    
+    let s: Float = unsafeCoerce prev in
+    -- printLn (float2string s);
+    let logS: Float = log s in
+    let kernel = DistGaussian {
+      mu = logS,
+      sigma = compileOptions.driftScale
+    } in
+    let logSNew = use RuntimeDist in sample kernel in
+    let sNew = exp logSNew in 
+    -- printLn "Propopsing ->";
+    -- printLn (float2string sNew);
+    
+    let sNew = unsafeCoerce sNew in
+    let priorWeight = use RuntimeDist in logObserve dist sNew in
+
+    -- Correcting the Weight with the Jacobian Term, intention: logObserve LogNormal sNew
+    --let forwardDensity = subf (use RuntimeDist in logObserve kernel logSNew) logSNew in -- correct
+    --let backwardDensity = subf (use RuntimeDist in logObserve kernel logS) logS in
+    --let hastingsRatio = subf backwardDensity forwardDensity in 
+    -- Simplifies due to symmetric kernel:
+    let hastingsRatio = subf logSNew logS in 
+    let wNew = addf priorWeight hastingsRatio in
+
+    -- printLn "wNew, wOld:";
+    -- printLn (float2string wNew);
+    -- printLn (float2string w);
+
+    modref state.weightReused (addf (deref state.weightReused) wNew);
+    modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
+                    
+    --(unsafeCoerce sNew, priorWeight, false)
+    (unsafeCoerce sNew, wNew, false)
+    
+  -- TODO match more distributions here, next attempt at Poisson:
+  -- The shift on Poisson has no parameters yet, everything hard-coded
+  --   else match dist with DistPoisson d then
+  --     --printLn "Poisson match";
+  -- --      --newSample dist   -- early abort
+  --     if (bernoulliSample 0.5) then
+  --       --printLn "Flipping";
+  --       newSample dist
+  --     else
+    -- ? reuseSample dist prev w -- but we do not have w
   --       let s = unsafeCoerce prev in
   --       let w = use RuntimeDist in logObserve dist s in
   --       (unsafeCoerce s, w ,false)
@@ -172,8 +248,10 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
           --print "Aligned ";
           reuseSample dist sample w
         else
-          --printLn "Moving invalidated aligned sample!";
-          moveSample dist sample
+          -- printLn "Moving invalidated aligned sample!";
+          modref countReuse (addi 1 (deref countReuse)); -- ?
+          moveSample dist sample w
+          --moveSampleOld dist sample
       else
         never -- existing samples should always have the structure (Any,Float,Bool)
     else
@@ -321,14 +399,14 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
         -- printLn "-----";
         let iter = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then
-          --printLn "accept";
+          -- printLn "Accept";
           mcmcAccept ();
           mh
             (cons weight weights)
             (cons sample samples)
             iter
         else
-          --printLn "reject";
+          -- printLn "Reject";
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
           -- as we reject and reuse the old sample.
           modref state.alignedTrace prevAlignedTrace;
