@@ -196,8 +196,9 @@ let moveSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Fl
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
                     
-    --(unsafeCoerce sNew, priorWeight, false)
-    (unsafeCoerce sNew, wNew, false)
+    -- NOTE(vsenderov): Tim could you figure which of the next two is correct?
+    -- (unsafeCoerce sNew, priorWeight, false) 
+    (unsafeCoerce sNew, wNew, false) 
     
   -- TODO match more distributions here, next attempt at Poisson:
   -- The shift on Poisson has no parameters yet, everything hard-coded
@@ -347,6 +348,12 @@ let modTrace: Unknown -> () = lam config.
   --   modref state.oldUnalignedTraces (emptyList ())
   else
     -- One index must always change
+    -- TODO hack: scan which state.oldAlignedTrace have Gamma distribution
+    -- and then invalidate only amongst them with some probability
+    -- and amongst the other guys with another probability
+    -- let nuisance: [Bool] = whichNuissance state.alignedTrace in
+    -- [False, False, False, True, True, True...] but permutations possible!
+    -- sample one of the False indicies somehow
     let invalidIndex: Int = uniformDiscreteSample 0 (subi alignedTraceLength 1) in
     modref state.oldAlignedTrace
       (rec invalidIndex (deref state.alignedTrace) (emptyList ()));

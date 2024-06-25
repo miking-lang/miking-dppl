@@ -208,3 +208,9 @@ let resDiffConf: CpplRes -> Float = lam cpplRes.
   logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
 let diffConfTruth: Float = 2.
 let eqDiffConf: Float -> Float -> Float -> Bool = eqfApprox
+
+-- models/toy/*.mc
+let toyTruth = {
+  mean = 3.0, -- analytical truth
+  normConst = negf 2.249468240075144 -- 100,000 particles SMC WebPPL
+}
