@@ -11,6 +11,7 @@ include "inference/smc-apf.mc"
 include "inference/smc-bpf.mc"
 include "inference/is-lw.mc"
 include "inference/mcmc-lightweight.mc"
+include "inference/mcmc-lw-dk.mc"
 include "inference/mcmc-naive.mc"
 include "inference/mcmc-trace.mc"
 include "inference/pmcmc-pimh.mc"
@@ -21,7 +22,7 @@ lang DPPLParser =
   KeywordMaker +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
-  LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
+  LightweightMCMCMethod  + DkMCMCMethod + NaiveMCMCMethod + TraceMCMCMethod +
   PIMHMethod +
 
   RK4Method
