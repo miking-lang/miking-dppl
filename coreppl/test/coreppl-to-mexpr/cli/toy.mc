@@ -46,7 +46,7 @@ printLn "Type I error may occur in tests";
 -- utest r (t 1000 500 "-m mcmc-lightweight --align --cps full"       ) with rhs using e in
 -- utest r (t 1000 500 "-m mcmc-lightweight"                          ) with rhs using e in
 utest r (t 10000 500 "-m mcmc-lightweight --align --cps none --mcmc-lw-gprob 0.0"      ) with rhs using e in
-utest r (t 10000 500 "-m mcmc-lw-dk --align --cps none --mcmc-lw-gprob 0.0 --drift 0.1") with rhs using e in
+utest r (t 100000 500 "-m mcmc-lw-dk --align --cps none --mcmc-lw-gprob 0.0 --drift 0.1") with rhs using e in
 
 
 
