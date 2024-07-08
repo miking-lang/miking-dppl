@@ -12,6 +12,7 @@ include "is-lw/compile.mc"
 include "mcmc-naive/compile.mc"
 include "mcmc-trace/compile.mc"
 include "mcmc-lightweight/compile.mc"
+include "mcmc-lw-dk/compile.mc"
 include "pmcmc-pimh/compile.mc"
 
 lang LoadRuntime =
@@ -53,6 +54,7 @@ lang LoadRuntime =
   | APF _ -> compilerAPF options
   | BPF _ -> compilerBPF options
   | LightweightMCMC _ -> compilerLightweightMCMC options
+  | DkMCMC _ -> compilerDkMCMC options
   | NaiveMCMC _ -> compilerNaiveMCMC options
   | TraceMCMC _ -> compilerTraceMCMC options
   | PIMH _ -> compilerPIMH options
@@ -215,6 +217,7 @@ lang LoadRuntime =
       ("printAcceptanceRate", bool_ options.printAcceptanceRate),
       ("subsample", bool_ options.subsample),
       ("subsampleSize", int_ options.subsampleSize),
+      ("driftScale", float_ options.driftScale),
 
       -- NOTE(dlunde,2022-11-04): Emulating option type
       ("seedIsSome",
