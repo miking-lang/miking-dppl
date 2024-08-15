@@ -34,6 +34,11 @@ lang DPPLExtract =
     match bindInferExpressions runtimes ast with (data, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
 
+    -- NOTE(vipa, 2023-10-10): This code was written before
+    -- `liftLambdasWithSolutions` handled tyVars, thus we discard that
+    -- information for now.
+    let solutions = mapMap (lam x. x.vars) solutions in
+
     let modelAsts : Map Name ModelRepr =
       mapMapWithKey
         (lam inferId. lam method.
