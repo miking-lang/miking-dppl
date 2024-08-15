@@ -1,8 +1,3 @@
-/-
-- MExprPPLStaticDelayedANF: normalizes the terms; however, apply special conditions to terms that create the vertices 
-- The tests for --static-delay can be run via `make -s -f test-coreppl.mk static-delay`
--/
-
 include "digraph.mc"
 include "coreppl.mc"
 include "dist.mc"
@@ -10,7 +5,7 @@ include "ext/math-ext.mc"
 include "mexpr/shallow-patterns.mc"
 
 let debug = false
--- This part is for the ANF transformation for not to ANF distributions with assume and observe but only the parameters
+-- This part is for the ANF transformation for not to ANF distributions with assume and observe as well as some constants but only the parameters
 lang MExprPPLStaticDelayedANF = MExprPPL + MExprANFAll
   sem normalize (k:Expr -> Expr) =
   | TmAssume ({ dist = TmDist ({ dist = dist } & td) } & t) ->
@@ -42,6 +37,23 @@ lang MExprPPLStaticDelayedANF = MExprPPL + MExprANFAll
              k (TmApp {{a1 with lhs= TmApp {{a2 with lhs=TmConst c} with rhs=
              TmLam {l with body=normalizeTerm l.body} }} with rhs=lst}))
       lst
+
+  | TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CMulf ())}&c),rhs=m1}&a2), rhs=m2}&a1) ->
+    normalizeName
+      (lam m1.
+        normalizeName
+          (lam m2.
+             k (TmApp {{a1 with lhs= TmApp {{a2 with lhs=TmConst c} with rhs=m1}} with rhs=m2}))
+          m2)
+      m1
+  | TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=m1}&a2), rhs=m2}&a1) ->
+    normalizeName
+      (lam m1.
+        normalizeName
+          (lam m2.
+             k (TmApp {{a1 with lhs= TmApp {{a2 with lhs=TmConst c} with rhs=m1}} with rhs=m2}))
+          m2)
+      m1
   | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CIteri ()}&c),rhs=TmLam ({body=TmLam l2}&l1)}&a2),rhs=lst}&a1) ->
     normalizeName
       (lam lst.
@@ -68,6 +80,11 @@ lang PBNGraph = MExprAst + MExprPPL
                     mDist:Ref (Option Dist),
                     listId:Ref (Option Name),
                     plateId:Ref (Option Name)} --if it belongs to a plate (ref to most inner plate)
+  | AffineNode {ident:Name,
+                    tVertex:Ref Vertex,
+                    meanScale:Expr,
+                    meanOffset:Expr,
+                    plateId:Ref (Option Name)}
   | CodeBlockNode {ident:Name,
                     code:Expr,
                     plateId:Ref (Option Name),
@@ -88,17 +105,8 @@ lang PBNGraph = MExprAst + MExprPPL
                varIds:[Name], -- new variables introduced
                iterlId:Name, -- name of the observations to iterate over
                plateId:Ref (Option Name)}--if it belongs to a plate
-  | FoldNode {ident:Name,
-               varIds:[Name], -- variables introduced got from plate 
-               lamAccId:Name, -- new lam acc id for updated parameters
-               --margPIdM:Ref (Map Name Name), -- keep track of the marginalized parameters of the outside values, normally we would acces the params by their distribution but we cannot do that since we assign fold's return value as the marginlaized parameter to the outside dist 
-               vToIndex:Ref (Map Name Int), -- parameters tag in the accumulated record
-               iterlId:Name, -- name of the observations to iterate over
-               plateId:Ref (Option Name),
-               retBlockId:Name,
-               accId:Name}
 
-  -- to print out the vertex types
+  -- to print a vertex
   sem v2str: Vertex -> String
   sem v2str =
   | RandomVarNode v -> let id = v.ident in 
@@ -111,7 +119,7 @@ lang PBNGraph = MExprAst + MExprPPL
   | CodeBlockNode v -> let id = v.ident in 
                       let plateStr =match deref v.plateId with Some id then join ["(", id.0, ", ",(int2string (sym2hash id.1)), ")"] else "-" in                       let ret = if v.ret then " true" else " false" in
                       join ["\nCodeBlockNode ident: (", id.0, ", ",(int2string (sym2hash id.1)), ")",
-                           "\nCode:",expr2str v.code,
+                         --  "\nCode:",expr2str v.code,
                             "\nIsRet:",ret,
                             "\nplateId: ", plateStr,"\n"]
   | ListNode v -> let id = v.ident in
@@ -127,13 +135,8 @@ lang PBNGraph = MExprAst + MExprPPL
                   let plateStr = match deref v.plateId with Some id then join ["(", id.0, ", ",(int2string (sym2hash id.1)), ")"] else "-" in
                         join ["\nPlateNode ident: (", id.0, ", ",(int2string (sym2hash id.1)), ")",
                               "\nplateId: ", plateStr]
-  | FoldNode v -> let id = v.ident in
-                  let plateStr = match deref v.plateId with Some id then join ["(", id.0, ", ",(int2string (sym2hash id.1)), ")"] else "-" in
+  | _ -> "AffineNode"
 
-                        join ["\nFoldNode ident: (", id.0, ", ",(int2string (sym2hash id.1)), ")"]
-
-  sem printVertices g =
-  | v2str -> iter (lam v. print (join [(v2str v), "\n"])) (digraphVertices g)
 
   sem cmprVertex: Vertex -> Vertex -> Int
   sem cmprVertex v1 =
@@ -146,9 +149,7 @@ lang PBNGraph = MExprAst + MExprPPL
   | (ListNode t1, ListNode t2) -> nameCmp t1.ident t2.ident
   | (MultiplexerNode t1, MultiplexerNode t2) -> nameCmp t1.ident t2.ident
   | (PlateNode t1, PlateNode t2) -> nameCmp t1.ident t2.ident
-  | (PlateNode t1, FoldNode t2) -> nameCmp t1.ident t2.ident
-  | (FoldNode t1, PlateNode t2) -> nameCmp t1.ident t2.ident
-  | (FoldNode t1, FoldNode t2) -> nameCmp t1.ident t2.ident
+  | (AffineNode t1, AffineNode t2) -> nameCmp t1.ident t2.ident
   | (t1,t2) -> subi (constructorTag t1) (constructorTag t2)
 
   sem cmprEdge: (Vertex,Vertex,Label) -> (Vertex,Vertex,Label) -> Int
@@ -159,12 +160,12 @@ lang PBNGraph = MExprAst + MExprPPL
   sem getId: Vertex -> Name
   sem getId =
   | (RandomVarNode {ident=id} | CodeBlockNode {ident=id} | MultiplexerNode {ident=id} |
-     ListNode {ident=id} | PlateNode {ident=id} | FoldNode {ident=id})-> id
+     ListNode {ident=id} | PlateNode {ident=id} | AffineNode {ident=id}) -> id
 
   sem getPlateId: Vertex -> Option Name
   sem getPlateId =
   | (RandomVarNode {plateId=pid} | CodeBlockNode {plateId=pid} | MultiplexerNode {plateId=pid} |
-     ListNode {plateId=pid}| PlateNode {plateId=pid}| FoldNode {plateId=pid})-> deref pid
+     ListNode {plateId=pid}| PlateNode {plateId=pid} | AffineNode {plateId=pid} ) -> deref pid
   
   sem getListId: Vertex -> Option Name
   sem getListId =
@@ -216,6 +217,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     match deref r.listId with Some _ then false --already in another list
     else validListH pbn (deref r.dist) as
   | [t] ++ as -> false
+  | _ -> false
 
   sem validListH: PBN -> Dist -> [Option Vertex] -> Bool
   sem validListH pbn dst =
@@ -243,8 +245,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   
   -- given the likelihood, the prior and the observartion calculates the posterior
   -- (d1: likelihood, d2: prior)
-  sem posterior: Option Expr -> Option (Name,Expr) -> Option Name -> (Dist,Dist) -> (Vertex,Dist,[Name])
-  sem posterior obs indices plateId =
+  sem posterior obs indices plateId meanSO =
   | (DBernoulli d1,DBeta d2) ->
     let val = match obs with Some val then val else never in
     let aName = nameSym "postA" in
@@ -265,19 +266,25 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   | (DGaussian d1, DGaussian d2) ->
     let muName = nameSym "postMu" in
     let sigmaName = nameSym "postSigma" in
+    match meanSO with (scale, offset) in
+    let mu0 = addf_ (mulf_ scale d2.mu) offset in
+    let absf = lam s. if_ (gtf_ s (float_ 0.)) s (negf_ s) in
+    let s0 =  mulf_ d2.sigma (absf scale) in
     let val = match obs with Some val then val else never in
-    let s02 = (mulf_ d2.sigma d2.sigma) in
+    let s02 = (mulf_ s0 s0) in
     let s2 = (mulf_ d1.sigma d1.sigma) in
-    let muRHS = addf_ (divf_ d2.mu s02) (divf_ val s2) in
+    let muRHS = addf_ (divf_ mu0 s02) (divf_ val s2) in
     let muLHS = divf_ (float_ 1.0) (addf_ (divf_ (float_ 1.0) s02) (divf_ (float_ 1.0) s2)) in
-    let postMu = nulet_ muName (mulf_ muRHS muLHS) in
-    let sigma = divf_ (float_ 1.0) (addf_ (divf_ (float_ 1.0) s02) (divf_ (float_ 1.0) s2)) in
-    let postSigma = nulet_ sigmaName (appf1_ (var_ "externalSqrt") sigma) in
+    let pMu =  divf_ (subf_ (mulf_ muRHS muLHS) offset) scale in
+    let postMu = nulet_ muName pMu in
+    let sigma2 = divf_ (float_ 1.0) (addf_ (divf_ (float_ 1.0) s02) (divf_ (float_ 1.0) s2)) in
+    let pSigma = divf_ (appf1_ (var_ "externalSqrt") sigma2) (absf scale) in
+    let postSigma = nulet_ sigmaName pSigma in
     let code = match indices with Some (mInd, lInd) then
       let eqN =(nameSym "eq") in
        bindall_ [nulet_ eqN ((eqi_ (nvar_ mInd) lInd)),
-                nulet_ muName ( if_ (nvar_ eqN) (mulf_ muRHS muLHS) d2.mu),
-                nulet_ sigmaName (if_ (nvar_ eqN) (appf1_ (var_ "externalSqrt") sigma) d2.sigma)
+                nulet_ muName ( if_ (nvar_ eqN) pMu mu0),
+                nulet_ sigmaName (if_ (nvar_ eqN) pSigma s0)
                 ]
       else (bind_ postMu postSigma) in
     let tName = nameSym "paramR" in
@@ -301,8 +308,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
 
   -- input (d1: likelihood, d2: prior)
   -- output (rho:Vertex, q:Expr)
-  sem posteriorPredictive: Option Name -> (Dist,Dist) -> Option (Vertex,Dist)
-  sem posteriorPredictive plateId =
+  sem posteriorPredictive plateId meanSO =
   | (DBernoulli d1, DBeta d2) ->
     let postP = divf_ d2.a (addf_ d2.a d2.b) in
     let tName = nameSym "param" in
@@ -310,19 +316,21 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let letT = nulet_ pName postP in
     let rho = CodeBlockNode {ident=tName, code=letT, ret=false,plateId=ref plateId} in
     Some (rho, DBernoulli {d1 with p=nvar_ pName})
-
   | (DGaussian d1,DGaussian d2) ->
-    let s02 = (mulf_ d2.sigma d2.sigma) in
+    match meanSO with (scale, offset) in
+    let mu0 =  addf_ (mulf_ scale d2.mu) offset in
+    let absf = lam s. if_ (geqf_ s (float_ 0.)) s (negf_ s) in
+    let s0 =  mulf_ d2.sigma (absf scale) in
+    let s02 = (mulf_ s0 s0) in
     let s2 = (mulf_ d1.sigma d1.sigma) in
-    let postMu = mulf_ s02 (divf_ d2.mu s02) in
-    let postSigma = appf1_ (var_ "externalSqrt") (addf_ s02 s2) in
+    let postMu =  ( (mulf_ s02 (divf_ mu0 s02)) )  in
+    let postSigma =  (appf1_ (var_ "externalSqrt") (addf_ s02 s2))  in
     let tName = nameSym "param" in
     let mName = nameSym "margMu" in
     let sName = nameSym "margSigma" in
     let letT = bind_ (nulet_ mName postMu) (nulet_ sName postSigma) in
     let rho = CodeBlockNode {ident=tName, code=letT, ret=false,plateId=ref plateId} in
     Some (rho, DGaussian {{d1 with mu=nvar_ mName} with sigma=nvar_ sName})
-
   | (DCategorical d1,DDirichlet d2) ->
     let sumName = nameSym "sum" in
     let sumai = nulet_ sumName (foldl_ (ulam_ "acc" (ulam_ "i" (addf_ (var_ "acc") (var_ "i")))) (float_ 0.0) (d2.a)) in
@@ -334,37 +342,6 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     Some (rho, DCategorical {d1 with p=nvar_ pName})
   | _ -> None ()
 
-  sem posteriorPredictiveL (plateId:Option Name) (indexId:Name) =
-  | ([DBernoulli d]++as)&mDists -> 
-    let lName = nameSym "" in
-    let pName = nameSym "margP" in
-    let params = map getParams mDists in
-    let lLet = nulet_ lName (seq_ params) in
-    let pLet = nulet_ pName (tupleproj_ 0 (get_ (nvar_ lName) (nvar_ indexId))) in
-    let code = bindall_ [lLet,pLet] in
-    let rho = CodeBlockNode {ident=nameSym "",code=code,ret=false,plateId=ref plateId} in
-    Some (rho, DBernoulli {d with p=nvar_ pName})
-  | ([DGaussian d]++as)&mDists -> 
-    let lName = nameSym "" in
-    let muName = nameSym "margMu" in
-    let sigmaName = nameSym "margSigma" in
-    let params = map getParams mDists in
-    let lLet = nulet_ lName (seq_ params) in
-    let muLet = nulet_ muName (tupleproj_ 0 (get_ (nvar_ lName) (nvar_ indexId))) in
-    let sigmaLet = nulet_ sigmaName (tupleproj_ 1 (get_ (nvar_ lName) (nvar_ indexId))) in
-    let code = bindall_ [lLet,muLet,sigmaLet] in
-    let rho = CodeBlockNode {ident=nameSym "",code=code,ret=false,plateId=ref plateId} in
-    Some (rho, DGaussian {{d with mu=nvar_ muName} with sigma=nvar_ sigmaName})
-  | ([DCategorical d]++as)&mDists -> 
-    let lName = nameSym "" in
-    let pName = nameSym "margP" in
-    let params = map getParams mDists in
-    let lLet = nulet_ lName (seq_ params) in
-    let pLet = nulet_ pName (tupleproj_ 0 (get_ (nvar_ lName) (nvar_ indexId))) in
-    let code = bindall_ [lLet,pLet] in
-    let rho = CodeBlockNode {ident=nameSym "",code=code,ret=false,plateId=ref plateId} in
-    Some (rho, DCategorical {d with p=nvar_ pName})
-  | _ -> None ()
 end
 
 -- First step of the algorithm (Static PBN constructor): create/construct a PBN from a given program
@@ -452,6 +429,57 @@ lang CreatePBN = ConjugatePrior
   | t -> let res = createPBNH pbn {{cAcc with isRet=true} with vertexId=None ()} t in
          (res.0,res.1)
 
+  sem checkAffineScale v =
+  | (Some (AffineNode a),Some (AffineNode a2)) ->
+    Some (mulf_ a2.meanScale a.meanScale, mulf_ a2.meanScale a.meanOffset, a.tVertex)
+  | (Some (AffineNode a),Some (RandomVarNode r)) ->
+     Some (mulf_ v.1 a.meanScale, mulf_ v.1 a.meanOffset, a.tVertex)
+  | (Some (RandomVarNode r),Some (AffineNode a)) ->
+    Some (mulf_ v.0 a.meanScale, mulf_ v.0 a.meanOffset, a.tVertex)
+  | (Some (RandomVarNode r),Some (RandomVarNode r2)) ->
+    match deref r.dist with (DGaussian _) then
+        Some (v.1, float_ 0.,ref (RandomVarNode r))
+      else None ()
+  | (Some (AffineNode a),None ()) ->
+     Some (mulf_ v.1 a.meanScale, mulf_ v.1 a.meanOffset, a.tVertex)
+  | (None (),Some (AffineNode a)) ->
+     Some (mulf_ v.0 a.meanScale, mulf_ v.0 a.meanOffset, a.tVertex)
+  | (Some (RandomVarNode r),None ()) ->
+      match deref r.dist with (DGaussian _) then
+        Some (v.1, float_ 0.,ref (RandomVarNode r))
+      else None ()
+  | (None (),Some (RandomVarNode r)) ->
+    match deref r.dist with (DGaussian _) then
+        Some (v.0, float_ 0.,ref (RandomVarNode r))
+      else None ()
+  | _ -> None ()
+
+
+  sem checkAffineOffset v =
+  | (Some (AffineNode a),Some (AffineNode a2)) ->
+     Some (addf_ a.meanScale a2.meanScale, addf_ a2.meanOffset a.meanOffset, a.tVertex)
+  | (Some (AffineNode a),Some (RandomVarNode r)) ->
+     Some (a.meanScale, addf_ v.1 a.meanOffset, a.tVertex)
+  | (Some (RandomVarNode r),Some (AffineNode a)) ->
+    Some (a.meanScale, addf_ v.0 a.meanOffset, a.tVertex)
+  | (Some (RandomVarNode r),Some (RandomVarNode r2)) ->
+     match deref r.dist with (DGaussian _) then
+        Some (float_ 1.,v.1,ref (RandomVarNode r))
+      else None ()
+  | (Some (AffineNode a),None ()) ->
+       Some (a.meanScale, addf_ v.1 a.meanOffset, a.tVertex)
+  | (None (),Some (AffineNode a)) ->
+       Some (a.meanScale, addf_ v.0 a.meanOffset,  a.tVertex)
+  | (Some (RandomVarNode r),None ()) ->
+       match deref r.dist with (DGaussian _) then
+        Some (float_ 1.,v.1,ref (RandomVarNode r))
+      else None ()
+  | (None (),Some (RandomVarNode r)) ->
+    match deref r.dist with (DGaussian _) then
+        Some (float_ 1.,v.0,ref (RandomVarNode r))
+      else None ()
+  | _ -> None ()
+
   sem createPBNH:PBN -> CreateAcc -> Expr -> (PBN, CreateAcc,Option Vertex)
   sem createPBNH pbn cAcc =
   | (TmAssume {dist=TmDist {dist=dist}} | TmObserve {dist=TmDist {dist=dist}}) & t ->
@@ -460,7 +488,7 @@ lang CreatePBN = ConjugatePrior
     -- if an observe then get its value
     let val = match t with TmObserve t then Some t.value else None () in
     -- create an initialized (state 0) vertex 
-    let v = RandomVarNode {ident = id, val = val, state = ref 0, dist = ref dist, mDist = ref (None ()), plateId=ref cAcc.plateId, listId=ref (None ())} in
+    let v = RandomVarNode {ident = id, val = val, state = ref 0, dist = ref dist, mDist = ref (None ()),/- affineT= ref (mapEmpty nameCmp),-/plateId=ref cAcc.plateId, listId=ref (None ())} in
     -- add the vertex to the graph and to the context
     match addVertex pbn cAcc (v,id) with (pbn,cAcc) in
     -- if it is an observe, add it to the targets to be conditioned
@@ -468,8 +496,18 @@ lang CreatePBN = ConjugatePrior
     -- create edges to the created random variable node v from the nodes that it depends on
     let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) t) in
     let g = digraphMaybeAddEdges edges pbn.g in
-    ({{pbn with targets=targets} with g=g},{cAcc with blockIdent=None()} ,Some v)
+    let pbn = {{pbn with targets=targets} with g=g} in
+    (pbn,{cAcc with blockIdent=None()} ,Some v)
   | TmVar t -> if cAcc.isRet then createPBNGeneric pbn cAcc (TmVar t) else never -- aliases are removed
+  | TmRecLets t -> match createPBNGeneric pbn cAcc (TmRecLets t) with (pbn,cAcc,Some v) in
+    let blockIdent = match v with CodeBlockNode c then c.ident else never in
+    let res = foldl (lam acc. lam b. match acc with (pbn,cAcc) in
+      let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) b.body) in
+      let g = digraphMaybeAddEdges edges pbn.g in
+      ({{pbn with g=g} with m =mapInsert b.ident v pbn.m}, {cAcc with m =mapInsert b.ident blockIdent cAcc.m})
+      ) (pbn,cAcc) t.bindings
+    in match res with (pbn,cAcc) in
+    (pbn,cAcc,Some v)
   | TmSeq t ->
     -- get the ident if it comes from a let expression
     let id = match cAcc.vertexId with Some id then id else nameSym "seq" in
@@ -477,17 +515,17 @@ lang CreatePBN = ConjugatePrior
     let items = map (lam v. match v with TmVar v in mapLookup v.ident pbn.m) t.tms in
     let v = if validList pbn items then
       let items = map (lam r. match r with Some (RandomVarNode r) in modref r.listId (Some id);RandomVarNode r) items in
-      (ListNode {ident=id, items=items,plateId=ref cAcc.plateId,create=None (),dist=getDist (get items 0),lamParam=ref (None ()), outParam=ref (None ())},pbn)
+      (ListNode {ident=id, items=items,plateId=ref cAcc.plateId,create=None (),dist=getDist (get items 0),lamParam=ref (None ()), outParam=ref (None ())},pbn,cAcc)
     else -- if items are not valid, then this should be code block so no transformation will be performed
         let res = createCodeBlock pbn cAcc (TmSeq t) (cAcc.vertexId,cAcc.blockIdent) in
         let edges = setToSeq (createEdges res.0 pbn cAcc (setEmpty cmprEdge) (TmSeq t)) in
         let g = digraphMaybeAddEdges edges pbn.g in
-        (res.0,{pbn with g=g})
+        (res.0,{pbn with g=g}, {cAcc with vertexId=Some id})
     in
-    match addVertex v.1 cAcc (v.0,id) with (pbn,cAcc) in
+    match addVertex v.1 v.2 (v.0,id) with (pbn,cAcc) in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
     (pbn,{cAcc with blockIdent=blockIdent} ,Some v.0)
-    | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CCreate()}&c),rhs=rep})&a1),
+  | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CCreate()}&c),rhs=rep})&a1),
               rhs=TmLam ({body=TmAssume {dist=TmDist {dist=dist}}}&l)}&a2) ->
     let id = match cAcc.vertexId with Some id then id else nameSym "create" in
     let accH = {{{cAcc with blockIdent=None()} with vertexId=None()} with isRet=false} in
@@ -498,16 +536,16 @@ lang CreatePBN = ConjugatePrior
     let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) (TmApp a2)) in
     let g = digraphMaybeAddEdges edges pbn.g in
     ({pbn with g=g},{cAcc with blockIdent=None ()}, Some v)
- | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CGet ()}&c),rhs=TmVar seq})&t2),rhs=TmVar ind}&a) ->
+  | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CGet ()}&c),rhs=TmVar seq})&t2),rhs=TmVar ind}&a) ->
     let id = match cAcc.vertexId with Some id then id else nameSym "get" in
     let pbn = findTargetRVs pbn (TmVar ind) in
     let v =
       -- if there is no such list node created, create a codeblock
-      match mapLookup seq.ident pbn.m with None () then
-        (createCodeBlock pbn cAcc (TmApp a) (cAcc.vertexId,cAcc.blockIdent)).0
-      else -- there is a list node created which consists of valid items
+      match mapLookup seq.ident pbn.m with Some (ListNode _) then -- there is a list node created which consists of valid items
         let lst = mapLookupOrElse (lam. error "not found") seq.ident pbn.m in
         MultiplexerNode {ident=id,indexId=ind.ident,list=lst,plateId=ref cAcc.plateId,mDist=ref (None ())}
+      else 
+        (createCodeBlock pbn cAcc (TmApp a) (cAcc.vertexId,cAcc.blockIdent)).0
     in
     match addVertex pbn cAcc (v,id) with (pbn,cAcc) in
     let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) (TmApp a)) in
@@ -518,6 +556,29 @@ lang CreatePBN = ConjugatePrior
     createPlate pbn cAcc [l.ident] l.body lst.ident (TmApp a2)
   | TmApp ({lhs=(TmApp ({lhs=TmConst ({val=CIteri()}&c),rhs=TmLam ({body=TmLam l2}&l1)})&a1),rhs=TmVar lst}&a2) ->
     createPlate pbn cAcc [l1.ident,l2.ident] l2.body lst.ident (TmApp a2)
+  | TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CMulf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1) ->
+    let id = match cAcc.vertexId with Some id then id else nameSym "av" in
+    let v1V = match mapLookup v1.ident pbn.m with Some (AffineNode _ |RandomVarNode _)&t then t else None () in
+    let v2V = match mapLookup v2.ident pbn.m with Some (AffineNode _ |RandomVarNode _)&t then t else None () in
+
+    match checkAffineScale (TmVar v1,TmVar v2) (v1V,v2V) with Some (meanScale, meanOffset,r) then
+      let affineNode = AffineNode {ident=id, tVertex = r, meanScale=meanScale, meanOffset=meanOffset,plateId=ref cAcc.plateId} in
+      match addVertex pbn cAcc (affineNode,id) with (pbn,cAcc) in
+      let edges = setToSeq (createEdges affineNode pbn cAcc (setEmpty cmprEdge) (TmApp a1)) in
+      let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
+      (pbn,cAcc,Some affineNode)
+    else createPBNGeneric pbn cAcc (TmApp a1)
+ | TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1) ->
+    let id = match cAcc.vertexId with Some id then id else nameSym "av" in
+    let v1V = match mapLookup v1.ident pbn.m with Some (AffineNode _ |RandomVarNode _)&t then t else None () in
+    let v2V = match mapLookup v2.ident pbn.m with Some (AffineNode _ |RandomVarNode _)&t then t else None () in
+    match checkAffineOffset (TmVar v1,TmVar v2) (v1V,v2V) with Some (meanScale, meanOffset,r) then
+      let affineNode = AffineNode {ident=id, tVertex = r, meanScale=meanScale, meanOffset=meanOffset,plateId=ref cAcc.plateId} in
+      match addVertex pbn cAcc (affineNode,id) with (pbn,cAcc) in
+      let edges = setToSeq (createEdges affineNode pbn cAcc (setEmpty cmprEdge) (TmApp a1)) in
+      let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
+      (pbn,cAcc,Some affineNode)
+    else createPBNGeneric pbn cAcc (TmApp a1)
   | t -> createPBNGeneric pbn cAcc t
 
   sem createPlate: PBN -> CreateAcc -> [Name] -> Expr -> Name -> Expr -> (PBN,CreateAcc,Option Vertex)
@@ -541,9 +602,9 @@ lang CreatePBN = ConjugatePrior
     match addVertex pbn cAcc (v.0,id) with (pbn,cAcc) in
     let edges = setToSeq (createEdges v.0 pbn cAcc (setEmpty cmprEdge) t) in
     let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-    --let pbn = findTargetRVs pbn t in
+    let pbn = findTargetRVs pbn t in
     let blockIdent = match v.0 with CodeBlockNode c then Some c.ident else None () in
-    (pbn,{cAcc with blockIdent=blockIdent}, Some v.0)
+    (pbn,{{cAcc with blockIdent=blockIdent} with vertexId=Some id}, Some v.0)
 
 end
 
@@ -559,7 +620,6 @@ lang RecreateProg = PBNGraph + MExprAst + MExprPPL
   sem recreate: PBN -> Expr
   sem recreate =
   | pbn ->
-    let order = digraphTopologicalOrder pbn.g in
     let pbn = modifyGraph pbn in
     let order = digraphTopologicalOrder pbn.g in
     let vRet = filter (lam v.
@@ -587,17 +647,18 @@ lang RecreateProg = PBNGraph + MExprAst + MExprPPL
                     let edges = digraphEdgesTo i g in
                     digraphMaybeAddEdges (map (lam e. (e.0,l,e.2)) edges) g) g r.items) g lists in
     let g = foldl (lam g. lam v. 
-      match v with (PlateNode _ | FoldNode _) then g else
-      match getPlateId v with Some pid then let pv = mapLookupOrElse (lam. error "not found") pid pbn.m in
+      match v with (PlateNode p ) then g
+      else match getPlateId v with Some pid then let pv = mapLookupOrElse (lam. error "not found") pid pbn.m in
       digraphMaybeAddEdge v pv 0 g else g) g (digraphVertices g) in 
     {pbn with g=g}
 
   sem recreateCode plateVertices pbn =
   | CodeBlockNode t -> t.code
   | RandomVarNode v -> let body = match v.val with Some val then
-    TmObserve {dist=dist_ (deref v.dist), value=val,ty=tyunknown_, info = NoInfo ()}
-    else TmAssume {dist=dist_ (deref v.dist), ty=tyunknown_, info = NoInfo ()} in
+      TmObserve {dist=dist_ (deref v.dist), value=val,ty=tyunknown_, info = NoInfo ()}
+      else TmAssume {dist=dist_ (deref v.dist), ty=tyunknown_, info = NoInfo ()} in
     nulet_ v.ident body
+  | AffineNode v -> nulet_ v.ident (addf_ (mulf_ (nvar_ (getId (deref v.tVertex))) v.meanScale) v.meanOffset)
   | MultiplexerNode m -> nulet_ m.ident (get_ (nvar_ (getId m.list)) (nvar_ m.indexId))
   | ListNode l ->
     match l.create with Some val then 
@@ -614,14 +675,6 @@ lang RecreateProg = PBNGraph + MExprAst + MExprPPL
     let body = if eqi (length p.varIds) 1 then (iter_ (nulam_ (get p.varIds 0) bdyIn) (nvar_ p.iterlId))
     else (iteri_ (nulam_ (get p.varIds 0) (nulam_ (get p.varIds 1) bdyIn)) (nvar_ p.iterlId)) in
     nulet_ p.ident body
-  | FoldNode f ->
-    let vItems = mapLookupOrElse (lam. error "recreateCode:Lookup failed") f.ident plateVertices in
-    let vPRet = filter (lam v. match v with CodeBlockNode c then c.ret else false) vItems in   
-    let vPRet = get vPRet 0 in
-    let vItems = filter (lam v. match v with CodeBlockNode c then not c.ret else true) vItems in
-    let bdyIn = foldl (lam acc. lam v. bind_ acc (recreateCode plateVertices pbn v)) unit_ (snoc vItems vPRet) in
-    let bdy = foldl (lam acc. lam l. nulam_ l acc) bdyIn (snoc f.varIds f.lamAccId ) in
-    nulet_ f.ident (foldl_ bdy (nvar_ f.accId) (nvar_ f.iterlId))
     
 
   sem recreateVertex: Map Name [Vertex] -> PBN -> [Vertex] -> Expr
@@ -631,8 +684,8 @@ lang RecreateProg = PBNGraph + MExprAst + MExprPPL
   | [(RandomVarNode _)&t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
   | [(MultiplexerNode _)&t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
   | [(PlateNode _) & t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
-  | [(FoldNode _) & t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
   | [(ListNode _) & t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
+  | [(AffineNode _) & t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
   | [] -> unit_
 
 end
@@ -664,12 +717,14 @@ lang TransformPBN = ConjugatePrior
   type TAcc =
   {
     accName:Map Name Name,
-    plateTBR:Set Name
+    plateTBR:Set Name,
+    refMap:Map Name Name,
+    modrefMap:Map Name Name
   }
 
   sem emptyTAcc: () -> TAcc
   sem emptyTAcc = 
-  | _ -> {accName=mapEmpty nameCmp,plateTBR=setEmpty nameCmp}
+  | _ -> {accName=mapEmpty nameCmp,plateTBR=setEmpty nameCmp,refMap=mapEmpty nameCmp,modrefMap=mapEmpty nameCmp}
 
 
   sem orderPlates pbn order =
@@ -712,6 +767,7 @@ lang TransformPBN = ConjugatePrior
   sem isStabilized: PBN -> Vertex -> Bool
   sem isStabilized pbn =
   | RandomVarNode v -> if eqi (deref v.state) 2 then true else false
+  | AffineNode a -> isStabilized pbn (deref a.tVertex)
   | MultiplexerNode m -> match m.list with ListNode l in
     foldl (lam acc. lam i. or acc (isStabilized pbn i)) false l.items
   
@@ -724,7 +780,7 @@ lang TransformPBN = ConjugatePrior
   sem isNestedPl: PBN -> Name -> Name -> Bool
   sem isNestedPl pbn parentPID = 
   | childPID -> match mapLookupOrElse (lam. error "isNestedPl:Lookup failed.") childPID pbn.m with 
-    (PlateNode {plateId=pid}|FoldNode {plateId=pid}) in
+    (PlateNode {plateId=pid}) in
     match deref pid with Some pid then -- if child's one of outer plates is parent plate
       or (nameEq pid parentPID) (isNestedPl pbn parentPID pid) else false
 
@@ -736,6 +792,8 @@ lang TransformPBN = ConjugatePrior
   | (RandomVarNode v, MultiplexerNode p) & t -> 
     match p.list with ListNode l in
     createMParameterH pbn tAcc t (deref v.plateId, deref l.plateId, deref p.plateId)
+  | (RandomVarNode v, AffineNode p) & t -> 
+    createMParameterH pbn tAcc t (deref v.plateId, getPlateId (deref p.tVertex), deref p.plateId)
 
   sem createMParameterH: PBN -> TAcc -> (Vertex,Vertex) -> (Option Name, Option Name, Option Name) -> Option (PBN,TAcc,Vertex,Dist)        
   sem createMParameterH pbn tAcc t =
@@ -793,17 +851,28 @@ lang TransformPBN = ConjugatePrior
   sem createMParameterNP: PBN -> TAcc -> (Vertex, Vertex) -> Option (PBN,TAcc,Vertex,Dist)
   sem createMParameterNP pbn tAcc =
   | (RandomVarNode t, RandomVarNode p)&v -> match deref p.mDist with Some pMarginalizedDist in
-    match posteriorPredictive (deref t.plateId) (deref t.dist, pMarginalizedDist) with Some (rho,q) then
+    match posteriorPredictive (deref t.plateId) (float_ 1., float_ 0.) (deref t.dist, pMarginalizedDist) with Some (rho,q) then
       let pbn = addVertexPBN pbn rho in
       -- inherit the dependencies
       let pbn = inheritMDependencies pbn rho v.0 in
       let pbn = inheritMDependencies pbn rho v.1 in
       Some (pbn, tAcc,rho, q)
     else None ()
+  | (RandomVarNode t, AffineNode a)&v ->
+    let parent = match v.1 with AffineNode a then deref a.tVertex else v.1 in
+    match parent with RandomVarNode p in
+    match deref p.mDist with Some pMarginalizedDist in
+    match posteriorPredictive (deref t.plateId) (a.meanScale,a.meanOffset) (deref t.dist, pMarginalizedDist) with Some (rho,q) then
+      let pbn = addVertexPBN pbn rho in
+      -- inherit the dependencies
+      let pbn = inheritMDependencies pbn rho v.0 in
+      let pbn = inheritMDependencies pbn rho parent in
+      Some (pbn, tAcc,rho, q)
+    else None ()
   | (RandomVarNode t, MultiplexerNode p)&v -> match p.list with ListNode l in
     match createMarginalizedListParam pbn v.1 with (pbn, pMarginalizedDist, selectedBlock) in
     modref p.mDist (Some pMarginalizedDist);
-    match posteriorPredictive (deref t.plateId) (deref t.dist, pMarginalizedDist) with Some (rho,q) then
+    match posteriorPredictive (deref t.plateId) (float_ 1., float_ 0.) (deref t.dist, pMarginalizedDist) with Some (rho,q) then
       let pbn = addVertexPBN pbn rho in
       -- inherit the dependencies
       let pbn = inheritMDependencies pbn rho v.0 in
@@ -817,110 +886,101 @@ lang TransformPBN = ConjugatePrior
     let newRec = record_add (int2string (mapSize r.bindings)) param t.body in
     let newCB = (CodeBlockNode {c with code = nulet_ t.ident newRec}) in
     (addVertexPBN pbn newCB, newCB)
-    
 
   sem createMParameterTDP: PBN -> TAcc -> (Vertex, Vertex) -> Option (PBN,TAcc,Vertex,Dist)
   sem createMParameterTDP pbn tAcc =
-  | (RandomVarNode t, RandomVarNode p)&v -> (if debug then print (join ["createMParameterTDP-nolist",v2str v.0,"\n"]) else ());
+  | (RandomVarNode t, RandomVarNode _ | AffineNode _)&v -> (if debug then print (join ["createMParameterTDP-nolist",v2str v.0,"\n"]) else ());
+    let parent = match v.1 with AffineNode a then deref a.tVertex else v.1 in
+    match parent with RandomVarNode p in
     let tAcc = {tAcc with plateTBR=setInsert t.ident tAcc.plateTBR} in
-    -- Get parent's marginalized distribution parameters
-    match (deref p.mDist) with Some pMarginalizedDist in 
-    let param = (getParams pMarginalizedDist) in
-    let ppId = nameSym "pMargParam" in
-    modref p.mDist (Some (changeParams ppId pMarginalizedDist));
-    match createMParameterTDPH pbn tAcc param ppId v with (pbn,_) in
-    createMParameterNP pbn tAcc v 
-  | (RandomVarNode t, MultiplexerNode p)&v ->(if debug then print (join ["createMParameterTDP-muxnode",v2str v.0,"\n"]) else ());
-    let tAcc = {tAcc with plateTBR=setInsert t.ident tAcc.plateTBR} in
-    match p.list with ListNode l in --get the list input of the multiplexer node
-    let ppId = nameSym "pMargParam" in
-    let param = match l.create with Some rep then
-        match get l.items 0 with RandomVarNode v in 
-        match deref (v.mDist) with Some pMarginalizedDist in create_ rep (ulam_ "" (getParams pMarginalizedDist))
-      else
-        seq_ (map (lam i. match i with RandomVarNode v in 
-            match deref (v.mDist) with Some pMarginalizedDist in getParams pMarginalizedDist
-          ) l.items) in
-    match createMParameterTDPH pbn tAcc param ppId v with (pbn,cb) in
-    let selectedParamId = nameSym "selectedParam" in
-    let pMarginalizedDistParam = nulet_ selectedParamId (get_ (nvar_ ppId) (nvar_ p.indexId)) in
-    let selectedBlock = CodeBlockNode {ident=nameSym "", code=pMarginalizedDistParam, ret=false, plateId=t.plateId} in
-    let pbn = addVertexPBN pbn selectedBlock in
-
+    let mDist = match v.1 with RandomVarNode p then p.mDist else (match v.1 with AffineNode p in match deref p.tVertex with RandomVarNode p in  p.mDist) in 
+    let res = match mapLookup (getId v.1) tAcc.refMap with Some pParamId then 
+      let cb = mapLookupOrElse (lam. error "") pParamId pbn.m in
+      (pbn, tAcc, pParamId, cb)
+    else 
+      let pParamId = nameSym "param" in
+      match deref mDist with Some pMarginalizedDist in
+      let paramCB = CodeBlockNode {ident=pParamId, code=nulet_ pParamId (ref_ (getParams pMarginalizedDist)), ret=false, plateId=p.plateId} in
+      let pbn = addVertexPBN pbn paramCB in
+      match deref t.plateId with Some pid in
+      let plate:Vertex = (mapLookupOrElse (lam. error "") pid pbn.m) in
+      let pbn = inheritNestedPlD pbn paramCB plate in
+      let tAcc = {tAcc with refMap=mapInsert (getId v.1) pParamId tAcc.refMap} in (pbn, tAcc, pParamId,paramCB) 
+    in match res with  (pbn, tAcc, pParamId,paramCB) in
+    let mParamId = nameSym "prMargP" in
+    let derefCB = CodeBlockNode {ident=nameSym "", code=nulet_ mParamId (deref_ (nvar_ pParamId)), ret=false, plateId=t.plateId} in
+    let pbn = addVertexPBN pbn derefCB in
+    let pbn = match mapLookup (getId v.1) tAcc.modrefMap with Some id then 
+      let v = mapLookupOrElse (lam. error "lookup failed") id pbn.m in
+      {pbn with g=digraphMaybeAddEdge v derefCB 0 pbn.g} else pbn in
+    let pbn = inheritMDependencies pbn paramCB parent in
+    match (deref mDist) with Some pMarginalizedDist in
+    modref mDist (Some (changeParams mParamId pMarginalizedDist));
+    createMParameterNP pbn tAcc v
+  | (RandomVarNode t, MultiplexerNode p)&v -> --(pbn, tAcc)
+    match p.list with ListNode l in
+    let res = match mapLookup l.ident tAcc.refMap with Some pParamId then 
+      let cb = mapLookupOrElse (lam. error "") pParamId pbn.m in
+      (pbn, tAcc, pParamId, cb)
+    else 
+      let pParamId = nameSym "paramI" in
+      let param = match l.create with Some rep then
+          match get l.items 0 with RandomVarNode v in 
+          match deref (v.mDist) with Some pMarginalizedDist in create_ rep (ulam_ "" (ref_ (getParams pMarginalizedDist)))
+        else
+          seq_ (map (lam i. match i with RandomVarNode v in 
+              match deref (v.mDist) with Some pMarginalizedDist in ref_ (getParams pMarginalizedDist)
+            ) l.items) in
+      let paramCB = CodeBlockNode {ident=pParamId, code=nulet_ pParamId (ref_ param), ret=false, plateId=l.plateId} in
+      let pbn = addVertexPBN pbn paramCB in
+      match deref t.plateId with Some pid in
+      let plate:Vertex = (mapLookupOrElse (lam. error "") pid pbn.m) in
+      let pbn = inheritNestedPlD pbn paramCB plate in
+      let pbn = inheritMDependencies pbn paramCB p.list in
+      let tAcc = {tAcc with refMap=mapInsert l.ident pParamId tAcc.refMap} in (pbn, tAcc, pParamId,paramCB) 
+    in
+    match res with (pbn, tAcc, pParamId,paramCB) in
+    let mParamId = nameSym "prMargP" in
+    let mParam = deref_ (get_ (deref_ (nvar_ pParamId)) (nvar_ p.indexId)) in
+    let derefCB = CodeBlockNode {ident=mParamId, code=nulet_ mParamId mParam, ret=false, plateId=t.plateId} in
+    let pbn = match mapLookup l.ident tAcc.modrefMap with Some id then 
+      let v = mapLookupOrElse (lam. error "lookup failed") id pbn.m in
+      {pbn with g=digraphMaybeAddEdge v derefCB 0 pbn.g} else pbn in
+    let pbn = addVertexPBN pbn derefCB in
     match get l.items 0 with RandomVarNode a in 
-    let pbn = {pbn with g=digraphMaybeAddEdge cb selectedBlock 0 pbn.g} in
-    match deref a.mDist with Some mdist in
-    let pbn = inheritMDependencies pbn selectedBlock (MultiplexerNode p) in
-    let pMarginalizedDist = changeParams selectedParamId mdist in
+    match deref a.mDist with Some pMarginalizedDist in
+    let pMarginalizedDist = (changeParams mParamId pMarginalizedDist) in
     modref p.mDist (Some pMarginalizedDist);
-    match posteriorPredictive (deref t.plateId) (deref t.dist, pMarginalizedDist) with Some (rho,q) then
+    match posteriorPredictive (deref t.plateId) (float_ 1., float_ 0.) (deref t.dist, pMarginalizedDist) with Some (rho,q) then
       let pbn = addVertexPBN pbn rho in
       -- inherit the dependencies
       let pbn = inheritMDependencies pbn rho v.0 in
       let pbn = inheritMDependencies pbn rho v.1 in
-    let pbn = {pbn with g=digraphMaybeAddEdge selectedBlock rho 0 pbn.g} in
+      let pbn = inheritMDependencies pbn derefCB v.1 in
+      let pbn = {pbn with g=digraphMaybeAddEdge derefCB rho 0 pbn.g} in
       Some (pbn, tAcc,rho, q)
     else None ()
 
-  sem propagateThroughPlates pbn initParam innerAccID newParamId v acc =
-  | (Some targetPID, ppid)  -> 
-    (if debug then print (join ["propagateThroughPlates",v2str v.0,"\n"]) else ());
-      match mapLookup targetPID pbn.m with Some container in 
-      match (getPlateId container) with Some pid then 
-        let res = match ppid with Some ppid then 
-          if nameEq pid ppid then Some (createFoldNode pbn (initParam) newParamId innerAccID targetPID v container)
-        else None () else None () in match res with Some _ then res
-        else let gpContainer = mapLookupOrElse (lam. error "") pid pbn.m in
-          let index = match gpContainer with PlateNode _ then 0 else match gpContainer with FoldNode l in mapSize (deref l.vToIndex) in
-          let outerAccId = match gpContainer with FoldNode gp then gp.lamAccId else (nameSym "outerParam") in
-          let param = tupleproj_ index (nvar_ outerAccId)  in
-          match createFoldNode pbn param newParamId innerAccID targetPID v container with (pbn, (FoldNode fl), index) & res in
-          propagateThroughPlates pbn initParam innerAccID (Some outerAccId) v (Some res) (deref fl.plateId, None ()) 
-      else Some (createFoldNode pbn (initParam) newParamId innerAccID targetPID v container)
-  | _ -> acc
 
-  -- TODO: here if already in fold parameters then do not add
-  sem createFoldNode pbn param newParamId innerAccID targetPID v =
-  | PlateNode pl ->
-    (if debug then print (join ["createFoldNode-plate",v2str v.0,"\n"]) else ());
-    let accAppId = nameSym "pInitParam" in
-    let lamAccId = match newParamId with Some id then id else innerAccID in
-    let retBId = nameSym "r" in
-    let cbInitParam = CodeBlockNode {ident = accAppId, code = nulet_ accAppId (utuple_ [param]), ret=false, plateId=pl.plateId} in
-    let pbn = addVertexPBN pbn cbInitParam in
-    let pbn = inheritMDependencies pbn cbInitParam v.1 in
-    let index = 0 in
-    let vToIndex = mapInsert (getId v.1) index (mapEmpty nameCmp) in
-    let f = FoldNode {ident = pl.ident, varIds=pl.varIds, plateId=pl.plateId, lamAccId=lamAccId, accId=accAppId, iterlId=pl.iterlId, retBlockId=retBId, vToIndex=ref vToIndex} in
-    let pbn = {pbn with g=digraphRemoveVertex (PlateNode pl) pbn.g} in -- since constructor tag is diff should be removed
-    let pbn = addVertexPBN pbn f in
-    ({pbn with g=digraphMaybeAddEdge cbInitParam f 0 pbn.g}, f,0)
-  | FoldNode fl ->
-    match mapLookup (getId v.1) (deref fl.vToIndex) with Some index then (pbn, (FoldNode fl), index)
-    else 
-      let index = mapSize (deref fl.vToIndex) in
-      modref fl.vToIndex (mapInsert (getId v.1) index (deref fl.vToIndex));
-      let cbInitParam = mapLookupOrElse (lam. error "") fl.accId pbn.m in
-      match addParam pbn param cbInitParam with (pbn,_) in
-      (pbn, (FoldNode fl), index)
-
-  sem createMParameterTDPH pbn tAcc param ppId =
-  | (RandomVarNode t, (RandomVarNode _ | MultiplexerNode _)) & v  -> 
-    (if debug then print (join ["createMParameterTDPH",v2str v.0,"\n"]) else ());
-    match (deref t.plateId) with Some tpid in
-    let parentPID = match v.1 with MultiplexerNode m then match m.list with ListNode l in deref l.plateId
-      else match v.1 with RandomVarNode p in deref p.plateId in
-    let innerAccID = match mapLookup tpid pbn.m with Some (FoldNode f) then f.lamAccId else nameSym "p" in 
-    match propagateThroughPlates pbn param innerAccID (None ()) v (None ()) (Some tpid, parentPID) with Some (pbn, f, index) in
-    let cb = CodeBlockNode {ident = nameSym "", code = nulet_ ppId (tupleproj_ index (nvar_ innerAccID)), ret=false, plateId=t.plateId} in
-    let pbn = addVertexPBN pbn cb in
-    (pbn,cb)
+  sem inheritNestedPlD:PBN -> Vertex -> Vertex -> PBN
+  sem inheritNestedPlD pbn v =
+  | (PlateNode p) & t -> 
+      let inplate = match getPlateId v with Some pid then
+        if nameEq p.ident pid then true else false else false in
+      if inplate then pbn
+      else let pbn = {pbn with g=digraphAddEdge v t 0 pbn.g} in 
+        match deref p.plateId with Some pid then 
+          let plate:Vertex = (mapLookupOrElse (lam. error "") pid pbn.m) in
+          inheritNestedPlD pbn v plate
+        else pbn
+  | _ -> pbn
 
   sem inheritMDependencies: PBN -> Vertex -> Vertex -> PBN
   sem inheritMDependencies pbn toV =
   | (MultiplexerNode m)&fromV -> 
     let parents = filter (lam v. match v with CodeBlockNode _ then true
-                            else match v with RandomVarNode r then true
+                            else match v with RandomVarNode _ then true
+                            else match v with AffineNode _ then true
                             else false) (digraphPredeccessors fromV pbn.g) in
     let g = foldl (lam acc. lam gp. digraphMaybeAddEdge gp toV 0 acc) pbn.g parents in
     {pbn with g=g}
@@ -929,7 +989,7 @@ lang TransformPBN = ConjugatePrior
     -- get the codeblock parents and stabilized nodes of t
     let parents = filter (lam v. match v with CodeBlockNode _ then true
                             else match v with RandomVarNode r then eqi (deref r.state) 2
-                            else false) (digraphPredeccessors fromV pbn.g) in
+                            else match v with AffineNode n then match deref n.tVertex with RandomVarNode r in eqi (deref r.state) 2 else false) (digraphPredeccessors fromV pbn.g) in
     let g = foldl (lam acc. lam gp. digraphMaybeAddEdge gp toV 0 acc) pbn.g parents in
     {pbn with g=g}
   
@@ -937,7 +997,7 @@ lang TransformPBN = ConjugatePrior
   sem marginalize pbn tAcc =
   | (RandomVarNode v) & t -> (if debug then print (join ["Marginalize ", v2str t, "\n"]) else ());
     -- filter its random variable parents that are not stabilized
-    let parents = filter (lam p. match p with RandomVarNode _ | MultiplexerNode _ then 
+    let parents = filter (lam p. match p with RandomVarNode _ | MultiplexerNode _ | AffineNode _ then 
         not (isStabilized pbn p) else false) (digraphPredeccessors t pbn.g) in
     if null parents then (if debug then print (join ["Marginalize: no parents", "\n"]) else ());
       addToMarginalized (deref v.dist) t; (pbn, tAcc)
@@ -977,7 +1037,7 @@ lang TransformPBN = ConjugatePrior
     else -- not marginalized
       (if debug then print "Graft: RV t is not marginalized\n" else ());
       -- get the non-stabilized parents that are either random var or a multiplexer node.
-      let parents = filter (lam v. match v with (RandomVarNode _ | MultiplexerNode _) then not (isStabilized pbn v)
+      let parents = filter (lam v. match v with (RandomVarNode _ | MultiplexerNode _ | AffineNode _) then not (isStabilized pbn v)
                      else false) (digraphPredeccessors t pbn.g) in
       match if null parents then (if debug then print (join ["Graft: t has no parents\n"]) else ());
         marginalize pbn tAcc t
@@ -986,10 +1046,13 @@ lang TransformPBN = ConjugatePrior
               graft pbn tAcc (RandomVarNode p)
             case MultiplexerNode p then (if debug then print "Graft: t's parent comes from a list\n" else ());
               graft pbn tAcc p.list
+            case AffineNode p then (if debug then print (join ["Graft: parent of t is an affine\n"]) else ());
+              graft pbn tAcc (deref p.tVertex)
             end in marginalize res.0 res.1 t 
       with (pbn, tAcc) in
       -- if t has any child that belongs to a list, prune t; otherwise, the order of the list would not be handled
       if any (lam c. match getListId c with Some _ then true else false) (digraphSuccessors t pbn.g) then pruneD pbn tAcc t else (pbn, tAcc)
+  | (AffineNode v) & t -> graft pbn tAcc (deref v.tVertex)    
   | (ListNode l) & t ->
     let children = digraphSuccessors t pbn.g in
     let res = foldl (lam acc. lam e. graft acc.0 acc.1 e) (pbn,tAcc) l.items in res
@@ -1008,6 +1071,7 @@ lang TransformPBN = ConjugatePrior
         -- if it has a marginalized child then prune it first.
         match pruneD pbn tAcc (get children 0) with (pbn, tAcc) in
         reorder pbn tAcc t)
+  | (AffineNode v) & t -> pruneD pbn tAcc (deref v.tVertex)    
   | (ListNode l) & t -> foldl (lam acc. lam e. pruneD acc.0 acc.1 e) (pbn, tAcc) l.items
 
 
@@ -1019,6 +1083,8 @@ lang TransformPBN = ConjugatePrior
   | (RandomVarNode v, MultiplexerNode p) & t -> 
     match p.list with ListNode l in
     createRParameterH pbn tAcc t (deref v.plateId, deref l.plateId, deref p.plateId)
+  | (RandomVarNode v, AffineNode p) & t -> 
+    createRParameterH pbn tAcc t (deref v.plateId, getPlateId (deref p.tVertex),deref p.plateId)
 
   sem createRParameterH: PBN -> TAcc -> (Vertex, Vertex) -> (Option Name, Option Name, Option Name) -> (PBN,TAcc)
   sem createRParameterH pbn tAcc t =
@@ -1031,19 +1097,25 @@ lang TransformPBN = ConjugatePrior
     if nameEq pid pid2 then
       if nameEq pid2 pid3 then (createRParameterNP pbn tAcc (None ()) t) else never else never
   | (Some pid, None (), Some pid2) -> if nameEq pid pid2 then 
-      match createRParameterTDP pbn tAcc t with (pbn,tAcc) in 
-      let pbn = removeVertexPBN pbn t.1 in (pbn, tAcc) else 
+      match createRParameterTDP pbn tAcc t with (pbn, tAcc) in
+        removeMuxAffine pbn tAcc t.1 else 
       if isNestedPl pbn pid2 pid then
-      match createRParameterTDP pbn tAcc t with (pbn,tAcc) in 
-      let pbn = removeVertexPBN pbn t.1 in (pbn, tAcc) else  never
+        match createRParameterTDP pbn tAcc t with (pbn,tAcc) in 
+        removeMuxAffine pbn tAcc t.1  else never
   | _ -> never
+
+  sem removeMuxAffine pbn tAcc =
+  | (MultiplexerNode n)&t -> let pbn = removeVertexPBN pbn t in (pbn, tAcc) 
+  | (AffineNode p)&t ->  let parent = filter (lam p. match p with AffineNode _ then true else false) (digraphPredeccessors t pbn.g) in
+    let res = if null parent then (pbn,tAcc) else foldl (lam acc. lam p. removeMuxAffine acc.0 acc.1 p) (pbn,tAcc) parent in
+    match res with (pbn,tAcc) in (removeVertexPBN pbn t,tAcc)
 
   sem inheritRDependencies: PBN -> TAcc -> (Vertex, Vertex, Vertex) -> PBN
   sem inheritRDependencies pbn tAcc =
   | (t, p, rho) -> 
     let filterC = (lam v. match v with CodeBlockNode _ then true
                                 else match v with RandomVarNode r then neqi (deref r.state) 1
-                                else false) in
+                                else match v with AffineNode a then match deref a.tVertex with RandomVarNode r in neqi (deref r.state) 1 else false) in
     let parentsT = filter filterC (digraphPredeccessors t pbn.g) in
     -- get the codeblock parents and stabilized nodes of p
     let parentsP = filter filterC (digraphPredeccessors p pbn.g) in
@@ -1054,21 +1126,25 @@ lang TransformPBN = ConjugatePrior
 
   sem createRParameterNP: PBN -> TAcc -> Option (Name,Expr) -> (Vertex, Vertex) -> (PBN,TAcc)
   sem createRParameterNP pbn tAcc indices =
-  | (RandomVarNode t, RandomVarNode p)&v ->
+  | (RandomVarNode t, RandomVarNode _ | AffineNode _)&v ->
     (if debug then print (join ["createRParameterNP ", v2str v.0, "\n"]) else ());
+    let parent = match v.1 with AffineNode a then deref a.tVertex else v.1 in
+    match parent with RandomVarNode p in
+    let meanSO = match v.1 with AffineNode a then (a.meanScale, a.meanOffset) else (float_ 1., float_ 0.) in 
     let obs = match t.val with Some _ then t.val else Some (nvar_ t.ident) in
     match deref p.mDist with Some pMarginalizedDist in
-    match posterior obs indices (deref t.plateId) (deref t.dist,pMarginalizedDist) with (rho,q,_) in
+    match posterior obs indices (deref t.plateId) meanSO (deref t.dist,pMarginalizedDist) with (rho,q,_) in
     modref p.dist q;
+    --modref p.meanScale (None ());
     let pbn = addVertexPBN pbn rho in
-    let pbn = inheritRDependencies pbn tAcc (v.0,v.1,rho) in
-    let g = digraphMaybeAddEdges [(rho, v.1, 0), (v.0, rho, 0)] pbn.g in
+    let pbn = inheritRDependencies pbn tAcc (v.0,parent,rho) in
+    let g = digraphMaybeAddEdges [(rho, parent, 0), (v.0, rho, 0)] pbn.g in
     modref p.mDist (Some q);
     ({pbn with g=g}, tAcc)
   | (RandomVarNode t, MultiplexerNode p)&v -> match p.list with ListNode l in
     match deref p.mDist with (Some pMarginalizedDist) in
     let obs = match t.val with Some _ then t.val else Some (nvar_ t.ident) in
-    match posterior obs (None ()) (deref t.plateId) (deref t.dist,pMarginalizedDist) with (rho,q,paramNames) in
+    match posterior obs indices (deref t.plateId) (float_ 1., float_ 0.) (deref t.dist,pMarginalizedDist) with (rho,q,paramNames) in
     let pbn = addVertexPBN pbn rho in
     let pbn = inheritRDependencies pbn tAcc (v.0,v.1,rho) in
     let pbn = {pbn with g= digraphMaybeAddEdges [(rho, v.1, 0), (v.0, rho, 0)] pbn.g} in
@@ -1119,129 +1195,87 @@ lang TransformPBN = ConjugatePrior
       match res with (pbn, _) in
     (pbn, tAcc)
 
-  sem createRParameterTDPH: PBN -> TAcc -> (Name, Vertex) -> Option (Name, Expr) -> (Vertex, Vertex) -> (PBN, TAcc, Name, Vertex, Option Vertex)
-  sem createRParameterTDPH pbn tAcc out indices =
-  | (RandomVarNode t, RandomVarNode p)&v ->
-    match out with (outName, outBlock) in
+  sem createRParameterTDP: PBN -> TAcc -> (Vertex, Vertex) -> (PBN,TAcc)
+  sem createRParameterTDP pbn tAcc =
+  | (RandomVarNode t, RandomVarNode _ | AffineNode _)&v ->
+    let parent = match v.1 with AffineNode a then deref a.tVertex else v.1 in
+    match parent with RandomVarNode p in
+    let meanSO = match v.1 with AffineNode a then (a.meanScale,a.meanOffset) else (float_ 1., float_ 0.) in 
+    match deref t.plateId with Some pid in
+    let plateN = mapLookupOrElse (lam. error "Lookup failed") pid pbn.m in
     let obs = match t.val with Some _ then t.val else Some (nvar_ t.ident) in
     match deref p.mDist with Some pMarginalizedDist in
-    match posterior obs indices (deref t.plateId) (deref t.dist, pMarginalizedDist) with (rho, q, paramNames) in
+    match posterior obs (None ()) (deref t.plateId) meanSO (deref t.dist, pMarginalizedDist) with (rho, q, paramNames) in
     let pbn = addVertexPBN pbn rho in
-    let paramName = nameSym "rP" in
-    let paramBlock = CodeBlockNode {ident=nameSym "", code=nulet_ paramName (utuple_ (map nvar_ paramNames)),ret=false,plateId=t.plateId} in
-    let pbn = addVertexPBN pbn paramBlock in
-    let edges = [(outBlock, v.1, 0), (rho, paramBlock, 0), (v.0, rho, 0)] in
-    let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-    let q = changeParams outName q in
-    modref p.dist q;
-    modref p.mDist (Some q);
-    (pbn, tAcc, paramName, paramBlock, Some rho)
-  | (RandomVarNode t, MultiplexerNode p)&v -> match p.list with ListNode l in
+    -- calculate postParam, and modref it to be used later iteration
+    let id = mapLookupOrElse (lam. error "lookup failed") (getId v.1) tAcc.refMap in
+    let modRId = nameSym "" in
+    let derefCB = CodeBlockNode {ident=modRId, code=ulet_ "" (modref_ (nvar_ id) (getParams q)), ret=false, plateId=t.plateId} in
+    let pbn = addVertexPBN pbn derefCB in
+    let pbn = inheritRDependencies pbn tAcc (v.0,parent,rho) in
+    match mapLookup p.ident tAcc.modrefMap with Some _ then 
+       let tAcc = {tAcc with modrefMap=mapInsert p.ident modRId tAcc.modrefMap} in (pbn, tAcc)
+    else
+      let rParamId = nameSym "prPostP" in
+      let outerCB = CodeBlockNode {ident=nameSym "", code=nulet_ rParamId (deref_ (nvar_ id)), ret=false, plateId=p.plateId} in
+      let pbn = addVertexPBN pbn outerCB in
+      let edges = [(rho,derefCB,0),(v.0,rho,0),(outerCB, parent, 0),(plateN, outerCB, 0)] in
+      let pbn = {pbn with g=digraphMaybeAddEdges edges pbn.g} in
+      let q = changeParams rParamId q in
+      let tAcc = {tAcc with modrefMap=mapInsert p.ident modRId tAcc.modrefMap} in
+      modref p.dist q;
+      modref p.mDist (Some q);
+      (pbn,tAcc)
+  | (RandomVarNode t, (MultiplexerNode p)) & v  -> 
+    match deref t.plateId with Some pid in
+    let plateN = mapLookupOrElse (lam. error "Lookup failed") pid pbn.m in
+    match p.list with ListNode l in
     match deref p.mDist with (Some pMarginalizedDist) in
     let obs = match t.val with Some _ then t.val else Some (nvar_ t.ident) in
-    match posterior obs (None ()) (deref t.plateId) (deref t.dist,pMarginalizedDist) with (rho,q,paramNames) in
-    match deref t.plateId with Some pid in
-    match mapLookup pid pbn.m with Some (FoldNode f) in
-    match out with (outName, outBlock) in
+    match posterior obs (None ()) (deref t.plateId) (float_ 1., float_ 0.) (deref t.dist,pMarginalizedDist) with (rho,q,paramNames) in
     let pbn = addVertexPBN pbn rho in
     let pbn = inheritRDependencies pbn tAcc (v.0,v.1,rho) in
     let pbn = {pbn with g= digraphMaybeAddEdges [(rho, v.1, 0), (v.0, rho, 0)] pbn.g} in
-    let reorderedParam  = getParams q in
-    let i = nameSym "i" in
-    let e = nameSym "e" in
-    let index = mapLookupOrElse (lam. error "") (getId v.1) (deref f.vToIndex) in
-    let params = tupleproj_ index (nvar_ f.lamAccId)  in
-    let code = match l.create with Some rep then
-      match deref l.outParam with Some outParam then (nvar_ outParam)
-      else match get l.items 0 with RandomVarNode v in 
-        match deref (v.mDist) with Some pMarginalizedDist in create_ rep (ulam_ "" (getParams pMarginalizedDist)) 
-    else seq_ (map (lam i. match i with RandomVarNode v in match (deref v.mDist) with Some md in getParams md) l.items) in
-    let code = mapi_ (nulam_ i 
-      (nulam_ e 
-        (if_ (eqi_ (nvar_ i) (nvar_ p.indexId)) reorderedParam (nvar_ e)))) (params) in
-    let paramName = nameSym "rP" in
-    let paramBlock = CodeBlockNode {ident=nameSym "", code=nulet_ paramName code, ret=false,plateId=t.plateId} in
-    let pbn = addVertexPBN pbn paramBlock in
-    let edges = [(rho,paramBlock,0)] in
-    let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-    match l.create with Some rep then
-      match get l.items 0 with RandomVarNode v in
-      match deref l.lamParam with Some id in
-      modref l.outParam (Some outName);
-      let q = changeParams id q in
-      modref v.dist q;
-      modref v.mDist (Some q);
-      let edges = [(outBlock, p.list, 0)] in
-      let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-      (pbn, tAcc, paramName, paramBlock, None ())
-    else 
-      let res = foldl (lam acc. lam i.
-        match acc with (pbn, tAcc, edges, cnt) in
-        match i with RandomVarNode v in
-        let outNameI = nameSym (join ["postParam", int2string cnt]) in
-        let outBlockI = CodeBlockNode {ident=nameSym "", code=nulet_ outNameI (get_ (nvar_ outName) (int_ cnt)), ret=false, plateId=l.plateId} in
-        let pbn = addVertexPBN pbn outBlockI in
-        let newEdges = [(outBlock,outBlockI, 0),(outBlockI, i, 0),((FoldNode f),outBlockI,0)] in
-        let q = changeParams outNameI q in
-        modref v.dist q; modref v.mDist (Some q);
-        (pbn, tAcc, join [newEdges, edges], addi cnt 1)
-      ) (pbn, tAcc, [(outBlock, p.list, 0)], 0) l.items in
-      match res with (pbn, tAcc, edges, _) in
-      let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
-      (pbn, tAcc, paramName, paramBlock, None ())
-
-      -- propagate is not correct when several things are propagated
-  sem propagateThroughPlatesR pbn v id =
-  | (Some targetPID, None ())  -> 
-      match mapLookup targetPID pbn.m with Some (FoldNode f) in
-      match deref f.plateId with Some lpid then
-        match mapLookup lpid pbn.m with Some (FoldNode gf) in
-          let index = mapLookupOrElse (lam. error "") (getId v.1) (deref gf.vToIndex) in
-          let param = tupleproj_ index (nvar_ f.ident) in
-          let res = match mapLookup gf.retBlockId pbn.m with Some (CodeBlockNode rt) then 
-           addParam pbn param (CodeBlockNode rt)
-          else let retBlock = CodeBlockNode {ident=gf.retBlockId, code= (nulet_ gf.retBlockId (utuple_ [param])), ret=false,plateId=f.plateId} in
-            (addVertexPBN pbn retBlock, retBlock) in 
-          match res with (pbn,retBlock) in
-          let ret = CodeBlockNode {ident=nameSym "", code=(nvar_ gf.retBlockId), ret=true,plateId=f.plateId} in
-          let pbn = addVertexPBN pbn ret in 
-          let pbn = {pbn with g=digraphMaybeAddEdge (FoldNode f) retBlock 0 pbn.g} in
-          propagateThroughPlatesR pbn v gf.ident (Some lpid, None ())
-      else (pbn, id)
-  | _ -> (pbn, id)
-    
-  sem createRParameterTDP: PBN -> TAcc -> (Vertex, Vertex) -> (PBN,TAcc)
-  sem createRParameterTDP pbn tAcc =
-  | (RandomVarNode t, (RandomVarNode _ | MultiplexerNode _)) & v  -> 
-    match deref t.plateId with Some pid in
-    match mapLookup pid pbn.m with Some (FoldNode f) in
-    let parentPID = match v.1 with MultiplexerNode m then match m.list with ListNode l in deref l.plateId
-      else match v.1 with RandomVarNode p in deref p.plateId in
-    match propagateThroughPlatesR pbn v f.ident (Some pid, parentPID) with (pbn, outfid) in
-    -- create the outblock that gets the result from foldnode
-    let outName = nameSym "postParam" in
-    let index = mapLookupOrElse (lam. error "index not found") (getId v.1) (deref f.vToIndex) in
-    let ppid = match v.1 with MultiplexerNode m then match m.list with ListNode l in l.plateId
-      else match v.1 with RandomVarNode p then p.plateId else never in
-      -- here f.ident should be the last foldname
-    let outBlock = CodeBlockNode {ident=nameSym "", code=nulet_ outName (tupleproj_ index (nvar_ outfid)), ret=false, plateId=ppid} in
-    let pbn = addVertexPBN pbn outBlock in
-    match createRParameterTDPH pbn tAcc (outName,outBlock) (None ()) v with (pbn, tAcc, paramName, paramBlock) in
-
-    -- here should get the return value as the marginalized
-    let res = match mapLookup f.retBlockId pbn.m with Some (CodeBlockNode rt) then
-      addParam pbn (nvar_ paramName) (CodeBlockNode rt)
+    let id = mapLookupOrElse (lam. error "lookup failed") l.ident tAcc.refMap in
+    let modrefCode = get_ (deref_ (nvar_ id)) (nvar_ p.indexId) in
+    let modRId = nameSym "" in
+    let derefCB = CodeBlockNode {ident=modRId, code=ulet_ "" (modref_ modrefCode (getParams q)), ret=false, plateId=t.plateId} in
+    let pbn = addVertexPBN pbn derefCB in
+    let pbn = {pbn with g=digraphMaybeAddEdge rho derefCB 0 pbn.g} in
+    match mapLookup l.ident tAcc.modrefMap with Some _ then 
+      let tAcc = {tAcc with modrefMap=mapInsert l.ident modRId tAcc.modrefMap} in (pbn, tAcc)
     else
-      let retBlock = CodeBlockNode {ident=f.retBlockId, code= (nulet_ f.retBlockId (utuple_ [nvar_ paramName])), ret=false,plateId=t.plateId} in
-      (addVertexPBN pbn retBlock, retBlock) in 
-    match res with (pbn,retBlock) in
-    let ret = CodeBlockNode {ident=nameSym "", code=(nvar_ f.retBlockId), ret=true,plateId=t.plateId} in
-    let pbn = addVertexPBN pbn ret in
+      let rParamId = nameSym "prPostP" in
+      let tmpId = nameSym "" in
+      let outerCB = CodeBlockNode {ident=rParamId, code=nulet_ rParamId (map_ (nulam_ tmpId (deref_ (nvar_ tmpId))) (deref_ (nvar_ id))), ret=false, plateId=l.plateId} in
+      let pbn = addVertexPBN pbn outerCB in
+      let edges = [(rho,derefCB,0),(outerCB, p.list, 0),(plateN, outerCB, 0)] in
+      let pbn = {pbn with g=digraphMaybeAddEdges edges pbn.g} in
+      let tAcc = {tAcc with modrefMap=mapInsert l.ident modRId tAcc.modrefMap} in
+      match l.create with Some rep then
+        match get l.items 0 with RandomVarNode v in
+        match deref l.lamParam with Some id in
+        modref l.outParam (Some rParamId);
+        let q = changeParams id q in
+        modref v.dist q;
+        modref v.mDist (Some q);
+        (pbn,tAcc)
+      else 
+        let res = foldl (lam acc. lam i. 
+          match acc with (pbn, edges, cnt) in
+          match i with RandomVarNode v in
+          let outNameI = nameSym (join ["postParam", int2string cnt]) in
+          let outBlockI = CodeBlockNode {ident=nameSym "", code=nulet_ outNameI (get_ (nvar_ rParamId) (int_ cnt)), ret=false, plateId=l.plateId} in
+          let pbn = addVertexPBN pbn outBlockI in
+          let newEdges = [(outerCB,outBlockI, 0),(outBlockI, i, 0),(plateN,outBlockI,0)] in
+          let q = changeParams outNameI q in
+          modref v.dist q;
+          modref v.mDist (Some q); 
+          (pbn, join [newEdges, edges], addi cnt 1)) (pbn,[],0) l.items in
+        match res with (pbn, edges, _) in
+        let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
+        (pbn,tAcc)
 
-    match mapLookup outfid pbn.m with Some (FoldNode f) in
-    let edges = [(FoldNode f,outBlock,0), (paramBlock,retBlock,0)] in
-    let pbn = {pbn with g=digraphMaybeAddEdges edges pbn.g} in
-    (pbn, tAcc)
 
 
   sem reorder: PBN -> TAcc -> Vertex -> (PBN,TAcc)
@@ -1250,7 +1284,7 @@ lang TransformPBN = ConjugatePrior
     -- already stabilized, return the graph
     if eqi (deref v.state) 2 then (pbn,tAcc) else
     let parents = filter (lam v. 
-                          match v with (RandomVarNode _ | MultiplexerNode _) then
+                          match v with (RandomVarNode _ | MultiplexerNode _| AffineNode _) then
                             not (isStabilized pbn v)
                           else false) (digraphPredeccessors t pbn.g) in
     if null parents then --if it has no rv parents then directly stabilize the node
@@ -1271,32 +1305,18 @@ lang TransformPBN = ConjugatePrior
       (pbn, tAcc)
   | MultiplexerNode p -> reorder pbn tAcc p.list
   | ListNode l -> foldl (lam acc. lam i. reorder acc.0 acc.1 i) (pbn, tAcc) l.items
+  | (AffineNode v) & t -> reorder pbn tAcc (deref v.tVertex)    
          
 end
 
-let modifiedBFS : all v. all l. v -> v -> Digraph v l -> Bool
-  = lam source. lam dst. lam g.
-  recursive let work = lam fs. lam level. lam dist:Map v Int. lam u.
-    if null fs then u else
-    match
-      foldl (lam acc:([v], Map v Int,Bool). lam f.
-        foldl (lam acc:([v], Map v Int,Bool). lam v.
-          if mapMem v acc.1 then
-            if digraphEqv g dst v then
-              (acc.0,acc.1, false)
-            else acc
-          else (cons v acc.0, mapInsert v level acc.1,acc.2)
-        ) acc (digraphSuccessors f g)) ([],dist,u) fs
-      with (ns, dist, u) then
-        if not u then u
-        else
-          work ns (addi level 1) dist u
-      else never
-    in
-    work [source] 1 (mapInsert source 1 (mapEmpty (digraphCmpv g))) true
-
--- the whole algorithm with three steps: Static PBN Constructor + Conjugate Prior Transformer + Program Reconstructor
+-- Three steps of the algorithm: Static PBN Constructor + Conjugate Prior Transformer + Program Reconstructor
 lang StaticDelay = CreatePBN + TransformPBN + RecreateProg 
+
+  sem fixIter =
+  | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CIter ()}&c),rhs=TmLet t}&a2),rhs=lst}&a1) -> 
+    let newrhs = match t.inexpr with TmLam l then TmLam {l with body=bind_ (TmLet {t with inexpr=unit_}) l.body} else TmLet t in
+    TmApp {a1 with lhs=TmApp {a2 with rhs=newrhs}}
+  | t -> smap_Expr_Expr (fixIter) t
 
   sem removeAlias env =
   | TmLet ({body=TmVar v}&t) ->
@@ -1308,7 +1328,7 @@ lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
 
   sem transformModel =
   | prog -> 
-    let model = use MExprPPLStaticDelayedANF in (normalizeTerm prog) in
+    let model = use MExprPPLStaticDelayedANF in (normalizeTerm (fixIter prog)) in
     let model = removeAlias (mapEmpty nameCmp) model in
     let pbn = createM model in
     let pbn = transformPBN ({pbn with targets=(distinct nameEq pbn.targets)},(emptyTAcc ())) in
@@ -1328,7 +1348,6 @@ lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
   sem transform =
   | prog -> transformModel (transformLam prog)
 end
-
 
 let staticDelay = lam prog. use StaticDelay in
   transform prog
