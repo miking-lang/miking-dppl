@@ -1174,10 +1174,8 @@ with strJoin "\n" [
 utest mexprPPLToString tmObserve
 with strJoin "\n" [
   "observe",
-  "  1.5",
-  "  (Beta",
-  "     1.",
-  "     2.)"
+  "  1.5 (Beta",
+  "     1. 2.)"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmWeight
@@ -1191,19 +1189,9 @@ with strJoin "\n" [
   "solveode",
   "  (lam t.",
   "     lam x.",
-  "       [ get",
-  "           x",
-  "           0,",
-  "         subf",
-  "           (negf",
-  "              (get",
-  "                 x",
-  "                 1))",
-  "           (get",
-  "              x",
-  "              0) ])",
-  "  [ 1.,",
-  "    0. ]",
+  "       [ get x 0,",
+  "         subf (negf (get x 1)) (get x 0) ])",
+  "  [ 1., 0. ]",
   "  1."
 ] using eqString else _toStr in
 
@@ -1211,9 +1199,7 @@ utest mexprPPLToString tmPrune
 with strJoin "\n" [
   "prune",
   "  (Categorical",
-  "     [ 0.5,",
-  "       0.3,",
-  "       0.2 ])"
+  "     [ 0.5, 0.3, 0.2 ])"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmPruned
@@ -1221,17 +1207,14 @@ with strJoin "\n" [
   "pruned",
   "  (prune",
   "     (Categorical",
-  "        [ 0.5,",
-  "          0.3,",
-  "          0.2 ]))"
+  "        [ 0.5, 0.3, 0.2 ]))"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmCancel
 with strJoin "\n" [
   "cancel",
   "  (observe",
-  "    true",
-  "    (Bernoulli",
+  "    true (Bernoulli",
   "       0.7))"
 ] using eqString else _toStr in
 
