@@ -1116,8 +1116,7 @@ let tmWiener = wiener_ in
 
 utest mexprToString tmUniform with strJoin "\n" [
   "Uniform",
-  "  1.",
-  "  2."
+  "  1. 2."
 ] using eqString in
 
 utest mexprToString tmBernoulli with strJoin "\n" [
@@ -1132,29 +1131,22 @@ utest mexprToString tmPoisson with strJoin "\n" [
 
 utest mexprToString tmBeta with strJoin "\n" [
   "Beta",
-  "  1.",
-  "  2."
+  "  1. 2."
 ] using eqString in
 
 utest mexprToString tmGamma with strJoin "\n" [
   "Gamma",
-  "  1.",
-  "  2."
+  "  1. 2."
 ] using eqString in
 
 utest mexprToString tmCategorical with strJoin "\n" [
   "Categorical",
-  "  [ 0.3,",
-  "    0.2,",
-  "    0.5 ]"
+  "  [ 0.3, 0.2, 0.5 ]"
 ] using eqString in
 
 utest mexprToString tmMultinomial with strJoin "\n" [
   "Multinomial",
-  "  5",
-  "  [ 0.3,",
-  "    0.2,",
-  "    0.5 ]"
+  "  5 [ 0.3, 0.2, 0.5 ]"
 ] using eqString in
 
 utest mexprToString tmExponential with strJoin "\n" [
@@ -1170,21 +1162,17 @@ utest mexprToString tmEmpirical with strJoin "\n" [
 
 utest mexprToString tmDirichlet with strJoin "\n" [
   "Dirichlet",
-  "  [ 1.3,",
-  "    1.3,",
-  "    1.5 ]"
+  "  [ 1.3, 1.3, 1.5 ]"
 ] using eqString in
 
 utest mexprToString tmGaussian with strJoin "\n" [
   "Gaussian",
-  "  0.",
-  "  1."
+  "  0. 1."
 ] using eqString in
 
 utest mexprToString tmBinomial with strJoin "\n" [
   "Binomial",
-  "  5",
-  "  0.5"
+  "  5 0.5"
 ] using eqString in
 
 utest mexprToString tmWiener with "Wiener ()"
