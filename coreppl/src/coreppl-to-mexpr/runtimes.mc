@@ -118,7 +118,8 @@ lang LoadRuntime =
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
     let stateType = findStateType method stateId runtime in
     let pruningRuntime = loadRuntime false "pruning/runtime.mc" in
-    let runtime = bind_ pruningRuntime runtime in
+    let delayedRuntime = loadRuntime false "delayed-sampling/runtime.mc" in
+    let runtime = bindall_ [pruningRuntime, delayedRuntime, runtime] in
     match eliminateDuplicateCodeWithSummary runtime with (replacements, runtime) in
     { ast = runtime, runId = runId, stateType = stateType
     , topSymEnv = addTopNames symEnvEmpty runtime }

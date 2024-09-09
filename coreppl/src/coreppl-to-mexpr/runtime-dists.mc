@@ -68,6 +68,9 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet {a : [Float]}
   | DistUniform {a : Float, b : Float}
   | DistWiener {}
+  | DistLomax {scale: Float, shape : Float}
+  | DistBetabin {n:Int, a: Float, b: Float}
+  | DistNegativeBinomial {n:Int, p: Float}
 
   sem sample =
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
@@ -82,6 +85,9 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
   | DistWiener _ -> unsafeCoerce (wienerSample ())
+  | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
+  | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
+  | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
 
   sem logObserve =
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
@@ -99,6 +105,9 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
   | DistWiener _ -> error "logObserve undefined for the Wiener process"
+  | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
+  | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
+  | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
 end
 
 -- Elementary distributions with samples lifted to dual numbers

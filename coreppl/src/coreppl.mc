@@ -1047,6 +1047,233 @@ lang Diff =
       r.fn
 end
 
+lang Delay =
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+
+  syn Expr =
+  | TmDelay { dist: Expr,
+              ty: Type,
+              info: Info }
+
+  syn Type =
+  | TyDelayInt { info : Info }
+  | TyDelayFloat { info : Info }
+  | TyDelaySeqF { info : Info }
+
+  sem infoTm =
+  | TmDelay t -> t.info
+
+  sem tyTm =
+  | TmDelay t -> t.ty
+
+  sem withInfo (info: Info) =
+  | TmDelay t -> TmDelay { t with info = info }
+
+  sem withType (ty: Type) =
+  | TmDelay t -> TmDelay {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmDelay t ->
+    match f acc t.dist with (acc,dist) in
+    (acc, TmDelay { t with dist = dist })
+
+  sem smapAccumL_Expr_Type f acc =
+  | TmDelay t ->
+    match f acc t.ty with (acc,ty) in
+    (acc, TmDelay {t with ty = ty })
+
+  sem infoTy =
+  | TyDelayInt t -> t.info
+  | TyDelayFloat t -> t.info
+  | TyDelaySeqF t -> t.info
+
+  sem unifyBase u env =
+  | (TyDelayInt _, TyDelayInt _) -> u.empty
+  | (TyDelayFloat _, TyDelayFloat _) -> u.empty
+  | (TyDelaySeqF _, TyDelaySeqF _) -> u.empty
+
+  sem tyWithInfo (info: Info) =
+  | TyDelayInt t -> TyDelayInt {t with info = info}
+  | TyDelayFloat t -> TyDelayFloat {t with info = info}
+  | TyDelaySeqF t -> TyDelaySeqF {t with info = info}
+
+  sem getTypeStringCode (indent: Int) (env: PprintEnv) =
+  | TyDelayInt t ->
+    (env, join ["DelayInt"])
+  | TyDelayFloat t ->
+    (env, join ["DelayFloat"])
+  | TyDelaySeqF t ->
+    (env, join ["DelaySeqF"])
+
+  sem isAtomic =
+  | TmDelay _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmDelay t ->
+    let i = pprintIncr indent in
+    match printParen i env t.dist with (env,dist) then
+      (env, join ["delay", pprintNewline i, dist])
+    else never
+
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmDelay r ->
+    match lhs with TmDelay l then
+      eqExprH env free l.dist r.dist
+    else None ()
+
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | TyDelayInt r ->
+    match unwrapType lhs with TyDelayInt _ then
+      Some free
+    else None ()
+  | TyDelayFloat r ->
+    match unwrapType lhs with TyDelayFloat _ then
+      Some free
+    else None ()
+  | TyDelaySeqF r ->
+    match unwrapType lhs with TyDelaySeqF _ then
+      Some free
+    else None ()
+
+  sem symbolizeExpr (env: SymEnv) =
+  | TmDelay t ->
+    TmDelay {{ t with dist = symbolizeExpr env t.dist}
+                    with ty = symbolizeType env t.ty}
+
+  sem typeCheckExpr (env : TCEnv) =
+  | TmDelay t ->
+    let dist = typeCheckExpr env t.dist in
+    let ty =
+        match (inspectType (tyTm dist)) with TyDist ({ty=ty}&d) then
+        switch inspectType ty
+        case TyInt _ then
+          TyDelayInt { info = t.info }
+        case TyFloat _ then
+          TyDelayFloat { info = t.info }
+        case TySeq {ty = TyFloat _} then
+          TyDelaySeqF { info = t.info }
+        case _ then
+          error "invalid Type for delay"
+        end
+      else error "invalid Type for delay"
+    in
+    TmDelay {t with dist = dist, ty = ty}
+
+  sem normalize (k : Expr -> Expr) =
+  | TmDelay ({dist= dist} & t) ->
+    normalizeName (lam dist. k (TmDelay { t with dist=dist})) dist
+
+  sem typeLiftExpr (env:TypeLiftEnv) =
+  | TmDelay t ->
+    match typeLiftExpr env t.dist with (env, dist) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmDelay {{t with dist = dist}
+                          with ty = ty})
+      else never
+    else never
+
+  sem pevalIsValue =
+  | TmDelay _ -> false
+
+  sem pevalEval ctx k =
+  | TmDelay r ->
+    pevalBind ctx
+      (lam dist. k (TmDelay { r with dist = dist})) r.dist
+  | TmDelay ( {dist = TmDist ({dist = dist} & td)} & t) ->
+    pevalDistEval ctx
+      (lam dist. k (TmDelay { t with dist= TmDist { td with dist = dist} } )) dist
+
+end
+
+lang Delayed = Delay
+
+  syn Expr =
+  | TmDelayed { delay: Expr,
+              ty: Type,
+              info: Info }
+
+  sem infoTm =
+  | TmDelayed t -> t.info
+
+  sem tyTm =
+  | TmDelayed t -> t.ty
+
+  sem withInfo (info: Info) =
+  | TmDelayed t -> TmDelayed { t with info = info }
+
+  sem withType (ty: Type) =
+  | TmDelayed t -> TmDelayed {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmDelayed t ->
+    match f acc t.delay with (acc,delay) in
+    (acc, TmDelayed { t with delay = delay })
+
+  sem isAtomic =
+  | TmDelayed _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmDelayed t ->
+    let i = pprintIncr indent in
+    match printParen i env t.delay with (env, delay) then
+      (env, join ["delayed", pprintNewline i, delay])
+    else never
+
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmDelayed r ->
+    match lhs with TmDelayed l then
+      eqExprH env free l.delay r.delay
+    else None ()
+
+  sem symbolizeExpr (env: SymEnv) =
+  | TmDelayed t ->
+    TmDelayed {{ t with delay = symbolizeExpr env t.delay}
+                    with ty = symbolizeType env t.ty}
+
+   -- CPS
+  sem cpsCont k =
+  | TmLet ({ body = TmDelayed _ } & t) ->
+    TmLet { t with inexpr = cpsCont k t.inexpr }
+
+  sem typeCheckExpr (env : TCEnv) =
+  | TmDelayed t ->
+    let delay = typeCheckExpr env t.delay in
+    let ty =
+        switch inspectType (tyTm delay)
+        case TyDelayInt _ then
+          TyInt { info = t.info }
+        case TyDelayFloat _ then
+          TyFloat { info = t.info }
+        case TyDelaySeqF _ then
+          TySeq { ty = TyFloat {info = t.info}, info = t.info }
+        case _ then
+          error "invalid Type for delayed"
+        end
+    in
+    TmDelayed {t with delay = delay, ty = ty}
+
+  sem normalize (k : Expr -> Expr) =
+  | TmDelayed ({delay = delay} & t) ->
+    normalizeName (lam delay. k (TmDelayed { t with delay = delay})) delay
+
+  sem typeLiftExpr (env:TypeLiftEnv) =
+  | TmDelayed t ->
+    match typeLiftExpr env t.delay with (env, delay) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmDelayed {{t with delay = delay}
+                          with ty = ty})
+      else never
+    else never
+
+  sem pevalIsValue =
+  | TmDelayed _ -> false
+
+  sem pevalEval ctx k =
+  | TmDelayed r ->
+    pevalBind ctx
+      (lam delay. k (TmDelayed { r with delay = delay})) r.delay
+end
+
 -----------------
 -- AST BUILDER --
 -----------------
@@ -1087,10 +1314,25 @@ let cancel_ = use Cancel in
 
 let typruneint_ = use Prune in
   TyPruneInt {info = NoInfo ()}
+
 let diff_ = use Diff in
    lam fn. lam arg.
      TmDiff { fn = fn, arg = arg, ty = tyunknown_, info = NoInfo () }
 
+let delay_ = use Delay in
+  lam d. TmDelay {dist = d, ty = tyunknown_ , info = NoInfo ()}
+
+let delayed_ = use Delayed in
+  lam d. TmDelayed {delay = d, ty = tyunknown_ , info = NoInfo ()}
+
+let tydelayint_ = use Delay in
+  TyDelayInt {info = NoInfo ()}
+
+let tydelayfloat_ = use Delay in
+  TyDelayFloat {info = NoInfo ()}
+
+let tydelayseqf_ = use Delay in
+  TyDelaySeqF {info = NoInfo ()}
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
 ---------------------------
@@ -1101,19 +1343,27 @@ lang CorePPL =
 end
 
 let pplKeywords = [
-  "assume", "observe", "weight", "resample", "prune", "pruned", "cancel",
+  "assume", "observe", "weight", "resample", "cancel",
   "Uniform", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
   "Multinomial", "Dirichlet", "Exponential", "Empirical", "Gaussian",
   "Binomial", "Wiener"
 ]
 
-lang CoreDPL = Ast + SolveODE + Diff end
+lang CoreDPL = Ast + SolveODE + Diff + Delayed end
 
 let dplKeywords = [
   "solveode", "diff"
 ]
 
-let mexprPPLKeywords = join [mexprKeywords, pplKeywords, dplKeywords]
+let pruneKeywords = [
+  "prune", "pruned"
+]
+
+let delayKeywords = [
+  "delay", "delayed"
+]
+
+let mexprPPLKeywords = join [mexprKeywords, pplKeywords, dplKeywords, pruneKeywords, delayKeywords]
 
 lang MExprPPL =
   CorePPL + CoreDPL + ElementaryFunctions +
@@ -1156,6 +1406,14 @@ let tmPruned2 = pruned_ tmPrune2 in
 let tmCancel = cancel_ (bern_ (float_ 0.7)) true_ in
 let tmCancel2 = cancel_ (bern_ (float_ 0.7)) false_  in
 let tmDiff = diff_ (ulam_ "x" (var_ "x")) (float_ 1.) in
+let tmDelay =
+  delay_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]))
+in
+let tmDelay2 =
+  delay_ (categorical_ (seq_ [float_ 0.4,float_ 0.4,float_ 0.2]))
+in
+let tmDelayed = delayed_ tmDelay in
+let tmDelayed2 = delayed_ tmDelay2 in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -1218,6 +1476,21 @@ with strJoin "\n" [
   "       0.7))"
 ] using eqString else _toStr in
 
+utest mexprPPLToString tmDelay
+with strJoin "\n" [
+  "delay",
+  "  (Categorical",
+  "     [ 0.5, 0.3, 0.2 ])"
+] using eqString else _toStr in
+
+utest mexprPPLToString tmDelayed
+with strJoin "\n" [
+  "delayed",
+  "  (delay",
+  "     (Categorical",
+  "        [ 0.5, 0.3, 0.2 ]))"
+] using eqString else _toStr in
+
 --------------------
 -- EQUALITY TESTS --
 --------------------
@@ -1252,6 +1525,10 @@ utest tmDiff with tmDiff using eqExpr else _toStr in
 utest tmDiff with diff_ (ulam_ "x" (var_ "x")) (float_ 2.)
   using neqExpr else _toStr
 in
+utest tmDelay with tmDelay using eqExpr else _toStr in
+utest tmDelayed with tmDelayed using eqExpr else _toStr in
+utest tmDelay with tmDelay2 using neqExpr else _toStr in
+utest tmDelayed with tmDelayed2 using neqExpr else _toStr in
 
 ----------------------
 -- SMAP/SFOLD TESTS --
@@ -1315,6 +1592,15 @@ utest sfold_Expr_Expr foldToSeq [] tmDiff
   using eqSeq eqExpr else _seqToStr
 in
 
+utest sfold_Expr_Expr foldToSeq [] tmDelay
+  with [ categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]) ]
+  using eqSeq eqExpr else _seqToStr
+in
+
+utest sfold_Expr_Expr foldToSeq [] tmDelayed
+  with [ delay_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2])) ]
+  using eqSeq eqExpr else _seqToStr
+in
 ---------------------
 -- SYMBOLIZE TESTS --
 ---------------------
@@ -1328,6 +1614,8 @@ utest symbolize tmPrune with tmPrune using eqExpr in
 utest symbolize tmPruned with tmPruned using eqExpr in
 utest symbolize tmCancel with tmCancel using eqExpr in
 utest symbolize tmDiff with tmDiff using eqExpr in
+utest symbolize tmDelay with tmDelay using eqExpr in
+utest symbolize tmDelayed with tmDelayed using eqExpr in
 
 
 ----------------------
@@ -1343,6 +1631,7 @@ utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmPrune) with typruneint_ using eqType in
 utest tyTm (typeCheck tmCancel) with tyunit_ using eqType in
 utest tyTm (typeCheck tmDiff) with tyarrow_ tyfloat_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmDelay) with tydelayint_ using eqType in
 
 ---------------
 -- ANF TESTS --
@@ -1398,6 +1687,19 @@ utest _anf tmDiff
     ulet_ "t" tmDiff,
     var_ "t"
 ] using eqExpr else _toStr in
+utest _anf tmDelay with bindall_ [
+  ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
+  ulet_ "t1" (categorical_ (var_ "t")),
+  ulet_ "t2" (delay_ (var_ "t1")),
+  var_ "t2"
+] using eqExpr else _toStr in
+utest _anf tmDelayed with bindall_ [
+  ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
+  ulet_ "t1" (categorical_ (var_ "t")),
+  ulet_ "t2" (delay_ (var_ "t1")),
+  ulet_ "t3" (delayed_ (var_ "t2")),
+  var_ "t3"
+] using eqExpr else _toStr in
 
 ---------------------
 -- TYPE-LIFT TESTS --
@@ -1412,5 +1714,7 @@ utest (typeLift tmPrune).1 with tmPrune using eqExpr in
 utest (typeLift tmPruned).1 with tmPruned using eqExpr in
 utest (typeLift tmCancel).1 with tmCancel using eqExpr in
 utest (typeLift tmDiff).1 with tmDiff using eqExpr in
+utest (typeLift tmDelay).1 with tmDelay using eqExpr in
+utest (typeLift tmDelayed).1 with tmDelayed using eqExpr in
 
 ()
