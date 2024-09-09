@@ -275,7 +275,7 @@ lang DPPLDelayedTransform = TransformDsDist
       bindall_
       [ vertex
       , ulet_ "" (appf2_ (var_ "valueDs") sampleT (nvar_ rvIdent))
-      ,  match t with TmAssume a then TmAssume {a with dist = dst} else match t with TmObserve o then (TmObserve {o with dist = dst}) else never
+      ,  match t with TmAssume a then (appf1_ (var_ "getValue") (nvar_ rvIdent)) else match t with TmObserve o then (TmObserve {o with dist = dst}) else never
       ]
     else t
   | TmLet ({body=TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t) ->
@@ -323,5 +323,4 @@ lang DPPLDelayedSampling = DPPLDelayedTransform
     let prog =  replaceTmDelayed {env=envParam, delayedEnv=(mapEmpty nameCmp)} prog in
     let prog = replaceTyDelay prog in prog
 end
-
 

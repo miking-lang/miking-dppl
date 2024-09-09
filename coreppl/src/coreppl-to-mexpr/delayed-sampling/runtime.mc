@@ -154,21 +154,22 @@ lang DelayedSampling = DelayedGraph
 
   sem isTerminal =
   | (RandomVarV v) & t -> if eqi (deref v.state) 1 then deref v.terminal else false
-
+  
   sem graft:  all a. (Dist a -> a) -> DelayVar -> ()
   sem graft sampleT =
   | (RandomVarV v)&t ->
     --debugPrint (join ["grafting: ", (v2str t),"\n"]);
     (if eqi (deref v.state) 1 then -- if v is marginalized
+      modref v.terminal true;
       (let child = deref v.next in
       match child with Some child then -- if it has a marginalized child, prune the child
         prune sampleT child
       else ())
     else -- if v is not marginalized
       let parents = filter (lam p. match p with RandomVarV p in neqi (deref p.state) 2) (getParents (deref v.dist)) in
-      if null parents then marginalize sampleT t -- if no parents, directly marginalize
+      if null parents then marginalize sampleT t;modref v.terminal true -- if no parents, directly marginalize
       else
-      (if not (null (tail parents)) then
+      (if gti (length parents) 1 then
     --debugPrint (join ["has many parents: ","\n"]);
         iter (lam p. valueDs sampleT p) (tail parents)
       else ());
@@ -206,7 +207,7 @@ lang DelayedSampling = DelayedGraph
     let parents = filter (lam p. match p with RandomVarV p in eqi (deref p.state) 1) (getParents (deref v.dist)) in
     modref v.state 2;
     modref v.terminal false;
-    if null parents then
+    (if null parents then
     --debugPrint (join ["has no parent: ","\n"]); 
     match deref v.margDist with Some mdist in
     modref v.dist ( mdist);
@@ -221,8 +222,8 @@ lang DelayedSampling = DelayedGraph
       let ppDist = posterior (getValue t) (mDist, deref v.dist) in
       modref p.margDist ppDist;
       modref p.next (None ());
-       match deref v.margDist with Some mdist in
-    modref v.dist ( mdist)
+      match deref v.margDist with Some mdist in
+      modref v.dist ( mdist))
 
   sem prune: all a. (Dist a -> a) -> DelayVar -> ()
   sem prune sampleT =
