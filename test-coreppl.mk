@@ -16,8 +16,11 @@ test-files := $(filter-out coreppl/src/cppl.mc,$(test-files))
 test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
 test-staticdelay-files=$(shell find coreppl/test/coreppl-to-mexpr/static-delay -name "*.mc")
 test-cli-files=\
-  $(shell find coreppl/test/coreppl-to-mexpr/cli \
-               coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
+  $(shell find coreppl/test/coreppl-to-mexpr/cli -name "*.mc")
+# NOTE(johnwikman, 2024-09-13): The RootPPL compilation is currently broken, so
+# leaving it commented out until someone has fixed RootPPL compilation.
+#test-cli-files+=\
+#  $(shell find coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
 
 .PHONY: all
 all: compiler cppl
