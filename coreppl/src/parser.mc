@@ -225,6 +225,7 @@ let builtin = use MExprPPL in concat
   , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
   , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
   , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
+  , ("expectation", CDistExpectation ())
     -- External elementary functions
   , ("sin", CSin ())
   , ("cos", CCos ())
