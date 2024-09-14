@@ -48,6 +48,7 @@ lang ConstAllCFA = MExprCFA + MExprPPL + DualNumLift
     | CDistEmpiricalNormConst _
     | CDistEmpiricalAcceptRate _ ) ->
     errorSingle [info] "Constant not supported in CorePPL CFA"
+  | CDistExpectation _ -> graph
 
   sem addConstAllConstraints (graph: CFAGraphInit) =
   | t ->
