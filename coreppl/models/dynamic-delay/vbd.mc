@@ -4,31 +4,31 @@
 
 -- Include pow and exp
 include "math.mc"
-
+include "seq.mc"
 -- Include data
-include "../../data/data-vbd.mc"
+include "data/data-vbd.mc"
 
 let model: () -> Int = lam.
 
   -- Human parameters
   let hNu: Float = 0. in
   let hMu: Float = 1. in
-  let hLambda = assume (Beta 1. 1.) in
-  let hDelta: Float =
-    assume (Beta (addf 1. (divf 2. 4.4)) (subf 3. (divf 2. 4.4))) in
-  let hGamma: Float =
-    assume (Beta (addf 1. (divf 2. 4.5)) (subf 3. (divf 2. 4.5))) in
+  let hLambda = delay (Beta 1. 1.) in
+  let hDelta =
+    delay (Beta (addf 1. (divf 2. 4.4)) (subf 3. (divf 2. 4.4))) in
+  let hGamma =
+    delay (Beta (addf 1. (divf 2. 4.5)) (subf 3. (divf 2. 4.5))) in
 
   -- Mosquito parameters
   let mNu: Float = divf 1. 7. in
   let mMu: Float = divf 6. 7. in
-  let mLambda: Float = assume (Beta 1. 1.) in
-  let mDelta: Float =
-    assume (Beta (addf 1. (divf 2. 6.5)) (subf 3. (divf 2. 6.5))) in
+  let mLambda = delay (Beta 1. 1.) in
+  let mDelta =
+    delay (Beta (addf 1. (divf 2. 6.5)) (subf 3. (divf 2. 6.5))) in
   let mGamma: Float = 0. in
 
   -- Other parameters
-  let rho = assume (Beta 1. 1.) in
+  let rho = delay (Beta 1. 1.) in
   let z: Int = 0 in
 
   -- Human SEIR component
@@ -65,8 +65,9 @@ let model: () -> Int = lam.
       let y: Int = get ys t in
       let z: Int = if neqi (negi 1) y then
         if geqi z y then
+          let rho = delayed rho in
           observe y (Binomial z rho); 0
-        else weight (negf inf);0
+        else weight (negf inf); 0
         else z in
       z
   in
@@ -95,9 +96,11 @@ let model: () -> Int = lam.
         assume (Binomial hSP (subf 1. (exp (negf (divf
                                                   (int2float mIP)
                                                   (int2float hN)))))) in
-    -- let hLambda = delayed hLambda in
+      let hLambda = delayed hLambda in
       let hDeltaE: Int = assume (Binomial hTau hLambda) in
+      let hDelta = delayed hDelta in
       let hDeltaI: Int = assume (Binomial hEP hDelta) in
+      let hGamma = delayed hGamma in
       let hDeltaR: Int = assume (Binomial hIP hGamma) in
       let hS: Int = subi hSP hDeltaE in
       let hE: Int = subi (addi hEP hDeltaE) hDeltaI in
@@ -110,7 +113,9 @@ let model: () -> Int = lam.
                                                  (int2float hIP)
                                                  (int2float hN)))))) in
       let mN: Int  = addi (addi (addi mSP mEP) mIP) mRP in
+      let mLambda = delayed mLambda in
       let mDeltaE: Int = assume (Binomial mTau mLambda) in
+      let mDelta = delayed mDelta in
       let mDeltaI: Int = assume (Binomial mEP mDelta) in
       let mDeltaR: Int = assume (Binomial mIP mGamma) in
       let mS: Int = subi mSP mDeltaE in
