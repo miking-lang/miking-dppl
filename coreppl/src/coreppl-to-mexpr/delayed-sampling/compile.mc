@@ -1,3 +1,7 @@
+include "mexpr/externals.mc"
+include "../../coreppl.mc"
+include "../../parser.mc"
+include "../dists.mc"
 lang MExprPPLDelayedANF = MExprPPL + DPPLParser + Externals + MExprANFAll
   -- specialized normalize for assume and observe, and delay
   sem normalize (k:Expr -> Expr) =
