@@ -64,15 +64,6 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
     let v2Type = mapLookup v2.ident env in
     let env = affineScaleTransform env t.ident (TmVar v1,TmVar v2) (v1Type, v2Type) in
     createDEnvParam (createDEnvParam env t.body) t.inexpr
-  | TmLam t ->
-    let env = match t.tyParam with TyDelayInt _ then
-          mapInsert t.ident (DelayParam ()) env else
-        match t.tyParam with TyDelayFloat _ then
-          mapInsert t.ident (DelayParam ()) env else
-        match t.tyParam with TyDelaySeqF _ then
-          mapInsert t.ident (DelayParam ()) env
-      else env in
-    (createDEnvParam env t.body)
   | t -> sfold_Expr_Expr createDEnvParam env t
 
 
