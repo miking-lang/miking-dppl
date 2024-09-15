@@ -741,6 +741,10 @@ lang TransformPBN = ConjugatePrior
     let plates = filter (lam v. match v with PlateNode _ then true else false) (digraphVertices pbn.g) in
     let plateIds = (map getId plates) in
     let orderedPlates = orderPlates pbn [] plates in
+    let oTargets = filter (lam v. let v= mapLookupOrElse (lam. error"") v pbn.m in match v with RandomVarNode t then (match t.val with Some _ then true else false) else false) pbn.targets in
+   	let aTargets = filter (lam v. let v= mapLookupOrElse (lam. error"") v pbn.m in match v with RandomVarNode t then (match t.val with None () then true else false) else true) pbn.targets in
+   	let targets = foldl (lam acc. lam t. cons t acc) aTargets oTargets in
+   	let pbn = {pbn with targets = targets} in
     let plateTargets = map (lam p. 
           let p = mapLookupOrElse (lam. error "Lookup failed") p pbn.m in
           match p with PlateNode p in
