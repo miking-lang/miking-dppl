@@ -214,7 +214,8 @@ lang ADTransform =
   | CEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumEpsilon")
   | CPrimal _ -> withInfo (infoTm tm) (_var env "dualnumPrimal")
   | CPrimalRec _ -> withInfo (infoTm tm) (_var env "dualnumPrimalRec")
-  | CPertubation _ -> withInfo (infoTm tm) (_var env "dualnumPertubation")
+  | CUnboxPrimalExn _ -> withInfo (infoTm tm) (_var env "dualnumUnboxPrimalExn")
+  | CPertubation _ -> withInfo (infoTm tm) (_var env "dualnumPertubationExn")
   | CLifted (CFloat r) ->
     let i = withInfo (infoTm tm) in
     withInfo (infoTm tm) (nconapp_ (_name env "Primal") (i (float_ r.val)))
@@ -258,7 +259,8 @@ lang ADTransform =
     "dualnumGenEpsilon",
     "dualnumPrimal",
     "dualnumPrimalRec",
-    "dualnumPertubation",
+    "dualnumUnboxPrimalExn",
+    "dualnumPertubationExn",
     "addn",
     "muln",
     "eqn",

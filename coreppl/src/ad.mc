@@ -57,6 +57,10 @@ lang DualNumAst =
   -- nested dual number.
   | CPrimalRec {}
 
+  -- `unboxPrimalExn (n : Dual Float)` unboxes a dual number to a float and
+  -- gives a runtime error of the dual number has a pertubation.
+  | CUnboxPrimalExn {}
+
   -- `pertubation ε₁ (n : Dual Float)` returns x' if n = x+ε₂x' and ε₁≤ε₂,
   -- otherwise it returns `0` boxed as a dual number.
   | CPertubation {}
@@ -76,7 +80,6 @@ lang DualNumAst =
     let i = withInfo info in
     i (appf2_ (i (uconst_ (CLtEpsilon ()))) e1 e2)
 
-
   sem dualnumCreatePrimal : Info -> Expr -> Expr
   sem dualnumCreatePrimal info =| x ->
     let i = withInfo info in
@@ -92,27 +95,28 @@ lang DualNumAst =
     let i = withInfo info in
     appf1_ (i (uconst_ (CIsDualNum ())))
 
-
   sem dualnumEpsilon : Info -> Expr -> Expr
   sem dualnumEpsilon info =| x ->
     let i = withInfo info in
     i (appf1_ (i (uconst_ (CEpsilon ()))) x)
-
 
   sem dualnumPrimal : Info -> Expr -> Expr -> Expr
   sem dualnumPrimal info e =| x ->
     let i = withInfo info in
     i (appf2_ (i (uconst_ (CPrimal ()))) e x)
 
-
   sem dualnumPrimalRec : Info -> Expr -> Expr
   sem dualnumPrimalRec info =| x ->
     let i = withInfo info in
     i (appf1_ (i (uconst_ (CPrimalRec ()))) x)
 
+  sem dualnumUnboxPrimalExn : Info -> Expr -> Expr
+  sem dualnumUnboxPrimalExn info =| x ->
+    let i = withInfo info in
+    i (appf1_ (i (uconst_ (CUnboxPrimalExn ()))) x)
 
-  sem dualnumPertubation : Info -> Expr -> Expr -> Expr
-  sem dualnumPertubation info e =| x ->
+  sem dualnumPertubationExn : Info -> Expr -> Expr -> Expr
+  sem dualnumPertubationExn info e =| x ->
     let i = withInfo info in
     i (appf2_ (i (uconst_ (CPertubation ()))) e x)
 
@@ -121,48 +125,48 @@ lang DualNumAst =
   -- │ Type directed dual number transformations │
   -- └───────────────────────────────────────────┘
 
-  -- Returns a function that boxes the floats of a term as a primal number based
-  -- on its type. If the term does not need boxing or the function cannot
-  -- determine how to box the particular type, `None ()` is returned.
-  -- TODO(oerikss, 2024-04-16): Improve feedback when boxing is not posible.
-  sem dualnumCreatePrimalTypeDirected : Type -> Option (Expr -> Expr)
-  sem dualnumCreatePrimalTypeDirected =
+  -- Returns a function that boxes an expression into a dual number based on its
+  -- type, if it needs unboxing. Otherwise it returns `None ()`. The difference
+  -- compared to lifting is that pertubations are not allowed to propagate
+  -- through (un)boxed expressions. In particular applying a boxed function to a
+  -- dual number with a pertubation will result in a runtime error.
+  sem dualnumBoxTypeDirected : Type -> Option (Expr -> Expr)
+  sem dualnumBoxTypeDirected =
   | ty -> _convTypeDirected
            (lam tm. dualnumCreatePrimal (infoTm tm) tm)
-           (lam tm. dualnumPrimalRec (infoTm tm) tm)
+           (lam tm. dualnumUnboxPrimalExn (infoTm tm) tm)
            ty
 
-  -- Returns a function that unboxes a dual number into a float based on its
-  -- type, if it needs unboxing. Otherwise it returns `None ()`
-  sem dualnumPrimalRecTypeDirected : Type -> Option (Expr -> Expr)
-  sem dualnumPrimalRecTypeDirected =
+  -- Similar to `dualnumBoxTypeDirected` but instead unboxes
+  sem dualnumUnboxTypeDirected : Type -> Option (Expr -> Expr)
+  sem dualnumUnboxTypeDirected =
   | ty -> _convTypeDirected
-           (lam tm. dualnumPrimalRec (infoTm tm) tm)
+           (lam tm. dualnumUnboxPrimalExn (infoTm tm) tm)
            (lam tm. dualnumCreatePrimal (infoTm tm) tm)
            ty
 
-  -- `dualnumPertubationTypeDirected ty`, based on the type `ty`, returns a
+  -- `dualnumPertubationTypeDirectedExn ty`, based on the type `ty`, returns a
   -- function f whose first argument should be a dual number epsilon tag `e` and
   -- the second argument should be a term `tm` of type `ty` before it is lifted
   -- to dual numbers. The resulting expression recursivly retrieves the
   -- pertubation of all dual numbers in the term `tm`, given `e`.
   --
   -- Examples:
-  -- `dualnumPertubationTypeDirected Float e x` = `pertubation e x`
-  -- `dualnumPertubationTypeDirected (Float, Float) e x` =
+  -- `dualnumPertubationTypeDirectedExn Float e x` = `pertubation e x`
+  -- `dualnumPertubationTypeDirectedExn (Float, Float) e x` =
   --   `(pertubation e x.0, pertubation e x.1)`
-  -- `dualnumPertubationTypeDirected (Float, [Float]) e x` =
+  -- `dualnumPertubationTypeDirectedExn (Float, [Float]) e x` =
   --   `(pertubation e x.0, map (pertubation e) x.1)`
   --
   -- If the given type `ty` is not first order and does not contain `Float` in
   -- its leafs, `None ()` is returned.
-  sem dualnumPertubationTypeDirected : Type -> Option (Expr -> Expr -> Expr)
-  sem dualnumPertubationTypeDirected =
-  | TyFloat _ -> Some (lam e. lam tm. dualnumPertubation (infoTm tm) e tm)
+  sem dualnumPertubationTypeDirectedExn : Type -> Option (Expr -> Expr -> Expr)
+  sem dualnumPertubationTypeDirectedExn =
+  | TyFloat _ -> Some (lam e. lam tm. dualnumPertubationExn (infoTm tm) e tm)
   | TySeq r ->
     optionMap
       (lam f. lam e. _mapSeqTm (f e))
-      (dualnumPertubationTypeDirected r.ty)
+      (dualnumPertubationTypeDirectedExn r.ty)
   | TyRecord r ->
     optionMap
       (lam ts. lam e. _mapRecordTm (map (lam t. (t.0, t.1 e)) ts))
@@ -170,13 +174,13 @@ lang DualNumAst =
          (lam t. match t with (key, ty) in
                optionMap
                  (lam f. (key, f))
-                 (dualnumPertubationTypeDirected ty))
+                 (dualnumPertubationTypeDirectedExn ty))
          (map (lam t. (sidToString t.0, t.1)) (mapBindings r.fields)))
-  | TyAlias r -> dualnumPertubationTypeDirected r.content
+  | TyAlias r -> dualnumPertubationTypeDirectedExn r.content
   | _ -> None ()
 
-  -- Similar to `dualnumPertubationTypeDirected` but instead creates aggregated
-  -- dual numbers based on a type.
+  -- Similar to `dualnumPertubationTypeDirectedExn` but instead creates
+  -- aggregated dual numbers based on a type.
   sem dualnumCreateDualTypeDirected : Type -> Option (Expr -> Expr -> Expr -> Expr)
   sem dualnumCreateDualTypeDirected =
   | TyFloat _ -> Some (lam e. lam x. lam xp. dualnumCreateDual (infoTm xp) e x xp)
@@ -270,7 +274,12 @@ lang DualNumAst =
 
   sem constArity =
   | CLifted const -> constArity const
-  | CGenEpsilon _ | CCreatePrimal _ | CIsDualNum _ | CEpsilon _ | CPrimalRec _ -> 1
+  | CGenEpsilon _
+  | CCreatePrimal _
+  | CIsDualNum _
+  | CEpsilon _
+  | CPrimalRec _
+  | CUnboxPrimalExn _ -> 1
   | CLtEpsilon _ | CPrimal _ | CPertubation _ -> 2
   | CCreateDual _ -> 3
 
@@ -284,6 +293,7 @@ lang DualNumAst =
   | CEpsilon _
   | CPrimal _
   | CPrimalRec _
+  | CUnboxPrimalExn _
   | CPertubation _ -> false
 
   sem generateConstraintsConst graph info ident =
@@ -296,6 +306,7 @@ lang DualNumAst =
   | CEpsilon _
   | CPrimal _
   | CPrimalRec _
+  | CUnboxPrimalExn _
   | CPertubation _ -> graph
 
   sem getConstStringCode (indent : Int) =
@@ -308,6 +319,7 @@ lang DualNumAst =
   | CEpsilon _ -> "epsilon"
   | CPrimal _ -> "primal"
   | CPrimalRec _ -> "primalRec"
+  | CUnboxPrimalExn _ -> "unboxPrimalExn"
   | CPertubation _ -> "pertubation"
 
 
@@ -420,13 +432,13 @@ lang DualNumLift =
   | CLifted const -> dualnumLiftType (tyConstBase d const)
   | CGenEpsilon _ -> tyarrows_ [tyunit_, tyint_]
   | CLtEpsilon _ -> tyarrows_ [tyint_, tyint_]
-  | CCreatePrimal _ -> tyarrows_ [tyfloat_, tydualnum_ ()]
+  | CCreatePrimal _
   | CCreateDual _ -> let ty = tydualnum_ () in tyarrows_ [tyint_, ty, ty, ty]
   | CIsDualNum _ -> tyarrows_ [tydualnum_ (), tybool_]
   | CEpsilon _ -> tyarrows_ [tydualnum_ (), tyint_]
   | CPrimal _ | CPertubation _ ->
     let ty = tydualnum_ () in tyarrows_ [tyint_, ty, ty]
-  | CPrimalRec _ -> tyarrows_ [tydualnum_ (), tyfloat_]
+  | CPrimalRec _ | CUnboxPrimalExn _ -> tyarrows_ [tydualnum_ (), tyfloat_]
 
   -- ┌──────────────────────────────────────┐
   -- │ Lift types and terms to dual numbers │
@@ -482,12 +494,12 @@ lang DualNumLift =
                      pertubation (i (nvar_ e_)) (i (nvar_ d_))
                    ])))
             (dualnumCreateDualTypeDirected tyr.from))
-        (dualnumPertubationTypeDirected tyr.to)
+        (dualnumPertubationTypeDirectedExn tyr.to)
     else error "impossible"
   | TmExt r ->
     optionMapOrElse
       (lam. TmExt { r with inexpr = dualnumLiftExpr r.inexpr })
-      (lam createPrimal.
+      (lam box.
         let id1 = nameSetNewSym r.ident in
         -- NOTE(oerikss, 2024-04-16): We us an intermediate eta expanded alias
         -- because externals needs to be fully applied.
@@ -507,20 +519,19 @@ lang DualNumLift =
                          (nvar_ id2)
                          (map (lam p. i (nvar_ p)) ps))
                       ps)),
-              i (nulet_ r.ident
-                   (dualnumLiftExpr (createPrimal (i (nvar_ id1))))),
+              i (nulet_ r.ident (box (i (nvar_ id1)))),
               dualnumLiftExpr r.inexpr
             ]
         })
-      (dualnumCreatePrimalTypeDirected r.tyIdent)
+      (dualnumBoxTypeDirected r.tyIdent)
   | TmDist (r & { dist = ! DEmpirical _ }) ->
     let dist =
       smapDist_Expr_Expr
         (lam tm.
           optionMapOrElse
             (lam. dualnumLiftExpr tm)
-            (lam primal. primal (dualnumLiftExpr tm))
-            (dualnumPrimalRecTypeDirected (tyTm tm)))
+            (lam unbox. unbox (dualnumLiftExpr tm))
+            (dualnumUnboxTypeDirected (tyTm tm)))
         r.dist
     in
     TmDist { r with dist = DDual dist }
@@ -533,8 +544,8 @@ lang DualNumLift =
         (lam tm.
           optionMapOrElse
             (lam. dualnumLiftExpr tm)
-            (lam primal. primal (dualnumLiftExpr tm))
-            (dualnumPrimalRecTypeDirected (tyTm tm)))
+            (lam unbox. unbox (dualnumLiftExpr tm))
+            (dualnumUnboxTypeDirected (tyTm tm)))
         r.method
     in
     TmInfer { r with model = dualnumLiftExpr r.model, method = method }
@@ -574,8 +585,8 @@ lang DualNumLift =
   -- Lift remaining constants based on their type signature
   | const ->
     optionMapOr tm
-      (lam createPrimal. createPrimal tm)
-      (dualnumCreatePrimalTypeDirected (tyConst const))
+      (lam box. box tm)
+      (dualnumBoxTypeDirected (tyConst const))
 end
 
 
@@ -596,53 +607,54 @@ mexpr
 use TestLang in
 
 let createPrimal_ = appf1_ (uconst_ (CCreatePrimal ())) in
+let unboxPrimal_ = appf1_ (uconst_ (CUnboxPrimalExn ())) in
 let primalRec_ = appf1_ (uconst_ (CPrimalRec ())) in
 let pertubation_ = appf2_ (uconst_ (CPertubation ())) in
 let createDual_ = appf3_ (uconst_ (CCreateDual ())) in
 let tm_ = uconst_ (CTmPlaceholder { str = "term" } ) in
 let e_ = uconst_ (CTmPlaceholder { str = "e" } ) in
 
--- ┌──────────────────────────────────────┐
--- │ Test dualnumCreatePrimalTypeDirected │
--- └──────────────────────────────────────┘
+-- ┌─────────────────────────────┐
+-- │ Test dualnumBoxTypeDirected │
+-- └─────────────────────────────┘
 
-let _createPrimal = lam ty.
+let _boxPrimal = lam ty.
   optionMapOr tm_ (lam primal. primal tm_)
-    (dualnumCreatePrimalTypeDirected ty)
+    (dualnumBoxTypeDirected ty)
 in
 let failToString = utestDefaultToString expr2str expr2str in
 
 -- Base types
 
-utest _createPrimal tyfloat_ with createPrimal_ tm_
+utest _boxPrimal tyfloat_ with createPrimal_ tm_
   using eqExpr else failToString
 in
 
-utest _createPrimal tyint_ with tm_
+utest _boxPrimal tyint_ with tm_
   using eqExpr else failToString
 in
 
-utest _createPrimal tybool_ with tm_
+utest _boxPrimal tybool_ with tm_
   using eqExpr else failToString
 in
 
-utest _createPrimal tychar_ with tm_
+utest _boxPrimal tychar_ with tm_
   using eqExpr else failToString
 in
 
 -- Sequences
 
-utest _createPrimal (tyseq_ tyfloat_) with
+utest _boxPrimal (tyseq_ tyfloat_) with
   map_ (ulam_ "x" (createPrimal_ (var_ "x"))) tm_
   using eqExpr else failToString
 in
 
-utest _createPrimal (tyseq_ (tyseq_ tyfloat_)) with
+utest _boxPrimal (tyseq_ (tyseq_ tyfloat_)) with
   map_ (ulam_ "x" (map_ (ulam_ "x" (createPrimal_ (var_ "x"))) (var_ "x"))) tm_
   using eqExpr else failToString
 in
 
-utest _createPrimal (tyseq_ tyint_) with tm_
+utest _boxPrimal (tyseq_ tyint_) with tm_
   using eqExpr else failToString
 in
 
@@ -656,7 +668,7 @@ let ty = tyrecord_ [
   ("c", tyrecord_ [("d", tyfloat_), ("e", tyint_)])
 ] in
 utest
-  _createPrimal ty
+  _boxPrimal ty
   with
   urecord_ [
     ("a", createPrimal_ (recordproj_ "a" tm_)),
@@ -671,33 +683,33 @@ in
 
 -- Functions
 
-utest _createPrimal (tyarrow_ tyfloat_ tyfloat_) with
-  ulam_ "x" (createPrimal_ (appf1_ tm_ (primalRec_ (var_ "x"))))
+utest _boxPrimal (tyarrow_ tyfloat_ tyfloat_) with
+  ulam_ "x" (createPrimal_ (appf1_ tm_ (unboxPrimal_ (var_ "x"))))
   using eqExpr else failToString
 in
 
-utest _createPrimal (tyarrows_ [tyfloat_, tyfloat_, tyfloat_]) with
+utest _boxPrimal (tyarrows_ [tyfloat_, tyfloat_, tyfloat_]) with
   ulam_ "x"
     (ulam_ "y"
        (createPrimal_
-          (appf2_ tm_ (primalRec_ (var_ "x")) (primalRec_ (var_ "y")))))
+          (appf2_ tm_ (unboxPrimal_ (var_ "x")) (unboxPrimal_ (var_ "y")))))
   using eqExpr else failToString
 in
 
-utest _createPrimal (tyarrows_ [tyfloat_, tyint_, tyfloat_]) with
+utest _boxPrimal (tyarrows_ [tyfloat_, tyint_, tyfloat_]) with
   ulam_ "x"
     (ulam_ "y"
-       (createPrimal_ (appf2_ tm_ (primalRec_ (var_ "x")) (var_ "y"))))
+       (createPrimal_ (appf2_ tm_ (unboxPrimal_ (var_ "x")) (var_ "y"))))
   using eqExpr else failToString
 in
 
--- ┌─────────────────────────────────────┐
--- │ Test dualnumPertubationTypeDirected │
--- └─────────────────────────────────────┘
+-- ┌────────────────────────────────────────┐
+-- │ Test dualnumPertubationTypeDirectedExn │
+-- └────────────────────────────────────────┘
 
 let _pertubation = lam ty.
   optionMapOr tm_ (lam pertubation.  pertubation e_ tm_)
-    (dualnumPertubationTypeDirected ty)
+    (dualnumPertubationTypeDirectedExn ty)
 in
 
 -- Base types

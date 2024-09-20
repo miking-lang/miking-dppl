@@ -91,6 +91,18 @@ let model : () -> () = lam.
   assert "partial derivatives 2.3"
     (eqSeq eqf (d h x v).a (dh x v).a);
 
+
+  -- ┌──────────────────────────────────────────┐
+  -- │ Differentiating through assume Example 3 │
+  -- └──────────────────────────────────────────┘
+
+  let d : (Float -> Float) -> (Float -> Float) =
+    lam f. lam x. let d = diff f x in d 1.
+  in
+
+  let f = lam x. assume (Gaussian x 1.) in
+  -- assert "Differentiating through assume 3.1" (eqf (d f 2.) 2.); -- Should result in a runtime error
+
   ()
 
 mexpr

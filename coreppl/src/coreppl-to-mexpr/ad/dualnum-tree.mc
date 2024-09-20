@@ -11,8 +11,9 @@ let dualnumCreateDual : Eps -> DualNum -> DualNum -> DualNum =
   lam e. lam x. lam xp. dualCreateDual (eqf 0.) e x xp
 let dualnumPrimal : Eps -> DualNum -> DualNum = lam e. lam x. dualPrimal e x
 let dualnumPrimalRec : DualNum -> Float = lam x. dualPrimalRec x
-let dualnumPertubation : Eps -> DualNum -> DualNum =
-  lam e. lam x. dualPertubation 0. e x
+let dualnumUnboxPrimalExn : DualNum -> Float = lam x. dualUnboxPrimalExn x
+let dualnumPertubationExn : Eps -> DualNum -> DualNum =
+  lam e. lam x. dualPertubationExn 0. e x
 let dualnumEq = lam l. lam r. dualEq l r
 
 -----------------
@@ -46,16 +47,17 @@ let dnum134 = dnum1 num3 num4 in
 let dnum036 = dnum0 num3 num6 in
 let dnum048 = dnum0 num4 num8 in
 
-utest dualPrimalRec num0 with 0. using eqf in
-utest dualPrimalRec dnum134 with 3. using eqf in
-utest dualPrimalRec (dnum1 dnum036 dnum048) with 3. using eqf in
+utest dualnumPrimalRec num0 with 0. using eqf in
+utest dualnumUnboxPrimalExn num0 with 0.using eqf in
+utest dualnumPrimalRec dnum134 with 3. using eqf in
+utest dualnumPrimalRec (dnum1 dnum036 dnum048) with 3. using eqf in
 utest dualIsDual num1 with false in
 utest dualIsDual dnum112 with true in
-utest dualEpsilon dnum112 with e1 in
-utest dualEpsilon (_dnum e3 dnum112 dnum212) with e3 in
-utest dualPrimal e1 dnum112 with num1 using eq in
-utest dualnumPertubation e1 dnum112 with num2 using eq in
-utest dualPrimal e2 dnum112 with dnum112 using eq in
-utest dualnumPertubation e2 dnum112 with num0 using eq in
+utest dualnumEpsilon dnum112 with e1 in
+utest dualnumEpsilon (_dnum e3 dnum112 dnum212) with e3 in
+utest dualnumPrimal e1 dnum112 with num1 using eq in
+utest dualnumPertubationExn e1 dnum112 with num2 using eq in
+utest dualnumPrimal e2 dnum112 with dnum112 using eq in
+utest dualnumPertubationExn e2 dnum112 with num0 using eq in
 
 ()
