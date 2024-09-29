@@ -44,6 +44,18 @@ let parseRun: String -> CpplRes = lam output.
   in
   { samples = res.0, lweights = res.1, extra = extra }
 
+let sysRunCommandWithUtest = lam args. lam s. lam wd.
+  let run = sysRunCommand args s wd in
+  utest run.returncode with 0 using eqi else lam. lam. (strJoin "\n" [
+    join ["Command ", strJoin " " args, " failed with code ", int2string run.returncode],
+    "---------->> STDOUT <<----------",
+    run.stdout,
+    "---------->> STDERR <<----------",
+    run.stderr,
+    "--------------------------------"
+  ]) in
+  run
+
 let burnCpplRes: Int -> CpplRes -> CpplRes = lam burn. lam cpplRes.
   let samples = subsequence cpplRes.samples burn (length cpplRes.samples) in
   let lweights =  subsequence cpplRes.lweights burn (length cpplRes.lweights) in
@@ -55,9 +67,8 @@ let testCpplMExpr: String -> Int -> Int -> String -> CpplRes =
   lam model. lam samples. lam burn. lam compileArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
-    let run = sysRunCommand [cppl, "--seed 0", compileArgs, m ] "" wd in
-    utest run.returncode with 0 using eqi else lam. lam. run.stderr in
-    let run = sysRunCommand [ "./out", (int2string samples) ] "" wd in
+    let run = sysRunCommandWithUtest [cppl, "--seed 0", compileArgs, m ] "" wd in
+    let run = sysRunCommandWithUtest [ "./out", (int2string samples) ] "" wd in
     sysDeleteDir wd;
     burnCpplRes burn (parseRun run.stdout)
 
@@ -67,13 +78,13 @@ let testCpplRootPPL: String -> Int -> Int -> String -> String -> CpplRes =
   lam model. lam samples. lam burn. lam cpplCompileArgs. lam rpplCompileArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
-    sysRunCommand [
+    sysRunCommandWithUtest [
         cppl, "--seed 0", "-t rootppl", "--skip-final", cpplCompileArgs, m
       ] "" wd;
-    sysRunCommand [
+    sysRunCommandWithUtest [
         rppl, "--seed 0", "--stack-size 10000", rpplCompileArgs, "out.cu"
       ] "" wd;
-    let run = sysRunCommand [ "./a.out", (int2string samples) ] "" wd in
+    let run = sysRunCommandWithUtest [ "./a.out", (int2string samples) ] "" wd in
     sysDeleteDir wd;
     burnCpplRes burn (parseRun run.stdout)
 
