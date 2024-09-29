@@ -30,7 +30,25 @@ lang CPPLBackcompat = LoadRuntime
   | TyChar _ -> ulam_ "x" (seq_ [(var_ "x")])
   | TyRecord r ->
     if mapIsEmpty r.fields then ulam_ "" (str_ "()")
-    else error errMsgPrintFunction
+    else
+      match record2tuple r.fields with Some tys then
+        ulam_ "x"
+          (foldl_ (ulams_ ["x", "y"] (concat_ (var_ "x") (var_ "y")))
+             (str_ "(")
+             (seq_ (join [
+               mapi
+                 (lam i. lam ty.
+                   let x =
+                     appf1_ (getTypePrintFunction runtimeEntry ty)
+                       (tupleproj_ i (var_ "x"))
+                   in
+                   if eqi i 0 then x
+                   else cons_ (char_ ',') x)
+                 tys,
+               [str_ ")"]
+             ])))
+      else error errMsgPrintFunction
+
   | _ -> error errMsgPrintFunction
 
   -- Generates an infer AST node applied on the entire provided AST, using the

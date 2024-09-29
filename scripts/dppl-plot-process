@@ -42,40 +42,16 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-with args.file as file:
-    line_number = 0
-    traces = []
-    lws = []
-    for line in file:
-        line_number += 1
 
-        if line_number > 1:
-            data, lw = line.split(" ")
-            nested_array_str = data.strip("[]")
-            inner_arrays = nested_array_str.split("],[")
-            nested_array = [
-                [float(num) for num in inner.split(",")]
-                for inner in inner_arrays
-            ]
-            arr = np.asarray(nested_array)
-
-            if line_number == 2:
-                ts = arr[:, 0]
-
-            traces.append(arr[:, 1])
-            lws.append(float(lw))
-
-    traces = np.vstack(traces)
-    lws = np.asarray(lws)
-
+def plot_traces(ax, ws, ts, traces, color, label, first_plot=True):
     if args.lines:
         for i, trace in enumerate(traces):
-            plt.plot(
+            ax.plot(
                 ts,
                 trace,
-                color="blue",
-                alpha=args.alpha_scale * np.exp(lws[i]),
-                label=None,
+                color=color,
+                alpha=min(1, args.alpha_scale * ws[i]),
+                label=f"{label}" if i == 0 else None,
             )
 
     else:
@@ -91,76 +67,146 @@ with args.file as file:
         # plot the layers
         for i in range(len(pcts)):
             if i == 0:
-                plt.fill_between(
+                ax.fill_between(
                     ts,
                     layers[:, i, 0],
                     layers[:, i, 1],
-                    color="blue",
+                    color=color,
                     alpha=pcts[i] * 0.01,
-                    label=f"{pcts[i]}%",
+                    label=f"{label}: {pcts[i]}%" if first_plot else f"{label}",
                 )
             else:
-                plt.fill_between(
+                ax.fill_between(
                     ts,
                     layers[:, i - 1, 0],
                     layers[:, i, 0],
-                    color="blue",
+                    color=color,
                     alpha=pcts[i] * 0.01,
-                    label=f"{pcts[i]}%",
+                    label=f"{label}: {pcts[i]}%" if first_plot else None,
                 )
-                plt.fill_between(
+                ax.fill_between(
                     ts,
                     layers[:, i - 1, 1],
                     layers[:, i, 1],
-                    color="blue",
+                    color=color,
                     alpha=pcts[i] * 0.01,
                 )
 
     # Plot median
     if args.median:
-        plt.plot(
+        ax.plot(
             ts,
             np.median(traces, axis=0),
             color="purple",
             linestyle="-",
-            label="median",
+            label="median" if first_plot else None,
         )
 
     # Plot mean
     if args.mean:
-        plt.plot(
+        ax.plot(
             ts,
             np.mean(traces, axis=0),
             color="red",
             linestyle="-",
-            label="mean",
+            label="mean" if first_plot else None,
         )
 
     # Plot standard deviation
     if args.std:
         std = np.std(traces, axis=0)
-        plt.plot(ts, std, color="red", linestyle="--", alpha=0.5, label="std")
+        ax.plot(
+            ts,
+            std,
+            color="red",
+            linestyle="--",
+            alpha=0.5,
+            label="std" if first_plot else None,
+        )
 
-    plt.legend()
-    plt.xlabel("t")
 
-    plt.grid(
-        True,
-        which="major",
-        linestyle="-",
-        linewidth=0.5,
-        color="gray",
-        alpha=0.5,
-    )
+colors = ["blue", "green", "orange", "gray", "yellow"]
 
-    plt.grid(
-        True,
-        which="minor",
-        linestyle="--",
-        linewidth=0.5,
-        color="gray",
-        alpha=0.2,
-    )
+with args.file as file:
+    line_number = 0
+    lws = []
+    plots = {}
+    for line in file:
+        line_number += 1
 
-    plt.minorticks_on()
+        if line_number > 1:
+            data, lw = line.split(" ")
+            lws.append(float(lw))
+
+            data = [
+                [
+                    [
+                        float(substr.split(",[")[0].strip("[]()")),
+                        [
+                            float(substr)
+                            for substr in substr.split(",[")[1]
+                            .strip("[]()")
+                            .split(",")
+                        ],
+                    ]
+                    for substr in substr.split("),(")
+                ]
+                for substr in data.split("],[")
+            ]
+
+            for i, data in enumerate(data):
+                for data_points in data:
+                    for j, data_point in enumerate(data_points[1]):
+                        plots.setdefault(i, {}).setdefault(j, {}).setdefault(
+                            data_points[0], []
+                        ).append(data_point)
+
+    ws = np.exp(np.asarray(lws))
+
+    fig, axs = plt.subplots(len(plots))
+
+    for p, traces in enumerate(plots.values()):
+        ax = axs if len(plots) == 1 else axs[p]
+        for i, traces in enumerate(traces.values()):
+            ts = np.asarray(list(traces.keys()))
+            traces = np.asarray(list(traces.values()))
+            plot_traces(
+                ax,
+                ws,
+                ts,
+                traces.T,
+                colors[i % len(colors)],
+                i,
+                first_plot=True if i == 0 else False,
+            )
+
+        legend = ax.legend()
+
+        # Set alpha to 1 if we are plotting lines to make them visible
+        if args.lines:
+            for lh in legend.legend_handles:
+                lh.set_alpha(1)
+
+        ax.set_xlabel("t")
+
+        ax.grid(
+            True,
+            which="major",
+            linestyle="-",
+            linewidth=0.5,
+            color="gray",
+            alpha=0.5,
+        )
+
+        ax.grid(
+            True,
+            which="minor",
+            linestyle="--",
+            linewidth=0.5,
+            color="gray",
+            alpha=0.2,
+        )
+
+        ax.minorticks_on()
+
     plt.show()

@@ -1,4 +1,4 @@
-include "../../../models/diff-regression.mc"
+include "../../../models/diff/regression.mc"
 include "../../cppl-test.mc"
 include "../../test.mc"
 

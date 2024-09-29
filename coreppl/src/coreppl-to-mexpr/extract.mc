@@ -284,29 +284,6 @@ lang DPPLExtract =
     else (me, TmVar t)
 
   | expr -> smapAccumL_Expr_Expr (inlineSingleUseH m) me expr
-
-  -- Extracts solveode terms to a map from ODE solver methods to names. Each
-  -- solveode term is replaced by an application of an identifier the named
-  -- according to the returned map.
-  sem extractSolveODE : Expr -> (Map ODESolverMethod Name, Expr)
-  sem extractSolveODE =| tm ->
-    recursive let inner = lam acc. lam tm.
-      match tm with TmSolveODE r then
-        let f : Name -> Expr = lam name.
-          appf4_ (nvar_ name)
-            (odeSolverMethodConfig r.info r.method) r.model r.init r.endTime
-        in
-        optionMapOrElse
-          (lam.
-            let name = nameSym (odeSolverMethodToString r.method) in
-            let acc = mapInsert r.method name acc in
-            (acc, f name))
-          (lam name. (acc, f name))
-          (mapLookup r.method acc)
-      else smapAccumL_Expr_Expr inner acc tm
-    in
-    inner (mapEmpty cmpODESolverMethod) tm
 end
 
 let extractInfer = use DPPLExtract in extractInfer
-let extractSolveODE = use DPPLExtract in extractSolveODE

@@ -14,7 +14,7 @@ include "inference/mcmc-lightweight.mc"
 include "inference/mcmc-naive.mc"
 include "inference/mcmc-trace.mc"
 include "inference/pmcmc-pimh.mc"
-include "solveode/rk4.mc"
+include "ode-solver-method.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
@@ -24,7 +24,7 @@ lang DPPLParser =
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
   PIMHMethod +
 
-  RK4Method
+  ODESolverMethod
 
   sem _interpretMethod : Expr -> (Info, String, Map SID Expr)
   sem _interpretMethod =
