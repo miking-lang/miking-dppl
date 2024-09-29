@@ -117,6 +117,8 @@ lang DPPLParser =
   | TmPruned _ -> true
   | TmCancel _ -> true
   | TmDiff _ -> true
+  | TmDelay _ -> true
+  | TmDelayed _ -> true
 
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
@@ -194,14 +196,26 @@ lang DPPLParser =
                                           value = getValueCancel (get lst 0),
                                           ty = TyUnknown {info = info},
                                           info = info})
+  | "delay" -> Some (1, lam lst. TmDelay {dist = get lst 0,
+                                          ty = TyUnknown {info = info},
+                                          info = info})
+  | "delayed" -> Some (1, lam lst. TmDelayed {delay = get lst 0,
+                                          ty = TyUnknown {info = info},
+                                          info = info})
 
   sem isTypeKeyword =
   | TyDist _ -> true
   | TyPruneInt _ -> true
+  | TyDelayInt _ -> true
+  | TyDelayFloat _ -> true
+  | TyDelaySeqF _ -> true
 
   sem matchTypeKeywordString (info: Info) =
   | "Dist" -> Some(1, lam lst. TyDist { info = info, ty = get lst 0 })
   | "PruneInt" -> Some(0, lam lst. TyPruneInt { info = info})
+  | "DelayInt" -> Some(0, lam lst. TyDelayInt { info = info})
+  | "DelayFloat" -> Some(0, lam lst. TyDelayFloat { info = info})
+  | "DelaySeqF" -> Some(0, lam lst. TyDelaySeqF { info = info})
 
 end
 

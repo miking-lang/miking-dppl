@@ -26,6 +26,9 @@ type Options = {
   -- Apply static delayed sampling transformation
   staticDelay: Bool,
 
+  -- Apply dynamic delayed sampling
+  dynamicDelay: Bool,
+
   -- Prune algorithm
   prune: Bool,
 
@@ -92,6 +95,7 @@ let default = {
   outputMc = false,
   output = "out",
   staticDelay = false,
+  dynamicDelay = false,
   prune = false,
   printSamples = true,
   stackSize = 10000,
@@ -175,6 +179,10 @@ let config = [
     "The model is transformed to an efficient representation if possible.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with staticDelay = true}),
+  ([("--dynamic-delay", "", "")],
+    "Runs dynamic delayed sampling on the model.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with dynamicDelay = true}),
   ([("--prune", "", "")],
     "The model is pruned if possible.",
     lam p: ArgPart Options.

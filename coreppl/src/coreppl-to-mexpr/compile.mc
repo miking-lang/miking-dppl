@@ -22,6 +22,7 @@ include "dists.mc"
 include "runtimes.mc"
 
 include "pruning/compile.mc"
+include "delayed-sampling/compile.mc"
 
 lang DPPLKeywordReplace = DPPLParser
   sem _makeError : Info -> String -> Expr
@@ -108,6 +109,34 @@ lang DPPLTransformCancel = DPPLParser
                ty = t.ty}
   | t -> smap_Expr_Expr replaceCancel t
 end
+
+lang DPPLDelayedReplace = DPPLParser
+   sem replaceDelayKeywords =
+   | TmDelay t -> TmAssume { dist = t.dist, ty = t.ty, info = t.info }
+   | TmDelayed t -> t.delay
+   | t -> smap_Expr_Expr replaceDelayKeywords t
+
+  sem replaceDelayTypes =
+  | t ->
+    let t = smap_Expr_Type toRuntimeDelayTyVar t in
+    let t = smap_Expr_TypeLabel toRuntimeDelayTyVar t in
+    let t = smap_Expr_Pat replaceDelayTyVarPat t in
+    let t = smap_Expr_Expr replaceDelayTypes t in
+    withType (toRuntimeDelayTyVar (tyTm t)) t
+
+  sem toRuntimeDelayTyVar : Type -> Type
+  sem toRuntimeDelayTyVar =
+  | TyDelayInt t -> TyInt {info=t.info}
+  | TyDelayFloat t -> TyFloat {info=t.info}
+  | TyDelaySeqF t -> TySeq {info=t.info,ty=TyFloat {info=t.info}}
+  | ty -> smap_Type_Type toRuntimeDelayTyVar ty
+
+  sem replaceDelayTyVarPat : Pat -> Pat
+  sem replaceDelayTyVarPat =
+  | p ->
+    let p = smap_Pat_Pat replaceDelayTyVarPat p in
+    withTypePat (toRuntimeDelayTyVar (tyPat p)) p
+ end
 
 lang ADTransform =
   DPPLParser +
@@ -283,7 +312,7 @@ lang MExprCompile =
   StaticDelay + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat +
   ODETransform + DPPLTransformCancel + DPPLPruning +
-  ElementaryFunctionsTransform
+  ElementaryFunctionsTransform + DPPLDelayedReplace + DPPLDelayedSampling
   + ADTransform
 
   sem transformModelAst : Options -> Expr -> Expr
@@ -300,6 +329,11 @@ lang MExprCompile =
         prune ast
       else ast in
     let ast = replaceCancel ast in
+    let ast =
+      if options.dynamicDelay then
+        delayedSampling ast
+      else ast in
+    let ast = replaceDelayTypes (replaceDelayKeywords ast) in
     -- Optionally print the model AST
     (if options.printModel then
       printLn (mexprPPLToString ast)
@@ -384,7 +418,7 @@ lang MExprCompile =
     let modelAsts = compileModels options runtimes models in
 
     -- Transform distributions in the CorePPL AST to use MExpr code.
-    let corepplAst = replaceTyPruneInt (removePrunes ((replaceCancel corepplAst))) in
+    let corepplAst = replaceDelayTypes (replaceDelayKeywords (replaceTyPruneInt (removePrunes ((replaceCancel corepplAst))))) in
     let corepplAst = transformDistributions corepplAst in
 
     -- Symbolize any free occurrences in the CorePPL AST and in any of the
