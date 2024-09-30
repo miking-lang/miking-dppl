@@ -21,6 +21,7 @@ test-cli-files=\
 # leaving it commented out until someone has fixed RootPPL compilation.
 #test-cli-files+=\
 #  $(shell find coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
+test-expectation-files=$(shell find coreppl/test/coreppl-to-mexpr/expectation -name "*.mc")
 
 .PHONY: all
 all: compiler cppl
@@ -41,10 +42,16 @@ ${test-files}::
 ###################
 
 .PHONY: cppl
-cppl: ${test-staticdelay-files} ${test-infer-files} ${test-cli-files} 
+cppl: ${test-staticdelay-files} ${test-infer-files} ${test-cli-files} ${test-expectation-files}
+
+.PHONY: infer
+infer: ${test-infer-files}
 
 .PHONY: static-delay
 static-delay: ${test-staticdelay-files}
+
+.PHONY: expectation
+expectation: ${test-expectation-files}
 
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}
@@ -64,3 +71,7 @@ ${test-cli-files}::
 # Static delay tests
 ${test-staticdelay-files}::
 	@./make test $@
+
+# Expectation tests
+${test-expectation-files}::
+	@./make test-cppl $@ "build/${CPPL_NAME}"

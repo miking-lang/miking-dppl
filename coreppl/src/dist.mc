@@ -180,12 +180,14 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
   | CDistEmpiricalDegenerate {}
   | CDistEmpiricalNormConst {}
   | CDistEmpiricalAcceptRate {}
+  | CDistExpectation {}
 
   sem getConstStringCode (indent : Int) =
   | CDistEmpiricalSamples _ -> "distEmpiricalSamples"
   | CDistEmpiricalDegenerate _ -> "distEmpiricalDegenerate"
   | CDistEmpiricalNormConst _ -> "distEmpiricalNormConst"
   | CDistEmpiricalAcceptRate _ -> "distEmpiricalAcceptRate"
+  | CDistExpectation _ -> "expectation"
 
   sem _tydist =
   | a -> TyDist {info = NoInfo (), ty = a}
@@ -197,12 +199,14 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
   | CDistEmpiricalDegenerate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tybool_)
   | CDistEmpiricalNormConst _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
   | CDistEmpiricalAcceptRate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
+  | CDistExpectation _ -> tyarrow_ (_tydist tyfloat_) tyfloat_
 
   sem constArity =
   | CDistEmpiricalSamples _ -> 1
   | CDistEmpiricalDegenerate _ -> 1
   | CDistEmpiricalNormConst _ -> 1
   | CDistEmpiricalAcceptRate _ -> 1
+  | CDistExpectation _ -> 1
 
 end
 

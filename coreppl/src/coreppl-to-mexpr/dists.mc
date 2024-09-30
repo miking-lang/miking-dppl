@@ -17,6 +17,7 @@ lang TransformDist = MExprPPL + DualNumDist
       | CDistEmpiricalDegenerate _
       | CDistEmpiricalNormConst _
       | CDistEmpiricalAcceptRate _
+      | CDistExpectation _
       )
     } ->
     var_ (getConstStringCode 0 c)
