@@ -60,8 +60,16 @@ lam n.
   end
 end
 
+-- Unboxes x where x is assumed to have no pertubation.
+let dualUnboxPrimalExn : all a. Dual a -> a =
+lam n.
+  switch n
+  case Primal n then n
+  case _ then error "Tried to unbox a dual number assumed to have no pertubation. The source of this error is likely an attempt to differentiate a non-differentiable function."
+  end
+
 -- x' in x+ex' given e
-let dualPertubation : all a. a -> Eps -> Dual a -> Dual a =
+let dualPertubationExn : all a. a -> Eps -> Dual a -> Dual a =
 lam zero. lam e. lam n.
   switch n
   case Primal _ then Primal zero
