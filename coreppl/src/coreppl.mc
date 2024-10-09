@@ -103,6 +103,14 @@ lang ElementaryFunctions =
 
   sem generateConstraintsConst graph info ident =
   | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ | CPow _ -> graph
+
+  -- Builders
+  sem sin_ =| x -> app_ (uconst_ (CSin ())) x
+  sem cos_ =| x -> app_ (uconst_ (CCos ())) x
+  sem sqrt_ =| x -> app_ (uconst_ (CSqrt ())) x
+  sem exp_ =| x -> app_ (uconst_ (CExp ())) x
+  sem log_ =| x -> app_ (uconst_ (CLog ())) x
+  sem pow_ =| x -> app_ (uconst_ (CPow ())) x
 end
 
 
