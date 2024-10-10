@@ -117,8 +117,8 @@ lang LoadRuntime =
     let runtime = symbolizeAllowFree (loadRuntime false runtime) in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
     let stateType = findStateType method stateId runtime in
-    let pruningRuntime = loadRuntime false "pruning/runtime.mc" in
-    let delayedRuntime = loadRuntime false "delayed-sampling/runtime.mc" in
+    let pruningRuntime = symbolizeAllowFree (loadRuntime false "pruning/runtime.mc") in
+    let delayedRuntime = symbolizeAllowFree (loadRuntime false "delayed-sampling/runtime.mc") in
     let runtime = bindall_ [pruningRuntime, delayedRuntime, runtime] in
     match eliminateDuplicateCodeWithSummary runtime with (replacements, runtime) in
     { ast = runtime, runId = runId, stateType = stateType
@@ -232,6 +232,7 @@ lang LoadRuntime =
     -- Eliminate duplicate code in the combined AST of all runtimes, and update
     -- the symbolization environments of the individual runtimes accordingly.
     match eliminateDuplicateCodeWithSummary ast with (replacements, ast) in
+
     {entries = _updateRuntimeEntriesSymEnv replacements entries, ast = ast}
 
   sem _updateRuntimeEntriesSymEnv
