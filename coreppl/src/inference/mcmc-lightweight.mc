@@ -44,6 +44,13 @@ lang LightweightMCMCMethod = MExprPPL
       ("globalProb", t.globalProb)
     ]
 
+  sem inferMethodConfigType info =
+  | LightweightMCMC _ ->
+    tyRecord info [
+      ("iterations", ityint_ info),
+      ("globalProb", ityfloat_ info)
+    ]
+
   sem typeCheckInferMethod env info =
   | LightweightMCMC t ->
     let int = TyInt {info = info} in

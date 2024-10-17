@@ -35,6 +35,12 @@ lang TraceMCMCMethod = MExprPPL
       ("iterations", t.iterations)
     ]
 
+  sem inferMethodConfigType info =
+  | TraceMCMC _ ->
+    tyRecord info [
+      ("iterations", ityint_ info)
+    ]
+
   sem typeCheckInferMethod env info =
   | TraceMCMC t ->
     let int = TyInt {info = info} in

@@ -35,6 +35,12 @@ lang NaiveMCMCMethod = MExprPPL
       ("iterations", t.iterations)
     ]
 
+  sem inferMethodConfigType info =
+  | NaiveMCMC _ ->
+    tyRecord info [
+      ("iterations", ityint_ info)
+    ]
+
   sem typeCheckInferMethod env info =
   | NaiveMCMC t ->
     let int = TyInt {info = info} in
