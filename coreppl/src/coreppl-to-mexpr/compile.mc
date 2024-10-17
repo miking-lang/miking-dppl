@@ -78,7 +78,7 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
     else
       -- load ODE solver runtime
       let runtime =
-        symbolizeAllowFree (loadRuntime true "runtime-ode-wrapper.mc")
+        symbolizeAllowFree (loadRuntimeFile true "runtime-ode-wrapper.mc")
       in
 
       -- collect the names of used ODE solvers runtime names and make sure they
@@ -188,7 +188,7 @@ lang ADTransform =
     let runtimeFile = "runtime-ad-wrapper.mc" in
 
     -- load AD runtime
-    let runtime = symbolize (loadRuntime true runtimeFile) in
+    let runtime = symbolize (loadRuntimeFile true runtimeFile) in
 
     -- Define function that maps string identifiers to names
     let s2n = makeRuntimeNameMap runtime (_adTransformRuntimeIds ()) in
@@ -295,7 +295,7 @@ lang ElementaryFunctionsTransform = ElementaryFunctions + LoadRuntime
     let runtimeFile = "runtime-elementary-wrapper.mc" in
 
     -- load elementary functions runtime
-    let runtime = symbolize (loadRuntime true runtimeFile) in
+    let runtime = symbolize (loadRuntimeFile true runtimeFile) in
 
     -- Define function that maps string identifiers to names
     let stringToName =
@@ -556,7 +556,7 @@ lang MExprCompile =
   sem replaceHigherOrderConstants =
   | t ->
     let t = mapPre_Expr_Expr _replaceHigherOrderConstantExpr t in
-    let replacements = loadRuntime false "runtime-const.mc" in
+    let replacements = loadRuntimeFile false "runtime-const.mc" in
     let replacements = normalizeTerm replacements in
     let t = bind_ replacements t in
     let t = symbolizeExpr

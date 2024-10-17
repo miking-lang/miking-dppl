@@ -75,8 +75,8 @@ lang LoadRuntime =
       mapInsert t.method (loadRuntimeEntry t.method runtime) acc
   | t -> sfold_Expr_Expr (loadRuntimesH options) acc t
 
-  sem loadRuntime : Bool -> String -> Expr
-  sem loadRuntime eliminateDeadCode =
+  sem loadRuntimeFile : Bool -> String -> Expr
+  sem loadRuntimeFile eliminateDeadCode =
   | runtime ->
     let parse = use BootParser in parseMCoreFile {
       defaultBootParserParseMCoreFileArg with
@@ -114,11 +114,11 @@ lang LoadRuntime =
   sem loadRuntimeEntry : InferMethod -> String -> InferRuntimeEntry
   sem loadRuntimeEntry method =
   | runtime ->
-    let runtime = symbolizeAllowFree (loadRuntime false runtime) in
+    let runtime = symbolizeAllowFree (loadRuntimeFile false runtime) in
     match findRequiredRuntimeIds method runtime with (runId, stateId) in
     let stateType = findStateType method stateId runtime in
-    let pruningRuntime = symbolizeAllowFree (loadRuntime false "pruning/runtime.mc") in
-    let delayedRuntime = symbolizeAllowFree (loadRuntime false "delayed-sampling/runtime.mc") in
+    let pruningRuntime = symbolizeAllowFree (loadRuntimeFile false "pruning/runtime.mc") in
+    let delayedRuntime = symbolizeAllowFree (loadRuntimeFile false "delayed-sampling/runtime.mc") in
     let runtime = bindall_ [pruningRuntime, delayedRuntime, runtime] in
     match eliminateDuplicateCodeWithSummary runtime with (replacements, runtime) in
     { ast = runtime, runId = runId, stateType = stateType
