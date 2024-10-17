@@ -343,45 +343,20 @@ lang DualNumAst =
   | TyDualNum _ -> (env, "DualNum")
 end
 
-lang DualNumDist = Dist + PrettyPrint + Eq + Sym
+lang DualNumDist = Dist
   syn Dist =
   | DDual Dist
 
-  sem smapAccumLDist_Expr_Expr f acc =
+  sem distSmapAccumL_Expr_Expr f acc =
   | DDual d ->
-    match smapAccumLDist_Expr_Expr f acc d with (acc, d) in (acc, DDual d)
+    match distSmapAccumL_Expr_Expr f acc d with (acc, d) in
+    (acc, DDual d)
 
-  -- Pretty printing, NOTE(oerikss, 2024-04-10): Because a lifted distribution
-  -- is internal, its string representation is not parseable.
-  sem pprintDist (indent: Int) (env: PprintEnv) =
-  | DDual d ->
-    match pprintDist indent env d with (env, d) in
-    (env, join ["<Dual>", d])
+  sem distTy info =
+  | DDual d -> distTy info d
 
-  -- Equality
-  sem eqExprHDist (env : EqEnv) (free : EqEnv) (lhs : Dist) =
-  | DDual r ->
-    match lhs with DDual l then eqExprHDist env free l r else None ()
-
-  -- Symbolize
-  sem symbolizeDist (env: SymEnv) =
-  | DDual d -> DDual (symbolizeDist env d)
-
-  -- Type Check
-  sem typeCheckDist (env: TCEnv) (info: Info) =
-  | DDual d -> typeCheckDist env info d
-
-  -- ANF
-  sem normalizeDist (k : Dist -> Expr) =
-  | DDual d -> normalizeDist (lam d. k (DDual d)) d
-
-  -- Type lift
-  sem typeLiftDist (env : TypeLiftEnv) =
-  | DDual d -> match typeLiftDist env d with (env, d) in (env, DDual d)
-
-  -- Partial evaluation
-  sem pevalDistEval ctx k =
-  | DDual d -> pevalDistEval ctx (lam d. k (DDual d)) d
+  sem distNameToString =
+  | DDual d -> join ["Dual<", distNameToString d, ">"]
 end
 
 
@@ -501,7 +476,7 @@ lang DualNumLift =
       (lam. TmExt { r with inexpr = dualnumLiftExpr r.inexpr })
       (lam box.
         let id1 = nameSetNewSym r.ident in
-        -- NOTE(oerikss, 2024-04-16): We us an intermediate eta expanded alias
+        -- NOTE(oerikss, 2024-04-16): We use an intermediate eta expanded alias
         -- because externals needs to be fully applied.
         let id2 = nameSetNewSym r.ident in
         let i = withInfo r.info in
@@ -525,16 +500,13 @@ lang DualNumLift =
         })
       (dualnumBoxTypeDirected r.tyIdent)
   | TmDist (r & { dist = ! DEmpirical _ }) ->
-    let dist =
-      smapDist_Expr_Expr
-        (lam tm.
-          optionMapOrElse
-            (lam. dualnumLiftExpr tm)
-            (lam unbox. unbox (dualnumLiftExpr tm))
-            (dualnumUnboxTypeDirected (tyTm tm)))
-        r.dist
-    in
-    TmDist { r with dist = DDual dist }
+    smap_Expr_Expr
+      (lam tm.
+        optionMapOrElse
+          (lam. dualnumLiftExpr tm)
+          (lam unbox. unbox (dualnumLiftExpr tm))
+          (dualnumUnboxTypeDirected (tyTm tm)))
+      (TmDist { r with dist = DDual r.dist })
   | TmWeight r -> TmWeight {
     r with weight = dualnumPrimalRec r.info (dualnumLiftExpr r.weight)
   }

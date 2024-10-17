@@ -722,16 +722,13 @@ lang Prune =
       else never
     else never
 
-  sem pevalIsValue =
-  | TmPrune _ -> false
+  sem pevalBindThis =
+  | TmPrune _ -> true
 
   sem pevalEval ctx k =
   | TmPrune r ->
     pevalBind ctx
       (lam dist. k (TmPrune { r with dist = dist})) r.dist
-  | TmPrune ( {dist = TmDist ({dist = dist} & td)} & t) ->
-    pevalDistEval ctx
-      (lam dist. k (TmPrune { t with dist= TmDist { td with dist = dist} } )) dist
 
 end
 
@@ -916,8 +913,8 @@ lang Cancel = Observe
     else never
 
   -- Partial evaluation
-  sem pevalIsValue =
-  | TmCancel _ -> false
+   sem pevalBindThis =
+  | TmCancel _ -> true
 
   sem pevalEval ctx k =
   | TmCancel r ->
@@ -1180,8 +1177,8 @@ lang Delay =
       else never
     else never
 
-  sem pevalIsValue =
-  | TmDelay _ -> false
+  sem pevalBindThis =
+  | TmDelay _ -> true
 
   sem pevalEval ctx k =
   | TmDelay r ->
@@ -1273,8 +1270,8 @@ lang Delayed = Delay
       else never
     else never
 
-  sem pevalIsValue =
-  | TmDelayed _ -> false
+  sem pevalBindThis =
+  | TmDelayed _ -> true
 
   sem pevalEval ctx k =
   | TmDelayed r ->
@@ -1433,15 +1430,13 @@ let _toStr = utestDefaultToString (lam x. x) (lam x. x) in
 utest mexprPPLToString tmAssume
 with strJoin "\n" [
   "assume",
-  "  (Bernoulli",
-  "     0.7)"
+  "  (Bernoulli 0.7)"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmObserve
 with strJoin "\n" [
   "observe",
-  "  1.5 (Beta",
-  "     1. 2.)"
+  "  1.5 (Beta 1. 2.)"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmWeight
@@ -1464,39 +1459,34 @@ with strJoin "\n" [
 utest mexprPPLToString tmPrune
 with strJoin "\n" [
   "prune",
-  "  (Categorical",
-  "     [ 0.5, 0.3, 0.2 ])"
+  "  (Categorical [ 0.5, 0.3, 0.2 ])"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmPruned
 with strJoin "\n" [
   "pruned",
   "  (prune",
-  "     (Categorical",
-  "        [ 0.5, 0.3, 0.2 ]))"
+  "     (Categorical [ 0.5, 0.3, 0.2 ]))"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmCancel
 with strJoin "\n" [
   "cancel",
   "  (observe",
-  "    true (Bernoulli",
-  "       0.7))"
+  "    true (Bernoulli 0.7))"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmDelay
 with strJoin "\n" [
   "delay",
-  "  (Categorical",
-  "     [ 0.5, 0.3, 0.2 ])"
+  "  (Categorical [ 0.5, 0.3, 0.2 ])"
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmDelayed
 with strJoin "\n" [
   "delayed",
   "  (delay",
-  "     (Categorical",
-  "        [ 0.5, 0.3, 0.2 ]))"
+  "     (Categorical [ 0.5, 0.3, 0.2 ]))"
 ] using eqString else _toStr in
 
 --------------------
