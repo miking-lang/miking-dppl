@@ -341,9 +341,21 @@ lang DualNumAst =
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyDualNum _ -> (env, "DualNum")
+
+
+  -- ┌───────────────────┐
+  -- │ Lifting interface │
+  -- └───────────────────┘
+
+  -- `dualnumLiftType ty` lifts a type to dual numbers.
+  sem dualnumLiftType : Type -> Type
+
+  -- `dualnumLiftExpr tm` lifts the term `tm` to dual numbers. Any term that is
+  -- lifted using the dual number API above is independent of the runtime.
+  sem dualnumLiftExpr : Expr -> Expr
 end
 
-lang DualNumDist = Dist
+lang DualNumDist = Dist + DualNumAst
   syn Dist =
   | DDual Dist
 
@@ -353,7 +365,9 @@ lang DualNumDist = Dist
     (acc, DDual d)
 
   sem distTy info =
-  | DDual d -> distTy info d
+  | DDual d ->
+    match distTy info d with (vars, paramTys, ty) in
+    (vars, map dualnumLiftType paramTys, dualnumLiftType ty)
 
   sem distNameToString =
   | DDual d -> join ["Dual<", distNameToString d, ">"]
@@ -419,8 +433,6 @@ lang DualNumLift =
   -- │ Lift types and terms to dual numbers │
   -- └──────────────────────────────────────┘
 
-  -- `dualnumLiftType ty` lifts a type to dual numbers.
-  sem dualnumLiftType : Type -> Type
   sem dualnumLiftType =
   | TyFloat r -> TyDualNum r
   | ty -> smap_Type_Type dualnumLiftType ty
@@ -430,7 +442,6 @@ lang DualNumLift =
   -- However, most elementary functions are mutually recursive so it is more
   -- convenient to lift them in the runtime and then simply refer to its lifted
   -- implementation in this semantic function.
-  sem dualnumLiftExpr : Expr -> Expr
   sem dualnumLiftExpr =
   | TmDiff r ->
     match r.ty with TyArrow tyr then
