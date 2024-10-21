@@ -1007,27 +1007,24 @@ lang Diff =
     let tyRes = newpolyvar env.currentLvl t.info in
     unify env [infoTm t.fn] (ityarrow_ (infoTm fn) tyParam tyRes) (tyTm fn);
     unify env [infoTm t.arg] tyParam (tyTm arg);
-    let argErrorMsg =
-      "* Cannot differentiate functions with a function as parameter type\n"
+    recursive let isIsomorficToRn = lam ty.
+      switch ty
+      case TyFloat _ then true
+      case TyRecord _ | TySeq _ then
+        sfold_Type_Type (lam acc. lam ty. and acc (isIsomorficToRn ty)) true ty
+      case _ then false
+      end
     in
-    let resErrorMsg =
-      "* Cannot differentiate functions with a function as result type\n"
-    in
-    let endMsg = "* When type checking the expression\n" in
-    switch (inspectType tyParam, inspectType tyRes)
-    case (TyArrow _, TyArrow _) then
-      let msg = join [argErrorMsg, resErrorMsg, endMsg] in
-      errorSingle [t.info] msg
-    case (TyArrow _, _) then
-      let msg = join [argErrorMsg, endMsg] in
-      errorSingle [t.info] msg
-    case (_, TyArrow _) then
-      let msg = join [resErrorMsg, endMsg] in
-      errorSingle [t.info] msg
-    case _ then
-      let tyDiff = ityarrow_ t.info tyParam tyRes in
-      TmDiff { t with fn = fn, arg = arg, ty = tyDiff }
-    end
+    if isIsomorficToRn (inspectType tyParam) then
+      if isIsomorficToRn (inspectType tyRes) then
+        let tyDiff = ityarrow_ t.info tyParam tyRes in
+        TmDiff { t with fn = fn, arg = arg, ty = tyDiff }
+      else
+        errorSingle [infoTm t.fn]
+          "* The parameter type is not isomorfic to a tuple of floats"
+    else
+      errorSingle [infoTm t.fn]
+        "* The return type is not isomorfic to a tuple of floats"
 
   -- ANF
   sem normalize (k : Expr -> Expr) =
