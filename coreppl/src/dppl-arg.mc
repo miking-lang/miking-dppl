@@ -66,12 +66,6 @@ type Options = {
   -- (temporary option, the end-goal is that we should only ever use peval)
   extractSimplification: String,
 
-  -- ODE solver algorithm
-  odeSolverMethod: String,
-
-  -- Size of fixed step-size ODE solvers
-  stepSize: Float,
-
   -- Whether to subsample the posterior distribution
   -- used in conjuction with smc-apf and smc-bpf and without no-print-samples
   subsample: Bool,
@@ -107,8 +101,6 @@ let default = {
   pmcmcParticles = 2,
   seed = None (),
   extractSimplification = "none",
-  odeSolverMethod = "rk4",
-  stepSize = 1e-3,
   subsample = false,
   subsampleSize = 1
 }
@@ -236,20 +228,6 @@ let config = [
     join ["Temporary flag that decides the simplification approach after extraction in the MExpr compiler backend. The supported options are: none, inline, and peval. Default: ", default.extractSimplification, ". Eventually, we will remove this option and only use peval."],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with extractSimplification = argToString p}),
-  ([("--ode-solve-method", " ", "<method>")],
-    join [
-      "The selected ODE solving method. The supported methods are: rk4. Default: ",
-      default.odeSolverMethod
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with odeSolverMethod = argToString p}),
-  ([("--ode-step-size", " ", "<value>")],
-   join [
-     "The step-size for fixed step-size ODE solvers. Default: ",
-     float2string default.stepSize, "."
-   ],
-   lam p : ArgPart Options. let o : Options = p.options in {o with stepSize = argToFloatMin p 0. }),
-
   ([("--subsample", "", "")],
     "Whether to subsample the posterior distribution. Use in conjuction with -m smc-apf or smc-bpf and without --no-print-samples",
     lam p: ArgPart Options.

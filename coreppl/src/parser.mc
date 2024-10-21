@@ -64,11 +64,9 @@ lang DPPLParser =
       match expr with TmSolveODE ({ method = ODESolverDefault d } & r) then
         TmSolveODE {
           r with
-          method =
-            odeSolverMethodFromOptions
-              options d.stepSize options.odeSolverMethod,
+          method = RK4 d,
           model = replaceDefaultODESolverMethod options r.model,
-          init = replaceDefaultODESolverMethod options r.model,
+          init = replaceDefaultODESolverMethod options r.init,
           endTime = replaceDefaultODESolverMethod options r.endTime
         }
       else expr

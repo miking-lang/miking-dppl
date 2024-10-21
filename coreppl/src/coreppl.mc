@@ -541,11 +541,15 @@ lang SolveODE =
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmSolveODE t ->
     let i = pprintIncr indent in
+    match printParen i env (odeSolverMethodToCon (NoInfo ()) t.method)
+      with (env, method)
+    in
     match printParen i env t.model with (env, model) in
     match printParen i env t.init with (env, init) in
     match printParen i env t.endTime with (env, endTime) in
     (env, join [
       "solveode",
+      pprintNewline i, method,
       pprintNewline i, model,
       pprintNewline i, init,
       pprintNewline i, endTime
@@ -562,22 +566,25 @@ lang SolveODE =
   -- Type check
   sem typeCheckExpr (env : TCEnv) =
   | TmSolveODE t ->
+    let tyState = newpolyvar env.currentLvl t.info in
+    let method = typeCheckODESolverMethod env t.info tyState t.method in
     let model = typeCheckExpr env t.model in
     let init = typeCheckExpr env t.init in
     let endTime = typeCheckExpr env t.endTime in
     let tyModel = newvar env.currentLvl t.info in
-    let tyfloat_ = ityfloat_ t.info in
-    let tyseq_ = ityseq_ t.info tyfloat_ in
+    let float = ityfloat_ t.info in
+    let arrow = ityarrow_ t.info in
     unify env [infoTm model]
-      (ityarrow_ t.info tyfloat_ (ityarrow_ t.info tyseq_ tyseq_))
+      (arrow float (arrow tyState tyState))
       (tyTm model);
-    unify env [infoTm init] tyseq_ (tyTm init);
-    unify env [infoTm endTime] tyfloat_ (tyTm endTime);
+    unify env [infoTm init] tyState (tyTm init);
+    unify env [infoTm endTime] float (tyTm endTime);
     TmSolveODE { t with
+                 method = method,
                  model = model,
                  init = init,
                  endTime = endTime,
-                 ty = tyseq_ }
+                 ty = tyState }
 
   -- ANF
   sem normalize (k : Expr -> Expr) =
@@ -1300,7 +1307,11 @@ let weight_ = use Weight in
  let solveode_ = use SolveODE in
    lam m. lam i. lam t.
     TmSolveODE {
-      method = ODESolverDefault { stepSize = float_ 0.01 },
+      method = ODESolverDefault {
+        stepSize = float_ 0.01,
+        add = uconst_ (CAddf ()),
+        smul = uconst_ (CMulf ())
+      },
       model = m,
       init = i,
       endTime = t,
@@ -1391,13 +1402,9 @@ let tmAssume = assume_ (bern_ (float_ 0.7)) in
 let tmObserve = observe_ (float_ 1.5) (beta_ (float_ 1.0) (float_ 2.0)) in
 let tmWeight = weight_ (float_ 1.5) in
 let tmODE =
-  ulams_ ["t", "x"]
-    (seq_ [
-      get_ (var_ "x") (int_ 0),
-      subf_ (negf_ (get_ (var_ "x") (int_ 1))) (get_ (var_ "x") (int_ 0))
-    ])
+  ulams_ ["t", "x"] (float_ 1.)
 in
-let tmX0 = seq_ [float_ 1., float_ 0.] in
+let tmX0 = float_ 0. in
 let tmTEnd = float_ 1. in
 let tmSolveODE = solveode_ tmODE tmX0 tmTEnd in
 let tmPrune =
@@ -1448,11 +1455,12 @@ with strJoin "\n" [
 utest mexprPPLToString tmSolveODE
 with strJoin "\n" [
   "solveode",
+  "  (Default",
+  "     { stepSize = 0.01, add = addf, smul = mulf })",
   "  (lam t.",
   "     lam x.",
-  "       [ get x 0,",
-  "         subf (negf (get x 1)) (get x 0) ])",
-  "  [ 1., 0. ]",
+  "       1.)",
+  "  0.",
   "  1."
 ] using eqString else _toStr in
 
@@ -1566,8 +1574,10 @@ utest smap_Expr_Expr mapVar tmSolveODE
   using eqExpr else _toStr
 in
 utest sfold_Expr_Expr foldToSeq [] tmSolveODE
-with [ tmTEnd, tmX0, tmODE, float_ 0.01 ] using eqSeq eqExpr else _seqToStr in
-
+with
+  [ tmTEnd, tmX0, tmODE, uconst_ (CMulf ()), uconst_ (CAddf ()), float_ 0.01 ]
+  using eqSeq eqExpr else _seqToStr
+in
 
 utest sfold_Expr_Expr foldToSeq [] tmPrune
   with [ categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]) ]
@@ -1624,7 +1634,7 @@ utest symbolize tmDelayed with tmDelayed using eqExpr in
 utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmObserve) with tyunit_ using eqType in
 utest tyTm (typeCheck tmWeight) with tyunit_ using eqType in
-utest tyTm (typeCheck tmSolveODE) with tyseq_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmSolveODE) with tyfloat_ using eqType in
 utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmPrune) with typruneint_ using eqType in
 utest tyTm (typeCheck tmCancel) with tyunit_ using eqType in
@@ -1652,15 +1662,18 @@ utest _anf tmWeight with bindall_ [
   ulet_ "t" (weight_ (float_ 1.5)),
   var_ "t"
 ] using eqExpr else _toStr in
-utest _anf (solveode_ (ulams_ ["t", "x"] (seq_ [float_ 1.])) tmX0 tmTEnd)
+utest _anf
+        (solveode_ (ulams_ ["t", "x"] (addf_ (float_ 1.) (float_ 0.)))
+           tmX0 tmTEnd)
   with bindall_ [
-    ulet_ "t" tmX0,
-    ulet_ "t1"
+    ulet_ "t"
       (solveode_
          (ulams_ ["t", "x"]
-            (bind_ (ulet_ "t" (seq_ [float_ 1.])) (var_ "t"))) (var_ "t")
+            (bind_ (ulet_ "t" (addf_ (float_ 1.) (float_ 0.)))
+               (var_ "t")))
+         (float_ 0.)
          tmTEnd),
-    var_ "t1"
+    var_ "t"
 ] using eqExpr else _toStr in
 utest _anf tmPrune with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),

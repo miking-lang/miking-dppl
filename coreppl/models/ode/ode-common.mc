@@ -39,7 +39,13 @@ let odeTrace : (Float -> [Float] -> [Float]) -> [Float] -> [Float] -> [[Float]] 
     reverse
       (foldl
          (lam trace. lam dt.
-           cons (solveode (RK4 { stepSize = 1e-3 }) f (head trace) dt) trace)
+           cons
+             (solveode (RK4 {
+               stepSize = 1e-3,
+               add = map2 addf,
+               smul = lam s. map (mulf s)
+             }) f (head trace) dt)
+             trace)
          [xs0] dts)
 
 -- `printSeq p xs` prints the sequence `xs` to standard out, printing each

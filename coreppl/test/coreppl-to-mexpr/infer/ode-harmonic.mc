@@ -15,22 +15,31 @@ let f = lam sample: [Float].
 in
 let c = cpplResOfDist f in
 
-utest r (c 0   (infer (Default {}) model))
+let _model = lam. model (EulerForward ()) () in
+utest r (c 0 (infer (Importance { particles = 1 }) _model))
 with rhs using e in
-utest r (c 0   (infer (Importance { particles = 1000 }) model))
+
+let _model = lam. model (Default ()) () in
+utest r (c 0 (infer (Importance { particles = 1 }) _model))
 with rhs using e in
-utest r (c 0   (infer (BPF { particles = 1000 }) model))
+
+let _model = lam. model (RungeKutta ()) () in
+utest r (c 0 (infer (Default {}) _model))
 with rhs using e in
-utest r (c 0   (infer (APF { particles = 1000 }) model))
+utest r (c 0 (infer (Importance { particles = 1 }) _model))
 with rhs using e in
-utest r (c 500 (infer (PIMH { particles = 10, iterations = 100 }) model))
+utest r (c 0 (infer (BPF { particles = 1 }) _model))
 with rhs using e in
-utest r (c 500 (infer (TraceMCMC { iterations = 1000 }) model))
+utest r (c 0 (infer (APF { particles = 2 }) _model))
 with rhs using e in
-utest r (c 500 (infer (NaiveMCMC { iterations = 1000 }) model))
+utest r (c 0 (infer (PIMH { particles = 2, iterations = 1 }) _model))
 with rhs using e in
-utest r (c 500
-  (infer (LightweightMCMC { iterations = 1000, globalProb = 0.1 }) model))
+utest r (c 0 (infer (TraceMCMC { iterations = 1 }) _model))
+with rhs using e in
+utest r (c 0 (infer (NaiveMCMC { iterations = 1 }) _model))
+with rhs using e in
+utest r (c 0
+  (infer (LightweightMCMC { iterations = 1, globalProb = 0.1 }) _model))
 with rhs using e in
 
 ()

@@ -96,7 +96,7 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
   | RK4 _ -> "odeSolverRK4Solve"
   | EF _ -> "odeSolverEFSolve"
   | method -> error (join [
-    odeSolverMethodToString method,
+    nameGetStr (odeSolverMethodName method),
     " does not have an implementation in the ODE solver runtime"
   ])
 
@@ -113,7 +113,7 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
         in
         optionMapOrElse
           (lam.
-            let name = nameSym (odeSolverMethodToString r.method) in
+            let name = odeSolverMethodName r.method in
             let acc = mapInsert r.method name acc in
             (acc, f name))
           (lam name. (acc, f name))
