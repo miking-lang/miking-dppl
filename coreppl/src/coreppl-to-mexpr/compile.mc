@@ -710,17 +710,19 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
        | TmCancel _
        | TmDelay _
        | TmDelayed _ ) ->
-    let f = lam e.
-      let ty = _tyTm e in
-      if _hasFloatExprsMap ty then
-        let i = infoTm e in
-        let _x = nameSym "x" in
-        _let_ i _x e
-          (_mapFloatExprsExpr i (adAssertFloat env i) (lam x. x) ty
-             (_var_ i ty _x))
-      else e
-    in
-    smap_Expr_Expr f e
+    if env.config.insertFloatAssertions then
+      let f = lam e.
+        let ty = _tyTm e in
+        if _hasFloatExprsMap ty then
+          let i = infoTm e in
+          let _x = nameSym "x" in
+          _let_ i _x e
+            (_mapFloatExprsExpr i (adAssertFloat env i) (lam x. x) ty
+               (_var_ i ty _x))
+        else e
+      in
+      smap_Expr_Expr (compose f (adLiftExpr env)) e
+    else smap_Expr_Expr (adLiftExpr env) e
   | e -> smap_Expr_Expr (adLiftExpr env) e
 
   sem adLiftConst : ADHookEnv -> Expr -> Const -> Expr
@@ -965,9 +967,9 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
     optionMapOr e (lam map. map e) (_mapFloatExprs i from to ty)
 end
 
-lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader + ADLoader
+lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader + DTCTypeOf + ADLoader
   syn FileType =
-  | FCorePPL {isModel : Bool}
+  | FCorePPL {isModel : Bool, dpplFrontEnd : Bool}
 
   sem _insertBackcompatInfer : Expr -> Loader -> Loader
   sem _insertBackcompatInfer modelBody = | loader ->
@@ -999,7 +1001,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       let symEnv = symbolizeUpdateVarEnv symEnv
         (mapInsert (nameGetStr particlesName) particlesName symEnv.currentEnv.varEnv) in
       _setSymEnv symEnv loader in
-    match includeFileTypeExn (FCorePPL {isModel = false}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
+    match includeFileTypeExn (FCorePPL {isModel = false, dpplFrontEnd = false}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
       with (topEnv, loader) in
 
     let retTy = match unwrapType (mapFindExn modelName (_getTCEnv loader).varEnv)
@@ -1057,7 +1059,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       } in
     _addDeclExn loader decl
 
-  sem _loadFile path = | (FCorePPL {isModel = isModel}, loader & Loader x) ->
+  sem _loadFile path = | (FCorePPL {isModel = isModel, dpplFrontEnd = dpplFrontEnd}, loader & Loader x) ->
     -- NOTE(vipa, 2024-12-12): Return if we've already included this
     -- file
     match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
@@ -1077,65 +1079,62 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
     let ast = parseMCoreFile args path in
     let ast = use DPPLParser in makeKeywords ast in
 
+    -- NOTE(oerikss, 2025-03-14): If the user requested it, we type-check with
+    -- the DPPL type-checker.
+    (if dpplFrontEnd then
+      typeOfExn (decorateTypesExn (decorateTerms (symbolize ast))); ()
+     else ());
+
     recursive let f = lam decls. lam ast.
       match exprAsDecl ast with Some (decl, ast)
       then f (snoc decls decl) ast
       else (decls, ast) in
-    match f [] ast with (decls, expr) in
+    -- NOTE(oerikss, 2025-03-14): We need to erase any type decorations specific
+    -- to the new DPPL typechecker.
+    match f [] (eraseDecorations ast) with (decls, expr) in
+
+    let hasTerm : (Expr -> Bool) -> Bool = lam p.
+      recursive let hasTerm = lam acc. lam e.
+        if acc then acc else
+          if p e then true
+          else sfold_Expr_Expr hasTerm false e in
+      let hasTermD = lam acc. lam d.
+        if acc then acc else
+          sfold_Decl_Expr hasTerm false d in
+      or (foldl hasTermD false decls) (hasTerm false expr) in
 
     let hasInfer =
-      recursive let hasInfer = lam acc. lam e.
-        if acc then acc else
-        match e with TmInfer _ then true else
-        sfold_Expr_Expr hasInfer false e in
-      let hasInferD = lam acc. lam d.
-        if acc then acc else
-        sfold_Decl_Expr hasInfer false d in
-      or (foldl hasInferD false decls) (hasInfer false expr) in
+      hasTerm (lam e. match e with TmInfer _ then true else false) in
     let needsAddedInfer = and isModel (not hasInfer) in
 
-    let hasDiff =
-      -- TODO(vipa, 2025-02-26): This should check that `isModel` is
-      -- true if there's a `diff` included, otherwise the "separate
-      -- world" assumption doesn't really make sense
-      recursive let hasDiff = lam acc. lam e.
-        if acc then true else
-        match e with TmDiff r then
-          -- NOTE(oerikss, 2025-02-27): If we found a `diff` but we are not in a
-          -- model we really do not know what to do at this point so we just
-          -- crash.
-          (if not isModel then
-            error
-              (concat
-                 "found a `diff` outside model code which we cannot handle.\n\n"
-                 (info2str r.info))
-           else ());
-          true
-        else sfold_Expr_Expr hasDiff false e in
-      let hasDiffD = lam acc. lam d.
-        if acc then acc else
-          sfold_Decl_Expr hasDiff false d in
-      or (foldl hasDiffD false decls) (hasDiff false expr) in
-    recursive let makeLoader = lam hasDiff. lam needsAddedInfer.
-      switch (hasDiff, needsAddedInfer)
-      case (false, false) then
+    let hasSolve =
+      hasTerm (lam e. match e with TmSolveODE _ then true else false) in
+
+    let hasDiff = hasTerm (lam e. match e with TmDiff _ then true else false) in
+    (if and hasDiff (not isModel) then
+      error "found a `diff` outside model code which we cannot handle."
+     else ());
+
+    recursive let makeLoader = lam needsAddedInfer.
+      switch (hasDiff, hasSolve, needsAddedInfer)
+      case (false, _, false) then
         -- NOTE(vipa, 2025-02-26): Simple case, no AD, and no need to add an infer
         let decls = if isModel
           then snoc decls (declWithInfo (infoTm expr) (decl_nulet_ (nameSym "") expr))
           else decls in
         _addDeclsByFile loader decls
-      case (false, true) then
-        -- NOTE(vipa, 2025-02-26): No AD, but we do need to add an infer
+      case (false, false, true) then
+        -- NOTE(vipa, 2025-02-26): No AD or solve, but we do need to add an infer
         match partition (lam d. match infoDecl d with Info {filename = f} then eqString f path else false) decls
           with (inFile, beforeFile) in
         let loader = _addDeclsByFile loader beforeFile in
         let modelBody = foldr (lam d. lam e. declAsExpr e d) expr inFile in
         _insertBackcompatInfer modelBody loader
-      case (true, true) then
-        -- NOTE(oerikss, 2025-03-01): A program with differentiation is not
-        -- implicitly a probabilistic model.
-        makeLoader true false
-      case (true, false) then
+      case (true, _, true) | (_, true, true) then
+        -- NOTE(oerikss, 2025-03-01): A program with differentiation or solve is
+        -- not implicitly a probabilistic model.
+        makeLoader false
+      case (true, _, false) then
         -- NOTE(vipa, 2025-02-26): When using AD we make a simplifying
         -- assumption: we make the model code exist "in its own world",
         -- i.e., we get duplication of dependencies between the model
@@ -1153,19 +1152,13 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let hooks = match odeHook with Some hook
           then [hook]
           else [] in
-        -- TODO(vipa, 2025-02-26): Add ADHook
-        match prepareADRuntime loader { insertFloatAssertions = true }
+        match prepareADRuntime loader { insertFloatAssertions = not dpplFrontEnd }
           with (adHook, loader) in
         let hooks = snoc hooks adHook in
         let separateLoader = mkLoader
           (_getSymEnv loader)
           (_getTCEnv loader)
           hooks in
-
-        -- TODO(vipa, 2025-02-26): There will later be an extra
-        -- type-check for ensuring `diff` is used appropriately, which
-        -- should be run on the model only; that should happen here on
-        -- `ast`.
 
         let decls = snoc decls (declWithInfo (infoTm expr) (decl_nulet_ (nameSym "") expr)) in
         let separateLoader = _addDeclsByFile separateLoader decls in
@@ -1185,7 +1178,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let loader = Loader {x with symEnv = prevSymEnv, includedFiles = prevIncluded} in
         loader
       end in
-    let loader = makeLoader hasDiff needsAddedInfer in
+    let loader = makeLoader needsAddedInfer in
 
     match loader with Loader x in
     match mapLookup path x.includedFiles with Some env

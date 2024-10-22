@@ -24,7 +24,7 @@ test-inference-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/inference-accuracy -name "*.mc")
 
 .PHONY: all
-all: compiler cppl
+all: cppl cdppl
 
 ############################################
 ## Tests in CorePPL compiler source files ##
@@ -41,7 +41,7 @@ ${test-files}::
 ###################
 
 .PHONY: cppl
-cppl: ${test-staticdelay-files} ${test-infer-files} ${test-cli-files} ${test-expectation-files}
+cppl: ${test-infer-files} ${test-cli-files} ${test-expectation-files}
 
 .PHONY: infer
 infer: ${test-infer-files}
@@ -55,8 +55,9 @@ expectation: ${test-expectation-files}
 .PHONY: inference
 inference: ${test-inference-files}
 
-.PHONY: dppl
-dppl: ${test-dppl-files}
+.PHONY: cdppl
+cdppl: ${test-dppl-files}
+
 
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}
@@ -84,4 +85,4 @@ ${test-expectation-files}::
 
 # DPPL tests
 ${test-dppl-files}::
-	@./make test-cppl $@ "build/${CPPL_NAME}"
+	@./make test-cdppl $@ "build/${CPPL_NAME}"

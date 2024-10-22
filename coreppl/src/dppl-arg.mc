@@ -72,7 +72,10 @@ type Options = {
 
   -- Drift kernel activation and scale
   driftKernel: Bool,
-  driftScale: Float
+  driftScale: Float,
+
+  -- Use DPPL frontend with (co)effect decorations
+  dpplFrontEnd: Bool
 }
 
 -- Default values for options
@@ -105,7 +108,8 @@ let defaultArgs = {
   subsample = false,
   subsampleSize = 1,
   driftKernel = false,
-  driftScale = 1.0
+  driftScale = 1.0,
+  dpplFrontEnd = false
 }
 
 -- Options configuration
@@ -248,7 +252,11 @@ let config = [
           "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: ",
           float2string defaultArgs.driftScale, "."
       ],
-      lam p : ArgPart Options. let o : Options = p.options in {o with driftScale = argToFloatMin p 0. })
+      lam p : ArgPart Options. let o : Options = p.options in {o with driftScale = argToFloatMin p 0. }),
+  ([("--dppl-frontend", "", "")],
+   "Use (co)effect frontend",
+   lam p: ArgPart Options.
+     let o: Options = p.options in {o with dpplFrontEnd = true})
 ]
 
 -- Menu
