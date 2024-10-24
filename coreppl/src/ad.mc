@@ -347,9 +347,9 @@ lang DualNumDist = Dist
   syn Dist =
   | DDual Dist
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DDual d ->
-    match distSmapAccumL_Expr_Expr f acc d with (acc, d) in
+    match smapAccumL_Dist_Expr f acc d with (acc, d) in
     (acc, DDual d)
 
   sem distTy info =

@@ -51,7 +51,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   -- Each distribution should implement the following three semantic functions.
 
   -- Shallow map/fold over distribution parameters.
-  sem distSmapAccumL_Expr_Expr : all a. (a -> Expr -> (a, Expr)) -> a -> Dist -> (a, Dist)
+  sem smapAccumL_Dist_Expr : all a. (a -> Expr -> (a, Expr)) -> a -> Dist -> (a, Dist)
 
   -- Returns the parameter and sample type of a distribution. E.g.,
   -- `distTy _ (Gaussian _)` = `([], [TyFloat _, TyFloat _], [TyFloat _])`.
@@ -59,7 +59,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
     ([Name],                    -- The names of all type variables appearing in
                                 -- the distribution type.
      [Type],                    -- The parameter types with the same order as as
-                                -- the order `distSmapAccumL_Expr_Expr`
+                                -- the order `smapAccumL_Dist_Expr`
                                 -- traverses the parameters.
      Type)                      -- The type of the support.
 
@@ -71,17 +71,17 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   -- implemented using the above semantic functions.
 
   -- Shallow map/fold
-  sem distSmap_Expr_Expr : (Expr -> Expr) -> Dist -> Dist
-  sem distSmap_Expr_Expr f =| d ->
-    (distSmapAccumL_Expr_Expr (lam. lam tm. ((), f tm)) () d).1
+  sem smap_Dist_Expr : (Expr -> Expr) -> Dist -> Dist
+  sem smap_Dist_Expr f =| d ->
+    (smapAccumL_Dist_Expr (lam. lam tm. ((), f tm)) () d).1
 
-  sem distSfold_Expr_Expr : all a. (a -> Expr -> a) -> a -> Dist -> a
-  sem distSfold_Expr_Expr f acc =| d ->
-    (distSmapAccumL_Expr_Expr (lam acc. lam tm. (f acc tm, tm)) acc d).0
+  sem sfold_Dist_Expr : all a. (a -> Expr -> a) -> a -> Dist -> a
+  sem sfold_Dist_Expr f acc =| d ->
+    (smapAccumL_Dist_Expr (lam acc. lam tm. (f acc tm, tm)) acc d).0
 
   sem smapAccumL_Expr_Expr f acc =
   | TmDist t ->
-    match distSmapAccumL_Expr_Expr f acc t.dist with (acc, dist) in
+    match smapAccumL_Dist_Expr f acc t.dist with (acc, dist) in
     (acc, TmDist { t with dist = dist })
 
   sem smapAccumL_Type_Type f acc =
@@ -91,13 +91,13 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
 
   -- Returns the parameters of a distribution
   sem distParams : Dist -> [Expr]
-  sem distParams =| d -> distSfold_Expr_Expr snoc [] d
+  sem distParams =| d -> sfold_Dist_Expr snoc [] d
 
   -- Sets the parameters of a distribution. The order of the parameters should
   -- be the same as returned by `distParams`.
   sem distWithParams : Dist -> [Expr] -> Dist
   sem distWithParams d =| tms ->
-    (distSmapAccumL_Expr_Expr
+    (smapAccumL_Dist_Expr
        (lam tms. lam.
         match tms with [tm] ++ tms then (tms, tm)
         else error "Illformed distribution parameters")
@@ -160,7 +160,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
         optionGetOrElse (lam. error "impossible") (record2tuple paramTys)
       in
       match
-        distSmapAccumL_Expr_Expr
+        smapAccumL_Dist_Expr
           (lam tys. lam p.
             match tys with [ty] ++ tys then
               let p = typeCheckExpr env p in
@@ -236,7 +236,7 @@ lang UniformDist = Dist
   syn Dist =
   | DUniform { a : Expr, b : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DUniform t ->
     match f acc t.a with (acc, a) in
     match f acc t.b with (acc, b) in
@@ -254,7 +254,7 @@ lang BernoulliDist = Dist
   syn Dist =
   | DBernoulli { p : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DBernoulli t ->
     match f acc t.p with (acc, p) in
     (acc, DBernoulli { t with p = p })
@@ -270,7 +270,7 @@ lang PoissonDist = Dist
   syn Dist =
   | DPoisson { lambda : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DPoisson t ->
     match f acc t.lambda with (acc, lambda) in
     (acc, DPoisson { t with lambda = lambda })
@@ -286,7 +286,7 @@ lang BetaDist = Dist
   syn Dist =
   | DBeta { a : Expr, b : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DBeta t ->
     match f acc t.a with (acc, a) in
     match f acc t.b with (acc, b) in
@@ -304,7 +304,7 @@ lang GammaDist = Dist
   syn Dist =
   | DGamma { k : Expr, theta : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DGamma t ->
     match f acc t.k with (acc, k) in
     match f acc t.theta with (acc, theta) in
@@ -324,7 +324,7 @@ lang CategoricalDist = Dist
   -- p has type [Float]: the list of probabilities
   | DCategorical { p : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DCategorical t ->
     match f acc t.p with (acc, p) in
     (acc, DCategorical { t with p = p })
@@ -342,7 +342,7 @@ lang MultinomialDist = Dist
   -- p has type [Float]: the list of probabilities
   | DMultinomial { n : Expr, p : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DMultinomial t ->
     match f acc t.n with (acc, n) in
     match f acc t.p with (acc, p) in
@@ -363,7 +363,7 @@ lang DirichletDist = Dist
   -- a has type [Float]: the list of concentration parameters
   | DDirichlet { a : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DDirichlet t ->
     match f acc t.a with (acc, a) in
     (acc, DDirichlet { t with a = a })
@@ -382,7 +382,7 @@ lang ExponentialDist = Dist
   syn Dist =
   | DExponential { rate : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DExponential t ->
     match f acc t.rate with (acc, rate) in
     (acc, DExponential { t with rate = rate })
@@ -400,7 +400,7 @@ lang EmpiricalDist = Dist
   -- samples has type [(Float,a)]: A set of weighted samples over type a
   | DEmpirical { samples : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DEmpirical t ->
     match f acc t.samples with (acc, samples) in
     (acc, DEmpirical { t with samples = samples })
@@ -419,7 +419,7 @@ lang GaussianDist = Dist
   syn Dist =
   | DGaussian { mu : Expr, sigma : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DGaussian t ->
     match f acc t.mu with (acc, mu) in
     match f acc t.sigma with (acc, sigma) in
@@ -437,7 +437,7 @@ lang BinomialDist = Dist
   syn Dist =
   | DBinomial { n : Expr, p : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DBinomial t ->
     match f acc t.n with (acc, n) in
     match f acc t.p with (acc, p) in
@@ -457,7 +457,7 @@ lang WienerDist = Dist
   syn Dist =
   | DWiener { a : Expr }
 
-  sem distSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Dist_Expr f acc =
   | DWiener t ->
     match f acc t.a with (acc, a) in
     (acc, DWiener { t with a = a })
