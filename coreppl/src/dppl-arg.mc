@@ -77,7 +77,10 @@ type Options = {
   subsample: Bool,
 
   -- Used in conjuction with subsample, how many subsamples to take
-  subsampleSize: Int
+  subsampleSize: Int,
+
+  -- Drift kernel scale
+  driftScale: Float
 }
 
 -- Default values for options
@@ -110,7 +113,8 @@ let default = {
   odeSolverMethod = "rk4",
   stepSize = 1e-3,
   subsample = false,
-  subsampleSize = 1
+  subsampleSize = 1,
+  driftScale = 1.0
 }
 
 -- Options configuration
@@ -118,7 +122,7 @@ let config = [
   -- TODO(dlunde,2022-11-14): Could we automatically generate the list of available inference algorithms instead of hardcoding it?
   ([("-m", " ", "<method>")],
     join [
-      "The selected inference method. The supported methods are: is-lw, smc-bpf, smc-apf, mcmc-lightweight, mcmc-trace, mcmc-naive, pmcmc-pimh. Default: ",
+      "The selected inference method. The supported methods are: is-lw, smc-bpf, smc-apf, mcmc-lightweight, mcmc-lw-dk, mcmc-trace, mcmc-naive, pmcmc-pimh. Default: ",
       default.method
     ],
     lam p: ArgPart Options.
@@ -261,7 +265,16 @@ let config = [
     int2string default.subsampleSize, "."
        ],
        lam p: ArgPart Options.
-        let o: Options = p.options in {o with subsampleSize = argToIntMin p 1})
+        let o: Options = p.options in {o with subsampleSize = argToIntMin p 1}),
+
+  ([("--drift", " ", "<value>")],
+  join [
+    "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: ",
+    float2string default.driftScale, "."
+  ],
+  lam p : ArgPart Options. let o : Options = p.options in {o with driftScale = argToFloatMin p 0. })
+
+     
 ]
 
 -- Menu
