@@ -13,6 +13,8 @@ test-files := $(filter-out coreppl/src/transformation.mc,$(test-files))
 # out and it is compiled anyways when doing the inference tests.
 test-files := $(filter-out coreppl/src/cppl.mc,$(test-files))
 
+test-coin-iter-alter=$(shell find coreppl/test/coreppl-to-mexpr/cli -name "coin-iter-alter.mc")
+
 test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
 test-staticdelay-files=$(shell find coreppl/test/coreppl-to-mexpr/static-delay -name "*.mc")
 test-cli-files=\
@@ -52,6 +54,9 @@ static-delay: ${test-staticdelay-files}
 
 .PHONY: expectation
 expectation: ${test-expectation-files}
+
+.PHONY: coin-iter-alter
+coin-iter-alter: ${test-coin-iter-alter}
 
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}

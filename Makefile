@@ -65,6 +65,10 @@ test-coreppl: build/${CPPL_NAME}
 test-coreppl-compiler:
 	@$(MAKE) -s -f test-coreppl.mk compiler
 
+.PHONY: test-coreppl-coin-iter-alter
+test-coreppl-coin-iter-alter:
+	@$(MAKE) -s -f test-coreppl.mk coin-iter-alter
+
 #############
 ## RootPPL ##
 #############
