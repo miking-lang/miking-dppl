@@ -63,6 +63,11 @@ lang InferMethodBase =
   sem inferMethodConfig info =
   | Default { runs = runs } -> fieldsToRecord info [("runs", runs)]
 
+  -- Produces the expected type of `inferMethodConfig`
+  sem inferMethodConfigType : Info -> InferMethod -> Type
+  sem inferMethodConfigType info =
+  | Default _ -> tyRecord info [("runs", ityint_ info)]
+
   -- Type checks the inference method. This ensures that the provided arguments
   -- have the correct types.
   sem typeCheckInferMethod : TCEnv -> Info -> InferMethod -> InferMethod

@@ -38,6 +38,13 @@ lang PIMHMethod = MExprPPL
   | PIMH {iterations = iterations, particles = particles} ->
     fieldsToRecord info [("iterations",iterations), ("particles", particles)]
 
+  sem inferMethodConfigType info =
+  | PIMH _ ->
+    tyRecord info [
+      ("iterations",tyint_ info),
+      ("particles", ityint_ info)
+    ]
+
   sem typeCheckInferMethod env info =
   | PIMH {iterations = iterations, particles = particles} ->
     let int = TyInt {info = info} in
