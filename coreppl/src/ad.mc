@@ -369,8 +369,8 @@ lang DualNumDist = Dist + DualNumAst
     match distTy info d with (vars, paramTys, ty) in
     (vars, map dualnumLiftType paramTys, dualnumLiftType ty)
 
-  sem distNameToString =
-  | DDual d -> join ["Dual<", distNameToString d, ">"]
+  sem distName =
+  | DDual d -> join ["Dual<", distName d, ">"]
 end
 
 
