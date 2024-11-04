@@ -311,7 +311,7 @@ lang DualNumAst =
   | CPertubation _ -> graph
 
   sem getConstStringCode (indent : Int) =
-  | CLifted const -> join ["L(", getConstStringCode indent const, ")"]
+  | CLifted const -> join ["L<", getConstStringCode indent const, ">"]
   | CGenEpsilon _ -> "genEpsilon"
   | CLtEpsilon _ -> "ltEpsilon"
   | CCreatePrimal _ -> "createPrimal"
