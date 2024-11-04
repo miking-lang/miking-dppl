@@ -371,24 +371,24 @@ lang DualNumAst =
   sem dualnumLiftExprH : Expr -> Expr
 end
 
-lang DualNumDist = Dist + DualNumAst
+lang LiftedDist = Dist + DualNumAst
   syn Dist =
-  | DDual Dist
+  | LDist Dist
 
   sem smapAccumL_Dist_Expr f acc =
-  | DDual d ->
+  | LDist d ->
     match smapAccumL_Dist_Expr f acc d with (acc, d) in
-    (acc, DDual d)
+    (acc, LDist d)
 
   sem distTy info =
-  | DDual d ->
+  | LDist d ->
     match distTy info d with (vars, paramTys, ty) in
     -- NOTE(oerikss, 2024-11-04): We lift the support and instead make sure that
     -- TmDist unboxes its parameters.
     (vars, paramTys, dualnumLiftType ty)
 
   sem distName =
-  | DDual d -> join ["Dual<", distName d, ">"]
+  | LDist d -> join ["L<", distName d, ">"]
 end
 
 
@@ -424,7 +424,7 @@ end
 
 
 lang DualNumLift =
-  MExprPPL + DualNumAst + ElementaryFunctions + Diff + DualNumDist + TyConst
+  MExprPPL + DualNumAst + ElementaryFunctions + Diff + LiftedDist + TyConst
 
   sem tyConstBase d =
   -- NOTE(oerikss, 2024-04-25): The type of a lifted constant is its type lifted
@@ -530,7 +530,7 @@ lang DualNumLift =
           (lam. dualnumLiftExprH tm)
           (lam unbox. unbox (dualnumLiftExprH tm))
           (dualnumUnboxTypeDirected (tyTm tm)))
-      (TmDist { r with dist = DDual r.dist })
+      (TmDist { r with dist = LDist r.dist })
   | TmWeight r -> TmWeight {
     r with weight = dualnumPrimalRec r.info (dualnumLiftExprH r.weight)
   }
