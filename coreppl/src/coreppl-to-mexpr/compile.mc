@@ -426,7 +426,7 @@ lang MExprCompile =
 
     -- Transform diff terms and lift to dual numbers if necessary.
     let corepplAst =
-      if hasDiff then dualnumLiftExpr corepplAst
+      if hasDiff then typeCheck (dualnumLiftExpr corepplAst)
       else corepplAst
     in
 
