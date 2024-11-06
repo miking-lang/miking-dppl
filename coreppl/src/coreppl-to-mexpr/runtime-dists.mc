@@ -8,7 +8,7 @@ include "ext/dist-ext.mc"
 include "ad/dualnum.mc"
 
 -- Weiner process
-let wienerSample : () -> (Float -> Float) = lam.
+let wienerSample : () -> Float -> Float = lam.
   -- TODO(oerikss, 2024-03-20): We save the observed trace of the process in a
   -- map. This is ofcourse limiting in the sense that we need to keep the
   -- observed traces of all Wiener process in memory. In the futurue we want to
@@ -35,7 +35,7 @@ let wienerSample : () -> (Float -> Float) = lam.
                  (mulf (subf t t1) (divf (subf b a) (subf t2 t1))))
             in
             let sigma =
-              sqrt (mulf (subf t2 t) (divf (subf t1 t) (subf t2 t1)))
+              sqrt (divf (mulf (subf t2 t) (subf t t1)) (subf t2 t1))
             in
             gaussianSample mu sigma
           end
@@ -351,3 +351,12 @@ let expectation : all a. use RuntimeDist in Dist a -> a =
 let logObserve : all a. use RuntimeDist in Dist a -> a -> Float =
   use RuntimeDist in
   logObserve
+
+mexpr
+
+let w = wienerSample () in
+utest w 0. with w 0. in
+utest w 1. with w 1. in
+utest w -1. with w -1. in
+
+()
