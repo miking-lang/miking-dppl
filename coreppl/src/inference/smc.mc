@@ -103,6 +103,15 @@ lang SMCCommon = MExprPPL + Resample + MExprCPS
     TmLet { t with inexpr = exprCps env k t.inexpr }
   | TmLet ({ body = TmDist _ } & t) ->
     TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet ({ body = TmDist (d & { dist = DWiener w })} & t) ->
+    if not (transform env t.ident) then
+      TmLet { t with inexpr = exprCps env k t.inexpr }
+    else
+      TmLet {
+        t with
+        body = TmDist { d with dist = DWiener { w with cps = true }},
+        inexpr = exprCps env k t.inexpr
+      }
   | TmLet { ident = ident, body = TmResample {},
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in

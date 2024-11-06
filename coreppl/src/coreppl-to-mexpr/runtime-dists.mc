@@ -69,7 +69,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical {p : [Float]}
   | DistDirichlet {a : [Float]}
   | DistUniform {a : Float, b : Float}
-  | DistWiener {}
+  | DistWiener {cps : Bool, a : ()}
   | DistLomax {scale: Float, shape : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
   | DistNegativeBinomial {n:Int, p: Float}
@@ -86,7 +86,9 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
-  | DistWiener _ -> unsafeCoerce (wienerSample ())
+  | DistWiener {cps = false, a = a} -> unsafeCoerce (wienerSample a)
+  | DistWiener {cps = true, a = a} ->
+    unsafeCoerce (let w = wienerSample a in lam k. lam x. k (w x))
   | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
   | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)

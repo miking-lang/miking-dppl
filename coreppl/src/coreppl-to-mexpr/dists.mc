@@ -92,9 +92,10 @@ lang TransformDist = TransformDistBase + LiftedDist
     i (conapp_
         "RuntimeDistElementary_DistUniform"
          (i (urecord_ [("a", a), ("b", b)])))
-  | DWiener {} ->
+  | DWiener { cps = cps, a = a } ->
     i (conapp_
-         "RuntimeDistElementary_DistWiener" (i unit_))
+         "RuntimeDistElementary_DistWiener"
+         (i (urecord_ [("cps", if cps then i true_ else i false_), ("a", a)])))
   | DEmpirical { samples = samples } ->
     i (app_ (var_ "vRuntimeDistEmpirical_constructDistEmpiricalHelper") samples)
   | DLifted d ->

@@ -460,7 +460,7 @@ end
 
 lang WienerDist = Dist
   syn Dist =
-  | DWiener { a : Expr }
+  | DWiener { a : Expr, cps : Bool }
 
   sem smapAccumL_Dist_Expr f acc =
   | DWiener t ->
@@ -522,7 +522,7 @@ let gaussian_ = use GaussianDist in
 let binomial_ = use BinomialDist in
   lam n. lam p. dist_ (DBinomial {n = n, p = p})
 
-let wiener_ = use WienerDist in dist_ (DWiener { a = unit_ })
+let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
