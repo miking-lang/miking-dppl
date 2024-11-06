@@ -3,6 +3,7 @@ include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
 include "mexpr/type-check.mc"
 include "mexpr/anf.mc"
+include "mexpr/cps.mc"
 include "mexpr/type-lift.mc"
 
 include "../coreppl.mc"
@@ -71,7 +72,7 @@ let resample_ = use Resample in
 -- COMMON FUNCTIONS --
 ----------------------
 
-lang SMCCommon = MExprPPL
+lang SMCCommon = MExprPPL + Resample + MExprCPS
 
   -- Add resample after weights (given a predicate over identifiers, assumes
   -- ANF). Used in SMC compilers for both the RootPPL and MExpr backends.
@@ -91,6 +92,51 @@ lang SMCCommon = MExprPPL
           TmLet { r with inexpr = inexpr }
         else t
       else t
+
+  -- CPS compile
+  sem exprCps env k =
+  | TmLet ({ body = TmAssume _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet ({ body = TmObserve _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet ({ body = TmWeight _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet ({ body = TmDist _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet { ident = ident, body = TmResample {},
+            inexpr = inexpr } & t ->
+    let i = withInfo (infoTm t) in
+    let k =
+      if tailCall t then
+        match k with Some k then
+          k
+        else
+          error "Something went wrong with partial CPS transformation"
+      else
+        i (nulam_ ident (exprCps env k inexpr))
+    in
+      i (appf1_ (i (var_ "resample")) k)
+
+  -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
+  -- transformed versions are removed when removing duplicate code.
+  -- Therefore, we have to simply replace TyCon and TyApp with Unknown here.
+  sem tyCps env =
+  | (TyCon { info = info } | TyApp { info = info } ) ->
+    let i = tyWithInfo info in i tyunknown_
+
+  sem transformProb =
+  | TmAssume t ->
+    let i = withInfo t.info in
+    i (app_ (i (var_ "sample")) t.dist)
+  | TmResample t -> errorSingle [t.info] "Impossible"
+  | TmObserve t ->
+    let i = withInfo t.info in
+    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
+    i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
+  | TmWeight t ->
+    let i = withInfo t.info in
+    i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
+  | t -> t
 end
 
 -----------------------
