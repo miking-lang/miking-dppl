@@ -82,18 +82,18 @@ lang InferMethodBase =
   sem setRuns : Expr -> InferMethod -> InferMethod
 
   -- Map/Accum over expressions in inference method
-  sem inferSmapAccumL_Expr_Expr
+  sem smapAccumL_InferMethod_Expr
     : all a. (a -> Expr -> (a, Expr)) -> a -> InferMethod -> (a, InferMethod)
-  sem inferSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_InferMethod_Expr f acc =
   | Default r ->
     match f acc r.runs with (acc, runs) in (acc, Default {r with runs = runs})
   | m -> printLn (pprintInferMethod 0 pprintEnvEmpty m).1; error "fail"
 
   sem inferSmap_Expr_Expr : (Expr -> Expr) -> InferMethod -> InferMethod
   sem inferSmap_Expr_Expr f =| m ->
-    (inferSmapAccumL_Expr_Expr (lam. lam tm. ((), f tm)) () m).1
+    (smapAccumL_InferMethod_Expr (lam. lam tm. ((), f tm)) () m).1
 
   sem inferSfold_Expr_Expr : all a. (a -> Expr -> a) -> a -> InferMethod -> a
   sem inferSfold_Expr_Expr f acc =| m ->
-    (inferSmapAccumL_Expr_Expr (lam acc. lam tm. (f acc tm, tm)) acc m).0
+    (smapAccumL_InferMethod_Expr (lam acc. lam tm. (f acc tm, tm)) acc m).0
 end

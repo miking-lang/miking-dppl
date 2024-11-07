@@ -143,7 +143,12 @@ lang Infer =
 
   sem smapAccumL_Expr_Expr f acc =
   | TmInfer t ->
-    match inferSmapAccumL_Expr_Expr f acc t.method with (acc,method) in
+    -- NOTE(oerikss, 2024-11-07): We shallow recurse through method expressions
+    -- by default. This is more convenient than requiring each semantic function
+    -- that nees to map/recurse through all expressions in an AST to manually
+    -- call `smapAccumL_InferMethod_Expr`. If you want to avoid this behaviour
+    -- you can instead manually match on `TmInfer` and do something different.
+    match smapAccumL_InferMethod_Expr f acc t.method with (acc,method) in
     match f acc t.model with (acc,model) in
     (acc, TmInfer { t with method = method, model = model })
 
@@ -524,8 +529,13 @@ lang SolveODE =
 
   sem smapAccumL_Expr_Expr f acc =
   | TmSolveODE t ->
+    -- NOTE(oerikss, 2024-11-07): We shallow recurse through method expressions
+    -- by default. This is more convenient than requiring each semantic function
+    -- that nees to map/recurse through all expressions in an AST to manually
+    -- call `smapAccumL_InferMethod_Expr`. If you want to avoid this behaviour
+    -- you can instead manually match on `TmSolve` and do something different.
     match
-      odeSolverMethodSmapAccumL_Expr_Expr f acc t.method with (acc, method)
+      smapAccumL_ODESolverMethod_Expr f acc t.method with (acc, method)
     in
     match f acc t.model with (acc, model) in
     match f acc t.init with (acc, init) in

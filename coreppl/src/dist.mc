@@ -81,6 +81,11 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
 
   sem smapAccumL_Expr_Expr f acc =
   | TmDist t ->
+    -- NOTE(oerikss, 2024-11-07): We shallow recurse through dist expressions by
+    -- default. This is more convenient than requiring each semantic function
+    -- that nees to map/recurse through all expressions in an AST to manually
+    -- call `smapAccumL_InferMethod_Expr`. If you want to avoid this behaviour
+    -- you can instead manually match on `TmDist` and do something different.
     match smapAccumL_Dist_Expr f acc t.dist with (acc, dist) in
     (acc, TmDist { t with dist = dist })
 

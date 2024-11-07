@@ -30,20 +30,20 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
   | EF MethodArg
 
   -- Map/Accum over expressions in ODE solver method.
-  sem odeSolverMethodSmapAccumL_Expr_Expr
+  sem smapAccumL_ODESolverMethod_Expr
     : all a. (a -> Expr -> (a, Expr)) -> a -> ODESolverMethod -> (a, ODESolverMethod)
-  sem odeSolverMethodSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_ODESolverMethod_Expr f acc =
   | ODESolverDefault r ->
-    match _odeSolverMethodSmapAccumL_Expr_Expr f acc r with (acc, r) in
+    match _smapAccumL_ODESolverMethod_Expr f acc r with (acc, r) in
     (acc, ODESolverDefault r)
   | RK4 r ->
-    match _odeSolverMethodSmapAccumL_Expr_Expr f acc r with (acc, r) in
+    match _smapAccumL_ODESolverMethod_Expr f acc r with (acc, r) in
     (acc, RK4 r)
   | EF r ->
-    match _odeSolverMethodSmapAccumL_Expr_Expr f acc r with (acc, r) in
+    match _smapAccumL_ODESolverMethod_Expr f acc r with (acc, r) in
     (acc, EF r)
 
-  sem _odeSolverMethodSmapAccumL_Expr_Expr f acc =| r ->
+  sem _smapAccumL_ODESolverMethod_Expr f acc =| r ->
     match f acc r.stepSize with (acc, stepSize) in
     match f acc r.add with (acc, add) in
     match f acc r.smul with (acc, smul) in
