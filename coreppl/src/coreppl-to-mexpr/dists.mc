@@ -6,28 +6,48 @@ include "../coreppl.mc"
 include "../ad.mc"
 include "mexpr/ast-builder.mc"
 
--- TODO(dlunde,2022-05-11): The common case where the user writes, e.g., assume
--- (Bernoulli x), can also be optimized to not create an intermediate record.
-lang TransformDist = MExprPPL + LiftedDist
+lang TransformDistBase = MExprPPL
+  -- Transforms TmDist and constant functions operating on distributions to
+  -- their runtime representation.
   sem transformTmDist: Expr -> Expr
   sem transformTmDist =
-  | TmDist t -> transformDist (withInfo t.info) t.dist
-  | TmConst {val = c &
-      ( CDistEmpiricalSamples _
-      | CDistEmpiricalDegenerate _
-      | CDistEmpiricalNormConst _
-      | CDistEmpiricalAcceptRate _
-      | CDistExpectation _
-      )
-    } ->
-    var_ (getConstStringCode 0 c)
+  | TmDist t ->
+    transformTmDistH (withInfo t.info) (smap_Dist_Expr transformTmDist t.dist)
+  | tm & TmConst t -> transformDistConst tm t.val
   | t -> t
+
+  -- Extensible helper for `transformTmDist`. `transformTmDistH i dist` should
+  -- transform distributions `dist`, where `i` sets the info of a term to the
+  -- info of the TmDist from where this functions is called.
+  sem transformTmDistH: (Expr -> Expr) -> Dist -> Expr
+
+  -- Transforms constant functions operating on distributions to their runtime
+  -- representation.
+  sem transformDistConst : Expr -> Const -> Expr
+  sem transformDistConst constTm =
+  | _ -> constTm
+end
+
+-- TODO(dlunde,2022-05-11): The common case where the user writes, e.g., assume
+-- (Bernoulli x), can also be optimized to not create an intermediate record.
+lang TransformDist = TransformDistBase + LiftedDist
+
+  sem transformDistConst constTm =
+  | c & (CDistEmpiricalSamples _
+       | CDistEmpiricalDegenerate _
+       | CDistEmpiricalNormConst _
+       | CDistEmpiricalAcceptRate _
+       | CDistExpectation _) ->
+    withInfo (infoTm constTm) (var_ (getConstStringCode 0 c))
+  -- NOTE(oerikss, 2024-11-09): Lifting expectation is done dynamically. See
+  -- `RuntimeDistLifted`.
+  | CLifted (CDistExpectation _) ->
+    transformDistConst constTm (CDistExpectation ())
 
   -- TODO(larshum, 2022-10-12): This code assumes the MLang transformation
   -- performs name mangling as of writing. Therefore, it will break after we
   -- make the change.
-  sem transformDist: (Expr -> Expr) -> Dist -> Expr
-  sem transformDist i =
+  sem transformTmDistH i =
   | DGamma { k = k, theta = theta } ->
     i (conapp_
         "RuntimeDistElementary_DistGamma"
@@ -77,8 +97,8 @@ lang TransformDist = MExprPPL + LiftedDist
          "RuntimeDistElementary_DistWiener" (i unit_))
   | DEmpirical { samples = samples } ->
     i (app_ (var_ "vRuntimeDistEmpirical_constructDistEmpiricalHelper") samples)
-  | LDist d ->
-    i (conapp_ "RuntimeDistElementaryDual_DistDual" (transformDist i d))
+  | DLifted d ->
+    i (conapp_ "RuntimeDistLifted_DistLifted" (transformTmDistH i d))
 
   -- We need to replace occurrences of TyDist after transforming to MExpr
   -- distributions.

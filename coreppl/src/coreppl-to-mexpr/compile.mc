@@ -165,7 +165,9 @@ lang ADTransform =
   DPPLParser +
   LoadRuntime +
   DualNumRuntimeBase +
-  DualNumLift
+  DualNumLift +
+  LiftedDist +
+  TransformDistBase
 
   sem adHasDiff : Expr -> Bool
   sem adHasDiff =| tm -> adHasDiffExpr false tm

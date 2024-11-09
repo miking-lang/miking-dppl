@@ -50,7 +50,7 @@ lang RuntimeDistBase
 
   sem sample : all a. Dist a -> a
 
-  sem expectation : Dist Float -> Float
+  sem expectation : all a. Dist a -> a
 
   sem logObserve : all a. Dist a -> (a -> Float)
 end
@@ -93,20 +93,20 @@ lang RuntimeDistElementary = RuntimeDistBase
 
   -- Expectation of primitive distributions over real values
   sem expectation =
-  | DistGamma t -> mulf t.shape t.scale
-  | DistExponential t -> divf 1. t.rate
-  | DistPoisson t -> t.lambda
-  | DistBinomial t -> mulf t.p (int2float t.n)
-  | DistBernoulli t -> t.p
-  | DistBeta t -> divf t.a (addf t.a t.b)
-  | DistGaussian t -> t.mu
+  | DistGamma t -> unsafeCoerce (mulf t.shape t.scale)
+  | DistExponential t -> unsafeCoerce (divf 1. t.rate)
+  | DistPoisson t -> unsafeCoerce t.lambda
+  | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
+  | DistBernoulli t -> unsafeCoerce t.p
+  | DistBeta t -> unsafeCoerce (divf t.a (addf t.a t.b))
+  | DistGaussian t -> unsafeCoerce t.mu
   | DistMultinomial t ->
     error "expectation undefined for the multinomial distribution"
   | DistCategorical t ->
     error "expectation undefined for the categorical distribution"
   | DistDirichlet t ->
     error "expectation undefined for the Dirichlet distribution"
-  | DistUniform t -> divf (addf t.a t.b) 2.
+  | DistUniform t -> unsafeCoerce (divf (addf t.a t.b) 2.)
   | DistWiener _ -> error "expectation undefined for the Wiener process"
 
   sem logObserve =
@@ -128,43 +128,6 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
   | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
-end
-
--- Elementary distributions with samples lifted to dual numbers
-lang RuntimeDistElementaryDual = RuntimeDistElementary
-  syn Dist a =
-  | DistDual (Dist a)
-
-  sem sample =
-  | DistDual (d &
-    (DistGamma _
-   | DistExponential _
-   | DistBeta _
-   | DistGaussian _
-   | DistUniform _)) ->
-    unsafeCoerce (Primal (sample d))
-  | DistDual (d & (DistDirichlet _ )) ->
-    unsafeCoerce map (lam x. Primal x) (sample d)
-  | DistDual (d & (DistWiener _)) ->
-    unsafeCoerce
-      (let f = unsafeCoerce (sample d) in lam x. Primal (f (dualPrimalRec x)))
-  | DistDual d -> sample d
-
-  sem expectation =
-  | DistDual d -> expectation d
-
-  sem logObserve =
-  | DistDual (d &
-    (DistGamma _
-   | DistExponential _
-   | DistBeta _
-   | DistGaussian _
-   | DistUniform _)) ->
-    unsafeCoerce (lam x. logObserve d (dualPrimalRec x))
-  | DistDual (d & (DistDirichlet _ )) ->
-    unsafeCoerce logObserve d (map (lam x. dualPrimalRec x))
-  | DistDual (d & (DistWiener _)) -> unsafeCoerce (logObserve d)
-  | DistDual d -> logObserve d
 end
 
 -- Empirical distribution
@@ -276,12 +239,15 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     else
       error "Sampling from empirical distribution failed"
 
+  sem expectationEmpiricalFloat logWeights =| samples ->
+    let weights = map exp logWeights in
+    foldl addf 0. (zipWith mulf weights (unsafeCoerce samples))
+
   sem expectation =
   | DistEmpirical t ->
-    let weights = map exp t.logWeights in
     -- NOTE(oerikss, 2024-09-13): We assume that samples are floats. The
     -- type-system should reject expectation of distributions over other types.
-    foldl addf 0. (zipWith mulf weights (unsafeCoerce t.samples))
+    unsafeCoerce (expectationEmpiricalFloat t.logWeights t.samples)
 
   sem logObserve =
   -- TODO(dlunde,2022-10-18): Implement this?
@@ -305,10 +271,53 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     constructDistEmpirical s l extra
 end
 
+-- Elementary distributions whose support is lifted to dual numbers
+lang RuntimeDistLifted = RuntimeDistElementary + RuntimeDistEmpirical
+  syn Dist a =
+  | DistLifted (Dist a)
+
+  sem sample =
+  | DistLifted (d &
+    (DistGamma _
+   | DistExponential _
+   | DistBeta _
+   | DistGaussian _
+   | DistUniform _)) ->
+    unsafeCoerce (Primal (sample d))
+  | DistLifted (d & (DistDirichlet _ )) ->
+    unsafeCoerce map (lam x. Primal x) (sample d)
+  | DistLifted (d & (DistWiener _)) ->
+    unsafeCoerce
+      (let f = unsafeCoerce (sample d) in lam x. Primal (f (dualnumUnboxPrimalExn x)))
+  | DistLifted d -> sample d
+
+  sem expectation =
+  | DistLifted d -> unsafeCoerce (Primal (expectation d))
+  | DistLifted (DistEmpirical t) ->
+    unsafeCoerce
+      (Primal
+        (expectationEmpiricalFloat
+           t.logWeights
+           (map (unsafeCoerce dualnumUnboxPrimalExn) t.samples)))
+
+  sem logObserve =
+  | DistLifted (d &
+    (DistGamma _
+   | DistExponential _
+   | DistBeta _
+   | DistGaussian _
+   | DistUniform _)) ->
+    unsafeCoerce (lam x. logObserve d (unsafeCoerce dualnumUnboxPrimalExn x))
+  | DistLifted (d & (DistDirichlet _ )) ->
+    unsafeCoerce logObserve d (map (lam x. dualnumUnboxPrimalExn x))
+  | DistLifted (d & (DistWiener _)) -> unsafeCoerce (logObserve d)
+  | DistLifted d -> logObserve d
+end
+
 lang RuntimeDist =
   RuntimeDistElementary +
-  RuntimeDistElementaryDual +
-  RuntimeDistEmpirical
+  RuntimeDistEmpirical +
+  RuntimeDistLifted
 end
 
 -- We include the below definitions to produce non-mangled functions, which we
@@ -333,7 +342,7 @@ let sample : all a. use RuntimeDist in Dist a -> a =
   use RuntimeDist in
   sample
 
-let expectation : all a. use RuntimeDist in Dist Float -> Float =
+let expectation : all a. use RuntimeDist in Dist a -> a =
   use RuntimeDist in
   expectation
 

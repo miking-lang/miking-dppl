@@ -373,22 +373,22 @@ end
 
 lang LiftedDist = Dist + DualNumAst
   syn Dist =
-  | LDist Dist
+  | DLifted Dist
 
   sem smapAccumL_Dist_Expr f acc =
-  | LDist d ->
+  | DLifted d ->
     match smapAccumL_Dist_Expr f acc d with (acc, d) in
-    (acc, LDist d)
+    (acc, DLifted d)
 
   sem distTy info =
-  | LDist d ->
+  | DLifted d ->
     match distTy info d with (vars, paramTys, ty) in
-    -- NOTE(oerikss, 2024-11-04): We lift the support and instead make sure that
-    -- TmDist unboxes its parameters.
+    -- NOTE(oerikss, 2024-11-04): We lift the support in the runtime and in the
+    -- compilation make sure that TmDist unboxes its parameters.
     (vars, paramTys, dualnumLiftType ty)
 
   sem distName =
-  | LDist d -> join ["L<", distName d, ">"]
+  | DLifted d -> join ["L<", distName d, ">"]
 end
 
 
@@ -428,10 +428,8 @@ lang DualNumLift =
 
   sem tyConstBase d =
   -- NOTE(oerikss, 2024-04-25): The type of a lifted constant is its type lifted
-  -- to dual numbers. Lifting of the expectation intrinsic is handled by the
-  -- runtime implementation when it is applied to a distribution so we type it
-  -- as lifted.
-  | CDistExpectation _ | CLifted const -> dualnumLiftType (tyConstBase d const)
+  -- to dual numbers.
+  | CLifted const -> dualnumLiftType (tyConstBase d const)
   | CGenEpsilon _ -> tyarrows_ [tyunit_, tyint_]
   | CLtEpsilon _ -> tyarrows_ [tyint_, tyint_]
   | CCreatePrimal _ -> tyarrows_ [tyfloat_, tydualnum_ ()]
@@ -523,14 +521,14 @@ lang DualNumLift =
             ]
         })
       (dualnumBoxTypeDirected r.tyIdent)
-  | TmDist (r & { dist = ! DEmpirical _ }) ->
+  | TmDist r ->
     smap_Expr_Expr
       (lam tm.
         optionMapOrElse
           (lam. dualnumLiftExprH tm)
           (lam unbox. unbox (dualnumLiftExprH tm))
           (dualnumUnboxTypeDirected (tyTm tm)))
-      (TmDist { r with dist = LDist r.dist })
+      (TmDist { r with dist = DLifted r.dist })
   | TmWeight r -> TmWeight {
     r with weight = dualnumPrimalRec r.info (dualnumLiftExprH r.weight)
   }
@@ -570,7 +568,8 @@ lang DualNumLift =
   | CSqrt _
   | CExp _
   | CLog _
-  | CPow _)
+  | CPow _
+  | CDistExpectation _)
     -> withInfo (infoTm tm) (uconst_ (CLifted const))
   -- Lift remaining constants based on their type signature
   | const ->
