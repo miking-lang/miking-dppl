@@ -7,51 +7,36 @@ include "../lib.mc"
 include "../lotka-model.mc"
 
 -- Specialize solveode
-let add = lam a : (FloatA, FloatA). lam b : (FloatA, FloatA).
-  (addf a.0 b.0, addf a.1 b.1)
-
-let smul = lam s : FloatA. lam a : (FloatA, FloatA). (mulf s a.0, mulf s a.1)
-
 let solve =
-  lam f : FloatA -> (FloatA, FloatA) -> (FloatA, FloatA).
-    lam init : (FloatA, FloatA).
-      lam x : Float.
-        solveode (RK4 {stepSize = 1e-3, add = add, smul = smul }) f init x
-
+  lam f : FloatA -> (FloatA, FloatA) -> (FloatA, FloatA) .
+    lam y0 : (FloatA, FloatA).
+      lam x : FloatP.
+        solveode (RK4 {stepSize = 1e-3, add = addp, smul = smulp }) f y0 x
 
 -- Size time-step
-let dx = 0.1
--- Creates n time-steps
-let xs = lam n : Int. create n (lam i : Int. mulf (int2float i) dx)
+let hData = 0.1
 
 -- ODE model
 let ode =
-  lam theta : FloatA.
+  lam #var"θ" : FloatA.
     lam x : FloatA.
       lam y : (FloatA, FloatA).
-        lotkaVolterra (theta, 1., 1., 3.) y
+        lotkaVolterra (#var"θ", 1., 1., 3.) y
 
 -- We can only observe the preys in our model
 let output = lam y : (FloatA, FloatA). y.0
 
 -- Initial values
-let init = (1., 1.)
+let y0 = (1., 1.)
 
 -- True parametere value
-let trueTheta = 1.5
+let #var"trueθ" = 1.5
 
 -- Measurement noise
-let trueSigma = 0.2
-
--- The system is the output trace with the true parameter with added measurement
--- noise.
--- let system = lam t : ().
---   map
---     (lam o : FloatN. let v = assume (Gaussian 0. trueSigma) in addf o v)
---     (map (lam x : Float. output (solve (ode trueTheta) init x)) (xs 20))
+let #var"trueσ" = 0.2
 
 -- Genereate new data by drawing one sample from the system. The following data
--- use trueSigma = 0.2.
+-- use #var"trueσ" = 0.2.
 let data = [
   1.08031492294,
   1.12318304667,
@@ -155,35 +140,43 @@ let data = [
   0.88257679394,
   0.877031789279
 ]
-let data = mapi (lam i : Int. lam x : FloatA. (x, get data i)) (xs 12)
+-- let data = create 12 (lam i : Int. (mulf hData (int2float i), get data i))
+let data = create 11 (lam i : Int. (get data i))
 
 -- Probabilistic model
 let model = lam t : ().
-  let theta = assume (Gaussian 1. 1.) in
-  let sigma = assume (Beta 2. 2.) in
-  iter
-    (lam t : (FloatN, FloatN).
-      match t with (x, o) in
-      let y = solve (ode theta) init x in
-      observe o (Gaussian (output y) sigma))
+  -- Unknown parameter
+  let #var"θ" = assume (Gaussian 1. 1.) in
+  -- Measurement noise
+  let #var"σ" = assume (Beta 2. 2.) in
+  foldl
+    (lam y : (FloatN, FloatN). lam o : FloatN.
+      observe o (Gaussian (output y) #var"σ");
+      solve (ode #var"θ") y hData)
+    y0
     data;
-  theta
+  #var"θ"
 
 mexpr
 
+let printDist = false in
+
 let eq = eqfApprox 0.05 in
 
-let thetaDist = infer (APF { particles = 1000 }) model in
-let theta = expectation thetaDist in
+let #var"θDist" = infer (APF { particles = 1000 }) model in
+match distEmpiricalSamples #var"θDist" with (samples, weights) in
+writeFile "baysian-parameter-estimation.json"
+  (jsonObject [
+    ("weights", (seqToJson (map floatToJson weights))),
+    ("samples", (seqToJson (map floatToJson samples))),
+    ("mean", floatToJson (expectation #var"θDist"))
+  ]);
 
-utest theta with trueTheta using eq in
+let #var"θ" = expectation #var"θDist" in
+
+utest #var"θ" with #var"trueθ" using eq in
 
 let eq = eqfApprox 0.1 in
 let x = 10. in
--- utest
---   output (solve (ode theta) init x) with
---   output (solve (ode trueTheta) init x)
---   using eq
--- in
 
-()
+(if printDist then printFloatDist #var"θDist" else ())

@@ -28,6 +28,14 @@ let adds = lam a : [FloatA]. lam b : [FloatA].
 -- Scalar multiplication
 let smuls = lam s : FloatA. map (mulf s)
 
+-- Add pairs
+let addp = lam a : (FloatA, FloatA). lam b : (FloatA, FloatA).
+  (addf a.0 b.0, addf a.1 b.1)
+
+-- Scalar multiplication of pairs
+let smulp = lam s : FloatA. lam a : (FloatA, FloatA).
+  (mulf s a.0, mulf s a.1)
+
 -- Vector equality
 let eqs = lam a : [FloatP]. lam b : [FloatP].
   foldl and true (map (lam t : (FloatP, FloatP). eqfApprox 0.05 t.0 t.1) (zip a b))
@@ -90,7 +98,7 @@ let printODETraceDist = lam dist : Dist [(FloatN, [FloatN])].
     samples
 
 -- Prints a distribution of traces.
-let printODETracesDist = lam dist : Dist [[(FloatP, [FloatP])]].
+let printODETracesDist = lam dist : Dist [[(FloatN, [FloatN])]].
   match distEmpiricalSamples dist with (samples, weights) in
   iteri
     (lam i : Int. lam s : [[(FloatN, [FloatN])]].
@@ -100,6 +108,32 @@ let printODETracesDist = lam dist : Dist [[(FloatP, [FloatP])]].
       print "\n";
       ())
     samples
+
+-- JSON export helpers
+let strJoin = lam del : String. lam strs : [String].
+  switch strs
+  case [] then ""
+  case [hd] ++ tl then
+    foldl (lam acc : String. lam el : String. concat acc (concat del el)) hd tl
+  end
+
+let floatToJson = lam r : FloatN.
+  if eqf r r then
+    if eqf r (divf 1. 0.) then "Infinity"
+    else
+      if eqf r (divf -1. 0.) then "Infinity"
+      else
+        switch float2string r
+        case r & (_ ++ ['.']) then snoc r '0'
+        case r then r
+        end
+  else "NaN"
+
+let seqToJson = lam seq : [String]. strJoin "" ["[", strJoin "," seq ,"]"]
+let jsonField = lam t : (String, String). strJoin "" ["\"", t.0, "\":", t.1]
+
+let jsonObject = lam content : [(String, String)].
+  strJoin "" ["{", strJoin "," (map jsonField content), "}"]
 
 mexpr
 

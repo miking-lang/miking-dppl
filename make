@@ -69,7 +69,7 @@ case $1 in
     testcppl "$2" "$3"
     ;;
   test-cdppl)
-    testcppl "$2" "$3" --dppl-frontend
+    testcppl "$2" "$3" --dppl-typecheck
     ;;
   *)
     >&2 echo "Incorrect argument"

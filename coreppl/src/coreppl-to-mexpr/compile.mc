@@ -166,7 +166,7 @@ lang ReplaceHigherOrderConstants
   | CIteri _ -> Some "iteri"
   | CFoldl _ -> Some "foldl"
   | CFoldr _ -> Some "foldr"
-  | CCreate _ -> Some "create"
+  | CCreate _ | CCreateList _ -> Some "create"
   | _ -> None ()
 
   sem replaceHigherOrderConstants : {path : String, env : SymEnv} -> Expr -> Expr
@@ -969,7 +969,7 @@ end
 
 lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader + DTCTypeOf + ADLoader
   syn FileType =
-  | FCorePPL {isModel : Bool, dpplFrontEnd : Bool}
+  | FCorePPL {isModel : Bool, dpplTypeCheck : Bool}
 
   sem _insertBackcompatInfer : Expr -> Loader -> Loader
   sem _insertBackcompatInfer modelBody = | loader ->
@@ -1001,7 +1001,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       let symEnv = symbolizeUpdateVarEnv symEnv
         (mapInsert (nameGetStr particlesName) particlesName symEnv.currentEnv.varEnv) in
       _setSymEnv symEnv loader in
-    match includeFileTypeExn (FCorePPL {isModel = false, dpplFrontEnd = false}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
+    match includeFileTypeExn (FCorePPL {isModel = false, dpplTypeCheck = false}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
       with (topEnv, loader) in
 
     let retTy = match unwrapType (mapFindExn modelName (_getTCEnv loader).varEnv)
@@ -1059,7 +1059,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       } in
     _addDeclExn loader decl
 
-  sem _loadFile path = | (FCorePPL {isModel = isModel, dpplFrontEnd = dpplFrontEnd}, loader & Loader x) ->
+  sem _loadFile path = | (FCorePPL {isModel = isModel, dpplTypeCheck = dpplTypeCheck}, loader & Loader x) ->
     -- NOTE(vipa, 2024-12-12): Return if we've already included this
     -- file
     match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
@@ -1081,7 +1081,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
 
     -- NOTE(oerikss, 2025-03-14): If the user requested it, we type-check with
     -- the DPPL type-checker.
-    (if dpplFrontEnd then
+    (if dpplTypeCheck then
       typeOfExn (decorateTypesExn (decorateTerms (symbolize ast))); ()
      else ());
 
@@ -1152,7 +1152,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let hooks = match odeHook with Some hook
           then [hook]
           else [] in
-        match prepareADRuntime loader { insertFloatAssertions = not dpplFrontEnd }
+        match prepareADRuntime loader { insertFloatAssertions = not dpplTypeCheck }
           with (adHook, loader) in
         let hooks = snoc hooks adHook in
         let separateLoader = mkLoader

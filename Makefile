@@ -72,6 +72,7 @@ test-coreppl-inference:
 .PHONY: test-coredppl
 test-coredppl: build/${CPPL_NAME}
 	@$(MAKE) -s -f test-coreppl.mk cdppl
+	@$(MAKE) -s -f test-coreppl.mk cdppl-examples
 
 #############
 ## Scripts ##

@@ -18,17 +18,17 @@ test-staticdelay-files=$(shell find coreppl/test/coreppl-to-mexpr/static-delay -
 test-cli-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/cli -name "*.mc")
 test-expectation-files=$(shell find coreppl/test/coreppl-to-mexpr/expectation -name "*.mc")
-test-dppl-files=$(shell find coreppl/test/coreppl-to-mexpr/dppl -name "*.mc")
+test-dppl-files=$(shell find coreppl/test/coreppl-to-mexpr/dppl -name "*.mc" -a ! -wholename "coreppl/test/coreppl-to-mexpr/dppl/examples/*")
 
 test-inference-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/inference-accuracy -name "*.mc")
 
 .PHONY: all
-all: cppl cdppl
+all: compiler cppl cdppl cdppl-examples
 
-############################################
-## Tests in CorePPL compiler source files ##
-############################################
+#############################################
+## Tests in CoreDPPL compiler source files ##
+#############################################
 
 .PHONY: compiler
 compiler: ${test-files}
@@ -36,9 +36,9 @@ compiler: ${test-files}
 ${test-files}::
 	@./make test $@
 
-###################
-## CorePPL tests ##
-###################
+####################
+## CoreDPPL tests ##
+####################
 
 .PHONY: cppl
 cppl: ${test-infer-files} ${test-cli-files} ${test-expectation-files}
@@ -58,6 +58,10 @@ inference: ${test-inference-files}
 .PHONY: cdppl
 cdppl: ${test-dppl-files}
 
+.PHONY: cdppl-examples
+cdppl-examples:
+	$(MAKE) -C coreppl/test/coreppl-to-mexpr/dppl/examples
+	$(MAKE) -C coreppl/test/coreppl-to-mexpr/dppl/examples clean
 
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}

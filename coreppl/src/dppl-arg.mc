@@ -75,7 +75,7 @@ type Options = {
   driftScale: Float,
 
   -- Use DPPL frontend with (co)effect decorations
-  dpplFrontEnd: Bool
+  dpplTypeCheck: Bool
 }
 
 -- Default values for options
@@ -109,7 +109,7 @@ let defaultArgs = {
   subsampleSize = 1,
   driftKernel = false,
   driftScale = 1.0,
-  dpplFrontEnd = false
+  dpplTypeCheck = false
 }
 
 -- Options configuration
@@ -253,10 +253,10 @@ let config = [
           float2string defaultArgs.driftScale, "."
       ],
       lam p : ArgPart Options. let o : Options = p.options in {o with driftScale = argToFloatMin p 0. }),
-  ([("--dppl-frontend", "", "")],
-   "Use (co)effect frontend",
+  ([("--dppl-typecheck", "", "")],
+   "Use (co)effect type checker for tracking non-determinism and differentiability.",
    lam p: ArgPart Options.
-     let o: Options = p.options in {o with dpplFrontEnd = true})
+     let o: Options = p.options in {o with dpplTypeCheck = true})
 ]
 
 -- Menu
