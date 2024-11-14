@@ -112,6 +112,7 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
   sem odeODESolverMethodToRuntimeName =
   | RK4 _ -> "odeSolverRK4Solve"
   | EF _ -> "odeSolverEFSolve"
+  | EFA _ -> "odeSolverEFASolve"
   | method -> error (join [
     nameGetStr (odeSolverMethodName method),
     " does not have an implementation in the ODE solver runtime"
@@ -121,6 +122,7 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
   sem odeODESolverMethodToSolverArgs : ODESolverMethod -> [Expr]
   sem odeODESolverMethodToSolverArgs =
   | ODESolverDefault r | RK4 r | EF r -> [r.add, r.smul, r.stepSize]
+  | EFA r -> [r.add, r.smul, r.stepSize, r.n]
 end
 
 lang DPPLTransformCancel = DPPLParser
