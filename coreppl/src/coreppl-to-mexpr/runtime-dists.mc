@@ -44,6 +44,16 @@ let wienerSample : () -> Float -> Float = lam.
       t
       tr
 
+-- Fast version of `wienerSample` that assumes the sampled Wiener realization is
+-- evaluated at increasing positive times.
+let wienerSampleUnsafe : () -> Float -> Float = lam.
+  let state = ref (0., 0.) in
+  lam t2.
+    match deref state with (w, t1) in
+    if eqf t2 t1 then w else
+      let w = (gaussianSample w (sqrt (subf t2 t1))) in
+      modref state (w, t2); w
+
 -- Base interface
 lang RuntimeDistBase
   syn Dist a =
@@ -354,9 +364,10 @@ let logObserve : all a. use RuntimeDist in Dist a -> a -> Float =
 
 mexpr
 
+let randomTimes = create 10 (lam. gaussianSample 0. 1.) in
 let w = wienerSample () in
-utest w 0. with w 0. in
-utest w 1. with w 1. in
-utest w -1. with w -1. in
+utest map w randomTimes with map w randomTimes in
+utest map w randomTimes with map w randomTimes in
+utest map w randomTimes with map w randomTimes in
 
 ()
