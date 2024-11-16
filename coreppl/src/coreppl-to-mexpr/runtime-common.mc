@@ -18,21 +18,21 @@ let negInf = divf (negf 1.) 0.
 -- Returns the number of particles/points from the program argument
 let numarg = lam.
   if neqi (length argv) 2 then
-    writeString stderr
+    fileWriteString fileStderr
       "The number of particles/points need to be given as a program argument.\n";
     exit 1
   else string2int (get argv 1)
 
 -- Save the data to a CSV file
 let saveCSV = lam res. lam names. lam filename. lam expOnLogWeights.
-  match writeOpen filename with Some ch then
-    writeString ch (strJoin "," names);
-    writeString ch "\n";
-    iter (lam lst. writeString ch (strJoin "," (map float2string lst));
-                   writeString ch  "\n") (expOnLogWeights res);
-    writeClose ch
+  match fileWriteOpen filename with Some ch then
+    fileWriteString ch (strJoin "," names);
+    fileWriteString ch "\n";
+    iter (lam lst. fileWriteString ch (strJoin "," (map float2string lst));
+                   fileWriteString ch  "\n") (expOnLogWeights res);
+    fileWriteClose ch
   else
-    writeString stderr (join ["Cannot write to file ", filename, "\n"])
+    fileWriteString fileStderr (join ["Cannot write to file ", filename, "\n"])
 
 
 -- Saves the CSV file and pretty prints expected values, variance, etc.
