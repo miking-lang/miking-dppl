@@ -4,6 +4,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/type.mc"
 include "mexpr/utils.mc"
 include "mexpr/free-vars.mc"
+include "mexpr/phase-stats.mc"
 include "sys.mc"
 include "map.mc"
 
@@ -343,6 +344,7 @@ lang MExprCompile =
   ODETransform + DPPLTransformCancel + DPPLPruning +
   ElementaryFunctionsTransform + DPPLDelayedReplace + DPPLDelayedSampling
   + ADTransform
+  + PhaseStats
 
   sem transformModelAst : Options -> Expr -> Expr
   sem transformModelAst options =
@@ -373,12 +375,15 @@ lang MExprCompile =
   sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
   sem mexprCpplCompile options noInfer =
   | ast ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
     -- First replace externals that implements elementary functions with
     -- appropriate constants
     let ast = replaceExternalElementaryFunctions ast in
+    endPhaseStatsExpr log "replace-elementary" ast;
 
     -- Secondly translate all Default {} inference methods
     let ast = replaceDefaultInferMethod options ast in
+    endPhaseStatsExpr log "replace-default-infer" ast;
 
     -- Load the inference runtimes used in the provided AST, and collect
     -- identifiers of common methods within the runtimes.
@@ -398,12 +403,14 @@ lang MExprCompile =
       if noInfer then programModelTransform options ast
       else (inferRuntimes, ast)
     with (inferRuntimes, ast) in
+    endPhaseStatsExpr log "load-runtimes" ast;
 
     -- Combine the required runtime ASTs to one AST and eliminate duplicate
     -- definitions due to files having common dependencies. The result is an
     -- updated map of runtime entries, a combined runtime AST and a
     -- symbolization environment.
     let inferRuntimes = combineInferRuntimes options inferRuntimes in
+    endPhaseStatsExpr log "combine-runtimes" ast;
 
     mexprCompile options inferRuntimes ast
 
@@ -411,9 +418,12 @@ lang MExprCompile =
   sem mexprCompile : Options -> InferRuntimes -> Expr -> Expr
   sem mexprCompile options runtimes =
   | corepplAst ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
     -- Symbolize and type-check the CorePPL AST.
     let corepplAst = symbolize corepplAst in
+    endPhaseStatsExpr log "symbolize" corepplAst;
     let corepplAst = typeCheck corepplAst in
+    endPhaseStatsExpr log "type-check" corepplAst;
 
     -- Transform solveode terms and add the ODE solver runtime code and add it
     -- to the program.
@@ -424,6 +434,7 @@ lang MExprCompile =
       case (None _, corepplAst) then corepplAst
       end
     in
+    endPhaseStatsExpr log "ode-transform" corepplAst;
 
     -- Does the program contain differentiation?
     let hasDiff = adHasDiff corepplAst in
@@ -433,6 +444,7 @@ lang MExprCompile =
       if hasDiff then typeCheck (dualnumLiftExpr corepplAst)
       else corepplAst
     in
+    endPhaseStatsExpr log "lift-dual-nums" corepplAst;
 
     -- Extract the infer expressions to separate ASTs, one per inference
     -- method. The result consists of the provided AST, updated such that
@@ -442,24 +454,30 @@ lang MExprCompile =
     match extractInfer options runtimes.entries corepplAst with
       (corepplAst, models)
     in
+    endPhaseStatsExpr log "extract-infer" corepplAst;
 
     -- Compile the model ASTs.
     let modelAsts = compileModels options runtimes models in
+    endPhaseStatsExpr log "compile-models" corepplAst;
 
     -- Transform distributions in the CorePPL AST to use MExpr code.
     let corepplAst = replaceDelayTypes (replaceDelayKeywords (replaceTyPruneInt (removePrunes ((replaceCancel corepplAst))))) in
+    endPhaseStatsExpr log "replace-delay-types" corepplAst;
     let corepplAst = transformDistributions corepplAst in
+    endPhaseStatsExpr log "transform-distributions" corepplAst;
 
     -- Symbolize any free occurrences in the CorePPL AST and in any of the
     -- models using the symbolization environment of the runtime AST.
     let runtimeSymEnv = addTopNames symEnvEmpty runtimes.ast in
     let corepplAst = symbolizeExpr runtimeSymEnv corepplAst in
+    endPhaseStatsExpr log "add-top-names" corepplAst;
 
     -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
     -- with errors. This code is unreachable unless the inferred models are
     -- also used outside of infers, which is an error.
     -- TODO(larshum, 2022-10-07): Detect such errors statically.
     let corepplAst = replaceDpplKeywords corepplAst in
+    endPhaseStatsExpr log "replace-dppl-keywords" corepplAst;
 
     -- Combine the CorePPL AST with the runtime AST, after extracting the
     -- models, and eliminate duplicated external definitions.
@@ -467,6 +485,7 @@ lang MExprCompile =
     match eliminateDuplicateExternalsWithSummary mainAst
       with (replaced, mainAst)
     in
+    endPhaseStatsExpr log "eliminate-duplicate-externals" mainAst;
 
     -- Apply the replacements performed by the duplicate duplicated external
     -- elimination on the model ASTs.
@@ -475,6 +494,7 @@ lang MExprCompile =
     -- Insert all models into the main AST at the first point where any of the
     -- models are used.
     let prog = insertModels modelAsts mainAst in
+    endPhaseStatsExpr log "insert-models" prog;
 
     -- TODO(dlunde,2023-05-22): Does not work, currently (the program does not
     -- type check at this stage). It does, however, type check after generating
@@ -494,13 +514,16 @@ lang MExprCompile =
         eliminateDuplicateExternals (bind_ adRuntime prog)
       else prog
     in
+    endPhaseStatsExpr log "provide-dual-number-impl" prog;
 
     -- Finally we provide runtime implementations for elementary functions that
     -- are not MExpr intrinsics.
     match elementaryFunctionsTransform options prog with
       (elementaryRuntime, prog)
     in
+    endPhaseStatsExpr log "transform-elementary" prog;
     let prog = eliminateDuplicateExternals (bind_ elementaryRuntime prog) in
+    endPhaseStatsExpr log "eliminate-duplicate-externals-2" prog;
 
     -- Return complete program
     prog
@@ -512,11 +535,17 @@ lang MExprCompile =
     mapMapWithKey
       (lam id. lam model.
         match model with {ast = ast, method = method, params = params} in
+        let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+        endPhaseStatsExpr log "enter-compile-models-one" ast;
         match loadCompiler options method with (_, compile) in
         match mapLookup method runtimes.entries with Some entry then
           let ast = transformModelAst options ast in
-          let ast = compileModel compile entry id {model with ast = ast} in
-          removeModelDefinitions ast
+          endPhaseStatsExpr log "transform-model-ast-one" ast;
+          let ast = compileModel options compile entry id {model with ast = ast} in
+          endPhaseStatsExpr log "compile-model-one" ast;
+          let ast = removeModelDefinitions ast in
+          endPhaseStatsExpr log "remove-model-definitions-one" ast;
+          ast
         else
           match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in
           error (join ["Runtime definition missing for (", methodStr, ")"]))
@@ -569,12 +598,14 @@ lang MExprCompile =
     t
 
   sem compileModel
-    : ((Expr,Expr) -> Expr) -> InferRuntimeEntry -> Name -> ModelRepr -> Expr
-  sem compileModel compile entry modelId =
+    : Options -> ((Expr,Expr) -> Expr) -> InferRuntimeEntry -> Name -> ModelRepr -> Expr
+  sem compileModel options compile entry modelId =
   | {ast = modelAst, params = modelParams} ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- ANF
     let modelAst = normalizeTerm modelAst in
+    endPhaseStatsExpr log "normalize-term-one" modelAst;
 
     -- ANF with higher-order intrinsics replaced with alternatives in
     -- seq-native.mc
@@ -584,6 +615,7 @@ lang MExprCompile =
 
     -- Apply inference-specific transformation
     let ast = compile (modelAst, modelAstNoHigherOrderConstants) in
+    endPhaseStatsExpr log "compile-inference-one" ast;
 
     -- Bind the model code in a let-expression, which we can insert in the main
     -- AST.
@@ -591,16 +623,21 @@ lang MExprCompile =
     let ast =
       nulet_ modelId
         (nlams_ (snoc modelParams (stateVarId, entry.stateType)) ast) in
+    endPhaseStatsExpr log "insert-model-params-one" ast;
 
     -- Replace any occurrences of TyDist in the program with the runtime
     -- distribution type. This needs to be performed after the previous step as
     -- captured parameters may have type TyDist.
     let ast = replaceTyDist ast in
+    endPhaseStatsExpr log "replace-ty-dist-one" ast;
 
     -- Symbolize the AST using the symbolization environment of the runtime
     -- corresponding to the inference method used for this model. This ensures
     -- that we refer to the functions defined in that particular runtime.
-    symbolizeExpr entry.topSymEnv ast
+    let ast = symbolizeExpr entry.topSymEnv ast in
+    endPhaseStatsExpr log "symbolize-with-runtime-one" ast;
+    ast
+
 
   sem replaceIdentifiers : Map Name Name -> Map Name Expr -> Map Name Expr
   sem replaceIdentifiers replaced =

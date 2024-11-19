@@ -4,9 +4,10 @@ include "../../cfa.mc"
 
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
+include "mexpr/phase-stats.mc"
 
 lang MExprPPLImportance =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats
 
   -------------------------
   -- IMPORTANCE SAMPLING --
@@ -18,12 +19,15 @@ lang MExprPPLImportance =
   sem compile : Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (t,_) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProb t in
+    endPhaseStatsExpr log "transform-prob-one" t;
 
     t
 
@@ -112,6 +116,7 @@ lang MExprPPLImportance =
   sem compileCps : Options -> (Expr,Expr) -> Expr
   sem compileCps options =
   | (_,t) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
@@ -146,6 +151,7 @@ lang MExprPPLImportance =
       else error ( join [ "Invalid CPS option:", options.cps ])
 
     in
+    endPhaseStatsExpr log "cps-one" t;
     -- let t2 = wallTimeMs () in
     -- printLn (float2string (subf t2 t1));
 
@@ -155,9 +161,11 @@ lang MExprPPLImportance =
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProbCps t in
+    endPhaseStatsExpr log "transform-prob-cps-one" t;
 
     t
 

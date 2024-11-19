@@ -9,6 +9,7 @@ include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/type.mc"
 include "mexpr/const-types.mc"
+include "mexpr/phase-stats.mc"
 
 let addrName = nameSym "addr"
 let sym: Ref Int = ref 0
@@ -18,7 +19,7 @@ let uniqueSym = lam.
   s
 
 lang MExprPPLLightweightMCMC =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + MExprArity
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + MExprArity + PhaseStats
 
   -------------------------
   -- STATIC ALIGNED MCMC --
@@ -26,6 +27,7 @@ lang MExprPPLLightweightMCMC =
   sem compileAligned : Options -> (Expr,Expr) -> Expr
   sem compileAligned options =
   | (t,_) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- Alignment analysis
     let alignRes = alignCfa t in
@@ -33,9 +35,11 @@ lang MExprPPLLightweightMCMC =
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-dist" t;
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr (transformProbAligned unalignedNames) t in
+    endPhaseStatsExpr log "transform-prob-aligned-one" t;
 
     t
 
@@ -70,19 +74,24 @@ lang MExprPPLLightweightMCMC =
   sem compile : Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (_,t) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- Addressing transform combined with CorePPL->MExpr transform
     let t = transformAddr (setEmpty nameCmp) t in
+    endPhaseStatsExpr log "transform-addr-one" t;
 
     -- Type addressing transform
     let t = mapPre_Expr_Expr exprTyTransform t in
+    endPhaseStatsExpr log "empty-ty-transform-one" t;
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-one" t;
 
     -- Initialize addr to the empty list (not rope) at the
     -- beginning of the program.
     let t = bind_ (nulet_ addrName (var_ "emptyAddress")) t in
+    endPhaseStatsExpr log "bind-empty-addr-one" t;
 
     t
 
@@ -347,6 +356,7 @@ lang MExprPPLLightweightMCMC =
   sem compileAlignedCps : Options -> (Expr,Expr) -> Expr
   sem compileAlignedCps options =
   | (_,t) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
@@ -390,12 +400,15 @@ lang MExprPPLLightweightMCMC =
       else error ( join [ "Invalid CPS option:", options.cps ])
 
     in
+    endPhaseStatsExpr log "cps-one" t;
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformPostAlignedCps t in
+    endPhaseStatsExpr log "transform-post-aligned-one" t;
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     t
 

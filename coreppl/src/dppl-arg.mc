@@ -1,4 +1,5 @@
 include "arg.mc"
+include "set.mc"
 
 -- Options type
 type Options = {
@@ -22,6 +23,8 @@ type Options = {
   skipFinal: Bool,
   outputMc: Bool,
   output: String,
+  debugPhases: Bool,
+  debugDumpPhases: Set String,
 
   -- Apply static delayed sampling transformation
   staticDelay: Bool,
@@ -86,6 +89,8 @@ let default = {
   printMCore = false,
   exitBefore = false,
   skipFinal = false,
+  debugPhases = false,
+  debugDumpPhases = setEmpty cmpString,
   outputMc = false,
   output = "out",
   staticDelay = false,
@@ -159,6 +164,14 @@ let config = [
     "Do not perform the final compilation step (e.g., MExpr to OCaml).",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with skipFinal = true}),
+  ([("--debug-phases", "", "")],
+    "Show debug and profiling information about each pass",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugPhases = true}),
+  ([("--debug-phase", " ", "<phase>")],
+    "Print a json representation of the AST after the given pass. Can be given multiple times.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugDumpPhases = setInsert (argToString p) o.debugDumpPhases}),
   ([("--output-mc", "", "")],
     "Write intermediate MCore output to file when compiling",
     lam p: ArgPart Options.

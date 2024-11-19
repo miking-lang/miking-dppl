@@ -3,9 +3,10 @@ include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
+include "mexpr/phase-stats.mc"
 
 lang MExprPPLBPF =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats
   + SMCCommon
 
   sem transformStopFirstAssume: Expr -> Option Expr
@@ -53,6 +54,7 @@ lang MExprPPLBPF =
   sem compile: Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (_,t) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
@@ -72,6 +74,7 @@ lang MExprPPLBPF =
 
       else error "Invalid resample option"
     in
+    endPhaseStatsExpr log "resample-one" t;
 
     -- Static analysis and CPS transformation
     let t =
@@ -90,6 +93,7 @@ lang MExprPPLBPF =
       else
         error (join ["Invalid CPS option:", options.cps])
     in
+    endPhaseStatsExpr log "cps-one" t;
 
     -- printLn ""; printLn "--- BEFORE transformStopFirstAssume ---";
     -- match pprintCode 0 env t with (env,str) in
@@ -103,6 +107,7 @@ lang MExprPPLBPF =
         let i = withInfo (infoTm t) in
         i (app_ (i (var_ "stopInit")) (i (ulam_ "" t)))
     in
+    endPhaseStatsExpr log "transform-stop-first-assume-one" t;
 
     -- printLn ""; printLn "--- AFTER ---";
     -- match pprintCode 0 env t with (env,str) in
@@ -110,9 +115,11 @@ lang MExprPPLBPF =
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProb t in
+    endPhaseStatsExpr log "transform-prob-one" t;
 
     t
 

@@ -2,8 +2,9 @@ include "../dists.mc"
 include "../../inference/smc.mc"
 include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/phase-stats.mc"
 
-lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
+lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist + PhaseStats
 
   ----------------
   -- TRACE MCMC --
@@ -15,12 +16,15 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist
   sem compile : Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (t,_) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProb t in
+    endPhaseStatsExpr log "transform-prob-one" t;
 
     t
 
