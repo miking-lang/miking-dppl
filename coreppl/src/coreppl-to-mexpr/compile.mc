@@ -69,25 +69,42 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
     -- translate all Default { ... } ODE solve methods
     let tm = replaceDefaultODESolverMethod options tm in
 
-    -- extract ODE solve methods
-    match odeExtractSolve tm with (methods, tm) in
+    -- Extracts solver methods present in term
+    recursive let extractMethods = lam acc. lam tm.
+      match tm with TmSolveODE r then setInsert r.method acc
+      else sfold_Expr_Expr extractMethods acc tm
+    in
 
-    if mapIsEmpty methods then
+    let methods = setToSeq (extractMethods (setEmpty cmpODESolverMethod) tm) in
+
+    if null methods then
       -- There are no solveode terms in the term.
       (None (), tm)
     else
       -- load ODE solver runtime
-      let runtime =
-        symbolizeAllowFree (loadRuntimeFile true "runtime-ode-wrapper.mc")
+      let runtime = symbolize (loadRuntimeFile true "runtime-ode-wrapper.mc") in
+
+      -- collect the names of used ODE solvers runtime names
+      let names =
+        findNamesOfStringsExn (map odeODESolverMethodToRuntimeName methods)
+          runtime
+      in
+      let namesMap = mapFromSeq cmpODESolverMethod (zip methods names) in
+
+      -- replace solveode terms with applications of its runtime implementation.
+      recursive let applyRuntimeSolvers = lam tm.
+        match tm with TmSolveODE r then
+          let tm =
+            let solver = nvar_ (mapFindExn r.method namesMap) in
+            foldl (lam f. lam a.  withInfo r.info (app_ f a)) solver
+              (concat
+                 (odeODESolverMethodToSolverArgs r.method)
+                 [r.model, r.init, r.endTime])
+          in smap_Expr_Expr applyRuntimeSolvers tm
+        else smap_Expr_Expr applyRuntimeSolvers tm
       in
 
-      -- collect the names of used ODE solvers runtime names and make sure they
-      -- refer to their implementation.
-      match unzip (mapBindings methods) with (to, from) in
-      let to = map odeODESolverMethodToRuntimeName to in
-      let to = findNamesOfStringsExn to runtime in
-      let tm = substituteIdentifiers (mapFromSeq nameCmp (zip from to)) tm in
-      (Some runtime, tm)
+      (Some runtime, applyRuntimeSolvers tm)
 
   -- Maps ODE solver methods to the name bound to their implementation in
   -- the runtime.
@@ -96,31 +113,14 @@ lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
   | RK4 _ -> "odeSolverRK4Solve"
   | EF _ -> "odeSolverEFSolve"
   | method -> error (join [
-    odeSolverMethodToString method,
+    nameGetStr (odeSolverMethodName method),
     " does not have an implementation in the ODE solver runtime"
   ])
 
-  -- Extracts solveode terms to a map from ODE solver methods to names. Each
-  -- solveode term is replaced by an application of an identifier the named
-  -- according to the returned map.
-  sem odeExtractSolve : Expr -> (Map ODESolverMethod Name, Expr)
-  sem odeExtractSolve =| tm ->
-    recursive let inner = lam acc. lam tm.
-      match tm with TmSolveODE r then
-        let f : Name -> Expr = lam name.
-          appf4_ (nvar_ name)
-            (odeSolverMethodConfig r.info r.method) r.model r.init r.endTime
-        in
-        optionMapOrElse
-          (lam.
-            let name = nameSym (odeSolverMethodToString r.method) in
-            let acc = mapInsert r.method name acc in
-            (acc, f name))
-          (lam name. (acc, f name))
-          (mapLookup r.method acc)
-      else smapAccumL_Expr_Expr inner acc tm
-    in
-    inner (mapEmpty cmpODESolverMethod) tm
+  -- Maps ODE solver method to its method arguments.
+  sem odeODESolverMethodToSolverArgs : ODESolverMethod -> [Expr]
+  sem odeODESolverMethodToSolverArgs =
+  | ODESolverDefault r | RK4 r | EF r -> [r.add, r.smul, r.stepSize]
 end
 
 lang DPPLTransformCancel = DPPLParser
