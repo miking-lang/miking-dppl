@@ -1,6 +1,11 @@
 include "tuple.mc"
 include "math.mc"
 
+recursive let _repeat = lam f. lam n. lam acc.
+  if leqi n 0 then acc
+  else _repeat f (subi n 1) (f acc)
+end
+
 let _checkFinalTimeAndStepSize = lam tf. lam h.
   if ltf tf 0. then
     error "odeSolver: negative final time"
@@ -45,6 +50,37 @@ let odeSolverEFSolve
     in
     _solveFixed integrate h tf x0
 
+-- ┌────────────────────────┐
+-- │ Euler-Forward Averaged │
+-- └────────────────────────┘
+
+-- `add`  : Implements vector addition
+-- `smul` : Implements scalar multiplication
+-- `h`    : Step-size of the integration
+-- `n`    : The number if intervals to split `h` when averaging over t
+-- `f`    : Function that computes x'(t)
+-- `x0`   : Initial value x(0)
+-- `tf`   : Final time
+-- returns the solution x(tf) at the time tf
+let odeSolverEFASolve
+  : all a. (a -> a -> a) -> (Float -> a -> a) -> Float -> Int -> (Float -> a -> a) -> a -> Float -> a
+  = lam add. lam smul. lam h. lam n. lam f. lam x0. lam tf.
+    _checkFinalTimeAndStepSize tf h;
+    let dt = divf h (int2float n) in
+    let integrate =
+      lam h. lam t. lam x.
+        let f =
+          _repeat
+            (lam acc.
+              match acc with (t, sum) in
+              let t = addf t dt in
+              (t, add sum (smul h (f t x))))
+            (subi n 1)
+            (t, smul h (f t x))
+        in
+        add x (smul (divf 1. (int2float n)) f.1)
+    in
+    _solveFixed integrate h tf x0
 
 -- ┌──────────────────────────┐
 -- │ Runge-Kutta Fourth Order │

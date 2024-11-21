@@ -6,17 +6,18 @@
 include "utest.mc"
 
 include "mexpr/ast.mc"
-include "mexpr/type.mc"
-include "mexpr/eq.mc"
-include "mexpr/const-types.mc"
 include "mexpr/const-arity.mc"
+include "mexpr/const-types.mc"
+include "mexpr/eq.mc"
+include "mexpr/type.mc"
+include "mexpr/unify.mc"
 
 include "coreppl.mc"
 include "dist.mc"
 
 
 lang DualNumAst =
-  ConstArity + ConstSideEffectBase + ConstCFA + ConstPrettyPrint
+  ConstArity + ConstSideEffectBase + ConstCFA + ConstPrettyPrint + Unify
 
   -- ┌───────────────────────────────────────┐
   -- │ Lifted constants and Dual number API  │
@@ -310,7 +311,7 @@ lang DualNumAst =
   | CPertubation _ -> graph
 
   sem getConstStringCode (indent : Int) =
-  | CLifted const -> join ["L(", getConstStringCode indent const, ")"]
+  | CLifted const -> join ["L<", getConstStringCode indent const, ">"]
   | CGenEpsilon _ -> "genEpsilon"
   | CLtEpsilon _ -> "ltEpsilon"
   | CCreatePrimal _ -> "createPrimal"
@@ -333,15 +334,17 @@ lang DualNumAst =
   sem itydualnum_ =| info -> TyDualNum { info = NoInfo () }
   sem tydualnum_ =| () -> itydualnum_ ( NoInfo ())
 
-  sem withTypeInfo (info : Info) =
-  | TyDualNum r -> TyDualNum { r with info = info }
-
   sem infoTy =
   | TyDualNum r -> r.info
+
+  sem tyWithInfo (info : Info) =
+  | TyDualNum r -> TyDualNum { r with info = info }
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyDualNum _ -> (env, "DualNum")
 
+  sem unifyBase u env =
+  | (TyDualNum _, TyDualNum _) -> u.empty
 
   -- ┌───────────────────┐
   -- │ Lifting interface │
@@ -353,24 +356,39 @@ lang DualNumAst =
   -- `dualnumLiftExpr tm` lifts the term `tm` to dual numbers. Any term that is
   -- lifted using the dual number API above is independent of the runtime.
   sem dualnumLiftExpr : Expr -> Expr
+  sem dualnumLiftExpr =| tm ->
+    -- First lift terms
+    let tm = dualnumLiftExprH tm in
+    -- Then lift type labels
+    recursive let inner = lam tm.
+      match tm with TmExt r then TmExt { r with inexpr = inner r.inexpr }
+      else smap_Expr_Expr inner (smap_Expr_Type dualnumLiftType tm)
+    in
+    inner tm
+
+  -- `dualnumLiftExpr tm` lifts the term `tm` to dual numbers. Any term that is
+  -- lifted using the dual number API above is independent of the runtime.
+  sem dualnumLiftExprH : Expr -> Expr
 end
 
-lang DualNumDist = Dist + DualNumAst
+lang LiftedDist = Dist + DualNumAst
   syn Dist =
-  | DDual Dist
+  | DLifted Dist
 
   sem smapAccumL_Dist_Expr f acc =
-  | DDual d ->
+  | DLifted d ->
     match smapAccumL_Dist_Expr f acc d with (acc, d) in
-    (acc, DDual d)
+    (acc, DLifted d)
 
   sem distTy info =
-  | DDual d ->
+  | DLifted d ->
     match distTy info d with (vars, paramTys, ty) in
-    (vars, map dualnumLiftType paramTys, dualnumLiftType ty)
+    -- NOTE(oerikss, 2024-11-04): We lift the support in the runtime and in the
+    -- compilation make sure that TmDist unboxes its parameters.
+    (vars, paramTys, dualnumLiftType ty)
 
-  sem distNameToString =
-  | DDual d -> join ["Dual<", distNameToString d, ">"]
+  sem distName =
+  | DLifted d -> join ["L<", distName d, ">"]
 end
 
 
@@ -397,23 +415,16 @@ lang DualNumRuntimeBase = DualNumAst
   -- `dualnumTransformAPIExpr env tm` replaces the dual number API and constants
   -- lifted to dual numbers in `tm` with their runtime implementations.
   sem dualnumTransformAPIExpr : DualNumRuntimeEnv -> Expr -> Expr
-  sem dualnumTransformAPIExpr env =
-  | tm & TmConst r ->
-    let tm = dualnumTransformAPIConst env tm r.val in
-    (smap_Expr_TypeLabel (dualnumTransformTypeAPI env)
-       (smap_Expr_Type (dualnumTransformTypeAPI env)
-          tm))
+  sem dualnumTransformAPIExpr env = --
+  | tm & TmConst r -> dualnumTransformAPIConst env tm r.val
   | tm ->
     let tm = smap_Expr_Expr (dualnumTransformAPIExpr env) tm in
-    (smap_Expr_TypeLabel (dualnumTransformTypeAPI env)
-       (smap_Expr_Type (dualnumTransformTypeAPI env)
-          tm))
+    (smap_Expr_Type (dualnumTransformTypeAPI env) tm)
 end
 
 
 lang DualNumLift =
-  MExprPPL + DualNumAst + ElementaryFunctions + Diff + DualNumDist + TyConst
-
+  MExprPPL + DualNumAst + ElementaryFunctions + Diff + LiftedDist + TyConst
 
   sem tyConstBase d =
   -- NOTE(oerikss, 2024-04-25): The type of a lifted constant is its type lifted
@@ -421,7 +432,7 @@ lang DualNumLift =
   | CLifted const -> dualnumLiftType (tyConstBase d const)
   | CGenEpsilon _ -> tyarrows_ [tyunit_, tyint_]
   | CLtEpsilon _ -> tyarrows_ [tyint_, tyint_]
-  | CCreatePrimal _
+  | CCreatePrimal _ -> tyarrows_ [tyfloat_, tydualnum_ ()]
   | CCreateDual _ -> let ty = tydualnum_ () in tyarrows_ [tyint_, ty, ty, ty]
   | CIsDualNum _ -> tyarrows_ [tydualnum_ (), tybool_]
   | CEpsilon _ -> tyarrows_ [tydualnum_ (), tyint_]
@@ -437,12 +448,12 @@ lang DualNumLift =
   | TyFloat r -> TyDualNum r
   | ty -> smap_Type_Type dualnumLiftType ty
 
-  -- `dualnumLiftExpr tm` lifts the term `tm` to dual numbers. Any term that is
+  -- `dualnumLiftExprH tm` lifts the term `tm` to dual numbers. Any term that is
   -- lifted using the dual number API above is independent of the runtime.
   -- However, most elementary functions are mutually recursive so it is more
   -- convenient to lift them in the runtime and then simply refer to its lifted
   -- implementation in this semantic function.
-  sem dualnumLiftExpr =
+  sem dualnumLiftExprH =
   | TmDiff r ->
     match r.ty with TyArrow tyr then
       optionMapOrElse
@@ -466,8 +477,8 @@ lang DualNumLift =
               let x_ = nameSym "x" in
               let v_ = nameSym "v" in
               let d_ = nameSym "d" in
-              let fn = dualnumLiftExpr r.fn in
-              let arg = dualnumLiftExpr r.arg in
+              let fn = dualnumLiftExprH r.fn in
+              let arg = dualnumLiftExprH r.arg in
               bind_
                 (i (nulet_ e_ (dualnumGenEpsilon r.info)))
                 (nulam_ v_
@@ -484,7 +495,7 @@ lang DualNumLift =
     else error "impossible"
   | TmExt r ->
     optionMapOrElse
-      (lam. TmExt { r with inexpr = dualnumLiftExpr r.inexpr })
+      (lam. TmExt { r with inexpr = dualnumLiftExprH r.inexpr })
       (lam box.
         let id1 = nameSetNewSym r.ident in
         -- NOTE(oerikss, 2024-04-16): We use an intermediate eta expanded alias
@@ -506,40 +517,34 @@ lang DualNumLift =
                          (map (lam p. i (nvar_ p)) ps))
                       ps)),
               i (nulet_ r.ident (box (i (nvar_ id1)))),
-              dualnumLiftExpr r.inexpr
+              dualnumLiftExprH r.inexpr
             ]
         })
       (dualnumBoxTypeDirected r.tyIdent)
-  | TmDist (r & { dist = ! DEmpirical _ }) ->
+  | TmDist r ->
     smap_Expr_Expr
       (lam tm.
         optionMapOrElse
-          (lam. dualnumLiftExpr tm)
-          (lam unbox. unbox (dualnumLiftExpr tm))
+          (lam. dualnumLiftExprH tm)
+          (lam unbox. unbox (dualnumLiftExprH tm))
           (dualnumUnboxTypeDirected (tyTm tm)))
-      (TmDist { r with dist = DDual r.dist })
+      (TmDist { r with dist = DLifted r.dist })
   | TmWeight r -> TmWeight {
-    r with weight = dualnumPrimalRec r.info (dualnumLiftExpr r.weight)
+    r with weight = dualnumPrimalRec r.info (dualnumLiftExprH r.weight)
   }
   | TmInfer r ->
     let method =
       inferSmap_Expr_Expr
         (lam tm.
           optionMapOrElse
-            (lam. dualnumLiftExpr tm)
-            (lam unbox. unbox (dualnumLiftExpr tm))
+            (lam. dualnumLiftExprH tm)
+            (lam unbox. unbox (dualnumLiftExprH tm))
             (dualnumUnboxTypeDirected (tyTm tm)))
         r.method
     in
-    TmInfer { r with model = dualnumLiftExpr r.model, method = method }
-  | tm & TmConst r ->
-    let tm = dualnumLiftConst tm r.val in
-    (smap_Expr_TypeLabel dualnumLiftType
-       (smap_Expr_Type dualnumLiftType tm))
-  | tm ->
-    let tm = smap_Expr_Expr dualnumLiftExpr tm in
-    (smap_Expr_TypeLabel dualnumLiftType
-       (smap_Expr_Type dualnumLiftType tm))
+    TmInfer { r with model = dualnumLiftExprH r.model, method = method }
+  | tm & TmConst r -> dualnumLiftConst tm r.val
+  | tm -> smap_Expr_Expr dualnumLiftExprH tm
 
   -- We handle constants in this semantic function. `dualnumLiftConst env tm c`
   -- lifts the constant `c`, where `tm` is the term holding the constant.
@@ -563,7 +568,8 @@ lang DualNumLift =
   | CSqrt _
   | CExp _
   | CLog _
-  | CPow _)
+  | CPow _
+  | CDistExpectation _)
     -> withInfo (infoTm tm) (uconst_ (CLifted const))
   -- Lift remaining constants based on their type signature
   | const ->

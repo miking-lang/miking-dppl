@@ -50,7 +50,7 @@ lang TraceMCMCMethod = MExprPPL
       iterations = iterations
     }
 
-  sem inferSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_InferMethod_Expr f acc =
   | TraceMCMC r ->
     match f acc r.iterations with (acc, iterations) in
     (acc, TraceMCMC {r with iterations = iterations})
