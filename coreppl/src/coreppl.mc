@@ -1080,8 +1080,15 @@ lang Diff =
     match printParen i env t.fn with (env, fn) in
     match printParen i env t.arg with (env, arg) in
     match printParen i env t.darg with (env, darg) in
+    let mod = switch t.mod
+              case Some (Analytic _) then "A"
+              case Some (PAP _) then "P"
+              case _ then ""
+              end
+    in
     (env, join [
-      "diff", pprintNewline i, fn, pprintNewline i, arg, pprintNewline i, darg])
+      "diff", mod, pprintNewline i,
+      fn, pprintNewline i, arg, pprintNewline i, darg])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -1427,11 +1434,12 @@ let observe_ = use Observe in
 let weight_ = use Weight in
   lam w. TmWeight {weight = w, ty = tyunknown_, info = NoInfo ()}
 
- let solveode_ = use SolveODE in
-   lam m. lam i. lam t.
+let solveodeWithStepSize_ =
+  use SolveODE in
+  lam step. lam m. lam i. lam t.
     TmSolveODE {
       method = ODESolverDefault {
-        stepSize = float_ 0.01,
+        stepSize = step,
         add = uconst_ (CAddf ()),
         smul = uconst_ (CMulf ())
       },
