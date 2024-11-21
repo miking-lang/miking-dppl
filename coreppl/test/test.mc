@@ -7,6 +7,7 @@ include "option.mc"
 include "sys.mc"
 include "string.mc"
 include "stats.mc"
+include "tuple.mc"
 
 type CpplRes = {
   samples: [String],
@@ -98,6 +99,46 @@ let resCoin: CpplRes -> Float = lam cpplRes.
   logWeightedMean cpplRes.lweights (map string2float cpplRes.samples)
 let coinTruth: Float = divf 12.0 23.0
 let eqCoin: Float -> Float -> Float -> Bool = eqfApprox
+
+recursive
+let quantile_calc: Float -> Float -> [(Float, Float)] -> Float = lam inf. lam sup. lam cdf. 
+  if eqi (length cdf) 1 then
+    0.0
+  else
+    if gtf (head cdf).0 inf then
+      subf (quantile_sup sup (tail cdf)) (head cdf).1  
+    else
+      quantile_calc inf sup (tail cdf)
+
+let quantile_sup: Float -> [(Float, Float)] -> Float = lam sup. lam cdf.
+  if eqi (length cdf) 1 then
+    1.0
+  else
+    if gtf (head cdf).0 sup then
+      (head cdf).1
+    else
+      quantile_sup sup (tail cdf)
+end
+
+let testFail = lam opt. lam a. lam b. join 
+  [ float2string a, " != ", float2string b, " (", opt, ")"]
+
+let testPattern : (Int -> String -> CpplRes) -> (Float -> Float -> Bool) -> [(Float, Float, Float)] -> (Int, String) -> () = 
+  lam exe. lam custmcpf. lam quant. lam params.
+
+  let result = exe params.0 params.1 in 
+  let weights = (map exp result.lweights) in
+  -- re normalize after truncature of burning
+  let acc = foldl addf 0.0 weights in -- sum other the vector
+  let distr = zip (map string2float result.samples) (map (mulf (divf 1.0 acc)) weights) in
+  let sort = quickSort (tupleCmp2 cmpf cmpf) distr in
+  let temp = mapAccumL (lam acc. lam x. let x = (x.0, addf x.1 acc) in (x.1, x)) in
+  let cdf_dist = (temp 0.0 sort).1 in
+
+  let test: (Float -> Float -> Bool) -> (Float, Float, Float) -> () = lam custmcpf. lam kwant.
+    utest (quantile_calc kwant.0 kwant.1 cdf_dist) with kwant.2 using custmcpf else testFail params.1 in () in
+
+  iter (test custmcpf) quant
 
 -- models/sprinkler.mc
 let resSprinkler: CpplRes -> Float = lam cpplRes.
