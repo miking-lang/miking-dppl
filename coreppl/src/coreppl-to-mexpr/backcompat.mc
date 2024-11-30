@@ -101,6 +101,7 @@ lang CPPLBackcompat = LoadRuntime
                 "mcmc-naive"
               | "mcmc-trace"
               | "mcmc-lightweight"
+              | "mcmc-lw-dk"
               | "pmcmc-pimh"
             then
               if options.printAcceptanceRate then
