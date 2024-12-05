@@ -38,7 +38,7 @@ lang BPFMethod = MExprPPL
     unify env [info, infoTm particles] int (tyTm particles);
     BPF {particles = particles}
 
-  sem inferSmapAccumL_Expr_Expr env =
+  sem smapAccumL_InferMethod_Expr env =
   | BPF r ->
     match f acc r.particles with (acc, particles) in
     (acc, BPF {r with particles = particles})

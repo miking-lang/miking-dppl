@@ -65,7 +65,7 @@ lang LightweightMCMCMethod = MExprPPL
       globalProb = globalProb
     }
 
-  sem inferSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_InferMethod_Expr f acc =
   | LightweightMCMC r ->
     match f acc r.iterations with (acc, iterations) in
     match f acc r.globalProb with (acc, globalProb) in

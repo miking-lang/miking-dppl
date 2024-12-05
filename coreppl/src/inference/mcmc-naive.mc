@@ -50,7 +50,7 @@ lang NaiveMCMCMethod = MExprPPL
       iterations = iterations
     }
 
-  sem inferSmapAccumL_Expr_Expr f acc =
+  sem smapAccumL_InferMethod_Expr f acc =
   | NaiveMCMC r ->
     match f acc r.iterations with (acc, iterations) in
     (acc, NaiveMCMC {r with iterations = iterations})

@@ -5,5 +5,6 @@ mexpr
 -- to keep. The downside is that we get an ugly printout when we test this file.
 dprint (
   odeSolverRK4Solve,
-  odeSolverEFSolve
+  odeSolverEFSolve,
+  odeSolverEFASolve
   )
