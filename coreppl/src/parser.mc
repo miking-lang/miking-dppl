@@ -218,7 +218,7 @@ lang DPPLParser =
 end
 
 -- Extend builtins with CorePPL builtins
-let builtin = use MExprPPL in concat
+let cpplBuiltin = use MExprPPL in concat
   [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
   , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
   , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
@@ -237,7 +237,7 @@ let defaultBootParserParseCorePPLFileArg =
   {defaultBootParserParseMCoreFileArg with
      keywords = pplKeywords,
      allowFree = true,
-     builtin = builtin}
+     builtin = cpplBuiltin}
 
 let parseMCorePPLFile = lam keepUtests. lam filename.
   use DPPLParser in

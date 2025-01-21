@@ -334,6 +334,15 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
   -- Set aligned trace length (a constant, only modified here)
   modref state.alignedTraceLength (length (deref state.alignedTrace));
 
+  -- If the program contains no samples at all, then `alignedTrace` is
+  -- empty, and `mh` will crash. However, such a program requires no
+  -- inference at all, thus we exit early here.
+  if null (deref state.alignedTrace) then
+    use RuntimeDist in
+    constructDistEmpirical [sample] (create runs (lam. 1.))
+      (EmpMCMC { acceptRate = mcmcAcceptRate () })
+  else
+
   -- Sample the rest
   let res = mh [weight] [sample] iter in
 

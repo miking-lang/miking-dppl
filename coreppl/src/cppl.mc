@@ -21,10 +21,13 @@ include "common.mc"
 include "mexpr/ast.mc"
 include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/utils.mc"
+include "mexpr/generate-utest.mc"
+include "ocaml/mcore.mc"
 
-lang CPPLLang =
-  MExprAst + MExprCompile + TransformDist + MExprEliminateDuplicateCode +
-  MExprSubstitute + MExprPPL
+lang CPPLLang = CorePPLFileTypeLoader
+  + MExprAst + UtestLoader + MExprGenerateEq
+  + MExprLowerNestedPatterns + MCoreCompileLang
+  + PhaseStats + MExprGeneratePprint
 
   -- Check if a CorePPL program uses infer
   sem hasInfer =
@@ -52,38 +55,70 @@ match result with ParseOK r then
 
     -- Read and parse the file
     let filename = head r.strings in
-    let ast = parseMCorePPLFile options.test filename in
 
-    let noInfer = not (hasInfer ast) in
+    -- if eqString options.target "rootppl" then
 
-    if eqString options.target "rootppl" then
+    --   let ast = parseMCorePPLFile options.test filename in
 
-      ---------------------
-      -- RootPPL backend --
-      ---------------------
+    --   let noInfer = not (hasInfer ast) in
 
-      -- Handle the RootPPL backend in the old way, without using infers.
-      if noInfer then
-        let ast =
-          if options.staticDelay then staticDelay ast
-          else ast
-        in
-        let ast = rootPPLCompile options ast in
-        buildRootPPL options ast
-      else error "Use of infer is not supported by RootPPL backend"
+    --   ---------------------
+    --   -- RootPPL backend --
+    --   ---------------------
 
-    else
+    --   -- Handle the RootPPL backend in the old way, without using infers.
+    --   if noInfer then
+    --     let ast =
+    --       if options.staticDelay then staticDelay ast
+    --       else ast
+    --     in
+    --     let ast = rootPPLCompile options ast in
+    --     buildRootPPL options ast
+    --   else error "Use of infer is not supported by RootPPL backend"
+
+    -- else
 
       --------------------
       -- Miking backend --
       --------------------
+      let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
-      -- Compile the CorePPL AST using the provided options
-      let ast = mexprCpplCompile options noInfer ast in
+      let res = mkCPPLLoader [StripUtestHook ()] options in
+      let loader = enableUtestGeneration res.loader in
+      let loader = enablePprintGeneration loader in
+      endPhaseStatsExpr log "mk-cppl-loader" unit_;
 
-      -- Exit before producing the output files, if the flag is set
-      if options.exitBefore then exit 0
-      else buildMExpr options ast
+      let loader = (includeFileTypeExn (FCorePPL {isModel = true}) "." filename loader).1 in
+      let loader = insertUtestExitCheck loader in
+      endPhaseStatsExpr log "include-file" unit_;
+
+      let ast = extractAsMExprExn options res.envs (deref res.runtimes) loader in
+      endPhaseStatsExpr log "extract-as-mexpr" ast;
+
+      let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
+        let opts =
+          { defaultCompileOptions
+          with libraries = libs
+          , cLibraries = clibs
+          } in
+        (if options.outputMc then
+          writeFile "program.ml" prog
+         else ());
+        let res = ocamlCompileWithConfig opts prog in
+        sysMoveFile res.binaryPath options.output;
+        sysChmodWriteAccessFile options.output;
+        res.cleanup ();
+        options.output in
+      let hooks = mkEmptyHooks ocamlCompile in
+
+      let ast = lowerAll ast in
+      endPhaseStatsExpr log "lower-all" ast;
+
+      if options.exitBefore then exit 0 else
+
+      let res = compileMCore ast hooks in
+      endPhaseStatsExpr log "compile-mcore" ast;
+      res
 
 else
   -- Error in Argument parsing

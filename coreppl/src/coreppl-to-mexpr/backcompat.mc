@@ -18,15 +18,15 @@ lang CPPLBackcompat = LoadRuntime
   -- TODO(larshum, 2022-10-21): Add support for printing int and bool types.
   -- This is problematic as their pretty-print functions are not built-in, nor
   -- are they guaranteed to be included in the user code.
-  sem getTypePrintFunction : InferRuntimeEntry -> Type -> Expr
-  sem getTypePrintFunction runtimeEntry =
+  sem getTypePrintFunction : Type -> Expr
+  sem getTypePrintFunction =
   | TyInt _ -> var_ "int2string"
   | TyBool _ -> var_ "bool2string"
   | TyFloat _ -> uconst_ (CFloat2string ())
   -- TODO(dlunde,2022-10-28): For some reason, the versions below using ulam_
   -- do not seem to work.
   | TySeq {ty = TyChar _} -> ulam_ "x" (var_ "x")
-  | TySeq r -> app_ _seqToStrTm (getTypePrintFunction runtimeEntry r.ty)
+  | TySeq r -> app_ _seqToStrTm (getTypePrintFunction r.ty)
   | TyChar _ -> ulam_ "x" (seq_ [(var_ "x")])
   | TyRecord r ->
     if mapIsEmpty r.fields then ulam_ "" (str_ "()")
@@ -39,7 +39,7 @@ lang CPPLBackcompat = LoadRuntime
                mapi
                  (lam i. lam ty.
                    let x =
-                     appf1_ (getTypePrintFunction runtimeEntry ty)
+                     appf1_ (getTypePrintFunction ty)
                        (tupleproj_ i (var_ "x"))
                    in
                    if eqi i 0 then x
@@ -75,7 +75,7 @@ lang CPPLBackcompat = LoadRuntime
       let runtimes = mapFromSeq cmpInferMethod [(inferMethod, runtimeEntry)] in
 
       let resTy = tyTm (typeCheck ast) in
-      let tyPrintFun = getTypePrintFunction runtimeEntry resTy in
+      let tyPrintFun = getTypePrintFunction resTy in
 
       let top =
         parseMCorePPLFileLib options.test

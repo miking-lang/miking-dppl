@@ -7,6 +7,7 @@ include "mexpr/cps.mc"
 include "mexpr/type-lift.mc"
 
 include "../coreppl.mc"
+include "../coreppl-to-mexpr/inference-interface.mc"
 
 -- Explicit resample inference annotation for SMC
 lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift + TypeCheck
@@ -72,7 +73,7 @@ let resample_ = use Resample in
 -- COMMON FUNCTIONS --
 ----------------------
 
-lang SMCCommon = MExprPPL + Resample + MExprCPS
+lang SMCCommon = MExprPPL + Resample + MExprCPS + InferenceInterface
 
   -- Add resample after weights (given a predicate over identifiers, assumes
   -- ANF). Used in SMC compilers for both the RootPPL and MExpr backends.
@@ -112,7 +113,7 @@ lang SMCCommon = MExprPPL + Resample + MExprCPS
         body = TmDist { d with dist = DWiener { w with cps = true }},
         inexpr = exprCps env k t.inexpr
       }
-  | TmLet { ident = ident, body = TmResample {},
+  | TmLet { ident = ident, body = re & TmResample {},
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in
     let k =
@@ -124,7 +125,9 @@ lang SMCCommon = MExprPPL + Resample + MExprCPS
       else
         i (nulam_ ident (exprCps env k inexpr))
     in
-      i (appf1_ (i (var_ "resample")) k)
+      -- NOTE(vipa, 2025-01-16): This will be fixed in `transformProb`
+      -- later, because we don't have access to the environments here
+      i (appf1_ re k)
 
   -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
   -- transformed versions are removed when removing duplicate code.
@@ -133,18 +136,23 @@ lang SMCCommon = MExprPPL + Resample + MExprCPS
   | (TyCon { info = info } | TyApp { info = info } ) ->
     let i = tyWithInfo info in i tyunknown_
 
-  sem transformProb =
+  sem transformProb stateName env runtime =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (var_ "sample")) t.dist)
+    i (appFromEnv env "sample" [t.dist])
+  -- NOTE(vipa, 2025-01-20): This fixes what's mentioned in the
+  -- comment above from the same date, because here we *do* have
+  -- access to the environments
+  | TmApp {lhs = TmResample re, rhs = rhs} ->
+    withInfo re.info (appFromEnv runtime "resample" [rhs])
   | TmResample t -> errorSingle [t.info] "Impossible"
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
-    i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
+    let weight = i (appFromEnv env "logObserve" [t.dist, t.value]) in
+    i (appFromEnv runtime "updateWeight" [weight, i (nvar_ stateName)])
   | TmWeight t ->
     let i = withInfo t.info in
-    i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
+    i (appFromEnv runtime "updateWeight" [t.weight, i (nvar_ stateName)])
   | t -> t
 end
 
@@ -227,4 +235,3 @@ utest _anf resample_ with bindall_ [
 utest (typeLift resample_).1 with resample_ using eqExpr in
 
 ()
-
