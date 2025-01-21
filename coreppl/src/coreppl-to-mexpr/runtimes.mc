@@ -47,7 +47,7 @@ lang LoadRuntime =
   }
 
   sem loadCompiler : Options -> InferMethod
-                       -> (String, (Expr,Expr) -> Expr)
+                       -> (String, InferenceInterface -> Expr)
   sem loadCompiler options =
   | Importance _ -> compilerImportance options
   | APF _ -> compilerAPF options
@@ -206,7 +206,7 @@ lang LoadRuntime =
     -- Construct record accessible at runtime
     -- NOTE(dlunde,2022-06-28): It would be nice if we automatically lift the
     -- options variable here to an Expr.
-    let pre = ulet_ "compileOptions" (urecord_ [
+    let pre = ulet_ "compileOptions" (autoty_record_ [
       ("resample", str_ options.resample),
       ("cps", str_ options.cps),
       ("printSamples", bool_ options.printSamples),

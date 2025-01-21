@@ -41,7 +41,7 @@ lang PIMHMethod = MExprPPL
   sem inferMethodConfigType info =
   | PIMH _ ->
     tyRecord info [
-      ("iterations",tyint_ info),
+      ("iterations", ityint_ info),
       ("particles", ityint_ info)
     ]
 
