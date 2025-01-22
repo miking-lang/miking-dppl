@@ -71,7 +71,11 @@ type Options = {
   subsample: Bool,
 
   -- Used in conjuction with subsample, how many subsamples to take
-  subsampleSize: Int
+  subsampleSize: Int,
+
+  -- Drift kernel activation and scale
+  driftKernel: Bool,
+  driftScale: Float
 }
 
 -- Default values for options
@@ -102,7 +106,9 @@ let default = {
   seed = None (),
   extractSimplification = "none",
   subsample = false,
-  subsampleSize = 1
+  subsampleSize = 1,
+  driftKernel = false,
+  driftScale = 1.0
 }
 
 -- Options configuration
@@ -239,7 +245,19 @@ let config = [
     int2string default.subsampleSize, "."
        ],
        lam p: ArgPart Options.
-        let o: Options = p.options in {o with subsampleSize = argToIntMin p 1})
+        let o: Options = p.options in {o with subsampleSize = argToIntMin p 1}),
+  
+  ([("--kernel", "", "")], 
+    "Use drift Kernel in MCMC. Use in conjuction with -m mcmc-lightweight",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with driftKernel = true}),
+    
+  ([("--drift", " ", "<value>")],
+    join [
+          "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: ", 
+          float2string default.driftScale, "."
+      ],
+      lam p : ArgPart Options. let o : Options = p.options in {o with driftScale = argToFloatMin p 0. })
 ]
 
 -- Menu

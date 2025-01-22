@@ -16,7 +16,9 @@ test-files := $(filter-out coreppl/src/cppl.mc,$(test-files))
 # NOTE(ThimotheeV, 2024-11-021): Filter out the inference test frame
 # from the main test frame because they can be pretty long to complite
 test-files := $(filter-out coreppl/test/coreppl-to-mexpr/cli/coin-iter-alter.mc,$(test-files))
-test-inference=$(shell find coreppl/test/coreppl-to-mexpr/cli -name "coin-iter-alter.mc")
+test-files := $(filter-out coreppl/test/coreppl-to-mexpr/cli/gamma-poisson.mc,$(test-files))
+test-inference-coin:=coreppl/test/coreppl-to-mexpr/cli/coin-iter-alter.mc
+test-inference-gp:=coreppl/test/coreppl-to-mexpr/cli/gamma-poisson.mc
 
 test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
 test-staticdelay-files=$(shell find coreppl/test/coreppl-to-mexpr/static-delay -name "*.mc")
@@ -30,7 +32,6 @@ test-expectation-files=$(shell find coreppl/test/coreppl-to-mexpr/expectation -n
 
 .PHONY: all
 all: compiler cppl
-
 
 ############################################
 ## Tests in CorePPL compiler source files ##
@@ -58,8 +59,11 @@ static-delay: ${test-staticdelay-files}
 .PHONY: expectation
 expectation: ${test-expectation-files}
 
-.PHONY: inference
-inference: ${test-inference}
+.PHONY: inference-coin
+inference-coin: ${test-inference-coin}
+
+.PHONY: inference-gp
+inference-gp: ${test-inference-gp}
 
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}

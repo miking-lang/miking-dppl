@@ -64,9 +64,9 @@ lang MExprPPLLightweightMCMC =
 
   | t -> t
 
-  ------------------------------------------
-  -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
-  ------------------------------------------
+  ----------------------------------
+  -- DYNAMIC ("LIGHTWEIGHT") MCMC --
+  ----------------------------------
   sem compile : Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (_,t) ->
@@ -296,15 +296,6 @@ lang MExprPPLLightweightMCMC =
     TmLet { t with inexpr = exprCps env k t.inexpr }
   | TmLet ({ body = TmDist _ } & t) ->
     TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDist (d & { dist = DWiener w })} & t) ->
-    if not (transform env t.ident) then
-      TmLet { t with inexpr = exprCps env k t.inexpr }
-    else
-      TmLet {
-        t with
-        body = TmDist { d with dist = DWiener { w with cps = true }},
-        inexpr = exprCps env k t.inexpr
-      }
   | TmLet ({ body = TmWeight _ } & t) ->
     TmLet { t with inexpr = exprCps env k t.inexpr }
   | TmLet ({ body = TmObserve _ } & t) ->
@@ -403,6 +394,7 @@ lang MExprPPLLightweightMCMC =
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC (CPS) --
   ------------------------------------------------
   -- TODO(dlunde,2022-11-03)
+  -- TODO(vsenderov,2024-06-04): with drift kernels
 
 end
 
