@@ -2,13 +2,14 @@ include "../dists.mc"
 include "../inference-interface.mc"
 include "../../inference/smc.mc"
 include "../../cfa.mc"
+include "../delayed-sampling/compile.mc"
 
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 include "mexpr/phase-stats.mc"
 
 lang MExprPPLImportance =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats + InferenceInterface
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats + InferenceInterface + DPPLDelayedSampling
 
   -------------------------
   -- IMPORTANCE SAMPLING --
@@ -20,7 +21,8 @@ lang MExprPPLImportance =
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
     let t = x.extractNormal () in
     endPhaseStats log "extract-normal-one" t;
-
+    
+    let t = if x.options.dynamicDelay then delayedSampling x.delay t else t in
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStats log "transform-tm-dist-one" t;

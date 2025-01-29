@@ -14,6 +14,8 @@ lang InferenceInterface = Sym + SymGetters
     { options : Options
     , runtime : InferenceSymEnv
     , dists : InferenceSymEnv
+    , prune : InferenceSymEnv
+    , delay: InferenceSymEnv
     , extractNormal : () -> Expr
     , extractNoHigherOrderConsts : () -> Expr
     , stateName : Name

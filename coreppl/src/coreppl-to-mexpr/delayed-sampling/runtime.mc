@@ -7,8 +7,8 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | s -> if debug then print s else ()-/
   
   syn DelayVar =
-  | RandomVarV { dist:all a. Ref (DsDist a),
-                margDist:all a. Ref (Option (DsDist a)),
+  | RandomVarV { dist:Ref DsDist,
+                margDist:Ref (Option DsDist),
                 value:all a. Ref (Option a),
                 state:Ref Int,
                 next:Ref (Option DelayVar),
@@ -27,7 +27,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | AffineParam {aV: Param, meanScale : Float, meanOffset: Float}
 
   -- delayed distributions where parameters are not sampled directly
-  syn DsDist a =
+  syn DsDist =
   | DsDistBernoulli {p : Param}
   | DsDistBeta  {a : Param, b : Param}
   | DsDistGaussian {mu : Param, sigma : Param, meanScale : Float, meanOffset : Float}
@@ -283,7 +283,7 @@ lang DelayedSampling = DelayedGraph
   -- Multinomial Dirichlet
   --  Categorical Dirichlet
   -- to condition
-  sem posterior: all a1. all a. a -> (DsDist a1, DsDist a) -> Option (DsDist a1)
+  --sem posterior: all a1. all a. a -> (DsDist a1, DsDist a) -> Option (DsDist a1)
   sem posterior obs =
   | (DsDistBeta p, DsDistBernoulli l) ->
     let a = unwrap p.a in
