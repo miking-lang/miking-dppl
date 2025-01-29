@@ -57,22 +57,6 @@ lang DPPLParser =
     in
     mapPre_Expr_Expr mf expr
 
-  sem replaceDefaultODESolverMethod : Options -> Expr -> Expr
-  sem replaceDefaultODESolverMethod options =
-  | expr ->
-    let mf = lam expr.
-      match expr with TmSolveODE ({ method = ODESolverDefault d } & r) then
-        TmSolveODE {
-          r with
-          method = RK4 d,
-          model = replaceDefaultODESolverMethod options r.model,
-          init = replaceDefaultODESolverMethod options r.init,
-          endTime = replaceDefaultODESolverMethod options r.endTime
-        }
-      else expr
-    in
-    mapPre_Expr_Expr mf expr
-
   -- Replaces elementary external functions with their corresponding constant.
   sem replaceExternalElementaryFunctions : Expr -> Expr
   sem replaceExternalElementaryFunctions =| tm ->
