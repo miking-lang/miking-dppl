@@ -64,71 +64,6 @@ lang DPPLTransformDist = DPPLParser + TransformDist
     replaceTyDist t
 end
 
-lang ODETransform = DPPLParser + MExprSubstitute + MExprFindSym + LoadRuntime
-  -- Make transformations related to solveode. This pass removes all solveode
-  -- terms and returns a transformed term and an ODE related runtime. the
-  -- tranformed program can be treated like a normal probabilistic program.
-  sem odeTransform : Options -> Expr -> (Option Expr, Expr)
-  sem odeTransform options =| tm ->
-    -- translate all Default { ... } ODE solve methods
-    let tm = replaceDefaultODESolverMethod options tm in
-
-    -- Extracts solver methods present in term
-    recursive let extractMethods = lam acc. lam tm.
-      match tm with TmSolveODE r then setInsert r.method acc
-      else sfold_Expr_Expr extractMethods acc tm
-    in
-
-    let methods = setToSeq (extractMethods (setEmpty cmpODESolverMethod) tm) in
-
-    if null methods then
-      -- There are no solveode terms in the term.
-      (None (), tm)
-    else
-      -- load ODE solver runtime
-      let runtime = symbolize (loadRuntimeFile true "runtime-ode-wrapper.mc") in
-
-      -- collect the names of used ODE solvers runtime names
-      let names =
-        findNamesOfStringsExn (map odeODESolverMethodToRuntimeName methods)
-          runtime
-      in
-      let namesMap = mapFromSeq cmpODESolverMethod (zip methods names) in
-
-      -- replace solveode terms with applications of its runtime implementation.
-      recursive let applyRuntimeSolvers = lam tm.
-        match tm with TmSolveODE r then
-          let tm =
-            let solver = nvar_ (mapFindExn r.method namesMap) in
-            foldl (lam f. lam a.  withInfo r.info (app_ f a)) solver
-              (concat
-                 (odeODESolverMethodToSolverArgs r.method)
-                 [r.model, r.init, r.endTime])
-          in smap_Expr_Expr applyRuntimeSolvers tm
-        else smap_Expr_Expr applyRuntimeSolvers tm
-      in
-
-      (Some runtime, applyRuntimeSolvers tm)
-
-  -- Maps ODE solver methods to the name bound to their implementation in
-  -- the runtime.
-  sem odeODESolverMethodToRuntimeName : ODESolverMethod -> String
-  sem odeODESolverMethodToRuntimeName =
-  | RK4 _ -> "odeSolverRK4Solve"
-  | EF _ -> "odeSolverEFSolve"
-  | EFA _ -> "odeSolverEFASolve"
-  | method -> error (join [
-    nameGetStr (odeSolverMethodName method),
-    " does not have an implementation in the ODE solver runtime"
-  ])
-
-  -- Maps ODE solver method to its method arguments.
-  sem odeODESolverMethodToSolverArgs : ODESolverMethod -> [Expr]
-  sem odeODESolverMethodToSolverArgs =
-  | ODESolverDefault r | RK4 r | EF r -> [r.add, r.smul, r.stepSize]
-  | EFA r -> [r.add, r.smul, r.stepSize, r.n]
-end
-
 lang DPPLTransformCancel = DPPLParser
   sem replaceCancel =
   | (TmCancel t) ->
@@ -846,29 +781,58 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
     else (_symEnvEmpty, Loader {x with includedFiles = mapInsert path _symEnvEmpty x.includedFiles})
 end
 
--- TODO(vipa, 2024-12-04): does it actually work to do odetransform
--- before symbolize and typecheck? it's done after in the old pipeline
--- lang ODELoader = MCoreLoader + MExprSubstitute + ODETransform
---   syn Hook =
---   | ODEHook
---     { options : Options
---     }
---   sem _preSymbolize loader decl = | ODEHook x ->
---     let decl = smap_Decl_Expr (replaceDefaultODESolverMethod x.options) decl in
---     match smapAccumL_Decl_Expr _odeExtractSolve (mapEmpty cmpODESolverMethod) decl
---       with (methods, decl) in
---     -- Check for ode terms, exit early otherwise
---     if mapIsEmpty methods then (loader, decl) else
---     -- Load runtime and substitute proper references to functions in
---     -- the runtime
---     match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ode-wrapper.mc" loader with (symEnv, loader) in
---     let substitutions = mapFoldWithKey
---       (lam acc. lam to. lam from.
---         mapInsert from (mapFindExn (odeODESolverMethodToRuntimeName to) symEnv.currentEnv.varEnv) acc)
---       (mapEmpty nameCmp)
---       methods in
---     (loader, smap_Decl_Expr (substituteIdentifiers substitutions) decl)
--- end
+lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
+  -- Make transformations related to solveode. This pass removes all solveode
+  -- terms and returns a transformed term and an ODE related runtime. the
+  -- tranformed program can be treated like a normal probabilistic program.
+  sem transformTmSolveODE : Options -> {path : String, env : SymEnv} -> Expr -> Expr
+  sem transformTmSolveODE options symEnv =
+  | TmSolveODE r ->
+    let method = odeDefaultMethod options r.method in
+    let fn = nvar_ (_getVarExn (odeSolverName method) symEnv) in
+    let args = concat (odeSolverArgs method) [r.model, r.init, r.endTime] in
+    appSeq_ fn args
+  | tm -> smap_Expr_Expr (transformTmSolveODE options symEnv) tm
+
+  sem odeSolverName : ODESolverMethod -> String
+  sem odeSolverName =
+  | RK4 _ -> "odeSolverRK4Solve"
+  | EF _ -> "odeSolverEFSolve"
+  | EFA _ -> "odeSolverEFASolve"
+  | method -> error (join [
+    nameGetStr (odeSolverMethodName method),
+    " does not have an implementation in the ODE solver runtime"
+  ])
+
+  -- Maps ODE solver method to its method arguments.
+  sem odeSolverArgs : ODESolverMethod -> [Expr]
+  sem odeSolverArgs =
+  | ODESolverDefault r | RK4 r | EF r -> [r.add, r.smul, r.stepSize]
+  | EFA r -> [r.add, r.smul, r.stepSize, r.n]
+
+  -- Replaces default ODE solver methods with a concrete method.
+  sem odeDefaultMethod : Options -> ODESolverMethod -> ODESolverMethod
+  sem odeDefaultMethod options =
+  | ODESolverDefault d -> RK4 d
+  | m -> m
+
+  syn Hook =
+  | ODEHook
+    { options : Options
+    }
+  sem _preSymbolize loader decl = | ODEHook x ->
+    recursive let hasTmSolveODE = lam acc. lam tm.
+      match tm with TmSolveODE _ then true
+      else sfold_Expr_Expr hasTmSolveODE acc tm
+    in
+    if sfold_Decl_Expr hasTmSolveODE false decl then
+      match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ode.mc" loader
+        with (symEnv, loader)
+      in
+      (loader, smap_Decl_Expr (transformTmSolveODE x.options symEnv) decl)
+    else
+      (loader, decl)
+end
 
 -- lang ADLoader = MCoreLoader + ADTransform
 --   syn Hook =
@@ -913,7 +877,7 @@ lang MExprCompile =
   MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
   StaticDelay + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
   MExprANFAll + CPPLBackcompat +
-  ODETransform + DPPLTransformCancel + DPPLPruning +
+  DPPLTransformCancel + DPPLPruning +
   ElementaryFunctionsTransform + DPPLDelayedReplace + DPPLDelayedSampling
   + ReplaceHigherOrderConstantsLoadDirectly
   + CompileModels

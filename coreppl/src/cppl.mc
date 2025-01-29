@@ -25,7 +25,7 @@ include "mexpr/generate-utest.mc"
 include "ocaml/mcore.mc"
 
 lang CPPLLang = CorePPLFileTypeLoader
-  + MExprAst + UtestLoader + MExprGenerateEq
+  + MExprAst + UtestLoader + ODELoader + MExprGenerateEq
   + MExprLowerNestedPatterns + MCoreCompileLang
   + PhaseStats + MExprGeneratePprint
 
@@ -83,7 +83,11 @@ match result with ParseOK r then
       --------------------
       let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
-      let res = mkCPPLLoader [StripUtestHook ()] options in
+      let res = mkCPPLLoader [
+        StripUtestHook (),
+        ODEHook { options = options }
+      ] options
+      in
       let loader = enableUtestGeneration res.loader in
       let loader = enablePprintGeneration loader in
       endPhaseStatsExpr log "mk-cppl-loader" unit_;
