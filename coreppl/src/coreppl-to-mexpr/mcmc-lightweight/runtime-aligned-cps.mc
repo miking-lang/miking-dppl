@@ -9,6 +9,7 @@ include "option.mc"
 
 include "../runtime-common.mc"
 include "../runtime-dists.mc"
+include "kernel.mc"
 
 -- Any-type, used for traces
 type Any = ()
@@ -29,7 +30,7 @@ type State a = {
   weight: Ref Float,
 
   -- The Hasting ratio for the driftKernel call
-  qdk: Ref Float,
+  driftHastingRatio: Ref Float,
 
   -- The weight of reused values in the previous and current executions
   prevWeightReused: Ref Float,
@@ -74,7 +75,7 @@ type Result = Unknown
 -- State (reused throughout inference)
 let state: State Result = {
   weight = ref 0.,
-  qdk = ref 0.,
+  driftHastingRatio = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
   alignedTrace = ref (emptyList ()),
@@ -93,50 +94,6 @@ let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
   let w = use RuntimeDist in logObserve dist s in
   (unsafeCoerce s, w)
 
-let choseKernel: all a. use RuntimeDistBase in Dist a -> a -> Float -> Dist a = 
-  lam dist. lam prev. lam drift. 
-    use RuntimeDistElementary in
-  
-    let kernel = switch dist
-    case DistUniform x then --
-    -- exp = prev, var = 0 --
-      DistUniform {a = (subf (unsafeCoerce prev) drift), b = (addf (unsafeCoerce prev) drift)}
-    case DistBernoulli x then
-      DistBernoulli {p = subf 1.0 (unsafeCoerce prev)}
-    case DistBinomial x then
-    -- WARNING : Need prev > drift --
-    -- exp = prev, var = drift --
-      let p = divf (subf (unsafeCoerce prev) drift) (unsafeCoerce prev) in
-      DistBinomial {n = ceilfi (divf (unsafeCoerce prev) p), p = p}
-    case DistGaussian x then
-    -- exp = prev, var = drift --
-      DistGaussian {mu = (unsafeCoerce prev), sigma = drift}
-    case DistPoisson x then
-      -- WARNING : Need prev > drift --
-      -- exp = prev, var = drift --
-      let p = divf (subf (unsafeCoerce prev) drift) (unsafeCoerce prev) in
-      DistBinomial {n = ceilfi (divf (unsafeCoerce prev) p), p = p}
-    case DistBeta x then
-      -- exp = prev, var = prev*(1 - prev)/(drift + 1) --
-      DistBeta {a = (mulf drift (unsafeCoerce prev)), b = (mulf drift (subf 1. (unsafeCoerce prev)))}
-    case DistDirichlet x then
-      -- exp_i = prev_i/sum(prev),  var_i = prev_i*(sum(prev) - prev_i)/(drift*sum(prev)*(sum(prev)+1)) --
-      DistDirichlet {a = (map (mulf drift) (unsafeCoerce prev))}
-    case DistGamma x then
-      -- exp = prev,  var = prev*drift --
-      DistGamma {shape = (divf (unsafeCoerce prev) drift), scale = drift}
-    case DistExponential x then
-      -- exp = prev, var = 0 --
-      DistUniform {a = (divf (unsafeCoerce prev) drift), b = (mulf (unsafeCoerce prev) drift)}
-    case DistMultinomial x then
-    -- WARNING : Need drift > prev and drift > 1
-    -- exp_i = prev_i,  var_i = prev_i (1 - prev_i/drift_1)
-      let n = ceilfi drift in
-      DistMultinomial {n = n, p = map (divf (unsafeCoerce prev)) (unsafeCoerce n)}
-    end
-  in
-  kernel
-
 -- Drift Kernel Function
 -- - we have access here to the driftScale parameter compileOptions.driftScale
 -- - modeled on reuseSample
@@ -147,20 +104,21 @@ let moveSample: all a. a -> Float -> use RuntimeDistBase in Dist a -> (Any, Floa
 
     let drift = compileOptions.driftScale in
 
-    let kernelPrev = choseKernel dist (unsafeCoerce prev) drift in
-    let prop = sample kernelPrev in
+    let kernel = choseKernel dist (unsafeCoerce prev) drift in
 
-    let priorProp = logObserve dist (unsafeCoerce prop) in
-    let kernelProp = choseKernel dist (unsafeCoerce prop) drift in
-
-    let logLikProp = logObserve kernelPrev (unsafeCoerce prop) in
-    let logLikPrev = logObserve kernelProp (unsafeCoerce prev) in
-
-    modref state.qdk (subf logLikPrev logLikProp);
-    modref state.weightReused (addf (deref state.weightReused) priorProp);
+    let proposal = sample kernel in
+  
+    let proposalPriorProb = logObserve dist (unsafeCoerce proposal) in
+    let reverseKernel = choseKernel dist (unsafeCoerce proposal) drift in
+  
+    let prevToProposalProb = logObserve kernel (unsafeCoerce proposal) in
+    let proposalToPrevProb = logObserve reverseKernel (unsafeCoerce prev) in
+  
+    modref state.driftHastingRatio (subf proposalToPrevProb prevToProposalProb);
+    modref state.weightReused (addf (deref state.weightReused) proposalPriorProb);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
 
-    (unsafeCoerce prop, priorProp)  
+    (unsafeCoerce proposal, proposalPriorProb)  
 
 let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
   lam dist. lam sample. lam w.
@@ -210,7 +168,7 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> (a -> Result) -> Resu
       -- print "Aligned ";
       reuseSample dist sample w
     else
-      -- print "Balise";
+      -- print "Aligned : NewSample";
       newSample dist
   ) d
 
@@ -254,7 +212,7 @@ let runNext: Unknown -> (State Result -> Result) -> Result =
     modref state.oldAlignedTrace (emptyList ());
     modref state.oldUnalignedTraces (emptyList ());
     modref state.weight 0.;
-    modref state.qdk 0.;
+    modref state.driftHastingRatio 0.;
     modref state.prevWeightReused 0.;
     modref state.weightReused 0.;
     modref state.reuseUnaligned true;
@@ -326,7 +284,7 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
         -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
         let weight = deref state.weight in
-        let qdk = deref state.qdk in
+        let driftHastingRatio = deref state.driftHastingRatio in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
         let logMhAcceptProb =
@@ -334,7 +292,7 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
                     (addf
                       (subf weight prevWeight)
                       (subf weightReused prevWeightReused))
-                    qdk)
+                    driftHastingRatio)
         in
         -- print "weight: "; printLn (float2string weight);
         -- print "prevWeight: "; printLn (float2string prevWeight);

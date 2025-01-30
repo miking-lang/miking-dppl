@@ -8,9 +8,9 @@ include "stats.mc"
 
 mexpr
 
-let s = 10e-3 in
+let s = 10e-2 in
 let eq = eqCoin s in
-let t = testCpplMExpr "gamma-poisson.mc" 100000 in
+let t = testCpplMExpr "gamma-poisson.mc" 2000 in
 let res: [(Int, String)]  = [
   (0  ,"-m 'is-lw' --cps none"),
   (0  ,"-m 'is-lw' --cps partial"),

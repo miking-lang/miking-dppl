@@ -65,13 +65,9 @@ test-coreppl: build/${CPPL_NAME}
 test-coreppl-compiler:
 	@$(MAKE) -s -f test-coreppl.mk compiler
 
-.PHONY: test-coreppl-inference-coin
-test-coreppl-inference-coin:
-	@$(MAKE) -s -f test-coreppl.mk inference-coin
-
-.PHONY: test-coreppl-inference-gp
-test-coreppl-inference-gp:
-	@$(MAKE) -s -f test-coreppl.mk inference-gp
+.PHONY: test-coreppl-inference
+test-coreppl-inference:
+	@$(MAKE) -s -f test-coreppl.mk inference
 
 #############
 ## RootPPL ##
