@@ -403,6 +403,7 @@ lang MExprPPLLightweightMCMC =
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC (CPS) --
   ------------------------------------------------
   -- TODO(dlunde,2022-11-03)
+  -- TODO(vsenderov,2024-06-04): with drift kernels
 
 end
 
