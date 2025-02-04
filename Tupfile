@@ -1,0 +1,98 @@
+
+# MCore specific
+export MCORE_LIBS
+
+# DPPL test specific
+export MIDPPL_PATH
+export CPPL_NAME
+export ROOTPPL_BIN
+
+# OCaml specific
+export OCAMLPATH
+export OPAM_SWITCH_PREFIX
+export CAML_LD_LIBRARY_PATH
+export OCAML_TOPLEVEL_PATH
+export PKG_CONFIG_PATH
+
+# Nix specific
+
+# NOTE(vipa, 2024-11-14): The first two make nix-wrapped linker and
+# compiler add flags for this particular kind of build
+# target. Unfortunately I don't see a better way to ensure they're
+# present inside than to just export each of them, and then add new
+# combinations of these for new targets.
+export NIX_BINTOOLS_WRAPPER_TARGET_HOST_x86_64_unknown_linux_gnu
+export NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_gnu
+export NIX_LDFLAGS
+
+
+## Tests
+
+: |> ./make test coreppl/src/utils.mc |>
+: |> ./make test coreppl/src/parser.mc |>
+: |> ./make test coreppl/src/infer-method.mc |>
+: |> ./make test coreppl/src/coreppl.mc |>
+: |> ./make test coreppl/src/inference/pmcmc-pimh.mc |>
+: |> ./make test coreppl/src/inference/mcmc-naive.mc |>
+: |> ./make test coreppl/src/inference/smc.mc |>
+: |> ./make test coreppl/src/inference/mcmc-lightweight.mc |>
+: |> ./make test coreppl/src/inference/smc-bpf.mc |>
+: |> ./make test coreppl/src/inference/smc-apf.mc |>
+: |> ./make test coreppl/src/inference/is-lw.mc |>
+: |> ./make test coreppl/src/inference/mcmc-trace.mc |>
+: |> ./make test coreppl/src/build.mc |>
+: |> ./make test coreppl/src/src-location.mc |>
+: |> ./make test coreppl/src/cfa.mc |>
+: |> ./make test coreppl/src/method-helper.mc |>
+: |> ./make test coreppl/src/coreppl-to-rootppl/rootppl.mc |>
+: |> ./make test coreppl/src/coreppl-to-rootppl/compile.mc |>
+: |> ./make test coreppl/src/static-delay.mc |>
+: |> ./make test coreppl/src/dist.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/mcmc-naive/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/delayed-sampling/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/dists.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/mcmc-trace/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/extract.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/ad/dual-tree.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/ad/dualnum-tree.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/ad/dualnum.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/ad/dualnum-lift.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/inference-interface.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/smc-bpf/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/pmcmc-pimh/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/smc-apf/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/mcmc-lightweight/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/backcompat.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/is-lw/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/compile.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/pruning/compile.mc |>
+: |> ./make test coreppl/src/ad.mc |>
+: |> ./make test coreppl/src/ode-solver-method.mc |>
+: |> ./make test coreppl/src/dppl-arg.mc |>
+: |> ./make test coreppl/src/coreppl-to-mexpr/runtimes.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/static-delay/static-delay-tests.mc |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/coin-iter.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/ssm.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/lda.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/crbd.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/vbd.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/coin.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/sprinkler.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/clads.mc "build/cppl" |>
+# : |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/diff-demo.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/ode-harmonic.mc "build/cppl" |>
+# : |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/diff-external.mc "build/cppl" |>
+# : |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/diff-confusion.mc "build/cppl" |>
+# : |> ./make test-cppl coreppl/test/coreppl-to-mexpr/infer/diff-regression.mc "build/cppl" |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/coin-iter.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/ssm.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/lda.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/crbd.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/vbd.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/coin.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/sprinkler.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/coin-iter-alter.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/clads.mc |>
+: |> ./make test coreppl/test/coreppl-to-mexpr/cli/regression.mc |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/expectation/primitive.mc "build/cppl" |>
+: |> ./make test-cppl coreppl/test/coreppl-to-mexpr/expectation/empirical.mc "build/cppl" |>

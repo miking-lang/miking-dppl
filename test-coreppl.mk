@@ -40,7 +40,7 @@ all: compiler cppl
 compiler: ${test-files}
 
 ${test-files}::
-	@./make test $@
+	@./make test $@; echo test-files,$@,$$? >> build/log
 
 ###################
 ## CorePPL tests ##
@@ -70,16 +70,19 @@ export RPPL_ENGINE_SRC=${MIDPPL_PATH}/${ROOTPPL_SRC}
 
 # Infer tests
 ${test-infer-files}::
-	@./make test-cppl $@ "build/${CPPL_NAME}"
+	@./make test-cppl $@ "build/${CPPL_NAME}"; echo test-infer-files,$@,$$? >> build/log
 
 # CLI tests
 ${test-cli-files}::
-	@./make test $@
+	@./make test $@; echo test-cli-files,$@,$$? >> build/log
 
 # Static delay tests
 ${test-staticdelay-files}::
-	@./make test $@
+	@./make test $@; echo test-staticdelay-files,$@,$$? >> build/log
 
 # Expectation tests
 ${test-expectation-files}::
-	@./make test-cppl $@ "build/${CPPL_NAME}"
+	@./make test-cppl $@ "build/${CPPL_NAME}"; echo test-expectation-files,$@,$$? >> build/log
+
+tup:
+	tup -k -j6

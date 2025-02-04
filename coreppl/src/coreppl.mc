@@ -16,6 +16,7 @@ include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/const-arity.mc"
 include "mexpr/cfa.mc"
+include "mexpr/json-debug.mc"
 
 include "peval/peval.mc"
 
@@ -120,7 +121,7 @@ end
 
 lang Infer =
   Ast + PrettyPrint + Eq + Sym + Dist + FunTypeAst + TypeCheck + ANF +
-  TypeLift + InferMethodBase + PEval
+  TypeLift + InferMethodBase + PEval + AstToJson
 
   -- Evaluation of TmInfer returns a TmDist
   syn Expr =
@@ -207,12 +208,21 @@ lang Infer =
     pevalBind ctx
       (lam model. k (TmInfer {r with model = model}))
       r.model
+
+  sem exprToJson =
+  | TmInfer x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmInfer")
+    , ("model", exprToJson x.model)
+    , ("method", JsonString "<json-not-yet-implemented>")
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 
 -- Assume defines a new random variable
 lang Assume =
-  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval + AstToJson
 
   syn Expr =
   | TmAssume { dist: Expr,
@@ -292,12 +302,19 @@ lang Assume =
       (lam dist. k (TmAssume { t with dist = TmDist { td with dist = dist } }))
       dist
 
+  sem exprToJson =
+  | TmAssume x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmAssume")
+    , ("dist", exprToJson x.dist)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 
 -- Observe gives a random variable conditioned on a specific value
 lang Observe =
-  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval + AstToJson
 
   syn Expr =
   | TmObserve { value: Expr,
@@ -406,12 +423,20 @@ lang Observe =
   sem exprHasSideEffectH env lambdaCounting acc =
   | TmObserve _ -> true
 
+  sem exprToJson =
+  | TmObserve x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmObserve")
+    , ("dist", exprToJson x.dist)
+    , ("value", exprToJson x.value)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 -- Defines a weight term
 lang Weight =
   Ast + PrettyPrint + Eq + Sym + TypeCheck + FloatTypeAst + ANF + TypeLift +
-  PEval + Dist
+  PEval + Dist + AstToJson
   syn Expr =
   | TmWeight { weight: Expr, ty: Type, info: Info }
 
@@ -486,6 +511,13 @@ lang Weight =
   sem exprHasSideEffectH env lambdaCounting acc =
   | TmWeight _ -> true
 
+  sem exprToJson =
+  | TmWeight x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmWeight")
+    , ("weight", exprToJson x.weight)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 
@@ -505,7 +537,7 @@ end
 
 lang SolveODE =
   Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval +
-  ODESolverMethod
+  ODESolverMethod + AstToJson
 
   syn Expr =
   | TmSolveODE { method: ODESolverMethod,
@@ -637,10 +669,22 @@ lang SolveODE =
           r.endTime)
         r.init)
       r.model
+
+  sem exprToJson =
+  | TmSolveODE x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmSolveODE")
+    , ("method", JsonString "<json-not-yet-implemented>")
+    , ("model", exprToJson x.model)
+    , ("init", exprToJson x.init)
+    , ("endTime", exprToJson x.endTime)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
+
 end
 
 lang Prune =
-  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval + AstToJson
 
   syn Expr =
   | TmPrune { dist: Expr,
@@ -747,6 +791,19 @@ lang Prune =
     pevalBind ctx
       (lam dist. k (TmPrune { r with dist = dist})) r.dist
 
+  sem typeToJson =
+  | TyPruneInt x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TyPruneInt")
+    , ("info", infoToJson x.info)
+    ] )
+
+  sem exprToJson =
+  | TmPrune x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmPrune")
+    , ("dist", exprToJson x.dist)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 lang Pruned = Prune
@@ -833,6 +890,13 @@ lang Pruned = Prune
     pevalBind ctx
       (lam prune. k (TmPruned { r with prune = prune})) r.prune
 
+  sem exprToJson =
+  | TmPruned x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmPruned")
+    , ("prune", exprToJson x.prune)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 lang Cancel = Observe
@@ -959,11 +1023,20 @@ lang Cancel = Observe
 
   sem getDistCancel =
   | TmObserve t -> t.dist
+
+  sem exprToJson =
+  | TmCancel x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmCancel")
+    , ("dist", exprToJson x.dist)
+    , ("value", exprToJson x.value)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 -- Assume defines a new random variable
 lang Diff =
-  Ast + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+  Ast + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval + AstToJson
 
   syn Expr =
   | TmDiff { fn: Expr,
@@ -1064,10 +1137,19 @@ lang Diff =
         k (TmDiff { r with fn = fn, arg = arg }))
         r.arg)
       r.fn
+
+  sem exprToJson =
+  | TmDiff x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmDiff")
+    , ("fn", exprToJson x.fn)
+    , ("arg", exprToJson x.arg)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 lang Delay =
-  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval
+  Ast + Dist + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval + AstToJson
 
   syn Expr =
   | TmDelay { dist: Expr,
@@ -1202,6 +1284,27 @@ lang Delay =
     pevalDistEval ctx
       (lam dist. k (TmDelay { t with dist= TmDist { td with dist = dist} } )) dist
 
+  sem typeToJson =
+  | TyDelayInt x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TyDelayInt")
+    , ("info", infoToJson x.info)
+    ] )
+  | TyDelayFloat x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TyDelayFloat")
+    , ("info", infoToJson x.info)
+    ] )
+  | TyDelaySeqF x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TyDelaySeqF")
+    , ("info", infoToJson x.info)
+    ] )
+
+  sem exprToJson =
+  | TmDelay x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmDelay")
+    , ("dist", exprToJson x.dist)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 lang Delayed = Delay
@@ -1291,6 +1394,14 @@ lang Delayed = Delay
   | TmDelayed r ->
     pevalBind ctx
       (lam delay. k (TmDelayed { r with delay = delay})) r.delay
+
+  sem exprToJson =
+  | TmDelayed x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmDelayed")
+    , ("delay", exprToJson x.delay)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 -----------------
@@ -1391,7 +1502,8 @@ let mexprPPLKeywords = join [mexprKeywords, pplKeywords, dplKeywords, pruneKeywo
 lang MExprPPL =
   CorePPL + CoreDPL + ElementaryFunctions +
   MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
-  MExprTypeCheck + MExprTypeLift + MExprArity
+  MExprTypeCheck + MExprTypeLift + MExprArity +
+  MExprToJson
 
   sem mexprPPLToString =
   | expr -> exprToStringKeywords mexprPPLKeywords expr

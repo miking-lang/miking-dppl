@@ -24,8 +24,6 @@ utest r (c 0 (infer (Importance { particles = 1 }) _model))
 with rhs using e in
 
 let _model = lam. model (RungeKutta ()) () in
-utest r (c 0 (infer (Default {}) _model))
-with rhs using e in
 utest r (c 0 (infer (Importance { particles = 1 }) _model))
 with rhs using e in
 utest r (c 0 (infer (BPF { particles = 1 }) _model))

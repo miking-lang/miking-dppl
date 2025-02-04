@@ -19,6 +19,10 @@ uninstall: uninstall-coreppl uninstall-rootppl uninstall-scripts
 .PHONY: test
 test: test-coreppl test-rootppl
 
+.PHONY: tup
+tup:
+	@$(MAKE) -s -f test-coreppl.mk tup
+
 
 #############
 ## CorePPL ##
@@ -105,4 +109,3 @@ install-scripts:
 .PHONY: uninstall-scripts
 uninstall-scripts:
 	rm -f ${BIN_PATH}/${PLOT_NAME}
-
