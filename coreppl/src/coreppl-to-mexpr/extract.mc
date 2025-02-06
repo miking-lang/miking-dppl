@@ -190,38 +190,6 @@ lang DPPLExtract =
                       inexpr = removeInferBindings inferData t.inexpr}
   | t -> smap_Expr_Expr (removeInferBindings inferData) t
 
-  -- Replaces the application of the infer binding with a call to the run
-  -- function of the corresponding runtime.
-  sem replaceInferApplication : Map Name (Map Name Type)
-                              -> Map Name (InferMethod, Name)
-                              -> Expr -> Expr
-  sem replaceInferApplication solutions inferData =
-  | e & (TmVar _ | TmApp _) ->
-    let collectAppArgs = lam e.
-      recursive let work = lam acc. lam e.
-        match e with TmApp t then work (cons t.rhs acc) t.lhs
-        else (e, acc)
-      in work [] e
-    in
-    match collectAppArgs e with (TmVar {ident = id, info = info}, args) then
-      match mapLookup id inferData with Some (method, runId) then
-        let extraArgs = match mapLookup runId solutions with Some extraArgs
-          then map (lam pair. withType pair.1 (nvar_ pair.0)) (mapBindings extraArgs)
-          else [] in
-        appf2_ (foldl app_ (nvar_ runId) extraArgs)
-          (withType (inferMethodConfigType info method) (inferMethodConfig info method))
-          (appSeq_ (nvar_ id) args)
-      else smap_Expr_Expr (replaceInferApplication solutions inferData) e
-    else e
-  | t -> smap_Expr_Expr (replaceInferApplication solutions inferData) t
-
-  sem bindingsUsed : Set Name -> Bool -> Expr -> Bool
-  sem bindingsUsed bs acc =
-  | TmVar t -> if setMem t.ident bs then true else acc
-  | expr ->
-    if acc then acc else
-      sfold_Expr_Expr (bindingsUsed bs) acc expr
-
   -- Assumes proper symbolization and ANF
   sem inlineSingleUse : Expr -> Expr
   sem inlineSingleUse =

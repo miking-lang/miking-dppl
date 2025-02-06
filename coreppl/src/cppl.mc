@@ -7,19 +7,15 @@
 include "parser.mc"
 include "static-delay.mc"
 include "dppl-arg.mc"
-include "build.mc"
-include "src-location.mc"
 
 -- Backends
 include "coreppl-to-mexpr/compile.mc"
-include "coreppl-to-rootppl/compile.mc"
 
 include "bool.mc"
 include "option.mc"
 include "string.mc"
 include "common.mc"
 include "mexpr/ast.mc"
-include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/utils.mc"
 include "mexpr/generate-utest.mc"
 include "ocaml/mcore.mc"
@@ -56,73 +52,48 @@ match result with ParseOK r then
     -- Read and parse the file
     let filename = head r.strings in
 
-    -- if eqString options.target "rootppl" then
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
-    --   let ast = parseMCorePPLFile options.test filename in
+    let res = mkCPPLLoader [
+      StripUtestHook (),
+      ODEHook { options = options }
+    ] options
+    in
+    let loader = enableUtestGeneration res.loader in
+    let loader = enablePprintGeneration loader in
+    endPhaseStats log "mk-cppl-loader" unit_;
 
-    --   let noInfer = not (hasInfer ast) in
+    let loader = (includeFileTypeExn (FCorePPL {isModel = true}) "." filename loader).1 in
+    let loader = insertUtestExitCheck loader in
+    endPhaseStats log "include-file" unit_;
 
-    --   ---------------------
-    --   -- RootPPL backend --
-    --   ---------------------
+    let ast = extractAsMExprExn options res.envs (deref res.runtimes) loader in
+    endPhaseStats log "extract-as-mexpr" ast;
 
-    --   -- Handle the RootPPL backend in the old way, without using infers.
-    --   if noInfer then
-    --     let ast =
-    --       if options.staticDelay then staticDelay ast
-    --       else ast
-    --     in
-    --     let ast = rootPPLCompile options ast in
-    --     buildRootPPL options ast
-    --   else error "Use of infer is not supported by RootPPL backend"
+    let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
+      let opts =
+        { defaultCompileOptions
+        with libraries = libs
+        , cLibraries = clibs
+        } in
+      (if options.outputMc then
+        writeFile "program.ml" prog
+       else ());
+      let res = ocamlCompileWithConfig opts prog in
+      sysMoveFile res.binaryPath options.output;
+      sysChmodWriteAccessFile options.output;
+      res.cleanup ();
+      options.output in
+    let hooks = mkEmptyHooks ocamlCompile in
 
-    -- else
+    let ast = lowerAll ast in
+    endPhaseStats log "lower-all" ast;
 
-      --------------------
-      -- Miking backend --
-      --------------------
-      let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+    if options.exitBefore then exit 0 else
 
-      let res = mkCPPLLoader [
-        StripUtestHook (),
-        ODEHook { options = options }
-      ] options
-      in
-      let loader = enableUtestGeneration res.loader in
-      let loader = enablePprintGeneration loader in
-      endPhaseStats log "mk-cppl-loader" unit_;
-
-      let loader = (includeFileTypeExn (FCorePPL {isModel = true}) "." filename loader).1 in
-      let loader = insertUtestExitCheck loader in
-      endPhaseStats log "include-file" unit_;
-
-      let ast = extractAsMExprExn options res.envs (deref res.runtimes) loader in
-      endPhaseStats log "extract-as-mexpr" ast;
-
-      let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
-        let opts =
-          { defaultCompileOptions
-          with libraries = libs
-          , cLibraries = clibs
-          } in
-        (if options.outputMc then
-          writeFile "program.ml" prog
-         else ());
-        let res = ocamlCompileWithConfig opts prog in
-        sysMoveFile res.binaryPath options.output;
-        sysChmodWriteAccessFile options.output;
-        res.cleanup ();
-        options.output in
-      let hooks = mkEmptyHooks ocamlCompile in
-
-      let ast = lowerAll ast in
-      endPhaseStats log "lower-all" ast;
-
-      if options.exitBefore then exit 0 else
-
-      let res = compileMCore ast hooks in
-      endPhaseStats log "compile-mcore" ast;
-      res
+    let res = compileMCore ast hooks in
+    endPhaseStats log "compile-mcore" ast;
+    res
 
 else
   -- Error in Argument parsing
