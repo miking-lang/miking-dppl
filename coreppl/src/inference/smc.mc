@@ -76,7 +76,7 @@ let resample_ = use Resample in
 lang SMCCommon = MExprPPL + Resample + MExprCPS + InferenceInterface
 
   -- Add resample after weights (given a predicate over identifiers, assumes
-  -- ANF). Used in SMC compilers for both the RootPPL and MExpr backends.
+  -- ANF).
   sem addResample: (Name -> Bool) -> Expr -> Expr
   sem addResample pred =
     | t ->

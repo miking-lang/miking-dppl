@@ -16,11 +16,9 @@ include "../inference/smc.mc"
 include "../parser.mc"
 include "../dppl-arg.mc"
 include "../static-delay.mc"
-include "../src-location.mc"
 
 
 include "extract.mc"
-include "backcompat.mc"
 include "dists.mc"
 include "runtimes.mc"
 include "inference-interface.mc"
@@ -153,27 +151,27 @@ lang ADTransform =
   syn DualNumRuntimeEnv =
   | Env ADTransformEnv
 
-  sem adProvideRuntimeImplementation : Options -> Expr -> (Expr, Expr)
-  sem adProvideRuntimeImplementation options =| tm ->
-    let runtimeFile = "runtime-ad-wrapper.mc" in
+  -- sem adProvideRuntimeImplementation : Options -> Expr -> (Expr, Expr)
+  -- sem adProvideRuntimeImplementation options =| tm ->
+  --   let runtimeFile = "runtime-ad-wrapper.mc" in
 
-    -- load AD runtime
-    let runtime = symbolize (loadRuntimeFile true runtimeFile) in
+  --   -- load AD runtime
+  --   let runtime = symbolize (loadRuntimeFile true runtimeFile) in
 
-    -- Define function that maps string identifiers to names
-    let s2n = makeRuntimeNameMap runtime (_adTransformRuntimeIds ()) in
+  --   -- Define function that maps string identifiers to names
+  --   let s2n = makeRuntimeNameMap runtime (_adTransformRuntimeIds ()) in
 
-    -- Define function that constructs dual number types
-    let tyDualName = s2n "Dual" in
-    let lty = lam ty. TyApp {
-      lhs = TyCon { ident = tyDualName, data = tyunknown_, info = infoTy ty },
-      rhs = ty,
-      info = infoTy ty
-    } in
+  --   -- Define function that constructs dual number types
+  --   let tyDualName = s2n "Dual" in
+  --   let lty = lam ty. TyApp {
+  --     lhs = TyCon { ident = tyDualName, data = tyunknown_, info = infoTy ty },
+  --     rhs = ty,
+  --     info = infoTy ty
+  --   } in
 
-    let tm = dualnumTransformAPIExpr (Env { lty = lty, s2n = s2n }) tm in
+  --   let tm = dualnumTransformAPIExpr (Env { lty = lty, s2n = s2n }) tm in
 
-    (runtime, tm)
+  --   (runtime, tm)
 
   sem dualnumTransformAPIConst env tm =
   | CGenEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumGenEpsilon")
@@ -254,26 +252,8 @@ end
 -- Provides runtime implementations for elementary functions that are not MExpr
 -- intrisics.
 lang ElementaryFunctionsTransform = ElementaryFunctions + LoadRuntime
-
-  -- `elementaryFunctionsTransform options tm` returns a tuple where the first
-  -- element contains runt-time implementations (typically in the form of
-  -- external) for elementary functions that are not part of MExpr. The second
-  -- element is the term `tm` where elementary function constants are replaced
-  -- by variables referencing implementations in the runtime.
-  sem elementaryFunctionsTransform : Options -> Expr -> (Expr, Expr)
-  sem elementaryFunctionsTransform options =| tm ->
-    let runtimeFile = "runtime-elementary-wrapper.mc" in
-
-    -- load elementary functions runtime
-    let runtime = symbolize (loadRuntimeFile true runtimeFile) in
-
-    -- Define function that maps string identifiers to names
-    let stringToName =
-      makeRuntimeNameMap runtime (_elementaryFunctionsTransformRuntimeIds ())
-    in
-
-    (runtime, elementaryFunctionsTransformExpr stringToName tm)
-
+  -- The given function should look up the symbolized name for the
+  -- given elementary function.
   sem elementaryFunctionsTransformExpr : (String -> Name) -> Expr -> Expr
   sem elementaryFunctionsTransformExpr stringToName =
   | tm & TmConst r -> elementaryFunctionsTransformConst stringToName tm r.val
@@ -313,28 +293,6 @@ lang ReplaceHigherOrderConstants
   | _ -> None ()
 
   sem replaceHigherOrderConstants : {path : String, env : SymEnv} -> Expr -> Expr
-end
-
-lang ReplaceHigherOrderConstantsLoadDirectly
-  = ReplaceHigherOrderConstants + LoadRuntime + Sym + MExprANFAll
-  sem _replaceHigherOrderConstantExpr: Expr -> Expr
-  sem _replaceHigherOrderConstantExpr =
-  | TmConst r ->
-    match _replaceHigherOrderConstant r.val with Some t then
-      withType r.ty (withInfo r.info (var_ t))
-    else TmConst r
-  | t -> t
-
-  sem replaceHigherOrderConstants env =
-  | t ->
-    let t = mapPre_Expr_Expr _replaceHigherOrderConstantExpr t in
-    let replacements = loadRuntimeFile false "runtime-const.mc" in
-    let replacements = normalizeTerm replacements in
-    let t = bind_ replacements t in
-    let t = symbolizeExpr
-      { symEnvEmpty with allowFree = true, ignoreExternals = true } t
-    in
-    t
 end
 
 lang ReplaceHigherOrderConstantsLoadedPreviously = ReplaceHigherOrderConstants + SymGetters
@@ -561,6 +519,8 @@ lang CPPLLoader
         , ("seedIsSome", match options.seed with Some seed then bool_ true else bool_ false)
         , ("seed", match options.seed with Some seed then int_ seed else int_ 0)
         , ("prune", bool_ options.prune)
+        , ("driftKernel", bool_ options.driftKernel)
+        , ("driftScale", float_ options.driftScale)
         ]
       , ident = nameNoSym "compileOptions"
       , tyAnnot = tyunknown_
@@ -915,255 +875,3 @@ end
 --     let env = Env {lty = lty, s2n = s2n} in
 --     addHook loader (ADHook env)
 -- end
-
--- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr AST
--- types here. Optimally, the type would be Options -> CorePPLExpr -> MExprExpr
--- or similar.
-lang MExprCompile =
-  MExprPPL + Resample + Externals + DPPLParser + DPPLExtract + LoadRuntime +
-  StaticDelay + DPPLKeywordReplace + DPPLTransformDist + MExprSubstitute +
-  MExprANFAll + CPPLBackcompat +
-  DPPLPrunedReplace +
-  ElementaryFunctionsTransform + DPPLDelayedReplace
-  + ReplaceHigherOrderConstantsLoadDirectly
-  + CompileModels
-  + InsertModels
-  + MExprAsDecl
-  + ADTransform
-  + PhaseStats
-
-  -- sem mexprCpplCompile : Options -> Bool -> Expr -> Expr
-  -- sem mexprCpplCompile options noInfer =
-  -- | ast ->
-  --   let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
-  --   -- First replace externals that implements elementary functions with
-  --   -- appropriate constants
-  --   let ast = replaceExternalElementaryFunctions ast in
-  --   endPhaseStatsExpr log "replace-elementary" ast;
-
-  --   -- Secondly translate all Default {} inference methods
-  --   let ast = replaceDefaultInferMethod options ast in
-  --   endPhaseStatsExpr log "replace-default-infer" ast;
-
-  --   -- Load the inference runtimes used in the provided AST, and collect
-  --   -- identifiers of common methods within the runtimes.
-  --   let inferRuntimes = loadRuntimes options ast in
-
-  --   -- If no infers are found, the entire AST is the model code, so we transform
-  --   -- it as:
-  --   --
-  --   -- let d = infer <method> (lam. <model>) in
-  --   -- let printRes = ... in
-  --   -- printRes <pp> d
-  --   --
-  --   -- where <method> = inference method chosen according to options
-  --   --       <model> = the entire AST
-  --   --       <pp> = the pretty-print function used to print the result
-  --   match
-  --     if noInfer then programModelTransform options ast
-  --     else (inferRuntimes, ast)
-  --   with (inferRuntimes, ast) in
-  --   endPhaseStatsExpr log "load-runtimes" ast;
-
-  --   -- Combine the required runtime ASTs to one AST and eliminate duplicate
-  --   -- definitions due to files having common dependencies. The result is an
-  --   -- updated map of runtime entries, a combined runtime AST and a
-  --   -- symbolization environment.
-  --   let inferRuntimes = combineInferRuntimes options inferRuntimes in
-  --   endPhaseStatsExpr log "combine-runtimes" ast;
-
-  --   mexprCompile options inferRuntimes ast
-
-
-  -- sem mexprCompile : Options -> InferRuntimes -> Expr -> Expr
-  -- sem mexprCompile options runtimes =
-  -- | corepplAst ->
-  --   let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
-  --   -- Symbolize and type-check the CorePPL AST.
-  --   let corepplAst = symbolize corepplAst in
-  --   endPhaseStatsExpr log "symbolize" corepplAst;
-  --   let corepplAst = typeCheck corepplAst in
-  --   endPhaseStatsExpr log "type-check" corepplAst;
-
-  --   -- Transform solveode terms and add the ODE solver runtime code and add it
-  --   -- to the program.
-  --   let corepplAst =
-  --     switch odeTransform options corepplAst
-  --     case (Some odeRuntime, corepplAst) then
-  --       eliminateDuplicateExternals (bind_ odeRuntime corepplAst)
-  --     case (None _, corepplAst) then corepplAst
-  --     end
-  --   in
-  --   endPhaseStatsExpr log "ode-transform" corepplAst;
-
-  --   -- Does the program contain differentiation?
-  --   let hasDiff = adHasDiff corepplAst in
-
-  --   -- Transform diff terms and lift to dual numbers if necessary.
-  --   let corepplAst =
-  --     if hasDiff then typeCheck (dualnumLiftExpr corepplAst)
-  --     else corepplAst
-  --   in
-  --   endPhaseStatsExpr log "lift-dual-nums" corepplAst;
-
-  --   -- Extract the infer expressions to separate ASTs, one per inference
-  --   -- method. The result consists of the provided AST, updated such that
-  --   -- each infer is replaced with a call to the 'run' function provided by
-  --   -- the chosen runtime. It also consists of one AST per inference method
-  --   -- used in the program.
-  --   let runtimeRunNames = mapMap (lam entry. entry.runId) runtimes.entries in
-  --   match extractInfer options runtimeRunNames corepplAst with
-  --     (corepplAst, models)
-  --   in
-  --   endPhaseStatsExpr log "extract-infer" corepplAst;
-
-  --   -- Compile the model ASTs.
-  --   let runtimeEntries = mapMap (lam entry. {symEnv = entry.topSymEnv, stateType = entry.stateType}) runtimes.entries in
-  --   let modelAsts = compileModels options runtimes models in
-  --   endPhaseStatsExpr log "compile-models" corepplAst;
-
-  --   -- Transform distributions in the CorePPL AST to use MExpr code.
-  --   let corepplAst = replaceDelayTypes (replaceDelayKeywords (replaceTyPruneInt (removePrunes ((replaceCancel corepplAst))))) in
-  --   endPhaseStatsExpr log "replace-delay-types" corepplAst;
-  --   let corepplAst = transformDistributions corepplAst in
-  --   endPhaseStatsExpr log "transform-distributions" corepplAst;
-
-  --   -- Symbolize any free occurrences in the CorePPL AST and in any of the
-  --   -- models using the symbolization environment of the runtime AST.
-  --   let runtimeSymEnv = addTopNames symEnvEmpty runtimes.ast in
-  --   let corepplAst = symbolizeExpr runtimeSymEnv corepplAst in
-  --   endPhaseStatsExpr log "add-top-names" corepplAst;
-
-  --   -- Replace uses of DPPL keywords in the main AST, i.e. outside of models,
-  --   -- with errors. This code is unreachable unless the inferred models are
-  --   -- also used outside of infers, which is an error.
-  --   -- TODO(larshum, 2022-10-07): Detect such errors statically.
-  --   let corepplAst = replaceDpplKeywords corepplAst in
-  --   endPhaseStatsExpr log "replace-dppl-keywords" corepplAst;
-
-  --   -- Combine the CorePPL AST with the runtime AST, after extracting the
-  --   -- models, and eliminate duplicated external definitions.
-  --   let mainAst = bind_ runtimes.ast corepplAst in
-  --   match eliminateDuplicateExternalsWithSummary mainAst
-  --     with (replaced, mainAst)
-  --   in
-  --   endPhaseStatsExpr log "eliminate-duplicate-externals" mainAst;
-
-  --   -- Apply the replacements performed by the duplicate duplicated external
-  --   -- elimination on the model ASTs.
-  --   let modelAsts = replaceIdentifiers replaced modelAsts in
-
-  --   -- Insert all models into the main AST at the first point where any of the
-  --   -- models are used.
-  --   let prog = insertModels modelAsts mainAst in
-  --   endPhaseStatsExpr log "insert-models" prog;
-
-  --   -- TODO(dlunde,2023-05-22): Does not work, currently (the program does not
-  --   -- type check at this stage). It does, however, type check after generating
-  --   -- the code and compiling it with Miking.
-  --   -- Type-check if options is set
-  --   -- (if options.debugMExprCompile then
-  --   --   -- Check that the combined program type checks
-  --   --   typeCheck prog; ()
-  --   -- else ());
-
-  --   -- Provide a dual number runtime implementations
-  --   let prog =
-  --     if hasDiff then
-  --       match adProvideRuntimeImplementation options prog with
-  --         (adRuntime, prog)
-  --       in
-  --       eliminateDuplicateExternals (bind_ adRuntime prog)
-  --     else prog
-  --   in
-  --   endPhaseStatsExpr log "provide-dual-number-impl" prog;
-
-  --   -- Finally we provide runtime implementations for elementary functions that
-  --   -- are not MExpr intrinsics.
-  --   match elementaryFunctionsTransform options prog with
-  --     (elementaryRuntime, prog)
-  --   in
-  --   endPhaseStatsExpr log "transform-elementary" prog;
-  --   let prog = eliminateDuplicateExternals (bind_ elementaryRuntime prog) in
-  --   endPhaseStatsExpr log "eliminate-duplicate-externals-2" prog;
-
-  --   -- Return complete program
-  --   prog
-
-
-  sem replaceIdentifiers : Map Name Name -> Map Name Expr -> Map Name Expr
-  sem replaceIdentifiers replaced =
-  | modelAsts ->
-    mapMapWithKey
-      (lam. lam modelAst. substituteIdentifiers replaced modelAst)
-      modelAsts
-
-end
-
--- let mexprCompile = use MExprCompile in mexprCompile
-
--- lang TestCompileLang =
---   MExprCompile + CPPLBackcompat + MExprFindSym + DPPLParser
--- end
-
--- mexpr
-
--- use TestCompileLang in
-
--- let parse = parseMExprPPLString in
-
--- -- TODO(dlunde,2022-10-19): We should also add a `simpleInfer` test that uses
--- -- the new infer keyword.
--- let simple = parse "
--- let x = assume (Beta 10.0 5.0) in
--- let obs = true in
--- observe obs (Bernoulli x);
--- x
--- " in
--- let simple = symbolize simple in
-
--- let truefn = lam. lam. true in
-
--- let dummyOptions = default in
-
--- let compile = lam options. lam methodStr. lam ast.
---   let options = {options with method = methodStr} in
---   match programModelTransform options ast with (runtimes, ast) in
---   let runtimeData = combineInferRuntimes options runtimes in
---   mexprCompile options runtimeData ast
--- in
-
--- -- Simple tests that ensure compilation of a simple model throws no errors
-
--- -- Likelihood weighting
--- utest compile {dummyOptions with cps = "none"}
---         "is-lw" simple with () using truefn in
--- utest compile {dummyOptions with cps = "partial"}
---         "is-lw" simple with () using truefn in
--- utest compile {dummyOptions with cps = "full"}
---         "is-lw" simple with () using truefn in
-
--- -- APF
--- utest compile dummyOptions "smc-apf" simple with () using truefn in
-
--- -- BPF
--- utest compile dummyOptions "smc-bpf" simple with () using truefn in
-
--- -- Naive MCMC
--- utest compile dummyOptions "mcmc-naive" simple with () using truefn in
-
--- -- Trace MCMC
--- utest compile dummyOptions "mcmc-trace" simple with () using truefn in
-
--- -- Lightweight MCMC
--- utest compile dummyOptions "mcmc-lightweight" simple with () using truefn in
--- utest compile {dummyOptions with align = true, cps = "none"}
---         "mcmc-lightweight" simple with () using truefn in
--- utest compile {dummyOptions with align = true, cps = "partial"}
---         "mcmc-lightweight" simple with () using truefn in
--- utest compile {dummyOptions with align = true, cps = "full"}
---         "mcmc-lightweight" simple with () using truefn in
-
--- utest compile dummyOptions "pmcmc-pimh" simple with () using truefn in
-
--- ()

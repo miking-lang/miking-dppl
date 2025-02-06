@@ -23,10 +23,6 @@ let cppl =
   match sysGetEnv "CPPL_NAME" with Some cppl then join [dpplPath, "/build/", cppl]
   else error "CPPL_NAME not defined"
 
-let rppl =
-  match sysGetEnv "ROOTPPL_BIN" with Some rppl then join [dpplPath, "/", rppl]
-  else error "ROOTPPL_BIN not defined"
-
 let parseRun: String -> CpplRes = lam output.
   let output = strSplit "\n" output in
   let extra =
@@ -73,22 +69,6 @@ let testCpplMExpr: String -> Int -> Int -> String -> CpplRes =
     sysDeleteDir wd;
     burnCpplRes burn (parseRun run.stdout)
 
--- Compile and run CorePPL program and get back a list of weighted string
--- samples. RootPPL backend.
-let testCpplRootPPL: String -> Int -> Int -> String -> String -> CpplRes =
-  lam model. lam samples. lam burn. lam cpplCompileArgs. lam rpplCompileArgs.
-    let m = join [dpplPath, "/coreppl/models/", model] in
-    let wd = sysTempDirMake () in
-    sysRunCommandWithUtest [
-        cppl, "--seed 0", "-t rootppl", "--skip-final", cpplCompileArgs, m
-      ] "" wd;
-    sysRunCommandWithUtest [
-        rppl, "--seed 0", "--stack-size 10000", rpplCompileArgs, "out.cu"
-      ] "" wd;
-    let run = sysRunCommandWithUtest [ "./a.out", (int2string samples) ] "" wd in
-    sysDeleteDir wd;
-    burnCpplRes burn (parseRun run.stdout)
-
 -- Normalizing constant testing
 let resNormConst: CpplRes -> Float = lam cpplRes.
   match cpplRes.extra with Some nc then nc else
@@ -101,12 +81,12 @@ let coinTruth: Float = divf 12.0 23.0
 let eqCoin: Float -> Float -> Float -> Bool = eqfApprox
 
 recursive
-let quantile_calc: Float -> Float -> [(Float, Float)] -> Float = lam inf. lam sup. lam cdf. 
+let quantile_calc: Float -> Float -> [(Float, Float)] -> Float = lam inf. lam sup. lam cdf.
   if eqi (length cdf) 1 then
     0.0
   else
     if gtf (head cdf).0 inf then
-      subf (quantile_sup sup (tail cdf)) (head cdf).1  
+      subf (quantile_sup sup (tail cdf)) (head cdf).1
     else
       quantile_calc inf sup (tail cdf)
 
@@ -120,13 +100,13 @@ let quantile_sup: Float -> [(Float, Float)] -> Float = lam sup. lam cdf.
       quantile_sup sup (tail cdf)
 end
 
-let testFail = lam opt. lam a. lam b. join 
+let testFail = lam opt. lam a. lam b. join
   [ float2string a, " != ", float2string b, " (", opt, ")"]
 
-let testPattern : (Int -> String -> CpplRes) -> (Float -> Float -> Bool) -> [(Float, Float, Float)] -> (Int, String) -> () = 
+let testPattern : (Int -> String -> CpplRes) -> (Float -> Float -> Bool) -> [(Float, Float, Float)] -> (Int, String) -> () =
   lam exe. lam custmcpf. lam quant. lam params.
 
-  let result = exe params.0 params.1 in 
+  let result = exe params.0 params.1 in
   let weights = (map exp result.lweights) in
   -- re normalize after truncature of burning
   let acc = foldl addf 0.0 weights in -- sum other the vector

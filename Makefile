@@ -11,13 +11,13 @@ all: build/${CPPL_NAME}
 clean: clean-coreppl
 
 .PHONY: install
-install: install-coreppl install-rootppl install-scripts
+install: install-coreppl install-scripts
 
 .PHONY: uninstall
-uninstall: uninstall-coreppl uninstall-rootppl uninstall-scripts
+uninstall: uninstall-coreppl uninstall-scripts
 
 .PHONY: test
-test: test-coreppl test-rootppl
+test: test-coreppl
 
 
 #############
@@ -68,29 +68,6 @@ test-coreppl-compiler:
 .PHONY: test-coreppl-inference
 test-coreppl-inference:
 	@$(MAKE) -s -f test-coreppl.mk inference
-
-#############
-## RootPPL ##
-#############
-
-.PHONY: install-rootppl
-install-rootppl:
-	mkdir -p $(dir ${ROOTPPL_BIN_PATH}) ${ROOTPPL_SRC_PATH};
-	sed 's|$$RPPL_ENGINE_SRC|${ROOTPPL_SRC_PATH}|g' ${ROOTPPL_BIN} > ${ROOTPPL_BIN_PATH}
-	chmod +x ${ROOTPPL_BIN_PATH}
-	cp -rf ${ROOTPPL_SRC} ${ROOTPPL_SRC_PATH}
-
-.PHONY: uninstall-rootppl
-uninstall-rootppl:
-	rm -rf ${ROOTPPL_BIN_PATH}
-	rm -rf ${ROOTPPL_SRC_PATH}
-
-# TODO(2023-06-28,dlunde): Currently no pure RootPPL tests (although we test
-# the RootPPL backend of cppl as part of test-cppl). There seem to be some
-# tests under rootppl/, but I do not know their dependencies (seem to be some R
-# stuff there, for example) and how to run them from this makefile.
-.PHONY: test-rootppl
-test-rootppl:
 
 
 #############

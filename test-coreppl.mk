@@ -17,10 +17,6 @@ test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
 test-staticdelay-files=$(shell find coreppl/test/coreppl-to-mexpr/static-delay -name "*.mc")
 test-cli-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/cli -name "*.mc")
-# NOTE(johnwikman, 2024-09-13): The RootPPL compilation is currently broken, so
-# leaving it commented out until someone has fixed RootPPL compilation.
-#test-cli-files+=\
-#  $(shell find coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
 test-expectation-files=$(shell find coreppl/test/coreppl-to-mexpr/expectation -name "*.mc")
 
 test-inference-files=\
@@ -61,9 +57,6 @@ inference: ${test-inference-files}
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}
 export MIDPPL_SRC=${MIDPPL_PATH}/${CPPL_SRC}
-
-export ROOTPPL_BIN
-export RPPL_ENGINE_SRC=${MIDPPL_PATH}/${ROOTPPL_SRC}
 
 # Infer tests
 ${test-infer-files}::

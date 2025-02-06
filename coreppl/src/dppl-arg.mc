@@ -7,9 +7,6 @@ type Options = {
   -- Inference algorithm
   method : String,
 
-  -- Backend
-  target : String,
-
   -- Whether or not to include utests
   test : Bool,
 
@@ -43,9 +40,6 @@ type Options = {
 
   -- Whether or not to print the actual result samples in compiled programs
   printSamples: Bool,
-
-  -- Option for the `rootppl` target.
-  stackSize: Int,
 
   -- Whether or not to apply CPS transformations
   cps: String,
@@ -84,7 +78,6 @@ type Options = {
 -- Default values for options
 let default = {
   method = "is-lw",
-  target = "mexpr",
   test = false,
   particles = 5000,
   resample = "manual",
@@ -101,7 +94,6 @@ let default = {
   dynamicDelay = false,
   prune = false,
   printSamples = true,
-  stackSize = 10000,
   cps = "full",
   earlyStop = true,
   mcmcLightweightGlobalProb = 0.1,
@@ -130,13 +122,6 @@ let config = [
     "Include utests",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with test = true}),
-  ([("-t", " ", "<target>")],
-    join [
-      "The compilation target. The supported targets are: mexpr, rootppl. Default: ",
-      default.target
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with target = argToString p}),
   ([("-p", " ", "<particles>")],
     join [
       "The number of particles (i.e., samples or iterations). The default is ", (int2string default.particles)
@@ -202,13 +187,6 @@ let config = [
     "Do not print the final samples in the compiled program.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with printSamples = false}),
-  ([("--stack-size", " ", "<size>")],
-    join [
-      "The stack size used by RootPPL. The default is ",
-      (int2string default.stackSize), " (bytes)."
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with stackSize = argToIntMin p 1}),
   ([("--cps", " ", "<option>")],
     join ["Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: ", default.cps, "."],
     lam p: ArgPart Options.
@@ -259,12 +237,12 @@ let config = [
        ],
        lam p: ArgPart Options.
         let o: Options = p.options in {o with subsampleSize = argToIntMin p 1}),
-  
-  ([("--kernel", "", "")], 
+
+  ([("--kernel", "", "")],
     "Use drift Kernel in MCMC. Use in conjuction with -m mcmc-lightweight",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with driftKernel = true}),
-    
+
   ([("--drift", " ", "<value>")],
     join [
           "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: ", 
