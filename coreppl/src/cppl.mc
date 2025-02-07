@@ -45,21 +45,20 @@ match result with ParseOK r then
 
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
-    let res = mkCPPLLoader [
-      StripUtestHook (),
-      ODEHook { options = options }
-    ] options
-    in
-    let loader = enableUtestGeneration res.loader in
+    let loader = mkLoader symEnvDefault typcheckEnvDefault
+      [ ODEHook {options = options}
+      , StripUtestHook ()
+      ] in
+    let loader = enableCPPLCompilation options loader in
+    let loader = enableUtestGeneration loader in
     let loader = enablePprintGeneration loader in
     endPhaseStatsExpr log "mk-cppl-loader" unit_;
 
     let loader = (includeFileTypeExn (FCorePPL {isModel = true}) "." filename loader).1 in
-    let loader = insertUtestExitCheck loader in
     endPhaseStatsExpr log "include-file" unit_;
 
-    let ast = extractAsMExprExn options res.envs (deref res.runtimes) loader in
-    endPhaseStatsExpr log "extract-as-mexpr" ast;
+    let ast = buildFullAst loader in
+    endPhaseStatsExpr log "build-full-ast" ast;
 
     let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
       let opts =

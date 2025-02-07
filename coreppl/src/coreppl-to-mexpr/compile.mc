@@ -464,10 +464,6 @@ lang CPPLLoader
   | CPPLHook
     { options : Options
     , runtimes : Ref (Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type})
-    }
-
-  sem mkCPPLLoader : [Hook] -> Options ->
-    { runtimes : Ref (Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type})
     , envs :
       { higherOrderSymEnv : {path : String, env : SymEnv}
       , distEnv : {path : String, env : SymEnv}
@@ -475,15 +471,11 @@ lang CPPLLoader
       , pruneEnv : {path: String, env: SymEnv}
       , delayEnv : {path: String, env: SymEnv}
       }
-    , loader : Loader
     }
-  sem mkCPPLLoader hooks = | options ->
-    let runtimes = ref (mapEmpty cmpInferMethod) in
-    let cppl = CPPLHook
-      { options = options
-      , runtimes = runtimes
-      } in
-    let loader = mkLoader symEnvDefault typcheckEnvDefault (cons cppl hooks) in
+
+  sem enableCPPLCompilation : Options -> Loader -> Loader
+  sem enableCPPLCompilation options = | loader ->
+    if hasHook (lam x. match x with CPPLHook _ then true else false) loader then loader else
 
     match includeFileExn "." "stdlib::ext/math-ext.mc" loader with (externalMathEnv, loader) in
 
@@ -558,25 +550,30 @@ lang CPPLLoader
       , info = NoInfo ()
       } in
     let loader = _addDeclExn loader distAlias in
+
     match
       (if options.prune then
         includeFileExn "." "coreppl::coreppl-to-mexpr/pruning/runtime.mc" loader
-      else ({env= _symEnvEmpty, path="<no-prune-runtime-loader>"}, loader)) with (pruneEnv, loader) in
+      else ({env= _symEnvEmpty, path="<no-prune-runtime-loader>"}, loader))
+    with (pruneEnv, loader) in
     match
       (if options.dynamicDelay then
         includeFileExn "." "coreppl::coreppl-to-mexpr/delayed-sampling/runtime.mc" loader
-      else ({env=_symEnvEmpty,path="<no-delay-runtime-loader>"}, loader)) with (delayEnv, loader) in
+      else ({env=_symEnvEmpty,path="<no-delay-runtime-loader>"}, loader))
+    with (delayEnv, loader) in
 
-    { runtimes = runtimes
-    , loader = loader
-    , envs =
-      { higherOrderSymEnv = symEnv
-      , distEnv = distEnv
-      , externalMathEnv = externalMathEnv
-      , pruneEnv = pruneEnv
-      , delayEnv = delayEnv
-      }
-    }
+    let hook = CPPLHook
+      { options = options
+      , runtimes = ref (mapEmpty cmpInferMethod)
+      , envs =
+        { higherOrderSymEnv = symEnv
+        , distEnv = distEnv
+        , externalMathEnv = externalMathEnv
+        , pruneEnv = pruneEnv
+        , delayEnv = delayEnv
+        }
+      } in
+    addHook loader hook
 
   sem _preSymbolize loader decl = | CPPLHook x ->
     let decl = smap_Decl_Expr (replaceDefaultInferMethod x.options) decl in
@@ -606,21 +603,11 @@ lang CPPLLoader
       loader in
     (setFold f loader requiredRuntimes, decl)
 
-  sem extractAsMExprExn
-    : Options
-    -> { higherOrderSymEnv : {path : String, env : SymEnv}
-       , distEnv : {path : String, env : SymEnv}
-       , externalMathEnv : {path : String, env : SymEnv}
-       , pruneEnv : {path : String, env : SymEnv}
-       , delayEnv : {path : String, env : SymEnv}
-       }
-    -> Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type}
-    -> Loader
-    -> Expr
-  sem extractAsMExprExn options envs runtimes = | loader ->
+  sem _postBuildFullAst loader ast = | CPPLHook hook ->
+    let options = hook.options in
+    let runtimes = deref hook.runtimes in
+    let envs = hook.envs in
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
-    let ast = buildFullAst loader in
-    endPhaseStatsExpr log "build-full-ast" ast;
     let ast = removeMetaVarExpr ast in
     endPhaseStatsExpr log "remove-meta-var" ast;
     let runtimeRunNames = mapMap (lam entry. _getVarExn "run" entry.env) runtimes in
