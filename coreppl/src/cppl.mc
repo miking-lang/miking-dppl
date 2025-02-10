@@ -26,7 +26,11 @@ lang CPPLLang = CorePPLFileTypeLoader
   + MExprAst + UtestLoader + ODELoader + MExprGenerateEq
   + MExprLowerNestedPatterns + MCoreCompileLang
   + PhaseStats + MExprGeneratePprint
-  + RepTypesLoader + RepTypesSym + RepTypesTypeCheck + RepTypesPrettyPrint + RepTypesAst
+  + RepTypesLoader
+  + RepTypesSym + RepTypesDeclSym
+  + RepTypesTypeCheck + TypeCheckRepTypeDecls
+  + RepTypesPrettyPrint
+  + RepTypesAst
 end
 
 lang CPPLRepAnalysis
