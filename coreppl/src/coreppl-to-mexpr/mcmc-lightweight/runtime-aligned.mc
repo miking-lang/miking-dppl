@@ -79,9 +79,11 @@ let state: State = {
 }
 
 let updateWeight = lam v.
+  -- print "Weight: "; print (float2string (exp v)); print " TotalWeight: "; printLn (float2string (exp (addf (deref state.weight) v)));
   modref state.weight (addf (deref state.weight) v)
 
 let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
+  -- printLn "Nsample";
   let s = use RuntimeDist in sample dist in
   let w = use RuntimeDist in logObserve dist s in
   (unsafeCoerce s, w)
@@ -118,7 +120,7 @@ let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, F
   lam dist. lam sample. lam w.
     let s: a = unsafeCoerce sample in
     let wNew = use RuntimeDist in logObserve dist s in
-    -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
+    -- printLn (join ["Mod weightReused: ", float2string (exp wNew), "; "]);
     -- printLn (join ["Mod prevWeightReused: ", float2string w]);
     modref state.weightReused (addf (deref state.weightReused) wNew);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
@@ -258,11 +260,11 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
                       (subf weightReused prevWeightReused))
                     driftHastingRatio)
         in
-        -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
-        -- print "weight: "; printLn (float2string weight);
-        -- print "prevWeight: "; printLn (float2string prevWeight);
-        -- print "weightReused: "; printLn (float2string weightReused);
-        -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+        -- print "logMhAcceptProb: "; printLn (float2string (exp logMhAcceptProb));
+        -- print "weight: "; printLn (float2string (exp  weight));
+        -- print "prevWeight: "; printLn (float2string (exp prevWeight));
+        -- print "weightReused: "; printLn (float2string (exp weightReused));
+        -- print "prevWeightReused: "; printLn (float2string (exp prevWeightReused));
         -- printLn "-----";
         let iter = subi iter 1 in
         if bernoulliSample (exp logMhAcceptProb) then

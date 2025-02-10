@@ -1,3 +1,5 @@
+include "../runtime-dists.mc"
+
 let choseKernel: all a. use RuntimeDistBase in Dist a -> a -> Float -> Dist a = 
   lam dist. lam prev. lam drift. 
     use RuntimeDistElementary in

@@ -8,7 +8,6 @@ include "string.mc"
 include "option.mc"
 
 include "../runtime-common.mc"
-include "../runtime-dists.mc"
 include "kernel.mc"
 
 -- Any-type, used for traces
@@ -120,15 +119,18 @@ let moveSample: all a. a -> Float -> use RuntimeDistBase in Dist a -> (Any, Floa
 
     (unsafeCoerce proposal, proposalPriorProb)  
 
-let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
-  lam dist. lam sample. lam w.
-    let s: a = unsafeCoerce sample in
-    let wNew = use RuntimeDist in logObserve dist s in
-    -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
-    -- printLn (join ["Mod prevWeightReused: ", float2string w]);
-    modref state.weightReused (addf (deref state.weightReused) wNew);
-    modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
-    (sample, wNew)
+    let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
+    lam dist. lam sample. lam w.
+      let s: a = unsafeCoerce sample in
+      let wNew = use RuntimeDist in logObserve dist s in
+      -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
+      -- printLn (join ["Mod prevWeightReused: ", float2string w]);
+      if eqfApprox 1e-14 wNew 0.0 then
+        newSample dist
+      else
+        modref state.weightReused (addf (deref state.weightReused) wNew);
+        modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
+        (sample, wNew)
 
 -- Procedure at aligned samples
 let sampleAlignedBase: all a. (use RuntimeDistBase in Dist a -> (Any, Float)) -> use RuntimeDistBase in Dist a -> (a -> Result)
