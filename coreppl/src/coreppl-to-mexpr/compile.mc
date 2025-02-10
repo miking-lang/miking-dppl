@@ -627,7 +627,7 @@ lang CPPLLoader
     ast
 end
 
-lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint
+lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + RepTypesAsDecl
   syn FileType =
   | FCorePPL {isModel : Bool}
 
@@ -737,7 +737,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       , builtin = cpplBuiltin
       } in
     let ast = parseMCoreFile args path in
-    let ast = use DPPLParser in makeKeywords ast in
+    let ast = use DPPLParser in findRepTypeDecls (makeKeywords ast) in
     recursive let f = lam decls. lam ast.
       match exprAsDecl ast with Some (decl, ast)
       then f (snoc decls decl) ast

@@ -1,7 +1,7 @@
 include "../coreppl.mc"
 include "../dppl-arg.mc"
 
-lang LightweightMCMCMethod = MExprPPL
+lang LightweightMCMCMethod = InferMethodBase
   syn InferMethod =
   | LightweightMCMC {
       iterations : Expr, -- Type Int

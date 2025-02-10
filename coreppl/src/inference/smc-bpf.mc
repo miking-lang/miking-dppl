@@ -1,7 +1,7 @@
 include "../coreppl.mc"
 include "../dppl-arg.mc"
 
-lang BPFMethod = MExprPPL
+lang BPFMethod = InferMethodBase
   syn InferMethod =
   | BPF {particles : Expr}
 

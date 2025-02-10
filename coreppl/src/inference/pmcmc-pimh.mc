@@ -1,7 +1,7 @@
 include "../coreppl.mc"
 include "../dppl-arg.mc"
 
-lang PIMHMethod = MExprPPL
+lang PIMHMethod = InferMethodBase
   syn InferMethod =
   | PIMH {
       particles : Expr, -- Type Int

@@ -20,19 +20,44 @@ include "mexpr/utils.mc"
 include "mexpr/generate-utest.mc"
 include "ocaml/mcore.mc"
 
+include "mexpr/reptypes-loader.mc"
+
 lang CPPLLang = CorePPLFileTypeLoader
   + MExprAst + UtestLoader + ODELoader + MExprGenerateEq
   + MExprLowerNestedPatterns + MCoreCompileLang
   + PhaseStats + MExprGeneratePprint
+  + RepTypesLoader + RepTypesSym + RepTypesTypeCheck + RepTypesPrettyPrint + RepTypesAst
+end
 
-  -- Check if a CorePPL program uses infer
-  sem hasInfer =
-  | expr -> hasInferH false expr
+lang CPPLRepAnalysis
+  = MExprRepAnalysis
+  + ElementaryFunctions
+  + CorePPL
+  + CoreDPL
+  + Resample
+  + ImportanceSamplingMethod
+  + BPFMethod
+  + APFMethod
+  + LightweightMCMCMethod
+  + NaiveMCMCMethod
+  + TraceMCMCMethod
+  + PIMHMethod
+end
 
-  sem hasInferH acc =
-  | TmInfer _ -> true
-  | expr -> sfold_Expr_Expr hasInferH acc expr
-
+lang CPPLRepSolver
+  = MExprRepTypesSolverBase
+  + TreeSolverPartIndep
+  + ElementaryFunctions
+  + CorePPL
+  + CoreDPL
+  + Resample
+  + ImportanceSamplingMethod
+  + BPFMethod
+  + APFMethod
+  + LightweightMCMCMethod
+  + NaiveMCMCMethod
+  + TraceMCMCMethod
+  + PIMHMethod
 end
 
 mexpr
@@ -58,6 +83,10 @@ match result with ParseOK r then
       [ ODEHook {options = options}
       , StripUtestHook ()
       ] in
+    let loader = enableRepTypes
+      (use CPPLRepAnalysis in typeCheckLeaveMeta)
+      (use CPPLRepSolver in reprSolve defaultReprSolverOptions)
+      loader in
     let loader = enableCPPLCompilation options loader in
     let loader = enableUtestGeneration loader in
     let loader = enablePprintGeneration loader in

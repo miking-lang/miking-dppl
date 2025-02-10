@@ -1483,7 +1483,7 @@ let pplKeywords = [
   "Binomial", "Wiener"
 ]
 
-lang CoreDPL = Ast + SolveODE + Diff + Delayed end
+lang CoreDPL = Ast + SolveODE + Delayed end
 
 let dplKeywords = [
   "solveode", "diff"

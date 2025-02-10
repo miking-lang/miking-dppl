@@ -1,7 +1,7 @@
 include "../coreppl.mc"
 include "../dppl-arg.mc"
 
-lang TraceMCMCMethod = MExprPPL
+lang TraceMCMCMethod = InferMethodBase
   syn InferMethod =
   | TraceMCMC {
       iterations : Expr -- Type Int
