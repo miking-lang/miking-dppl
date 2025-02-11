@@ -289,6 +289,22 @@ lang MExprPPLLightweightMCMC =
   syn Expr =
   | TmAssumeUnaligned { dist: Expr, ty: Type, info: Info }
 
+  sem tyTm =
+  | TmAssumeUnaligned x -> x.ty
+  sem withType ty =
+  | TmAssumeUnaligned x -> TmAssumeUnaligned {x with ty = ty}
+
+  sem infoTm =
+  | TmAssumeUnaligned x -> x.info
+  sem withInfo info =
+  | TmAssumeUnaligned x -> TmAssumeUnaligned {x with info = info}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmAssumeUnaligned x ->
+    match f acc x.dist with (acc, dist) in
+    (acc, TmAssumeUnaligned {x with dist = dist})
+
+
   sem exprCps env k =
 
   -- This is where we use the continuation (aligned assumes)

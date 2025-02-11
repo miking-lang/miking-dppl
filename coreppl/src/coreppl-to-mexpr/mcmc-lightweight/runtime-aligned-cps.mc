@@ -338,8 +338,15 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
   -- empty, and `mh` will crash. However, such a program requires no
   -- inference at all, thus we exit early here.
   if null (deref state.alignedTrace) then
+    -- NOTE(vipa, 2025-02-14): It's important that this line is
+    -- *before* the use, otherwise `sample` will refer to the `sem`
+    -- from `RuntimeDist`. Because we don't type-check the return
+    -- value of this function in practice, and the `Dist` type places
+    -- no restrictions on the type of its samples this compiles, but
+    -- fails at run time
+    let res = [sample] in
     use RuntimeDist in
-    constructDistEmpirical [sample] (create runs (lam. 1.))
+    constructDistEmpirical res [1.]
       (EmpMCMC { acceptRate = mcmcAcceptRate () })
   else
 
