@@ -1449,10 +1449,6 @@ let cancel_ = use Cancel in
 let typruneint_ = use Prune in
   TyPruneInt {info = NoInfo ()}
 
-let diff_ = use Diff in
-   lam fn. lam arg.
-     TmDiff { fn = fn, arg = arg, ty = tyunknown_, info = NoInfo () }
-
 let delay_ = use Delay in
   lam d. TmDelay {dist = d, ty = tyunknown_ , info = NoInfo ()}
 
@@ -1536,7 +1532,6 @@ let tmPruned = pruned_ tmPrune in
 let tmPruned2 = pruned_ tmPrune2 in
 let tmCancel = cancel_ (bern_ (float_ 0.7)) true_ in
 let tmCancel2 = cancel_ (bern_ (float_ 0.7)) false_  in
-let tmDiff = diff_ (ulam_ "x" (var_ "x")) (float_ 1.) in
 let tmDelay =
   delay_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]))
 in
@@ -1646,10 +1641,6 @@ utest tmCancel with tmCancel using eqExpr else _toStr in
 utest tmPrune with tmPrune2 using neqExpr else _toStr in
 utest tmPruned with tmPruned2 using neqExpr else _toStr in
 utest tmCancel with tmCancel2 using neqExpr else _toStr in
-utest tmDiff with tmDiff using eqExpr else _toStr in
-utest tmDiff with diff_ (ulam_ "x" (var_ "x")) (float_ 2.)
-  using neqExpr else _toStr
-in
 utest tmDelay with tmDelay using eqExpr else _toStr in
 utest tmDelayed with tmDelayed using eqExpr else _toStr in
 utest tmDelay with tmDelay2 using neqExpr else _toStr in
@@ -1710,14 +1701,6 @@ in
 
 utest sfold_Expr_Expr foldToSeq [] tmCancel
 with [ bern_ (float_ 0.7), true_ ] using eqSeq eqExpr else _seqToStr in
-utest smap_Expr_Expr mapVar tmDiff
-  with diff_ tmVar tmVar
-  using eqExpr else _toStr
-in
-utest sfold_Expr_Expr foldToSeq [] tmDiff
-  with [ float_ 1., ulam_ "x" (var_ "x") ]
-  using eqSeq eqExpr else _seqToStr
-in
 
 utest sfold_Expr_Expr foldToSeq [] tmDelay
   with [ categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]) ]
@@ -1740,7 +1723,6 @@ utest symbolize tmSolveODE with tmSolveODE using eqExpr in
 utest symbolize tmPrune with tmPrune using eqExpr in
 utest symbolize tmPruned with tmPruned using eqExpr in
 utest symbolize tmCancel with tmCancel using eqExpr in
-utest symbolize tmDiff with tmDiff using eqExpr in
 utest symbolize tmDelay with tmDelay using eqExpr in
 utest symbolize tmDelayed with tmDelayed using eqExpr in
 
@@ -1757,7 +1739,6 @@ utest tyTm (typeCheck tmSolveODE) with tyfloat_ using eqType in
 utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmPrune) with typruneint_ using eqType in
 utest tyTm (typeCheck tmCancel) with tyunit_ using eqType in
-utest tyTm (typeCheck tmDiff) with tyarrow_ tyfloat_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmDelay) with tydelayint_ using eqType in
 
 ---------------
@@ -1812,11 +1793,6 @@ utest _anf tmCancel with bindall_ [
   ulet_ "t1" (cancel_ (var_ "t") true_),
   var_ "t1"
 ] using eqExpr else _toStr in
-utest _anf tmDiff
-  with bindall_ [
-    ulet_ "t" tmDiff,
-    var_ "t"
-] using eqExpr else _toStr in
 utest _anf tmDelay with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
   ulet_ "t1" (categorical_ (var_ "t")),
@@ -1843,7 +1819,6 @@ utest (typeLift tmSolveODE).1 with tmSolveODE using eqExpr in
 utest (typeLift tmPrune).1 with tmPrune using eqExpr in
 utest (typeLift tmPruned).1 with tmPruned using eqExpr in
 utest (typeLift tmCancel).1 with tmCancel using eqExpr in
-utest (typeLift tmDiff).1 with tmDiff using eqExpr in
 utest (typeLift tmDelay).1 with tmDelay using eqExpr in
 utest (typeLift tmDelayed).1 with tmDelayed using eqExpr in
 
