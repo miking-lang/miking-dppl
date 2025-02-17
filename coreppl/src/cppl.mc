@@ -79,7 +79,11 @@ match result with ParseOK r then
   else
 
     -- Read and parse the file
-    let filename = head r.strings in
+    let filename = stdlibResolveFileOr (lam x. error x) "." (head r.strings) in
+    let isFromModelFile = lam info.
+      match info with Info x
+      then eqString x.filename filename
+      else false in
 
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
@@ -92,7 +96,7 @@ match result with ParseOK r then
       (use CPPLRepSolver in reprSolve defaultReprSolverOptions)
       loader in
     let loader = enableCPPLCompilation options loader in
-    let loader = enableUtestGeneration loader in
+    let loader = enableUtestGeneration isFromModelFile loader in
     let loader = enablePprintGeneration loader in
     endPhaseStats log "mk-cppl-loader" unit_;
 
