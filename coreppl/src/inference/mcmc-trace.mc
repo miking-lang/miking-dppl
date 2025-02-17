@@ -16,7 +16,7 @@ lang TraceMCMCMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | methodStr & "TraceMCMC" ->
     let expectedFields = [
-      ("iterations", int_ default.particles)
+      ("iterations", int_ defaultArgs.particles)
     ] in
     match getFields info bindings expectedFields with [iterations] in
     TraceMCMC { iterations = iterations }

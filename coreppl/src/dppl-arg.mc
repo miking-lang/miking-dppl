@@ -18,7 +18,7 @@ type Options = {
   printMCore: Bool,
   exitBefore: Bool,
   skipFinal: Bool,
-  outputMc: Bool,
+  outputMl: Bool,
   output: String,
   debugPhases: Bool,
   debugDumpPhases: Set String,
@@ -76,7 +76,7 @@ type Options = {
 }
 
 -- Default values for options
-let default = {
+let defaultArgs = {
   method = "is-lw",
   test = false,
   particles = 5000,
@@ -88,7 +88,7 @@ let default = {
   skipFinal = false,
   debugPhases = false,
   debugDumpPhases = setEmpty cmpString,
-  outputMc = false,
+  outputMl = false,
   output = "out",
   staticDelay = false,
   dynamicDelay = false,
@@ -114,7 +114,7 @@ let config = [
   ([("-m", " ", "<method>")],
     join [
       "The selected inference method. The supported methods are: is-lw, smc-bpf, smc-apf, mcmc-lightweight, mcmc-trace, mcmc-naive, pmcmc-pimh. Default: ",
-      default.method
+      defaultArgs.method
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with method = argToString p}),
@@ -124,14 +124,14 @@ let config = [
       let o: Options = p.options in {o with test = true}),
   ([("-p", " ", "<particles>")],
     join [
-      "The number of particles (i.e., samples or iterations). The default is ", (int2string default.particles)
+      "The number of particles (i.e., samples or iterations). The default is ", (int2string defaultArgs.particles)
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
   ([("--resample", " ", "<method>")],
     join [
       "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates, forces --align), and manual (sample only at manually defined resampling locations). Default: ",
-      default.resample, "."
+      defaultArgs.resample, "."
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with resample = argToString p}),
@@ -163,10 +163,10 @@ let config = [
     "Print a json representation of the AST after the given pass. Can be given multiple times.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugDumpPhases = setInsert (argToString p) o.debugDumpPhases}),
-  ([("--output-mc", "", "")],
-    "Write intermediate MCore output to file when compiling",
+  ([("--output-ml", "", "")],
+    "Write intermediate OCaml output to 'program.ml' in cwd when compiling",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with outputMc = true}),
+      let o: Options = p.options in {o with outputMl = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.
@@ -188,7 +188,7 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with printSamples = false}),
   ([("--cps", " ", "<option>")],
-    join ["Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: ", default.cps, "."],
+    join ["Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: ", defaultArgs.cps, "."],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with cps = argToString p}),
   ([("--no-early-stop", "", "")],
@@ -198,7 +198,7 @@ let config = [
   ([("--mcmc-lw-gprob", " ", "<value>")],
     join [
       "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: ",
-      float2string default.mcmcLightweightGlobalProb, "."
+      float2string defaultArgs.mcmcLightweightGlobalProb, "."
     ],
     lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalProb = argToFloat p }),
   ([("--no-reuse-local", "", "")],
@@ -212,7 +212,7 @@ let config = [
   ([("--pmcmcParticles", " ", "<particles>")],
     join [
       "The number of particles for the smc proposal computation. The default is ",
-      (int2string default.pmcmcParticles),
+      (int2string defaultArgs.pmcmcParticles),
       ". This option is used if one of the following methods are used: pmcmc-*."
     ],
     lam p: ArgPart Options.
@@ -222,7 +222,7 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with seed = Some (argToInt p)}),
   ([("--extract-simplification", " ", "<option>")],
-    join ["Temporary flag that decides the simplification approach after extraction in the MExpr compiler backend. The supported options are: none, inline, and peval. Default: ", default.extractSimplification, ". Eventually, we will remove this option and only use peval."],
+    join ["Temporary flag that decides the simplification approach after extraction in the MExpr compiler backend. The supported options are: none, inline, and peval. Default: ", defaultArgs.extractSimplification, ". Eventually, we will remove this option and only use peval."],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with extractSimplification = argToString p}),
   ([("--subsample", "", "")],
@@ -233,7 +233,7 @@ let config = [
   ([("-n", " ", "<subsample size>")],
    join [
         "The number of subsamples to draw if --subsample is selected. Default: ",
-    int2string default.subsampleSize, "."
+    int2string defaultArgs.subsampleSize, "."
        ],
        lam p: ArgPart Options.
         let o: Options = p.options in {o with subsampleSize = argToIntMin p 1}),
@@ -245,8 +245,8 @@ let config = [
 
   ([("--drift", " ", "<value>")],
     join [
-          "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: ", 
-          float2string default.driftScale, "."
+          "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: ",
+          float2string defaultArgs.driftScale, "."
       ],
       lam p : ArgPart Options. let o : Options = p.options in {o with driftScale = argToFloatMin p 0. })
 ]

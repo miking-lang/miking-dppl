@@ -19,8 +19,8 @@ lang LightweightMCMCMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | "LightweightMCMC" ->
     let expectedFields = [
-      ("iterations", int_ default.particles),
-      ("globalProb", float_ default.mcmcLightweightGlobalProb)
+      ("iterations", int_ defaultArgs.particles),
+      ("globalProb", float_ defaultArgs.mcmcLightweightGlobalProb)
     ] in
     match getFields info bindings expectedFields
     with [iterations, globalProb] in

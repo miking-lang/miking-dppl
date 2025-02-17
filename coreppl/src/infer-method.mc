@@ -45,7 +45,7 @@ lang InferMethodBase =
   sem inferMethodFromCon info bindings =
   | "Default" ->
     let expectedFields = [
-      ("runs", int_ default.particles)
+      ("runs", int_ defaultArgs.particles)
     ] in
     match getFields info bindings expectedFields with [runs] in
     Default { runs = runs }

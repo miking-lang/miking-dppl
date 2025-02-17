@@ -14,7 +14,7 @@ lang APFMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | "APF" ->
     let expectedFields = [
-      ("particles", int_ default.particles)
+      ("particles", int_ defaultArgs.particles)
     ] in
     match getFields info bindings expectedFields with [particles] in
     APF {particles = particles}
