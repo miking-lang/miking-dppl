@@ -10,7 +10,7 @@ mexpr
 
 let s = 10e-3 in
 let eq = eqCoin s in
-let t = testCpplMExpr "gamma-poisson.mc" 100000 in
+let t = testCpplMExpr "gamma-poisson.mc" 200000 in
 let res: [(Int, String)]  = [
   (0  ,"-m 'is-lw' --cps none"),
   (0  ,"-m 'is-lw' --cps partial"),
@@ -31,7 +31,7 @@ let res: [(Int, String)]  = [
   (0  ,"-m 'smc-apf' --cps full --resample likelihood"),
   (500,"-m 'pmcmc-pimh' --cps partial"),
   (500,"-m 'pmcmc-pimh' --cps full"),
-  -- (500,"-m 'mcmc-trace'"),
+  (500,"-m 'mcmc-trace'"),
   (500,"-m 'mcmc-naive'"),
   (500,"-m 'mcmc-lightweight' --align --cps none"),
   (500,"-m 'mcmc-lightweight' --align --cps partial"),
