@@ -220,7 +220,11 @@ lang LoadRuntime =
       -- NOTE(dlunde,2022-11-04): Emulating option type
       ("seedIsSome",
        match options.seed with Some seed then bool_ true else bool_ false),
-      ("seed", match options.seed with Some seed then int_ seed else int_ 0)
+      ("seed", match options.seed with Some seed then int_ seed else int_ 0),
+
+      -- NOTE(tvirgoulay,2025-01-15): DriftKernel option type
+      ("driftKernel", bool_ options.driftKernel),
+      ("driftScale", float_ options.driftScale)
 
     ]) in
 

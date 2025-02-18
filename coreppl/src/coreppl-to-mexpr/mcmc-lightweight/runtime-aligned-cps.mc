@@ -8,7 +8,7 @@ include "string.mc"
 include "option.mc"
 
 include "../runtime-common.mc"
-include "../runtime-dists.mc"
+include "kernel.mc"
 
 -- Any-type, used for traces
 type Any = ()
@@ -27,6 +27,9 @@ type State a = {
 
   -- The weight of the current execution
   weight: Ref Float,
+
+  -- The Hasting ratio for the driftKernel call
+  driftHastingRatio: Ref Float,
 
   -- The weight of reused values in the previous and current executions
   prevWeightReused: Ref Float,
@@ -71,6 +74,7 @@ type Result = Unknown
 -- State (reused throughout inference)
 let state: State Result = {
   weight = ref 0.,
+  driftHastingRatio = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
   alignedTrace = ref (emptyList ()),
@@ -89,15 +93,44 @@ let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
   let w = use RuntimeDist in logObserve dist s in
   (unsafeCoerce s, w)
 
-let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
-  lam dist. lam sample. lam w.
-    let s: a = unsafeCoerce sample in
-    let wNew = use RuntimeDist in logObserve dist s in
-    -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
-    -- printLn (join ["Mod prevWeightReused: ", float2string w]);
-    modref state.weightReused (addf (deref state.weightReused) wNew);
+-- Drift Kernel Function
+-- - we have access here to the driftScale parameter compileOptions.driftScale
+-- - modeled on reuseSample
+-- Call one time per run
+let moveSample: all a. a -> Float -> use RuntimeDistBase in Dist a -> (Any, Float) =
+  lam prev. lam w. lam dist.
+    use RuntimeDistElementary in
+
+    let drift = compileOptions.driftScale in
+
+    let kernel = choseKernel dist (unsafeCoerce prev) drift in
+
+    let proposal = sample kernel in
+  
+    let proposalPriorProb = logObserve dist (unsafeCoerce proposal) in
+    let reverseKernel = choseKernel dist (unsafeCoerce proposal) drift in
+  
+    let prevToProposalProb = logObserve kernel (unsafeCoerce proposal) in
+    let proposalToPrevProb = logObserve reverseKernel (unsafeCoerce prev) in
+  
+    modref state.driftHastingRatio (subf proposalToPrevProb prevToProposalProb);
+    modref state.weightReused (addf (deref state.weightReused) proposalPriorProb);
     modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
-    (sample, wNew)
+
+    (unsafeCoerce proposal, proposalPriorProb)  
+
+    let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, Float) =
+    lam dist. lam sample. lam w.
+      let s: a = unsafeCoerce sample in
+      let wNew = use RuntimeDist in logObserve dist s in
+      -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
+      -- printLn (join ["Mod prevWeightReused: ", float2string w]);
+      if eqfApprox 1e-14 wNew 0.0 then
+        newSample dist
+      else
+        modref state.weightReused (addf (deref state.weightReused) wNew);
+        modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
+        (sample, wNew)
 
 -- Procedure at aligned samples
 let sampleAlignedBase: all a. (use RuntimeDistBase in Dist a -> (Any, Float)) -> use RuntimeDistBase in Dist a -> (a -> Result)
@@ -137,11 +170,15 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> (a -> Result) -> Resu
       -- print "Aligned ";
       reuseSample dist sample w
     else
+      -- print "Aligned : NewSample";
       newSample dist
   ) d
 
 let sampleAlignedForceNew: all a. use RuntimeDistBase in Dist a -> (a -> Result) -> Result =
   lam d. sampleAlignedBase newSample d
+
+let sampleAlignedKernel: all a. use RuntimeDistBase in Dist a -> a -> Float -> (a -> Result) -> Result =
+  lam d. lam prev. lam w. sampleAlignedBase (moveSample prev w) d
 
 let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. lam dist.
   let sample: (Any, Float) =
@@ -177,6 +214,7 @@ let runNext: Unknown -> (State Result -> Result) -> Result =
     modref state.oldAlignedTrace (emptyList ());
     modref state.oldUnalignedTraces (emptyList ());
     modref state.weight 0.;
+    modref state.driftHastingRatio 0.;
     modref state.prevWeightReused 0.;
     modref state.weightReused 0.;
     modref state.reuseUnaligned true;
@@ -213,9 +251,10 @@ let runNext: Unknown -> (State Result -> Result) -> Result =
 
             -- This is where we actually run the program
             -- printLn "A";
-            let res = sampleAlignedForceNew cont.dist cont.cont in
-            -- printLn "B";
-            res
+            if compileOptions.driftKernel then
+              sampleAlignedKernel cont.dist s1.0 s1.1 cont.cont
+            else
+              sampleAlignedForceNew cont.dist cont.cont
           )
         else error "Impossible"
     in
@@ -247,14 +286,16 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
         -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
         let weight = deref state.weight in
+        let driftHastingRatio = deref state.driftHastingRatio in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
         let logMhAcceptProb =
-          minf 0. (addf
-                    (subf weight prevWeight)
-                    (subf weightReused prevWeightReused))
+          minf 0. (addf 
+                    (addf
+                      (subf weight prevWeight)
+                      (subf weightReused prevWeightReused))
+                    driftHastingRatio)
         in
-        -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
         -- print "weight: "; printLn (float2string weight);
         -- print "prevWeight: "; printLn (float2string prevWeight);
         -- print "weightReused: "; printLn (float2string weightReused);
