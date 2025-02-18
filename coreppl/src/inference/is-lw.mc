@@ -1,7 +1,7 @@
 include "../coreppl.mc"
 include "../dppl-arg.mc"
 
-lang ImportanceSamplingMethod = MExprPPL
+lang ImportanceSamplingMethod = InferMethodBase
   syn InferMethod =
   | Importance {particles : Expr}
 

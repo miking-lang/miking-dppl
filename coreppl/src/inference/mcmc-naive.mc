@@ -1,7 +1,7 @@
 include "../coreppl.mc"
 include "../dppl-arg.mc"
 
-lang NaiveMCMCMethod = MExprPPL
+lang NaiveMCMCMethod = InferMethodBase
   syn InferMethod =
   | NaiveMCMC {
       iterations : Expr -- Type Int

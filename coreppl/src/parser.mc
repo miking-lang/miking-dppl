@@ -2,6 +2,7 @@ include "digraph.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/builtin.mc"
+include "mexpr/repr-ast.mc"
 
 include "coreppl.mc"
 include "inference/smc.mc"
@@ -19,6 +20,7 @@ include "ode-solver-method.mc"
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample +
   KeywordMaker +
+  RepTypesAst +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
@@ -53,22 +55,6 @@ lang DPPLParser =
       match expr with TmInfer ({ method = Default d } & t) then
         TmInfer { t with method = setRuns d.runs
                           (inferMethodFromOptions options options.method) }
-      else expr
-    in
-    mapPre_Expr_Expr mf expr
-
-  sem replaceDefaultODESolverMethod : Options -> Expr -> Expr
-  sem replaceDefaultODESolverMethod options =
-  | expr ->
-    let mf = lam expr.
-      match expr with TmSolveODE ({ method = ODESolverDefault d } & r) then
-        TmSolveODE {
-          r with
-          method = RK4 d,
-          model = replaceDefaultODESolverMethod options r.model,
-          init = replaceDefaultODESolverMethod options r.init,
-          endTime = replaceDefaultODESolverMethod options r.endTime
-        }
       else expr
     in
     mapPre_Expr_Expr mf expr
@@ -114,7 +100,6 @@ lang DPPLParser =
   | TmPrune _ -> true
   | TmPruned _ -> true
   | TmCancel _ -> true
-  | TmDiff _ -> true
   | TmDelay _ -> true
   | TmDelayed _ -> true
 
@@ -180,10 +165,6 @@ lang DPPLParser =
                                              endTime = get lst 3,
                                              ty = TyUnknown {info = info},
                                              info = info})
-  | "diff" -> Some (2, lam lst. TmDiff {fn = get lst 0,
-                                     arg = get lst 1,
-                                     ty = TyUnknown {info = info},
-                                     info = info})
   | "prune" -> Some (1, lam lst. TmPrune {dist = get lst 0,
                                           ty = TyUnknown {info = info},
                                           info = info})
@@ -207,6 +188,9 @@ lang DPPLParser =
   | TyDelayInt _ -> true
   | TyDelayFloat _ -> true
   | TyDelaySeqF _ -> true
+  | TyRepr _ -> true
+  | TyWild _ -> true
+  | TySubst _ -> true
 
   sem matchTypeKeywordString (info: Info) =
   | "Dist" -> Some(1, lam lst. TyDist { info = info, ty = get lst 0 })
@@ -214,11 +198,53 @@ lang DPPLParser =
   | "DelayInt" -> Some(0, lam lst. TyDelayInt { info = info})
   | "DelayFloat" -> Some(0, lam lst. TyDelayFloat { info = info})
   | "DelaySeqF" -> Some(0, lam lst. TyDelaySeqF { info = info})
+  | "Repr" -> Some(1, lam lst. TyRepr {info = info, arg = get lst 0, repr = ref (UninitRepr ())})
+  | "_" -> Some(0, lam lst. TyWild {info = info})
+  | "Subst" ->
+    let mk = lam lst.
+      match lst with [TyVar {ident = ident} | TyCon {ident = ident}, arg] then
+        let arg = match arg with TyWild x
+          then TyRepr {info = x.info, arg = TyUnknown {info = x.info}, repr = ref (UninitRepr ())}
+          else arg in
+        TySubst {info = info, arg = arg, subst = ident}
+      else errorSingle [info] "The first argument of Subst should be a repr" in
+    Some(2, mk)
 
+  sem findRepTypeDecls : Expr -> Expr
+  sem findRepTypeDecls =
+  | tm -> smap_Expr_Expr findRepTypeDecls tm
+  | tm & TmLet x ->
+    let mkDefault = lam. smap_Expr_Expr findRepTypeDecls tm in
+    switch x.body
+    case TmVar v then
+      switch nameGetStr v.ident
+      case "op" then
+        let inexpr = findRepTypeDecls x.inexpr in
+        TmOpDecl {ident = x.ident, tyAnnot = x.tyAnnot, ty = tyTm inexpr, inexpr = inexpr, info = x.info}
+      case "repr" then
+        let inexpr = findRepTypeDecls x.inexpr in
+        match stripTyAll x.tyAnnot with (vars, TyArrow {from = pat, to = repr}) then
+          TmReprDecl {ident = x.ident, vars = map (lam x. x.0) vars, pat = pat, repr = repr, ty = tyTm inexpr, inexpr = inexpr, info = x.info}
+        else errorSingle [x.info] "A repr-decl must have a type signature of the form 'all v1. all v2. absty -> reprty'"
+      case _ then
+        mkDefault ()
+      end
+    case TmApp {lhs = TmApp {lhs = TmVar v, rhs = cost}, rhs = body} then
+      if eqString (nameGetStr v.ident) "impl" then
+        let inexpr = findRepTypeDecls x.inexpr in
+        let body = findRepTypeDecls body in
+        let selfCost = match cost with TmConst {val = CFloat {val = selfCost}}
+          then selfCost
+          else errorSingle [x.info] "The cost of a letimpl must be a literal float constant" in
+        TmOpImpl {ident = x.ident, implId = negi 1, reprScope = negi 1, metaLevel = negi 1, selfCost = selfCost, body = body, specType = x.tyAnnot, delayedReprUnifications = [], inexpr = inexpr, ty = tyTm inexpr, info = x.info}
+      else mkDefault ()
+    case _ then
+      mkDefault ()
+    end
 end
 
 -- Extend builtins with CorePPL builtins
-let builtin = use MExprPPL in concat
+let cpplBuiltin = use MExprPPL in concat
   [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
   , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
   , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
@@ -237,7 +263,7 @@ let defaultBootParserParseCorePPLFileArg =
   {defaultBootParserParseMCoreFileArg with
      keywords = pplKeywords,
      allowFree = true,
-     builtin = builtin}
+     builtin = cpplBuiltin}
 
 let parseMCorePPLFile = lam keepUtests. lam filename.
   use DPPLParser in

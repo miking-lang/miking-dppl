@@ -1,13 +1,11 @@
 include "arg.mc"
+include "set.mc"
 
 -- Options type
 type Options = {
 
   -- Inference algorithm
   method : String,
-
-  -- Backend
-  target : String,
 
   -- Whether or not to include utests
   test : Bool,
@@ -22,6 +20,8 @@ type Options = {
   skipFinal: Bool,
   outputMc: Bool,
   output: String,
+  debugPhases: Bool,
+  debugDumpPhases: Set String,
 
   -- Apply static delayed sampling transformation
   staticDelay: Bool,
@@ -40,9 +40,6 @@ type Options = {
 
   -- Whether or not to print the actual result samples in compiled programs
   printSamples: Bool,
-
-  -- Option for the `rootppl` target.
-  stackSize: Int,
 
   -- Whether or not to apply CPS transformations
   cps: String,
@@ -77,7 +74,6 @@ type Options = {
 -- Default values for options
 let default = {
   method = "is-lw",
-  target = "mexpr",
   test = false,
   particles = 5000,
   resample = "manual",
@@ -86,13 +82,14 @@ let default = {
   printMCore = false,
   exitBefore = false,
   skipFinal = false,
+  debugPhases = false,
+  debugDumpPhases = setEmpty cmpString,
   outputMc = false,
   output = "out",
   staticDelay = false,
   dynamicDelay = false,
   prune = false,
   printSamples = true,
-  stackSize = 10000,
   cps = "full",
   earlyStop = true,
   mcmcLightweightGlobalProb = 0.1,
@@ -119,13 +116,6 @@ let config = [
     "Include utests",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with test = true}),
-  ([("-t", " ", "<target>")],
-    join [
-      "The compilation target. The supported targets are: mexpr, rootppl. Default: ",
-      default.target
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with target = argToString p}),
   ([("-p", " ", "<particles>")],
     join [
       "The number of particles (i.e., samples or iterations). The default is ", (int2string default.particles)
@@ -159,6 +149,14 @@ let config = [
     "Do not perform the final compilation step (e.g., MExpr to OCaml).",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with skipFinal = true}),
+  ([("--debug-phases", "", "")],
+    "Show debug and profiling information about each pass",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugPhases = true}),
+  ([("--debug-phase", " ", "<phase>")],
+    "Print a json representation of the AST after the given pass. Can be given multiple times.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugDumpPhases = setInsert (argToString p) o.debugDumpPhases}),
   ([("--output-mc", "", "")],
     "Write intermediate MCore output to file when compiling",
     lam p: ArgPart Options.
@@ -183,13 +181,6 @@ let config = [
     "Do not print the final samples in the compiled program.",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with printSamples = false}),
-  ([("--stack-size", " ", "<size>")],
-    join [
-      "The stack size used by RootPPL. The default is ",
-      (int2string default.stackSize), " (bytes)."
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with stackSize = argToIntMin p 1}),
   ([("--cps", " ", "<option>")],
     join ["Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: ", default.cps, "."],
     lam p: ArgPart Options.
