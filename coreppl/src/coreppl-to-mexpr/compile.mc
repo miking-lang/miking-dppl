@@ -629,7 +629,60 @@ lang CPPLLoader
     ast
 end
 
-lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint
+lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
+  -- Make transformations related to solveode. This pass removes all solveode
+  -- terms and returns a transformed term and an ODE related runtime. the
+  -- tranformed program can be treated like a normal probabilistic program.
+  sem transformTmSolveODE : Options -> {path : String, env : SymEnv} -> Expr -> Expr
+  sem transformTmSolveODE options symEnv =
+  | TmSolveODE r ->
+    let method = odeDefaultMethod options r.method in
+    let fn = nvar_ (_getVarExn (odeSolverName method) symEnv) in
+    let args = concat (odeSolverArgs method) [r.model, r.init, r.endTime] in
+    appSeq_ fn args
+  | tm -> smap_Expr_Expr (transformTmSolveODE options symEnv) tm
+
+  sem odeSolverName : ODESolverMethod -> String
+  sem odeSolverName =
+  | RK4 _ -> "odeSolverRK4Solve"
+  | EF _ -> "odeSolverEFSolve"
+  | EFA _ -> "odeSolverEFASolve"
+  | method -> error (join [
+    nameGetStr (odeSolverMethodName method),
+    " does not have an implementation in the ODE solver runtime"
+  ])
+
+  -- Maps ODE solver method to its method arguments.
+  sem odeSolverArgs : ODESolverMethod -> [Expr]
+  sem odeSolverArgs =
+  | ODESolverDefault r | RK4 r | EF r -> [r.add, r.smul, r.stepSize]
+  | EFA r -> [r.add, r.smul, r.stepSize, r.n]
+
+  -- Replaces default ODE solver methods with a concrete method.
+  sem odeDefaultMethod : Options -> ODESolverMethod -> ODESolverMethod
+  sem odeDefaultMethod options =
+  | ODESolverDefault d -> RK4 d
+  | m -> m
+
+  syn Hook =
+  | ODEHook
+    { options : Options
+    }
+  sem _preSymbolize loader decl = | ODEHook x ->
+    recursive let hasTmSolveODE = lam acc. lam tm.
+      match tm with TmSolveODE _ then true
+      else sfold_Expr_Expr hasTmSolveODE acc tm
+    in
+    if sfold_Decl_Expr hasTmSolveODE false decl then
+      match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ode.mc" loader
+        with (symEnv, loader)
+      in
+      (loader, smap_Decl_Expr (transformTmSolveODE x.options symEnv) decl)
+    else
+      (loader, decl)
+end
+
+lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader
   syn FileType =
   | FCorePPL {isModel : Bool}
 
@@ -740,11 +793,13 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       } in
     let ast = parseMCoreFile args path in
     let ast = use DPPLParser in makeKeywords ast in
+
     recursive let f = lam decls. lam ast.
       match exprAsDecl ast with Some (decl, ast)
       then f (snoc decls decl) ast
       else (decls, ast) in
     match f [] ast with (decls, expr) in
+
     let hasInfer =
       recursive let hasInfer = lam acc. lam e.
         if acc then acc else
@@ -754,77 +809,83 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         if acc then acc else
         sfold_Decl_Expr hasInfer false d in
       or (foldl hasInferD false decls) (hasInfer false expr) in
+    let needsAddedInfer = and isModel (not hasInfer) in
 
-    let loader =
-      if or (not isModel) hasInfer then
+    let hasDiff =
+      -- TODO(vipa, 2025-02-26): This should check that `isModel` is
+      -- true if there's a `diff` included, otherwise the "separate
+      -- world" assumption doesn't really make sense
+      never in
+
+    let loader = switch (hasDiff, needsAddedInfer)
+      case (false, false) then
+        -- NOTE(vipa, 2025-02-26): Simple case, no AD, and no need to add an infer
+        let decls = if isModel
+          then snoc decls (declWithInfo (infoTm expr) (decl_nulet_ (nameSym "") expr))
+          else decls in
         _addDeclsByFile loader decls
-      else
-        -- NOTE(vipa, 2025-01-22): No infer, need to transform the
-        -- program to insert one
+      case (false, true) then
+        -- NOTE(vipa, 2025-02-26): No AD, but we do need to add an infer
         match partition (lam d. match infoDecl d with Info {filename = f} then eqString f path else false) decls
           with (inFile, beforeFile) in
         let loader = _addDeclsByFile loader beforeFile in
         let modelBody = foldr (lam d. lam e. declAsExpr e d) expr inFile in
         _insertBackcompatInfer modelBody loader
-    in
+      case (false, true) then
+        error "TODO: decide what to do in this case"
+      case (true, false) then
+        -- NOTE(vipa, 2025-02-26): When using AD we make a simplifying
+        -- assumption: we make the model code exist "in its own world",
+        -- i.e., we get duplication of dependencies between the model
+        -- and the rest of what's in the loader. This means that we can
+        -- lift everything in the model indiscriminately without
+        -- affecting other code and without more complicated data-flow
+        -- analysis.
+
+        -- NOTE(vipa, 2025-02-26): This is the initial separate world,
+        -- where we *might* load the ode-runtime, and where we *will* do
+        -- adtransform
+        let odeHook = getHookOpt
+          (lam x. match x with h & ODEHook _ then Some h else None ())
+          loader in
+        let hooks = match odeHook with Some hook
+          then [hook]
+          else [] in
+        -- TODO(vipa, 2025-02-26): Add ADHook
+        let hooks = snoc hooks never in
+        let separateLoader = mkLoader
+          symEnvDefault
+          typcheckEnvDefault
+          hooks in
+
+        -- TODO(vipa, 2025-02-26): There will later be an extra
+        -- type-check for ensuring `diff` is used appropriately, which
+        -- should be run on the model only; that should happen here on
+        -- `ast`.
+
+        let decls = snoc decls (declWithInfo (infoTm expr) (decl_nulet_ (nameSym "") expr)) in
+        let separateLoader = _addDeclsByFile separateLoader decls in
+
+        -- NOTE(vipa, 2025-02-26): Now we're going to put the decls we
+        -- got in the original loader, letting it run its various
+        -- hooks. This means we, e.g., type-check twice. Afterwards we
+        -- reset SymEnv and includedFiles to what they were before,
+        -- which has the effect of making these decls quite isolated
+        -- from other decls.
+        let prevSymEnv = _getSymEnv loader in
+        let prevIncluded = match loader with Loader {includedFiles = x} in x in
+        -- NOTE(vipa, 2025-02-26): We use normal `addDecl` to ensure
+        -- all hooks are run
+        let loader = foldl _addDeclExn loader (getDecls loader) in
+        match loader with Loader x in
+        let loader = Loader {x with symEnv = prevSymEnv, includedFiles = prevIncluded} in
+        loader
+      end in
 
     match loader with Loader x in
     match mapLookup path x.includedFiles with Some env
     then (env, loader)
     else (_symEnvEmpty, Loader {x with includedFiles = mapInsert path _symEnvEmpty x.includedFiles})
-end
-
-lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
-  -- Make transformations related to solveode. This pass removes all solveode
-  -- terms and returns a transformed term and an ODE related runtime. the
-  -- tranformed program can be treated like a normal probabilistic program.
-  sem transformTmSolveODE : Options -> {path : String, env : SymEnv} -> Expr -> Expr
-  sem transformTmSolveODE options symEnv =
-  | TmSolveODE r ->
-    let method = odeDefaultMethod options r.method in
-    let fn = nvar_ (_getVarExn (odeSolverName method) symEnv) in
-    let args = concat (odeSolverArgs method) [r.model, r.init, r.endTime] in
-    appSeq_ fn args
-  | tm -> smap_Expr_Expr (transformTmSolveODE options symEnv) tm
-
-  sem odeSolverName : ODESolverMethod -> String
-  sem odeSolverName =
-  | RK4 _ -> "odeSolverRK4Solve"
-  | EF _ -> "odeSolverEFSolve"
-  | EFA _ -> "odeSolverEFASolve"
-  | method -> error (join [
-    nameGetStr (odeSolverMethodName method),
-    " does not have an implementation in the ODE solver runtime"
-  ])
-
-  -- Maps ODE solver method to its method arguments.
-  sem odeSolverArgs : ODESolverMethod -> [Expr]
-  sem odeSolverArgs =
-  | ODESolverDefault r | RK4 r | EF r -> [r.add, r.smul, r.stepSize]
-  | EFA r -> [r.add, r.smul, r.stepSize, r.n]
-
-  -- Replaces default ODE solver methods with a concrete method.
-  sem odeDefaultMethod : Options -> ODESolverMethod -> ODESolverMethod
-  sem odeDefaultMethod options =
-  | ODESolverDefault d -> RK4 d
-  | m -> m
-
-  syn Hook =
-  | ODEHook
-    { options : Options
-    }
-  sem _preSymbolize loader decl = | ODEHook x ->
-    recursive let hasTmSolveODE = lam acc. lam tm.
-      match tm with TmSolveODE _ then true
-      else sfold_Expr_Expr hasTmSolveODE acc tm
-    in
-    if sfold_Decl_Expr hasTmSolveODE false decl then
-      match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ode.mc" loader
-        with (symEnv, loader)
-      in
-      (loader, smap_Decl_Expr (transformTmSolveODE x.options symEnv) decl)
-    else
-      (loader, decl)
 end
 
 -- lang ADLoader = MCoreLoader + ADTransform
