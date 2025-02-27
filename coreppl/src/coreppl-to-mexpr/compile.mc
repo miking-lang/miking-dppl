@@ -10,7 +10,6 @@ include "sys.mc"
 include "map.mc"
 include "mlang/loader.mc"
 
-include "../ad.mc"
 include "../coreppl.mc"
 include "../inference/smc.mc"
 include "../parser.mc"
@@ -125,128 +124,6 @@ lang DPPLPrunedReplace = DPPLKeywordReplace + SymGetters
   | p ->
     let p = smap_Pat_Pat (replacePruneTyVarPat env options) p in
     withTypePat (toRuntimePruneTyVar env options (tyPat p)) p
-end
-
-lang ADTransform =
-  DPPLParser +
-  LoadRuntime +
-  DualNumRuntimeBase +
-  DualNumLift +
-  LiftedDist +
-  TransformDistBase
-
-  sem adHasDiff : Expr -> Bool
-  sem adHasDiff =| tm -> adHasDiffExpr false tm
-
-  sem adHasDiffExpr : Bool -> Expr -> Bool
-  sem adHasDiffExpr hasDiff =
-  | TmDiff _ -> true
-  | tm -> sfold_Expr_Expr adHasDiffExpr hasDiff tm
-
-  type ADTransformEnv = {
-    lty : Type -> Type,
-    s2n : String -> Name
-  }
-
-  syn DualNumRuntimeEnv =
-  | Env ADTransformEnv
-
-  -- sem adProvideRuntimeImplementation : Options -> Expr -> (Expr, Expr)
-  -- sem adProvideRuntimeImplementation options =| tm ->
-  --   let runtimeFile = "runtime-ad-wrapper.mc" in
-
-  --   -- load AD runtime
-  --   let runtime = symbolize (loadRuntimeFile true runtimeFile) in
-
-  --   -- Define function that maps string identifiers to names
-  --   let s2n = makeRuntimeNameMap runtime (_adTransformRuntimeIds ()) in
-
-  --   -- Define function that constructs dual number types
-  --   let tyDualName = s2n "Dual" in
-  --   let lty = lam ty. TyApp {
-  --     lhs = TyCon { ident = tyDualName, data = tyunknown_, info = infoTy ty },
-  --     rhs = ty,
-  --     info = infoTy ty
-  --   } in
-
-  --   let tm = dualnumTransformAPIExpr (Env { lty = lty, s2n = s2n }) tm in
-
-  --   (runtime, tm)
-
-  sem dualnumTransformAPIConst env tm =
-  | CGenEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumGenEpsilon")
-  | CLtEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumLtEpsilon")
-  | CCreatePrimal _ -> withInfo (infoTm tm) (_var env "dualnumCreatePrimal")
-  | CCreateDual _ -> withInfo (infoTm tm) (_var env "dualnumCreateDual")
-  | CIsDualNum _ -> withInfo (infoTm tm) (_var env "dualnumIsDualNum")
-  | CEpsilon _ -> withInfo (infoTm tm) (_var env "dualnumEpsilon")
-  | CPrimal _ -> withInfo (infoTm tm) (_var env "dualnumPrimal")
-  | CPrimalRec _ -> withInfo (infoTm tm) (_var env "dualnumPrimalRec")
-  | CUnboxPrimalExn _ -> withInfo (infoTm tm) (_var env "dualnumUnboxPrimalExn")
-  | CPertubation _ -> withInfo (infoTm tm) (_var env "dualnumPertubationExn")
-  | CLifted (CFloat r) ->
-    let i = withInfo (infoTm tm) in
-    withInfo (infoTm tm) (nconapp_ (_name env "Primal") (i (float_ r.val)))
-  | CLifted (CAddf _) -> withInfo (infoTm tm) (_var env "addn")
-  | CLifted (CMulf _) -> withInfo (infoTm tm) (_var env "muln")
-  | CLifted (CNegf _) -> withInfo (infoTm tm) (_var env "negn")
-  | CLifted (CSubf _) -> withInfo (infoTm tm) (_var env "subn")
-  | CLifted (CDivf _) -> withInfo (infoTm tm) (_var env "divn")
-  | CLifted (CEqf _) -> withInfo (infoTm tm) (_var env "eqn")
-  | CLifted (CNeqf _) -> withInfo (infoTm tm) (_var env "neqn")
-  | CLifted (CLtf _) -> withInfo (infoTm tm) (_var env "ltn")
-  | CLifted (CLeqf _) -> withInfo (infoTm tm) (_var env "leqn")
-  | CLifted (CGtf _) -> withInfo (infoTm tm) (_var env "gtn")
-  | CLifted (CGeqf _) -> withInfo (infoTm tm) (_var env "geqn")
-  | CLifted (CSin _) -> withInfo (infoTm tm) (_var env "sinn")
-  | CLifted (CCos _) -> withInfo (infoTm tm) (_var env "cosn")
-  | CLifted (CSqrt _) -> withInfo (infoTm tm) (_var env "sqrtn")
-  | CLifted (CExp _) -> withInfo (infoTm tm) (_var env "expn")
-  | CLifted (CLog _) -> withInfo (infoTm tm) (_var env "logn")
-  | CLifted (CPow _) -> withInfo (infoTm tm) (_var env "pown")
-  | CLifted const -> withInfo (infoTm tm) (uconst_ const)
-  | _ -> tm
-
-  sem dualnumTransformTypeAPI env =
-  | TyDualNum r -> match env with Env env in env.lty (TyFloat r)
-
-  sem _name : DualNumRuntimeEnv -> String -> Name
-  sem _name env =| str ->
-    match env with Env env in env.s2n str
-
-  sem _var : DualNumRuntimeEnv -> String -> Expr
-  sem _var env =| str -> nvar_ (_name env str)
-
-  sem _adTransformRuntimeIds =| _ -> [
-    "Dual",
-    "Primal",
-    "dualnumCreatePrimal",
-    "dualnumCreateDual",
-    "dualnumIsDualNum",
-    "dualnumLtEpsilon",
-    "dualnumGenEpsilon",
-    "dualnumPrimal",
-    "dualnumPrimalRec",
-    "dualnumUnboxPrimalExn",
-    "dualnumPertubationExn",
-    "addn",
-    "muln",
-    "eqn",
-    "neqn",
-    "ltn",
-    "leqn",
-    "gtn",
-    "geqn",
-    "negn",
-    "subn",
-    "divn",
-    "sinn",
-    "cosn",
-    "sqrtn",
-    "expn",
-    "logn",
-    "pown"
-  ]
 end
 
 -- Provides runtime implementations for elementary functions that are not MExpr
@@ -682,7 +559,293 @@ lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
       (loader, decl)
 end
 
-lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader
+lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
+
+  ------------------------------------------------------------------------------
+  -- Hooks
+  ------------------------------------------------------------------------------
+
+  type ADHookEnv = {
+    adRuntimeEnv : {path : String, env : SymEnv}
+  }
+
+  syn Hook =
+  | ADHook ADHookEnv
+
+  sem _postTypecheck loader decl =| ADHook env ->
+    adPostTypecheck env loader decl
+
+  sem prepareADRuntime : Loader -> (Hook, Loader)
+  sem prepareADRuntime =| loader ->
+    match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ad.mc" loader
+      with (adRuntimeEnv, loader) in
+    (ADHook {
+      adRuntimeEnv = adRuntimeEnv
+    }, loader)
+
+  ------------------------------------------------------------------------------
+  -- Transformations and Static Assertions
+  ------------------------------------------------------------------------------
+
+  sem _unwrapTypes =| ty -> smap_Type_Type _unwrapTypes (unwrapType ty)
+  sem _tyTm =| e -> _unwrapTypes (tyTm e)
+
+  sem adPostTypecheck : ADHookEnv -> Loader -> Decl -> (Loader, Decl)
+  sem adPostTypecheck env loader =| decl ->
+    let f = compose (adLiftExpr env) adAssertWellTypedDiff in
+    (loader, smap_Decl_Expr f decl)
+
+  sem adAssertWellTypedDiff : Expr -> Expr
+  sem adAssertWellTypedDiff =
+  | e & TmDiff r ->
+    recursive let isIsomorficToRn = lam ty.
+      switch ty
+      case TyFloat _ then true
+      case TyRecord _ | TySeq _ then
+        sfold_Type_Type (lam acc. lam ty. and acc (isIsomorficToRn ty)) true ty
+      case _ then type2str ty; false
+      end
+    in
+    if isIsomorficToRn (_tyTm r.arg) then
+      if isIsomorficToRn (_unwrapTypes r.ty) then
+        smap_Expr_Expr adAssertWellTypedDiff e
+      else
+        errorSingle [infoTm r.fn]
+          "* The parameter type is not isomorphic to a tuple of floats"
+    else
+      errorSingle [infoTm r.fn]
+        "* The return type is not isomorphic to a tuple of floats"
+  | e -> smap_Expr_Expr adAssertWellTypedDiff e
+
+  sem adLiftExpr : ADHookEnv -> Expr -> Expr
+  sem adLiftExpr env =
+  | TmDiff r ->
+    match _tyTm r.fn with TyArrow tyr then
+      let i = r.info in
+      let _var_ = _var_ i in
+      let _lam_ = _lam_ i in
+      let _app_ = _app_ i in
+      let _let_ = _let_ i in
+      let ityfloat_ = ityfloat_ i in
+      let _eps = nameSym "eps" in
+      let eps = _var_ ityfloat_ _eps in
+      let _pri = nameSym "pri" in
+      let pri = _var_ tyr.from _pri in
+      let _tgn = nameSym "tgn" in
+      let tgn = _var_ tyr.from _tgn in
+      let _res = nameSym "res" in
+      let res = _var_ tyr.to _res in
+      _let_ _eps
+        (_app_ (adGetVarExn env i (ityarrow_ i tyunit_ ityfloat_) "geneps")
+           (_unit_ i))
+        (_let_ _pri (adLiftExpr env r.arg)
+           (_let_ _tgn (adLiftExpr env r.darg)
+              (_let_ _res
+                 (_app_
+                    (adLiftExpr env r.fn)
+                    (adTypeDirectedDual env i eps pri tgn tyr.from))
+                 (adTypeDirectedTangent env i eps res tyr.to))))
+    else
+      printErrorLn (type2str r.ty);
+      error (_tyAssertErrMsg "adLiftExpr")
+  | e & TmConst r -> adLiftConst env e r.val
+  | e -> smap_Expr_Expr (adLiftExpr env) e
+
+  sem adLiftConst : ADHookEnv -> Expr -> Const -> Expr
+  sem adLiftConst env e =
+  | CAddf _ -> adliftConstH env e "addf"
+  | CMulf _ -> adliftConstH env e "mulf"
+  | CSubf _ -> adliftConstH env e "subf"
+  | CDivf _ -> adliftConstH env e "divf"
+  | CNegf _ -> adliftConstH env e "negf"
+  | CEqf _ -> adliftConstH env e "eqf"
+  | CNeqf _ -> adliftConstH env e "neqf"
+  | CLtf _ -> adliftConstH env e "ltf"
+  | CLeqf _ -> adliftConstH env e "leqf"
+  | CGtf _ -> adliftConstH env e "gtf"
+  | CGeqf _ -> adliftConstH env e "geqf"
+  | CSin _ -> adliftConstH env e "sin"
+  | CCos _ -> adliftConstH env e "cos"
+  | CExp _ -> adliftConstH env e "exp"
+  | CLog _ -> adliftConstH env e "log"
+  | CSqrt _ -> adliftConstH env e "sqrt"
+  | CPow _ -> adliftConstH env e "pow"
+  | CFloat2string _ -> adliftConstH env e "float2string"
+  | _ -> e
+
+  sem adliftConstH env e =| name -> adGetVarExn env (infoTm e) (_tyTm e) name
+
+  sem adGetVarExn env i ty =| name ->
+    withType ty (withInfo i (nvar_ (_getVarExn name env.adRuntimeEnv)))
+
+  sem adDual : ADHookEnv -> Info -> Expr -> Expr -> Expr -> Expr
+  sem adDual env i eps pri =| tgn ->
+    let ityfloat_ = ityfloat_ i in
+    let dual =
+      adGetVarExn env i
+        (foldr1 (ityarrow_ i) [ityfloat_, ityfloat_, ityfloat_, ityfloat_])
+        "dual" in
+    _appf3_ i dual eps pri tgn
+
+  sem adTangent : ADHookEnv -> Info -> Expr -> Expr -> Expr
+  sem adTangent env i eps =| e ->
+    let ityfloat_ = ityfloat_ i in
+    let tangent =
+      adGetVarExn env i
+        (foldr1 (ityarrow_ i) [ityfloat_, ityfloat_, ityfloat_])
+        "tangent" in
+    _appf2_ i tangent eps e
+
+  sem adTypeDirectedDual
+    : ADHookEnv -> Info -> Expr -> Expr -> Expr -> Type -> Expr
+  sem adTypeDirectedDual env i eps pri tgn =
+  | TyFloat _ ->
+    (switch map _tyTm [eps, pri, tgn]
+     case [TyFloat _, TyFloat _, TyFloat _] then ()
+     case tys then
+      iter printErrorLn (map type2str tys);
+      error (_tyAssertErrMsg "adTypeDirectedDual")
+     end);
+    adDual env i eps pri tgn
+  | TySeq r ->
+    _map2SeqExpr i
+      (lam pri. lam tgn. adTypeDirectedDual env i eps pri tgn r.ty)
+      pri tgn
+  | TyRecord r ->
+    let fs =
+      map
+        (lam t.
+          let f = lam pri. lam tgn. adTypeDirectedDual env i eps pri tgn t.1 in
+          (sidToString t.0, t.1, f))
+        (mapBindings r.fields) in
+    _map2RecordExpr i fs pri tgn
+  | ty ->
+    printErrorLn (type2str ty); error (_tyAssertErrMsg "adTypeDirectedDual")
+
+  sem adTypeDirectedTangent
+    : ADHookEnv -> Info -> Expr -> Expr -> Type -> Expr
+  sem adTypeDirectedTangent env i eps e =
+  | TyFloat _ ->
+    (switch map _tyTm [eps, e]
+     case [TyFloat _, TyFloat _] then ()
+     case tys then
+      iter printErrorLn (map type2str tys);
+      error (_tyAssertErrMsg "adTypeDirectedTangent")
+     end);
+    adTangent env i eps e
+  | TySeq r -> _mapSeqExpr i (lam e. adTypeDirectedTangent env i eps e r.ty) e
+  | TyRecord r ->
+    let fs =
+      map
+        (lam t.
+          let f = lam e. adTypeDirectedTangent env i eps e t.1 in
+          (sidToString t.0, t.1, f))
+        (mapBindings r.fields) in
+    _mapRecordExpr i fs e
+  | ty ->
+    printErrorLn (type2str ty); error (_tyAssertErrMsg "adTypeDirectedTangent")
+
+  sem _tyAssertErrMsg =| fn -> concat "Failed a type assertion in " fn
+
+  sem _tyHasFloat =| ty -> _tyHasFloatH false ty
+  sem _tyHasFloatH acc =
+  | TyFloat _ -> true
+  | ty -> sfold_Type_Type _tyHasFloatH acc ty
+
+  ------------------------------------------------------------------------------
+  -- AD transformation specific ty-preserving term builders.
+  ------------------------------------------------------------------------------
+
+  sem _tmBuildErrMsg =| caller ->
+    concat "failed to build type preserving term, expected in " caller
+
+  sem _var_ i ty =| n -> withInfo i (withType ty (nvar_ n))
+
+  sem _lam_ i n ty =| e ->
+    let ty = ityarrow_ i ty (tyTm e) in
+    tmLam i ty n (TyUnknown { info = i }) e
+
+  sem _app_ i f =| e ->
+    let ty =
+      match _tyTm f with TyArrow r then r.to
+      else printErrorLn (type2str (_tyTm f)); error (_tmBuildErrMsg "_app_") in
+    withInfo i (withType ty (app_ f e))
+
+  sem _appf2_ i f e1 =| e2 -> _app_ i (_app_ i f e1) e2
+
+  sem _appf3_ i f e1 e2 =| e3 -> _app_ i (_appf2_ i f e1 e2) e3
+
+  sem _let_ i n e1 =| e2 ->
+    withInfo i (withType (_tyTm e2) (bind_ (nulet_ n e1) e2))
+
+  sem _unit_ =| i -> withInfo i (withType tyunit_ unit_)
+
+  sem _recordproj_ i e =| key ->
+    let fields =
+      match _tyTm e with TyRecord r then r.fields else
+        error (_tmBuildErrMsg "_recordproj_") in
+    let ty = mapFindExn (stringToSid key) fields in
+    withInfo i (withType ty (recordproj_ key e))
+
+  sem _get_ i e =| j ->
+    let ty = match _tyTm e with TySeq r then r.ty
+             else error (_tmBuildErrMsg "_get_") in
+    (match _tyTm j with ! TyInt _ then error (_tmBuildErrMsg "_get_") else ());
+    let c =
+      let ty = ityarrow_ i (_tyTm e) (ityarrow_ i (ityint_ i) ty) in
+      withInfo i (const_ ty (CGet ())) in
+    _appf2_ i c e j
+
+  sem _map_ i f =| e ->
+    let ty = match _tyTm f with TyArrow r then r.to
+             else error (_tmBuildErrMsg "_map_") in
+    let c =
+      let ty = ityarrow_ i (_tyTm f) (ityarrow_ i (_tyTm e) (ityseq_ i ty)) in
+      withInfo i (const_ ty (CMap ())) in
+    _appf2_ i c f e
+
+  sem _mapi_ i f =| e ->
+    let ty = match _tyTm f with TyArrow { to = TyArrow r } then r.to
+             else error (_tmBuildErrMsg "_mapi_") in
+    let c =
+      let ty = ityarrow_ i (_tyTm f) (ityarrow_ i (_tyTm e) (ityseq_ i ty)) in
+      withInfo i (const_ ty (CMapi ())) in
+    _appf2_ i c f e
+
+  sem _mapSeqExpr i f =| e ->
+    let ty = match _tyTm e with TySeq r then r.ty
+             else error (_tmBuildErrMsg "_mapSeqExpr") in
+    let _x = nameSym "x" in
+    _map_ i (_lam_ i _x ty (f (_var_ i ty _x))) e
+
+  sem _map2SeqExpr i f e1 =| e2 ->
+    let ty =
+      match _tyTm e1 with TySeq r then r.ty else
+        error (_tmBuildErrMsg "_map2SeqExpr") in
+    let _x = nameSym "x" in
+    let _i = nameSym "i" in
+    let _lam_ = _lam_ i in
+    let _var_ = _var_ i in
+    let ityint_ = ityint_ i in
+    _mapi_ i
+      (_lam_ _i ityint_
+         (_lam_ _x ty
+            (f (_var_ ty _x) (_get_ i e2 (_var_ ityint_ _i)))))
+      e1
+
+  sem _mapRecordExpr i fs =| e ->
+    tmRecord i (tyRecord i (map (lam t. (t.0, t.1)) fs))
+      (map (lam t. (t.0, t.2 (_recordproj_ i e t.0))) fs)
+
+  sem _map2RecordExpr i fs e1 =| e2 ->
+    tmRecord i (tyRecord i (map (lam t. (t.0, t.1)) fs))
+      (map
+         (lam t. (t.0, t.2 (_recordproj_ i e1 t.0) (_recordproj_ i e2 t.0)))
+         fs)
+
+end
+
+lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader + ADLoader
   syn FileType =
   | FCorePPL {isModel : Bool}
 
@@ -815,9 +978,25 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       -- TODO(vipa, 2025-02-26): This should check that `isModel` is
       -- true if there's a `diff` included, otherwise the "separate
       -- world" assumption doesn't really make sense
-      never in
-
-    let loader = switch (hasDiff, needsAddedInfer)
+      recursive let hasDiff = lam acc. lam e.
+        match e with TmDiff r then
+          -- NOTE(oerikss, 2025-02-27): If we found a `diff` but we are not in a
+          -- model we really do not know what to do at this point so we just
+          -- crash.
+          (if not isModel then
+            error
+              (concat
+                 "found a `diff` outside model code which we cannot handle.\n\n"
+                 (info2str r.info))
+           else ());
+          true
+        else sfold_Expr_Expr hasDiff false e in
+      let hasDiffD = lam acc. lam d.
+        if acc then acc else
+          sfold_Decl_Expr hasDiff false d in
+      or (foldl hasDiffD false decls) (hasDiff false expr) in
+    recursive let makeLoader = lam hasDiff. lam needsAddedInfer.
+      switch (hasDiff, needsAddedInfer)
       case (false, false) then
         -- NOTE(vipa, 2025-02-26): Simple case, no AD, and no need to add an infer
         let decls = if isModel
@@ -831,8 +1010,10 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let loader = _addDeclsByFile loader beforeFile in
         let modelBody = foldr (lam d. lam e. declAsExpr e d) expr inFile in
         _insertBackcompatInfer modelBody loader
-      case (false, true) then
-        error "TODO: decide what to do in this case"
+      case (true, true) then
+        -- NOTE(oerikss, 2025-03-01): A program with differentiation is not
+        -- implicitly a probabilistic model.
+        makeLoader true false
       case (true, false) then
         -- NOTE(vipa, 2025-02-26): When using AD we make a simplifying
         -- assumption: we make the model code exist "in its own world",
@@ -852,7 +1033,8 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
           then [hook]
           else [] in
         -- TODO(vipa, 2025-02-26): Add ADHook
-        let hooks = snoc hooks never in
+        match prepareADRuntime loader with (adHook, loader) in
+        let hooks = snoc hooks adHook in
         let separateLoader = mkLoader
           symEnvDefault
           typcheckEnvDefault
@@ -876,50 +1058,15 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let prevIncluded = match loader with Loader {includedFiles = x} in x in
         -- NOTE(vipa, 2025-02-26): We use normal `addDecl` to ensure
         -- all hooks are run
-        let loader = foldl _addDeclExn loader (getDecls loader) in
+        let loader = foldl _addDeclExn loader (getDecls separateLoader) in
         match loader with Loader x in
         let loader = Loader {x with symEnv = prevSymEnv, includedFiles = prevIncluded} in
         loader
       end in
+    let loader = makeLoader hasDiff needsAddedInfer in
 
     match loader with Loader x in
     match mapLookup path x.includedFiles with Some env
     then (env, loader)
     else (_symEnvEmpty, Loader {x with includedFiles = mapInsert path _symEnvEmpty x.includedFiles})
 end
-
--- lang ADLoader = MCoreLoader + ADTransform
---   syn Hook =
---   | ADHook
---     { env : DualNumRuntimeEnv
---     , liftableDecls : Ref {var : Map Name Decl, tyCon : Map Name Decl}
---     , liftedDecls : Ref {var : Map Name Name}
---     }
---   sem prepareADRuntime : Loader -> Loader
---   sem prapareADRuntime = | loader ->
---     match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ad-wrapper.mc" loader
---       with (symEnv, loader) in
-
---     -- NOTE(vipa, 2024-12-04): Originally this function (s2n) was
---     -- limited to looking at the names in _adTransformRuntimeIds (),
---     -- and looked at both names and types at once, hence the chained
---     -- mapFindOrElse
---     let s2n = lam str. mapFindOrElse
---       (lam.
---         mapFindOrElse
---           (lam. error (join ["\"", str, "\" is not present in this runtime."]))
---           str
---           symEnv.currentEnv.tyConEnv)
---       str
---       symEnv.currentEnv.varEnv in
-
---     let tyDualName = s2n "Dual" in
---     let lty = lam ty. TyApp {
---       lhs = TyCon { ident = tyDualName, data = tyunknown_, info = infoTy ty },
---       rhs = ty,
---       info = infoTy ty
---     } in
-
---     let env = Env {lty = lty, s2n = s2n} in
---     addHook loader (ADHook env)
--- end

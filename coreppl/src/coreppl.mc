@@ -1041,6 +1041,7 @@ lang Diff =
   syn Expr =
   | TmDiff { fn: Expr,
              arg: Expr,
+             darg: Expr,
              ty: Type,
              info: Info }
 
@@ -1060,7 +1061,8 @@ lang Diff =
   | TmDiff t ->
     match f acc t.fn with (acc, fn) in
     match f acc t.arg with (acc, arg) in
-    (acc, TmDiff { t with fn = fn, arg = arg })
+    match f acc t.darg with (acc, darg) in
+    (acc, TmDiff { t with fn = fn, arg = arg, darg = darg })
 
   -- Pretty printing
   sem isAtomic =
@@ -1071,50 +1073,43 @@ lang Diff =
     let i = pprintIncr indent in
     match printParen i env t.fn with (env, fn) in
     match printParen i env t.arg with (env, arg) in
-    (env, join ["diff", pprintNewline i, fn, pprintNewline i, arg])
+    match printParen i env t.darg with (env, darg) in
+    (env, join [
+      "diff", pprintNewline i, fn, pprintNewline i, arg, pprintNewline i, darg])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmDiff r ->
     match lhs with TmDiff l then
-      optionBind (eqExprH env free l.fn r.fn)
-        (lam free. eqExprH env free l.arg r.arg)
+      optionFoldlM (lam free. uncurry (eqExprH free env)) free
+        [(l.arg, r.arg), (l.darg, r.darg)]
     else None ()
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =
   | TmDiff t ->
+    -- NOTE(oerikss, 2025-02-28): The type of `diff` here is more flexible than
+    -- we can allows in the end. We therefore need to make a pass after type
+    -- checking to assert that the differentiated functions maps a vector of
+    -- floats to a vector of floats.
     let fn = typeCheckExpr env t.fn in
     let arg = typeCheckExpr env t.arg in
+    let darg = typeCheckExpr env t.darg in
     let tyParam = newpolyvar env.currentLvl t.info in
     let tyRes = newpolyvar env.currentLvl t.info in
     unify env [infoTm t.fn] (ityarrow_ (infoTm fn) tyParam tyRes) (tyTm fn);
     unify env [infoTm t.arg] tyParam (tyTm arg);
-    recursive let isIsomorficToRn = lam ty.
-      switch ty
-      case TyFloat _ then true
-      case TyRecord _ | TySeq _ then
-        sfold_Type_Type (lam acc. lam ty. and acc (isIsomorficToRn ty)) true ty
-      case _ then false
-      end
-    in
-    if isIsomorficToRn (inspectType tyParam) then
-      if isIsomorficToRn (inspectType tyRes) then
-        let tyDiff = ityarrow_ t.info tyParam tyRes in
-        TmDiff { t with fn = fn, arg = arg, ty = tyDiff }
-      else
-        errorSingle [infoTm t.fn]
-          "* The parameter type is not isomorfic to a tuple of floats"
-    else
-      errorSingle [infoTm t.fn]
-        "* The return type is not isomorfic to a tuple of floats"
+    unify env [infoTm t.darg] tyParam (tyTm darg);
+    TmDiff { t with fn = fn, arg = arg, darg = darg, ty = tyRes }
 
   -- ANF
   sem normalize (k : Expr -> Expr) =
   | TmDiff t ->
     normalizeName (lam fn.
       normalizeName (lam arg.
-        k (TmDiff { t with fn = fn, arg = arg }))
+        normalizeName (lam darg.
+          k (TmDiff { t with fn = fn, arg = arg, darg = darg }))
+          t.darg)
         t.arg)
       t.fn
 
@@ -1123,8 +1118,9 @@ lang Diff =
   | TmDiff t ->
     match typeLiftExpr env t.fn with (env, fn) in
     match typeLiftExpr env t.arg with (env, arg) in
+    match typeLiftExpr env t.darg with (env, darg) in
     match typeLiftType env t.ty with (env, ty) in
-    (env, TmDiff { t with fn = fn, arg = arg, ty = ty })
+    (env, TmDiff { t with fn = fn, arg = arg, darg = darg, ty = ty })
 
   -- Partial evaluation
   sem pevalBindThis =
@@ -1134,7 +1130,9 @@ lang Diff =
   | TmDiff r ->
     pevalBind ctx (lam fn.
       pevalBind ctx (lam arg.
-        k (TmDiff { r with fn = fn, arg = arg }))
+        pevalBind ctx (lam darg.
+          k (TmDiff { r with fn = fn, arg = arg, darg = darg }))
+          r.darg)
         r.arg)
       r.fn
 
@@ -1143,6 +1141,7 @@ lang Diff =
     [ ("con", JsonString "TmDiff")
     , ("fn", exprToJson x.fn)
     , ("arg", exprToJson x.arg)
+    , ("darg", exprToJson x.darg)
     , ("ty", typeToJson x.ty)
     , ("info", infoToJson x.info)
     ] )
@@ -1479,7 +1478,7 @@ let pplKeywords = [
   "Binomial", "Wiener"
 ]
 
-lang CoreDPL = Ast + SolveODE + Diff + Delayed end
+lang CoreDPL = Ast + SolveODE + Diff end
 
 let dplKeywords = [
   "solveode", "diff"
@@ -1496,7 +1495,7 @@ let delayKeywords = [
 let mexprPPLKeywords = join [mexprKeywords, pplKeywords, dplKeywords, pruneKeywords, delayKeywords]
 
 lang MExprPPL =
-  CorePPL + CoreDPL + ElementaryFunctions +
+  CorePPL + CoreDPL + Delayed + ElementaryFunctions +
   MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
   MExprTypeCheck + MExprTypeLift + MExprArity +
   MExprToJson

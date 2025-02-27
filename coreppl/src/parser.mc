@@ -164,8 +164,9 @@ lang DPPLParser =
                                              endTime = get lst 3,
                                              ty = TyUnknown {info = info},
                                              info = info})
-  | "diff" -> Some (2, lam lst. TmDiff {fn = get lst 0,
+  | "diff" -> Some (3, lam lst. TmDiff {fn = get lst 0,
                                      arg = get lst 1,
+                                     darg = get lst 2,
                                      ty = TyUnknown {info = info},
                                      info = info})
   | "prune" -> Some (1, lam lst. TmPrune {dist = get lst 0,
