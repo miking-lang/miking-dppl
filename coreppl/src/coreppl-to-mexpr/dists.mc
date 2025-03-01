@@ -3,7 +3,6 @@
 -- common/dists.mc
 
 include "../coreppl.mc"
-include "../ad.mc"
 include "mexpr/ast-builder.mc"
 include "mlang/loader.mc"
 include "inference-interface.mc"
@@ -32,7 +31,7 @@ end
 
 -- TODO(dlunde,2022-05-11): The common case where the user writes, e.g., assume
 -- (Bernoulli x), can also be optimized to not create an intermediate record.
-lang TransformDist = TransformDistBase + LiftedDist + InferenceInterface
+lang TransformDist = TransformDistBase + InferenceInterface
 
   sem transformDistConst constTm env =
   | c & (CDistEmpiricalSamples _
@@ -41,10 +40,6 @@ lang TransformDist = TransformDistBase + LiftedDist + InferenceInterface
        | CDistEmpiricalAcceptRate _
        | CDistExpectation _) ->
     withInfo (infoTm constTm) (appFromEnv env (getConstStringCode 0 c) [])
--- NOTE(oerikss, 2024-11-09): Lifting expectation is done dynamically. See
-  -- `RuntimeDistLifted`.
-  | CLifted (CDistExpectation _) ->
-    transformDistConst constTm env (CDistExpectation ())
 
   -- TODO(larshum, 2022-10-12): This code assumes the MLang transformation
   -- performs name mangling as of writing. Therefore, it will break after we
@@ -89,9 +84,6 @@ lang TransformDist = TransformDistBase + LiftedDist + InferenceInterface
         (i (autoty_record_ [("cps", if cps then i true_ else i false_), ("a", a)])))
   | DEmpirical { samples = samples } ->
     i (appFromEnv env "vRuntimeDistEmpirical_constructDistEmpiricalHelper" [samples])
-  | DLifted d ->
-    let cname = _getConExn "RuntimeDistLifted_DistLifted" env.env in
-    i (nconapp_ cname (transformTmDistH i env d))
 
   -- We need to replace occurrences of TyDist after transforming to MExpr
   -- distributions.
