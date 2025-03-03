@@ -8,6 +8,7 @@ include "mexpr/anf.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/const-arity.mc"
 include "mexpr/const-types.mc"
+include "mexpr/json-debug.mc"
 
 include "peval/peval.mc"
 
@@ -16,7 +17,7 @@ include "seq.mc"
 include "utest.mc"
 
 lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
-            TyConst + ConstPrettyPrint + ConstArity + PEval
+            TyConst + ConstPrettyPrint + ConstArity + PEval + AstToJson
 
   syn Expr =
   | TmDist { dist : Dist,
@@ -234,6 +235,21 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst _ -> 1
   | CDistEmpiricalAcceptRate _ -> 1
   | CDistExpectation _ -> 1
+
+  sem exprToJson =
+  | TmDist x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmDist")
+    , ("dist", JsonString (distName x.dist))
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
+
+  sem typeToJson =
+  | TyDist x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TyDist")
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 
 end
 
@@ -838,4 +854,3 @@ utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
 utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 
 ()
-

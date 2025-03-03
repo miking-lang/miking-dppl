@@ -3,14 +3,16 @@ include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
+include "mexpr/phase-stats.mc"
 
 lang MExprPPLPIMH =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA +
-  SMCCommon
+  SMCCommon + PhaseStats
 
   sem compile: Options -> (Expr,Expr) -> Expr
   sem compile options =
   | (_,t) ->
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
     -- Static analysis and CPS transformation
     let t =
       let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
@@ -28,10 +30,13 @@ lang MExprPPLPIMH =
       else
         error (join ["Invalid CPS option:", options.cps])
     in
+    endPhaseStatsExpr log "cps-one" t;
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr transformTmDist t in
+    endPhaseStatsExpr log "transform-tm-dist-one" t;
     -- Transform samples, observes, and weights to MExpr
     let t = mapPre_Expr_Expr transformProb t in
+    endPhaseStatsExpr log "transform-prob-one" t;
     t
 end
 
