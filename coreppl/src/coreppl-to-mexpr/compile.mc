@@ -559,14 +559,18 @@ lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
       (loader, decl)
 end
 
-lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
+lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
+  ElementaryFunctions + PrettyPrint + TyConst
 
   ------------------------------------------------------------------------------
   -- Hooks
   ------------------------------------------------------------------------------
 
+  type ADConfig = {insertFloatAssertions : Bool}
+
   type ADHookEnv = {
-    adRuntimeEnv : {path : String, env : SymEnv}
+    adRuntimeEnv : {path : String, env : SymEnv},
+    config : ADConfig
   }
 
   syn Hook =
@@ -575,12 +579,13 @@ lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
   sem _postTypecheck loader decl =| ADHook env ->
     adPostTypecheck env loader decl
 
-  sem prepareADRuntime : Loader -> (Hook, Loader)
-  sem prepareADRuntime =| loader ->
+  sem prepareADRuntime : Loader -> ADConfig -> (Hook, Loader)
+  sem prepareADRuntime loader =| config ->
     match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ad.mc" loader
       with (adRuntimeEnv, loader) in
     (ADHook {
-      adRuntimeEnv = adRuntimeEnv
+      adRuntimeEnv = adRuntimeEnv,
+      config = config
     }, loader)
 
   ------------------------------------------------------------------------------
@@ -592,8 +597,56 @@ lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
 
   sem adPostTypecheck : ADHookEnv -> Loader -> Decl -> (Loader, Decl)
   sem adPostTypecheck env loader =| decl ->
+    match adPostTypecheckH env loader decl with (loader, decl) in
     let f = compose (adLiftExpr env) adAssertWellTypedDiff in
     (loader, smap_Decl_Expr f decl)
+
+  sem adPostTypecheckH : ADHookEnv -> Loader -> Decl -> (Loader, Decl)
+  sem adPostTypecheckH env loader =
+  | d & DeclExt r ->
+    let loader =
+      if env.config.insertFloatAssertions then
+        let tyIdent = _unwrapTypes r.tyIdent in
+        if _hasFloatExprsMap tyIdent then
+          let i = r.info in
+          let decl_let = lam body. DeclLet {
+            ident = r.ident,
+            tyAnnot = TyUnknown { info = i },
+            tyBody = r.tyIdent,
+            body = body,
+            info = i
+          } in
+          -- NOTE(oerikss, 2025-03-03): We use an intermediate eta expanded
+          -- alias because externals needs to be fully applied.
+          let _ps =
+            recursive let recur = lam ty.
+              switch ty
+              case TyArrow r then snoc (recur r.to) (nameSym "p", r.from)
+              case TyAll r then recur r.ty
+              case _ then []
+              end
+            in
+            recur tyIdent
+          in
+          let decl1 =
+            let ps =
+              map
+                (lam _p.
+                  -- Asserts parameters only if needed
+                  _mapFloatExprsExpr i (adAssertFloat env i) (lam x. x) _p.1
+                    (_var_ i _p.1 _p.0))
+                _ps in
+            let body =
+              foldr (lam p. lam fn. _app_ i fn p) (_var_ i r.tyIdent r.ident)
+                ps in
+            let body =
+              foldl (lam body. lam _p. _lam_ i _p.0 _p.1 body) body _ps in
+            decl_let body in
+          _queueAddDecl loader decl1
+        else loader
+      else loader in
+    (loader, d)
+  | decl -> (loader, decl)
 
   sem adAssertWellTypedDiff : Expr -> Expr
   sem adAssertWellTypedDiff =
@@ -604,8 +657,7 @@ lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
       case TyRecord _ | TySeq _ then
         sfold_Type_Type (lam acc. lam ty. and acc (isIsomorficToRn ty)) true ty
       case _ then type2str ty; false
-      end
-    in
+      end in
     if isIsomorficToRn (_tyTm r.arg) then
       if isIsomorficToRn (_unwrapTypes r.ty) then
         smap_Expr_Expr adAssertWellTypedDiff e
@@ -649,6 +701,26 @@ lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
       printErrorLn (type2str r.ty);
       error (_tyAssertErrMsg "adLiftExpr")
   | e & TmConst r -> adLiftConst env e r.val
+  | e & (TmInfer _
+       | TmDist _
+       | TmObserve _
+       | TmWeight _
+       | TmPrune _
+       | TmPruned _
+       | TmCancel _
+       | TmDelay _
+       | TmDelayed _ ) ->
+    let f = lam e.
+      let ty = _tyTm e in
+      if _hasFloatExprsMap ty then
+        let i = infoTm e in
+        let _x = nameSym "x" in
+        _let_ i _x e
+          (_mapFloatExprsExpr i (adAssertFloat env i) (lam x. x) ty
+             (_var_ i ty _x))
+      else e
+    in
+    smap_Expr_Expr f e
   | e -> smap_Expr_Expr (adLiftExpr env) e
 
   sem adLiftConst : ADHookEnv -> Expr -> Const -> Expr
@@ -671,7 +743,11 @@ lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
   | CSqrt _ -> adliftConstH env e "sqrt"
   | CPow _ -> adliftConstH env e "pow"
   | CFloat2string _ -> adliftConstH env e "float2string"
-  | _ -> e
+  | const ->
+    if env.config.insertFloatAssertions then
+      let i = infoTm e in
+      _mapFloatExprsExpr i (lam x. x) (adAssertFloat env i) (tyConst const) e
+    else e
 
   sem adliftConstH env e =| name -> adGetVarExn env (infoTm e) (_tyTm e) name
 
@@ -735,15 +811,16 @@ lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
     adTangent env i eps e
   | TySeq r -> _mapSeqExpr i (lam e. adTypeDirectedTangent env i eps e r.ty) e
   | TyRecord r ->
-    let fs =
-      map
-        (lam t.
-          let f = lam e. adTypeDirectedTangent env i eps e t.1 in
-          (sidToString t.0, t.1, f))
-        (mapBindings r.fields) in
-    _mapRecordExpr i fs e
+    _mapRecordExprOverField i (adTypeDirectedTangent env i eps) r.fields e
   | ty ->
     printErrorLn (type2str ty); error (_tyAssertErrMsg "adTypeDirectedTangent")
+
+  sem adAssertFloat : ADHookEnv -> Info -> Expr -> Expr
+  sem adAssertFloat env i =| e ->
+    let assertfloat =
+      adGetVarExn env i (ityarrow_ i (ityfloat_ i) (ityfloat_ i))
+        "assertFloat" in
+    _app_ i assertfloat e
 
   sem _tyAssertErrMsg =| fn -> concat "Failed a type assertion in " fn
 
@@ -843,6 +920,49 @@ lang ADLoader = MCoreLoader + Diff + ElementaryFunctions + PrettyPrint
          (lam t. (t.0, t.2 (_recordproj_ i e1 t.0) (_recordproj_ i e2 t.0)))
          fs)
 
+  sem _mapRecordExprOverField i f fields =| e ->
+    let fs = map (lam t. (sidToString t.0, t.1, (lam e. f e t.1)))
+               (mapBindings fields) in
+    _mapRecordExpr i fs e
+
+  sem _mapFloatExprs i from to =
+  | TyFloat _ -> Some from
+  | TySeq r -> optionMap (_mapSeqExpr i) (_mapFloatExprs i from to r.ty)
+  | ty & TyRecord r ->
+    if not (_tyHasFloat ty) then None ()
+    else
+      let bs =
+        (map
+           (lam t.
+             (sidToString t.0,
+              t.1,
+              optionGetOr (lam x. x) (_mapFloatExprs i from to t.1)))
+           (mapBindings r.fields))
+      in
+      Some (_mapRecordExpr i bs)
+  | TyArrow r ->
+    let f = lam from. lam to.
+      Some (
+        lam e.
+          let _x = nameSym "x" in
+          let ty = _tyTm e in
+          _lam_ i _x ty (to (_app_ i e (from (_var_ i ty _x)))))
+    in
+    switch (_mapFloatExprs i to from r.from, _mapFloatExprs i from to r.to)
+    case (Some from, Some to) then f from to
+    case (Some from, None _) then f from (lam x. x)
+    case (None _, Some to) then f (lam x. x) to
+    case (None _, None _) then None ()
+    end
+  | TyAll r -> _mapFloatExprs i from to r.ty
+  | TyAlias r -> _mapFloatExprs i from to r.content
+  | _ -> None ()
+
+  sem _hasFloatExprsMap =| ty ->
+    optionIsSome (_mapFloatExprs (NoInfo ()) (lam x. x) (lam x. x) ty)
+
+  sem _mapFloatExprsExpr i from to ty =| e ->
+    optionMapOr e (lam map. map e) (_mapFloatExprs i from to ty)
 end
 
 lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader + ADLoader
@@ -979,6 +1099,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       -- true if there's a `diff` included, otherwise the "separate
       -- world" assumption doesn't really make sense
       recursive let hasDiff = lam acc. lam e.
+        if acc then true else
         match e with TmDiff r then
           -- NOTE(oerikss, 2025-02-27): If we found a `diff` but we are not in a
           -- model we really do not know what to do at this point so we just
@@ -1033,11 +1154,12 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
           then [hook]
           else [] in
         -- TODO(vipa, 2025-02-26): Add ADHook
-        match prepareADRuntime loader with (adHook, loader) in
+        match prepareADRuntime loader { insertFloatAssertions = true }
+          with (adHook, loader) in
         let hooks = snoc hooks adHook in
         let separateLoader = mkLoader
-          symEnvDefault
-          typcheckEnvDefault
+          (_getSymEnv loader)
+          (_getTCEnv loader)
           hooks in
 
         -- TODO(vipa, 2025-02-26): There will later be an extra

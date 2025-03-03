@@ -1,4 +1,4 @@
--- -*- compile-command : "cppl --test test.mc && ./out && rm ./out" -*-
+-- -*- compile-command : "cppl --test diff.mc && ./out && rm ./out" -*-
 
 include "common.mc"
 
@@ -239,5 +239,25 @@ utest
   repeat (lam. test (rf (), rf ()) (rf (), rf ())) 100;
 
   () with () in
+
+--------------------------------------------------------------------------------
+-- Terms failing float assertions (when float assertions enabled)
+--------------------------------------------------------------------------------
+
+let diff1 = lam f : Float -> Float. lam x : Float. diff f x 1. in
+
+-- utest diff1 (lam x. int2float (floorfi x)) 1. with 0. in
+-- utest diff1 (lam x. int2float (ceilfi x)) 1. with 0. in
+-- utest diff1 (lam x. int2float (roundfi x)) 1. with 0. in
+
+--------------------------------------------------------------------------------
+-- Terms not-failing float assertions (when float assertions enabled)
+--------------------------------------------------------------------------------
+
+let diff1 = lam f : Float -> Float. lam x : Float. diff f x 1. in
+
+utest diff1 (lam x. mulf (int2float (floorfi 1.)) x) 1. with 1. in
+utest diff1 (lam x. mulf (int2float (ceilfi 1.)) x) 1. with 1. in
+utest diff1 (lam x. mulf (int2float (roundfi 1.)) x) 1. with 1. in
 
 ()

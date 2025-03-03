@@ -2,6 +2,11 @@
 
 include "ext/reflection-ext.mc"
 
+let assertFloat : Float -> Float
+  = lam a.
+    if isfloat a then a
+    else error "Float assertion failed. The assertion likely failed beacuse the derivative of a non-differentiable functions was requested."
+
 let _uc = unsafeCoerce
 
 let _e = ref 0.

@@ -564,8 +564,9 @@ lang SolveODE =
     -- NOTE(oerikss, 2024-11-07): We shallow recurse through method expressions
     -- by default. This is more convenient than requiring each semantic function
     -- that nees to map/recurse through all expressions in an AST to manually
-    -- call `smapAccumL_InferMethod_Expr`. If you want to avoid this behaviour
-    -- you can instead manually match on `TmSolve` and do something different.
+    -- call `smapAccumL_ODESolverMethod_Expr`. If you want to avoid this
+    -- behaviour you can instead manually match on `TmSolve` and do something
+    -- different.
     match
       smapAccumL_ODESolverMethod_Expr f acc t.method with (acc, method)
     in
