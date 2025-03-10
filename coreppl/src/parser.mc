@@ -120,7 +120,8 @@ lang DPPLParser =
   sem matchKeywordString (info: Info) =
   | "assume" -> Some (1, lam lst. TmAssume {dist = get lst 0,
                                             ty = TyUnknown {info = info},
-                                            info = info})
+                                            info = info,
+                                            driftKernel = None ()})
   | "observe" -> Some (2, lam lst. TmObserve {value = get lst 0,
                                               dist = get lst 1,
                                               ty = TyUnknown {info = info},

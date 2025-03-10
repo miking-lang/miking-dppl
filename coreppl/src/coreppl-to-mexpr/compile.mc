@@ -64,7 +64,7 @@ end
 
 lang DPPLDelayedReplace = DPPLParser
    sem replaceDelayKeywords =
-   | TmDelay t -> TmAssume { dist = t.dist, ty = t.ty, info = t.info }
+   | TmDelay t -> TmAssume { dist = t.dist, ty = t.ty, info = t.info, driftKernel = None () }
    | TmDelayed t -> t.delay
    | t -> smap_Expr_Expr replaceDelayKeywords t
 

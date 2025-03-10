@@ -287,7 +287,7 @@ lang MExprPPLLightweightMCMC =
   -- Extension to Expr specific for this compiler. Used to track
   -- unaligned/aligned assumes in CPS.
   syn Expr =
-  | TmAssumeUnaligned { dist: Expr, ty: Type, info: Info }
+  | TmAssumeUnaligned { dist: Expr, ty: Type, info: Info, driftKernel: Option Expr }
 
   sem tyTm =
   | TmAssumeUnaligned x -> x.ty
@@ -302,7 +302,8 @@ lang MExprPPLLightweightMCMC =
   sem smapAccumL_Expr_Expr f acc =
   | TmAssumeUnaligned x ->
     match f acc x.dist with (acc, dist) in
-    (acc, TmAssumeUnaligned {x with dist = dist})
+    match optionMapAccum f acc x.driftKernel with (acc, driftKernel) in
+    (acc, TmAssumeUnaligned {x with dist = dist, driftKernel = driftKernel})
 
 
   sem exprCps env k =
@@ -370,11 +371,24 @@ lang MExprPPLLightweightMCMC =
     i (appFromEnv runtime "sampleUnaligned" [i (int_ (uniqueSym ())), t.dist])
   | TmApp
     { lhs = TmApp
-      { lhs = TmAssume assume
+      { lhs = TmAssume {driftKernel = None (), info = info}
       , rhs = dist
       },
       rhs = k
-    } -> appFromEnv runtime "sampleAligned" [transformPostAlignedCps env runtime dist, transformPostAlignedCps env runtime k]
+    } ->
+      errorSingle [info] "For now you need an explicit drift kernel for aligned assumes"
+  | TmApp
+    { lhs = TmApp
+      { lhs = TmAssume {driftKernel = Some driftKernel}
+      , rhs = dist
+      },
+      rhs = k
+    } ->
+      -- NOTE(vipa, 2025-03-10): The runtime expects a non-cps form
+      -- function, which we can achieve by applying to the identity
+      -- function
+      let dk = app_ (transformPostAlignedCps env runtime driftKernel) (ulam_ "x" (var_ "x")) in
+      appFromEnv runtime "sampleAligned" [dk, transformPostAlignedCps env runtime dist, transformPostAlignedCps env runtime k]
   | TmAssume r -> errorSingle [r.info] "Some TmAssume's were not replaced in CPS"
   | TmObserve t ->
     let i = withInfo t.info in
