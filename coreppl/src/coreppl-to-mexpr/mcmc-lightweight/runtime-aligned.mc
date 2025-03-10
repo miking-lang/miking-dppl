@@ -8,7 +8,7 @@ include "string.mc"
 include "option.mc"
 
 include "../runtime-common.mc"
-include "kernel.mc"
+include "../runtime-dists.mc"
 
 -- Any-type, used for traces
 type Any = ()
