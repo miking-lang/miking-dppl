@@ -1035,14 +1035,19 @@ lang Cancel = Observe
     ] )
 end
 
--- Assume defines a new random variable
+-- Diff computes the derivative of a function.
 lang Diff =
   Ast + PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift + PEval + AstToJson
+
+  syn DiffMod =
+  | Analytic ()
+  | PAP ()
 
   syn Expr =
   | TmDiff { fn: Expr,
              arg: Expr,
              darg: Expr,
+             mod : Option DiffMod,
              ty: Type,
              info: Info }
 
@@ -1083,7 +1088,7 @@ lang Diff =
   | TmDiff r ->
     match lhs with TmDiff l then
       optionFoldlM (lam free. uncurry (eqExprH free env)) free
-        [(l.arg, r.arg), (l.darg, r.darg)]
+        [(l.fn, r.fn), (l.arg, r.arg), (l.darg, r.darg)]
     else None ()
 
   -- Type check
@@ -1437,6 +1442,21 @@ let weight_ = use Weight in
       info = NoInfo ()
     }
 
+let solveode_ = solveodeWithStepSize_ (float_ 0.01)
+
+let diffmod_ = use Diff in lam mod. lam fn. lam arg. lam darg. TmDiff {
+  fn = fn,
+  arg = arg,
+  darg = darg,
+  mod = mod,
+  ty = tyunknown_,
+  info = NoInfo ()
+}
+
+let diff_ = diffmod_ (None ())
+let diffa_ = use Diff in diffmod_ (Some (Analytic ()))
+let diffp_ = use Diff in diffmod_ (Some (PAP ()))
+
 let prune_ = use Prune in
   lam d. TmPrune {dist = d, ty = tyunknown_ , info = NoInfo ()}
 
@@ -1522,6 +1542,7 @@ in
 let tmX0 = float_ 0. in
 let tmTEnd = float_ 1. in
 let tmSolveODE = solveode_ tmODE tmX0 tmTEnd in
+let tmDiff = diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.) in
 let tmPrune =
   prune_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]))
 in
@@ -1576,6 +1597,15 @@ with strJoin "\n" [
   "       1.)",
   "  0.",
   "  1."
+] using eqString else _toStr in
+
+utest mexprPPLToString tmDiff
+with strJoin "\n" [
+  "diff",
+  "  (lam x: Float.",
+  "     x)",
+  "  1.",
+  "  2."
 ] using eqString else _toStr in
 
 utest mexprPPLToString tmPrune
@@ -1635,6 +1665,20 @@ utest tmSolveODE with solveode_ tmODE tmX0 (float_ 2.)
   using neqExpr else _toStr
 in
 
+utest tmDiff with tmDiff using eqExpr else _toStr in
+utest diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.)
+  with diff_ (lam_ "x" tyfloat_ (float_ 1.)) (float_ 1.) (float_ 2.)
+  using neqExpr else _toStr
+in
+utest diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.)
+  with diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 2.) (float_ 2.)
+  using neqExpr else _toStr
+in
+utest diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.)
+  with diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 1.)
+  using neqExpr else _toStr
+in
+
 utest tmPrune with tmPrune using eqExpr else _toStr in
 utest tmPruned with tmPruned using eqExpr else _toStr in
 utest tmCancel with tmCancel using eqExpr else _toStr in
@@ -1689,6 +1733,16 @@ with
   using eqSeq eqExpr else _seqToStr
 in
 
+utest smap_Expr_Expr mapVar tmDiff
+  with diff_ tmVar tmVar tmVar
+  using eqExpr else _toStr
+in
+utest sfold_Expr_Expr foldToSeq [] tmDiff
+with
+  [  float_ 2., float_ 1., lam_ "x" tyfloat_ (var_ "x") ]
+  using eqSeq eqExpr else _seqToStr
+in
+
 utest sfold_Expr_Expr foldToSeq [] tmPrune
   with [ categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]) ]
   using eqSeq eqExpr else _seqToStr
@@ -1720,6 +1774,7 @@ utest symbolize tmAssume with tmAssume using eqExpr in
 utest symbolize tmObserve with tmObserve using eqExpr in
 utest symbolize tmWeight with tmWeight using eqExpr in
 utest symbolize tmSolveODE with tmSolveODE using eqExpr in
+utest symbolize tmDiff with tmDiff using eqExpr in
 utest symbolize tmPrune with tmPrune using eqExpr in
 utest symbolize tmPruned with tmPruned using eqExpr in
 utest symbolize tmCancel with tmCancel using eqExpr in
@@ -1736,6 +1791,7 @@ utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmObserve) with tyunit_ using eqType in
 utest tyTm (typeCheck tmWeight) with tyunit_ using eqType in
 utest tyTm (typeCheck tmSolveODE) with tyfloat_ using eqType in
+utest tyTm (typeCheck tmDiff) with tyfloat_ using eqType in
 utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmPrune) with typruneint_ using eqType in
 utest tyTm (typeCheck tmCancel) with tyunit_ using eqType in
@@ -1774,6 +1830,10 @@ utest _anf
          (float_ 0.)
          tmTEnd),
     var_ "t"
+] using eqExpr else _toStr in
+utest _anf tmDiff with bindall_ [
+  ulet_ "t" (diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.)),
+  var_ "t"
 ] using eqExpr else _toStr in
 utest _anf tmPrune with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
@@ -1815,6 +1875,7 @@ utest _anf tmDelayed with bindall_ [
 utest (typeLift tmAssume).1 with tmAssume using eqExpr in
 utest (typeLift tmObserve).1 with tmObserve using eqExpr in
 utest (typeLift tmWeight).1 with tmWeight using eqExpr in
+utest (typeLift tmDiff).1 with tmDiff using eqExpr in
 utest (typeLift tmSolveODE).1 with tmSolveODE using eqExpr in
 utest (typeLift tmPrune).1 with tmPrune using eqExpr in
 utest (typeLift tmPruned).1 with tmPruned using eqExpr in
