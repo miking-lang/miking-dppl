@@ -1,49 +1,51 @@
 include "../dists.mc"
+include "../inference-interface.mc"
 include "../../inference/smc.mc"
 include "../../cfa.mc"
+include "../delayed-sampling/compile.mc"
 
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 include "mexpr/phase-stats.mc"
 
 lang MExprPPLImportance =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats + InferenceInterface + DPPLDelayedSampling
 
   -------------------------
   -- IMPORTANCE SAMPLING --
   -------------------------
 
-  -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
-  -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
-  -- MExprExpr or similar.
-  sem compile : Options -> (Expr,Expr) -> Expr
-  sem compile options =
-  | (t,_) ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  sem compile : InferenceInterface -> Expr
+  sem compile =
+  | x ->
+    let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
+    let t = x.extractNormal () in
+    endPhaseStatsExpr log "extract-normal-one" t;
 
+    let t = if x.options.dynamicDelay then delayedSampling x.delay t else t in
     -- Transform distributions to MExpr distributions
-    let t = mapPre_Expr_Expr transformTmDist t in
+    let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     -- Transform samples, observes, and weights to MExpr
-    let t = mapPre_Expr_Expr transformProb t in
+    let t = mapPre_Expr_Expr (transformProb x.stateName x.dists x.runtime) t in
     endPhaseStatsExpr log "transform-prob-one" t;
 
     t
 
-  sem transformProb =
+
+  sem transformProb stateName env runtime =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (var_ "sample")) t.dist)
-
+    i (appFromEnv env "sample" [t.dist])
+  | TmResample t -> withInfo t.info unit_
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
-    i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
+    let weight = i (appFromEnv env "logObserve" [t.dist, t.value]) in
+    i (appFromEnv runtime "updateWeight" [weight, i (nvar_ stateName)])
   | TmWeight t ->
     let i = withInfo t.info in
-    i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
-  | TmResample t -> withInfo t.info unit_
+    i (appFromEnv runtime "updateWeight" [t.weight, i (nvar_ stateName)])
   | t -> t
 
 
@@ -71,7 +73,7 @@ lang MExprPPLImportance =
       }
 
   -- This is where we use the continuation (weight and observe)
-  | TmLet { ident = ident, body = TmWeight { weight = weight },
+  | TmLet { ident = ident, body = w & TmWeight { weight = weight },
             inexpr = inexpr} & t ->
     let i = withInfo (infoTm t) in
     let k =
@@ -80,10 +82,13 @@ lang MExprPPLImportance =
         else error "Something went wrong with partial CPS transformation"
       else i (nulam_ ident (exprCps env k inexpr))
     in
-    i (appf2_ (i (var_ "updateWeight")) weight k)
+    -- NOTE(vipa, 2025-01-16): This will be fixed in
+    -- `transformProbCps` later, because we don't have access to the
+    -- environments here
+    i (appf2_ w weight k)
 
   -- This is where we use the continuation (weight and observe)
-  | TmLet { ident = ident, body = TmObserve { value = value, dist = dist },
+  | TmLet { ident = ident, body = obs & TmObserve { value = value, dist = dist },
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in
     let k =
@@ -92,8 +97,10 @@ lang MExprPPLImportance =
         else error "Something went wrong with partial CPS transformation"
       else i (nulam_ ident (exprCps env k inexpr))
     in
-    let weight = i (appf2_ (i (var_ "logObserve")) dist value) in
-    i (appf2_ (i (var_ "updateWeight")) weight k)
+    -- NOTE(vipa, 2025-01-16): This will be fixed in `transformProb`
+    -- later, because we don't have access to the environments here
+    let weight = i (appf2_ obs dist value) in
+    i (appf2_ (i (TmWeight {weight = unit_, ty = tyunknown_, info = infoTm t})) weight k)
 
   -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
   -- transformed versions are removed when removing duplicate code.
@@ -102,21 +109,37 @@ lang MExprPPLImportance =
   | (TyCon { info = info } | TyApp { info = info } ) ->
     let i = tyWithInfo info in i tyunknown_
 
-  sem transformProbCps =
+  sem transformProbCps env runtime =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (var_ "sample")) t.dist)
+    i (appFromEnv env "sample" [t.dist])
   | TmResample t -> withInfo t.info unit_
 
+  | TmApp
+    { lhs = TmApp
+      { lhs = TmObserve obs
+      , rhs = dist
+      },
+      rhs = value
+    } -> appFromEnv env "logObserve" [dist, value]
+  | TmApp
+    { lhs = TmApp
+      { lhs = TmWeight w
+      , rhs = weight
+      },
+      rhs = k
+    } -> appFromEnv runtime "updateWeight" [weight, k]
   -- Should already have been removed by CPS!
   | (TmObserve _ | TmWeight _) & tm ->
     errorSingle [infoTm tm] "Impossible in importance sampling with CPS"
   | t -> t
 
-  sem compileCps : Options -> (Expr,Expr) -> Expr
-  sem compileCps options =
-  | (_,t) ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  sem compileCps : InferenceInterface -> Expr
+  sem compileCps =
+  | x ->
+    let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
+    let t = x.extractNoHigherOrderConsts () in
+    endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
@@ -127,9 +150,12 @@ lang MExprPPLImportance =
     -- let t1 = wallTimeMs () in
     let t =
 
-      let cont = (ulam_ "x" (conapp_ "End" (var_ "x"))) in
+      let cont =
+        let n = _getConExn "End" x.runtime.env in
+        let x = nameSym "x" in
+        (nulam_ x (nconapp_ n (nvar_ x))) in
 
-      match options.cps with "partial" then
+      match x.options.cps with "partial" then
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = body } then
             match body with TmWeight _ | TmObserve _ then true else false
@@ -146,9 +172,9 @@ lang MExprPPLImportance =
 
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
 
-      else match options.cps with "full" then cpsFullCont cont t
+      else match x.options.cps with "full" then cpsFullCont cont t
 
-      else error ( join [ "Invalid CPS option:", options.cps ])
+      else error ( join [ "Invalid CPS option:", x.options.cps ])
 
     in
     endPhaseStatsExpr log "cps-one" t;
@@ -160,11 +186,11 @@ lang MExprPPLImportance =
     -- printLn (str);
 
     -- Transform distributions to MExpr distributions
-    let t = mapPre_Expr_Expr transformTmDist t in
+    let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     -- Transform samples, observes, and weights to MExpr
-    let t = mapPre_Expr_Expr transformProbCps t in
+    let t = mapPre_Expr_Expr (transformProbCps x.dists x.runtime) t in
     endPhaseStatsExpr log "transform-prob-cps-one" t;
 
     t
@@ -173,8 +199,8 @@ end
 
 let compilerImportance = lam options. use MExprPPLImportance in
   match options.cps with "partial" | "full" then
-    ("is-lw/runtime-cps.mc", compileCps options)
+    ("is-lw/runtime-cps.mc", compileCps)
   else match options.cps with "none" then
-    ("is-lw/runtime.mc", compile options)
+    ("is-lw/runtime.mc", compile)
   else
     error ( join [ "Unknown CPS option:", options.cps ])

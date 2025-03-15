@@ -3,6 +3,7 @@ include "mexpr/const-arity.mc"
 include "mexpr/cps.mc"
 
 include "../dists.mc"
+include "../inference-interface.mc"
 include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "../../dppl-arg.mc"
@@ -19,50 +20,52 @@ let uniqueSym = lam.
   s
 
 lang MExprPPLLightweightMCMC =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + MExprArity + PhaseStats
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + MExprArity + PhaseStats + InferenceInterface
 
   -------------------------
   -- STATIC ALIGNED MCMC --
   -------------------------
-  sem compileAligned : Options -> (Expr,Expr) -> Expr
-  sem compileAligned options =
-  | (t,_) ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  sem compileAligned : InferenceInterface -> Expr
+  sem compileAligned =
+  | x ->
+    let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
+    let t = x.extractNormal () in
+    endPhaseStatsExpr log "extract-normal-one" t;
 
     -- Alignment analysis
     let alignRes = alignCfa t in
     let unalignedNames: Set Name = extractUnaligned alignRes in
 
     -- Transform distributions to MExpr distributions
-    let t = mapPre_Expr_Expr transformTmDist t in
+    let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist" t;
 
     -- Transform samples, observes, and weights to MExpr
-    let t = mapPre_Expr_Expr (transformProbAligned unalignedNames) t in
+    let t = mapPre_Expr_Expr (transformProbAligned x.runtime x.dists unalignedNames) t in
     endPhaseStatsExpr log "transform-prob-aligned-one" t;
 
     t
 
   -- Compile CorePPL constructs to MExpr
-  sem transformProbAligned unalignedNames =
+  sem transformProbAligned env dists unalignedNames =
 
   | TmLet ({ ident = ident, body = TmAssume t, inexpr = inexpr } & r) ->
     let i = withInfo r.info in
     TmLet { r with body =
       if setMem ident unalignedNames then
-        i (appf2_ (i (var_ "sampleUnaligned")) (i (int_ (uniqueSym ()))) t.dist)
+        i (appFromEnv env "sampleUnaligned" [i (int_ (uniqueSym ())), t.dist])
       else
-        i (appf1_ (i (var_ "sampleAligned")) t.dist)
+        i (appFromEnv env "sampleAligned" [t.dist])
     }
 
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
-    i (appf1_ (i (var_ "updateWeight")) weight)
+    let weight = i (appFromEnv dists "logObserve" [t.dist, t.value]) in
+    i (appFromEnv env "updateWeight" [weight])
 
   | TmWeight t ->
     let i = withInfo t.info in
-    i (appf1_ (i (var_ "updateWeight")) t.weight)
+    i (appFromEnv env "updateWeight" [t.weight])
 
   | TmResample t -> withInfo t.info unit_
 
@@ -71,39 +74,43 @@ lang MExprPPLLightweightMCMC =
   ------------------------------------------
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
   ------------------------------------------
-  sem compile : Options -> (Expr,Expr) -> Expr
-  sem compile options =
-  | (_,t) ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  sem compile : InferenceInterface -> Expr
+  sem compile =
+  | x ->
+    let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
+    let t = x.extractNoHigherOrderConsts () in
+    endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- Addressing transform combined with CorePPL->MExpr transform
-    let t = transformAddr (setEmpty nameCmp) t in
+    let t = transformAddr x.dists x.runtime (setEmpty nameCmp) t in
     endPhaseStatsExpr log "transform-addr-one" t;
 
     -- Type addressing transform
-    let t = mapPre_Expr_Expr exprTyTransform t in
+    let t = mapPre_Expr_Expr (exprTyTransform x.runtime) t in
     endPhaseStatsExpr log "empty-ty-transform-one" t;
 
     -- Transform distributions to MExpr distributions
-    let t = mapPre_Expr_Expr transformTmDist t in
+    let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-one" t;
 
     -- Initialize addr to the empty list (not rope) at the
     -- beginning of the program.
-    let t = bind_ (nulet_ addrName (var_ "emptyAddress")) t in
+    let t =
+      let emptyAddress = appFromEnv x.runtime "emptyAddress" [] in
+      bind_ (nulet_ addrName emptyAddress) t in
     endPhaseStatsExpr log "bind-empty-addr-one" t;
 
     t
 
-  sem addr: Info -> Expr
-  sem addr =
+  sem addr: {env : {path : String, env : SymEnv}, lamliftSols : Map Name FinalOrderedLamLiftSolution} -> Info -> Expr
+  sem addr env =
   | i ->
     let i = withInfo i in
     let s = uniqueSym () in
-    i (appf2_ (i (var_ "constructAddress")) (i (nvar_ addrName)) (i (int_ s)))
+    i (appFromEnv env "constructAddress" [i (nvar_ addrName), i (int_ s)])
 
-  sem transformConst: Int -> Expr -> Expr
-  sem transformConst arity =
+  sem transformConst: {env : {path : String, env : SymEnv}, lamliftSols : Map Name FinalOrderedLamLiftSolution} -> Int -> Expr -> Expr
+  sem transformConst env arity =
   | e ->
     let i = withInfo (infoTm e) in
     recursive let vars = lam acc. lam arity.
@@ -115,18 +122,20 @@ lang MExprPPLLightweightMCMC =
     let varNames: [Name] = vars [] arity in
     let inner = foldl (lam acc. lam v. i (app_ acc (nvar_ v))) e varNames in
     foldr (lam v. lam acc.
-        i (nlam_ addrName (tycon_ "Address") (i (nulam_ v acc)))
+        let n = _getTyConExn "Address" env.env in
+        i (nlam_ addrName (ntycon_ n) (i (nulam_ v acc)))
       ) inner varNames
 
-  sem transformAddr: Set Name -> Expr -> Expr
-  sem transformAddr externalIds =
+  sem transformAddr: {env : {path : String, env : SymEnv}, lamliftSols : Map Name FinalOrderedLamLiftSolution} -> {env : {path : String, env : SymEnv}, lamliftSols : Map Name FinalOrderedLamLiftSolution} -> Set Name -> Expr -> Expr
+  sem transformAddr dists env externalIds =
 
-  | t -> smap_Expr_Expr (transformAddr externalIds) t
+  | t -> smap_Expr_Expr (transformAddr dists env externalIds) t
 
   | TmLam _ & t ->
-    match smap_Expr_Expr (transformAddr externalIds) t with TmLam r & t in
+    match smap_Expr_Expr (transformAddr dists env externalIds) t with TmLam r & t in
     let i = withInfo r.info in
-    i (nlam_ addrName (tycon_ "Address") t)
+    let n = _getTyConExn "Address" env.env in
+    i (nlam_ addrName (ntycon_ n) t)
 
   | TmConst r & t ->
     if isHigherOrderFunType (tyConst r.val) then
@@ -134,17 +143,17 @@ lang MExprPPLLightweightMCMC =
       errorSingle [r.info]
         "Higher-order constant functions not yet supported in addressing transformAddr"
     else
-      transformConst (constArity r.val) t
+      transformConst env (constArity r.val) t
 
   -- NOTE(dlunde,2022-10-24): We keep track of externals currently in scope.
   -- Note that the ANF transformation "replaces" externals with their eta
   -- expansions. Hence, we must also remove externals from scope after a `let`
   -- defines them anew.
   | TmExt r & t ->
-    TmExt { r with inexpr = transformAddr (setInsert r.ident externalIds) r.inexpr }
+    TmExt { r with inexpr = transformAddr dists env (setInsert r.ident externalIds) r.inexpr }
   | TmLet r ->
-    let body = transformAddr externalIds r.body in
-    let inexpr = transformAddr (setRemove r.ident externalIds) r.inexpr in
+    let body = transformAddr dists env externalIds r.body in
+    let inexpr = transformAddr dists env (setRemove r.ident externalIds) r.inexpr in
     TmLet { r with body = body, inexpr = inexpr }
 
   | TmApp _ & t ->
@@ -172,7 +181,7 @@ lang MExprPPLLightweightMCMC =
     let transformApp = lam app.
       match app with TmApp r then
         let i = withInfo r.info in
-        TmApp {r with lhs = i (app_ r.lhs (addr r.info))}
+        TmApp {r with lhs = i (app_ r.lhs (addr env r.info))}
       else error "Impossible"
     in
 
@@ -180,7 +189,7 @@ lang MExprPPLLightweightMCMC =
       match app with TmApp r then
 
         -- Always transform the argument (the rhs)
-        let r = { r with rhs = transformAddr externalIds r.rhs } in
+        let r = { r with rhs = transformAddr dists env externalIds r.rhs } in
 
         -- Recurse over lhs if it's an app
         match r.lhs with TmApp _ then
@@ -210,36 +219,36 @@ lang MExprPPLLightweightMCMC =
         -- directly when constructed (as they, at least partially, can't escape
         -- then).
         else
-          let app = TmApp { r with lhs = transformAddr externalIds r.lhs } in
+          let app = TmApp { r with lhs = transformAddr dists env externalIds r.lhs } in
           (transformApp app, 0)
 
       else error "Impossible"
     in
 
     match rec t 0 with (t,remainingConstArity) in
-    transformConst remainingConstArity t
+    transformConst env remainingConstArity t
 
   | TmAssume r ->
     let i = withInfo r.info in
-    let dist = transformAddr externalIds r.dist in
-    i (appf2_ (i (var_ "sample")) (addr r.info) dist)
+    let dist = transformAddr dists env externalIds r.dist in
+    i (appFromEnv env "sample" [addr env r.info, dist])
 
   | TmObserve r ->
     let i = withInfo r.info in
-    let dist = transformAddr externalIds r.dist in
-    let value = transformAddr externalIds r.value in
-    let weight = i (appf2_ (i (var_ "logObserve")) dist value) in
-    i (appf1_ (i (var_ "updateWeight")) weight)
+    let dist = transformAddr dists env externalIds r.dist in
+    let value = transformAddr dists env externalIds r.value in
+    let weight = i (appFromEnv dists "logObserve" [dist, value]) in
+    i (appFromEnv env "updateWeight" [weight])
 
   | TmWeight r ->
     let i = withInfo r.info in
-    let weight = transformAddr externalIds r.weight in
-    i (appf1_ (i (var_ "updateWeight")) weight)
+    let weight = transformAddr dists env externalIds r.weight in
+    i (appFromEnv env "updateWeight" [weight])
 
   | TmResample r -> withInfo r.info unit_
 
-  sem exprTyTransform =
-  | t -> smap_Expr_Type tyTransform t
+  sem exprTyTransform env =
+  | t -> smap_Expr_Type (tyTransform env) t
   | TmConDef r & t ->
     -- We do not transform the top-level arrow type of the condef (due to the
     -- nested smap_Type_Type), as data values are constructed as usual.
@@ -250,20 +259,21 @@ lang MExprPPLLightweightMCMC =
     -- TmType. It is then incorrectly transformed.
     recursive let rec = lam ty.
       match ty with TyAll b then TyAll { b with ty = rec b.ty }
-      else match ty with TyArrow _ & t then smap_Type_Type tyTransform t
+      else match ty with TyArrow _ & t then smap_Type_Type (tyTransform env) t
       else errorSingle [r.info]
         "Error in mcmc-lightweight compile: Problem with TmConDef in exprTyTransform"
     in smap_Expr_Type rec t
   -- Don't touch the types of externals
   | TmExt r -> TmExt r
 
-  sem tyTransform =
-  | t -> smap_Type_Type tyTransform t
+  sem tyTransform env =
+  | t -> smap_Type_Type (tyTransform env) t
   | TyArrow r & t ->
     let i = tyWithInfo r.info in
-    let from = tyTransform r.from in
-    let to = tyTransform r.to in
-    (i (tyarrow_ (i (tycon_ "Address"))
+    let from = tyTransform env r.from in
+    let to = tyTransform env r.to in
+    let n = _getTyConExn "Address" env.env in
+    (i (tyarrow_ (i (ntycon_ n))
         (TyArrow { r with from = from, to = to })))
   -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
   -- transformed versions are removed when removing duplicate code.
@@ -279,10 +289,26 @@ lang MExprPPLLightweightMCMC =
   syn Expr =
   | TmAssumeUnaligned { dist: Expr, ty: Type, info: Info }
 
+  sem tyTm =
+  | TmAssumeUnaligned x -> x.ty
+  sem withType ty =
+  | TmAssumeUnaligned x -> TmAssumeUnaligned {x with ty = ty}
+
+  sem infoTm =
+  | TmAssumeUnaligned x -> x.info
+  sem withInfo info =
+  | TmAssumeUnaligned x -> TmAssumeUnaligned {x with info = info}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmAssumeUnaligned x ->
+    match f acc x.dist with (acc, dist) in
+    (acc, TmAssumeUnaligned {x with dist = dist})
+
+
   sem exprCps env k =
 
   -- This is where we use the continuation (aligned assumes)
-  | TmLet ({ ident = ident, body = TmAssume { dist = dist },
+  | TmLet ({ ident = ident, body = assume & TmAssume { dist = dist },
             inexpr = inexpr } & r) & t ->
     let i = withInfo (infoTm t) in
     if not (transform env ident) then
@@ -295,7 +321,10 @@ lang MExprPPLLightweightMCMC =
           else error "Something went wrong with partial CPS transformation"
         else i (nulam_ ident (exprCps env k inexpr))
       in
-      i (appf2_ (i (var_ "sampleAligned")) dist k)
+      -- NOTE(vipa, 2025-01-16): This will be fixed in
+      -- `transformPostAlignedCps` later, because we don't have access
+      -- to the environments here
+      i (appf2_ assume dist k)
 
   -- Ignore unaligned assumes for now
   | TmLet ({ body = TmAssumeUnaligned _ } & t) ->
@@ -335,28 +364,37 @@ lang MExprPPLLightweightMCMC =
   | t -> t
 
   -- Compile CorePPL constructs to MExpr
-  sem transformPostAlignedCps =
+  sem transformPostAlignedCps env runtime =
   | TmAssumeUnaligned t ->
     let i = withInfo t.info in
-    i (appf2_ (i (var_ "sampleUnaligned")) (i (int_ (uniqueSym ()))) t.dist)
+    i (appFromEnv runtime "sampleUnaligned" [i (int_ (uniqueSym ())), t.dist])
+  | TmApp
+    { lhs = TmApp
+      { lhs = TmAssume assume
+      , rhs = dist
+      },
+      rhs = k
+    } -> appFromEnv runtime "sampleAligned" [transformPostAlignedCps env runtime dist, transformPostAlignedCps env runtime k]
   | TmAssume r -> errorSingle [r.info] "Some TmAssume's were not replaced in CPS"
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
-    i (appf1_ (i (var_ "updateWeight")) weight)
+    let weight = i (appFromEnv env "logObserve" [t.dist, t.value]) in
+    i (appFromEnv runtime "updateWeight" [weight])
 
   | TmWeight t ->
     let i = withInfo t.info in
-    i (appf1_ (i (var_ "updateWeight")) t.weight)
+    i (appFromEnv runtime "updateWeight" [t.weight])
 
   | TmResample t -> withInfo t.info unit_
 
   | t -> t
 
-  sem compileAlignedCps : Options -> (Expr,Expr) -> Expr
-  sem compileAlignedCps options =
-  | (_,t) ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  sem compileAlignedCps : InferenceInterface -> Expr
+  sem compileAlignedCps =
+  | x ->
+    let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
+    let t = x.extractNoHigherOrderConsts () in
+    endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
@@ -376,7 +414,7 @@ lang MExprPPLLightweightMCMC =
 
       let cont = (ulam_ "x" (var_ "x")) in
 
-      match options.cps with "partial" then
+      match x.options.cps with "partial" then
         -- Partial checkpoint/suspension analysis
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = TmAssume _ } then
@@ -393,21 +431,21 @@ lang MExprPPLLightweightMCMC =
         let t = mapPre_Expr_Expr (transformPreAlignedCps unalignedNames) t in
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
 
-      else match options.cps with "full" then
+      else match x.options.cps with "full" then
         let t = mapPre_Expr_Expr (transformPreAlignedCps unalignedNames) t in
         cpsFullCont cont t
 
-      else error ( join [ "Invalid CPS option:", options.cps ])
+      else error ( join [ "Invalid CPS option:", x.options.cps ])
 
     in
     endPhaseStatsExpr log "cps-one" t;
 
     -- Transform samples, observes, and weights to MExpr
-    let t = mapPre_Expr_Expr transformPostAlignedCps t in
+    let t = mapPre_Expr_Expr (transformPostAlignedCps x.dists x.runtime) t in
     endPhaseStatsExpr log "transform-post-aligned-one" t;
 
     -- Transform distributions to MExpr distributions
-    let t = mapPre_Expr_Expr transformTmDist t in
+    let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     t
@@ -430,13 +468,13 @@ let compilerLightweightMCMC = lam options. use MExprPPLLightweightMCMC in
 
   switch (options.align, options.cps)
     case (true,"none") then
-      ("mcmc-lightweight/runtime-aligned.mc", compileAligned options)
+      ("mcmc-lightweight/runtime-aligned.mc", compileAligned)
     case (true,_) then
-      ("mcmc-lightweight/runtime-aligned-cps.mc", compileAlignedCps options)
+      ("mcmc-lightweight/runtime-aligned-cps.mc", compileAlignedCps)
     case (false,"none") then
-      ("mcmc-lightweight/runtime.mc", compile options)
+      ("mcmc-lightweight/runtime.mc", compile)
     case (false,_) then
       -- TODO(2023-05-17,dlunde): Currently the same as non-CPS. Switch to
       -- CPS-version when implemented.
-      ("mcmc-lightweight/runtime.mc", compile options)
+      ("mcmc-lightweight/runtime.mc", compile)
   end

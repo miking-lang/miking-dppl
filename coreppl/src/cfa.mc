@@ -2,13 +2,12 @@
 
 include "coreppl.mc"
 include "parser.mc"
-include "ad.mc"
 
 include "mexpr/cfa.mc"
 include "mexpr/type.mc"
 include "mexpr/const-types.mc"
 
-lang ConstAllCFA = MExprCFA + MExprPPL + DualNumLift
+lang ConstAllCFA = MExprCFA + MExprPPL
 
   -- The below ensures all constants are tracked as needed for the CorePPL
   -- analyses.  In the base CFA fragment in Miking, constraints for constants
@@ -1538,4 +1537,3 @@ utest _testWithSymbolize false t [
 ] using eqTest in
 
 ()
-

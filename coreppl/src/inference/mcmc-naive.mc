@@ -16,7 +16,7 @@ lang NaiveMCMCMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | "NaiveMCMC" ->
     let expectedFields = [
-      ("iterations", int_ default.particles)
+      ("iterations", int_ defaultArgs.particles)
     ] in
     match getFields info bindings expectedFields with [iterations] in
     NaiveMCMC { iterations = iterations }

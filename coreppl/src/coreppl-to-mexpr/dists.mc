@@ -3,128 +3,113 @@
 -- common/dists.mc
 
 include "../coreppl.mc"
-include "../ad.mc"
 include "mexpr/ast-builder.mc"
+include "mlang/loader.mc"
+include "inference-interface.mc"
 
 lang TransformDistBase = MExprPPL
   -- Transforms TmDist and constant functions operating on distributions to
   -- their runtime representation.
-  sem transformTmDist: Expr -> Expr
-  sem transformTmDist =
+  sem transformTmDist: InferenceSymEnv -> Expr -> Expr
+  sem transformTmDist env =
   | TmDist t ->
-    transformTmDistH (withInfo t.info) (smap_Dist_Expr transformTmDist t.dist)
-  | tm & TmConst t -> transformDistConst tm t.val
+    transformTmDistH (withInfo t.info) env (smap_Dist_Expr (transformTmDist env) t.dist)
+  | tm & TmConst t -> transformDistConst tm env t.val
   | t -> t
 
   -- Extensible helper for `transformTmDist`. `transformTmDistH i dist` should
   -- transform distributions `dist`, where `i` sets the info of a term to the
   -- info of the TmDist from where this functions is called.
-  sem transformTmDistH: (Expr -> Expr) -> Dist -> Expr
+  sem transformTmDistH: (Expr -> Expr) -> InferenceSymEnv -> Dist -> Expr
 
   -- Transforms constant functions operating on distributions to their runtime
   -- representation.
-  sem transformDistConst : Expr -> Const -> Expr
-  sem transformDistConst constTm =
+  sem transformDistConst : Expr -> InferenceSymEnv -> Const -> Expr
+  sem transformDistConst constTm env =
   | _ -> constTm
 end
 
 -- TODO(dlunde,2022-05-11): The common case where the user writes, e.g., assume
 -- (Bernoulli x), can also be optimized to not create an intermediate record.
-lang TransformDist = TransformDistBase + LiftedDist
+lang TransformDist = TransformDistBase + InferenceInterface
 
-  sem transformDistConst constTm =
+  sem transformDistConst constTm env =
   | c & (CDistEmpiricalSamples _
        | CDistEmpiricalDegenerate _
        | CDistEmpiricalNormConst _
        | CDistEmpiricalAcceptRate _
        | CDistExpectation _) ->
-    withInfo (infoTm constTm) (var_ (getConstStringCode 0 c))
-  -- NOTE(oerikss, 2024-11-09): Lifting expectation is done dynamically. See
-  -- `RuntimeDistLifted`.
-  | CLifted (CDistExpectation _) ->
-    transformDistConst constTm (CDistExpectation ())
+    withInfo (infoTm constTm) (appFromEnv env (getConstStringCode 0 c) [])
 
   -- TODO(larshum, 2022-10-12): This code assumes the MLang transformation
   -- performs name mangling as of writing. Therefore, it will break after we
   -- make the change.
-  sem transformTmDistH i =
+  sem transformTmDistH i env =
   | DGamma { k = k, theta = theta } ->
-    i (conapp_
-        "RuntimeDistElementary_DistGamma"
-        (i (urecord_ [("shape", k), ("scale", theta)])))
+    let cname = _getConExn "RuntimeDistElementary_DistGamma" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("shape", k), ("scale", theta)])))
   | DExponential { rate = rate } ->
-    i (conapp_
-        "RuntimeDistElementary_DistExponential"
-        (i (urecord_ [("rate", rate)])))
+    let cname = _getConExn "RuntimeDistElementary_DistExponential" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
   | DPoisson { lambda = lambda } ->
-    i (conapp_
-        "RuntimeDistElementary_DistPoisson"
-        (i (urecord_ [("lambda", lambda)])))
+    let cname = _getConExn "RuntimeDistElementary_DistPoisson" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("lambda", lambda)])))
   | DBinomial { n = n, p = p } ->
-    i (conapp_
-        "RuntimeDistElementary_DistBinomial"
-        (i (urecord_ [("n", n), ("p", p)])))
+    let cname = _getConExn "RuntimeDistElementary_DistBinomial" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
   | DBernoulli { p = p } ->
-    i (conapp_
-        "RuntimeDistElementary_DistBernoulli"
-        (i (urecord_ [("p", p)])))
+    let cname = _getConExn "RuntimeDistElementary_DistBernoulli" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("p", p)])))
   | DBeta { a = a, b = b } ->
-    i (conapp_
-        "RuntimeDistElementary_DistBeta"
-        (i (urecord_ [("a", a), ("b", b)])))
+    let cname = _getConExn "RuntimeDistElementary_DistBeta" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
   | DGaussian { mu = mu, sigma = sigma } ->
-    i (conapp_
-        "RuntimeDistElementary_DistGaussian"
-        (i (urecord_ [("mu", mu), ("sigma", sigma)])))
+    let cname = _getConExn "RuntimeDistElementary_DistGaussian" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("mu", mu), ("sigma", sigma)])))
   | DMultinomial { n = n, p = p } ->
-    i (conapp_
-        "RuntimeDistElementary_DistMultinomial"
-        (i (urecord_ [("n", n), ("p", p)])))
+    let cname = _getConExn "RuntimeDistElementary_DistMultinomial" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
   | DDirichlet { a = a } ->
-    i (conapp_
-        "RuntimeDistElementary_DistDirichlet"
-        (i (urecord_ [("a", a)])))
+    let cname = _getConExn "RuntimeDistElementary_DistDirichlet" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("a", a)])))
   | DCategorical { p = p } ->
-    i (conapp_
-        "RuntimeDistElementary_DistCategorical"
-        (i (urecord_ [("p", p)])))
+    let cname = _getConExn "RuntimeDistElementary_DistCategorical" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("p", p)])))
   | DUniform { a = a, b = b } ->
-    i (conapp_
-        "RuntimeDistElementary_DistUniform"
-         (i (urecord_ [("a", a), ("b", b)])))
+    let cname = _getConExn "RuntimeDistElementary_DistUniform" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
   | DWiener { cps = cps, a = a } ->
-    i (conapp_
-         "RuntimeDistElementary_DistWiener"
-         (i (urecord_ [("cps", if cps then i true_ else i false_), ("a", a)])))
+    let cname = _getConExn "RuntimeDistElementary_DistWiener" env.env in
+    i (nconapp_ cname
+        (i (autoty_record_ [("cps", if cps then i true_ else i false_), ("a", a)])))
   | DEmpirical { samples = samples } ->
-    i (app_ (var_ "vRuntimeDistEmpirical_constructDistEmpiricalHelper") samples)
-  | DLifted d ->
-    i (conapp_ "RuntimeDistLifted_DistLifted" (transformTmDistH i d))
+    i (appFromEnv env "vRuntimeDistEmpirical_constructDistEmpiricalHelper" [samples])
 
   -- We need to replace occurrences of TyDist after transforming to MExpr
   -- distributions.
-  sem replaceTyDist: Expr -> Expr
-  sem replaceTyDist =
+  sem replaceTyDist: InferenceSymEnv -> Expr -> Expr
+  sem replaceTyDist env =
   | t ->
-    let t = smap_Expr_Type toRuntimeTyDist t in
-    let t = smap_Expr_TypeLabel toRuntimeTyDist t in
-    let t = smap_Expr_Pat replaceTyDistPat t in
-    let t = smap_Expr_Expr replaceTyDist t in
-    withType (toRuntimeTyDist (tyTm t)) t
+    let t = smap_Expr_Type (toRuntimeTyDist env) t in
+    let t = smap_Expr_TypeLabel (toRuntimeTyDist env) t in
+    let t = smap_Expr_Pat (replaceTyDistPat env) t in
+    let t = smap_Expr_Expr (replaceTyDist env) t in
+    withType (toRuntimeTyDist env (tyTm t)) t
 
-  sem toRuntimeTyDist : Type -> Type
-  sem toRuntimeTyDist =
+  sem toRuntimeTyDist : InferenceSymEnv -> Type -> Type
+  sem toRuntimeTyDist env =
   | TyDist t ->
+    -- let cname = _getTyConExn "RuntimeDistBase_Dist" env.env in
+    let cname = _getTyConExn "Dist" env.env in
     TyApp {
-      lhs = TyCon {ident = nameNoSym "RuntimeDistBase_Dist", info = t.info, data = tyunknown_},
-      --lhs = TyCon {ident = nameNoSym "Dist", info = t.info},
+      lhs = TyCon {ident = cname, info = t.info, data = tyunknown_},
       rhs = t.ty,
       info = t.info}
-  | ty -> smap_Type_Type toRuntimeTyDist ty
+  | ty -> smap_Type_Type (toRuntimeTyDist env) ty
 
-  sem replaceTyDistPat : Pat -> Pat
-  sem replaceTyDistPat =
+  sem replaceTyDistPat : InferenceSymEnv -> Pat -> Pat
+  sem replaceTyDistPat env =
   | p ->
-    let p = smap_Pat_Pat replaceTyDistPat p in
-    withTypePat (toRuntimeTyDist (tyPat p)) p
+    let p = smap_Pat_Pat (replaceTyDistPat env) p in
+    withTypePat (toRuntimeTyDist env (tyPat p)) p
 end

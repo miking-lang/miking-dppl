@@ -49,7 +49,9 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   sem tyWithInfo (info : Info) =
   | TyDist t -> TyDist {t with info = info}
 
+  ------------------------------------------------------------------------------
   -- Each distribution should implement the following three semantic functions.
+  ------------------------------------------------------------------------------
 
   -- Shallow map/fold over distribution parameters.
   sem smapAccumL_Dist_Expr : all a. (a -> Expr -> (a, Expr)) -> a -> Dist -> (a, Dist)
@@ -67,9 +69,11 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   -- Returns the distribution name
   sem distName : Dist -> String
 
+  ------------------------------------------------------------------------------
   -- End of semantic functions that should be implemented by all
   -- distributions. The remaining term related semantic functions are
   -- implemented using the above semantic functions.
+  ------------------------------------------------------------------------------
 
   -- Shallow map/fold
   sem smap_Dist_Expr : (Expr -> Expr) -> Dist -> Dist
@@ -85,7 +89,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
     -- NOTE(oerikss, 2024-11-07): We shallow recurse through dist expressions by
     -- default. This is more convenient than requiring each semantic function
     -- that nees to map/recurse through all expressions in an AST to manually
-    -- call `smapAccumL_InferMethod_Expr`. If you want to avoid this behaviour
+    -- call `smapAccumL_Dist_Expr`. If you want to avoid this behaviour
     -- you can instead manually match on `TmDist` and do something different.
     match smapAccumL_Dist_Expr f acc t.dist with (acc, dist) in
     (acc, TmDist { t with dist = dist })

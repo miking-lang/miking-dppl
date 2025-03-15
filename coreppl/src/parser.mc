@@ -57,22 +57,6 @@ lang DPPLParser =
     in
     mapPre_Expr_Expr mf expr
 
-  sem replaceDefaultODESolverMethod : Options -> Expr -> Expr
-  sem replaceDefaultODESolverMethod options =
-  | expr ->
-    let mf = lam expr.
-      match expr with TmSolveODE ({ method = ODESolverDefault d } & r) then
-        TmSolveODE {
-          r with
-          method = RK4 d,
-          model = replaceDefaultODESolverMethod options r.model,
-          init = replaceDefaultODESolverMethod options r.init,
-          endTime = replaceDefaultODESolverMethod options r.endTime
-        }
-      else expr
-    in
-    mapPre_Expr_Expr mf expr
-
   -- Replaces elementary external functions with their corresponding constant.
   sem replaceExternalElementaryFunctions : Expr -> Expr
   sem replaceExternalElementaryFunctions =| tm ->
@@ -180,8 +164,9 @@ lang DPPLParser =
                                              endTime = get lst 3,
                                              ty = TyUnknown {info = info},
                                              info = info})
-  | "diff" -> Some (2, lam lst. TmDiff {fn = get lst 0,
+  | "diff" -> Some (3, lam lst. TmDiff {fn = get lst 0,
                                      arg = get lst 1,
+                                     darg = get lst 2,
                                      ty = TyUnknown {info = info},
                                      info = info})
   | "prune" -> Some (1, lam lst. TmPrune {dist = get lst 0,
@@ -218,7 +203,7 @@ lang DPPLParser =
 end
 
 -- Extend builtins with CorePPL builtins
-let builtin = use MExprPPL in concat
+let cpplBuiltin = use MExprPPL in concat
   [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
   , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
   , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
@@ -237,7 +222,7 @@ let defaultBootParserParseCorePPLFileArg =
   {defaultBootParserParseMCoreFileArg with
      keywords = pplKeywords,
      allowFree = true,
-     builtin = builtin}
+     builtin = cpplBuiltin}
 
 let parseMCorePPLFile = lam keepUtests. lam filename.
   use DPPLParser in

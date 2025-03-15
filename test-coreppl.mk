@@ -17,11 +17,8 @@ test-infer-files=$(shell find coreppl/test/coreppl-to-mexpr/infer -name "*.mc")
 test-staticdelay-files=$(shell find coreppl/test/coreppl-to-mexpr/static-delay -name "*.mc")
 test-cli-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/cli -name "*.mc")
-# NOTE(johnwikman, 2024-09-13): The RootPPL compilation is currently broken, so
-# leaving it commented out until someone has fixed RootPPL compilation.
-#test-cli-files+=\
-#  $(shell find coreppl/test/coreppl-to-rootppl/cli -name "*.mc")
 test-expectation-files=$(shell find coreppl/test/coreppl-to-mexpr/expectation -name "*.mc")
+test-dppl-files=$(shell find coreppl/test/coreppl-to-mexpr/dppl -name "*.mc")
 
 test-inference-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/inference-accuracy -name "*.mc")
@@ -58,12 +55,12 @@ expectation: ${test-expectation-files}
 .PHONY: inference
 inference: ${test-inference-files}
 
+.PHONY: dppl
+dppl: ${test-dppl-files}
+
 export CPPL_NAME
 export MIDPPL_PATH=${CURDIR}
 export MIDPPL_SRC=${MIDPPL_PATH}/${CPPL_SRC}
-
-export ROOTPPL_BIN
-export RPPL_ENGINE_SRC=${MIDPPL_PATH}/${ROOTPPL_SRC}
 
 # Infer tests
 ${test-infer-files}::
@@ -83,4 +80,8 @@ ${test-staticdelay-files}::
 
 # Expectation tests
 ${test-expectation-files}::
+	@./make test-cppl $@ "build/${CPPL_NAME}"
+
+# DPPL tests
+${test-dppl-files}::
 	@./make test-cppl $@ "build/${CPPL_NAME}"

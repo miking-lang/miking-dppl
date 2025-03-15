@@ -5,7 +5,6 @@ include "seq.mc"
 include "map.mc"
 include "float.mc"
 include "ext/dist-ext.mc"
-include "ad/dualnum.mc"
 
 -- Weiner process
 let wienerSample : () -> Float -> Float = lam.
@@ -283,54 +282,12 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     constructDistEmpirical s l extra
 end
 
--- Elementary distributions whose support is lifted to dual numbers
-lang RuntimeDistLifted = RuntimeDistElementary + RuntimeDistEmpirical
-  syn Dist a =
-  | DistLifted (Dist a)
-
-  sem sample =
-  | DistLifted (d &
-    (DistGamma _
-   | DistExponential _
-   | DistBeta _
-   | DistGaussian _
-   | DistUniform _)) ->
-    unsafeCoerce (Primal (sample d))
-  | DistLifted (d & (DistDirichlet _ )) ->
-    unsafeCoerce map (lam x. Primal x) (sample d)
-  | DistLifted (d & (DistWiener _)) ->
-    unsafeCoerce
-      (let f = unsafeCoerce (sample d) in lam x. Primal (f (dualnumUnboxPrimalExn x)))
-  | DistLifted d -> sample d
-
-  sem expectation =
-  | DistLifted d -> unsafeCoerce (Primal (expectation d))
-  | DistLifted (DistEmpirical t) ->
-    unsafeCoerce
-      (Primal
-        (expectationEmpiricalFloat
-           t.logWeights
-           (map (unsafeCoerce dualnumUnboxPrimalExn) t.samples)))
-
-  sem logObserve =
-  | DistLifted (d &
-    (DistGamma _
-   | DistExponential _
-   | DistBeta _
-   | DistGaussian _
-   | DistUniform _)) ->
-    unsafeCoerce (lam x. logObserve d (unsafeCoerce dualnumUnboxPrimalExn x))
-  | DistLifted (d & (DistDirichlet _ )) ->
-    unsafeCoerce logObserve d (map (lam x. dualnumUnboxPrimalExn x))
-  | DistLifted (d & (DistWiener _)) -> unsafeCoerce (logObserve d)
-  | DistLifted d -> logObserve d
-end
-
 lang RuntimeDist =
   RuntimeDistElementary +
-  RuntimeDistEmpirical +
-  RuntimeDistLifted
+  RuntimeDistEmpirical
 end
+
+type Dist a = use RuntimeDist in Dist a
 
 -- We include the below definitions to produce non-mangled functions, which we
 -- can refer to in the runtime handler without hard-coding the mangled prefix.

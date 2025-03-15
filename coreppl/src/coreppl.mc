@@ -564,8 +564,9 @@ lang SolveODE =
     -- NOTE(oerikss, 2024-11-07): We shallow recurse through method expressions
     -- by default. This is more convenient than requiring each semantic function
     -- that nees to map/recurse through all expressions in an AST to manually
-    -- call `smapAccumL_InferMethod_Expr`. If you want to avoid this behaviour
-    -- you can instead manually match on `TmSolve` and do something different.
+    -- call `smapAccumL_ODESolverMethod_Expr`. If you want to avoid this
+    -- behaviour you can instead manually match on `TmSolve` and do something
+    -- different.
     match
       smapAccumL_ODESolverMethod_Expr f acc t.method with (acc, method)
     in
@@ -1041,6 +1042,7 @@ lang Diff =
   syn Expr =
   | TmDiff { fn: Expr,
              arg: Expr,
+             darg: Expr,
              ty: Type,
              info: Info }
 
@@ -1060,7 +1062,8 @@ lang Diff =
   | TmDiff t ->
     match f acc t.fn with (acc, fn) in
     match f acc t.arg with (acc, arg) in
-    (acc, TmDiff { t with fn = fn, arg = arg })
+    match f acc t.darg with (acc, darg) in
+    (acc, TmDiff { t with fn = fn, arg = arg, darg = darg })
 
   -- Pretty printing
   sem isAtomic =
@@ -1071,50 +1074,43 @@ lang Diff =
     let i = pprintIncr indent in
     match printParen i env t.fn with (env, fn) in
     match printParen i env t.arg with (env, arg) in
-    (env, join ["diff", pprintNewline i, fn, pprintNewline i, arg])
+    match printParen i env t.darg with (env, darg) in
+    (env, join [
+      "diff", pprintNewline i, fn, pprintNewline i, arg, pprintNewline i, darg])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmDiff r ->
     match lhs with TmDiff l then
-      optionBind (eqExprH env free l.fn r.fn)
-        (lam free. eqExprH env free l.arg r.arg)
+      optionFoldlM (lam free. uncurry (eqExprH free env)) free
+        [(l.arg, r.arg), (l.darg, r.darg)]
     else None ()
 
   -- Type check
   sem typeCheckExpr (env : TCEnv) =
   | TmDiff t ->
+    -- NOTE(oerikss, 2025-02-28): The type of `diff` here is more flexible than
+    -- we can allows in the end. We therefore need to make a pass after type
+    -- checking to assert that the differentiated functions maps a vector of
+    -- floats to a vector of floats.
     let fn = typeCheckExpr env t.fn in
     let arg = typeCheckExpr env t.arg in
+    let darg = typeCheckExpr env t.darg in
     let tyParam = newpolyvar env.currentLvl t.info in
     let tyRes = newpolyvar env.currentLvl t.info in
     unify env [infoTm t.fn] (ityarrow_ (infoTm fn) tyParam tyRes) (tyTm fn);
     unify env [infoTm t.arg] tyParam (tyTm arg);
-    recursive let isIsomorficToRn = lam ty.
-      switch ty
-      case TyFloat _ then true
-      case TyRecord _ | TySeq _ then
-        sfold_Type_Type (lam acc. lam ty. and acc (isIsomorficToRn ty)) true ty
-      case _ then false
-      end
-    in
-    if isIsomorficToRn (inspectType tyParam) then
-      if isIsomorficToRn (inspectType tyRes) then
-        let tyDiff = ityarrow_ t.info tyParam tyRes in
-        TmDiff { t with fn = fn, arg = arg, ty = tyDiff }
-      else
-        errorSingle [infoTm t.fn]
-          "* The parameter type is not isomorfic to a tuple of floats"
-    else
-      errorSingle [infoTm t.fn]
-        "* The return type is not isomorfic to a tuple of floats"
+    unify env [infoTm t.darg] tyParam (tyTm darg);
+    TmDiff { t with fn = fn, arg = arg, darg = darg, ty = tyRes }
 
   -- ANF
   sem normalize (k : Expr -> Expr) =
   | TmDiff t ->
     normalizeName (lam fn.
       normalizeName (lam arg.
-        k (TmDiff { t with fn = fn, arg = arg }))
+        normalizeName (lam darg.
+          k (TmDiff { t with fn = fn, arg = arg, darg = darg }))
+          t.darg)
         t.arg)
       t.fn
 
@@ -1123,8 +1119,9 @@ lang Diff =
   | TmDiff t ->
     match typeLiftExpr env t.fn with (env, fn) in
     match typeLiftExpr env t.arg with (env, arg) in
+    match typeLiftExpr env t.darg with (env, darg) in
     match typeLiftType env t.ty with (env, ty) in
-    (env, TmDiff { t with fn = fn, arg = arg, ty = ty })
+    (env, TmDiff { t with fn = fn, arg = arg, darg = darg, ty = ty })
 
   -- Partial evaluation
   sem pevalBindThis =
@@ -1134,7 +1131,9 @@ lang Diff =
   | TmDiff r ->
     pevalBind ctx (lam fn.
       pevalBind ctx (lam arg.
-        k (TmDiff { r with fn = fn, arg = arg }))
+        pevalBind ctx (lam darg.
+          k (TmDiff { r with fn = fn, arg = arg, darg = darg }))
+          r.darg)
         r.arg)
       r.fn
 
@@ -1143,6 +1142,7 @@ lang Diff =
     [ ("con", JsonString "TmDiff")
     , ("fn", exprToJson x.fn)
     , ("arg", exprToJson x.arg)
+    , ("darg", exprToJson x.darg)
     , ("ty", typeToJson x.ty)
     , ("info", infoToJson x.info)
     ] )
@@ -1449,10 +1449,6 @@ let cancel_ = use Cancel in
 let typruneint_ = use Prune in
   TyPruneInt {info = NoInfo ()}
 
-let diff_ = use Diff in
-   lam fn. lam arg.
-     TmDiff { fn = fn, arg = arg, ty = tyunknown_, info = NoInfo () }
-
 let delay_ = use Delay in
   lam d. TmDelay {dist = d, ty = tyunknown_ , info = NoInfo ()}
 
@@ -1483,7 +1479,7 @@ let pplKeywords = [
   "Binomial", "Wiener"
 ]
 
-lang CoreDPL = Ast + SolveODE + Diff + Delayed end
+lang CoreDPL = Ast + SolveODE + Diff end
 
 let dplKeywords = [
   "solveode", "diff"
@@ -1500,7 +1496,7 @@ let delayKeywords = [
 let mexprPPLKeywords = join [mexprKeywords, pplKeywords, dplKeywords, pruneKeywords, delayKeywords]
 
 lang MExprPPL =
-  CorePPL + CoreDPL + ElementaryFunctions +
+  CorePPL + CoreDPL + Delayed + ElementaryFunctions +
   MExprAst + MExprPrettyPrint + MExprEq + MExprSym +
   MExprTypeCheck + MExprTypeLift + MExprArity +
   MExprToJson
@@ -1536,7 +1532,6 @@ let tmPruned = pruned_ tmPrune in
 let tmPruned2 = pruned_ tmPrune2 in
 let tmCancel = cancel_ (bern_ (float_ 0.7)) true_ in
 let tmCancel2 = cancel_ (bern_ (float_ 0.7)) false_  in
-let tmDiff = diff_ (ulam_ "x" (var_ "x")) (float_ 1.) in
 let tmDelay =
   delay_ (categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]))
 in
@@ -1646,10 +1641,6 @@ utest tmCancel with tmCancel using eqExpr else _toStr in
 utest tmPrune with tmPrune2 using neqExpr else _toStr in
 utest tmPruned with tmPruned2 using neqExpr else _toStr in
 utest tmCancel with tmCancel2 using neqExpr else _toStr in
-utest tmDiff with tmDiff using eqExpr else _toStr in
-utest tmDiff with diff_ (ulam_ "x" (var_ "x")) (float_ 2.)
-  using neqExpr else _toStr
-in
 utest tmDelay with tmDelay using eqExpr else _toStr in
 utest tmDelayed with tmDelayed using eqExpr else _toStr in
 utest tmDelay with tmDelay2 using neqExpr else _toStr in
@@ -1710,14 +1701,6 @@ in
 
 utest sfold_Expr_Expr foldToSeq [] tmCancel
 with [ bern_ (float_ 0.7), true_ ] using eqSeq eqExpr else _seqToStr in
-utest smap_Expr_Expr mapVar tmDiff
-  with diff_ tmVar tmVar
-  using eqExpr else _toStr
-in
-utest sfold_Expr_Expr foldToSeq [] tmDiff
-  with [ float_ 1., ulam_ "x" (var_ "x") ]
-  using eqSeq eqExpr else _seqToStr
-in
 
 utest sfold_Expr_Expr foldToSeq [] tmDelay
   with [ categorical_ (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]) ]
@@ -1740,7 +1723,6 @@ utest symbolize tmSolveODE with tmSolveODE using eqExpr in
 utest symbolize tmPrune with tmPrune using eqExpr in
 utest symbolize tmPruned with tmPruned using eqExpr in
 utest symbolize tmCancel with tmCancel using eqExpr in
-utest symbolize tmDiff with tmDiff using eqExpr in
 utest symbolize tmDelay with tmDelay using eqExpr in
 utest symbolize tmDelayed with tmDelayed using eqExpr in
 
@@ -1757,7 +1739,6 @@ utest tyTm (typeCheck tmSolveODE) with tyfloat_ using eqType in
 utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmPrune) with typruneint_ using eqType in
 utest tyTm (typeCheck tmCancel) with tyunit_ using eqType in
-utest tyTm (typeCheck tmDiff) with tyarrow_ tyfloat_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmDelay) with tydelayint_ using eqType in
 
 ---------------
@@ -1812,11 +1793,6 @@ utest _anf tmCancel with bindall_ [
   ulet_ "t1" (cancel_ (var_ "t") true_),
   var_ "t1"
 ] using eqExpr else _toStr in
-utest _anf tmDiff
-  with bindall_ [
-    ulet_ "t" tmDiff,
-    var_ "t"
-] using eqExpr else _toStr in
 utest _anf tmDelay with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
   ulet_ "t1" (categorical_ (var_ "t")),
@@ -1843,7 +1819,6 @@ utest (typeLift tmSolveODE).1 with tmSolveODE using eqExpr in
 utest (typeLift tmPrune).1 with tmPrune using eqExpr in
 utest (typeLift tmPruned).1 with tmPruned using eqExpr in
 utest (typeLift tmCancel).1 with tmCancel using eqExpr in
-utest (typeLift tmDiff).1 with tmDiff using eqExpr in
 utest (typeLift tmDelay).1 with tmDelay using eqExpr in
 utest (typeLift tmDelayed).1 with tmDelayed using eqExpr in
 

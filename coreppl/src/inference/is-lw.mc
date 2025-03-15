@@ -14,7 +14,7 @@ lang ImportanceSamplingMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | "Importance" ->
     let expectedFields = [
-      ("particles", int_ default.particles)
+      ("particles", int_ defaultArgs.particles)
     ] in
     match getFields info bindings expectedFields with [particles] in
     Importance {particles = particles}

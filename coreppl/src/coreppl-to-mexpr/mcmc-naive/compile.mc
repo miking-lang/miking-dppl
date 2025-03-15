@@ -1,10 +1,11 @@
 include "../dists.mc"
+include "../inference-interface.mc"
 include "../../inference/smc.mc"
 include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/phase-stats.mc"
 
-lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats
+lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats + InferenceInterface
 
   ----------------
   -- NAIVE MCMC --
@@ -13,37 +14,35 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : Options -> (Expr,Expr) -> Expr
-  sem compile options =
-  | (t,_) ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+  sem compile : InferenceInterface -> Expr
+  sem compile =
+  | x ->
+    let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
+    let t = x.extractNormal () in
+    endPhaseStatsExpr log "extract-normal-one" t;
 
     -- Transform distributions to MExpr distributions
-    let t = mapPre_Expr_Expr transformTmDist t in
+    let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
 
     -- Transform samples, observes, and weights to MExpr
-    let t = mapPre_Expr_Expr transformProb t in
+    let t = mapPre_Expr_Expr (transformProb x.stateName x.dists x.runtime) t in
     endPhaseStatsExpr log "transform-prob-one" t;
 
     t
 
-  sem transformProb =
+  sem transformProb stateName env runtime =
   | TmAssume t ->
     let i = withInfo t.info in
-    i (app_ (i (var_ "sample")) t.dist)
-
-  -- NOTE(dlunde,2022-05-16): Note that we cannot stop immediately when the
-  -- weight becomes 0 (-inf in log-space). For this, we need CPS, PCFGs, or
-  -- maybe some type of exception handler.
+    i (appFromEnv env "sample" [t.dist])
+  | TmResample t -> withInfo t.info unit_
   | TmObserve t ->
     let i = withInfo t.info in
-    let weight = i (appf2_ (i (var_ "logObserve")) t.dist t.value) in
-    i (appf2_ (i (var_ "updateWeight")) weight (i (var_ "state")))
+    let weight = i (appFromEnv env "logObserve" [t.dist, t.value]) in
+    i (appFromEnv runtime "updateWeight" [weight, i (nvar_ stateName)])
   | TmWeight t ->
     let i = withInfo t.info in
-    i (appf2_ (i (var_ "updateWeight")) t.weight (i (var_ "state")))
-  | TmResample t -> withInfo t.info unit_
+    i (appFromEnv runtime "updateWeight" [t.weight, i (nvar_ stateName)])
   | t -> t
 
 
@@ -56,4 +55,4 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats
 end
 
 let compilerNaiveMCMC = lam options. use MExprPPLNaiveMCMC in
-  ("mcmc-naive/runtime.mc", compile options)
+  ("mcmc-naive/runtime.mc", compile)

@@ -7,33 +7,23 @@
 include "parser.mc"
 include "static-delay.mc"
 include "dppl-arg.mc"
-include "build.mc"
-include "src-location.mc"
 
 -- Backends
 include "coreppl-to-mexpr/compile.mc"
-include "coreppl-to-rootppl/compile.mc"
 
 include "bool.mc"
 include "option.mc"
 include "string.mc"
 include "common.mc"
 include "mexpr/ast.mc"
-include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/utils.mc"
+include "mexpr/generate-utest.mc"
+include "ocaml/mcore.mc"
 
-lang CPPLLang =
-  MExprAst + MExprCompile + TransformDist + MExprEliminateDuplicateCode +
-  MExprSubstitute + MExprPPL
-
-  -- Check if a CorePPL program uses infer
-  sem hasInfer =
-  | expr -> hasInferH false expr
-
-  sem hasInferH acc =
-  | TmInfer _ -> true
-  | expr -> sfold_Expr_Expr hasInferH acc expr
-
+lang CPPLLang = CorePPLFileTypeLoader
+  + MExprAst + UtestLoader + ODELoader + MExprGenerateEq
+  + MExprLowerNestedPatterns + MCoreCompileLang
+  + PhaseStats + MExprGeneratePprint
 end
 
 mexpr
@@ -41,7 +31,7 @@ mexpr
 use CPPLLang in
 
 -- Use the arg.mc library to parse arguments
-let result = argParse default config in
+let result = argParse defaultArgs config in
 match result with ParseOK r then
   let options: Options = r.options in
   -- Print menu if not exactly one file argument
@@ -51,39 +41,54 @@ match result with ParseOK r then
   else
 
     -- Read and parse the file
-    let filename = head r.strings in
-    let ast = parseMCorePPLFile options.test filename in
+    let filename = stdlibResolveFileOr (lam x. error x) "." (head r.strings) in
+    let isFromModelFileOrStatic = lam x.
+      if x.static then true else
+      match x.info with Info x
+      then eqString x.filename filename
+      else false in
 
-    let noInfer = not (hasInfer ast) in
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
-    if eqString options.target "rootppl" then
+    let loader = mkLoader symEnvDefault typcheckEnvDefault
+      [ ODEHook {options = options}
+      , StripUtestHook ()
+      ] in
+    let loader = enableCPPLCompilation options loader in
+    let loader = enableUtestGeneration (if options.test then isFromModelFileOrStatic else lam. false) loader in
+    let loader = enablePprintGeneration loader in
+    endPhaseStatsExpr log "mk-cppl-loader" unit_;
 
-      ---------------------
-      -- RootPPL backend --
-      ---------------------
+    let loader = (includeFileTypeExn (FCorePPL {isModel = true}) "." filename loader).1 in
+    endPhaseStatsExpr log "include-file" unit_;
 
-      -- Handle the RootPPL backend in the old way, without using infers.
-      if noInfer then
-        let ast =
-          if options.staticDelay then staticDelay ast
-          else ast
-        in
-        let ast = rootPPLCompile options ast in
-        buildRootPPL options ast
-      else error "Use of infer is not supported by RootPPL backend"
+    let ast = buildFullAst loader in
+    endPhaseStatsExpr log "build-full-ast" ast;
 
-    else
+    let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
+      let opts =
+        { defaultCompileOptions
+        with libraries = libs
+        , cLibraries = clibs
+        } in
+      (if options.outputMl then
+        writeFile "program.ml" prog
+       else ());
+      let res = ocamlCompileWithConfig opts prog in
+      sysMoveFile res.binaryPath options.output;
+      sysChmodWriteAccessFile options.output;
+      res.cleanup ();
+      options.output in
+    let hooks = mkEmptyHooks ocamlCompile in
 
-      --------------------
-      -- Miking backend --
-      --------------------
+    let ast = lowerAll ast in
+    endPhaseStatsExpr log "lower-all" ast;
 
-      -- Compile the CorePPL AST using the provided options
-      let ast = mexprCpplCompile options noInfer ast in
+    if options.exitBefore then exit 0 else
 
-      -- Exit before producing the output files, if the flag is set
-      if options.exitBefore then exit 0
-      else buildMExpr options ast
+    let res = compileMCore ast hooks in
+    endPhaseStatsExpr log "compile-mcore" ast;
+    res
 
 else
   -- Error in Argument parsing
