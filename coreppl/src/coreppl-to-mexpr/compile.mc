@@ -1115,9 +1115,9 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       error "found a `diff` outside model code which we cannot handle."
      else ());
 
-    recursive let makeLoader = lam needsAddedInfer.
+    let loader =
       switch (hasDiff, hasSolve, needsAddedInfer)
-      case (false, _, false) then
+      case (false, _, false) | (false, true, true) then
         -- NOTE(vipa, 2025-02-26): Simple case, no AD, and no need to add an infer
         let decls = if isModel
           then snoc decls (declWithInfo (infoTm expr) (decl_nulet_ (nameSym "") expr))
@@ -1130,11 +1130,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let loader = _addDeclsByFile loader beforeFile in
         let modelBody = foldr (lam d. lam e. declAsExpr e d) expr inFile in
         _insertBackcompatInfer modelBody loader
-      case (true, _, true) | (_, true, true) then
-        -- NOTE(oerikss, 2025-03-01): A program with differentiation or solve is
-        -- not implicitly a probabilistic model.
-        makeLoader false
-      case (true, _, false) then
+      case _ then
         -- NOTE(vipa, 2025-02-26): When using AD we make a simplifying
         -- assumption: we make the model code exist "in its own world",
         -- i.e., we get duplication of dependencies between the model
@@ -1178,7 +1174,6 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let loader = Loader {x with symEnv = prevSymEnv, includedFiles = prevIncluded} in
         loader
       end in
-    let loader = makeLoader needsAddedInfer in
 
     match loader with Loader x in
     match mapLookup path x.includedFiles with Some env
