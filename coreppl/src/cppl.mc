@@ -59,7 +59,7 @@ match result with ParseOK r then
     let loader = enablePprintGeneration loader in
     endPhaseStatsExpr log "mk-cppl-loader" unit_;
 
-    let loader = (includeFileTypeExn (FCorePPL {isModel = true}) "." filename loader).1 in
+    let loader = (includeFileTypeExn (FCorePPL {isModel = true, dpplTypeCheck = options.dpplTypeCheck}) "." filename loader).1 in
     endPhaseStatsExpr log "include-file" unit_;
 
     let ast = buildFullAst loader in

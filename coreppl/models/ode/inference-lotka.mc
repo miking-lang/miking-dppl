@@ -58,7 +58,9 @@ let data = [
 
 -- Some renaming of variables to conform to example names in paper
 let init = x0
-let solve = lam ode. lam init. lam x. solveode (RK4 { stepSize = 1e-3 }) ode init x
+let solve = lam ode. lam init. lam x.
+  solveode (RK4 { stepSize = 1e-3, add = map2 addf, smul = lam s. map (mulf s) })
+    ode init x
 let data = zip ts data
 
 -- Run with
