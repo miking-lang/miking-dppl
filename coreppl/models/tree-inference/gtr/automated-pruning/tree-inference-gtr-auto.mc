@@ -20,20 +20,16 @@ let ctmc = lam i. lam qt:Tensor[Float]. --lam t:Float.
   [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
 
 let pickpair = lam n.
-  let p = make (subi n 1) (divf 1. (int2float (subi n 1))) in
-  let i = assume (Categorical p) in
-  let i = addi i 2 in
-  let p = make (subi i 1) (divf 1. (int2float (subi i 1))) in
-  let j = assume (Categorical p) in
-  (subi i 1,j) 
+  let i = assume (UniformDiscrete 0 (subi n 1)) in
+  let j = assume (UniformDiscrete 0 (subi n 2)) in
+  if lti j i then (i,j) else (i,addi j 1)
 
 let iid = lam f. lam p. lam n.
   let params = make n p in
   map f params 
 
 recursive
-let cluster = lam q. lam trees. lam maxAge. lam seqLen.
-  let n = length trees in
+let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
   if eqi n 1 then trees else
   let pairs = pickpair n in
   let leftChild = get trees pairs.0 in
@@ -71,11 +67,12 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen.
       (if lti rc 4 then observe rc (Categorical p2)
         else ())
     )) seq;
+  resample;
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
   let min = mini pairs.0 pairs.1 in
   let max = maxi pairs.0 pairs.1 in
   let new_trees = join ([slice trees 0 min, slice trees (addi min 1) max, slice trees (addi max 1) n, [parent]]) in
-  cluster q new_trees age seqLen
+  cluster q new_trees age seqLen (subi n 1)
 end
 
 let gtr = lam pi. lam ri. 
@@ -107,4 +104,4 @@ let model = lam.
   let pi = assume (Dirichlet ([1.0, 1.0, 1.0, 1.0])) in
   let er = assume (Dirichlet [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]) in
   let q = gtr pi er in 
-  cluster q trees 0.0 seqLength
+  cluster q trees 0.0 seqLength (length trees)
