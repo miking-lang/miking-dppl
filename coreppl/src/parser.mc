@@ -122,6 +122,9 @@ lang DPPLParser =
   | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
                                            ty = TyUnknown {info = info},
                                            info = info})
+  | "UniformDiscrete" -> Some (2, lam lst. TmDist {dist = DUniformDiscrete {a = get lst 0, b = get lst 1},
+                                           ty = TyUnknown {info = info},
+                                           info = info})
   | "Bernoulli" -> Some (1, lam lst. TmDist {dist = DBernoulli {p = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})

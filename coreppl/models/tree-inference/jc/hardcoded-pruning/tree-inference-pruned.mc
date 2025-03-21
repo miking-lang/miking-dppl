@@ -15,25 +15,10 @@ let slice = lam seq. lam beg. lam mend.
 let matrixGet = lam row. lam col. lam tensor.
   tensorGetExn tensor [row, col]
 
-recursive
-let foldl2 =
-  lam f. lam acc. lam seq1. lam seq2.
-    let g = lam acc. lam x2.
-      match acc with (y, [x1] ++ xs1) then (f y x1 x2, xs1)
-      else error "foldl2: Cannot happen!"
-    in
-    if geqi (length seq1) (length seq2) then
-      match foldl g (acc, seq1) seq2 with (acc, _) in acc
-    else foldl2 (lam acc. lam x1. lam x2. f acc x2 x1) acc seq2 seq1
-end
-
 let pickpair = lam n.
-  let p = make (subi n 1) (divf 1. (int2float (subi n 1))) in
-  let i = assume (Categorical p) in
-  let i = addi i 2 in
-  let p = make (subi i 1) (divf 1. (int2float (subi i 1))) in
-  let j = assume (Categorical p) in
-  (subi i 1,j) 
+  let i = assume (UniformDiscrete 0 (subi n 1)) in
+  let j = assume (UniformDiscrete 0 (subi n 2)) in
+  if lti j i then (i,j) else (i,addi j 1)
 
 let iid = lam f. lam p. lam n.
   let params = make n p in
@@ -68,8 +53,7 @@ let buildForest =  lam data. lam forest:[Tree]. lam index. lam data_len. lam seq
 end
 
 recursive
-let cluster = lam q. lam trees:[Tree]. lam maxAge.
-  let n = length trees in
+let cluster = lam q. lam trees:[Tree]. lam maxAge. lam n.
   if eqi n 1 then trees else
   let pairs = pickpair n in
   let leftChild = get trees pairs.0 in
@@ -96,24 +80,23 @@ let cluster = lam q. lam trees:[Tree]. lam maxAge.
       let log_likes_left = getLogLikes lc in
       weight (negf (log_likes_left))
     else ());
-    
     let rc = get rightMsg i in
      let right_in_msg  = map (lam p. let t = foldl2 (lam acc. lam pi. lam rci. addf acc (mulf pi rci)) 0. p rc in t) r_values in
     (match rightChild with Node _ then
       let log_likes_right = getLogLikes rc in
       weight (negf (log_likes_right))
-    else ()); 
+    else ());
      let node_msg = mapi (lam i. lam lm. let rm = get right_in_msg i in mulf lm rm) left_in_msg in
      let log_likes = getLogLikes node_msg in
      weight (log_likes);
      node_msg
   ) leftMsg in
-  
+  resample;
   let parent = Node {age=age, msg = node_msg,left = leftChild, right = rightChild} in
   let min = mini pairs.0 pairs.1 in
   let max = maxi pairs.0 pairs.1 in
   let new_trees = join ([slice trees 0 min, slice trees (addi min 1) max, slice trees (addi max 1) n, [parent]]) in
-  cluster q new_trees age
+  cluster q new_trees age (subi n 1)
 end
 
 let model = lam.
@@ -124,4 +107,4 @@ let model = lam.
   let q = matrixCreate [4,4] q in
   let dataLen = length data in
   let trees:[Tree] = buildForest data [] 0 dataLen seqLength in
-  cluster q trees 0.0
+  cluster q trees 0.0 dataLen
