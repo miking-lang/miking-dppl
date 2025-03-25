@@ -25,8 +25,8 @@ lang LightweightMCMCMethod = MExprPPL
       [ ( "continue"
         , utuple_
           [ int_ defaultArgs.particles
-          , ulam_ "remaining"
-            (utuple_ [subi_ (var_ "remaining") (int_ 1), eqi_ (var_ "remaining") (int_ 0)])
+          , ulam_ "remaining" (ulam_ ""
+            (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)]))
           ]
         )
       , ("keepSample", ulam_ "" true_)
@@ -45,8 +45,8 @@ lang LightweightMCMCMethod = MExprPPL
       -- better name
       continue = utuple_
         [ int_ defaultArgs.particles
-        , ulam_ "remaining"
-          (utuple_ [subi_ (var_ "remaining") (int_ 1), eqi_ (var_ "remaining") (int_ 0)])
+        , ulam_ "remaining" (ulam_ ""
+          (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)]))
         ],
       keepSample = ulam_ "" true_,
       globalProb = float_ options.mcmcLightweightGlobalProb
@@ -92,7 +92,7 @@ lang LightweightMCMCMethod = MExprPPL
   sem setRuns expr =
   | LightweightMCMC r -> LightweightMCMC {r with continue = utuple_
     [ expr
-    , ulam_ "remaining"
-      (utuple_ [subi_ (var_ "remaining") (int_ 1), eqi_ (var_ "remaining") (int_ 0)])
+    , ulam_ "remaining" (ulam_ ""
+      (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)]))
     ] }
 end

@@ -185,8 +185,14 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   modref state.unalignedTraces (cons (cons (sample,w,i) current) rest);
   unsafeCoerce sample
 
+type Config a acc =
+  { continue : (acc, acc -> a -> (acc, Bool))
+  , keepSample : Int -> Bool
+  , globalProb : Float
+  }
+
 -- Function to propose aligned trace changes between MH iterations.
-let modTrace: Unknown -> () = lam config.
+let modTrace: all a. all acc. Config a acc -> () = lam config.
 
   let alignedTraceLength: Int = deref state.alignedTraceLength in
 
@@ -224,11 +230,11 @@ let modTrace: Unknown -> () = lam config.
     ()
 
 -- General inference algorithm for aligned MCMC
-let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
+let run : all a. all acc. Config a acc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
 
-  recursive let mh : [a] -> Float -> (Unknown, Bool) -> Int -> [a] =
-    lam samples. lam prevWeight. lam continueState. lam iter.
+  recursive let mh : [a] -> Float -> a -> (acc, Bool) -> Int -> [a] =
+    lam samples. lam prevWeight. lam prevSample. lam continueState. lam iter.
       match continueState with (continueState, true) then
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
@@ -292,7 +298,7 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
   let samples = if config.keepSample iter then [sample] else [] in
 
   -- Sample the rest
-  let samples = mh samples weight (config.continue.1 config.continue.0 sample) (addi iter 1) in
+  let samples = mh samples weight sample (config.continue.1 config.continue.0 sample) (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
