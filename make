@@ -39,14 +39,19 @@ testcppl () {
   set +e
   cpplout=$(mktemp)
   compile_cmd="$2 --seed 0 --test --output $cpplout"
-  output=$1
-  compile_output=$($compile_cmd $1 2>&1)
+  model="$1"
+  # Add any remaining arguments to the compile command
+  shift 2
+  compile_cmd="$compile_cmd $*"
+  echo $compile_cmd
+  output=$model
+  compile_output=$($compile_cmd $model 2>&1)
   exit_code=$?
   [ -n "$compile_output" ] && output="$output\n$compile_output"
   if [ $exit_code -ne 0 ]
   then
     echo "$output"
-    echo "ERROR: command '$compile_cmd $1 2>&1' exited with $exit_code"
+    echo "ERROR: command '$compile_cmd $model 2>&1' exited with $exit_code"
     exit 1
   fi
   set -e
@@ -62,6 +67,9 @@ case $1 in
     ;;
   test-cppl)
     testcppl "$2" "$3"
+    ;;
+  test-cdppl)
+    testcppl "$2" "$3" --dppl-typecheck
     ;;
   *)
     >&2 echo "Incorrect argument"

@@ -69,6 +69,10 @@ test-coreppl-compiler:
 test-coreppl-inference:
 	@$(MAKE) -s -f test-coreppl.mk inference
 
+.PHONY: test-coredppl
+test-coredppl: build/${CPPL_NAME}
+	@$(MAKE) -s -f test-coreppl.mk cdppl
+	@$(MAKE) -s -f test-coreppl.mk cdppl-examples
 
 #############
 ## Scripts ##
@@ -82,4 +86,3 @@ install-scripts:
 .PHONY: uninstall-scripts
 uninstall-scripts:
 	rm -f ${BIN_PATH}/${PLOT_NAME}
-
