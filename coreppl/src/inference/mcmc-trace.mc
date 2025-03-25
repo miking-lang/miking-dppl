@@ -35,7 +35,7 @@ lang TraceMCMCMethod = MExprPPL
       ("iterations", t.iterations)
     ]
 
-  sem typeCheckInferMethod env info =
+  sem typeCheckInferMethod env info sampleType =
   | TraceMCMC t ->
     let int = TyInt {info = info} in
     let iterations = typeCheckExpr env t.iterations in

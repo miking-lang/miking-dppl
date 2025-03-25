@@ -66,8 +66,8 @@ lang InferMethodBase =
   -- Produces the expected type of `inferMethodConfig`
   -- Type checks the inference method. This ensures that the provided arguments
   -- have the correct types.
-  sem typeCheckInferMethod : TCEnv -> Info -> InferMethod -> InferMethod
-  sem typeCheckInferMethod env info =
+  sem typeCheckInferMethod : TCEnv -> Info -> Type -> InferMethod -> InferMethod
+  sem typeCheckInferMethod env info sampleType =
   | Default { runs = runs } ->
     let int = TyInt {info = info} in
     let runs = typeCheckExpr env runs in

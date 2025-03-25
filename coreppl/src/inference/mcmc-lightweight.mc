@@ -44,7 +44,7 @@ lang LightweightMCMCMethod = MExprPPL
       ("globalProb", t.globalProb)
     ]
 
-  sem typeCheckInferMethod env info =
+  sem typeCheckInferMethod env info sampleType =
   | LightweightMCMC t ->
     let int = TyInt {info = info} in
     let bool = TyBool {info = info} in
