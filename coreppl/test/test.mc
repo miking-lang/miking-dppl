@@ -8,6 +8,8 @@ include "sys.mc"
 include "string.mc"
 include "stats.mc"
 include "tuple.mc"
+include "map.mc"
+include "name.mc"
 
 type CpplRes = {
   samples: [String],
@@ -144,6 +146,23 @@ let regressionTruth = (0.43,0.621)
 let eqRegression: Float -> Float -> (Float, Float) -> (Float,Float) -> Bool =
   lam s1. lam s2. lam t1. lam t2.
     if eqfApprox s1 t1.0 t2.0 then eqfApprox s2 t1.1 t2.1 else false
+
+-- models/pick-pair.mc
+let resPickPair: CpplRes -> Float = lam cpplRes.
+  let counts = foldl (lam acc. lam t.
+    match mapLookup t acc with Some val then
+      mapInsert t (addf val 1.) acc
+    else  mapInsert t 0. acc
+    ) (mapEmpty cmpString) cpplRes.samples in
+
+  let size = int2float (mapSize counts) in
+  let counts = (mapValues counts) in
+  let mean = divf (foldl addf 0. counts) size in
+  let std = sqrt (divf (foldl (lam acc. lam e. addf acc (pow (subf e mean) 2.)) 0. counts) size) in
+  divf std mean
+let eqPickPair: Float -> Float -> Float -> Bool =
+  eqfApprox
+let pickPairTruth = 0.
 
 -- models/ssm.mc
 let resSsm: CpplRes -> Float = lam cpplRes.
