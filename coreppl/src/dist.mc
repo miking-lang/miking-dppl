@@ -287,7 +287,7 @@ lang UniformDiscreteDist = Dist
 
   sem distTy info =
   | DUniformDiscrete _ ->
-    let f = ityint_ info in ([], [f, f], f)
+    let i = ityint_ info in ([], [i, i], i)
 
   sem distName =
   | DUniformDiscrete _ -> "UniformDiscrete"
