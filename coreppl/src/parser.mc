@@ -4,6 +4,7 @@ include "mexpr/keyword-maker.mc"
 include "mexpr/builtin.mc"
 
 include "coreppl.mc"
+include "dppl-type-check.mc"
 include "inference/smc.mc"
 
 -- Include the inference method definition definition files.
@@ -17,7 +18,7 @@ include "inference/pmcmc-pimh.mc"
 include "ode-solver-method.mc"
 
 lang DPPLParser =
-  BootParser + MExprPrettyPrint + MExprPPL + Resample +
+  BootParser + MExprPrettyPrint + MExprPPL + Resample + DTCAst +
   KeywordMaker +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
@@ -25,6 +26,20 @@ lang DPPLParser =
   PIMHMethod +
 
   ODESolverMethod
+
+  syn Type =
+  -- This type only lives in the parser and is transformed to an effect
+  -- annotation in a `TyArrowE`. The type is therefore only allowed at the `to`
+  -- field in arrow types.
+  | TyRnd { info : Info, ty : Type }
+
+  sem tyWithInfo info =| TyRnd r -> TyRnd { r with info = info }
+  sem infoTy =| TyRnd r -> r.info
+
+  sem smapAccumL_Type_Type f acc =
+  | TyRnd r ->
+    match f acc r.ty with (acc, ty) in
+    (acc, TyRnd { r with ty = ty })
 
   sem _interpretMethod : Expr -> (Info, String, Map SID Expr)
   sem _interpretMethod =
@@ -168,10 +183,23 @@ lang DPPLParser =
                                              ty = TyUnknown {info = info},
                                              info = info})
   | "diff" -> Some (3, lam lst. TmDiff {fn = get lst 0,
-                                     arg = get lst 1,
-                                     darg = get lst 2,
-                                     ty = TyUnknown {info = info},
-                                     info = info})
+                                        arg = get lst 1,
+                                        darg = get lst 2,
+                                        mod = None (),
+                                        ty = TyUnknown {info = info},
+                                        info = info})
+  | "diffA" -> Some (3, lam lst. TmDiff {fn = get lst 0,
+                                         arg = get lst 1,
+                                         darg = get lst 2,
+                                         mod = Some (Analytic ()),
+                                         ty = TyUnknown {info = info},
+                                         info = info})
+  | "diffP" -> Some (3, lam lst. TmDiff {fn = get lst 0,
+                                         arg = get lst 1,
+                                         darg = get lst 2,
+                                         mod = Some (PAP ()),
+                                         ty = TyUnknown {info = info},
+                                         info = info})
   | "prune" -> Some (1, lam lst. TmPrune {dist = get lst 0,
                                           ty = TyUnknown {info = info},
                                           info = info})
@@ -195,6 +223,8 @@ lang DPPLParser =
   | TyDelayInt _ -> true
   | TyDelayFloat _ -> true
   | TyDelaySeqF _ -> true
+  | TyFloatC _ -> true
+  | TyRnd _ -> true
 
   sem matchTypeKeywordString (info: Info) =
   | "Dist" -> Some(1, lam lst. TyDist { info = info, ty = get lst 0 })
@@ -202,7 +232,34 @@ lang DPPLParser =
   | "DelayInt" -> Some(0, lam lst. TyDelayInt { info = info})
   | "DelayFloat" -> Some(0, lam lst. TyDelayFloat { info = info})
   | "DelaySeqF" -> Some(0, lam lst. TyDelaySeqF { info = info})
+  | "Rnd" -> Some(1, lam seq. TyRnd { info = info, ty = get seq 0 })
+  | "FloatA" -> Some(0, lam seq. TyFloatC { info = info, c = A () })
+  | "FloatP" -> Some(0, lam seq. TyFloatC { info = info, c = P () })
+  | "FloatN" -> Some(0, lam seq. TyFloatC { info = info, c = N () })
 
+  sem decorateTypesExn : Expr -> Expr
+  sem decorateTypesExn =| tm ->
+    smap_Expr_Expr decorateTypesExn (smap_Expr_Type decorateTypesH tm)
+
+  sem decorateTypesH : Type -> Type
+  sem decorateTypesH =
+  | TyFloat r -> TyFloatC { info = r.info, c = P () }
+  | TyArrow r ->
+    let ty = TyArrowE { info = r.info, from = r.from, to = r.to, e = Det () } in
+    smap_Type_Type decorateTypesH ty
+  | TyArrow (r & {to = TyRnd {ty = to}}) ->
+    let ty = TyArrowE { info = r.info, from = r.from, to = to, e = Rnd () } in
+    smap_Type_Type decorateTypesH ty
+  | TyRnd r ->
+    errorSingle [r.info]
+      "Parse error: Rnd decoration appeared outside an arrow return type"
+  | ty -> smap_Type_Type decorateTypesH ty
+
+  sem decorateTerms : Expr -> Expr
+  sem decorateTerms =
+  | TmDiff (r & {mod = None _}) ->
+    smap_Expr_Expr decorateTerms (TmDiff { r with mod = Some (PAP ()) })
+  | e -> smap_Expr_Expr decorateTerms e
 end
 
 -- Extend builtins with CorePPL builtins

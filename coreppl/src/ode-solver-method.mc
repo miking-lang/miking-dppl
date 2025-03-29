@@ -59,6 +59,10 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
     match f acc r.smul with (acc, smul) in
     (acc, { r with stepSize = stepSize, add = add, smul = smul })
 
+  sem sfold_ODESolverMetod_Expr : all a. (a -> Expr -> a) -> a -> ODESolverMethod -> a
+  sem sfold_ODESolverMetod_Expr f acc =| m ->
+    (smapAccumL_ODESolverMethod_Expr (lam acc. lam tm. (f acc tm, tm)) acc m).0
+
   -- NOTE(oerikss, 2024-03-08): Compares the inference methods tags only.
   sem cmpODESolverMethod : ODESolverMethod -> ODESolverMethod -> Int
   sem cmpODESolverMethod lhs =
