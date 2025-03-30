@@ -78,6 +78,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical {p : [Float]}
   | DistDirichlet {a : [Float]}
   | DistUniform {a : Float, b : Float}
+  | DistUniformDiscrete {a : Int, b : Int}
   | DistWiener {cps : Bool, a : ()}
   | DistLomax {scale: Float, shape : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
@@ -95,6 +96,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
+  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteSample t.a t.b)
   | DistWiener {cps = false, a = a} -> unsafeCoerce (wienerSample a)
   | DistWiener {cps = true, a = a} ->
     unsafeCoerce (let w = wienerSample a in lam k. lam x. k (w x))
@@ -118,6 +120,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet t ->
     error "expectation undefined for the Dirichlet distribution"
   | DistUniform t -> unsafeCoerce (divf (addf t.a t.b) 2.)
+  | DistUniformDiscrete t -> unsafeCoerce (divf (int2float (addi t.a t.b)) 2.)
   | DistWiener _ -> error "expectation undefined for the Wiener process"
 
   sem logObserve =
@@ -135,6 +138,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
+  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteLogPdf t.a t.b)
   | DistWiener _ -> error "logObserve undefined for the Wiener process"
   | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
   | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)

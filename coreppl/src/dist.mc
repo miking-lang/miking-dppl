@@ -275,6 +275,24 @@ lang UniformDist = Dist
   | DUniform _ -> "Uniform"
 end
 
+lang UniformDiscreteDist = Dist
+  syn Dist =
+  | DUniformDiscrete { a : Expr, b : Expr }
+
+  sem smapAccumL_Dist_Expr f acc =
+  | DUniformDiscrete t ->
+    match f acc t.a with (acc, a) in
+    match f acc t.b with (acc, b) in
+    (acc, DUniformDiscrete { t with a = a, b = b })
+
+  sem distTy info =
+  | DUniformDiscrete _ ->
+    let i = ityint_ info in ([], [i, i], i)
+
+  sem distName =
+  | DUniformDiscrete _ -> "UniformDiscrete"
+end
+
 lang BernoulliDist = Dist
   syn Dist =
   | DBernoulli { p : Expr }
@@ -509,6 +527,9 @@ let tydist_ = use Dist in
 let uniform_ = use UniformDist in
   lam a. lam b. dist_ (DUniform {a = a, b = b})
 
+let uniformDiscrete_ = use UniformDiscreteDist in
+  lam a. lam b. dist_ (DUniformDiscrete {a = a, b = b})
+
 let bern_ = use BernoulliDist in
   lam p. dist_ (DBernoulli {p = p})
 
@@ -549,7 +570,7 @@ let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 ---------------------------
 
 lang DistAll =
-  UniformDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
+  UniformDist + UniformDiscreteDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist + GaussianDist + BinomialDist + WienerDist
 end
@@ -565,6 +586,7 @@ mexpr
 use Test in
 
 let tmUniform = uniform_ (float_ 1.0) (float_ 2.0) in
+let tmUniformDiscrete = uniformDiscrete_ (int_ 1) (int_ 2) in
 let tmBernoulli = bern_ (float_ 0.5) in
 let tmPoisson = poisson_ (float_ 0.5) in
 let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
@@ -589,6 +611,10 @@ let tmWiener = wiener_ in
 
 utest mexprToString tmUniform with strJoin "\n" [
   "Uniform 1. 2."
+] using eqString in
+
+utest mexprToString tmUniformDiscrete with strJoin "\n" [
+  "UniformDiscrete 1 2"
 ] using eqString in
 
 utest mexprToString tmBernoulli with strJoin "\n" [
@@ -645,6 +671,9 @@ using eqString in
 
 utest tmUniform with tmUniform using eqExpr in
 utest eqExpr tmUniform (uniform_ (float_ 1.0) (float_ 1.0)) with false in
+
+utest tmUniformDiscrete with tmUniformDiscrete using eqExpr in
+utest eqExpr tmUniformDiscrete (uniformDiscrete_ (int_ 1) (int_ 1)) with false in
 
 utest tmBernoulli with tmBernoulli using eqExpr in
 utest eqExpr tmBernoulli (bern_ (float_ 0.4)) with false in
@@ -713,6 +742,10 @@ utest smap_Expr_Expr mapVar tmUniform with uniform_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmUniform
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmUniformDiscrete with uniformDiscrete_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmUniformDiscrete
+with [ int_ 2, int_ 1 ] using eqSeq eqExpr in
+
 utest smap_Expr_Expr mapVar tmBernoulli with bern_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmBernoulli
 with [ float_ 0.5 ] using eqSeq eqExpr in
@@ -765,6 +798,7 @@ with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
 ---------------------
 
 utest symbolize tmUniform with tmUniform using eqExpr in
+utest symbolize tmUniformDiscrete with tmUniformDiscrete using eqExpr in
 utest symbolize tmBernoulli with tmBernoulli using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
@@ -783,6 +817,7 @@ utest symbolize tmBinomial with tmBinomial using eqExpr in
 -------------------------
 
 utest tyTm (typeCheck tmUniform) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmUniformDiscrete) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBernoulli) with tydist_ tybool_ using eqType in
 utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBeta) with tydist_ tyfloat_ using eqType in
@@ -807,6 +842,7 @@ let toStr = utestDefaultToString expr2str expr2str in
 let _anf = compose normalizeTerm symbolize in
 
 utest _anf tmUniform with bind_ (ulet_ "t" tmUniform) (var_ "t") using eqExpr in
+utest _anf tmUniformDiscrete with bind_ (ulet_ "t" tmUniformDiscrete) (var_ "t") using eqExpr in
 utest _anf tmBernoulli with bind_ (ulet_ "t" tmBernoulli) (var_ "t") using eqExpr in
 utest _anf tmPoisson with bind_ (ulet_ "t" tmPoisson) (var_ "t") using eqExpr in
 utest _anf tmBeta with bind_ (ulet_ "t" tmBeta) (var_ "t") using eqExpr in
@@ -844,6 +880,7 @@ utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 ---------------------
 
 utest (typeLift tmUniform).1 with tmUniform using eqExpr in
+utest (typeLift tmUniformDiscrete).1 with tmUniformDiscrete using eqExpr in
 utest (typeLift tmBernoulli).1 with tmBernoulli using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
 utest (typeLift tmBeta).1 with tmBeta using eqExpr in
