@@ -76,21 +76,16 @@ let cluster = lam q. lam trees:[Tree]. lam maxAge. lam n.
 
   let node_msg = mapi (lam i. lam lc.
     let left_in_msg = map (lam p. let t = foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p lc in t) l_values in
-    (match leftChild with Node _ then
-      let log_likes_left = getLogLikes lc in
-      weight (negf (log_likes_left))
-    else ());
-    
+    let log_likes_left = getLogLikes lc in
+    weight (negf (log_likes_left));
     let rc = get rightMsg i in
-     let right_in_msg  = map (lam p. let t = foldl2 (lam acc. lam pi. lam rci. addf acc (mulf pi rci)) 0. p rc in t) r_values in
-    (match rightChild with Node _ then
-      let log_likes_right = getLogLikes rc in
-      weight (negf (log_likes_right))
-    else ()); 
-     let node_msg = mapi (lam i. lam lm. let rm = get right_in_msg i in mulf lm rm) left_in_msg in
-     let log_likes = getLogLikes node_msg in
-     weight (log_likes);
-     node_msg
+    let right_in_msg  = map (lam p. let t = foldl2 (lam acc. lam pi. lam rci. addf acc (mulf pi rci)) 0. p rc in t) r_values in
+    let log_likes_right = getLogLikes rc in
+    weight (negf (log_likes_right));
+    let node_msg = mapi (lam i. lam lm. let rm = get right_in_msg i in mulf lm rm) left_in_msg in
+    let log_likes = getLogLikes node_msg in
+    weight (log_likes);
+    node_msg
   ) leftMsg in
   resample;
   let parent = Node {age=age, msg = node_msg,left = leftChild, right = rightChild} in
@@ -131,4 +126,5 @@ let model = lam.
   let q = gtr pi er in 
   let dataLen = length data in
   let trees:[Tree] = buildForest data [] 0 dataLen seqLength in
+  weight (mulf (int2float (muli dataLen seqLength)) (log 0.25));
   cluster q trees 0.0 (length trees)

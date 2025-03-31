@@ -932,13 +932,8 @@ lang Cancel = Observe
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmCancel t ->
     let i = pprintIncr indent in
-    match
-      pprintCode i env
-        (TmObserve {dist=t.dist,value=t.value,ty=t.ty,info=t.info})
-      with (env,args)
-    then
-      (env, join ["cancel", pprintNewline i,
-       "(", args ,")"])
+    match printArgs i env [t.value, t.dist] with (env,args) then
+      (env, join ["cancelObserve", pprintNewline i, args])
     else never
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =

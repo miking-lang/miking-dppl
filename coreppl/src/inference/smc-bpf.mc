@@ -3,45 +3,60 @@ include "../dppl-arg.mc"
 
 lang BPFMethod = MExprPPL
   syn InferMethod =
-  | BPF {particles : Expr}
+  | BPF {particles : Expr
+        ,resampleFrac : Expr}
 
   sem pprintInferMethod indent env =
-  | BPF {particles = particles} ->
+  | BPF {particles = particles, resampleFrac = resampleFrac} ->
     let i = pprintIncr indent in
     match pprintCode i env particles with (env, particles) in
-    (env, join ["(BPF {particles = ", particles, "})"])
+    match pprintCode i env resampleFrac with (env, resampleFrac) in
+    (env, join ["(BPF {particles = ", particles,
+                "resampleFrac =", resampleFrac, "})"])
 
   sem inferMethodFromCon info bindings =
   | "BPF" ->
     let expectedFields = [
-      ("particles", int_ defaultArgs.particles)
+      ("particles", int_ defaultArgs.particles),
+      ("resampleFrac", float_ defaultArgs.resampleFrac)
     ] in
-    match getFields info bindings expectedFields with [particles] in
-    BPF {particles = particles}
+    match getFields info bindings expectedFields with [particles, resampleFrac] in
+    BPF {particles = particles, resampleFrac = resampleFrac}
 
   sem inferMethodFromOptions options =
   | "smc-bpf" ->
-    BPF {particles = int_ options.particles}
+    BPF {particles = int_ options.particles,
+        resampleFrac = float_ options.resampleFrac}
 
   sem inferMethodConfig info =
-  | BPF {particles = particles} ->
-    fieldsToRecord info [("particles", particles)]
+  | BPF {particles = particles, resampleFrac = resampleFrac} ->
+    fieldsToRecord info [
+      ("particles", particles),
+      ("resampleFrac", resampleFrac)
+    ]
 
   sem inferMethodConfigType info =
   | BPF _ ->
-    tyRecord info [("particles", ityint_ info)]
+    tyRecord info [
+      ("particles", ityint_ info),
+      ("resampleFrac", ityfloat_ info)
+    ]
 
   sem typeCheckInferMethod env info =
-  | BPF {particles = particles} ->
+  | BPF {particles = particles, resampleFrac = resampleFrac} ->
     let int = TyInt {info = info} in
+    let float = TyFloat {info = info} in
     let particles = typeCheckExpr env particles in
     unify env [info, infoTm particles] int (tyTm particles);
-    BPF {particles = particles}
+    let resampleFrac = typeCheckExpr env resampleFrac in
+    unify env [info, infoTm resampleFrac] float (tyTm resampleFrac);
+    BPF {particles = particles, resampleFrac = resampleFrac}
 
   sem smapAccumL_InferMethod_Expr env =
   | BPF r ->
     match f acc r.particles with (acc, particles) in
-    (acc, BPF {r with particles = particles})
+    match f acc r.resampleFrac with (acc, resampleFrac) in
+    (acc, BPF {r with particles = particles, resampleFrac = resampleFrac})
 
   sem setRuns expr =
   | BPF r -> BPF {r with particles = expr}

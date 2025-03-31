@@ -35,6 +35,9 @@ type Options = {
   -- Where to resample in SMC
   resample: String,
 
+  -- Trigger resampling for SMC-BPF when ESS is less than resampleFrac × particleCount
+  resampleFrac: Float,
+
   -- Whether or not to use alignment (for certain inference algorithms)
   align: Bool,
 
@@ -84,6 +87,7 @@ let defaultArgs = {
   test = false,
   particles = 5000,
   resample = "manual",
+  resampleFrac = 0.7,
   align = false,
   printModel = false,
   printMCore = false,
@@ -132,6 +136,12 @@ let config = [
     ],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with particles = argToIntMin p 1}),
+  ([("--resample-frac", " ", "<value>")],
+    join [
+          "Floating point number to trigger resampling for SMC-BPF when ESS is less than resampleFrac × particleCount. Default: ",
+          float2string defaultArgs.resampleFrac, "."
+      ],
+      lam p : ArgPart Options. let o : Options = p.options in {o with resampleFrac = argToFloatMin p 0. }),
   ([("--resample", " ", "<method>")],
     join [
       "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates, forces --align), and manual (sample only at manually defined resampling locations). Default: ",
