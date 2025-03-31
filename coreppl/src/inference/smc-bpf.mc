@@ -17,8 +17,8 @@ lang BPFMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | "BPF" ->
     let expectedFields = [
-      ("particles", int_ defaultArgs.particles),
-      ("resampleFrac", float_ defaultArgs.resampleFrac)
+      ("particles", int_ _modelOptionsTempDefault.particles),
+      ("resampleFrac", float_ _modelOptionsTempDefault.resampleFrac)
     ] in
     match getFields info bindings expectedFields with [particles, resampleFrac] in
     BPF {particles = particles, resampleFrac = resampleFrac}

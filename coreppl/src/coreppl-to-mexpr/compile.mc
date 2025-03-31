@@ -378,7 +378,6 @@ lang CPPLLoader
         , ("printSamples", bool_ options.printSamples)
         , ("earlyStop", bool_ options.earlyStop)
         , ("mcmcLightweightGlobalProb", float_ options.mcmcLightweightGlobalProb)
-        , ("mcmcLightweightReuseLocal", bool_ options.mcmcLightweightReuseLocal)
         , ("printAcceptanceRate", bool_ options.printAcceptanceRate)
         , ("subsample", bool_ options.subsample)
         , ("subsampleSize", int_ options.subsampleSize)

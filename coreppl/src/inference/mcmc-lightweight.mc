@@ -24,13 +24,13 @@ lang LightweightMCMCMethod = MExprPPL
     let expectedFields =
       [ ( "continue"
         , utuple_
-          [ int_ defaultArgs.particles
+          [ int_ _modelOptionsTempDefault.particles
           , ulam_ "remaining" (ulam_ ""
             (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)]))
           ]
         )
       , ("keepSample", ulam_ "" true_)
-      , ("globalProb", float_ defaultArgs.mcmcLightweightGlobalProb)
+      , ("globalProb", float_ _modelOptionsTempDefault.mcmcLightweightGlobalProb)
       ] in
     match getFields info bindings expectedFields
     with [continue, keepSample, globalProb] in
@@ -44,7 +44,7 @@ lang LightweightMCMCMethod = MExprPPL
       -- Reusing particles option for now for iterations, maybe we need a
       -- better name
       continue = utuple_
-        [ int_ defaultArgs.particles
+        [ int_ _modelOptionsTempDefault.particles
         , ulam_ "remaining" (ulam_ ""
           (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)]))
         ],

@@ -1,5 +1,370 @@
-include "arg.mc"
+include "optparse-applicative.mc"
 include "set.mc"
+
+type FrontendOptions =
+  { printModel : Bool
+  , printMCore : Bool
+  , exitBefore : Bool
+  , outputMl : Bool
+  , input : String
+  , output : String
+  , test : Bool
+  }
+
+type CPPLFileOptions =
+  { dpplTypeCheck : Bool
+  -- NOTE(vipa, 2025-03-28): These are relevant only to programs
+  -- without `infer`
+  , printSamples : Bool
+  , printAcceptanceRate : Bool
+  }
+
+-- TODO(vipa, 2025-03-31): These should be split by inference method,
+-- most likely by extending each InferenceMethod record with extra
+-- fields for everything they end up using
+type ModelOptionsTemp =
+  { method : String
+  , align : Bool
+  , cps : String
+  , driftKernel : Bool
+  , driftScale : Float
+  , dynamicDelay : Bool
+  , earlyStop : Bool
+  , mcmcLightweightGlobalProb : Float
+  , particles : Int
+  , pmcmcParticles : Int
+  , prune : Bool
+  , resample : String
+  , resampleFrac : Float
+  , subsample : Bool
+  , subsampleSize : Int
+  }
+
+type TransformationOptions =
+  { extractSimplification : String
+  , staticDelay : Bool
+  , debugDumpPhases : Set String
+  , debugPhases : Bool
+  , seed : Option Int
+  , defaultMethod : ModelOptionsTemp
+  }
+
+type SeparatedOptions =
+  { frontend : FrontendOptions
+  , cpplFiles : CPPLFileOptions
+  , transformations : TransformationOptions
+  }
+
+let frontendOptions : OptParser FrontendOptions =
+  let mk = lam printModel. lam printMCore. lam exitBefore. lam outputMl. lam output. lam test. lam input.
+    { printModel = printModel
+    , printMCore = printMCore
+    , exitBefore = exitBefore
+    , outputMl = outputMl
+    , output = output
+    , test = test
+    , input = input
+    } in
+  let printModel = optFlag
+    { optFlagDef with long = "print-model"
+    , description = "The parsed model is pretty printed before inference."
+    } in
+  let printMCore = optFlag
+    { optFlagDef with long = "print-mcore"
+    , description = "Print the generated MCore program before execution."
+    } in
+  let exitBefore = optFlag
+    { optFlagDef with long = "exit-before"
+    , description = "Exit before compiling."
+    } in
+  let outputMl = optFlag
+    { optFlagDef with long = "output-ml"
+    , description = "Write intermediate OCaml output to 'program.ml' in cwd when compiling."
+    } in
+  let output = optArg
+    { optArgDefString with long = "output"
+    , arg = "<file>"
+    , description = "Write output to <file> when compiling"
+    } in
+  let test = optFlag
+    { optFlagDef with long = "test"
+    , description = "Include utests."
+    } in
+  let input = optPos
+    { optPosDefString with arg = "<program>"
+    , description = "The CorePPL program to compile."
+    } in
+  optApply (optApply (optMap5 mk printModel printMCore exitBefore outputMl output) test) input
+
+let cpplFileOptions : OptParser CPPLFileOptions =
+  let mk = lam dpplTypeCheck. lam dpplTypeCheck. lam printSamples. lam printAcceptanceRate.
+    { dpplTypeCheck = dpplTypeCheck
+    , printSamples = printSamples
+    , printAcceptanceRate = printAcceptanceRate
+    } in
+  let dpplTypeCheck = optFlag
+    { optFlagDef with long = "dppl-typecheck"
+    , description = "Use (co)effect type checker for tracking non-determinism and differentiability."
+    } in
+  let printSamples = optMap (lam x. not x) (optFlag
+    { optFlagDef with long = "no-print-samples"
+    , description = "Do not print the final samples in the compiled program."
+    }) in
+  let printAcceptanceRate = optFlag
+    { optFlagDef with long = "print-accept-rate"
+    , description = "Prints the acceptance rate of MCMC algorithms."
+    } in
+  optMap4 mk dpplTypeCheck dpplTypeCheck printSamples printAcceptanceRate
+
+let _modelOptionsTempDefault : ModelOptionsTemp =
+  { method = ""
+  , align = false
+  , cps = "full"
+  , driftKernel = false
+  , driftScale = 1.0
+  , dynamicDelay = false
+  , earlyStop = true
+  , mcmcLightweightGlobalProb = 0.1
+  , particles = 5000
+  , pmcmcParticles = 2
+  , prune = false
+  , resample = "manual"
+  , resampleFrac = 0.7
+  , subsample = false
+  , subsampleSize = 1
+  }
+let _align : OptParser Bool = optFlag
+  { optFlagDef with long = "align"
+  , description = "Whether or not to align the model for certain inference algorithms."
+  }
+let _cps : OptParser String =
+  let default = "full" in
+  let opt = optArg
+    { optArgDefString with long = "cps"
+    , description = concat "Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: " default
+    } in
+  optOr opt (optPure default)
+let _driftKernel : OptParser Bool = optFlag
+  { optFlagDef with long = "kernel"
+  , description = "Use drift Kernel in MCMC."
+  }
+let _driftScale : OptParser Float =
+  let default = 1.0 in
+  let opt = optArg
+    { optArgDefFloat with long = "drift"
+    , description = concat "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: " (float2string default)
+    } in
+  optOr opt (optPure default)
+let _dynamicDelay : OptParser Bool = optFlag
+  { optFlagDef with long = "dynamic-delay"
+  , description = "Runs dynamic delayed sampling on the model."
+  }
+let _earlyStop : OptParser Bool = optMap (lam x. not x) (optFlag
+  { optFlagDef with long = "no-early-stop"
+  , description = "Disables early stopping in certain inference algorithms."
+  })
+let _mcmcLightweightGlobalProb : OptParser Float =
+  let default = 0.1 in
+  let opt = optArg
+    { optArgDefFloat with long = "mcmc-lw-gprob"
+    , description = concat "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: " (float2string default)
+    } in
+  optOr opt (optPure default)
+let _particles : OptParser Int =
+  let default = 5000 in
+  let opt = optArg
+    { optArgDefInt with long = "particles", short = "p"
+    , description = concat "The number of particles (i.e., samples or iterations). The default is " (int2string default)
+    } in
+  optOr opt (optPure default)
+let _pmcmcParticles : OptParser Int =
+  let default = 2 in
+  let opt = optArg
+    { optArgDefInt with long = "pmcmcParticles"
+    , description = concat "The number of particles for the smc proposal computation. The default is " (int2string default)
+    } in
+  optOr opt (optPure default)
+let _prune : OptParser Bool = optFlag
+  { optFlagDef with long = "prune"
+  , description = "The model is pruned if possible."
+  }
+let _resample : OptParser String =
+  let default = "manual" in
+  let opt = optArg
+    { optArgDefString with long = "resample"
+    , description = concat "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates, forces --align), and manual (sample only at manually defined resampling locations). Default: " default
+    } in
+  optOr opt (optPure default)
+let _resampleFrac : OptParser Float =
+  let default = 0.7 in
+  let opt = optArg
+    { optArgDefFloat with long = "resampleFrac"
+    , description = concat "Floating point number to trigger resampling for SMC-BPF when ESS is less than resampleFrac × particleCount. Default: " (float2string default)
+    } in
+  optOr opt (optPure default)
+let _subsample : OptParser Bool = optFlag
+  { optFlagDef with long = "subsample"
+  , description = "Whether to subsample the posterior distribution."
+  }
+let _subsampleSize : OptParser Int =
+  let default = 1 in
+  let opt = optArg
+    { optArgDefInt with long = "subsample-size", short = "n"
+    , description = concat "The number of subsamples to draw if --subsample is selected. Default: " (int2string default)
+    } in
+  optOr opt (optPure default)
+
+let _methodFlag : Bool -> String -> OptParser String = lam default. lam str.
+  let opt = optMap (lam. str) (optSpecificArg {optExactArg str with short = "m"}) in
+  if default then optOr opt (optPure str) else opt
+
+let isLightweightOptions : OptParser ModelOptionsTemp =
+  let mk = lam method. lam cps. lam dynamicDelay. lam particles. lam earlyStop.
+    { _modelOptionsTempDefault with method = method
+    , cps = cps
+    , dynamicDelay = dynamicDelay
+    , particles = particles
+    , earlyStop = earlyStop
+    } in
+  let m = _methodFlag true "is-lw" in
+  optMap5 mk m _cps _dynamicDelay _particles _earlyStop
+
+let mcmcLightweightOptions : OptParser ModelOptionsTemp =
+  let mk = lam method. lam particles. lam align. lam cps. lam mcmcLightweightGlobalProb. lam driftKernel. lam driftScale.
+    { _modelOptionsTempDefault with method = method
+    , align = align
+    , cps = cps
+    , mcmcLightweightGlobalProb = mcmcLightweightGlobalProb
+    , driftKernel = driftKernel
+    , driftScale = driftScale
+    , particles = particles
+    } in
+  let m = _methodFlag false "mcmc-lightweight" in
+  (optApply (optApply (optMap5 mk m _particles _align _cps _mcmcLightweightGlobalProb) _driftKernel) _driftScale)
+
+let mcmcNaiveOptions : OptParser ModelOptionsTemp =
+  let mk = lam method. lam particles.
+    { _modelOptionsTempDefault with method = method
+    , particles = particles
+    } in
+  let m = _methodFlag false "mcmc-naive" in
+  optMap2 mk m _particles
+
+let mcmcTraceOptions : OptParser ModelOptionsTemp =
+  let mk = lam method. lam particles.
+    { _modelOptionsTempDefault with method = method
+    , particles = particles
+    } in
+  let m = _methodFlag false "mcmc-trace" in
+  optMap2 mk m _particles
+
+let pmcmcPimhOptions : OptParser ModelOptionsTemp =
+  let mk = lam method. lam cps. lam particles. lam pmcmcParticles.
+    { _modelOptionsTempDefault with method = method
+    , cps = cps
+    , particles = particles
+    , pmcmcParticles = pmcmcParticles
+    } in
+  let m = _methodFlag false "pmcmc-pimh" in
+  optMap4 mk m _cps _particles _pmcmcParticles
+
+let smcApfOptions : OptParser ModelOptionsTemp =
+  let mk = lam method. lam cps. lam resample. lam particles. lam subsample. lam subsampleSize.
+    { _modelOptionsTempDefault with method = method
+    , cps = cps
+    , resample = resample
+    , particles = particles
+    , subsample = subsample
+    , subsampleSize = subsampleSize
+    } in
+  let m = _methodFlag false "smc-apf" in
+  optApply (optMap5 mk m _cps _resample _particles _subsample) _subsampleSize
+
+let smcBpfOptions : OptParser ModelOptionsTemp =
+  let mk = lam cps. lam resample. lam resampleFrac. lam particles. lam subsample. lam subsampleSize. lam prune. lam dynamicDelay.
+    { _modelOptionsTempDefault with cps = cps
+    , resample = resample
+    , resampleFrac = resampleFrac
+    , particles = particles
+    , subsample = subsample
+    , subsampleSize = subsampleSize
+    , prune = prune
+    , dynamicDelay = dynamicDelay
+    } in
+  let m = _methodFlag false "smc-bpf" in
+  optMap2 (lam. lam x. x) m (optApply (optApply (optApply (optMap5 mk _cps _resample _resampleFrac _particles _subsample) _subsampleSize) _prune) _dynamicDelay)
+
+let inferenceMethodOptions : OptParser ModelOptionsTemp = foldl1 optOr
+  [ isLightweightOptions
+  , mcmcLightweightOptions
+  , mcmcNaiveOptions
+  , mcmcTraceOptions
+  , pmcmcPimhOptions
+  , smcApfOptions
+  , smcBpfOptions
+  -- , optArg -- NOTE(vipa, 2025-03-31): Each inference method handles
+  --          -- its own identifier, thus all that's left here is
+  --          -- documentation and failing if we get here
+  --   { optArgDef with short = "m"
+  --   , arg = "<method>"
+  --   , parse = lam str.
+  --     Left (join ["Unknown inference method: ", str])
+  --   , description = "The selected inference method."
+  --   }
+  ]
+
+
+let transformationOptions : OptParser ModelOptionsTemp -> OptParser TransformationOptions = lam method.
+  let mk = lam extractSimplification. lam staticDelay. lam debugPhases. lam debugDumpPhases. lam defaultMethod. lam seed.
+    { extractSimplification = extractSimplification
+    , staticDelay = staticDelay
+    , debugPhases = debugPhases
+    , debugDumpPhases = debugDumpPhases
+    , defaultMethod = defaultMethod
+    , seed = seed
+    } in
+  let extractSimplification =
+    let default = "none" in
+    let opt = optArg
+      { optArgDefString with long = "extract-simplification"
+      , arg = "<option>"
+      , description = join
+        [ "Temporary flag that decides the simplification approach after extraction"
+        , "in the MExpr compiler backend. The supported options are: none, inline,"
+        , "and peval. Default: ", default, ". Eventually, we will remove this option"
+        , "and only use peval."
+        ]
+      } in
+    optOr opt (optPure default) in
+  let staticDelay = optFlag
+    { optFlagDef with long = "static-delay"
+    , description = "The model is transformed to an efficient representation if possible."
+    } in
+  let debugPhases = optFlag
+    { optFlagDef with long = "debug-phases"
+    , description = "Show debug and profiling information about each pass"
+    } in
+  let debugDumpPhases =
+    let opt = optArg
+      { optArgDefString with long = "debug-log-phases"
+      , arg = "<phases>"
+      , description = "Print a json representation of the AST after the given (comma-separated) passes."
+      } in
+    optOr (optMap (lam str. setOfSeq cmpString (strSplit "," str)) opt) (optPure (setEmpty cmpString)) in
+  let seed = optOptional (optArg
+    { optArgDefInt with long = "seed"
+    , arg = "<seed>"
+    , description = "The random seed to use. Initialized randomly if option is omitted."
+    }) in
+  optApply (optMap5 mk extractSimplification staticDelay debugPhases debugDumpPhases method) seed
+
+let options : OptParser SeparatedOptions =
+  let mk = lam frontend. lam cpplFiles. lam transformations.
+    { frontend = frontend
+    , cpplFiles = cpplFiles
+    , transformations = transformations
+    } in
+  optMap3 mk frontendOptions cpplFileOptions (transformationOptions inferenceMethodOptions)
 
 -- Options type
 type Options = {
@@ -17,7 +382,6 @@ type Options = {
   printModel: Bool,
   printMCore: Bool,
   exitBefore: Bool,
-  skipFinal: Bool,
   outputMl: Bool,
   output: String,
   debugPhases: Bool,
@@ -52,7 +416,6 @@ type Options = {
 
   -- Lightweight MCMC options
   mcmcLightweightGlobalProb: Float,
-  mcmcLightweightReuseLocal: Bool, -- Currently has no effect
 
   -- MCMC options,
   printAcceptanceRate: Bool,
@@ -81,198 +444,41 @@ type Options = {
   dpplTypeCheck: Bool
 }
 
--- Default values for options
-let defaultArgs = {
-  method = "is-lw",
-  test = false,
-  particles = 5000,
-  resample = "manual",
-  resampleFrac = 0.7,
-  align = false,
-  printModel = false,
-  printMCore = false,
-  exitBefore = false,
-  skipFinal = false,
-  debugPhases = false,
-  debugDumpPhases = setEmpty cmpString,
-  outputMl = false,
-  output = "out",
-  staticDelay = false,
-  dynamicDelay = false,
-  prune = false,
-  printSamples = true,
-  cps = "full",
-  earlyStop = true,
-  mcmcLightweightGlobalProb = 0.1,
-  mcmcLightweightReuseLocal = true,
-  printAcceptanceRate = false,
-  pmcmcParticles = 2,
-  seed = None (),
-  extractSimplification = "none",
-  subsample = false,
-  subsampleSize = 1,
-  driftKernel = false,
-  driftScale = 1.0,
-  dpplTypeCheck = false
-}
+let mkBackcompatOptions : SeparatedOptions -> (String, Options) = lam options.
+  ( options.frontend.input
+  , { particles = options.transformations.defaultMethod.particles
+    , method = options.transformations.defaultMethod.method
+    , align = options.transformations.defaultMethod.align
+    , cps = options.transformations.defaultMethod.cps
+    , driftKernel = options.transformations.defaultMethod.driftKernel
+    , driftScale = options.transformations.defaultMethod.driftScale
+    , dynamicDelay = options.transformations.defaultMethod.dynamicDelay
+    , earlyStop = options.transformations.defaultMethod.earlyStop
+    , mcmcLightweightGlobalProb = options.transformations.defaultMethod.mcmcLightweightGlobalProb
+    , particles = options.transformations.defaultMethod.particles
+    , pmcmcParticles = options.transformations.defaultMethod.pmcmcParticles
+    , prune = options.transformations.defaultMethod.prune
+    , resample = options.transformations.defaultMethod.resample
+    , resampleFrac = options.transformations.defaultMethod.resampleFrac
+    , subsample = options.transformations.defaultMethod.subsample
+    , subsampleSize = options.transformations.defaultMethod.subsampleSize
+    , printModel = options.frontend.printModel
+    , printMCore = options.frontend.printMCore
+    , exitBefore = options.frontend.exitBefore
+    , outputMl = options.frontend.outputMl
+    , output = options.frontend.output
+    , test = options.frontend.test
+    , dpplTypeCheck = options.cpplFiles.dpplTypeCheck
+    , printSamples = options.cpplFiles.printSamples
+    , printAcceptanceRate = options.cpplFiles.printAcceptanceRate
+    , extractSimplification = options.transformations.extractSimplification
+    , staticDelay = options.transformations.staticDelay
+    , debugDumpPhases = options.transformations.debugDumpPhases
+    , debugPhases = options.transformations.debugPhases
+    , seed = options.transformations.seed
+    }
+  )
 
--- Options configuration
-let config = [
-  -- TODO(dlunde,2022-11-14): Could we automatically generate the list of available inference algorithms instead of hardcoding it?
-  ([("-m", " ", "<method>")],
-    join [
-      "The selected inference method. The supported methods are: is-lw, smc-bpf, smc-apf, mcmc-lightweight, mcmc-trace, mcmc-naive, pmcmc-pimh. Default: ",
-      defaultArgs.method
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with method = argToString p}),
-  ([("--test", "", "")],
-    "Include utests",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with test = true}),
-  ([("-p", " ", "<particles>")],
-    join [
-      "The number of particles (i.e., samples or iterations). The default is ", (int2string defaultArgs.particles)
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with particles = argToIntMin p 1}),
-  ([("--resample-frac", " ", "<value>")],
-    join [
-          "Floating point number to trigger resampling for SMC-BPF when ESS is less than resampleFrac × particleCount. Default: ",
-          float2string defaultArgs.resampleFrac, "."
-      ],
-      lam p : ArgPart Options. let o : Options = p.options in {o with resampleFrac = argToFloatMin p 0. }),
-  ([("--resample", " ", "<method>")],
-    join [
-      "The selected resample placement method, for inference algorithms where applicable. The supported methods are: likelihood (resample immediately after all likelihood updates), align (resample after aligned likelihood updates, forces --align), and manual (sample only at manually defined resampling locations). Default: ",
-      defaultArgs.resample, "."
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with resample = argToString p}),
-  ([("--align", "", "")],
-    "Whether or not to align the model for certain inference algorithms.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with align = true}),
-  ([("--print-model", "", "")],
-    "The parsed model is pretty printed before inference.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with printModel = true}),
-  ([("--print-mcore", "", "")],
-    "Print the generated MCore program before execution.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with printMCore = true}),
-  ([("--exit-before", "", "")],
-    "Exit before compiling.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with exitBefore = true}),
-  ([("--skip-final", "", "")],
-    "Do not perform the final compilation step (e.g., MExpr to OCaml).",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with skipFinal = true}),
-  ([("--debug-phases", "", "")],
-    "Show debug and profiling information about each pass",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with debugPhases = true}),
-  ([("--debug-phase", " ", "<phase>")],
-    "Print a json representation of the AST after the given pass. Can be given multiple times.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with debugDumpPhases = setInsert (argToString p) o.debugDumpPhases}),
-  ([("--output-ml", "", "")],
-    "Write intermediate OCaml output to 'program.ml' in cwd when compiling",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with outputMl = true}),
-  ([("--output", " ", "<file>")],
-    "Write output to <file> when compiling",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with output = argToString p}),
-  ([("--static-delay", "", "")],
-    "The model is transformed to an efficient representation if possible.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with staticDelay = true}),
-  ([("--dynamic-delay", "", "")],
-    "Runs dynamic delayed sampling on the model.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with dynamicDelay = true}),
-  ([("--prune", "", "")],
-    "The model is pruned if possible.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with prune = true}),
-  ([("--no-print-samples", "", "")],
-    "Do not print the final samples in the compiled program.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with printSamples = false}),
-  ([("--cps", " ", "<option>")],
-    join ["Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: ", defaultArgs.cps, "."],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with cps = argToString p}),
-  ([("--no-early-stop", "", "")],
-    "Disables early stopping in certain inference algorithms.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with earlyStop = false}),
-  ([("--mcmc-lw-gprob", " ", "<value>")],
-    join [
-      "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: ",
-      float2string defaultArgs.mcmcLightweightGlobalProb, "."
-    ],
-    lam p : ArgPart Options. let o : Options = p.options in {o with mcmcLightweightGlobalProb = argToFloat p }),
-  ([("--no-reuse-local", "", "")],
-    "Do not try to reuse local variables in lightweight MCMC with --align option.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with mcmcLightweightReuseLocal = false}),
-  ([("--print-accept-rate", "", "")],
-    "Prints the acceptance rate of MCMC algorithms.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with printAcceptanceRate = true}),
-  ([("--pmcmcParticles", " ", "<particles>")],
-    join [
-      "The number of particles for the smc proposal computation. The default is ",
-      (int2string defaultArgs.pmcmcParticles),
-      ". This option is used if one of the following methods are used: pmcmc-*."
-    ],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with pmcmcParticles = argToIntMin p 1}),
-  ([("--seed", " ", "<seed>")],
-    "The random seed to use. Initialized randomly if option is omitted.",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with seed = Some (argToInt p)}),
-  ([("--extract-simplification", " ", "<option>")],
-    join ["Temporary flag that decides the simplification approach after extraction in the MExpr compiler backend. The supported options are: none, inline, and peval. Default: ", defaultArgs.extractSimplification, ". Eventually, we will remove this option and only use peval."],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with extractSimplification = argToString p}),
-  ([("--subsample", "", "")],
-    "Whether to subsample the posterior distribution. Use in conjuction with -m smc-apf or smc-bpf and without --no-print-samples",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with subsample = true}),
-
-  ([("-n", " ", "<subsample size>")],
-   join [
-        "The number of subsamples to draw if --subsample is selected. Default: ",
-    int2string defaultArgs.subsampleSize, "."
-       ],
-       lam p: ArgPart Options.
-        let o: Options = p.options in {o with subsampleSize = argToIntMin p 1}),
-
-  ([("--kernel", "", "")],
-    "Use drift Kernel in MCMC. Use in conjuction with -m mcmc-lightweight",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with driftKernel = true}),
-
-  ([("--drift", " ", "<value>")],
-    join [
-          "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: ",
-          float2string defaultArgs.driftScale, "."
-      ],
-      lam p : ArgPart Options. let o : Options = p.options in {o with driftScale = argToFloatMin p 0. }),
-  ([("--dppl-typecheck", "", "")],
-   "Use (co)effect type checker for tracking non-determinism and differentiability.",
-   lam p: ArgPart Options.
-     let o: Options = p.options in {o with dpplTypeCheck = true})
-]
-
--- Menu
-let menu = lam. join [
-  "Usage: cppl file.mc [<options>]\n\n",
-  "Options:\n",
-  argHelpOptions config,
-  "\n"
-]
+let backcompatOptions : OptParser (String, Options) = optMap mkBackcompatOptions options
+let cpplName = "cppl"
+let cpplDescription = ""
