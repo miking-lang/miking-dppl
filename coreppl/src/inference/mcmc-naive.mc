@@ -1,11 +1,11 @@
-include "../coreppl.mc"
-include "../dppl-arg.mc"
+include "../infer-method.mc"
 
-lang NaiveMCMCMethod = MExprPPL
-  syn InferMethod =
-  | NaiveMCMC {
-      iterations : Expr -- Type Int
+lang NaiveMCMCMethod = InferMethodBase
+  type NaiveMCMCConfig =
+    { iterations : Expr -- : Int
     }
+  syn InferMethod =
+  | NaiveMCMC NaiveMCMCConfig
 
   sem pprintInferMethod indent env =
   | NaiveMCMC t ->
@@ -16,18 +16,10 @@ lang NaiveMCMCMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | "NaiveMCMC" ->
     let expectedFields = [
-      ("iterations", int_ _modelOptionsTempDefault.particles)
+      ("iterations", int_ _particlesDefault)
     ] in
     match getFields info bindings expectedFields with [iterations] in
     NaiveMCMC { iterations = iterations }
-
-  sem inferMethodFromOptions options =
-  | "mcmc-naive" ->
-    NaiveMCMC {
-      -- Reusing particles option for now for iterations, maybe we need a
-      -- better name
-      iterations = int_ options.particles
-    }
 
   sem inferMethodConfig info =
   | NaiveMCMC t ->
@@ -51,5 +43,12 @@ lang NaiveMCMCMethod = MExprPPL
 
   sem setRuns expr =
   | NaiveMCMC r -> NaiveMCMC {r with iterations = expr}
-
 end
+
+let mcmcNaiveOptions : OptParser (use NaiveMCMCMethod in InferMethod) =
+  use NaiveMCMCMethod in
+  let mk = lam iterations. NaiveMCMC
+    { iterations = int_ iterations
+    } in
+  let method = optMap mk _particles in
+  optMap2 (lam. lam x. x) (_methodFlag false "mcmc-naive") method

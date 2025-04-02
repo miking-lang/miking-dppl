@@ -5,7 +5,7 @@ include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/phase-stats.mc"
 
-lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats + InferenceInterface
+lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats + InferenceInterface + NaiveMCMCMethod
 
   ----------------
   -- NAIVE MCMC --
@@ -14,11 +14,11 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats + Infe
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : InferenceInterface -> Expr
-  sem compile =
+  sem compile : NaiveMCMCConfig -> InferenceInterface -> Expr
+  sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNormal () in
+    let t = x.extractNormal (lam x. x) in
     endPhaseStatsExpr log "extract-normal-one" t;
 
     -- Transform distributions to MExpr distributions
@@ -44,15 +44,13 @@ lang MExprPPLNaiveMCMC = MExprPPL + Resample + TransformDist + PhaseStats + Infe
     let i = withInfo t.info in
     i (appFromEnv runtime "updateWeight" [t.weight, i (nvar_ stateName)])
   | t -> t
-
-
-  ----------------------
-  -- NAIVE MCMC (CPS) --
-  ----------------------
-
-  -- TODO(dlunde,2022-08-22)
-
 end
 
-let compilerNaiveMCMC = lam options. use MExprPPLNaiveMCMC in
-  ("mcmc-naive/runtime.mc", compile)
+lang NaiveMCMCCompilerPicker = NaiveMCMCMethod
+  sem _cmpInferMethod = | (NaiveMCMC _, NaiveMCMC _) -> 0
+
+  sem pickRuntime = | NaiveMCMC _ -> ("mcmc-naive/runtime.mc", mapEmpty cmpString)
+
+  sem pickCompiler = | NaiveMCMC x ->
+    use MExprPPLNaiveMCMC in compile x
+end

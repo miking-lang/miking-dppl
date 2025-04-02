@@ -5,7 +5,7 @@ include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/phase-stats.mc"
 
-lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist + PhaseStats + InferenceInterface
+lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist + PhaseStats + InferenceInterface + TraceMCMCMethod
 
   ----------------
   -- TRACE MCMC --
@@ -14,11 +14,11 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist + PhaseStats + Infe
   -- NOTE(dlunde,2022-05-04): No way to distinguish between CorePPL and MExpr
   -- AST types here. Optimally, the type would be Options -> CorePPLExpr ->
   -- MExprExpr or similar.
-  sem compile : InferenceInterface -> Expr
-  sem compile =
+  sem compile : TraceMCMCConfig -> InferenceInterface -> Expr
+  sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNormal () in
+    let t = x.extractNormal (lam x. x) in
     endPhaseStatsExpr log "extract-normal-one" t;
 
     -- Transform distributions to MExpr distributions
@@ -48,15 +48,14 @@ lang MExprPPLTraceMCMC = MExprPPL + Resample + TransformDist + PhaseStats + Infe
     let i = withInfo t.info in
     i (appFromEnv runtime "updateWeight" [t.weight])
   | t -> t
-
-
-  ----------------------
-  -- TRACE MCMC (CPS) --
-  ----------------------
-
-  -- TODO(dlunde,2022-08-22)
-
 end
 
-let compilerTraceMCMC = lam options. use MExprPPLTraceMCMC in
-  ("mcmc-trace/runtime.mc", compile)
+lang TraceMCMCCompilerPicker = TraceMCMCMethod
+  -- NOTE(vipa, 2025-04-04): We always get the same runtimes, thus we
+  -- look at nothing here
+  sem _cmpInferMethod = | (TraceMCMC _, TraceMCMC _) -> 0
+
+  sem pickRuntime = | TraceMCMC _ -> ("mcmc-trace/runtime.mc", mapEmpty cmpString)
+
+  sem pickCompiler = | TraceMCMC x -> use MExprPPLTraceMCMC in compile x
+end
