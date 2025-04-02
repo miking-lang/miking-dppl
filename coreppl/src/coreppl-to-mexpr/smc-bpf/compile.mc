@@ -54,11 +54,11 @@ lang MExprPPLBPF =
 
   | t -> None ()
 
-  sem compile: InferenceInterface -> Expr
-  sem compile =
+  sem compile: BPFConfig -> InferenceInterface -> Expr
+  sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNoHigherOrderConsts () in
+    let t = x.extractNoHigherOrderConsts (lam x. x) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
@@ -67,9 +67,9 @@ lang MExprPPLBPF =
 
     -- Automatic resampling annotations
     let t =
-      match x.options.resample with "likelihood" then addResample (lam. true) t
-      else match x.options.resample with "manual" then t
-      else match x.options.resample with "align"  then
+      match config.resample with "likelihood" then addResample (lam. true) t
+      else match config.resample with "manual" then t
+      else match config.resample with "align"  then
 
         -- Do static analysis for stochastic value flow and alignment
         let unaligned: Set Name = extractUnaligned (alignCfa t) in
@@ -85,7 +85,7 @@ lang MExprPPLBPF =
     let t =
       let cEnd = _getConExn "End" x.runtime.env in
       let cont = (ulam_ "x" (nconapp_ cEnd (var_ "x"))) in
-      match x.options.cps with "partial" then
+      match config.cps with "partial" then
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = body } then
             match body with TmResample _ then true else false
@@ -94,10 +94,10 @@ lang MExprPPLBPF =
         in
         let checkPointNames: Set Name = extractCheckpoint (checkpointCfa checkpoint t) in
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
-      else match x.options.cps with "full" then
+      else match config.cps with "full" then
         cpsFullCont cont t
       else
-        error (join ["Invalid CPS option:", x.options.cps])
+        error (join ["Invalid CPS option:", config.cps])
     in
     endPhaseStatsExpr log "cps-one" t;
 
@@ -105,8 +105,11 @@ lang MExprPPLBPF =
     -- match pprintCode 0 env t with (env,str) in
     -- printLn (str);
 
-    let t = if x.options.prune then prune x.prune t else
-      if x.options.dynamicDelay then delayedSampling x.delay t else t in
+    let t = switch (mapLookup "prune" x.extraEnvs, mapLookup "delayed-sampling" x.extraEnvs)
+      case (Some pruneEnv, _) then prune pruneEnv t
+      case (_, Some delayEnv) then delayedSampling delayEnv t
+      case _ then t
+      end in
     -- Attempt to identify and stop at first assume to potentially reuse
     -- previous empirical distribution (see runtime)
     let t =
@@ -133,5 +136,24 @@ lang MExprPPLBPF =
 
 end
 
-let compilerBPF = lam options. use MExprPPLBPF in
-  ("smc-bpf/runtime.mc", compile)
+lang BPFCompilerPicker = BPFMethod
+  -- NOTE(vipa, 2025-04-02): The presence or absence of prune and
+  -- dynamic delay are the only things that change what runtimes we
+  -- fetch, thus we only check those in comparisons
+  sem _cmpInferMethod = | (BPF a, BPF b) ->
+    let res = cmpBool a.prune b.prune in
+    if neqi res 0 then res else
+    cmpBool a.dynamicDelay b.dynamicDelay
+
+  sem pickRuntime = | BPF x ->
+    let extras = mapEmpty cmpString in
+    let extras = if x.prune
+      then mapInsert "prune" "pruning/runtime.mc" extras
+      else extras in
+    let extras = if x.dynamicDelay
+      then mapInsert "delayed-sampling" "delayed-sampling/runtime.mc" extras
+      else extras in
+    ("smc-bpf/runtime.mc", extras)
+
+  sem pickCompiler = | BPF x -> use MExprPPLBPF in compile x
+end

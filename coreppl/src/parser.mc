@@ -61,13 +61,12 @@ lang DPPLParser =
     match _interpretMethod tm with (info, ident, bindings) in
     odeSolverMethodFromCon info bindings ident
 
-  sem replaceDefaultInferMethod : Options -> Expr -> Expr
-  sem replaceDefaultInferMethod options =
+  sem replaceDefaultInferMethod : InferMethod -> Expr -> Expr
+  sem replaceDefaultInferMethod inferMethod =
   | expr ->
     let mf = lam expr.
       match expr with TmInfer ({ method = Default d } & t) then
-        TmInfer { t with method = setRuns d.runs
-                          (inferMethodFromOptions options options.method) }
+        TmInfer { t with method = setRuns d.runs inferMethod }
       else expr
     in
     mapPre_Expr_Expr mf expr

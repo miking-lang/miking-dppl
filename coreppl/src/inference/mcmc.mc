@@ -1,19 +1,13 @@
-include "mlang/loader.mc"
+include "mlang/ast.mc"
+include "mlang/ast-builder.mc"
 include "../coreppl.mc"
 include "../dist.mc"
 
-lang AutoDriftKernelHook = MCoreLoader + Assume + DistAll
-  syn Hook =
-  | AutoDriftKernelHook {driftScale : Float}
-
-  sem _preSymbolize loader decl = | AutoDriftKernelHook hook ->
-    (loader, smap_Decl_Expr (generateKernels hook.driftScale) decl)
-
+lang AutoDriftKernel = Assume + DistAll + LetAsDecl
   sem generateKernels : Float -> Expr -> Expr
   sem generateKernels driftScale =
   | tm -> smap_Expr_Expr (generateKernels driftScale) tm
   | TmAssume (x & {driftKernel = None ()}) ->
-    warnSingle [x.info] "generateKernels assume without driftkernel";
     let dist = generateKernels driftScale x.dist in
     let res = chooseKernel driftScale dist in
     let assume = TmAssume {x with dist = res.distribution, driftKernel = Some res.driftKernelF} in

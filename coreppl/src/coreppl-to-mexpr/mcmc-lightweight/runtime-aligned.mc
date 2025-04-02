@@ -21,6 +21,7 @@ type State = {
   -- The weight of the current execution
   weight: Ref Float,
   --
+  useDriftKernels : Ref Bool,
   driftPrevValue: Ref (Any, Float),
   -- The Hasting ratio for the driftKernel call
   driftHastingRatio: Ref Float,
@@ -65,6 +66,7 @@ let countReuseUnaligned = ref 0
 -- State (reused throughout inference)
 let state: State = {
   weight = ref 0.,
+  useDriftKernels = ref false,
   driftPrevValue = ref ((), 0.),
   driftHastingRatio = ref 0.,
   prevWeightReused = ref 0.,
@@ -91,27 +93,26 @@ let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
 -- - we have access here to the driftScale parameter compileOptions.driftScale
 -- - modeled on reuseSample
 -- Call one time per run
-let moveSample: all a. use RuntimeDistBase in Dist a -> (Any, Float) =
-  lam dist.
+let moveSample: all a. use RuntimeDistBase in Dist a -> (a -> use RuntimeDistBase in Dist a) -> (Any, Float) =
+  lam dist. lam drift.
   use RuntimeDistElementary in
 
-  let prevSample = deref state.driftPrevValue in
-  let prev = prevSample.0 in
-  let drift = compileOptions.driftScale in
+  match deref state.driftPrevValue with (prev, prevWeight) in
+  let prev : a = unsafeCoerce prev in
 
-  let kernel = choseKernel dist (unsafeCoerce prev) drift in
+  let kernel = drift prev in
 
   let proposal = sample kernel in
 
-  let proposalPriorProb = logObserve dist (unsafeCoerce proposal) in
-  let reverseKernel = choseKernel dist (unsafeCoerce proposal) drift in
+  let proposalPriorProb = logObserve dist proposal in
+  let reverseKernel = drift proposal in
 
-  let prevToProposalProb = logObserve kernel (unsafeCoerce proposal) in
-  let proposalToPrevProb = logObserve reverseKernel (unsafeCoerce prev) in
+  let prevToProposalProb = logObserve kernel proposal in
+  let proposalToPrevProb = logObserve reverseKernel prev in
 
   modref state.driftHastingRatio (subf proposalToPrevProb prevToProposalProb);
   modref state.weightReused (addf (deref state.weightReused) proposalPriorProb);
-  modref state.prevWeightReused (addf (deref state.prevWeightReused) prevSample.1);
+  modref state.prevWeightReused (addf (deref state.prevWeightReused) prevWeight);
 
   (unsafeCoerce proposal, proposalPriorProb)
 
@@ -126,7 +127,7 @@ let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, F
     (sample, wNew)
 
 -- Procedure at aligned samples
-let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
+let sampleAligned: all a. use RuntimeDistBase in Dist a -> (a -> use RuntimeDistBase in Dist a) -> a = lam dist. lam drift.
   let oldAlignedTrace: [Option (Any,Float)] = deref state.oldAlignedTrace in
   let sample: (Any, Float) =
     match oldAlignedTrace with [sample] ++ oldAlignedTrace then
@@ -136,9 +137,9 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> a = lam dist.
         -- print "Aligned ";
         reuseSample dist sample w
       else
-        if compileOptions.driftKernel then
+        if deref state.useDriftKernels then
           -- printLn "Not reused!";
-          let res = moveSample dist in
+          let res = moveSample dist drift in
           modref state.driftPrevValue ((), 0.);
           res
         else
@@ -189,6 +190,7 @@ type Config a acc =
   { continue : (acc, acc -> a -> (acc, Bool))
   , keepSample : Int -> Bool
   , globalProb : Float
+  , driftKernel : Bool
   }
 
 -- Function to propose aligned trace changes between MH iterations.
@@ -293,6 +295,7 @@ let run : all a. all acc. Config a acc -> (State -> a) -> use RuntimeDistBase in
 
   -- Set aligned trace length (a constant, only modified here)
   modref state.alignedTraceLength (length (deref state.alignedTrace));
+  modref state.useDriftKernels config.driftKernel;
 
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in

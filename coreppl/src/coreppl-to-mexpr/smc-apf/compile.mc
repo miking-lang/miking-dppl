@@ -9,20 +9,20 @@ include "mexpr/phase-stats.mc"
 
 lang MExprPPLAPF =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
-  + SMCCommon + PhaseStats + InferenceInterface + DPPLPruning
+  + SMCCommon + PhaseStats + InferenceInterface + DPPLPruning + APFMethod
 
-  sem compile: InferenceInterface -> Expr
-  sem compile =
+  sem compile: APFConfig -> InferenceInterface -> Expr
+  sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNoHigherOrderConsts () in
+    let t = x.extractNoHigherOrderConsts (lam x. x) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- Automatic resampling annotations
     let t =
-      match x.options.resample with "likelihood" then addResample (lam. true) t
-      else match x.options.resample with "manual" then t
-      else match x.options.resample with "align"  then
+      match config.resample with "likelihood" then addResample (lam. true) t
+      else match config.resample with "manual" then t
+      else match config.resample with "align"  then
 
         -- Do static analysis for stochastic value flow and alignment
         let unaligned: Set Name = extractUnaligned (alignCfa t) in
@@ -38,7 +38,7 @@ lang MExprPPLAPF =
     let t =
       let nEnd = _getConExn "End" x.runtime.env in
       let cont = (ulam_ "x" (nconapp_ nEnd (var_ "x"))) in
-      match x.options.cps with "partial" then
+      match config.cps with "partial" then
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = body } then
             match body with TmResample _ then true else false
@@ -47,14 +47,16 @@ lang MExprPPLAPF =
         in
         let checkPointNames: Set Name = extractCheckpoint (checkpointCfa checkpoint t) in
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
-      else match x.options.cps with "full" then
+      else match config.cps with "full" then
         cpsFullCont cont t
       else
-        error (join ["Invalid CPS option:", x.options.cps])
+        error (join ["Invalid CPS option:", config.cps])
     in
     endPhaseStatsExpr log "cps-one" t;
 
-    let t = if x.options.prune then prune x.prune t else t in
+    let t = match mapLookup "prune" x.extraEnvs with Some pruneEnv
+      then prune pruneEnv t
+      else t in
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
@@ -64,5 +66,18 @@ lang MExprPPLAPF =
     t
 end
 
-let compilerAPF = lam options. use MExprPPLAPF in
-  ("smc-apf/runtime.mc", compile)
+lang APFCompilerPicker = APFMethod
+  -- NOTE(vipa, 2025-04-04): We fetch a prune runtime if pruning is
+  -- set, thus we only compare prune here
+  sem _cmpInferMethod = | (APF a, APF b) ->
+    cmpBool a.prune b.prune
+
+  sem pickRuntime = | APF x ->
+    let extras = mapEmpty cmpString in
+    let extras = if x.prune
+      then mapInsert "prune" "pruning/runtime.mc" extras
+      else extras in
+    ("smc-apf/runtime.mc", extras)
+
+  sem pickCompiler = | APF x -> use MExprPPLAPF in compile x
+end

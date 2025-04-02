@@ -8,19 +8,19 @@ include "mexpr/phase-stats.mc"
 
 lang MExprPPLPIMH =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA +
-  SMCCommon + PhaseStats + InferenceInterface
+  SMCCommon + PhaseStats + InferenceInterface + PIMHMethod
 
-  sem compile: InferenceInterface -> Expr
-  sem compile =
+  sem compile: PIMHConfig -> InferenceInterface -> Expr
+  sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNoHigherOrderConsts () in
+    let t = x.extractNoHigherOrderConsts (lam x. x) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
     -- Static analysis and CPS transformation
     let t =
       let cEnd = _getConExn "End" x.runtime.env in
       let cont = (ulam_ "x" (nconapp_ cEnd (var_ "x"))) in
-      match x.options.cps with "partial" then
+      match config.cps with "partial" then
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = body } then
             match body with TmResample _ then true else false
@@ -29,10 +29,10 @@ lang MExprPPLPIMH =
         in
         let checkPointNames: Set Name = extractCheckpoint (checkpointCfa checkpoint t) in
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
-      else match x.options.cps with "full" then
+      else match config.cps with "full" then
         cpsFullCont cont t
       else
-        error (join ["Invalid CPS option:", x.options.cps])
+        error (join ["Invalid CPS option:", config.cps])
     in
     endPhaseStatsExpr log "cps-one" t;
     -- Transform distributions to MExpr distributions
@@ -44,5 +44,12 @@ lang MExprPPLPIMH =
     t
 end
 
-let compilerPIMH = lam options. use MExprPPLPIMH in
-  ("pmcmc-pimh/runtime.mc", compile)
+lang PIMHCompilerPicker = PIMHMethod
+  -- NOTE(vipa, 2025-04-04): We fetch the same runtime no matter what,
+  -- thus we don't look at any fields here
+  sem _cmpInferMethod = | (PIMH _, PIMH _) -> 0
+
+  sem pickRuntime = | PIMH _ -> ("pmcmc-pimh/runtime.mc", mapEmpty cmpString)
+
+  sem pickCompiler = | PIMH x -> use MExprPPLPIMH in compile x
+end

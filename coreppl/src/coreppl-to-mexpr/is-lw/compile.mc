@@ -15,14 +15,18 @@ lang MExprPPLImportance =
   -- IMPORTANCE SAMPLING --
   -------------------------
 
-  sem compile : InferenceInterface -> Expr
-  sem compile =
+  sem compile : ImportanceConfig -> InferenceInterface -> Expr
+  sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNormal () in
+    let t = x.extractNormal (lam x. x) in
     endPhaseStatsExpr log "extract-normal-one" t;
 
-    let t = if x.options.prune then prune x.prune t else if x.options.dynamicDelay then delayedSampling x.delay t else t in
+    let t = switch (mapLookup "prune" x.extraEnvs, mapLookup "delayed-sampling" x.extraEnvs)
+      case (Some pruneEnv, _) then prune pruneEnv t
+      case (_, Some delayEnv) then delayedSampling delayEnv t
+      case _ then t
+      end in
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
@@ -138,11 +142,11 @@ lang MExprPPLImportance =
     errorSingle [infoTm tm] "Impossible in importance sampling with CPS"
   | t -> t
 
-  sem compileCps : InferenceInterface -> Expr
-  sem compileCps =
+  sem compileCps : ImportanceConfig -> InferenceInterface -> Expr
+  sem compileCps config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNoHigherOrderConsts () in
+    let t = x.extractNoHigherOrderConsts (lam x. x) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
@@ -159,7 +163,7 @@ lang MExprPPLImportance =
         let x = nameSym "x" in
         (nulam_ x (nconapp_ n (nvar_ x))) in
 
-      match x.options.cps with "partial" then
+      match config.cps with "partial" then
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = body } then
             match body with TmWeight _ | TmObserve _ then true else false
@@ -176,9 +180,9 @@ lang MExprPPLImportance =
 
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
 
-      else match x.options.cps with "full" then cpsFullCont cont t
+      else match config.cps with "full" then cpsFullCont cont t
 
-      else error ( join [ "Invalid CPS option:", x.options.cps ])
+      else error ( join [ "Invalid CPS option:", config.cps ])
 
     in
     endPhaseStatsExpr log "cps-one" t;
@@ -188,7 +192,7 @@ lang MExprPPLImportance =
     -- printLn ""; printLn "--- AFTER CPS ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
     -- printLn (str);
-    let t = if or x.options.prune x.options.dynamicDelay then error "Importance sampling with CPS does not support pruning or dynamic delayed sampling" else t in
+    let t = if or config.prune config.dynamicDelay then error "Importance sampling with CPS does not support pruning or dynamic delayed sampling" else t in
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
@@ -198,13 +202,33 @@ lang MExprPPLImportance =
     endPhaseStatsExpr log "transform-prob-cps-one" t;
 
     t
-
 end
 
-let compilerImportance = lam options. use MExprPPLImportance in
-  match options.cps with "partial" | "full" then
-    ("is-lw/runtime-cps.mc", compileCps)
-  else match options.cps with "none" then
-    ("is-lw/runtime.mc", compile)
-  else
-    error ( join [ "Unknown CPS option:", options.cps ])
+lang ImportanceCompilerPicker = ImportanceSamplingMethod
+  -- NOTE(vipa, 2025-04-04): Runtime selection only looks at
+  -- dynamicDelay and cps, thus we only compare those here
+  sem _cmpInferMethod = | (Importance a, Importance b) ->
+    let res = cmpBool a.prune b.prune in
+    if neqi res 0 then res else
+    let res = cmpBool a.dynamicDelay b.dynamicDelay in
+    if neqi res 0 then res else
+    cmpBool (eqString a.cps "none") (eqString b.cps "none")
+
+  sem pickRuntime = | Importance x ->
+    let extras = mapEmpty cmpString in
+    let extras = if x.prune
+      then mapInsert "prune" "pruning/runtime.mc" extras
+      else extras in
+    let extras = if x.dynamicDelay
+      then mapInsert "delayed-sampling" "delayed-sampling/runtime.mc" extras
+      else extras in
+    if eqString x.cps "none"
+    then ("is-lw/runtime.mc", extras)
+    else ("is-lw/runtime-cps.mc", extras)
+
+  sem pickCompiler = | Importance x ->
+    use MExprPPLImportance in
+    if eqString x.cps "none"
+    then compile x
+    else compileCps x
+end

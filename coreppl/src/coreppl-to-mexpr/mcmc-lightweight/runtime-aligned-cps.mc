@@ -11,7 +11,7 @@ include "../runtime-common.mc"
 include "../runtime-dists.mc"
 
 -- Any-type, used for traces
-type Any = ()
+type Any
 
 -- Type used to resume execution midway through a previous run using a
 -- continuation.
@@ -95,7 +95,6 @@ let newSample: all a. use RuntimeDistBase in Dist a -> (Any,Float) = lam dist.
   (unsafeCoerce s, w)
 
 -- Drift Kernel Function
--- - we have access here to the driftScale parameter compileOptions.driftScale
 -- - modeled on reuseSample
 -- Call one time per run
 let moveSample: all a. a -> Float -> (a -> use RuntimeDistBase in Dist a) -> use RuntimeDistBase in Dist a -> (Any, Float) =
@@ -251,7 +250,7 @@ let runNext: Unknown -> (State Result -> Result) -> Result =
 
             -- This is where we actually run the program
             -- printLn "A";
-            if compileOptions.driftKernel then
+            if config.driftKernel then
               sampleAlignedKernel s1.0 s1.1 cont.drift cont.dist cont.cont
             else
               sampleAlignedForceNew cont.drift cont.dist cont.cont

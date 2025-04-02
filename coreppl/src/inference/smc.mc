@@ -10,7 +10,7 @@ include "../coreppl.mc"
 include "../coreppl-to-mexpr/inference-interface.mc"
 
 -- Explicit resample inference annotation for SMC
-lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift + TypeCheck
+lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift + TypeCheck + AstToJson
 
   syn Expr =
   | TmResample { ty: Type, info: Info }
@@ -60,6 +60,13 @@ lang Resample = Ast + PrettyPrint + Eq + Sym + ANF + TypeLift + TypeCheck
     match typeLiftType env t.ty with (env, ty) then
       (env, TmResample { t with ty = ty })
     else never
+
+  sem exprToJson =
+  | TmResample x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmResample")
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
 end
 
 -----------------
