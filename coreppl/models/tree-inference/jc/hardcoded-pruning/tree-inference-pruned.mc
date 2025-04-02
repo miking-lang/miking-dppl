@@ -103,5 +103,5 @@ let model = lam.
   let q = matrixCreate [4,4] q in
   let dataLen = length data in
   let trees:[Tree] = buildForest data [] 0 dataLen seqLength in
-  weight (mulf (int2float (muli dataLen seqLength)) (log 0.25));
+  iter (lam l. iter (lam s. if eqi s 4 then () else weight (log 0.25)) l) data;
   cluster q trees 0.0 dataLen

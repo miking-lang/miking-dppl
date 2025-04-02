@@ -1016,9 +1016,11 @@ lang Cancel = Observe
 
   sem getValueCancel =
   | TmObserve t -> t.value
+  | t -> errorSingle [infoTm t] "Expected an observe application"
 
   sem getDistCancel =
   | TmObserve t -> t.dist
+  | t -> errorSingle [infoTm t] "Expected an observe application"
 
   sem exprToJson =
   | TmCancel x -> JsonObject (mapFromSeq cmpString

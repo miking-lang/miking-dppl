@@ -42,11 +42,11 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
       match child with Node n then
         let s = get n.seq i in
         observe (pruned s) (Categorical p1);
-        cancelObserve (pruned s) (Categorical [0.25,0.25,0.25,0.25])
+        cancel (observe (pruned s) (Categorical [0.25,0.25,0.25,0.25]))
       else match child with Leaf l in
         let s = get l.seq i in
         (if lti s 4 then observe s (Categorical p1) else ());
-        cancelObserve s (Categorical [0.25,0.25,0.25,0.25])
+        cancel (observe s (Categorical [0.25,0.25,0.25,0.25]))
     ) children qts
   ) seq;
   resample;

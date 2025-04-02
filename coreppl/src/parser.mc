@@ -206,8 +206,8 @@ lang DPPLParser =
   | "pruned" -> Some (1, lam lst. TmPruned {prune = get lst 0,
                                           ty = TyUnknown {info = info},
                                           info = info})
-  | "cancelObserve" -> Some (2, lam lst. TmCancel {dist = (get lst 1),
-                                          value = (get lst 0),
+  | "cancel" -> Some (1, lam lst. TmCancel {dist = getDistCancel (get lst 0),
+                                          value = getValueCancel (get lst 0),
                                           ty = TyUnknown {info = info},
                                           info = info})
   | "delay" -> Some (1, lam lst. TmDelay {dist = get lst 0,

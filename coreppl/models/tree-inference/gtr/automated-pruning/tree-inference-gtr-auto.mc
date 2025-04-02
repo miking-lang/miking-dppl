@@ -9,10 +9,10 @@ let slice = lam seq. lam beg. lam mend.
     subsequence seq beg (subi mend beg)
 
 let matrixGet = lam row. lam col. lam tensor.
-  tensorGetExn tensor [row, col] 
+  tensorGetExn tensor [row, col]
 
 let ctmc = lam i. lam qt:Tensor[Float]. --lam t:Float.
-  [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
+  [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt]
 
 let pickpair = lam n.
   let i = assume (UniformDiscrete 0 (subi n 1)) in
@@ -21,7 +21,7 @@ let pickpair = lam n.
 
 let iid = lam f. lam p. lam n.
   let params = make n p in
-  map f params 
+  map f params
 
 recursive
 let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
@@ -42,11 +42,11 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
       match child with Node n then
         let s = get n.seq i in
         observe (pruned s) (Categorical p1);
-        cancelObserve (pruned s) (Categorical [0.25,0.25,0.25,0.25])
+        cancel (observe (pruned s) (Categorical [0.25,0.25,0.25,0.25]))
       else match child with Leaf l in
         let s = get l.seq i in
         (if lti s 4 then observe s (Categorical p1) else ());
-        cancelObserve s (Categorical [0.25,0.25,0.25,0.25])
+        cancel (observe s (Categorical [0.25,0.25,0.25,0.25]))
     ) children qts
   ) seq;
   resample;
@@ -57,27 +57,27 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
   cluster q new_trees age seqLen (subi n 1)
 end
 
-let gtr = lam pi. lam ri. 
+let gtr = lam pi. lam ri.
   let p1r0 = (mulf (get pi 1) (get ri 0)) in
   let p2r1 = (mulf (get pi 2) (get ri 1)) in
   let p3r2 = (mulf (get pi 3) (get ri 2)) in
   let m11 = addf (addf p1r0 p2r1) p3r2 in
-  let scale1 = (mulf m11 (get pi 0)) in 
+  let scale1 = (mulf m11 (get pi 0)) in
   let p0r0 = (mulf (get pi 0) (get ri 0)) in
   let p2r3 = (mulf (get pi 2) (get ri 3)) in
   let p3r4 = (mulf (get pi 3) (get ri 4)) in
   let m22 = addf (addf p0r0 p2r3) p3r4 in
-  let scale2 = (mulf m22 (get pi 1)) in 
+  let scale2 = (mulf m22 (get pi 1)) in
   let p0r1 = (mulf (get pi 0) (get ri 1)) in
   let p1r3 = (mulf (get pi 1) (get ri 3)) in
   let p3r5 = (mulf (get pi 3) (get ri 5)) in
   let m33 = addf (addf p0r1 p1r3) p3r5 in
-  let scale3 = (mulf m33 (get pi 2)) in 
+  let scale3 = (mulf m33 (get pi 2)) in
   let p0r2 = (mulf (get pi 0) (get ri 2)) in
   let p1r4 = (mulf (get pi 1) (get ri 4)) in
   let p2r5 = (mulf (get pi 2) (get ri 5)) in
   let m44 = addf (addf p0r2 p1r4) p2r5 in
-  let scale4 = (mulf m44 (get pi 3)) in 
+  let scale4 = (mulf m44 (get pi 3)) in
   let scale = foldl addf scale1 [scale2,scale3,scale4] in
   let lst = map (lam e. divf e scale) [ negf m11, p1r0, p2r1, p3r2, p0r0, negf m22, p2r3, p3r4, p0r1, p1r3, negf m33,p3r5,p0r2,p1r4,p2r5,negf m44] in
   matrixCreate [4,4] lst
