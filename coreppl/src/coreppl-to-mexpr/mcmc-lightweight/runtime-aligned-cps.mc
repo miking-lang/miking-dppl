@@ -272,14 +272,11 @@ let runNext: Unknown -> (State Result -> Result) -> Result =
 let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
   lam config. lam model.
 
-  recursive let mh : [Float] -> [Result] -> Int -> ([Float], [Result]) =
-    lam weights. lam samples. lam iter.
-      if leqi iter 0 then (weights, samples)
-      else
+  recursive let mh : [Result] -> Float -> Result -> (Unknown, Bool) -> Int -> [Result] =
+    lam keptSamples. lam prevWeight. lam prevSample. lam continueState. lam iter.
+      match continueState with (continueState, true) then
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
-        let prevSample = head samples in
-        let prevWeight = head weights in
         let sample = runNext config model in
         -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
@@ -301,35 +298,28 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
         -- print "weightReused: "; printLn (float2string weightReused);
         -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
         -- printLn "-----";
-        let iter = subi iter 1 in
-        if bernoulliSample (exp logMhAcceptProb) then
-          mcmcAccept ();
-          mh
-            (cons weight weights)
-            (cons sample samples)
-            iter
-        else
+        match
+          if bernoulliSample (exp logMhAcceptProb) then
+            mcmcAccept ();
+            (weight, sample)
+          else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
           -- as we reject and reuse the old sample.
-          modref state.alignedTrace prevAlignedTrace;
-          modref state.unalignedTraces prevUnalignedTraces;
-          mh
-            (cons prevWeight weights)
-            (cons prevSample samples)
-            iter
+            modref state.alignedTrace prevAlignedTrace;
+            modref state.unalignedTraces prevUnalignedTraces;
+            (prevWeight, prevSample)
+        with (weight, sample) in
+        let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
+        mh keptSamples weight sample (config.continue.1 continueState sample) (addi iter 1)
+      else keptSamples
   in
 
-  let runs = config.iterations in
-
   -- Used to keep track of acceptance ratio
-  mcmcAcceptInit runs;
+  mcmcAcceptInit ();
 
   -- First sample
   let sample = model state in
-  -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
-  -- computing the MH acceptance ratio?
   let weight = deref state.weight in
-  let iter = subi runs 1 in
 
   -- Set aligned trace length (a constant, only modified here)
   modref state.alignedTraceLength (length (deref state.alignedTrace));
@@ -347,21 +337,19 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
     let res = [sample] in
     use RuntimeDist in
     constructDistEmpirical res [1.]
-      (EmpMCMC { acceptRate = mcmcAcceptRate () })
+      (EmpMCMC { acceptRate = mcmcAcceptRate 1 })
   else
 
-  -- Sample the rest
-  let res = mh [weight] [sample] iter in
+  let iter = 0 in
+  let samples = if config.keepSample iter then [sample] else [] in
 
-  -- Reverse to get the correct order
-  let res = match res with (weights,samples) in
-    (reverse weights, reverse samples)
-  in
+  -- Sample the rest
+  let samples = mh samples weight sample (config.continue.1 config.continue.0 sample) (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
 
-  -- Return
+  let numSamples = length samples in
   use RuntimeDist in
-  constructDistEmpirical res.1 (create runs (lam. 1.))
-    (EmpMCMC { acceptRate = mcmcAcceptRate () })
+  constructDistEmpirical samples (make numSamples 1.0)
+    (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})

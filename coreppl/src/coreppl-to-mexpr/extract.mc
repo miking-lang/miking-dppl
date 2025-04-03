@@ -90,7 +90,7 @@ lang DPPLExtract =
         inexpr = TmApp {
           lhs = TmApp {
             lhs = nvar_ runId,
-            rhs = withType (inferMethodConfigType t.info t.method) (inferMethodConfig t.info t.method),
+            rhs = inferMethodConfig t.info t.method,
             ty = tyunknown_,
             info = t.info},
           rhs = TmVar {ident = inferId, ty = t.ty, info = info, frozen = false},

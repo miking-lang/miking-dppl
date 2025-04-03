@@ -104,7 +104,7 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
     let runs = config.iterations in
 
     -- Used to keep track of acceptance ratio
-    mcmcAcceptInit runs;
+    mcmcAcceptInit ();
 
     -- First sample
     let sample = model state in
@@ -122,4 +122,4 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
   -- Return
   constructDistEmpirical res.1 (create runs (lam. 1.))
     -- TODO(dlunde,2022-10-20): Add normconst
-    (EmpMCMC { acceptRate = mcmcAcceptRate () })
+    (EmpMCMC { acceptRate = mcmcAcceptRate runs })

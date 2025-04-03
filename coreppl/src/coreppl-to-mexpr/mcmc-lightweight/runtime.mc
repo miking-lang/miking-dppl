@@ -110,8 +110,14 @@ let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam
   modref state.db (mapInsert addr sample (deref state.db));
   unsafeCoerce (sample.0)
 
+type ConfigType acc res =
+  { keepSample : Int -> Bool
+  , continue : (acc, acc -> res -> (acc, Bool))
+  , globalProb : Float
+  }
+
 -- Function to propose db changes between MH iterations.
-let modDb: Unknown -> () = lam config.
+let modDb: all acc. all res. ConfigType acc res -> () = lam config.
 
   let db = deref state.db in
 
@@ -136,18 +142,14 @@ let modDb: Unknown -> () = lam config.
          sample
       ) db)
 
-let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
+let run : all acc. all a. ConfigType acc a -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
-  use RuntimeDist in
 
-  recursive let mh : [Float] -> [a] -> Int -> ([Float], [a]) =
-    lam weights. lam samples. lam iter.
-      if leqi iter 0 then (weights, samples)
-      else
+  recursive let mh : [a] -> Float -> a -> (Unknown, Bool) -> Int -> [a] =
+    lam samples. lam prevWeight. lam prevSample. lam continueState. lam iter.
+      match continueState with (continueState, true) then
         let prevDb = deref state.db in
-        let prevSample = head samples in
         let prevTraceLength = deref state.traceLength in
-        let prevWeight = head weights in
         modDb config;
         modref state.weight 0.;
         modref state.weightReused 0.;
@@ -173,44 +175,37 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
         -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
         -- print "prevTraceLength: "; printLn (float2string (int2float prevTraceLength));
         -- print "traceLength: "; printLn (float2string (int2float traceLength));
-        let iter = subi iter 1 in
-        if bernoulliSample (exp logMhAcceptProb) then
-          mcmcAccept ();
-          mh
-            (cons weight weights)
-            (cons sample samples)
-            iter
-        else
+        match
+          if bernoulliSample (exp logMhAcceptProb) then
+            mcmcAccept ();
+            (weight, sample)
+          else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous database
           -- and trace length as we reject and reuse the old sample.
-          modref state.db prevDb;
-          modref state.traceLength prevTraceLength;
-          mh
-            (cons prevWeight weights)
-            (cons prevSample samples)
-            iter
+            modref state.db prevDb;
+            modref state.traceLength prevTraceLength;
+            (prevWeight, prevSample)
+        with (weight, sample) in
+        let samples = if config.keepSample iter then snoc samples sample else samples in
+        mh samples weight sample (config.continue.1 continueState sample) (addi iter 1)
+      else samples
   in
 
-  let runs = config.iterations in
-
   -- Used to keep track of acceptance ratio
-  mcmcAcceptInit runs;
+  mcmcAcceptInit ();
 
   -- First sample
   let sample = model state in
-  -- NOTE(dlunde,2022-08-22): Are the weights really meaningful beyond
-  -- computing the MH acceptance ratio?
   let weight = deref state.weight in
-  let iter = subi runs 1 in
+
+  let iter = 0 in
+  let samples = if config.keepSample iter then [sample] else [] in
 
   -- Sample the rest
-  let res = mh [weight] [sample] iter in
-
-  -- Reverse to get the correct order
-  let res = match res with (weights,samples) in
-    (reverse weights, reverse samples)
-  in
+  let samples = mh samples weight sample (config.continue.1 config.continue.0 sample) (addi iter 1) in
 
   -- Return
-  constructDistEmpirical res.1 (create runs (lam. 1.))
-    (EmpMCMC { acceptRate = mcmcAcceptRate () })
+  let numSamples = length samples in
+  use RuntimeDist in
+  constructDistEmpirical samples (make numSamples 1.)
+    (EmpMCMC { acceptRate = mcmcAcceptRate numSamples })

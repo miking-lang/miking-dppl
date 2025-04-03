@@ -27,11 +27,7 @@ lang ImportanceSamplingMethod = MExprPPL
   | Importance {particles = particles} ->
     fieldsToRecord info [("particles", particles)]
 
-  sem inferMethodConfigType info =
-  | Importance _ ->
-    tyRecord info [("particles", ityint_ info)]
-
-  sem typeCheckInferMethod env info =
+  sem typeCheckInferMethod env info sampleType =
   | Importance {particles = particles} ->
     let int = TyInt {info = info} in
     let particles = typeCheckExpr env particles in

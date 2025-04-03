@@ -140,7 +140,7 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> use RuntimeDistBase in Di
   let runs = config.iterations in
 
   -- Used to keep track of acceptance ratio
-  mcmcAcceptInit runs;
+  mcmcAcceptInit ();
 
   -- Initial sample
   match runSMC () with (weights, samples) in
@@ -171,4 +171,4 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> use RuntimeDistBase in Di
 
   -- Return
   constructDistEmpirical samples weights
-    (EmpMCMC { acceptRate = mcmcAcceptRate () })
+    (EmpMCMC { acceptRate = mcmcAcceptRate runs })
