@@ -29,9 +29,6 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
   | TmLet ({body = TmPruned p} & t) ->
     let prunedEnv = setInsert t.ident envs.prunedEnv in
     createDistParam {envs with prunedEnv=prunedEnv} t.inexpr
- /-| TmLet ({body = TmSeq p} & t) -> --check the type not whether seq or not
-      let distParamEnv = mapInsert t.ident (SeqFParam ()) envs.distParamEnv in
-      createDistParam {envs with distParamEnv=distParamEnv} t.inexpr-/
   | TmLet ({body=TmApp {lhs=TmVar v1, rhs=TmVar v2}}&t) ->
     if setMem v2.ident envs.prunedEnv then 
       let distParamEnv = mapInsert t.ident (PruneFParam ()) envs.distParamEnv in
