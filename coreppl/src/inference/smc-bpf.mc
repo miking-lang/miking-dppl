@@ -27,11 +27,7 @@ lang BPFMethod = MExprPPL
   | BPF {particles = particles} ->
     fieldsToRecord info [("particles", particles)]
 
-  sem inferMethodConfigType info =
-  | BPF _ ->
-    tyRecord info [("particles", ityint_ info)]
-
-  sem typeCheckInferMethod env info =
+  sem typeCheckInferMethod env info sampleType =
   | BPF {particles = particles} ->
     let int = TyInt {info = info} in
     let particles = typeCheckExpr env particles in
