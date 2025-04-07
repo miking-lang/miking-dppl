@@ -29,9 +29,9 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
   | TmLet ({body = TmPruned p} & t) ->
     let prunedEnv = setInsert t.ident envs.prunedEnv in
     createDistParam {envs with prunedEnv=prunedEnv} t.inexpr
-  | TmLet ({body = TmSeq p} & t) ->
+ /-| TmLet ({body = TmSeq p} & t) -> --check the type not whether seq or not
       let distParamEnv = mapInsert t.ident (SeqFParam ()) envs.distParamEnv in
-      createDistParam {envs with distParamEnv=distParamEnv} t.inexpr
+      createDistParam {envs with distParamEnv=distParamEnv} t.inexpr-/
   | TmLet ({body=TmApp {lhs=TmVar v1, rhs=TmVar v2}}&t) ->
     if setMem v2.ident envs.prunedEnv then 
       let distParamEnv = mapInsert t.ident (PruneFParam ()) envs.distParamEnv in
@@ -66,7 +66,7 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
   sem extractParam env runtimeEnv =
   | TmVar ({ident=id}&v) ->
     match mapLookup id env.distEnv with Some (TmDist ({dist=DCategorical ({p=p}&d)}&t)) in
-    match assignCons env.paramEnv runtimeEnv p with Some x then x else (conapp_ "PruneGraph_SeqFParam" p)
+    match assignCons env.paramEnv runtimeEnv p with Some x then x else (nconapp_ (_getConExn "PruneGraph_SeqFParam" runtimeEnv.env) p)
 
   sem assignValueCons env runtimeEnv =
   | TmVar v ->
@@ -93,7 +93,6 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
 
   sem assignConsH env t =
   | PruneFParam _ -> nconapp_ (_getConExn "PruneGraph_PruneFParam" env) t
-  | SeqFParam _ -> nconapp_ (_getConExn "PruneGraph_SeqFParam" env) t
 
 end
 
