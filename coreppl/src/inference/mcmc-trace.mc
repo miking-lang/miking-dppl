@@ -1,11 +1,11 @@
-include "../coreppl.mc"
-include "../dppl-arg.mc"
+include "../infer-method.mc"
 
-lang TraceMCMCMethod = MExprPPL
-  syn InferMethod =
-  | TraceMCMC {
-      iterations : Expr -- Type Int
+lang TraceMCMCMethod = InferMethodBase
+  type TraceMCMCConfig =
+    { iterations : Expr -- : Int
     }
+  syn InferMethod =
+  | TraceMCMC TraceMCMCConfig
 
   sem pprintInferMethod indent env =
   | TraceMCMC t ->
@@ -16,18 +16,10 @@ lang TraceMCMCMethod = MExprPPL
   sem inferMethodFromCon info bindings =
   | methodStr & "TraceMCMC" ->
     let expectedFields = [
-      ("iterations", int_ defaultArgs.particles)
+      ("iterations", int_ _particlesDefault)
     ] in
     match getFields info bindings expectedFields with [iterations] in
     TraceMCMC { iterations = iterations }
-
-  sem inferMethodFromOptions options =
-  | "mcmc-trace" ->
-    TraceMCMC {
-      -- Reusing particles option for now for iterations, maybe we need a
-      -- better name
-      iterations = int_ options.particles
-    }
 
   sem inferMethodConfig info =
   | TraceMCMC t ->
@@ -51,5 +43,12 @@ lang TraceMCMCMethod = MExprPPL
 
   sem setRuns expr =
   | TraceMCMC r -> TraceMCMC {r with iterations = expr}
-
 end
+
+let mcmcTraceOptions : OptParser (use TraceMCMCMethod in InferMethod) =
+  use TraceMCMCMethod in
+  let mk = lam iterations. TraceMCMC
+    { iterations = int_ iterations
+    } in
+  let method = optMap mk _particles in
+  optMap2 (lam. lam x. x) (_methodFlag false "mcmc-trace") method

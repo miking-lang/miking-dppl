@@ -11,13 +11,14 @@ lang InferenceInterface = Sym + SymGetters
     }
 
   type InferenceInterface =
-    { options : Options
+    { options : TransformationOptions
     , runtime : InferenceSymEnv
     , dists : InferenceSymEnv
-    , prune : InferenceSymEnv
-    , delay: InferenceSymEnv
-    , extractNormal : () -> Expr
-    , extractNoHigherOrderConsts : () -> Expr
+    , extraEnvs : Map String InferenceSymEnv
+    -- NOTE(vipa, 2025-04-09): These take a function to run on the
+    -- *entire* AST before extracting the model-relevant code
+    , extractNormal : (Expr -> Expr) -> Expr
+    , extractNoHigherOrderConsts : (Expr -> Expr) -> Expr
     , stateName : Name
     }
 

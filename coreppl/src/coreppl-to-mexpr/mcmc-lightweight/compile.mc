@@ -5,6 +5,7 @@ include "mexpr/cps.mc"
 include "../dists.mc"
 include "../inference-interface.mc"
 include "../../inference/smc.mc"
+include "../../inference/mcmc.mc"
 include "../../cfa.mc"
 include "../../dppl-arg.mc"
 include "mexpr/ast-builder.mc"
@@ -19,17 +20,19 @@ let uniqueSym = lam.
   modref sym (addi s 1);
   s
 
-lang MExprPPLLightweightMCMC =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + MExprArity + PhaseStats + InferenceInterface
+lang MExprPPLLightweightMCMC
+  = MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll
+  + MExprPPLCFA + MExprArity + PhaseStats + InferenceInterface
+  + AutoDriftKernel + LightweightMCMCMethod
 
   -------------------------
   -- STATIC ALIGNED MCMC --
   -------------------------
-  sem compileAligned : InferenceInterface -> Expr
-  sem compileAligned =
+  sem compileAligned : LightweightMCMCConfig -> InferenceInterface -> Expr
+  sem compileAligned config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNormal () in
+    let t = x.extractNormal (generateKernels config.driftScale) in
     endPhaseStatsExpr log "extract-normal-one" t;
 
     -- Alignment analysis
@@ -55,7 +58,9 @@ lang MExprPPLLightweightMCMC =
       if setMem ident unalignedNames then
         i (appFromEnv env "sampleUnaligned" [i (int_ (uniqueSym ())), t.dist])
       else
-        i (appFromEnv env "sampleAligned" [t.dist])
+        match t.driftKernel with Some dk
+        then i (appFromEnv env "sampleAligned" [t.dist, dk])
+        else errorSingle [t.info] "Missing drift kernel on an aligned assume"
     }
 
   | TmObserve t ->
@@ -74,11 +79,11 @@ lang MExprPPLLightweightMCMC =
   ------------------------------------------
   -- DYNAMIC ("LIGHTWEIGHT") ALIGNED MCMC --
   ------------------------------------------
-  sem compile : InferenceInterface -> Expr
-  sem compile =
+  sem compile : LightweightMCMCConfig -> InferenceInterface -> Expr
+  sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNoHigherOrderConsts () in
+    let t = x.extractNoHigherOrderConsts (lam x. x) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- Addressing transform combined with CorePPL->MExpr transform
@@ -287,7 +292,7 @@ lang MExprPPLLightweightMCMC =
   -- Extension to Expr specific for this compiler. Used to track
   -- unaligned/aligned assumes in CPS.
   syn Expr =
-  | TmAssumeUnaligned { dist: Expr, ty: Type, info: Info }
+  | TmAssumeUnaligned { dist: Expr, ty: Type, info: Info, driftKernel: Option Expr }
 
   sem tyTm =
   | TmAssumeUnaligned x -> x.ty
@@ -302,7 +307,8 @@ lang MExprPPLLightweightMCMC =
   sem smapAccumL_Expr_Expr f acc =
   | TmAssumeUnaligned x ->
     match f acc x.dist with (acc, dist) in
-    (acc, TmAssumeUnaligned {x with dist = dist})
+    match optionMapAccum f acc x.driftKernel with (acc, driftKernel) in
+    (acc, TmAssumeUnaligned {x with dist = dist, driftKernel = driftKernel})
 
 
   sem exprCps env k =
@@ -364,17 +370,32 @@ lang MExprPPLLightweightMCMC =
   | t -> t
 
   -- Compile CorePPL constructs to MExpr
-  sem transformPostAlignedCps env runtime =
+  sem transformPostAlignedCps cpsDriftKernel env runtime =
   | TmAssumeUnaligned t ->
     let i = withInfo t.info in
     i (appFromEnv runtime "sampleUnaligned" [i (int_ (uniqueSym ())), t.dist])
   | TmApp
     { lhs = TmApp
-      { lhs = TmAssume assume
+      { lhs = TmAssume {driftKernel = None (), info = info}
       , rhs = dist
       },
       rhs = k
-    } -> appFromEnv runtime "sampleAligned" [transformPostAlignedCps env runtime dist, transformPostAlignedCps env runtime k]
+    } ->
+      errorSingle [info] "For now you need an explicit drift kernel for aligned assumes"
+  | TmApp
+    { lhs = TmApp
+      { lhs = TmAssume {driftKernel = Some driftKernel}
+      , rhs = dist
+      },
+      rhs = k
+    } ->
+      -- NOTE(vipa, 2025-03-10): The runtime expects a non-cps form
+      -- function, which we can achieve by applying to the identity
+      -- function
+      let dk = if cpsDriftKernel
+        then app_ (transformPostAlignedCps cpsDriftKernel env runtime driftKernel) (ulam_ "x" (var_ "x"))
+        else transformPostAlignedCps cpsDriftKernel env runtime driftKernel in
+      appFromEnv runtime "sampleAligned" [dk, transformPostAlignedCps cpsDriftKernel env runtime dist, transformPostAlignedCps cpsDriftKernel env runtime k]
   | TmAssume r -> errorSingle [r.info] "Some TmAssume's were not replaced in CPS"
   | TmObserve t ->
     let i = withInfo t.info in
@@ -389,11 +410,11 @@ lang MExprPPLLightweightMCMC =
 
   | t -> t
 
-  sem compileAlignedCps : InferenceInterface -> Expr
-  sem compileAlignedCps =
+  sem compileAlignedCps : LightweightMCMCConfig -> InferenceInterface -> Expr
+  sem compileAlignedCps config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases in
-    let t = x.extractNoHigherOrderConsts () in
+    let t = x.extractNoHigherOrderConsts (generateKernels config.driftScale) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
@@ -414,7 +435,7 @@ lang MExprPPLLightweightMCMC =
 
       let cont = (ulam_ "x" (var_ "x")) in
 
-      match x.options.cps with "partial" then
+      match config.cps with "partial" then
         -- Partial checkpoint/suspension analysis
         let checkpoint = lam t.
           match t with TmLet { ident = ident, body = TmAssume _ } then
@@ -431,17 +452,17 @@ lang MExprPPLLightweightMCMC =
         let t = mapPre_Expr_Expr (transformPreAlignedCps unalignedNames) t in
         cpsPartialCont (lam n. setMem n checkPointNames) cont t
 
-      else match x.options.cps with "full" then
+      else match config.cps with "full" then
         let t = mapPre_Expr_Expr (transformPreAlignedCps unalignedNames) t in
         cpsFullCont cont t
 
-      else error ( join [ "Invalid CPS option:", x.options.cps ])
+      else error ( join [ "Invalid CPS option:", config.cps ])
 
     in
     endPhaseStatsExpr log "cps-one" t;
 
     -- Transform samples, observes, and weights to MExpr
-    let t = mapPre_Expr_Expr (transformPostAlignedCps x.dists x.runtime) t in
+    let t = mapPre_Expr_Expr (transformPostAlignedCps (eqString config.cps "full") x.dists x.runtime) t in
     endPhaseStatsExpr log "transform-post-aligned-one" t;
 
     -- Transform distributions to MExpr distributions
@@ -458,23 +479,24 @@ lang MExprPPLLightweightMCMC =
 
 end
 
-let compilerLightweightMCMC = lam options. use MExprPPLLightweightMCMC in
+lang LightweightMCMCCompilerPicker = LightweightMCMCMethod
+  -- NOTE(vipa, 2025-04-04): We pick runtime based on alignment and
+  -- cps, thus we only examine those fields here
+  sem _cmpInferMethod = | (LightweightMCMC a, LightweightMCMC b) ->
+    let res = cmpBool a.align b.align in
+    if neqi res 0 then res else
+    cmpBool (eqString "none" a.cps) (eqString "none" b.cps)
 
-  -- Check that options are within the proper range
-  let gProb = options.mcmcLightweightGlobalProb in
-  (if or (ltf gProb 0.0) (gtf gProb 1.0) then
-  error "--mcmc-lw-gprob must be between 0.0 and 1.0"
-  else ());
+  sem pickRuntime =
+  | LightweightMCMC {align = true, cps = !"none"} -> ("mcmc-lightweight/runtime-aligned-cps.mc", mapEmpty cmpString)
+  | LightweightMCMC {align = true, cps = "none"} -> ("mcmc-lightweight/runtime-aligned.mc", mapEmpty cmpString)
+  | LightweightMCMC {align = false} -> ("mcmc-lightweight/runtime.mc", mapEmpty cmpString)
 
-  switch (options.align, options.cps)
-    case (true,"none") then
-      ("mcmc-lightweight/runtime-aligned.mc", compileAligned)
-    case (true,_) then
-      ("mcmc-lightweight/runtime-aligned-cps.mc", compileAlignedCps)
-    case (false,"none") then
-      ("mcmc-lightweight/runtime.mc", compile)
-    case (false,_) then
-      -- TODO(2023-05-17,dlunde): Currently the same as non-CPS. Switch to
-      -- CPS-version when implemented.
-      ("mcmc-lightweight/runtime.mc", compile)
-  end
+  sem pickCompiler = | LightweightMCMC x ->
+    use MExprPPLLightweightMCMC in
+    switch (x.align, x.cps)
+    case (true, !"none") then compileAlignedCps x
+    case (true, "none") then compileAligned x
+    case (false, _) then compile x
+    end
+end
