@@ -114,4 +114,4 @@ let model = lam.
   let dataLen = length data in
   let trees:[Tree] = buildForest data [] 0 dataLen seqLength in
   iter (lam l. iter (lam s. if eqi s 4 then () else weight (log (get pi s))) l) data;
-  cluster q trees 0.0 (length trees) pi
+  cluster q trees 0.0 seqLength (length trees) pi
