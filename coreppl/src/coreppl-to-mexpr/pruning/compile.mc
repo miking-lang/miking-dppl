@@ -124,7 +124,6 @@ lang DPPLPruningTransform = TransformPruningDist
   sem checkValidPrune env =
   | TmPrune p ->
     match p.dist with TmVar v in
-    -- this is too conservative (if .. then Categorical else Categorical wouldnt pass) 
     match mapLookup v.ident env.distEnv with Some (TmDist {dist=DCategorical {p=p}}) in
     match p with TmVar v in
     match mapLookup v.ident env.prunedFEnv with Some _ then
@@ -132,8 +131,6 @@ lang DPPLPruningTransform = TransformPruningDist
     else p
 
   sem prunedCases env runtimeEnv tmApp =
-  -- let branchL = mulf a (pruned x)
-  -- let p = ctmc site branchL
   | (Some (lamExpr,prune1), Some (body,prune2)) ->
     error "TODO:Pruned variable shouldn't be applied as an argument anywhere than to a distribution"
   | (Some (lamExpr,prune), None ()) ->
