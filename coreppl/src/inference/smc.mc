@@ -153,6 +153,10 @@ lang SMCCommon = MExprPPL + Resample + MExprCPS + InferenceInterface
   | TmWeight t ->
     let i = withInfo t.info in
     i (appFromEnv runtime "updateWeight" [t.weight, i (nvar_ stateName)])
+  | TmCancel t ->
+    let i = withInfo t.info in
+    let weight = i (appFromEnv env "logObserve" [t.dist, t.value]) in
+    i (appFromEnv runtime "updateWeight" [negf_ weight, i (nvar_ stateName)])
   | t -> t
 end
 

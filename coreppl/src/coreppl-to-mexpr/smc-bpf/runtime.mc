@@ -30,6 +30,7 @@ let run : all a. all b. Unknown
 
   let particleCount = config.particles in
   let logParticleCount = log (int2float particleCount) in
+  let resampleFrac = config.resampleFrac in
 
   let state = ref 0. in
   type Stop a = { weight: Float, checkpoint: Checkpoint a } in
@@ -62,7 +63,7 @@ let run : all a. all b. Unknown
       let expWeights = reverse (mapReverse (lam p. exp (subf p.weight maxWeight)) particles) in
       let sums = foldl (lam acc. lam w. (addf acc.0 w, addf acc.1 (mulf w w))) (0., 0.) expWeights in
       let ess = divf (mulf sums.0 sums.0) sums.1 in
-      if ltf (mulf 0.7 (int2float particleCount)) ess then
+      if ltf (mulf resampleFrac (int2float particleCount)) ess then
         let particles = mapReverse (lam p. propagate p p.weight) particles in
         runRec particles
       else

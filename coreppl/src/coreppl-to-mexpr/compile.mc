@@ -49,6 +49,7 @@ lang DPPLKeywordReplace = DPPLParser
   | TmObserve t -> _makeError t.info "observe"
   | TmWeight t -> _makeError t.info "weight"
   | TmResample t -> _makeError t.info "resample"
+  | TmCancel t -> _makeError t.info "cancel"
   | t -> smap_Expr_Expr replaceDpplKeywords t
 end
 
@@ -91,10 +92,8 @@ end
 
 lang DPPLPrunedReplace = DPPLKeywordReplace + SymGetters
   sem replaceCancel env =
-  | (TmCancel t) ->
+  | (TmCancel t) -> 
     let i = withInfo t.info in
-    let  _name = lam env. lam str. env.s2n str in
-
     TmWeight { weight = negf_ (appf2_ (withInfo t.info (nvar_ (_getVarExn "logObserve" env)))
  t.dist t.value),
                info = t.info,
@@ -103,8 +102,7 @@ lang DPPLPrunedReplace = DPPLKeywordReplace + SymGetters
 
   sem replacePrune =
   | TmPrune t -> assume_ t.dist
-  | TmPruned t -> match t.prune with TmVar v then t.prune
-    else match t.prune with TmPrune t then assume_ t.dist else t.prune
+  | TmPruned t -> t.prune
   | t -> smap_Expr_Expr replacePrune t
 
   sem replacePruneTypes env options =
@@ -494,7 +492,6 @@ lang CPPLLoader
     endPhaseStatsExpr log "extract-infer" ast;
     let models = compileModels options lamliftSols envs runtimes models in
     let ast = mapPre_Expr_Expr (transformTmDist {env = envs.distEnv, lamliftSols = lamliftSols}) ast in
-    let ast = replaceCancel envs.distEnv ast in
     let ast = replacePrune ast in
     let ast = replacePruneTypes envs.pruneEnv options ast in
     let ast = replaceDelayKeywords ast in
