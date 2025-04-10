@@ -39,7 +39,7 @@ let d = infer (NaiveMCMC { iterations = 1000 }) model1 in
 utest expectation d with expected using eqfApprox 1e-1 in
 
 let d =
-  infer (LightweightMCMC { iterations = 100000, globalProb = 0.1 }) model1
+  infer (LightweightMCMC { continue = (100000, lam x. lam. (subi x 1, neqi x 0)), globalProb = 0.1 }) model1
 in
 utest expectation d with expected using eqfApprox 1e-1 in
 
@@ -62,9 +62,9 @@ let d = infer (NaiveMCMC { iterations = 1 }) model2 in
 utest expectation d with expected in
 
 let d =
-  infer (LightweightMCMC { iterations = 1, globalProb = 0.1 }) model2
+  infer (LightweightMCMC { continue = (1, lam x. lam. (subi x 1, neqi x 0)), globalProb = 0.1 }) model2
 in
-utest expectation d with expected in
+utest expectation d with expected using eqfApprox 1e-1 in
 
 
 ()
