@@ -177,10 +177,10 @@ lang Infer =
   sem typeCheckExpr (env : TCEnv) =
   | TmInfer t ->
     let model = typeCheckExpr env t.model in
-    let method = typeCheckInferMethod env t.info t.method in
     let tyRes = newvar env.currentLvl t.info in
     unify env [infoTm model]
       (ityarrow_ t.info (tyWithInfo t.info tyunit_) tyRes) (tyTm model);
+    let method = typeCheckInferMethod env t.info tyRes t.method in
     TmInfer { t with model = model, method = method,
                      ty = TyDist {info = t.info, ty = tyRes} }
 

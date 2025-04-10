@@ -1,5 +1,6 @@
 include "mexpr/info.mc"
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 include "error.mc"
 include "seq.mc"
 include "set.mc"
@@ -48,10 +49,6 @@ lang MethodHelper = MExprAst
   -- Converts the provided sequence of string-expression tuples to a record
   -- expression, which is later passed to the runtime.
   sem fieldsToRecord : Info -> [(String, Expr)] -> Expr
-  sem fieldsToRecord info =
-  | fields ->
-    let bindings =
-      mapFromSeq cmpSID
-        (map (lam f. match f with (str, e) in (stringToSid str, e)) fields) in
-    TmRecord {bindings = bindings, ty = TyUnknown {info = info}, info = info}
+  sem fieldsToRecord info = | fields ->
+    withInfo info (autoty_record_ fields)
 end

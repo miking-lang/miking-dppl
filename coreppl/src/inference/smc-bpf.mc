@@ -35,14 +35,8 @@ lang BPFMethod = MExprPPL
       ("resampleFrac", resampleFrac)
     ]
 
-  sem inferMethodConfigType info =
-  | BPF _ ->
-    tyRecord info [
-      ("particles", ityint_ info),
-      ("resampleFrac", ityfloat_ info)
-    ]
 
-  sem typeCheckInferMethod env info =
+  sem typeCheckInferMethod env info sampleType =
   | BPF {particles = particles, resampleFrac = resampleFrac} ->
     let int = TyInt {info = info} in
     let float = TyFloat {info = info} in

@@ -27,11 +27,7 @@ lang APFMethod = MExprPPL
   | APF {particles = particles} ->
     fieldsToRecord info [("particles", particles)]
 
-  sem inferMethodConfigType info =
-  | APF _ ->
-    tyRecord info [("particles", ityint_ info)]
-
-  sem typeCheckInferMethod env info =
+  sem typeCheckInferMethod env info sampleType =
   | APF {particles = particles} ->
     let int = TyInt {info = info} in
     let particles = typeCheckExpr env particles in
