@@ -1,4 +1,4 @@
-include "../../data/primates.mc"
+include "../../data/M336.mc"
 include "tree-inference-gtr.mc"
 
 mexpr

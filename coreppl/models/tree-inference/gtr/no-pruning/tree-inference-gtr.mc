@@ -45,8 +45,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
         cancel (observe s (Categorical pi))
       else match child with Leaf l in
         let s = get l.seq i in
-        (if lti s 4 then observe s (Categorical p1) else ());
-        cancel (observe s (Categorical pi))
+        (if lti s 4 then observe s (Categorical p1); cancel (observe s (Categorical pi)) else ())
     ) children qts
   ) seq;
   resample;

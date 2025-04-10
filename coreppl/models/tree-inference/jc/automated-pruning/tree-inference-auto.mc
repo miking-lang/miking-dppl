@@ -45,8 +45,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
         cancel (observe (pruned s) (Categorical [0.25,0.25,0.25,0.25]))
       else match child with Leaf l in
         let s = get l.seq i in
-        (if lti s 4 then observe s (Categorical p1) else ());
-        cancel (observe s (Categorical [0.25,0.25,0.25,0.25]))
+        (if lti s 4 then observe s (Categorical p1); cancel (observe s (Categorical [0.25,0.25,0.25,0.25])) else ())
     ) children qts
   ) seq;
   resample;
@@ -63,5 +62,5 @@ let model = lam.
    divf 1. 3., divf 1. 3.,negf 1., divf 1. 3.,
    divf 1. 3., divf 1. 3., divf 1. 3., negf 1.] in
   let q = matrixCreate [4,4] q in
-  weight (mulf (int2float (muli (length trees) seqLength)) (log 0.25));
+  iter (lam l. match l with Leaf l in iter (lam s. if eqi s 4 then () else weight (log 0.25)) l.seq) trees;
   cluster q trees 0.0 seqLength (length trees)
