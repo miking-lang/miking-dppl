@@ -1,6 +1,7 @@
 include "matrix.mc"
 include "ext/matrix-ext.mc"
 include "ext/dist-ext.mc"
+include "../../helper/helper.mc"
 
 con Node : {age: Float, msg: [[Float]], left: Tree, right: Tree} -> Tree
 let getAge = lam n. match n with Node r then r.age else match n with Leaf r then r.age else never
@@ -33,9 +34,6 @@ let getLogLikes = lam msg.
   let like = foldl (lam acc. lam x. addf acc (mulf x 0.25)) 0. msg in
   log like
 
-let sapply = lam x. lam f.
-  map f x
-
 let ctmc = lam i. lam qt:Tensor[Float]. 
   [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
 
@@ -60,20 +58,22 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
   let t = assume (Exponential 10.0) in
   let age = addf t maxAge in
   let qts = map (lam c. matrixExponential (matrixMulFloat (subf age (getAge c)) q)) children in
+  let ps = map (lam qt. map (lam i. ctmc i qt) [0,1,2,3]) qts in
 
-  let node_msg = mapi (lam i. lam site.
-    let childMsgs = zipWith (lam child. lam qt.
-      let msg = get (getMsg child) i in
-      let p1 = map (lam i. ctmc i qt) [0,1,2,3] in
+  let msgs = reverse (zipAll (map getMsg children)) in
+  let node_msg = mapIndex (lam i.
+    let msg = get msgs i in
+    let childMsgs = zipWithIndex (lam j. lam child. lam p1.
+      let msg = get msg j in
       let in_msg = map (lam p. let t = foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p msg in t) p1 in
       let log_likes = getLogLikes msg in
       weight (negf (log_likes)); in_msg
-    ) children qts in
+    ) children ps in
     let node_msg = foldl (lam acc. lam m. zipWith (lam lm. lam rm. mulf lm rm) acc m) (head childMsgs) (tail childMsgs) in
     let log_likes = getLogLikes node_msg in
     weight (log_likes);
     node_msg
-  ) (make seqLen 0) in
+  ) seqLen in
   resample;
   let parent = Node {age=age, msg = node_msg,left = leftChild, right = rightChild} in
   let min = mini pairs.0 pairs.1 in
