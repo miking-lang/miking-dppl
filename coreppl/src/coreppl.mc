@@ -923,7 +923,6 @@ lang Cancel = Observe
   | TmCancel t ->
     match f acc t.value with (acc,value) in
     match f acc t.dist with (acc,dist) in
-
     (acc, TmCancel {{ t with value = value } with dist = dist})
 
   sem isAtomic =
@@ -932,13 +931,9 @@ lang Cancel = Observe
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmCancel t ->
     let i = pprintIncr indent in
-    match
-      pprintCode i env
-        (TmObserve {dist=t.dist,value=t.value,ty=t.ty,info=t.info})
-      with (env,args)
-    then
-      (env, join ["cancel", pprintNewline i,
-       "(", args ,")"])
+    match pprintCode i env
+      (TmObserve {dist=t.dist,value=t.value,ty=t.ty,info=t.info}) with (env,args)
+    then (env, join ["cancel", pprintNewline i, "(", args ,")"])
     else never
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -1021,9 +1016,11 @@ lang Cancel = Observe
 
   sem getValueCancel =
   | TmObserve t -> t.value
+  | t -> errorSingle [infoTm t] "Expected an observe application"
 
   sem getDistCancel =
   | TmObserve t -> t.dist
+  | t -> errorSingle [infoTm t] "Expected an observe application"
 
   sem exprToJson =
   | TmCancel x -> JsonObject (mapFromSeq cmpString

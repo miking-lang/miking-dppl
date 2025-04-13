@@ -2,13 +2,14 @@ include "../dists.mc"
 include "../inference-interface.mc"
 include "../../inference/smc.mc"
 include "../../cfa.mc"
+include "../pruning/compile.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 include "mexpr/phase-stats.mc"
 
 lang MExprPPLAPF =
   MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA
-  + SMCCommon + PhaseStats + InferenceInterface
+  + SMCCommon + PhaseStats + InferenceInterface + DPPLPruning
 
   sem compile: InferenceInterface -> Expr
   sem compile =
@@ -52,6 +53,8 @@ lang MExprPPLAPF =
         error (join ["Invalid CPS option:", x.options.cps])
     in
     endPhaseStatsExpr log "cps-one" t;
+
+    let t = if x.options.prune then prune x.prune t else t in
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;

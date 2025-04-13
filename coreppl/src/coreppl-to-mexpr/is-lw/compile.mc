@@ -3,13 +3,13 @@ include "../inference-interface.mc"
 include "../../inference/smc.mc"
 include "../../cfa.mc"
 include "../delayed-sampling/compile.mc"
-
+include "../pruning/compile.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cps.mc"
 include "mexpr/phase-stats.mc"
 
 lang MExprPPLImportance =
-  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats + InferenceInterface + DPPLDelayedSampling
+  MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll + MExprPPLCFA + PhaseStats + InferenceInterface + DPPLDelayedSampling + DPPLPruning
 
   -------------------------
   -- IMPORTANCE SAMPLING --
@@ -22,7 +22,7 @@ lang MExprPPLImportance =
     let t = x.extractNormal () in
     endPhaseStatsExpr log "extract-normal-one" t;
 
-    let t = if x.options.dynamicDelay then delayedSampling x.delay t else t in
+    let t = if x.options.prune then prune x.prune t else if x.options.dynamicDelay then delayedSampling x.delay t else t in
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;
@@ -46,6 +46,10 @@ lang MExprPPLImportance =
   | TmWeight t ->
     let i = withInfo t.info in
     i (appFromEnv runtime "updateWeight" [t.weight, i (nvar_ stateName)])
+  | TmCancel t ->
+    let i = withInfo t.info in
+    let weight = i (appFromEnv env "logObserve" [t.dist, t.value]) in
+    i (appFromEnv runtime "updateWeight" [negf_ weight, i (nvar_ stateName)])
   | t -> t
 
 
@@ -184,7 +188,7 @@ lang MExprPPLImportance =
     -- printLn ""; printLn "--- AFTER CPS ---";
     -- match pprintCode 0 pprintEnvEmpty t with (env,str) in
     -- printLn (str);
-
+    let t = if or x.options.prune x.options.dynamicDelay then error "Importance sampling with CPS does not support pruning or dynamic delayed sampling" else t in
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
     endPhaseStatsExpr log "transform-tm-dist-one" t;

@@ -3,21 +3,16 @@ include "ext/matrix-ext.mc"
 include "ext/dist-ext.mc"
 
 con Node : {age: Float, seq: [Int], left: Tree, right: Tree} -> Tree
-let getAge = lam n. match n with Node r then r.age else match n with Leaf r then r.age else never 
-let getLeafSeq = lam n. match n with Leaf r then r.seq else never
-let getNodeSeq = lam n. match n with Node r then r.seq else never
+let getAge = lam n. match n with Node r then r.age else match n with Leaf r then r.age else never
 
 let slice = lam seq. lam beg. lam mend.
     subsequence seq beg (subi mend beg)
 
-let zip = lam x. lam y.
-  mapi (lam i. lam x. (x, get y i)) x 
-
 let matrixGet = lam row. lam col. lam tensor.
-  tensorGetExn tensor [row, col] 
+  tensorGetExn tensor [row, col]
 
-let ctmc = lam i. lam qt:Tensor[Float]. --lam t:Float.
-  [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
+let ctmc = lam i. lam qt:Tensor[Float].
+  [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt]
 
 let pickpair = lam n.
   let i = assume (UniformDiscrete 0 (subi n 1)) in
@@ -29,50 +24,36 @@ let iid = lam f. lam p. lam n.
   map f params
 
 recursive
-let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
+let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
   if eqi n 1 then trees else
   let pairs = pickpair n in
   let leftChild = get trees pairs.0 in
   let rightChild = get trees pairs.1 in
+  let children = [leftChild, rightChild] in
 
   let t = assume (Exponential 10.0) in
   let age = addf t maxAge in
+  let qts = map (lam c. matrixExponential (matrixMulFloat (subf age (getAge c)) q)) children in
 
-  let seq = iid (lam p. assume (Categorical p)) [0.25,0.25,0.25,0.25] seqLen in
-
-  let leftChildAge = getAge leftChild in
-  let rightChildAge = getAge rightChild in
-  let qtL = (matrixExponential (matrixMulFloat (subf age leftChildAge) q)) in
-  let qtR = (matrixExponential (matrixMulFloat (subf age rightChildAge) q)) in
-
-  iteri
-  (lam i. lam site.
-    let p1 = ctmc site qtL in
-    (match leftChild with Node _ then
-      let lc = get (getNodeSeq leftChild) i in
-      observe lc (Categorical p1);
-      cancel (observe lc (Categorical [0.25,0.25,0.25,0.25]))
-    else
-      let lc = get (getLeafSeq leftChild) i in
-      (if lti lc 4 then observe lc (Categorical p1)
-        else ())
-    );
-    let p2 = ctmc site qtR in
-    (match rightChild with Node _ then
-      let rc = get (getNodeSeq rightChild) i in
-      observe rc (Categorical p2);
-      cancel (observe rc (Categorical [0.25,0.25,0.25,0.25]))
-    else
-      let rc = get (getLeafSeq rightChild) i in
-      (if lti rc 4 then observe rc (Categorical p2)
-        else ())
-    )) seq;
+  let seq = iid (lam p. assume (Categorical p)) pi seqLen in
+  iteri (lam i. lam site.
+    iter2 (lam child. lam qt.
+      let p1 = ctmc site qt in
+      match child with Node n then
+        let s = get n.seq i in
+        observe s (Categorical p1);
+        cancel (observe s (Categorical pi))
+      else match child with Leaf l in
+        let s = get l.seq i in
+        (if lti s 4 then observe s (Categorical p1); cancel (observe s (Categorical pi)) else ())
+    ) children qts
+  ) seq;
   resample;
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
   let min = mini pairs.0 pairs.1 in
   let max = maxi pairs.0 pairs.1 in
   let new_trees = join ([slice trees 0 min, slice trees (addi min 1) max, slice trees (addi max 1) n, [parent]]) in
-  cluster q new_trees age seqLen (subi n 1)
+  cluster q new_trees age seqLen (subi n 1) pi
 end
 
 let gtr = lam pi. lam ri.
@@ -104,4 +85,5 @@ let model = lam.
   let pi = assume (Dirichlet ([1.0, 1.0, 1.0, 1.0])) in
   let er = assume (Dirichlet [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]) in
   let q = gtr pi er in
-  cluster q trees 0.0 seqLength (length trees)
+  iter (lam l. match l with Leaf l in iter (lam s. if eqi s 4 then () else weight (log (get pi s))) l.seq) trees;
+  cluster q trees 0.0 seqLength (length trees) pi
