@@ -126,35 +126,6 @@ let output = lam res: [[Float]]. lam names: [String].
   printStatistics res names nc expVals varianceVals;
   saveCSV res names "data.csv" expOnLogWeights
 
-let printSamples : all a. (a -> String) -> [Float] -> [a] -> () =
-  lam printFun. lam weights. lam samples.
-    recursive let rec : [Float] -> [a] -> () = lam weights. lam samples.
-      if null weights then () else
-        let w = head weights in
-        let weights = tail weights in
-        let s = head samples in
-        let samples = tail samples in
-        print (printFun s);
-        print " ";
-        print (float2string w); print "\n";
-        rec weights samples
-    in if compileOptions.printSamples then rec weights samples else ()
-
-let printSamplesOption : all a. (a -> String) -> [Float] -> [Option a] -> () =
-  lam printFun. lam weights. lam samples.
-    recursive let rec : [Float] -> [Option a] -> () = lam weights. lam samples.
-      if null weights then () else
-        let w = head weights in
-        let weights = tail weights in
-        let s = head samples in
-        let samples = tail samples in
-        (match s with Some s then print (printFun s)
-         else print ".");
-        print " ";
-        print (float2string w); print "\n";
-        rec weights samples
-    in if compileOptions.printSamples then rec weights samples else ()
-
 -- MCMC acceptance rate
 let _mcmcAccepts = ref 0
 let mcmcAcceptInit = lam. modref _mcmcAccepts 0

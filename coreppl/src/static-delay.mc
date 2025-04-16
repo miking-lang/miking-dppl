@@ -242,7 +242,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   | DGaussian d -> DGaussian {{d with mu=tupleproj_ 0 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))} with sigma=tupleproj_ 1 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))}
   | DCategorical d -> DCategorical {d with p=tupleproj_ 0 (withType (tytuple_ [tyseq_ tyfloat_]) (nvar_ param))}
   | DDirichlet d -> DDirichlet {d with a=tupleproj_ 0 (withType (tytuple_ [tyseq_ tyfloat_]) (nvar_ param))}
-  
+
   -- given the likelihood, the prior and the observartion calculates the posterior
   -- (d1: likelihood, d2: prior)
   sem posterior sqrtName obs indices plateId meanSO =
@@ -656,7 +656,7 @@ lang RecreateProg = PBNGraph + MExprAst + MExprPPL
   | CodeBlockNode t -> t.code
   | RandomVarNode v -> let body = match v.val with Some val then
       TmObserve {dist=dist_ (deref v.dist), value=val,ty=tyunknown_, info = NoInfo ()}
-      else TmAssume {dist=dist_ (deref v.dist), ty=tyunknown_, info = NoInfo ()} in
+      else TmAssume {dist=dist_ (deref v.dist), ty=tyunknown_, info = NoInfo (), driftKernel = None ()} in
     nulet_ v.ident body
   | AffineNode v -> nulet_ v.ident (addf_ (mulf_ (nvar_ (getId (deref v.tVertex))) v.meanScale) v.meanOffset)
   | MultiplexerNode m -> nulet_ m.ident (get_ (nvar_ (getId m.list)) (nvar_ m.indexId))

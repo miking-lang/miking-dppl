@@ -19,7 +19,6 @@ include "../static-delay.mc"
 
 include "extract.mc"
 include "dists.mc"
-include "runtimes.mc"
 include "inference-interface.mc"
 
 include "pruning/compile.mc"
@@ -64,7 +63,7 @@ end
 
 lang DPPLDelayedReplace = DPPLParser
    sem replaceDelayKeywords =
-   | TmDelay t -> TmAssume { dist = t.dist, ty = t.ty, info = t.info }
+   | TmDelay t -> TmAssume { dist = t.dist, ty = t.ty, info = t.info, driftKernel = None () }
    | TmDelayed t -> t.delay
    | t -> smap_Expr_Expr replaceDelayKeywords t
 
@@ -105,28 +104,27 @@ lang DPPLPrunedReplace = DPPLKeywordReplace + SymGetters
   | TmPruned t -> t.prune
   | t -> smap_Expr_Expr replacePrune t
 
-  sem replacePruneTypes env options =
+  sem replacePruneTypes =
   | t ->
-    let t = smap_Expr_Type (toRuntimePruneTyVar env options) t in
-    let t = smap_Expr_TypeLabel (toRuntimePruneTyVar env options) t in
-    let t = smap_Expr_Pat (replacePruneTyVarPat env options) t in
-    let t = smap_Expr_Expr (replacePruneTypes env options) t in
-    withType (toRuntimePruneTyVar env options (tyTm t)) t
+    let t = smap_Expr_Type toRuntimePruneTyVar t in
+    let t = smap_Expr_TypeLabel toRuntimePruneTyVar t in
+    let t = smap_Expr_Pat replacePruneTyVarPat t in
+    let t = smap_Expr_Expr replacePruneTypes t in
+    withType (toRuntimePruneTyVar (tyTm t)) t
 
-  sem toRuntimePruneTyVar env options =
-  | TyPruneInt t -> if options.prune then ntycon_ (_getTyConExn "PruneGraph_PruneVar" env)
-         else TyInt {info=t.info}
-  | ty -> smap_Type_Type (toRuntimePruneTyVar env options) ty
+  sem toRuntimePruneTyVar =
+  | TyPruneInt t -> TyInt {info=t.info}
+  | ty -> smap_Type_Type toRuntimePruneTyVar ty
 
-  sem replacePruneTyVarPat env options =
+  sem replacePruneTyVarPat =
   | p ->
-    let p = smap_Pat_Pat (replacePruneTyVarPat env options) p in
-    withTypePat (toRuntimePruneTyVar env options (tyPat p)) p
+    let p = smap_Pat_Pat replacePruneTyVarPat p in
+    withTypePat (toRuntimePruneTyVar (tyPat p)) p
 end
 
 -- Provides runtime implementations for elementary functions that are not MExpr
 -- intrisics.
-lang ElementaryFunctionsTransform = ElementaryFunctions + LoadRuntime
+lang ElementaryFunctionsTransform = ElementaryFunctions
   -- The given function should look up the symbolized name for the
   -- given elementary function.
   sem elementaryFunctionsTransformExpr : (String -> Name) -> Expr -> Expr
@@ -179,19 +177,17 @@ lang ReplaceHigherOrderConstantsLoadedPreviously = ReplaceHigherOrderConstants +
     else tm
 end
 
-lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + LoadRuntime + DPPLDelayedReplace + DPPLPrunedReplace + MExprANFAll + DPPLExtract + InferenceInterface + DPPLDelayedSampling
+lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedReplace + DPPLPrunedReplace + MExprANFAll + DPPLExtract + InferenceInterface + DPPLDelayedSampling
   type CompileEnvs =
     { higherOrderSymEnv : {path : String, env : SymEnv}
     , distEnv : {path : String, env : SymEnv}
-    , pruneEnv : {path: String, env: SymEnv}
-    , delayEnv: {path: String, env: SymEnv}
     , externalMathEnv : {path : String, env : SymEnv}
     }
   sem compileModels
-    : Options
+    : TransformationOptions
     -> Map Name FinalOrderedLamLiftSolution
     -> CompileEnvs
-    -> Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type}
+    -> Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type, extraEnvs : Map String {path : String, env : SymEnv}}
     -> Map Name ModelRepr
     -> Map Name Expr
   sem compileModels options lamliftSols envs runtimes =
@@ -199,11 +195,10 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + LoadRuntime + DP
     mapMapWithKey
       (lam id. lam model.
         match model with {extractAst = extractAst, method = method, params = params} in
-        match loadCompiler options method with (_, compile) in
         match mapLookup method runtimes with Some entry then
-          let extractAst = lam f. transformModelAst envs options (extractAst f) in
+          let extractAst = lam f. transformModelAst envs options method (extractAst f) in
           let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
-          let ast = compileModel options compile lamliftSols envs entry id {model with extractAst = extractAst} in
+          let ast = compileModel options lamliftSols envs entry id {model with extractAst = extractAst} in
           endPhaseStatsExpr log "compile-model-one" ast;
           let ast = removeModelDefinitions ast in
           endPhaseStatsExpr log "remove-model-definitions-one" ast;
@@ -213,21 +208,20 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + LoadRuntime + DP
           error (join ["Runtime definition missing for (", methodStr, ")"]))
       models
 
-  sem transformModelAst : CompileEnvs -> Options -> Expr -> Expr
-  sem transformModelAst envs options =
+  sem transformModelAst : CompileEnvs -> TransformationOptions -> InferMethod -> Expr -> Expr
+  sem transformModelAst envs options method =
   | modelAst ->
     -- Transform the model AST, if the flag is set
-    let ast =
-      if options.staticDelay then
-        staticDelay (_getVarExn "externalSqrt" envs.externalMathEnv) modelAst
+    let ast = if options.staticDelay
+      then staticDelay (_getVarExn "externalSqrt" envs.externalMathEnv) modelAst
       else modelAst in
-    -- Apply pruning to the model AST, if the flag is set
-    let ast =
-      if options.prune then ast
-      else (replacePruneTypes envs.pruneEnv options (replacePrune ((replaceCancel envs.distEnv ast)))) in
-    let ast =
-      if options.dynamicDelay then ast
-        --delayedSampling envs.delayEnv ast
+    -- Replace pruning constructs with normal constructs unless
+    -- pruning is used by the infer method
+    let ast = if retainPruning method
+      then ast
+      else replacePruneTypes (replacePrune (replaceCancel envs.distEnv ast)) in
+    let ast = if retainDynamicDelayedSampling method
+      then ast
       else replaceDelayTypes (replaceDelayKeywords ast) in
     -- Optionally print the model AST
     (if options.printModel then
@@ -237,16 +231,15 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + LoadRuntime + DP
     ast
 
   sem compileModel
-    : Options
-    -> (InferenceInterface -> Expr)
+    : TransformationOptions
     -> Map Name FinalOrderedLamLiftSolution
     -> CompileEnvs
-    -> {env : {path : String, env : SymEnv}, stateType : Type}
+    -> {env : {path : String, env : SymEnv}, stateType : Type, extraEnvs : Map String {path : String, env : SymEnv}}
     -> Name
     -> ModelRepr
     -> Expr
-  sem compileModel options compile lamliftSols envs entry modelId =
-  | {extractAst = extractAst, params = modelParams} ->
+  sem compileModel options lamliftSols envs entry modelId =
+  | {extractAst = extractAst, params = modelParams, method = method} ->
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- ANF
@@ -260,16 +253,15 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + LoadRuntime + DP
     -- Apply inference-specific transformation
     let stateVarId = nameNoSym "state" in
     let interface =
-      { extractNormal = lam. extractAst (lam x. x)
-      , extractNoHigherOrderConsts = lam. extractAst (replaceHigherOrderConstants envs.higherOrderSymEnv)
+      { extractNormal = lam f. extractAst f
+      , extractNoHigherOrderConsts = lam f. extractAst (lam ast. replaceHigherOrderConstants envs.higherOrderSymEnv (f ast))
       , options = options
       , runtime = {env = entry.env, lamliftSols = lamliftSols}
       , dists = {env = envs.distEnv, lamliftSols = lamliftSols}
-      , prune = {env = envs.pruneEnv, lamliftSols = lamliftSols}
-      , delay = {env = envs.delayEnv, lamliftSols = lamliftSols}
+      , extraEnvs = mapMap (lam env. {env = env, lamliftSols = lamliftSols}) entry.extraEnvs
       , stateName = stateVarId
       } in
-    let ast = compile interface in
+    let ast = pickCompiler method interface in
     endPhaseStatsExpr log "compile-inference-one" ast;
 
     -- Bind the model code in a let-expression, which we can insert in the main
@@ -332,23 +324,21 @@ end
 lang CPPLLoader
   = MCoreLoader
   + ResolveType + SubstituteUnknown
-  + LoadRuntime + ReplaceHigherOrderConstantsLoadedPreviously + CompileModels + InsertModels
+  + ReplaceHigherOrderConstantsLoadedPreviously + CompileModels + InsertModels
   + ElementaryFunctionsTransform + DPPLPrunedReplace
   + DPPLKeywordReplace + DPPLDelayedReplace + DPPLParser
   syn Hook =
   | CPPLHook
-    { options : Options
-    , runtimes : Ref (Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type})
+    { options : TransformationOptions
+    , runtimes : Ref (Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type, extraEnvs : Map String {path : String, env : SymEnv}})
     , envs :
       { higherOrderSymEnv : {path : String, env : SymEnv}
       , distEnv : {path : String, env : SymEnv}
       , externalMathEnv : {path : String, env : SymEnv}
-      , pruneEnv : {path: String, env: SymEnv}
-      , delayEnv : {path: String, env: SymEnv}
       }
     }
 
-  sem enableCPPLCompilation : Options -> Loader -> Loader
+  sem enableCPPLCompilation : TransformationOptions -> Loader -> Loader
   sem enableCPPLCompilation options = | loader ->
     if hasHook (lam x. match x with CPPLHook _ then true else false) loader then loader else
 
@@ -373,21 +363,9 @@ lang CPPLLoader
     -- should pass the name directly to places
     let compileOptions = DeclLet
       { body = urecord_
-        [ ("resample", str_ options.resample)
-        , ("cps", str_ options.cps)
-        , ("printSamples", bool_ options.printSamples)
-        , ("earlyStop", bool_ options.earlyStop)
-        , ("mcmcLightweightGlobalProb", float_ options.mcmcLightweightGlobalProb)
-        , ("mcmcLightweightReuseLocal", bool_ options.mcmcLightweightReuseLocal)
-        , ("printAcceptanceRate", bool_ options.printAcceptanceRate)
-        , ("subsample", bool_ options.subsample)
-        , ("subsampleSize", int_ options.subsampleSize)
         -- NOTE(dlunde,2022-11-04): Emulating option type
-        , ("seedIsSome", match options.seed with Some seed then bool_ true else bool_ false)
+        [ ("seedIsSome", match options.seed with Some seed then bool_ true else bool_ false)
         , ("seed", match options.seed with Some seed then int_ seed else int_ 0)
-        , ("prune", bool_ options.prune)
-        , ("driftKernel", bool_ options.driftKernel)
-        , ("driftScale", float_ options.driftScale)
         ]
       , ident = nameNoSym "compileOptions"
       , tyAnnot = tyunknown_
@@ -426,17 +404,6 @@ lang CPPLLoader
       } in
     let loader = _addDeclExn loader distAlias in
 
-    match
-      (if options.prune then
-        includeFileExn "." "coreppl::coreppl-to-mexpr/pruning/runtime.mc" loader
-      else ({env= _symEnvEmpty, path="<no-prune-runtime-loader>"}, loader))
-    with (pruneEnv, loader) in
-    match
-      (if options.dynamicDelay then
-        includeFileExn "." "coreppl::coreppl-to-mexpr/delayed-sampling/runtime.mc" loader
-      else ({env=_symEnvEmpty,path="<no-delay-runtime-loader>"}, loader))
-    with (delayEnv, loader) in
-
     let hook = CPPLHook
       { options = options
       , runtimes = ref (mapEmpty cmpInferMethod)
@@ -444,14 +411,11 @@ lang CPPLLoader
         { higherOrderSymEnv = symEnv
         , distEnv = distEnv
         , externalMathEnv = externalMathEnv
-        , pruneEnv = pruneEnv
-        , delayEnv = delayEnv
         }
       } in
     addHook loader hook
 
   sem _preSymbolize loader decl = | CPPLHook x ->
-    let decl = smap_Decl_Expr (replaceDefaultInferMethod x.options) decl in
     let requiredRuntimes =
       recursive let findRuntimes = lam acc. lam tm.
         let acc = match tm with TmInfer t
@@ -461,8 +425,12 @@ lang CPPLLoader
       sfold_Decl_Expr findRuntimes (setEmpty cmpInferMethod) decl in
     let f = lam loader. lam inferMethod.
       if mapMem inferMethod (deref x.runtimes) then loader else
-      match loadCompiler x.options inferMethod with (runtime, _) in
+      match pickRuntime inferMethod with (runtime, extraEnvs) in
       match includeFileExn "." (join ["coreppl::coreppl-to-mexpr/", runtime]) loader with (symEnv, loader) in
+      let f = lam loader. lam. lam path.
+        match includeFileExn "." (join ["coreppl::coreppl-to-mexpr/", path]) loader with (env, loader) in
+        (loader, env) in
+      match mapMapAccum f loader extraEnvs with (loader, extraEnvs) in
 
       let entry =
         let stateName = _getTyConExn "State" symEnv in
@@ -473,6 +441,7 @@ lang CPPLLoader
         let stateType = resolveType (NoInfo ()) tcEnv false stateType in
         { env = symEnv
         , stateType = stateType
+        , extraEnvs = extraEnvs
         } in
       modref x.runtimes (mapInsert inferMethod entry (deref x.runtimes));
       loader in
@@ -493,7 +462,7 @@ lang CPPLLoader
     let models = compileModels options lamliftSols envs runtimes models in
     let ast = mapPre_Expr_Expr (transformTmDist {env = envs.distEnv, lamliftSols = lamliftSols}) ast in
     let ast = replacePrune ast in
-    let ast = replacePruneTypes envs.pruneEnv options ast in
+    let ast = replacePruneTypes ast in
     let ast = replaceDelayKeywords ast in
     let ast = replaceDelayTypes ast in
     let ast = replaceDpplKeywords ast in
@@ -501,20 +470,33 @@ lang CPPLLoader
     let ast = insertModels models ast in
     endPhaseStatsExpr log "insert-models" ast;
     ast
+
+  syn Hook =
+  | DefaultInferMethodHook
+    { inferMethod : InferMethod
+    }
+
+  sem enableDefaultInferMethod : InferMethod -> Loader -> Loader
+  sem enableDefaultInferMethod inferMethod = | loader ->
+    if hasHook (lam x. match x with DefaultInferMethodHook _ then true else false) loader then loader else
+    addHook loader (DefaultInferMethodHook {inferMethod = inferMethod})
+
+  sem _preSymbolize loader decl = | DefaultInferMethodHook x ->
+    (loader, smap_Decl_Expr (replaceDefaultInferMethod x.inferMethod) decl)
 end
 
 lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
   -- Make transformations related to solveode. This pass removes all solveode
   -- terms and returns a transformed term and an ODE related runtime. the
   -- tranformed program can be treated like a normal probabilistic program.
-  sem transformTmSolveODE : Options -> {path : String, env : SymEnv} -> Expr -> Expr
-  sem transformTmSolveODE options symEnv =
+  sem transformTmSolveODE : {path : String, env : SymEnv} -> Expr -> Expr
+  sem transformTmSolveODE symEnv =
   | TmSolveODE r ->
-    let method = odeDefaultMethod options r.method in
+    let method = odeDefaultMethod r.method in
     let fn = nvar_ (_getVarExn (odeSolverName method) symEnv) in
     let args = concat (odeSolverArgs method) [r.model, r.init, r.endTime] in
     appSeq_ fn args
-  | tm -> smap_Expr_Expr (transformTmSolveODE options symEnv) tm
+  | tm -> smap_Expr_Expr (transformTmSolveODE symEnv) tm
 
   sem odeSolverName : ODESolverMethod -> String
   sem odeSolverName =
@@ -533,16 +515,14 @@ lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
   | EFA r -> [r.add, r.smul, r.stepSize, r.n]
 
   -- Replaces default ODE solver methods with a concrete method.
-  sem odeDefaultMethod : Options -> ODESolverMethod -> ODESolverMethod
-  sem odeDefaultMethod options =
+  sem odeDefaultMethod : ODESolverMethod -> ODESolverMethod
+  sem odeDefaultMethod =
   | ODESolverDefault d -> RK4 d
   | m -> m
 
   syn Hook =
-  | ODEHook
-    { options : Options
-    }
-  sem _preSymbolize loader decl = | ODEHook x ->
+  | ODEHook ()
+  sem _preSymbolize loader decl = | ODEHook _ ->
     recursive let hasTmSolveODE = lam acc. lam tm.
       match tm with TmSolveODE _ then true
       else sfold_Expr_Expr hasTmSolveODE acc tm
@@ -551,7 +531,7 @@ lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
       match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-ode.mc" loader
         with (symEnv, loader)
       in
-      (loader, smap_Decl_Expr (transformTmSolveODE x.options symEnv) decl)
+      (loader, smap_Decl_Expr (transformTmSolveODE symEnv) decl)
     else
       (loader, decl)
 end
@@ -966,12 +946,13 @@ end
 
 lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader + DTCTypeOf + ADLoader
   syn FileType =
-  | FCorePPL {isModel : Bool, dpplTypeCheck : Bool}
+  | FCorePPL {isModel : Bool}
 
-  sem _insertBackcompatInfer : Expr -> Loader -> Loader
-  sem _insertBackcompatInfer modelBody = | loader ->
-    let options = (withHookState (lam l. lam h. match h with CPPLHook x then Some (l, x.options) else None ()) loader).1 in
+  syn Hook =
+  | CorePPLFileHook {options : CPPLFileOptions, method : InferMethod}
 
+  sem _insertBackcompatInfer : CPPLFileOptions -> InferMethod -> Expr -> Loader -> Loader
+  sem _insertBackcompatInfer options method modelBody = | loader ->
     let modelName = nameSym "_model" in
     let decl = DeclLet
       { ident = modelName
@@ -989,7 +970,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       { ident = particlesName
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , body = int_ options.particles
+      , body = int_ options.defaultParticles
       , info = NoInfo ()
       } in
     let loader = _addSymbolizedDeclExn loader decl in
@@ -998,7 +979,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       let symEnv = symbolizeUpdateVarEnv symEnv
         (mapInsert (nameGetStr particlesName) particlesName symEnv.currentEnv.varEnv) in
       _setSymEnv symEnv loader in
-    match includeFileTypeExn (FCorePPL {isModel = false, dpplTypeCheck = false}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
+    match includeFileTypeExn (FCorePPL {isModel = false}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
       with (topEnv, loader) in
 
     let retTy = match unwrapType (mapFindExn modelName (_getTCEnv loader).varEnv)
@@ -1018,12 +999,12 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
 
     let inferCode =
       let distName = nameSym "d" in
-      let basicPrint = switch (options.method, options.printAcceptanceRate)
-        case ("is-lw" | "smc-bpf" | "smc-apf", _) then
+      let basicPrint = switch (method, options.printAcceptanceRate)
+        case (Importance _ | BPF _ | APF _, _) then
           app_ (nvar_ (_getVarExn "printNormConst" topEnv)) (nvar_ distName)
-        case ("mcmc-naive" | "mcmc-trace" | "mcmc-lightweight" | "pmcmc-pimh", true) then
+        case (NaiveMCMC _ | TraceMCMC _ | LightweightMCMC _ | PIMH _, true) then
           app_ (nvar_ (_getVarExn "printAcceptRate" topEnv)) (nvar_ distName)
-        case ("mcmc-naive" | "mcmc-trace" | "mcmc-lightweight" | "pmcmc-pimh", false) then
+        case (NaiveMCMC _ | TraceMCMC _ | LightweightMCMC _ | PIMH _, false) then
           unit_
         case _ then
           error "Inference algorithm not supported in global mode"
@@ -1036,7 +1017,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
       , body = TmInfer
-        { method = setRuns (nvar_ (_getVarExn "particles" topEnv)) (inferMethodFromOptions options options.method)
+        { method = setRuns (nvar_ (_getVarExn "particles" topEnv)) method
         , model = nvar_ modelName
         , ty = tyunknown_
         , info = NoInfo ()
@@ -1056,7 +1037,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       } in
     _addDeclExn loader decl
 
-  sem _loadFile path = | (FCorePPL {isModel = isModel, dpplTypeCheck = dpplTypeCheck}, loader & Loader x) ->
+  sem _loadFile path = | (FCorePPL {isModel = isModel}, loader & Loader x) ->
     -- NOTE(vipa, 2024-12-12): Return if we've already included this
     -- file
     match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
@@ -1076,9 +1057,13 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
     let ast = parseMCoreFile args path in
     let ast = use DPPLParser in makeKeywords ast in
 
+    match optionGetOrElse (lam. error "missing CorePPLFileHook")
+      (getHookOpt (lam h. match h with CorePPLFileHook x then Some (x.options, x.method) else None ()) loader)
+    with (options, method) in
+
     -- NOTE(oerikss, 2025-03-14): If the user requested it, we type-check with
     -- the DPPL type-checker.
-    (if dpplTypeCheck then
+    (if options.dpplTypeCheck then
       typeOfExn (decorateTypesExn (decorateTerms (symbolize ast))); ()
      else ());
 
@@ -1126,7 +1111,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
           with (inFile, beforeFile) in
         let loader = _addDeclsByFile loader beforeFile in
         let modelBody = foldr (lam d. lam e. declAsExpr e d) expr inFile in
-        _insertBackcompatInfer modelBody loader
+        _insertBackcompatInfer options method modelBody loader
       case _ then
         -- NOTE(vipa, 2025-02-26): When using AD we make a simplifying
         -- assumption: we make the model code exist "in its own world",
@@ -1145,7 +1130,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         let hooks = match odeHook with Some hook
           then [hook]
           else [] in
-        match prepareADRuntime loader { insertFloatAssertions = not dpplTypeCheck }
+        match prepareADRuntime loader { insertFloatAssertions = not options.dpplTypeCheck }
           with (adHook, loader) in
         let hooks = snoc hooks adHook in
         let separateLoader = mkLoader

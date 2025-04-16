@@ -18,8 +18,8 @@ type State = Ref Float
 
 let updateWeight = lam weight. lam k. Checkpoint { weight = weight, k = k }
 
-let importance : all a. (State -> Stop a) -> State -> Option a =
-  lam model. lam state.
+let importance : all a. Unknown -> (State -> Stop a) -> State -> Option a =
+  lam config. lam model. lam state.
 
   -- First run the initial model to the first checkpoint
   let res: Stop a = model state in
@@ -40,7 +40,7 @@ let importance : all a. (State -> Stop a) -> State -> Option a =
     else match res with End a then Some a else never
   in
 
-  if compileOptions.earlyStop then recEarlyStop res
+  if config.earlyStop then recEarlyStop res
   else rec res
 
 let filterNone : all a. ([Float], [a]) -> Float -> Option a -> ([Float], [a]) =
@@ -58,7 +58,7 @@ let run : all a. Unknown -> (State -> Stop a) -> use RuntimeDistBase in Dist a =
 
   let weightInit: Float = 0. in
   let states = createList particles (lam. ref weightInit) in
-  let res = mapReverse (importance model) states in
+  let res = mapReverse (importance config model) states in
   let weights = mapReverse deref states in
 
   -- NOTE(dlunde,2022-10-27): It is very important that we compute the

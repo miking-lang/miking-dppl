@@ -1,51 +1,58 @@
-include "../coreppl.mc"
-include "../dppl-arg.mc"
+include "../infer-method.mc"
 
-lang PIMHMethod = MExprPPL
-  syn InferMethod =
-  | PIMH {
-      particles : Expr, -- Type Int
-      iterations : Expr -- Type Int
+lang PIMHMethod = InferMethodBase
+  type PIMHConfig =
+    { particles : Expr -- : Int
+    , iterations : Expr -- : Int
+    , cps : String
     }
+  syn InferMethod =
+  | PIMH PIMHConfig
 
   sem pprintInferMethod indent env =
-  | PIMH {iterations = iterations, particles = particles} ->
+  | PIMH x ->
     let i = pprintIncr indent in
-    match pprintCode i env particles with (env, particles) in
-    match pprintCode i env iterations with (env, iterations) in
-    (env, join [
-      "(PIMH {interations = ", iterations, "particles = ", particles, "})"])
+    match pprintCode i env x.particles with (env, particles) in
+    match pprintCode i env x.iterations with (env, iterations) in
+    match pprintCode i env (str_ x.cps) with (env, cps) in
+    ( env
+    , join
+      [ "(PIMH "
+      , "{ particles = ", particles
+      , ", iterations = ", iterations
+      , ", cps = ", cps
+      , "})"
+      ]
+    )
 
   sem inferMethodFromCon info bindings =
   | "PIMH" ->
-    let expectedFields = [
-      ("particles", int_ defaultArgs.particles),
-      ("iterations", int_ defaultArgs.pmcmcParticles)
-    ] in
-    match getFields info bindings expectedFields with [particles, iterations] in
-    PIMH {particles = particles, iterations = iterations}
-
-  sem inferMethodFromOptions options =
-  | "pmcmc-pimh" ->
-    PIMH {
-      -- Reusing particles option for now for iterations, maybe we need a
-      -- better name
-      iterations = int_ options.particles,
-      particles = int_ options.pmcmcParticles
+    let expectedFields =
+      [ ("particles", int_ _particlesDefault)
+      , ("iterations", int_ _pmcmcParticlesDefault)
+      , ("cps", str_ _cpsDefault)
+      ] in
+    match getFields info bindings expectedFields with [particles, iterations, cps] in
+    PIMH
+    { particles = particles
+    , iterations = iterations
+    , cps = _exprAsStringExn cps
     }
 
   sem inferMethodConfig info =
-  | PIMH {iterations = iterations, particles = particles} ->
-    fieldsToRecord info [("iterations",iterations), ("particles", particles)]
+  | PIMH x -> fieldsToRecord info
+    [ ("iterations",x.iterations)
+    , ("particles", x.particles)
+    ]
 
   sem typeCheckInferMethod env info sampleType =
-  | PIMH {iterations = iterations, particles = particles} ->
+  | PIMH x ->
     let int = TyInt {info = info} in
-    let iterations = typeCheckExpr env iterations in
-    let particles = typeCheckExpr env particles in
+    let iterations = typeCheckExpr env x.iterations in
+    let particles = typeCheckExpr env x.particles in
     unify env [info, infoTm iterations] int (tyTm iterations);
     unify env [info, infoTm particles] int (tyTm particles);
-    PIMH {iterations = iterations, particles = particles}
+    PIMH {x with iterations = iterations, particles = particles}
 
   sem smapAccumL_InferMethod_Expr f acc =
   | PIMH r ->
@@ -55,5 +62,14 @@ lang PIMHMethod = MExprPPL
 
   sem setRuns expr =
   | PIMH r -> PIMH {r with iterations = expr}
-
 end
+
+let pmcmcPimhOptions : OptParser (use PIMHMethod in InferMethod) =
+  use PIMHMethod in
+  let mk = lam particles. lam iterations. lam cps. PIMH
+    { particles = int_ particles
+    , iterations = int_ iterations
+    , cps = cps
+    } in
+  let method = optMap3 mk _pmcmcParticles _particles _cps in
+  optMap2 (lam. lam x. x) (_methodFlag false "pmcmc-pimh") method

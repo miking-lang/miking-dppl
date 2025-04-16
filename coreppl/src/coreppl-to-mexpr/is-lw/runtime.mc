@@ -18,8 +18,13 @@ let unwrapOpt : all a. Option a -> a = lam o.
   match o with Some x then x
   else error "Could not unwrap option"
 
+type Config =
+  { particles : Int
+  , earlyStop : Bool
+  }
+
 -- General inference algorithm for importance sampling
-let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a = lam config. lam model.
+let run : all a. Config -> (State -> a) -> use RuntimeDistBase in Dist a = lam config. lam model.
   use RuntimeDist in
 
   let particles = config.particles in

@@ -227,7 +227,8 @@ lang Assume =
   syn Expr =
   | TmAssume { dist: Expr,
                ty: Type,
-               info: Info }
+               info: Info,
+               driftKernel: Option Expr }
 
   sem infoTm =
   | TmAssume t -> t.info
@@ -244,7 +245,8 @@ lang Assume =
   sem smapAccumL_Expr_Expr f acc =
   | TmAssume t ->
     match f acc t.dist with (acc,dist) in
-    (acc, TmAssume { t with dist = dist })
+    match optionMapAccum f acc t.driftKernel with (acc, driftKernel) in
+    (acc, TmAssume { t with dist = dist, driftKernel = driftKernel })
 
   -- Pretty printing
   sem isAtomic =
@@ -261,7 +263,13 @@ lang Assume =
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmAssume r ->
     match lhs with TmAssume l then
-      eqExprH env free l.dist r.dist
+      match eqExprH env free l.dist r.dist with Some free
+      then switch (l.driftKernel, r.driftKernel)
+        case (Some l, Some r) then eqExprH env free l r
+        case (None _, None _) then Some free
+        case _ then None ()
+        end
+      else None ()
     else None ()
 
   -- Type check
@@ -269,24 +277,24 @@ lang Assume =
   | TmAssume t ->
     let dist = typeCheckExpr env t.dist in
     let tyRes = newvar env.currentLvl t.info in
-    unify env [infoTm dist] (TyDist { info = t.info, ty = tyRes }) (tyTm dist);
-    TmAssume {{ t with dist = dist }
-                  with ty = tyRes }
+    let distTy = TyDist { info = t.info, ty = tyRes } in
+    unify env [infoTm dist] distTy (tyTm dist);
+    let driftKernel =
+      match t.driftKernel with Some dk then
+        let dk = typeCheckExpr env dk in
+        unify env [infoTm dk] (tyarrow_ tyRes distTy) (tyTm dk);
+        Some dk
+      else None () in
+    TmAssume {t with dist = dist, ty = tyRes, driftKernel = driftKernel}
 
   -- ANF
   sem normalize (k : Expr -> Expr) =
   | TmAssume ({ dist = dist } & t) ->
-    normalizeName (lam dist. k (TmAssume { t with dist = dist })) dist
-
-  -- Type lift
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmAssume t ->
-    match typeLiftExpr env t.dist with (env, dist) then
-      match typeLiftType env t.ty with (env, ty) then
-        (env, TmAssume {{t with dist = dist}
-                           with ty = ty})
-      else never
-    else never
+    let f = lam dist. lam driftKernel.
+      k (TmAssume {t with dist = dist, driftKernel = driftKernel}) in
+    match t.driftKernel with Some driftKernel
+    then normalizeName (lam dist. normalizeName (lam dk. f dist (Some dk)) driftKernel) dist
+    else normalizeName (lam dist. f dist (None ())) dist
 
   -- Partial evaluation
   sem pevalBindThis =
@@ -306,6 +314,7 @@ lang Assume =
   | TmAssume x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmAssume")
     , ("dist", exprToJson x.dist)
+    , ("driftKernel", optToNull (optionMap exprToJson x.driftKernel))
     , ("ty", typeToJson x.ty)
     , ("info", infoToJson x.info)
     ] )
@@ -1422,7 +1431,7 @@ let infer_ = use Infer in
   TmInfer {method = d, model = m, ty = tyunknown_, info = NoInfo ()}
 
 let assume_ = use Assume in
-  lam d. TmAssume {dist = d, ty = tyunknown_, info = NoInfo ()}
+  lam d. TmAssume {dist = d, ty = tyunknown_, info = NoInfo (), driftKernel = None ()}
 
 let observe_ = use Observe in
   lam v. lam d.
