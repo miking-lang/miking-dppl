@@ -514,6 +514,19 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
 
 end
 
+lang AnnotateAlignment = Annotator + LetAst + Assume
+  sem annotateAssumes : Set Name -> Expr -> [(Info, Annotation)]
+  sem annotateAssumes unaligned =
+  | TmLet {ident = ident, body = assume & TmAssume {info = info}, inexpr = inexpr} ->
+    let pair =
+      ( info
+      , escapeAnnot (if setMem ident unaligned then "unaligned" else "aligned")
+      ) in
+    let res = sfold_Expr_Expr (lam acc. lam tm. concat acc (annotateAssumes unaligned tm)) [pair] assume in
+    concat res (annotateAssumes unaligned inexpr)
+  | tm -> sfold_Expr_Expr (lam acc. lam tm. concat acc (annotateAssumes unaligned tm)) [] tm
+end
+
 lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
 
   syn AbsVal =

@@ -11,6 +11,8 @@ include "map.mc"
 include "../runtime-common.mc"
 include "../runtime-dists.mc"
 
+include "./config.mc"
+
 -- Any-type, used for samples
 type Any = ()
 
@@ -110,14 +112,8 @@ let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam
   modref state.db (mapInsert addr sample (deref state.db));
   unsafeCoerce (sample.0)
 
-type ConfigType acc res =
-  { keepSample : Int -> Bool
-  , continue : (acc, acc -> res -> (acc, Bool))
-  , globalProb : Float
-  }
-
 -- Function to propose db changes between MH iterations.
-let modDb: all acc. all res. ConfigType acc res -> () = lam config.
+let modDb: all acc. all dAcc. all res. Config res acc dAcc -> () = lam config.
 
   let db = deref state.db in
 
@@ -142,11 +138,11 @@ let modDb: all acc. all res. ConfigType acc res -> () = lam config.
          sample
       ) db)
 
-let run : all acc. all a. ConfigType acc a -> (State -> a) -> use RuntimeDistBase in Dist a =
+let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
 
-  recursive let mh : [a] -> Float -> a -> (Unknown, Bool) -> Int -> [a] =
-    lam samples. lam prevWeight. lam prevSample. lam continueState. lam iter.
+  recursive let mh : [a] -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
+    lam samples. lam prevWeight. lam prevSample. lam debugState. lam continueState. lam iter.
       match continueState with (continueState, true) then
         let prevDb = deref state.db in
         let prevTraceLength = deref state.traceLength in
@@ -178,16 +174,19 @@ let run : all acc. all a. ConfigType acc a -> (State -> a) -> use RuntimeDistBas
         match
           if bernoulliSample (exp logMhAcceptProb) then
             mcmcAccept ();
-            (weight, sample)
+            (true, weight, sample)
           else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous database
           -- and trace length as we reject and reuse the old sample.
             modref state.db prevDb;
             modref state.traceLength prevTraceLength;
-            (prevWeight, prevSample)
-        with (weight, sample) in
+            (false, prevWeight, prevSample)
+        with (accepted, weight, sample) in
         let samples = if config.keepSample iter then snoc samples sample else samples in
-        mh samples weight sample (config.continue.1 continueState sample) (addi iter 1)
+        let debugInfo =
+          { accepted = accepted
+          } in
+        mh samples weight sample (config.debug.1 debugState debugInfo) (config.continue.1 continueState sample) (addi iter 1)
       else samples
   in
 
@@ -201,8 +200,12 @@ let run : all acc. all a. ConfigType acc a -> (State -> a) -> use RuntimeDistBas
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in
 
+  let debugInfo =
+    { accepted = true
+    } in
+
   -- Sample the rest
-  let samples = mh samples weight sample (config.continue.1 config.continue.0 sample) (addi iter 1) in
+  let samples = mh samples weight sample (config.debug.1 config.debug.0 debugInfo) (config.continue.1 config.continue.0 sample) (addi iter 1) in
 
   -- Return
   let numSamples = length samples in
