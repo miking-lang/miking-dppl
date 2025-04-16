@@ -10,6 +10,8 @@ include "option.mc"
 include "../runtime-common.mc"
 include "../runtime-dists.mc"
 
+include "./config.mc"
+
 -- Any-type, used for traces
 type Any
 
@@ -202,7 +204,7 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: Unknown -> (State Result -> Result) -> Result =
+let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Result =
   lam config. lam model.
 
   -- Enable global modifications with probability gProb
@@ -268,11 +270,11 @@ let runNext: Unknown -> (State Result -> Result) -> Result =
       (emptyList ()) (emptyList ())
 
 -- General inference algorithm for aligned MCMC
-let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
+let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
   lam config. lam model.
 
-  recursive let mh : [Result] -> Float -> Result -> (Unknown, Bool) -> Int -> [Result] =
-    lam keptSamples. lam prevWeight. lam prevSample. lam continueState. lam iter.
+  recursive let mh : [Result] -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
+    lam keptSamples. lam prevWeight. lam prevSample. lam debugState. lam continueState. lam iter.
       match continueState with (continueState, true) then
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
@@ -300,16 +302,19 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
         match
           if bernoulliSample (exp logMhAcceptProb) then
             mcmcAccept ();
-            (weight, sample)
+            (true, weight, sample)
           else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
           -- as we reject and reuse the old sample.
             modref state.alignedTrace prevAlignedTrace;
             modref state.unalignedTraces prevUnalignedTraces;
-            (prevWeight, prevSample)
-        with (weight, sample) in
+            (false, prevWeight, prevSample)
+        with (accepted, weight, sample) in
         let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
-        mh keptSamples weight sample (config.continue.1 continueState sample) (addi iter 1)
+        let debugInfo =
+          { accepted = accepted
+          } in
+        mh keptSamples weight sample (config.debug.1 debugState debugInfo) (config.continue.1 continueState sample) (addi iter 1)
       else keptSamples
   in
 
@@ -342,8 +347,12 @@ let run : Unknown -> (State Result -> Result) -> use RuntimeDistBase in Dist Res
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in
 
+  let debugInfo =
+    { accepted = true
+    } in
+
   -- Sample the rest
-  let samples = mh samples weight sample (config.continue.1 config.continue.0 sample) (addi iter 1) in
+  let samples = mh samples weight sample (config.debug.1 config.debug.0 debugInfo) (config.continue.1 config.continue.0 sample) (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
