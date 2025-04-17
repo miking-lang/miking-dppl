@@ -36,12 +36,13 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistCategorical {p : Param}
   | DsDistPoisson {lambda : Param, scale : Float}
   | DsDistBinomial {n : Param, p : Param}
+  | DsNegDistBinomial {n : Param, p : Param}
   | DsDistUniform {a : Param, b : Param}
   | DsDistGamma {shape : Param, scale : Param}
+  | DsDistGeometic {p : Param}
   | DsDistExponential {rate : Param}
   | DsDistLomax {scale : Param, shape : Param}
   | DsDistBetabin {n : Param, a: Param, b : Param}
-  | DsDistNegativeBinomial {n : Param, p: Param}
 
   sem getParentsH  =
   | DelayParam v -> Some v
@@ -57,12 +58,13 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistCategorical d -> [d.p]
   | DsDistPoisson d -> [d.lambda]
   | DsDistBinomial d -> [d.n,d.p]
+  | DsDistNegBinomial d -> [d.n,d.p]
   | DsDistUniform d -> [d.a,d.b]
   | DsDistGamma d -> [d.shape,d.scale]
+  | DsDistGeometric d -> [d.P]
   | DsDistExponential d -> [d.rate]
   | DsDistLomax d -> [d.shape,d.scale]
   | DsDistBetabin d -> [d.n,d.a,d.b]
-  | DsDistNegativeBinomial d -> [d.n,d.p]
   | _ -> never
 
   sem getParents =
@@ -97,14 +99,15 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistCategorical d -> "DsDistCategorical"
   | DsDistPoisson d -> "DsDistPoisson"
   | DsDistBinomial d -> "DsDistBinomial"
+  | DsDistNegBinomial d -> "DsNegDistBinomial"
   | DsDistUniform d -> "DsDistUniform"
   | DsDistGamma d -> "DsDistGamma"
+  | DsDistGeometric d -> "DsDistGeometric"
   | DsDistExponential d -> "DsDistExponential"
   | DsDistLomax d -> "DsDistLomax"
   | DsDistDirichlet d -> "DsDistDirichlet"
   | DsDistMultinomial d -> "DsDistMultinomial"
   | DsDistBetabin d -> "DsDistBetabin"
-  | DsDistNegativeBinomial d -> "DsDistNegativeBinomial"
   | _ -> error "d2str: distribution is not supported"
 
   sem v2str: DelayVar -> String
@@ -276,7 +279,7 @@ lang DelayedSampling = DelayedGraph
     let shape = ceilfi (unwrap p.shape) in
     let scale = unwrap p.scale in
     let pSc = divf 1. (addf (mulf scale l.scale) 1.) in
-    Some (DsDistNegativeBinomial {n = IntParam shape, p = FloatParam pSc})
+    Some (DsDistNegBinomial {n = IntParam shape, p = FloatParam pSc})
   | (_,_) -> None ()
 
   -- TODO 
@@ -337,11 +340,12 @@ lang DelayedSampling = DelayedGraph
   | DsDistUniform t -> DistUniform {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
   | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, scale =  value (unsafeCoerce sampleT) t.scale}
   | DsDistExponential t -> DistExponential {rate = value  (unsafeCoerce sampleT)  t.rate}
+  | DsDistGeometric t -> DistGeometric {rate = value  (unsafeCoerce sampleT)  t.rate}
   | DsDistLomax t -> DistLomax {shape = value (unsafeCoerce sampleT) t.shape, scale = value (unsafeCoerce sampleT) t.scale}
   | DsDistDirichlet t -> DistDirichlet {a = value (unsafeCoerce sampleT) t.a}
   | DsDistMultinomial t -> DistMultinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
   | DsDistBetabin t -> DistBetabin {n = value (unsafeCoerce sampleT) t.n, a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
-  | DsDistNegativeBinomial t -> DistNegativeBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
+  | DsDistNegBinomial t -> DistNegBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
   | _ -> error "not supported currently."
 
 end

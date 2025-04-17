@@ -48,6 +48,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DGamma { k = k, theta = theta } ->
     let cname = _getConExn "RuntimeDistElementary_DistGamma" env.env in
     i (nconapp_ cname (i (autoty_record_ [("shape", k), ("scale", theta)])))
+  | DGeometric { p = p } ->
+    let cname = _getConExn "RuntimeDistElementary_DistGeometric" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("p", p)])))
   | DExponential { rate = rate } ->
     let cname = _getConExn "RuntimeDistElementary_DistExponential" env.env in
     i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
@@ -56,6 +59,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
     i (nconapp_ cname (i (autoty_record_ [("lambda", lambda)])))
   | DBinomial { n = n, p = p } ->
     let cname = _getConExn "RuntimeDistElementary_DistBinomial" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
+  | DNegBinomial { n = n, p = p } ->
+    let cname = _getConExn "RuntimeDistElementary_DistNegBinomial" env.env in
     i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
   | DBernoulli { p = p } ->
     let cname = _getConExn "RuntimeDistElementary_DistBernoulli" env.env in

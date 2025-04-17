@@ -401,6 +401,26 @@ lang MultinomialDist = Dist
   | DMultinomial _ -> "Multinomial"
 end
 
+lang NegBinomialDist = Dist
+  syn Dist =
+  | DNegBinomial { n : Expr, p : Expr }
+
+  sem smapAccumL_Dist_Expr f acc =
+  | DNegBinomial t ->
+    match f acc t.n with (acc, n) in
+    match f acc t.p with (acc, p) in
+    (acc, DNegBinomial { t with n = n, p = p })
+
+  sem distTy info =
+  | DNegBinomial _ ->
+    let f = ityfloat_ info in
+    let i = ityint_ info in
+    ([], [i, f], i)
+
+  sem distName =
+  | DNegBinomial _ -> "NegBinomial"
+end
+
 lang DirichletDist = Dist
   syn Dist =
   -- a has type [Float]: the list of concentration parameters
@@ -476,6 +496,23 @@ lang GaussianDist = Dist
   | DGaussian _ -> "Gaussian"
 end
 
+lang GeometricDist = Dist
+  syn Dist =
+  | DGeometric { p : Expr }
+
+  sem smapAccumL_Dist_Expr f acc =
+  | DGeometric t ->
+    match f acc t.p with (acc, p) in
+    (acc, DGeometric { t with p = p })
+
+  sem distTy info =
+  | DGeometric _ ->
+    let f = ityfloat_ info in ([], [f], f)
+
+  sem distName =
+  | DGeometric _ -> "Geometric"
+end
+
 lang BinomialDist = Dist
   syn Dist =
   | DBinomial { n : Expr, p : Expr }
@@ -542,11 +579,17 @@ let beta_ = use BetaDist in
 let gamma_ = use GammaDist in
   lam k. lam theta. dist_ (DGamma {k = k, theta = theta})
 
+let geometric_ = use GeometricDist in
+  lam p. dist_ (DGeometric {p = p})
+
 let categorical_ = use CategoricalDist in
   lam p. dist_ (DCategorical {p = p})
 
 let multinomial_ = use MultinomialDist in
   lam n. lam p. dist_ (DMultinomial {n = n, p = p})
+
+let negbinomial_ = use NegBinomialDist in
+  lam n. lam p. dist_ (DNegBinomial {n = n, p = p})
 
 let dirichlet_ = use DirichletDist in
   lam a. dist_ (DDirichlet {a = a})
@@ -571,7 +614,7 @@ let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 
 lang DistAll =
   UniformDist + UniformDiscreteDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
-  CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
+  GeometricDist + CategoricalDist + MultinomialDist + NegBinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist + GaussianDist + BinomialDist + WienerDist
 end
 
@@ -591,6 +634,7 @@ let tmBernoulli = bern_ (float_ 0.5) in
 let tmPoisson = poisson_ (float_ 0.5) in
 let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
 let tmGamma = gamma_ (float_ 1.0) (float_ 2.0) in
+let tmGeometric = geometric_ (float_ 0.5) in
 let tmCategorical =
   categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmMultinomial =
@@ -603,6 +647,7 @@ let tmEmpirical = empirical_ (seq_ [
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
+let tmNegBinomial = negbinomial_ (int_ 5) (float_ 0.5) in
 let tmWiener = wiener_ in
 
 ------------------------
@@ -631,6 +676,10 @@ utest mexprToString tmBeta with strJoin "\n" [
 
 utest mexprToString tmGamma with strJoin "\n" [
   "Gamma 1. 2."
+] using eqString in
+
+utest mexprToString tmGeometric with strJoin "\n" [
+  "Geometric 0.5"
 ] using eqString in
 
 utest mexprToString tmCategorical with strJoin "\n" [
@@ -662,6 +711,10 @@ utest mexprToString tmBinomial with strJoin "\n" [
   "Binomial 5 0.5"
 ] using eqString in
 
+utest mexprToString tmNegBinomial with strJoin "\n" [
+  "NegBinomial 5 0.5"
+] using eqString in
+
 utest mexprToString tmWiener with "Wiener {}"
 using eqString in
 
@@ -686,6 +739,9 @@ utest eqExpr tmBeta (beta_ (float_ 1.0) (float_ 1.0)) with false in
 
 utest tmGamma with tmGamma using eqExpr in
 utest eqExpr tmGamma (gamma_ (float_ 1.0) (float_ 1.0)) with false in
+
+utest tmGeometric with tmGeometric using eqExpr in
+utest eqExpr tmGeometric (geometric_ (float_ 0.4)) with false in
 
 utest tmCategorical with tmCategorical using eqExpr in
 utest eqExpr tmCategorical
@@ -727,6 +783,9 @@ utest eqExpr tmGaussian
 utest tmBinomial with tmBinomial using eqExpr in
 utest eqExpr tmBinomial (binomial_ (int_ 4) (float_ 0.5)) with false in
 
+utest tmNegBinomial with tmNegBinomial using eqExpr in
+utest eqExpr tmNegBinomial (negbinomial_ (int_ 4) (float_ 0.5)) with false in
+
 utest tmWiener with tmWiener using eqExpr in
 utest eqExpr tmWiener tmBinomial with false in
 
@@ -762,6 +821,10 @@ utest smap_Expr_Expr mapVar tmGamma with gamma_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmGamma
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmGeometric with geometric_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmGeometric
+with [ float_ 0.5 ] using eqSeq eqExpr in
+
 utest smap_Expr_Expr mapVar tmCategorical with categorical_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmCategorical
 with [ seq_ [float_ 0.3, float_ 0.2, float_ 0.5] ] using eqSeq eqExpr in
@@ -793,6 +856,10 @@ utest smap_Expr_Expr mapVar tmBinomial with binomial_ tmVar tmVar using eqExpr i
 utest sfold_Expr_Expr foldToSeq [] tmBinomial
 with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmNegBinomial with negbinomial_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmNegBinomial
+with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
+
 ---------------------
 -- SYMBOLIZE TESTS --
 ---------------------
@@ -803,6 +870,7 @@ utest symbolize tmBernoulli with tmBernoulli using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
 utest symbolize tmGamma with tmGamma using eqExpr in
+utest symbolize tmGeometric with tmGeometric using eqExpr in
 utest symbolize tmCategorical with tmCategorical using eqExpr in
 utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmExponential with tmExponential using eqExpr in
@@ -810,7 +878,7 @@ utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmGaussian with tmGaussian using eqExpr in
 utest symbolize tmBinomial with tmBinomial using eqExpr in
-
+utest symbolize tmNegBinomial with tmNegBinomial using eqExpr in
 
 -------------------------
 -- TYPE-ANNOTATE TESTS --
@@ -822,6 +890,7 @@ utest tyTm (typeCheck tmBernoulli) with tydist_ tybool_ using eqType in
 utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBeta) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGamma) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmGeometric) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmCategorical) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
 utest tyTm (typeCheck tmExponential) with tydist_ tyfloat_ using eqType in
@@ -829,6 +898,7 @@ utest tyTm (typeCheck tmEmpirical) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
 utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmNegBinomial) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_)
   using eqType
 in
@@ -847,6 +917,7 @@ utest _anf tmBernoulli with bind_ (ulet_ "t" tmBernoulli) (var_ "t") using eqExp
 utest _anf tmPoisson with bind_ (ulet_ "t" tmPoisson) (var_ "t") using eqExpr in
 utest _anf tmBeta with bind_ (ulet_ "t" tmBeta) (var_ "t") using eqExpr in
 utest _anf tmGamma with bind_ (ulet_ "t" tmGamma) (var_ "t") using eqExpr in
+utest _anf tmGeometric with bind_ (ulet_ "t" tmGeometric) (var_ "t") using eqExpr in
 utest _anf tmCategorical with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
   ulet_ "t1" (categorical_ (var_ "t")),
@@ -873,6 +944,7 @@ utest _anf tmDirichlet with bindall_ [
 ] using eqExpr in
 utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
 utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
+utest _anf tmNegBinomial with bind_ (ulet_ "t" tmNegBinomial) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 
 ---------------------
@@ -885,6 +957,7 @@ utest (typeLift tmBernoulli).1 with tmBernoulli using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
 utest (typeLift tmBeta).1 with tmBeta using eqExpr in
 utest (typeLift tmGamma).1 with tmGamma using eqExpr in
+utest (typeLift tmGeometric).1 with tmGeometric using eqExpr in
 utest (typeLift tmCategorical).1 with tmCategorical using eqExpr in
 utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
 utest (typeLift tmExponential).1 with tmExponential using eqExpr in
@@ -892,6 +965,7 @@ utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
 utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
+utest (typeLift tmNegBinomial).1 with tmNegBinomial using eqExpr in
 utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 
 ()

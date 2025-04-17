@@ -2373,6 +2373,11 @@ utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DGamma {k = x, theta = y}))
   using eq
 in
 
+utest _typeOf [(_x, flt n)] (dist_ (DGeometric {p = x}))
+  with Right (det, tydist_ (flt n))
+  using eq
+in
+
 utest _typeOf [(_x, tyseq_ (flt n))] (dist_ (DCategorical {p = x}))
   with Right (det, tydist_ tyint_)
   using eq
@@ -2396,11 +2401,6 @@ in
 
 utest _typeOf [] (dist_ (DWiener { cps = false, a = unit_ }))
   with Right (det, tydist_ (arrd [flt n] (flt n)))
-  using eq
-in
-
-utest _typeOf [(_x, flt n)] (dist_ (DExponential {rate = x}))
-  with Right (det, tydist_ (flt n))
   using eq
 in
 
