@@ -138,10 +138,17 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
     let n = match assignDCons env runtimeDelayEnv n with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_IntParam" n) in
     let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistBinomial" (i (autoty_record_ [("n", n), ("p", p)])))
+  | DNegBinomial {n = n, p = p} ->
+      let n = match assignDCons env runtimeDelayEnv n with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_IntParam" n) in
+      let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
+      i (conapp runtimeDelayEnv "DelayedGraph_DsDistNegBinomial" (i (autoty_record_ [("n", n), ("p", p)])))
   | DGamma {k = shape, theta = scale} ->
     let shape = match assignDCons env runtimeDelayEnv shape with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" shape) in
     let scale = match assignDCons env runtimeDelayEnv scale with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" scale) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistGamma" (i (autoty_record_ [("shape", shape), ("scale", scale)])))
+  | DGeometric {p = p} ->
+    let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistGeometric" (i (autoty_record_ [("p", p)])))
   | DExponential {rate = rate} ->
     let rate = match assignDCons env runtimeDelayEnv rate with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" rate) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistExponential" (i (autoty_record_ [("rate", rate)])))

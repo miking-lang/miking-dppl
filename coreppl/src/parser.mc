@@ -150,8 +150,11 @@ lang DPPLParser =
                                         ty = TyUnknown {info = info},
                                         info = info})
   | "Gamma" -> Some (2, lam lst. TmDist {dist = DGamma {k = get lst 0, theta = get lst 1},
-                                         ty = TyUnknown {info = info},
-                                         info = info})
+                                        ty = TyUnknown {info = info},
+                                        info = info})
+  | "Geometric" -> Some (1, lam lst. TmDist {dist = DGeometric {p = get lst 0},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
   | "Categorical" -> Some (1, lam lst. TmDist {dist = DCategorical {p = get lst 0},
                                         ty = TyUnknown {info = info},
                                         info = info})
@@ -171,6 +174,9 @@ lang DPPLParser =
                                         ty = TyUnknown {info = info},
                                         info = info})
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
+  | "NegBinomial" -> Some (2, lam lst. TmDist {dist = DNegBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
   | "Wiener" -> Some (1, lam lst. TmDist {dist = DWiener {cps = false, a = get lst 0},
