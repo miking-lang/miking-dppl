@@ -1508,7 +1508,7 @@ end
 
 let pplKeywords = [
   "assume", "observe", "weight", "resample", "cancel",
-  "Uniform", "UniformDiscrete", "Bernoulli", "Poisson", "Beta", "Gamma",
+  "Uniform", "UniformDiscrete", "Bernoulli", "Chi2", "Poisson", "Beta", "Gamma",
   "Geometric", "Categorical", "Multinomial", "NegBinomial", "Dirichlet", 
   "Exponential", "Empirical", "Gaussian", "Binomial", "Wiener"
 ]

@@ -54,6 +54,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DExponential { rate = rate } ->
     let cname = _getConExn "RuntimeDistElementary_DistExponential" env.env in
     i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
+  | DChi2 { df = df } ->
+    let cname = _getConExn "RuntimeDistElementary_DistChi2" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("df", df)])))
   | DPoisson { lambda = lambda } ->
     let cname = _getConExn "RuntimeDistElementary_DistPoisson" env.env in
     i (nconapp_ cname (i (autoty_record_ [("lambda", lambda)])))

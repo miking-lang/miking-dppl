@@ -70,6 +70,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGamma {shape : Float, scale : Float}
   | DistExponential {rate : Float}
   | DistPoisson {lambda : Float}
+  | DistChi2 {df : Int}
   | DistBinomial {n : Int, p : Float}
   | DistNegBinomial {n : Int, p : Float}
   | DistBernoulli {p : Float}
@@ -89,6 +90,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
   | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
   | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
+  | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
   | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
   | DistNegBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
@@ -111,6 +113,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGamma t -> unsafeCoerce (mulf t.shape t.scale)
   | DistExponential t -> unsafeCoerce (divf 1. t.rate)
   | DistPoisson t -> unsafeCoerce t.lambda
+  | DistChi2 t -> unsafeCoerce t.df
   | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
   | DistNegBinomial t -> unsafeCoerce (divf (mulf (int2float t.n) (subf 1. t.p)) t.p)
   | DistBernoulli t -> unsafeCoerce t.p
@@ -131,6 +134,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
   | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
   | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
+  | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)
   | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
   | DistNegBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)

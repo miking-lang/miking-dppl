@@ -2353,6 +2353,11 @@ utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DUniform {a = x, b = y}))
   using eq
 in
 
+--utest _typeOf [(_x, tyint_)] (dist_ (DChi2 {df = x}))
+--  with Right (det, tydist_ (flt n))
+--  using eq
+--in
+
 utest _typeOf [(_x, flt n)] (dist_ (DBernoulli {p = x}))
   with Right (det, tydist_ tybool_)
   using eq
