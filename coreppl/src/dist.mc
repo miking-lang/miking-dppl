@@ -320,7 +320,9 @@ lang Chi2Dist = Dist
 
   sem distTy info =
   | DChi2 _ ->
-    let i = ityint_ info in ([], [i], i)
+    let f = ityfloat_ info in
+    let i = ityint_ info in
+    ([], [i], f)
 
   sem distName =
   | DChi2 _ -> "Chi2"
@@ -524,7 +526,9 @@ lang GeometricDist = Dist
 
   sem distTy info =
   | DGeometric _ ->
-    let f = ityfloat_ info in ([], [f], f)
+    let f = ityfloat_ info in
+    let i = ityint_ info in
+    ([], [f], i)
 
   sem distName =
   | DGeometric _ -> "Geometric"
@@ -913,17 +917,17 @@ utest symbolize tmBinomial with tmBinomial using eqExpr in
 utest symbolize tmNegBinomial with tmNegBinomial using eqExpr in
 
 -------------------------
--- TYPE-ANNOTATE TESTS --
+--- TYPE-CHECK TESTS ----
 -------------------------
 
 utest tyTm (typeCheck tmUniform) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmUniformDiscrete) with tydist_ tyint_ using eqType in
-utest tyTm (typeCheck tmChi2) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmChi2) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmBernoulli) with tydist_ tybool_ using eqType in
 utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBeta) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGamma) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeCheck tmGeometric) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmCategorical) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
 utest tyTm (typeCheck tmExponential) with tydist_ tyfloat_ using eqType in
