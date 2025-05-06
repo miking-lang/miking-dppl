@@ -512,6 +512,31 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
         else acc
       ) (setEmpty nameCmp) graph.data
 
+  sem extractGraphData = | graph ->
+    let f = lam acc. lam i. lam v.
+      match acc with (env, res) in
+      let names = map (int2name graph.im) i in
+      let name = head names in
+      match mapAccumL pprintVarName env names with (env, names) in
+      let names = strJoin " " names in
+      match mapAccumL (absValToString graph.im) env (setToSeq v) with (env, vs) in
+      let vs = join ["{", strJoin ", " vs, "}"] in
+      let msg = join [names, "\n", vs] in
+      (env, mapInsertWith (lam a. lam b. join [a, "\n\n", b]) name msg res) in
+    (tensorFoldi f (pprintEnvEmpty, mapEmpty nameCmp) graph.data).1
+
+end
+
+lang AnnotateAlignmentResult = Annotator + LetAst + Assume
+  sem annotateAlignmentResult : Map Name String -> Expr -> [(Info, Annotation)]
+  sem annotateAlignmentResult data =
+  | TmLet {ident = ident, body = thing, inexpr = inexpr} ->
+    let annot = match mapLookup ident data with Some data
+      then [(infoTm thing, escapeAnnot data)]
+      else [] in
+    let res = sfold_Expr_Expr (lam acc. lam tm. concat acc (annotateAlignmentResult data tm)) annot thing in
+    concat res (annotateAlignmentResult data inexpr)
+  | tm -> sfold_Expr_Expr (lam acc. lam tm. concat acc (annotateAlignmentResult data tm)) [] tm
 end
 
 lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
