@@ -30,6 +30,11 @@ let _driftKernel : OptParser Bool = optMap (xor _driftKernelDefault) (optFlag
   { optFlagDef with long = "kernel"
   , description = "Use drift Kernel in MCMC."
   })
+let _pigeonsDefault : Bool = false
+let _pigeons : OptParser Bool = optMap (xor _pigeonsDefault) (optFlag
+  { optFlagDef with long = "pigeons"
+  , description = "Let Pigeons.jl control inference via stdio."
+  })
 let _driftScaleDefault : Float = 1.0
 let _driftScale : OptParser Float =
   let opt = optArg

@@ -19,6 +19,7 @@ type Any
 -- continuation.
 type Cont a = {
   cont: Any -> a,
+  priorWeight : Float,
   weight: Float,
   dist: use RuntimeDistBase in Dist Any,
   drift: Any -> use RuntimeDistBase in Dist Any
@@ -30,6 +31,9 @@ type State a = {
 
   -- The weight of the current execution
   weight: Ref Float,
+  -- The "prior" probability, i.e., the probability density of getting
+  -- exact values we got from the `assume`s we've encountered
+  priorWeight: Ref Float,
 
   -- The Hasting ratio for the driftKernel call
   driftHastingRatio: Ref Float,
@@ -77,6 +81,7 @@ type Result = Unknown
 -- State (reused throughout inference)
 let state: State Result = {
   weight = ref 0.,
+  priorWeight = ref 0.,
   driftHastingRatio = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
@@ -133,14 +138,19 @@ let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, F
       (sample, wNew)
 
 -- Procedure at aligned samples
-let sampleAlignedBase: all a. ((a -> use RuntimeDistBase in Dist a) -> use RuntimeDistBase in Dist a -> (Any, Float)) -> (a -> use RuntimeDistBase in Dist a) -> use RuntimeDistBase in Dist a -> (a -> Result)
-                         -> Result =
-  lam f. lam drift. lam dist. lam k.
+let sampleAlignedBase
+  : all a. ((a -> use RuntimeDistBase in Dist a) -> use RuntimeDistBase in Dist a -> (Any, Float))
+  -> (a -> use RuntimeDistBase in Dist a)
+  -> use RuntimeDistBase in Dist a
+  -> (a -> Result)
+  -> Result
+  = lam f. lam drift. lam dist. lam k.
 
     -- Snapshot that can later be used to resume execution from this sample.
     let cont: Cont Result = {
       cont = unsafeCoerce k,
       weight = deref state.weight,
+      priorWeight = deref state.priorWeight,
       dist = unsafeCoerce dist,
       drift = unsafeCoerce drift
     } in
@@ -160,10 +170,15 @@ let sampleAlignedBase: all a. ((a -> use RuntimeDistBase in Dist a) -> use Runti
 
     modref state.alignedTrace
       (cons (sample.0, sample.1, cont) (deref state.alignedTrace));
+    modref state.priorWeight (addf (deref state.priorWeight) sample.1);
     k (unsafeCoerce sample.0)
 
-let sampleAligned: all a. (a -> use RuntimeDistBase in Dist a) -> use RuntimeDistBase in Dist a -> (a -> Result) -> Result =
-  lam x. sampleAlignedBase (lam drift. lam dist.
+let sampleAligned
+  : all a. (a -> use RuntimeDistBase in Dist a)
+  -> use RuntimeDistBase in Dist a
+  -> (a -> Result)
+  -> Result
+  = lam x. sampleAlignedBase (lam drift. lam dist.
     let oldAlignedTrace: [(Any,Float)] = deref state.oldAlignedTrace in
     match oldAlignedTrace with [(sample,w)] ++ oldAlignedTrace then
       modref state.oldAlignedTrace oldAlignedTrace;
@@ -175,11 +190,21 @@ let sampleAligned: all a. (a -> use RuntimeDistBase in Dist a) -> use RuntimeDis
       newSample dist
   ) x
 
-let sampleAlignedForceNew: all a. (a -> use RuntimeDistBase in Dist a) -> use RuntimeDistBase in Dist a -> (a -> Result) -> Result =
-  lam x. sampleAlignedBase (lam. newSample) x
+let sampleAlignedForceNew
+  : all a. (a -> use RuntimeDistBase in Dist a)
+  -> use RuntimeDistBase in Dist a
+  -> (a -> Result)
+  -> Result
+  = lam x. sampleAlignedBase (lam. newSample) x
 
-let sampleAlignedKernel: all a. a -> Float -> (a -> use RuntimeDistBase in Dist a) -> use RuntimeDistBase in Dist a -> (a -> Result) -> Result =
-  lam prev. lam w. sampleAlignedBase (moveSample prev w)
+let sampleAlignedKernel
+  : all a. a
+  -> Float
+  -> (a -> use RuntimeDistBase in Dist a)
+  -> use RuntimeDistBase in Dist a
+  -> (a -> Result)
+  -> Result
+  = lam prev. lam w. sampleAlignedBase (moveSample prev w)
 
 let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. lam dist.
   let sample: (Any, Float) =
@@ -201,6 +226,7 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   match deref state.unalignedTraces with [current] ++ rest in
   match sample with (sample,w) in
   modref state.unalignedTraces (cons (cons (sample,w,i) current) rest);
+  modref state.priorWeight (addf (deref state.priorWeight) w);
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
@@ -215,6 +241,7 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
     modref state.oldAlignedTrace (emptyList ());
     modref state.oldUnalignedTraces (emptyList ());
     modref state.weight 0.;
+    modref state.priorWeight 0.;
     modref state.driftHastingRatio 0.;
     modref state.prevWeightReused 0.;
     modref state.weightReused 0.;
@@ -240,6 +267,7 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
             modref state.oldAlignedTrace oldAlignedTrace;
             modref state.oldUnalignedTraces (cons (emptyList ()) (cons (reverse s2) oldUnalignedTraces));
             modref state.weight cont.weight;
+            modref state.priorWeight cont.priorWeight;
             modref state.prevWeightReused 0.;
             modref state.weightReused 0.;
             modref state.alignedTrace alignedTrace;
@@ -269,30 +297,50 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
     rec invalidIndex (deref state.alignedTrace) (deref state.unalignedTraces)
       (emptyList ()) (emptyList ())
 
+recursive let listenPigeons : Float -> Float -> Float = lam weight. lam priorWeight.
+  switch fileReadLine fileStdin
+  case Some ("log_potential(" ++ beta ++ ")") then
+    let beta = string2float beta in
+    -- printErrorLn (join ["weight: ", float2string weight, " priorWeight: ", float2string priorWeight, " beta: ", float2string beta]);
+    let result = addf priorWeight (mulf weight beta) in
+    printLn (join ["response(", float2string result, ")"]);
+    listenPigeons weight priorWeight
+  case Some ("call_sampler!(" ++ beta ++ ")") then
+    string2float beta
+  case Some cmd then
+    printErrorLn (concat "Unrecognized command, ignoring: " cmd);
+    listenPigeons weight priorWeight
+  case None () then
+    exit 0
+  end
+end
+
 -- General inference algorithm for aligned MCMC
 let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
   lam config. lam model.
 
-  recursive let mh : [Result] -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
-    lam keptSamples. lam prevWeight. lam prevSample. lam debugState. lam continueState. lam iter.
+  recursive let mh : [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Float -> Int -> [Result] =
+    lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam beta. lam iter.
       match continueState with (continueState, true) then
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
         let sample = runNext config model in
+        (if config.pigeons then
+          printLn "response()"
+         else ());
         -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
         -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
         let weight = deref state.weight in
+        let priorWeight = deref state.priorWeight in
         let driftHastingRatio = deref state.driftHastingRatio in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
-        let logMhAcceptProb =
-          minf 0. (addf
-                    (addf
-                      (subf weight prevWeight)
-                      (subf weightReused prevWeightReused))
-                    driftHastingRatio)
+        let logMhAcceptProb = minf 0.
+          (addf
+            (mulf beta (addf (subf weight prevWeight) driftHastingRatio))
+            (subf weightReused prevWeightReused))
         in
         -- print "weight: "; printLn (float2string weight);
         -- print "prevWeight: "; printLn (float2string prevWeight);
@@ -302,28 +350,43 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         match
           if bernoulliSample (exp logMhAcceptProb) then
             mcmcAccept ();
-            (true, weight, sample)
+            (true, weight, priorWeight, sample)
           else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
           -- as we reject and reuse the old sample.
             modref state.alignedTrace prevAlignedTrace;
             modref state.unalignedTraces prevUnalignedTraces;
-            (false, prevWeight, prevSample)
-        with (accepted, weight, sample) in
+            (false, prevWeight, prevPriorWeight, prevSample)
+        with (accepted, weight, priorWeight, sample) in
         let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
         let debugInfo =
           { accepted = accepted
           } in
-        mh keptSamples weight sample (config.debug.1 debugState debugInfo) (config.continue.1 continueState sample) (addi iter 1)
+        let debugState = config.debug.1 debugState debugInfo in
+        let continueState = if config.pigeons
+          then (continueState, true)
+          else config.continue.1 continueState sample in
+        let beta = if config.pigeons
+          then listenPigeons weight priorWeight
+          else 1. in
+        mh keptSamples weight priorWeight sample debugState continueState beta (addi iter 1)
       else keptSamples
   in
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
 
+  -- Assume that the first command from pigeons is a call_sampler call
+  -- and discard it
+  (if config.pigeons then fileReadLine fileStdin; () else ());
+
   -- First sample
   let sample = model state in
   let weight = deref state.weight in
+  let priorWeight = deref state.priorWeight in
+  (if config.pigeons then
+    printLn "response()"
+   else ());
 
   -- Set aligned trace length (a constant, only modified here)
   modref state.alignedTraceLength (length (deref state.alignedTrace));
@@ -352,7 +415,14 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
     } in
 
   -- Sample the rest
-  let samples = mh samples weight sample (config.debug.1 config.debug.0 debugInfo) (config.continue.1 config.continue.0 sample) (addi iter 1) in
+  let debugState = config.debug.1 config.debug.0 debugInfo in
+  let continueState = if config.pigeons
+    then (config.continue.0, true)
+    else config.continue.1 config.continue.0 sample in
+  let beta = if config.pigeons
+    then listenPigeons weight priorWeight
+    else 1.0 in
+  let samples = mh samples weight priorWeight sample debugState continueState beta (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);

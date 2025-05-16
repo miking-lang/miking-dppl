@@ -7,6 +7,7 @@ lang LightweightMCMCMethod = InferMethodBase
     , globalProb : Expr -- : Float (range 0 to 1)
     , debug : Expr -- : (a, a -> DebugInfo -> a) for some 'a', where DebugInfo can be found in "coreppl-to-mexpr/mcmc-lightweight/config.mc"
     , driftKernel : Bool
+    , pigeons : Bool
     , driftScale : Float
     , cps : String
     , align : Bool
@@ -27,6 +28,7 @@ lang LightweightMCMCMethod = InferMethodBase
     match optionMapAccum (pprintCode i) env (optionMap str_ t.debugAlignment) with (env, debugAlignment) in
     let align = bool2string t.align in
     let driftKernel = bool2string t.driftKernel in
+    let pigeons = bool2string t.pigeons in
     ( env
     , join
       [ "(LightweightMCMC "
@@ -35,6 +37,7 @@ lang LightweightMCMCMethod = InferMethodBase
       , ", globalProb = ", globalProb
       , ", debug = ", debug
       , ", driftKernel = ", driftKernel
+      , ", pigeons = ", pigeons
       , ", driftScale = ", driftScale
       , ", cps = ", cps
       , ", align = ", align
@@ -57,19 +60,21 @@ lang LightweightMCMCMethod = InferMethodBase
       , ("debug", utuple_ [unit_, ulam_ "" (ulam_ "" unit_)])
       , ("globalProb", float_ _mcmcLightweightGlobalProbDefault)
       , ("driftKernel", bool_ _driftKernelDefault)
+      , ("pigeons", bool_ _pigeonsDefault)
       , ("driftScale", float_ _driftScaleDefault)
       , ("cps", str_ _cpsDefault)
       , ("align", bool_ _alignDefault)
       , ("debugAlignment", str_ "")
       ] in
     match getFields info bindings expectedFields
-    with [continue, keepSample, debug, globalProb, driftKernel, driftScale, cps, align, debugAlignment] in
+    with [continue, keepSample, debug, globalProb, driftKernel, pigeons, driftScale, cps, align, debugAlignment] in
     LightweightMCMC
     { continue = continue
     , keepSample = keepSample
     , globalProb = globalProb
     , debug = debug
     , driftKernel = _exprAsBoolExn driftKernel
+    , pigeons = _exprAsBoolExn pigeons
     , driftScale = _exprAsFloatExn driftScale
     , cps = _exprAsStringExn cps
     , align = _exprAsBoolExn align
@@ -88,6 +93,7 @@ lang LightweightMCMCMethod = InferMethodBase
     , ("debug", t.debug)
     , ("globalProb", t.globalProb)
     , ("driftKernel", bool_ t.driftKernel)
+    , ("pigeons", bool_ t.pigeons)
     ]
 
   -- NOTE(vipa, 2025-04-15): 'inferMethodConfig' must be kept up to
@@ -143,7 +149,7 @@ end
 
 let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod) =
   use LightweightMCMCMethod in
-  let mk = lam particles. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam debugAlignment. LightweightMCMC
+  let mk = lam particles. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam debugAlignment. lam pigeons. LightweightMCMC
     { keepSample = ulam_ "" true_
     , continue = utuple_
       [ int_ particles
@@ -153,10 +159,11 @@ let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod
     , globalProb = float_ globalProb
     , debug = utuple_ [unit_, ulam_ "" (ulam_ "" unit_)]
     , driftKernel = driftKernel
+    , pigeons = pigeons
     , driftScale = driftScale
     , cps = cps
     , align = align
     , debugAlignment = debugAlignment
     } in
-  let method = optApply (optApply (optMap5 mk _particles _mcmcLightweightGlobalProb _driftKernel _driftScale _cps) _align) _debugAlignment in
+  let method = optApply (optApply (optApply (optMap5 mk _particles _mcmcLightweightGlobalProb _driftKernel _driftScale _cps) _align) _debugAlignment) _pigeons in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") method

@@ -12,4 +12,5 @@ type Config a acc dAcc =
   , debug : (dAcc, dAcc -> DebugInfo -> dAcc)
   , globalProb : Float
   , driftKernel : Bool
+  , pigeons : Bool
   }
