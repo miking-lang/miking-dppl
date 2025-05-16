@@ -34,7 +34,17 @@ lang DPPLExtract =
   sem extractInfer options runtimes =
   | ast ->
     match bindInferExpressions runtimes ast with (data, ast) in
-    match liftLambdasWithSolutionsAllowSpineCapture ast with (solutions, ast) in
+    -- NOTE(vipa, 2025-05-16): Bindings that are allowed to be
+    -- captured will be included in the extracted model code, and thus
+    -- re-run each time the model is re-run. We may need to transform
+    -- functions (e.g., if the inference method uses cps), thus we
+    -- only allow the capture of bindings whose type includes a
+    -- function, hoping that the repeated work is regligible or
+    -- non-existent.
+    recursive let includesFunction = lam ty.
+      match ty with TyArrow _ then true else
+      sfold_Type_Type (lam acc. lam ty. if acc then acc else includesFunction ty) false ty in
+    match liftLambdasWithSolutionsMaybeAllowSpineCapture (lam x. if includesFunction x.ty then AllowCapture () else DisallowCapture ()) ast with (solutions, ast) in
 
     let modelAsts : Map Name ModelRepr =
       mapMapWithKey
