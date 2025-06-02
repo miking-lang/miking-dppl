@@ -13,6 +13,11 @@ let _align : OptParser Bool = optMap (xor _alignDefault) (optFlag
   { optFlagDef with long = "align"
   , description = "Whether or not to align the model for certain inference algorithms."
   })
+let _debugAlignment : OptParser (Option String) = optOptional (optArg
+  { optArgDefString with long = "debug-alignment-html"
+  , description = "Output an interactive .html file showing alignment results to the given file."
+  , arg = "FILE"
+  })
 let _cpsDefault : String = "full"
 let _cps : OptParser String =
   let opt = optArg

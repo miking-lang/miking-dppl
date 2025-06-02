@@ -24,6 +24,7 @@ lang MExprPPLLightweightMCMC
   = MExprPPL + Resample + TransformDist + MExprCPS + MExprANFAll
   + MExprPPLCFA + MExprArity + PhaseStats + InferenceInterface
   + AutoDriftKernel + LightweightMCMCMethod
+  + AnnotateAlignmentResult + AnnotateSources + HtmlAnnotator
 
   -------------------------
   -- STATIC ALIGNED MCMC --
@@ -38,6 +39,10 @@ lang MExprPPLLightweightMCMC
     -- Alignment analysis
     let alignRes = alignCfa t in
     let unalignedNames: Set Name = extractUnaligned alignRes in
+
+    (match config.debugAlignment with Some path then
+      writeFile path (annotateAndReadSources (annotateAlignmentResult (extractGraphData alignRes) t))
+     else ());
 
     -- Transform distributions to MExpr distributions
     let t = mapPre_Expr_Expr (transformTmDist x.dists) t in
@@ -425,6 +430,10 @@ lang MExprPPLLightweightMCMC
     -- Alignment analysis
     let alignRes = alignCfa t in
     let unalignedNames: Set Name = extractUnaligned alignRes in
+
+    (match config.debugAlignment with Some path then
+      writeFile path (annotateAndReadSources (annotateAlignmentResult (extractGraphData alignRes) t))
+     else ());
 
     -- printLn ""; printLn "--- UNALIGNED NAMES ---";
     -- match mapAccumL pprintEnvGetStr env (setToSeq unalignedNames) with (env,strings) in
