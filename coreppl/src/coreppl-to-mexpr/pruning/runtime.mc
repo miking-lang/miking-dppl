@@ -1,11 +1,13 @@
 include "math.mc"
 include "seq.mc"
+
 lang PruneGraph
   syn PruneVar =
   | PruneRVar { dist: [Float]
               , likelihood: Ref ([Float])
               , states: [Int]
               , lastWeight: Ref Float
+              , identity: Symbol
               }
 
   | PruneFVar { values:[[Float]]
@@ -32,6 +34,10 @@ lang PruneGraph
   | y -> mapi (lam i. lam e. (get x i, e)) y
 
 end
+let transpose : all a. [[a]] -> [[a]]
+  = lam xs.
+    match xs with [x] ++ xs in
+    foldl (zipWith snoc) (map (lam x. [x]) x) xs
 
 lang PrunedSampling = PruneGraph
 
@@ -40,13 +46,14 @@ lang PrunedSampling = PruneGraph
   | d -> PruneRVar { dist = d
                    , likelihood = ref ((make (length d) 1.))
                    , states = range 0 (length d) 1
-                   , lastWeight = ref 0.}
+                   , lastWeight = ref 0.
+                   , identity = gensym ()}
 
   sem initializePruneFVar f =
   | PruneRVar p -> PruneFVar {values=map f p.states, input = (PruneRVar p)}
 
   sem calculateObservedLH d =
-  | PrunedValue (PruneRVar obs) -> deref obs.likelihood
+  | PrunedValue (PruneRVar obs) -> (deref obs.likelihood)
   | IntValue obs ->
     match d with PruneFParam (PruneFVar v) in
     let states = getStates d in
@@ -56,31 +63,58 @@ lang PrunedSampling = PruneGraph
   sem observePrune cancel value =
   | (SeqFParam p) & d ->
     let likelihood = calculateObservedLH d value in
-    let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip p likelihood) in
-    if cancel then negf (log w) else log w
+    let obsMsg = calculateObsMsg cancel likelihood value d in
+    match value with PrunedValue (PruneRVar obs) in
+    let msgMul = map (lam m. mulf m.0 m.1) (zip likelihood obsMsg) in
+    modref obs.likelihood msgMul;
+    let logw = log (foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul obs.dist)) in
+    let lastWeight = (deref obs.lastWeight) in
+    modref obs.lastWeight logw;
+    subf logw lastWeight
   | (PruneFParam (PruneFVar v)) & d ->
-    let likelihood = calculateObservedLH d value in
-    let msg = calculateMsg cancel likelihood (PruneFVar v) in
-    weightPrune msg v.input
+    let likelihood = calculateObservedLH d value in -- likelihood of observed value
+    let distMsg = calculateDistMsg cancel likelihood value d in -- L_{p,s} for a certain observe
+    let obsMsg = match value with PrunedValue (PruneRVar obs) then
+    Some (calculateObsMsg cancel likelihood value d) else None () in -- L_{p,s} for a certain observe
+    weightPrune distMsg obsMsg value v.input
 
-  sem calculateLogWeight msg =
-  | PruneRVar p -> 
-    let msgMul = map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) msg) in
+  sem calculateLogWeight distMsg obsMsg value =
+  | PruneRVar p ->
+    -- multiply the messages to calculate final L_{p,s}
+    let msgMul = map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) distMsg) in
+    (match value with PrunedValue (PruneRVar obs) then match obsMsg with Some obsMsg in 
+      modref obs.likelihood (map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) obsMsg)) else ());
     modref p.likelihood (msgMul);
+    -- calculate L_{p,s} P(p=s) L_p
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul p.dist) in log w
 
-  sem weightPrune msg =
+
+  sem weightPrune distMsg obsMsg value =
   | PruneRVar p ->
     let uw = (negf (deref p.lastWeight)) in
-    let w = (calculateLogWeight msg (PruneRVar p)) in
+    let w = (calculateLogWeight distMsg obsMsg value (PruneRVar p)) in
+    let xw = match value with PrunedValue (PruneRVar obs) then let lw = (deref obs.lastWeight) in modref obs.lastWeight w;lw else 0. in
     modref p.lastWeight w;
-    addf uw w
+    subf (addf uw w) xw
 
-  -- [p(d|e=0), p(d|e=1), p(d|e=2),p(d|e=1)]
-  sem calculateMsg: Bool -> [Float] -> PruneVar -> [Float]
-  sem calculateMsg cancel lh =
-  | PruneFVar v ->  map (lam p. let t = foldl (lam acc. lam x. addf acc (mulf x.0 x.1))  0. (zip p lh) in if cancel then divf 1. t else t) v.values
-
+  sem calculateObsMsg cancel lh value = -- likelihood of the observed value
+  | (PruneFParam (PruneFVar v)) -> 
+    match v.input with PruneRVar p in
+    let op = if cancel then divf else mulf in
+    mapi (lam i. lam l. foldl2 (lam acc. lam v. lam p. addf acc (op p (mulf (get v i) l))) 0. v.values p.dist) lh
+  | SeqFParam p -> if cancel then map (divf 1.) p else p
+ 
+  -- L_{p,s} = \sum_x L_{c,x}P(c=x|p=s)
+  sem calculateDistMsg cancel lh value = -- likelihood of the observed value
+  | (PruneFParam (PruneFVar v)) -> 
+    let applyCancel = lam t. if cancel then divf 1. t else t in
+    let op = if cancel then divf else mulf in
+    match v.input with PruneRVar p in
+    let mapDifferent = lam lh. map (lam p. let t = foldl (lam acc. lam x. addf acc (op x.0 x.1)) 0. (zip lh p) in t) v.values in
+    match value with PrunedValue (PruneRVar obs) then 
+      if eqsym obs.identity p.identity then let res = mapi (lam i. lam p. op (get lh i) (get p i)) v.values in res
+      else let lh = zipWith mulf obs.dist lh in mapDifferent lh
+    else mapDifferent lh
 end
 
 let initializePruneRVar = lam d.
