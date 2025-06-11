@@ -1,3 +1,6 @@
+include "matrix.mc"
+include "ext/matrix-ext.mc"
+include "ext/dist-ext.mc"
 -- Single observe --
 let modelNN = lam.
   let x = assume (Categorical [0.7, 0.3]) in
@@ -359,7 +362,7 @@ let results = [ infer (Importance {particles = 100000, cps = "none",prune=true})
 
 let normConsts = map distEmpiricalNormConst results
 let x = iter (lam n. utest noPrunedResult with n using eqfApprox 1e-2 in ()) normConsts
--- Single variable, double observe
+
 let modelN = lam.
   let x = assume (Categorical [0.7, 0.3]) in
   let f = lam d. get [[0.9, 0.1], [0.2, 0.8]] d in
@@ -379,6 +382,87 @@ let results = [ infer (Importance {particles = 100000, cps = "none",prune=true})
 
 let normConsts = map distEmpiricalNormConst results
 let x = iter (lam n. utest noPrunedResult with n using eqfApprox 1e-2 in ()) normConsts
+
+-- tree inference
+type Tree
+con Leaf : {age: Float, seq: [Int]} -> Tree
+
+let a:Tree = Leaf {age=0.0, seq=[1, 1, 0, 2, 3, 0, 0, 0, 0, 3, 1, 1, 3, 3, 2]} 
+let b:Tree = Leaf {age=0.0, seq=[1, 1, 0, 2, 0, 1, 0, 0, 0, 3, 1, 0, 1, 1, 0]} 
+let c:Tree = Leaf {age=0.0, seq=[0, 0, 1, 1, 0, 2, 1, 0, 0, 0, 2, 0, 3, 3, 0]}
+let d:Tree = Leaf {age=0.0, seq=[0, 0, 1, 1, 0, 3, 0, 1, 0, 0, 2, 2, 3, 1, 0]}
+
+
+let trees:[Tree] = [a,b,c,d]
+let seqLength = 15
+con Node : all a. {age: Float, seq: [Int], left: Tree, right: Tree} -> Tree
+con NodeP : all a. {age: Float, seq: [PruneInt], left: Tree, right: Tree} -> Tree
+let getAge = lam n. match n with Node r then r.age else match n with Leaf r then r.age else never
+let getAgeP = lam n. match n with NodeP r then r.age else match n with Leaf r then r.age else never
+
+let slice = lam seq. lam beg. lam mend.
+    subsequence seq beg (subi mend beg)
+
+let matrixGet = lam row. lam col. lam tensor.
+  tensorGetExn tensor [row, col]
+
+let ctmc = lam i. lam qt:Tensor[Float].
+  [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt]
+
+let pickpair = lam n.
+  let i = assume (UniformDiscrete 0 (subi n 1)) in
+  let j = assume (UniformDiscrete 0 (subi n 2)) in
+  if lti j i then (i,j) else (i,addi j 1)
+
+let iid = lam f. lam p. lam n.
+  let params = make n p in
+  map f params
+
+recursive
+let clusterP = lam q. lam trees. lam maxAge. lam seqLen. lam n.
+  if eqi n 1 then trees else
+  let pairs = pickpair n in
+  let leftChild = get trees pairs.0 in
+  let rightChild = get trees pairs.1 in
+  let children = [leftChild, rightChild] in
+
+  let t = assume (Exponential 10.0) in
+  let age = addf t maxAge in
+  let qts = map (lam c. matrixExponential (matrixMulFloat (subf age (getAgeP c)) q)) children in
+
+  let seq = iid (lam p. prune (Categorical p)) [0.25,0.25,0.25,0.25] seqLen in
+  iteri (lam i. lam site:PruneInt.
+    iter2 (lam child. lam qt.
+      let p1 = ctmc (pruned site) qt in
+      match child with NodeP n then
+        let s:PruneInt = get n.seq i in 
+        observe (pruned s) (Categorical p1);
+        cancel (observe (pruned s) (Categorical [0.25,0.25,0.25,0.25]))
+      else match child with Leaf l in
+        let s = get l.seq i in
+        (if lti s 4 then 
+        observe s (Categorical p1);
+        cancel (observe s (Categorical [0.25,0.25,0.25,0.25])) else ())
+    ) children qts
+  ) seq;
+  resample;
+  let parent = NodeP {age=age, seq=seq,left=leftChild, right=rightChild} in
+  let min = mini pairs.0 pairs.1 in
+  let max = maxi pairs.0 pairs.1 in
+  let new_trees = join ([slice trees 0 min, slice trees (addi min 1) max, slice trees (addi max 1) n, [parent]]) in
+  clusterP q new_trees age seqLen (subi n 1)
+end
+let modelTreeInferenceP = lam.
+  let q = [negf 1., divf 1. 3., divf 1. 3., divf 1. 3.,
+   divf 1. 3., negf 1., divf 1. 3., divf 1. 3.,
+   divf 1. 3., divf 1. 3.,negf 1., divf 1. 3.,
+   divf 1. 3., divf 1. 3., divf 1. 3., negf 1.] in
+  let q = matrixCreate [4,4] q in
+  iter (lam l. match l with Leaf l in iter (lam s. if eqi s 4 then () else weight (log 0.25)) l.seq) trees;
+  clusterP q trees 0.0 seqLength (length trees);()
+
+let treeNormConst = distEmpiricalNormConst (infer (Importance {particles = 10000, cps = "none",prune=true}) modelTreeInferenceP)
+utest treeNormConst with -79.28202 using eqfApprox 1e-5
 mexpr
 ()
 
