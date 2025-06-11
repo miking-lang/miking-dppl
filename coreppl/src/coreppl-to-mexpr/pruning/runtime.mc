@@ -82,8 +82,9 @@ lang PrunedSampling = PruneGraph
   | PruneRVar p ->
     -- multiply the messages to calculate final L_{p,s}
     let msgMul = map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) distMsg) in
+
     (match value with PrunedValue (PruneRVar obs) then match obsMsg with Some obsMsg in 
-      modref obs.likelihood (map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) obsMsg)) else ());
+      modref obs.likelihood obsMsg/-(map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) obsMsg))-/ else ());
     modref p.likelihood (msgMul);
     -- calculate L_{p,s} P(p=s) L_p
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul p.dist) in log w
@@ -101,7 +102,8 @@ lang PrunedSampling = PruneGraph
   | (PruneFParam (PruneFVar v)) -> 
     match v.input with PruneRVar p in
     let op = if cancel then divf else mulf in
-    mapi (lam i. lam l. foldl2 (lam acc. lam v. lam p. addf acc (op p (mulf (get v i) l))) 0. v.values p.dist) lh
+    match value with PrunedValue (PruneRVar obs) in
+    mapi (lam i. lam l. foldl2 (lam acc. lam v. lam c. addf acc (op c.0 (mulf c.1 (mulf (get v i) l)))) 0. v.values (zip p.dist (deref p.likelihood))) lh
   | SeqFParam p -> if cancel then map (divf 1.) p else p
  
   -- L_{p,s} = \sum_x L_{c,x}P(c=x|p=s)
