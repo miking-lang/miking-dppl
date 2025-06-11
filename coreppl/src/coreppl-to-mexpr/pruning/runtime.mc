@@ -63,28 +63,26 @@ lang PrunedSampling = PruneGraph
   sem observePrune cancel value =
   | (SeqFParam p) & d ->
     let likelihood = calculateObservedLH d value in
-    let obsMsg = calculateObsMsg cancel likelihood value d in
+    let obsLh = calculateObsLh cancel likelihood value d in
     match value with PrunedValue (PruneRVar obs) in
-    let msgMul = map (lam m. mulf m.0 m.1) (zip likelihood obsMsg) in
-    modref obs.likelihood msgMul;
-    let logw = log (foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul obs.dist)) in
+    modref obs.likelihood obsLh;
+    let logw = log (foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip obsLh obs.dist)) in
     let lastWeight = (deref obs.lastWeight) in
     modref obs.lastWeight logw;
     subf logw lastWeight
   | (PruneFParam (PruneFVar v)) & d ->
     let likelihood = calculateObservedLH d value in -- likelihood of observed value
     let distMsg = calculateDistMsg cancel likelihood value d in -- L_{p,s} for a certain observe
-    let obsMsg = match value with PrunedValue (PruneRVar obs) then
-    Some (calculateObsMsg cancel likelihood value d) else None () in -- L_{p,s} for a certain observe
-    weightPrune distMsg obsMsg value v.input
+    let obsLh = match value with PrunedValue (PruneRVar obs) then
+    Some (calculateObsLh cancel likelihood value d) else None () in -- L_{p,s} for a certain observe
+    weightPrune distMsg obsLh value v.input
 
-  sem calculateLogWeight distMsg obsMsg value =
+  sem calculateLogWeight distMsg obsLh value =
   | PruneRVar p ->
     -- multiply the messages to calculate final L_{p,s}
     let msgMul = map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) distMsg) in
-
-    (match value with PrunedValue (PruneRVar obs) then match obsMsg with Some obsMsg in 
-      modref obs.likelihood obsMsg/-(map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) obsMsg))-/ else ());
+    (match value with PrunedValue (PruneRVar obs) then match obsLh with Some obsLh in 
+      modref obs.likelihood obsLh else ());
     modref p.likelihood (msgMul);
     -- calculate L_{p,s} P(p=s) L_p
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul p.dist) in log w
@@ -98,16 +96,17 @@ lang PrunedSampling = PruneGraph
     modref p.lastWeight w;
     subf (addf uw w) xw
 
-  sem calculateObsMsg cancel lh value = -- likelihood of the observed value
+  -- \sum_s L_{c,x}P(c=x|p=s) P(p=s)
+  sem calculateObsLh cancel lh value =
   | (PruneFParam (PruneFVar v)) -> 
     match v.input with PruneRVar p in
     let op = if cancel then divf else mulf in
     match value with PrunedValue (PruneRVar obs) in
     mapi (lam i. lam l. foldl2 (lam acc. lam v. lam c. addf acc (op c.0 (mulf c.1 (mulf (get v i) l)))) 0. v.values (zip p.dist (deref p.likelihood))) lh
-  | SeqFParam p -> if cancel then map (divf 1.) p else p
+  | SeqFParam p -> if cancel then zipWith divf lh p else zipWith mulf lh p
  
   -- L_{p,s} = \sum_x L_{c,x}P(c=x|p=s)
-  sem calculateDistMsg cancel lh value = -- likelihood of the observed value
+  sem calculateDistMsg cancel lh value = 
   | (PruneFParam (PruneFVar v)) -> 
     let applyCancel = lam t. if cancel then divf 1. t else t in
     let op = if cancel then divf else mulf in
