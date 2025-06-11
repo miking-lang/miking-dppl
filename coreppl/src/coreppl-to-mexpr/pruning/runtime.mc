@@ -73,25 +73,25 @@ lang PrunedSampling = PruneGraph
   | (PruneFParam (PruneFVar v)) & d ->
     let likelihood = calculateObservedLH d value in -- likelihood of observed value
     let distMsg = calculateDistMsg cancel likelihood value d in -- L_{p,s} for a certain observe
-    let obsLh = match value with PrunedValue (PruneRVar obs) then
-    Some (calculateObsLh cancel likelihood value d) else None () in -- L_{p,s} for a certain observe
-    weightPrune distMsg obsLh value v.input
+    (match value with PrunedValue (PruneRVar obs) then
+      (match v.input with PruneRVar p in
+        (if eqsym obs.identity p.identity then () else modref obs.likelihood (calculateObsLh cancel likelihood value d)))
+     else ()); -- L_{p,s} for a certain observe
+    weightPrune distMsg value v.input
 
-  sem calculateLogWeight distMsg obsLh value =
+  sem calculateLogWeight distMsg value =
   | PruneRVar p ->
     -- multiply the messages to calculate final L_{p,s}
     let msgMul = map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) distMsg) in
-    (match value with PrunedValue (PruneRVar obs) then match obsLh with Some obsLh in 
-      modref obs.likelihood obsLh else ());
     modref p.likelihood (msgMul);
     -- calculate L_{p,s} P(p=s) L_p
     let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul p.dist) in log w
 
 
-  sem weightPrune distMsg obsMsg value =
+  sem weightPrune distMsg value =
   | PruneRVar p ->
     let uw = (negf (deref p.lastWeight)) in
-    let w = (calculateLogWeight distMsg obsMsg value (PruneRVar p)) in
+    let w = (calculateLogWeight distMsg value (PruneRVar p)) in
     let xw = match value with PrunedValue (PruneRVar obs) then let lw = (deref obs.lastWeight) in modref obs.lastWeight w;lw else 0. in
     modref p.lastWeight w;
     subf (addf uw w) xw
