@@ -45,7 +45,7 @@ lang PrunedSampling = PruneGraph
   | PruneRVar p -> PruneFVar {values=map f p.states, input = (PruneRVar p)}
 
   sem calculateObservedLH d =
-  | PrunedValue (PruneRVar obs) -> (deref obs.likelihood)
+  | PrunedValue (PruneRVar obs) -> deref obs.likelihood
   | IntValue obs ->
     match d with PruneFParam (PruneFVar v) in
     let states = getStates d in
@@ -59,12 +59,13 @@ lang PrunedSampling = PruneGraph
     match value with PrunedValue (PruneRVar obs) in
     modref obs.likelihood obsLh;
     let logw = log (foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip obsLh obs.dist)) in
-    let lastWeight = (deref obs.lastWeight) in
+    let lastWeight = deref obs.lastWeight in
     modref obs.lastWeight logw;
     subf logw lastWeight
   | (PruneFParam (PruneFVar v)) & d ->
     let likelihood = calculateObservedLH d value in -- likelihood of observed value
     let distMsg = calculateDistMsg cancel likelihood value d in -- L_{p,s} for a certain observe
+    -- Note: Commented out assuming that the pruned value does not live afterwards in a mixed observe
     /-(match value with PrunedValue (PruneRVar obs) then
       (match v.input with PruneRVar p in
         (if eqsym obs.identity p.identity then () else modref obs.likelihood (calculateObsLh cancel likelihood value d)))
@@ -84,6 +85,7 @@ lang PrunedSampling = PruneGraph
   | PruneRVar p ->
     let uw = (negf (deref p.lastWeight)) in
     let w = (calculateLogWeight distMsg value (PruneRVar p)) in
+    -- Note: Commented out assuming that the pruned value does not live afterwards in a mixed observe
     let xw = match value with PrunedValue (PruneRVar obs) then let lw = (deref obs.lastWeight) in /-modref obs.lastWeight w;-/lw else 0. in
     modref p.lastWeight w;
     subf (addf uw w) xw
