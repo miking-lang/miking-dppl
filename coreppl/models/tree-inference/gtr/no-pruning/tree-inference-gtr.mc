@@ -47,7 +47,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
         (if lti s 4 then observe s (Categorical p1); cancel (observe s (Categorical pi)) else ())
     ) children qts
   ) seq;
-  (if eqi n 2 then () else iteri (lam i. lam site:PruneInt. cancel (observe (pruned site) (Categorical pi))) seq);
+  (if eqi n 2 then () else iteri (lam i. lam site. cancel (observe site (Categorical pi))) seq);
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
   let min = mini pairs.0 pairs.1 in
   let max = maxi pairs.0 pairs.1 in
