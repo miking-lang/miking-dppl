@@ -56,32 +56,32 @@ let modelNN = lam.
   let d = assume (Categorical [0.5, 0.5]) in
   let f = lam d. get [[0.9, 0.1], [0.2, 0.8]] d in
   let params = f d in
-  observe x (Categorical params);
-  observe x (Categorical [0.9, 0.1])
+  observe x (Categorical [0.9, 0.1]);
+  observe x (Categorical params)
 
 let modelNP = lam.
   let x = assume (Categorical [0.7, 0.3]) in
   let d = prune (Categorical [0.5, 0.5]) in
   let f = lam d. get [[0.9, 0.1], [0.2, 0.8]] d in
   let params = f (pruned d) in
-  observe x (Categorical params);
-  observe x (Categorical [0.9, 0.1])
+  observe x (Categorical [0.9, 0.1]);
+  observe x (Categorical params)
 
 let modelPN = lam.
   let x = prune (Categorical [0.7, 0.3]) in
   let d = assume (Categorical [0.5, 0.5]) in
   let f = lam d. get [[0.9, 0.1], [0.2, 0.8]] d in
   let params = f d in
-  observe (pruned x) (Categorical params);
-  observe (pruned x) (Categorical [0.9, 0.1])
+  observe (pruned x) (Categorical [0.9, 0.1]);
+  observe (pruned x) (Categorical params)
 
 let modelPP = lam.
   let x = prune (Categorical [0.7, 0.3]) in
   let d = prune (Categorical [0.5, 0.5]) in
   let f = lam d. get [[0.9, 0.1], [0.2, 0.8]] d in
   let params = f (pruned d) in
-  observe (pruned x) (Categorical params);
-  observe (pruned x) (Categorical [0.9, 0.1])
+  observe (pruned x) (Categorical [0.9, 0.1]);
+  observe (pruned x) (Categorical params)
 
 let noPrunedResult = distEmpiricalNormConst (infer (Importance {particles = 100000, cps = "none"}) modelNN)
 
@@ -320,17 +320,17 @@ let modelN = lam.
   let d = assume (Categorical [0.4, 0.6]) in
   let f = lam d. get [[0.9, 0.1], [0.2, 0.8]] d in
   let params = f d in
-  cancel (observe x (Categorical params));
   cancel (observe x (Categorical [0.9, 0.1]));
-  cancel (observe x (Categorical [0.5, 0.5]))
+  cancel (observe x (Categorical [0.5, 0.5]));
+  cancel (observe x (Categorical params))
 let modelP = lam.
   let x = prune (Categorical [0.7, 0.3]) in
   let d = prune (Categorical [0.4, 0.6]) in
   let f = lam d. get [[0.9, 0.1], [0.2, 0.8]] d in
   let params = f (pruned d) in
-  cancel (observe (pruned x) (Categorical params));
   cancel (observe (pruned x) (Categorical [0.9, 0.1]));
-  cancel (observe (pruned x) (Categorical [0.5, 0.5]))
+  cancel (observe (pruned x) (Categorical [0.5, 0.5]));
+  cancel (observe (pruned x) (Categorical params))
 let noPrunedResult = distEmpiricalNormConst (infer (Importance {particles = 100000, cps = "none"}) modelN)
 
 let results = [ infer (Importance {particles = 100000, cps = "none",prune=true}) modelP
