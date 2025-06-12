@@ -29,15 +29,7 @@ lang PruneGraph
   | SeqFParam f -> range 0 (length f) 1
   | PruneFParam f -> match f with PruneFVar f in
       range 0 (length f.values) 1
-
-  sem zip x =
-  | y -> mapi (lam i. lam e. (get x i, e)) y
-
 end
-let transpose : all a. [[a]] -> [[a]]
-  = lam xs.
-    match xs with [x] ++ xs in
-    foldl (zipWith snoc) (map (lam x. [x]) x) xs
 
 lang PrunedSampling = PruneGraph
 
