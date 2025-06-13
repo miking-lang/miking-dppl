@@ -44,10 +44,10 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi:[Float].
         observe (pruned s) (Categorical p1)
       else match child with Leaf l in
         let s = get l.seq i in
-        (if lti s 4 then observe s (Categorical p1);cancel (observe s (Categorical pi)) else ())
+        (if lti s 4 then observe s (Categorical p1) else ())
     ) children qts
+    (if gti n 2 then cancel (observe (pruned site) (Categorical pi)) else ())
   ) seq;
-  (if eqi n 2 then () else iteri (lam i. lam site:PruneInt. cancel (observe (pruned site) (Categorical pi))) seq);
   resample;
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
   let min = mini pairs.0 pairs.1 in
@@ -85,5 +85,4 @@ let model = lam.
   let pi = assume (Dirichlet ([1.0, 1.0, 1.0, 1.0])) in
   let er = assume (Dirichlet [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]) in
   let q = gtr pi er in
-  iter (lam l. match l with Leaf l in iter (lam s. if eqi s 4 then () else weight (log (get pi s))) l.seq) trees;
   cluster q trees 0.0 seqLength (length trees) pi
