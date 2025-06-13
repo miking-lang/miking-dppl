@@ -41,13 +41,13 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
       let p1 = ctmc (pruned site) qt in
       match child with Node n then
         let s = get n.seq i in
-        observe (pruned s) (Categorical p1);
-        cancel (observe (pruned s) (Categorical [0.25,0.25,0.25,0.25]))
+        observe (pruned s) (Categorical p1)
       else match child with Leaf l in
         let s = get l.seq i in
-        (if lti s 4 then observe s (Categorical p1); cancel (observe s (Categorical [0.25,0.25,0.25,0.25])) else ())
+        (if lti s 4 then observe s (Categorical p1);cancel (observe s (Categorical [0.25,0.25,0.25,0.25])) else ())
     ) children qts
   ) seq;
+  (if eqi n 2 then () else iteri (lam i. lam site:PruneInt. cancel (observe (pruned site) (Categorical [0.25,0.25,0.25,0.25]))) seq);
   resample;
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
   let min = mini pairs.0 pairs.1 in
