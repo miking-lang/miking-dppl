@@ -35,7 +35,6 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi:[Float].
   let age = addf t maxAge in
   let qts = map (lam c. matrixExponential (matrixMulFloat (subf age (getAge c)) q)) children in
 
-  resample;
   let seq:[PruneInt] = iid (lam p. prune (Categorical p)) pi seqLen in
   iteri (lam i. lam site:PruneInt.
     iter2 (lam child. lam qt.
@@ -49,6 +48,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi:[Float].
     ) children qts
   ) seq;
   (if eqi n 2 then () else iteri (lam i. lam site:PruneInt. cancel (observe (pruned site) (Categorical pi))) seq);
+  resample;
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
   let min = mini pairs.0 pairs.1 in
   let max = maxi pairs.0 pairs.1 in
