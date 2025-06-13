@@ -71,7 +71,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
     let node_msg = foldl (lam acc. lam m. zipWith (lam lm. lam rm. mulf lm rm) acc m) (head childMsgs) (tail childMsgs) in
     let log_likes = getLogLikes node_msg in
     weight (log_likes);
-    (if gti n 2 then weight (negf (getLogLikes node_msg)) else ());
+    (if gti n 2 then weight (negf log_likes) else ());
     node_msg
   ) seqLen in
   resample;
@@ -89,5 +89,4 @@ let model = lam.
    divf 1. 3., divf 1. 3., divf 1. 3., negf 1.] in
   let q = matrixCreate [4,4] q in
   let trees:[Tree] = buildForest data [] 0 (length data) seqLength in
-  --iter (lam l. iter (lam s. if eqi s 4 then () else weight (log 0.25)) l) data;
   cluster q trees 0.0 seqLength (length trees)

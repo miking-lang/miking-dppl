@@ -71,7 +71,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
     let node_msg = foldl (lam acc. lam m. zipWith (lam lm. lam rm. mulf lm rm) acc m) (head childMsgs) (tail childMsgs) in
     let log_likes = getLogLikes node_msg pi in
     weight (log_likes);
-    (if gti n 2 then weight (negf (getLogLikes node_msg pi)) else ());
+    (if gti n 2 then weight (negf log_likes) else ());
     node_msg
   ) seqLen in
   resample;
