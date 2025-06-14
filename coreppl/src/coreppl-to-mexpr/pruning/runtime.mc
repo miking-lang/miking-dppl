@@ -102,10 +102,9 @@ lang PrunedSampling = PruneGraph
   -- L_{p,s} = \sum_x L_{c,x}P(c=x|p=s)
   sem calculateDistMsg cancel lh value = 
   | (PruneFParam (PruneFVar v)) -> 
-    let applyCancel = lam t. if cancel then divf 1. t else t in
     let op = if cancel then divf else mulf in
     match v.input with PruneRVar p in
-    let mapDifferent = lam lh. map (lam p. let t = foldl (lam acc. lam x. addf acc (op x.0 x.1)) 0. (zip lh p) in t) v.values in
+    let mapDifferent = lam lh. map (lam p. foldl (lam acc. lam x. addf acc (op x.0 x.1)) 0. (zip lh p)) v.values in
     match value with PrunedValue (PruneRVar obs) then 
       if eqsym obs.identity p.identity then let res = mapi (lam i. lam p. op (get lh i) (get p i)) v.values in res
       else let lh = zipWith mulf obs.dist lh in mapDifferent lh
