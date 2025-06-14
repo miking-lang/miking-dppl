@@ -30,7 +30,7 @@ let getLeafMessage = lam seq:Int.
   else if eqi seq 4 then [1.0, 1.0, 1.0, 1.0]
   else error "Invalid state at leaf"
 
-let getLogLikes = lam msg. 
+let getLogLikes = lam msg.
   let like = foldl (lam acc. lam x. addf acc (mulf x 0.25)) 0. msg in
   log like
 
@@ -66,12 +66,12 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
     let childMsgs = zipWithIndex (lam j. lam child. lam p1.
       let msg = get msg j in
       let in_msg = map (lam p. let t = foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p msg in t) p1 in
-      in_msg
+      let log_likes = getLogLikes msg in
+      weight (negf (log_likes)); in_msg
     ) children ps in
     let node_msg = foldl (lam acc. lam m. zipWith (lam lm. lam rm. mulf lm rm) acc m) (head childMsgs) (tail childMsgs) in
     let log_likes = getLogLikes node_msg in
     weight (log_likes);
-    (if gti n 2 then weight (negf log_likes) else ());
     node_msg
   ) seqLen in
   resample;
@@ -89,4 +89,5 @@ let model = lam.
    divf 1. 3., divf 1. 3., divf 1. 3., negf 1.] in
   let q = matrixCreate [4,4] q in
   let trees:[Tree] = buildForest data [] 0 (length data) seqLength in
+  iter (lam l. iter (lam s. if eqi s 4 then () else weight (log 0.25)) l) data;
   cluster q trees 0.0 seqLength (length trees)
