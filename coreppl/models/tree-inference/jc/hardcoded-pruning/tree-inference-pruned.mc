@@ -61,7 +61,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
   let ps = map (lam qt. map (lam i. ctmc i qt) [0,1,2,3]) qts in
   let msgs = reverse (zipAll (map getMsg children)) in
   iter (lam c. match c with Node n then weight (negf n.lastWeight) else ()) children;
-  
+
   let res = mapIndex (lam i.
     let msg = get msgs i in
     let childMsgs = zipWithIndex (lam j. lam child. lam p1.
@@ -71,7 +71,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
     ) children ps in
     let node_msg = foldl (lam acc. lam m. zipWith (lam lm. lam rm. mulf lm rm) acc m) (head childMsgs) (tail childMsgs) in
     let log_likes = getLogLikes node_msg [0.25,0.25,0.25,0.25] in
-    let lastW = (if gti n 2 then (foldl addf 0. node_msg) else log_likes) in
+    let lastW = (if gti n 2 then log (foldl addf 0. node_msg) else log_likes) in
     weight lastW;
     (node_msg, lastW)
   ) seqLen in
