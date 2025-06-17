@@ -86,7 +86,7 @@ lang PrunedSampling = PruneGraph
     let uw = (negf (deref p.lastWeight)) in
     let w = (calculateLogWeight distMsg value (PruneRVar p)) in
     -- Note: Commented out assuming that the pruned value does not live afterwards in a mixed observe
-    let xw = match value with PrunedValue (PruneRVar obs) then let lw = (deref obs.lastWeight) in /-modref obs.lastWeight w;-/lw else 0. in
+    let xw = match value with PrunedValue (PruneRVar obs) then (if eqsym obs.identity p.identity then 0. else let lw = (deref obs.lastWeight) in /-modref obs.lastWeight w;-/lw) else 0. in
     modref p.lastWeight w;
     subf (addf uw w) xw
 
@@ -106,7 +106,7 @@ lang PrunedSampling = PruneGraph
     match v.input with PruneRVar p in
     let mapDifferent = lam lh. map (lam p. foldl (lam acc. lam x. addf acc (op x.0 x.1)) 0. (zip lh p)) v.values in
     match value with PrunedValue (PruneRVar obs) then 
-      if eqsym obs.identity p.identity then let res = mapi (lam i. lam p. op (get lh i) (get p i)) v.values in res
+      if eqsym obs.identity p.identity then mapi (lam i. lam p. op 1. (get p i)) v.values 
       else let lh = zipWith mulf obs.dist lh in mapDifferent lh
     else mapDifferent lh
 end
