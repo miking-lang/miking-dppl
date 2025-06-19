@@ -72,7 +72,7 @@ lang PrunedSampling = PruneGraph
   sem calculateLogWeight distMsg value =
   | PruneRVar p ->
     -- multiply the messages to calculate final L_{p,s}
-    let msgMul = zipWith (lam l. lam d. mulf l d) (deref p.likelihood) distMsg in
+    let msgMul = zipWith mulf (deref p.likelihood) distMsg in
     modref p.likelihood (msgMul);
     -- calculate L_{p,s} P(p=s) L_p
     let w = foldl2 (lam acc. lam m. lam d. addf acc (mulf m d)) 0. msgMul p.dist in log w
