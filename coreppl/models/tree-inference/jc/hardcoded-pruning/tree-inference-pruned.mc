@@ -69,7 +69,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
       let in_msg = map (lam p. let t = foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p msg in t) p1 in
       in_msg
     ) children ps in
-    let node_msg = foldl (lam acc. lam m. zipWith (lam lm. lam rm. mulf lm rm) acc m) (head childMsgs) (tail childMsgs) in
+    let node_msg = foldl (lam acc. lam m. zipWith mulf acc m) (head childMsgs) (tail childMsgs) in
     let log_likes = getLogLikes node_msg [0.25,0.25,0.25,0.25] in
     let lastW = (if gti n 2 then log (foldl addf 0. node_msg) else log_likes) in
     weight lastW;
