@@ -66,8 +66,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
     let msg = get msgs i in
     let childMsgs = zipWithIndex (lam j. lam child. lam p1.
       let msg = get msg j in
-      let in_msg = map (lam p. foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p msg) p1 in
-      in_msg
+      map (lam p. foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p msg) p1
     ) children ps in
     let node_msg = foldl (lam acc. lam m. zipWith mulf acc m) (head childMsgs) (tail childMsgs) in
     let lastW = (if gti n 2 then log (foldl addf 0. node_msg) else getLogLikes node_msg pi) in
@@ -75,7 +74,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
     (node_msg, lastW)
   ) seqLen in
   resample;
-  
+
   match mapAccumL (lam acc. lam r. (addf acc r.1,r.0)) 0. res with (lastW,node_msg) in
   let parent = Node {age=age, msg = node_msg,left = leftChild, right = rightChild,lastWeight=lastW} in
   let min = mini pairs.0 pairs.1 in
