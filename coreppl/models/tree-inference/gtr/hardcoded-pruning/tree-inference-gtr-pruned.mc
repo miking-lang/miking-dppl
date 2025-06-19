@@ -40,11 +40,11 @@ let ctmc = lam i. lam qt:Tensor[Float].
 recursive
 let buildForest =  lam data. lam forest:[Tree]. lam index. lam data_len. lam seq_len.
   foldl (lam forest. lam data.
-      let newMessage = sapply data getLeafMessage in
-      let newLeaf = Leaf {age=0.0,msg = newMessage} in
-      let newForest = join ([forest,[newLeaf]]) in
-      newForest
-    ) [] data
+    let newMessage = sapply data getLeafMessage in
+    let newLeaf = Leaf {age=0.0,msg = newMessage} in
+    let newForest = join ([forest,[newLeaf]]) in
+    newForest
+  ) [] data
 end
 
 recursive
@@ -66,18 +66,16 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
     let msg = get msgs i in
     let childMsgs = zipWithIndex (lam j. lam child. lam p1.
       let msg = get msg j in
-      let in_msg = map (lam p. let t = foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p msg in t) p1 in
+      let in_msg = map (lam p. foldl2 (lam acc. lam pi. lam lci. addf acc (mulf pi lci)) 0. p msg) p1 in
       in_msg
     ) children ps in
     let node_msg = foldl (lam acc. lam m. zipWith mulf acc m) (head childMsgs) (tail childMsgs) in
-    let log_likes = getLogLikes node_msg pi in
-    let lastW = (if gti n 2 then log (foldl addf 0. node_msg) else log_likes) in
+    let lastW = (if gti n 2 then log (foldl addf 0. node_msg) else getLogLikes node_msg pi) in
     weight lastW;
     (node_msg, lastW)
   ) seqLen in
   resample;
-  let node_msg = map (lam r. r.0) res in
-  let lastW = foldl (lam acc. lam r. addf acc r.1) 0. res in
+  match mapAccumL (lam acc. lam r. (addf acc r.1,r.0)) 0. res with (lastW,node_msg) in
   let parent = Node {age=age, msg = node_msg,left = leftChild, right = rightChild,lastWeight=lastW} in
   let min = mini pairs.0 pairs.1 in
   let max = maxi pairs.0 pairs.1 in
