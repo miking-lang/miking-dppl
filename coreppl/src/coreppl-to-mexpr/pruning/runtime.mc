@@ -5,7 +5,6 @@ lang PruneGraph
   syn PruneVar =
   | PruneRVar { dist: [Float]
               , likelihood: Ref ([Float])
-              , states: [Int]
               , lastWeight: Ref Float
               , identity: Symbol
               }
@@ -26,9 +25,8 @@ lang PruneGraph
   | PruneRVar v  -> deref v.likelihood
 
   sem getStates =
-  | SeqFParam f -> range 0 (length f) 1
-  | PruneFParam f -> match f with PruneFVar f in
-      range 0 (length f.values) 1
+  | SeqFParam f -> length f
+  | PruneFParam f -> match f with PruneFVar f in length f.values
 end
 
 lang PrunedSampling = PruneGraph
@@ -37,19 +35,18 @@ lang PrunedSampling = PruneGraph
   sem initializePruneRVar =
   | d -> PruneRVar { dist = d
                    , likelihood = ref ((make (length d) 1.))
-                   , states = range 0 (length d) 1
                    , lastWeight = ref 0.
                    , identity = gensym ()}
 
   sem initializePruneFVar f =
-  | PruneRVar p -> PruneFVar {values=map f p.states, input = (PruneRVar p)}
+  | PruneRVar p -> PruneFVar {values=create (length p.dist) (lam i. f i), input = (PruneRVar p)}
 
   sem calculateObservedLH d =
   | PrunedValue (PruneRVar obs) -> deref obs.likelihood
   | IntValue obs ->
     match d with PruneFParam (PruneFVar v) in
     let states = getStates d in
-    mapi (lam i. lam. if eqi obs i then 1. else 0.) states
+    create states (lam i. if eqi obs i then 1. else 0.)
 
    -- to calculate the likelihood of depending functions
   sem observePrune cancel value =
@@ -58,7 +55,7 @@ lang PrunedSampling = PruneGraph
     let obsLh = calculateObsLh cancel likelihood value d in
     match value with PrunedValue (PruneRVar obs) in
     modref obs.likelihood obsLh;
-    let logw = log (foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip obsLh obs.dist)) in
+    let logw = log (foldl2 (lam acc. lam l. lam d. addf acc (mulf l d)) 0. obsLh obs.dist) in
     let lastWeight = deref obs.lastWeight in
     modref obs.lastWeight logw;
     subf logw lastWeight
@@ -75,10 +72,10 @@ lang PrunedSampling = PruneGraph
   sem calculateLogWeight distMsg value =
   | PruneRVar p ->
     -- multiply the messages to calculate final L_{p,s}
-    let msgMul = map (lam m. mulf m.0 m.1) (zip (deref p.likelihood) distMsg) in
+    let msgMul = zipWith (lam l. lam d. mulf l d) (deref p.likelihood) distMsg in
     modref p.likelihood (msgMul);
     -- calculate L_{p,s} P(p=s) L_p
-    let w = foldl (lam acc. lam x. addf acc (mulf x.0 x.1)) 0. (zip msgMul p.dist) in log w
+    let w = foldl2 (lam acc. lam m. lam d. addf acc (mulf m d)) 0. msgMul p.dist in log w
 
 
   sem weightPrune distMsg value =
@@ -104,7 +101,7 @@ lang PrunedSampling = PruneGraph
   | (PruneFParam (PruneFVar v)) -> 
     let op = if cancel then divf else mulf in
     match v.input with PruneRVar p in
-    let mapDifferent = lam lh. map (lam p. foldl (lam acc. lam x. addf acc (op x.0 x.1)) 0. (zip lh p)) v.values in
+    let mapDifferent = lam lh. map (lam p. foldl2 (lam acc. lam l. lam p. addf acc (op l p)) 0. lh p) v.values in
     match value with PrunedValue (PruneRVar obs) then 
       if eqsym obs.identity p.identity then mapi (lam i. lam p. op 1. (get p i)) v.values 
       else let lh = zipWith mulf obs.dist lh in mapDifferent lh
