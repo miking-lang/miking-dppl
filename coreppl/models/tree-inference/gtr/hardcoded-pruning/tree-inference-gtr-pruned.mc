@@ -75,6 +75,7 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
     (node_msg, lastW)
   ) seqLen in
   resample;
+  
   match mapAccumL (lam acc. lam r. (addf acc r.1,r.0)) 0. res with (lastW,node_msg) in
   let parent = Node {age=age, msg = node_msg,left = leftChild, right = rightChild,lastWeight=lastW} in
   let min = mini pairs.0 pairs.1 in
