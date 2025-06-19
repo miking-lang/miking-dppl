@@ -80,12 +80,12 @@ lang PrunedSampling = PruneGraph
 
   sem weightPrune distMsg value =
   | PruneRVar p ->
-    let uw = (negf (deref p.lastWeight)) in
+    let uw = (deref p.lastWeight) in
     let w = (calculateLogWeight distMsg value (PruneRVar p)) in
     -- Note: Commented out assuming that the pruned value does not live afterwards in a mixed observe
-    let xw = match value with PrunedValue (PruneRVar obs) then (if eqsym obs.identity p.identity then 0. else let lw = (deref obs.lastWeight) in /-modref obs.lastWeight w;-/lw) else 0. in
+    let xw = match value with PrunedValue (PruneRVar obs) then (if eqsym obs.identity p.identity then uw else let lw = (deref obs.lastWeight) in /-modref obs.lastWeight w;-/addf uw lw) else uw in
     modref p.lastWeight w;
-    subf (addf uw w) xw
+    subf w xw
 
   -- \sum_s L_{c,x}P(c=x|p=s) P(p=s)
   sem calculateObsLh cancel lh value =
