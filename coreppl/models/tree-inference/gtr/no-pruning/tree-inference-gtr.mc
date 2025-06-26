@@ -34,19 +34,19 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n. lam pi.
   let t = assume (Exponential 10.0) in
   let age = addf t maxAge in
   let qts = map (lam c. matrixExponential (matrixMulFloat (subf age (getAge c)) q)) children in
-
+  
   let seq = iid (lam p. assume (Categorical p)) pi seqLen in
   iteri (lam i. lam site.
     iter2 (lam child. lam qt.
       let p1 = ctmc site qt in
       match child with Node n then
         let s = get n.seq i in
-        observe s (Categorical p1);
-        cancel (observe s (Categorical pi))
+        observe s (Categorical p1)
       else match child with Leaf l in
         let s = get l.seq i in
-        (if lti s 4 then observe s (Categorical p1); cancel (observe s (Categorical pi)) else ())
-    ) children qts
+        (if lti s 4 then observe s (Categorical p1) else ())
+    ) children qts;
+    (if gti n 2 then cancel (observe site (Categorical pi)) else ())
   ) seq;
   resample;
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
@@ -85,5 +85,4 @@ let model = lam.
   let pi = assume (Dirichlet ([1.0, 1.0, 1.0, 1.0])) in
   let er = assume (Dirichlet [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]) in
   let q = gtr pi er in
-  iter (lam l. match l with Leaf l in iter (lam s. if eqi s 4 then () else weight (log (get pi s))) l.seq) trees;
   cluster q trees 0.0 seqLength (length trees) pi

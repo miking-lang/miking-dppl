@@ -41,12 +41,12 @@ let cluster = lam q. lam trees. lam maxAge. lam seqLen. lam n.
       let p1 = ctmc site qt in
       match child with Node n then
         let s = get n.seq i in
-        observe s (Categorical p1);
-        cancel (observe s (Categorical [0.25,0.25,0.25,0.25]))
+        observe s (Categorical p1)
       else match child with Leaf l in
         let s = get l.seq i in
-        (if lti s 4 then observe s (Categorical p1); cancel (observe s (Categorical [0.25,0.25,0.25,0.25])) else ())
-    ) children qts
+        (if lti s 4 then observe s (Categorical p1) else ())
+    ) children qts;
+    (if gti n 2 then cancel (observe site (Categorical [0.25,0.25,0.25,0.25])) else ())
   ) seq;
   resample;
   let parent = Node {age=age, seq=seq,left=leftChild, right=rightChild} in
@@ -62,5 +62,4 @@ let model = lam.
    divf 1. 3., divf 1. 3.,negf 1., divf 1. 3.,
    divf 1. 3., divf 1. 3., divf 1. 3., negf 1.] in
   let q = matrixCreate [4,4] q in
-  iter (lam l. match l with Leaf l in iter (lam s. if eqi s 4 then () else weight (log 0.25)) l.seq) trees;
   cluster q trees 0.0 seqLength (length trees)
