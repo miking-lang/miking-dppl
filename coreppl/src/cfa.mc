@@ -20,14 +20,18 @@ lang ConstAllCFA = MExprCFA + MExprPPL + FunArity
   -- uses one copy.
   sem generateConstAllConstraints graph =
   | _ -> graph
-  | TmLet ({ ident = ident, body = TmConst { val = const } } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmConst { val = const } } & b)} ->
     let ident = name2intAcc graph.ia b.info ident in
     let arity = constArity const in
     if eqi arity 0 then graph
     else addNewConst graph ident const
-  | TmExt ({
-      tyIdent = tyIdent, inexpr = TmLet { ident = ident, inexpr = inexpr }
-    } & b) ->
+  | TmDecl
+    { decl = DeclExt (b & {tyIdent = tyIdent})
+    , inexpr = TmDecl
+      { decl = DeclLet {ident = ident}
+      , inexpr = inexpr
+      }
+    } ->
     let ident = name2intAcc graph.ia b.info ident in
     let arity = arityFunType tyIdent in
     if eqi arity 0 then graph
@@ -248,11 +252,11 @@ lang StochCFA = MExprCFA + MExprPPL + ConstAllCFA
   sem generateStochConstraints graph =
   | _ -> graph
   -- Stochastic values
-  | TmLet ({ ident = ident, body = TmAssume _ } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmAssume _ } & b)} ->
     let cstr = CstrInit { lhs = AVStoch {}, rhs = name2intAcc graph.ia b.info ident } in
     { graph with cstrs = cons cstr graph.cstrs }
 
-  | TmLet ({ ident = ident, body = TmApp app } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmApp app } & b)} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
         let ident = name2intAcc graph.ia b.info ident in
@@ -396,16 +400,13 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
   sem exprUnalignedNamesAcc: [Name] -> Expr -> [Name]
   sem exprUnalignedNamesAcc acc =
   | TmVar t -> acc
-  | TmLet t -> exprUnalignedNamesAcc (cons t.ident acc) t.inexpr
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclLet t}) -> exprUnalignedNamesAcc (cons t.ident acc) x.inexpr
+  | TmDecl (x & {decl = DeclRecLets t}) ->
       exprUnalignedNamesAcc
-        (foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
+        (foldl (lam acc. lam bind : DeclLetRecord. cons bind.ident acc)
           acc t.bindings)
-        t.inexpr
-  | TmType t -> exprUnalignedNamesAcc acc t.inexpr
-  | TmConDef t -> exprUnalignedNamesAcc acc t.inexpr
-  | TmUtest t -> exprUnalignedNamesAcc acc t.next
-  | TmExt t -> exprUnalignedNamesAcc acc t.inexpr
+        x.inexpr
+  | TmDecl (x & {decl = DeclType _ | DeclConDef _ | DeclUtest _ | DeclExt _}) -> exprUnalignedNamesAcc acc x.inexpr
   | t -> errorSingle [infoTm t] "Error in exprUnalignedNames for CFA"
 
   sem appAlignConstraints lhs =
@@ -422,16 +423,16 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
 
   sem generateAlignConstraints graph =
   | _ -> graph
-  | TmLet ({ ident = ident, body = TmLam t } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmLam t } & b)} ->
     let tident = name2intAcc graph.ia t.info t.ident in
     let cstrs =
       map (lam n. cstrAlignDirect tident (name2intAcc graph.ia b.info n))
         (exprUnalignedNames t.body)
     in
     { graph with cstrs = concat cstrs graph.cstrs }
-  | TmRecLets ({ bindings = bindings } & rl) ->
+  | TmDecl {decl = DeclRecLets ({ bindings = bindings } & rl)} ->
     let cstrs =
-      join (map (lam b: RecLetBinding.
+      join (map (lam b: DeclLetRecord.
         match b.body with TmLam t then
           let tident = name2intAcc graph.ia t.info t.ident in
           map (lam n. cstrAlignDirect tident (name2intAcc graph.ia rl.info n))
@@ -440,7 +441,7 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
       ) bindings)
     in
     { graph with cstrs = concat cstrs graph.cstrs }
-  | TmLet ({ ident = ident, body = TmMatch t } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmMatch t } & b)} ->
     let innerNames = concat (exprUnalignedNames t.thn) (exprUnalignedNames t.els) in
     match t.target with TmVar tv then
       let cstrs =
@@ -458,7 +459,7 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
       in
       { graph with cstrs = concat cstrs graph.cstrs }
     else errorSingle [infoTm t.target] "Not a TmVar in match target"
-  | TmLet ({ ident = ident, body = TmApp app } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmApp app } & b)} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar _ then
         let res = name2intAcc graph.ia b.info ident in
@@ -527,10 +528,10 @@ lang AlignCFA = MExprCFA + MExprPPL + StochCFA + ConstAllCFA
 
 end
 
-lang AnnotateAlignmentResult = Annotator + LetAst + Assume
+lang AnnotateAlignmentResult = Annotator + LetDeclAst + Assume
   sem annotateAlignmentResult : Map Name String -> Expr -> [(Info, Annotation)]
   sem annotateAlignmentResult data =
-  | TmLet {ident = ident, body = thing, inexpr = inexpr} ->
+  | TmDecl {decl = DeclLet {ident = ident, body = thing}, inexpr = inexpr} ->
     let annot = match mapLookup ident data with Some data
       then [(infoTm thing, escapeAnnot data)]
       else [] in
@@ -629,7 +630,7 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
     (Expr -> Bool) -> CFAGraphInit -> Expr -> CFAGraphInit
   sem generateCheckpointInitConstraints checkpoint graph =
   | _ -> graph
-  | TmLet ({ ident = ident, body = b } & l) & t ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = b } & l)} & t ->
     let ident = name2intAcc graph.ia l.info ident in
     if checkpoint t then
       let cstr = CstrInit { lhs = AVCheckpoint {}, rhs = ident } in
@@ -645,22 +646,20 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
   sem exprCheckpointNamesAcc: (Expr -> Bool) -> [Name] -> Expr -> [Name]
   sem exprCheckpointNamesAcc checkpoint acc =
   | TmVar t -> acc
-  | TmLet t & tm ->
+  | TmDecl (x & {decl = DeclLet t}) & tm ->
     if checkpoint tm then
-      exprCheckpointNamesAcc checkpoint (cons t.ident acc) t.inexpr
+      exprCheckpointNamesAcc checkpoint (cons t.ident acc) x.inexpr
     else
-      exprCheckpointNamesAcc checkpoint acc t.inexpr
-  | TmLet { ident = ident, body = TmApp _ | TmMatch _, inexpr = inexpr} ->
+      exprCheckpointNamesAcc checkpoint acc x.inexpr
+  | TmDecl {decl = DeclLet { ident = ident, body = TmApp _ | TmMatch _}, inexpr = inexpr} ->
     exprCheckpointNamesAcc checkpoint (cons ident acc) inexpr
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     exprCheckpointNamesAcc checkpoint
-      (foldl (lam acc. lam bind : RecLetBinding. cons bind.ident acc)
+      (foldl (lam acc. lam bind : DeclLetRecord. cons bind.ident acc)
         acc t.bindings)
-      t.inexpr
-  | TmType t -> exprCheckpointNamesAcc checkpoint acc t.inexpr
-  | TmConDef t -> exprCheckpointNamesAcc checkpoint acc t.inexpr
-  | TmUtest t -> exprCheckpointNamesAcc checkpoint acc t.next
-  | TmExt t -> exprCheckpointNamesAcc checkpoint acc t.inexpr
+      x.inexpr
+  | TmDecl (x & {decl = DeclType _ | DeclConDef _ | DeclUtest _ | DeclExt _}) ->
+    exprCheckpointNamesAcc checkpoint acc x.inexpr
   | t -> errorSingle [infoTm t] "Error in exprCheckpointNames for CFA"
 
   sem appCheckpointConstraints lhs =
@@ -684,7 +683,7 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
     (Expr -> Bool) -> CFAGraphInit -> Expr -> CFAGraphInit
   sem generateCheckpointConstraints checkpoint graph =
   | _ -> graph
-  | TmLet ({ body = TmLam t } & b) ->
+  | TmDecl {decl = DeclLet ({ body = TmLam t } & b)} ->
     -- If certain expressions in the body of the lambda evaluates a checkpoint, the
     -- lambda evaluates a checkpoint
     let tident = name2intAcc graph.ia t.info t.ident in
@@ -693,9 +692,9 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
         (exprCheckpointNames checkpoint t.body)
     in
     { graph with cstrs = concat cstrs graph.cstrs }
-  | TmRecLets ({ bindings = bindings } & rl) ->
+  | TmDecl {decl = DeclRecLets ({ bindings = bindings } & rl)} ->
     let cstrs =
-      join (map (lam b: RecLetBinding.
+      join (map (lam b: DeclLetRecord.
         match b.body with TmLam t then
           -- Same as for lambda
           let tident = name2intAcc graph.ia t.info t.ident in
@@ -705,7 +704,7 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
       ) bindings)
     in
     { graph with cstrs = concat cstrs graph.cstrs }
-  | TmLet ({ ident = ident, body = TmMatch t } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmMatch t } & b)} ->
     -- If any expression in one of the match branches evaluates a checkpoint, the
     -- match itself evaluates a checkpoint
     let ident = name2intAcc graph.ia b.info ident in
@@ -718,7 +717,7 @@ lang CheckpointCFA = MExprCFA + MExprPPL + ConstAllCFA
         innerNames
     in
     { graph with cstrs = concat cstrs graph.cstrs }
-  | TmLet ({ ident = ident, body = TmApp app } & b) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmApp app } & b)} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar _ then
         let ident = name2intAcc graph.ia b.info ident in
@@ -1297,7 +1296,7 @@ using eqTest in
 -- Custom checkpoint function determining source expressions that introduce
 -- checkpoints: weights that are _not_ labeled by the variable "nocheck".
 let checkpoint: Expr -> Bool = lam t.
-  match t with TmLet { ident = ident, body = body } then
+  match t with TmDecl {decl = DeclLet { ident = ident, body = body }} then
     match body with TmWeight _ then
       not (eqString (nameGetStr ident) "nocheck")
     else false

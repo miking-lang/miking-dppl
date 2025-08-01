@@ -3,7 +3,7 @@ include "mlang/ast-builder.mc"
 include "../coreppl.mc"
 include "../dist.mc"
 
-lang AutoDriftKernel = Assume + DistAll + LetAsDecl
+lang AutoDriftKernel = Assume + DistAll
   sem generateKernels : Float -> Expr -> Expr
   sem generateKernels driftScale =
   | tm -> smap_Expr_Expr (generateKernels driftScale) tm
@@ -11,13 +11,13 @@ lang AutoDriftKernel = Assume + DistAll + LetAsDecl
     let dist = generateKernels driftScale x.dist in
     let res = chooseKernel driftScale dist in
     let assume = TmAssume {x with dist = res.distribution, driftKernel = Some res.driftKernelF} in
-    foldr (lam d. lam e. declAsExpr e d) assume res.shared
+    bindall_ res.shared assume
 
   sem _defaultKernel : Float -> Expr -> {shared : [Decl], distribution : Expr, driftKernelF : Expr}
   sem _defaultKernel driftScale = | dist ->
     let distName = nameSym "dist" in
     let info = infoTm dist in
-    { shared = [declWithInfo info (decl_nulet_ distName dist)]
+    { shared = [declWithInfo info (nulet_ distName dist)]
     , distribution = withInfo info (nvar_ distName)
     , driftKernelF = withInfo info (ulam_ "" (withInfo info (nvar_ distName)))
     }
@@ -37,7 +37,7 @@ lang AutoDriftKernel = Assume + DistAll + LetAsDecl
     match
       match args.p with TmVar _ then ([], args.p) else
       let argName = nameSym "p" in
-      ([decl_nulet_ argName args.p], withInfo x.info (nvar_ argName))
+      ([nulet_ argName args.p], withInfo x.info (nvar_ argName))
     with (shared, p) in
     let prevName = nameSym "x" in
     let driftP = set_ p (nvar_ prevName) (float_ 0.0) in
