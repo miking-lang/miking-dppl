@@ -197,8 +197,8 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
 
   -- CPS
   sem cpsCont k =
-  | TmLet ({ body = TmDist _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+  | TmDecl (x & {decl = DeclLet {body = TmDist _}}) ->
+    TmDecl {x with inexpr = cpsCont k x.inexpr}
 
   -- Partial Evaluation
   sem pevalDistEval : PEvalCtx -> (Dist -> Expr) -> Dist -> Expr
@@ -849,28 +849,28 @@ utest _anf tmBeta with bind_ (ulet_ "t" tmBeta) (var_ "t") using eqExpr in
 utest _anf tmGamma with bind_ (ulet_ "t" tmGamma) (var_ "t") using eqExpr in
 utest _anf tmCategorical with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
-  ulet_ "t1" (categorical_ (var_ "t")),
+  ulet_ "t1" (categorical_ (var_ "t"))](
   var_ "t1"
-] using eqExpr in
+) using eqExpr in
 utest _anf tmMultinomial with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
-  ulet_ "t1" (multinomial_ (int_ 5) (var_ "t")),
+  ulet_ "t1" (multinomial_ (int_ 5) (var_ "t"))](
   var_ "t1"
-] using eqExpr in
+) using eqExpr in
 utest _anf tmExponential with bind_ (ulet_ "t" tmExponential) (var_ "t") using eqExpr in
 utest _anf tmEmpirical with bindall_ [
   ulet_ "t" (utuple_ [float_ 1.0, float_ 1.5]),
   ulet_ "t1" (utuple_ [float_ 3.0, float_ 1.3]),
   ulet_ "t2" (seq_ [(var_ "t"), (var_ "t1")]),
-  ulet_ "t3" (empirical_ (var_ "t2")),
+  ulet_ "t3" (empirical_ (var_ "t2"))](
   var_ "t3"
-] using eqExpr else toStr in
+) using eqExpr else toStr in
 -- print (mexprToString (_anf tmEmpirical)); print "\n";
 utest _anf tmDirichlet with bindall_ [
   ulet_ "t" (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]),
-  ulet_ "t1" (dirichlet_ (var_ "t")),
+  ulet_ "t1" (dirichlet_ (var_ "t"))](
   var_ "t1"
-] using eqExpr in
+) using eqExpr in
 utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
 utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in

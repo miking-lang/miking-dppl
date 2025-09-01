@@ -7,10 +7,8 @@ let conapp = use InferenceInterface in lam env. lam str. lam t. nconapp_ (_getCo
 
 lang MExprPPLDelayedCPS = MExprPPL + DPPLParser + MExprCPS
   sem exprCps env k =
-  | TmLet ({ body = TmDelayed _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDelay _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmDecl (x & {decl = DeclLet {body = TmDelayed _ | TmDelay _}}) ->
+    TmDecl {x with inexpr = exprCps env k x.inexpr}
   end
 
 lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
@@ -36,19 +34,19 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
 
   sem createDParam: Map Name DParam -> Expr -> Map Name DParam
   sem createDParam env =
-  | TmLet ({body = TmDelayed p} & t) ->
+  | TmDecl (x & {decl = DeclLet ({body = TmDelayed p} & t)}) ->
     let env = mapInsert t.ident (DelayParam ()) env in
-    createDParam (createDParam env t.body) t.inexpr
-  | TmLet ({body= TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t) ->
+    createDParam (createDParam env t.body) x.inexpr
+  | TmDecl (x & {decl = DeclLet ({body= TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t)}) ->
     let v1Type = mapLookup v1.ident env in
     let v2Type = mapLookup v2.ident env in
     let env = affineAddTransform env t.ident (TmVar v1,TmVar v2) (v1Type, v2Type) in
-    createDParam (createDParam env t.body) t.inexpr
-  | TmLet ({body= TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CMulf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t) ->
+    createDParam (createDParam env t.body) x.inexpr
+  | TmDecl (x & {decl = DeclLet ({body= TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CMulf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t)}) ->
     let v1Type = mapLookup v1.ident env in
     let v2Type = mapLookup v2.ident env in
     let env = affineScaleTransform env t.ident (TmVar v1,TmVar v2) (v1Type, v2Type) in
-    createDParam (createDParam env t.body) t.inexpr
+    createDParam (createDParam env t.body) x.inexpr
   | t -> sfold_Expr_Expr createDParam env t
 
   sem replaceTyDistDelay env =
@@ -179,16 +177,8 @@ lang DPPLDelayedTransform = TransformDsDist
   | _ -> false
 
   sem replaceWithValue env runtimeDelayEnv =
-  | TmLet ({body = TmAssume _} &t) ->
-    TmLet {t with inexpr = replaceWithValue env runtimeDelayEnv t.inexpr}
-  | TmLet ({body = TmObserve _} &t) ->
-    TmLet {t with inexpr = replaceWithValue env runtimeDelayEnv t.inexpr}
-  | TmLet ({body=TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t) ->
-    TmLet {t with inexpr = replaceWithValue env runtimeDelayEnv t.inexpr}
-  | TmLet ({body=TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CMulf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t) ->
-    TmLet {t with inexpr = replaceWithValue env runtimeDelayEnv t.inexpr}
-  | TmLet ({body=TmDelayed p} &t) ->
-    TmLet {t with inexpr = replaceWithValue env runtimeDelayEnv t.inexpr}
+  | TmDecl (x & {decl = DeclLet {body = TmAssume _ | TmObserve _ | TmDelayed _ | TmApp {lhs = TmConst {val = CAddf _ | CMulf _}, rhs = TmVar _}}}) ->
+    TmDecl {x with inexpr = replaceWithValue env runtimeDelayEnv x.inexpr}
   | TmApp ({lhs = lhs, rhs=TmVar v2}&a1) ->
     let sampleT = (ulam_ "d" (assume_ (var_ "d"))) in
     let varType = mapLookup v2.ident env in
@@ -201,11 +191,7 @@ lang DPPLDelayedTransform = TransformDsDist
   | t -> smap_Expr_Expr (replaceWithValue env runtimeDelayEnv) t
 
   sem replaceReturn env runtimeDelayEnv =
-  | TmLet t -> TmLet {t with inexpr=replaceReturn env runtimeDelayEnv t.inexpr}
-  | TmRecLets t -> TmRecLets {t with inexpr=replaceReturn env runtimeDelayEnv t.inexpr}
-  | TmType t -> TmType {t with inexpr=replaceReturn env runtimeDelayEnv t.inexpr}
-  | TmExt t -> TmExt {t with inexpr=replaceReturn env runtimeDelayEnv t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr=replaceReturn env runtimeDelayEnv t.inexpr}
+  | TmDecl x -> TmDecl {x with inexpr = replaceReturn env runtimeDelayEnv x.inexpr}
   | TmVar t ->
     let sampleT = (ulam_ "d" (assume_ (var_ "d"))) in
     let varType = mapLookup t.ident env in
@@ -246,9 +232,9 @@ lang DPPLDelayedTransform = TransformDsDist
     appFromEnv runtimeDelayEnv "createDelayVar" [param]
   | TmVar t ->
     match mapLookup t.ident env.delayedEnv with Some v then v else TmVar t --replace the delayed variables with delay variables
-  | TmLet ({body=TmDelayed p} &t) ->
+  | TmDecl (x & {decl = DeclLet ({body=TmDelayed p} &t)}) ->
     let delayedEnv = mapInsert t.ident p.delay env.delayedEnv in
-    (replaceTmDelayed {env with delayedEnv=delayedEnv} runtimeDelayEnv t.inexpr)
+    (replaceTmDelayed {env with delayedEnv=delayedEnv} runtimeDelayEnv x.inexpr)
   | (TmAssume ({dist=dist}) | TmObserve ({dist=dist})) & t ->
         let param = (replaceTyDelay runtimeDelayEnv (replaceTmDelayed env runtimeDelayEnv dist)) in
         let rvIdent = nameSym "" in
@@ -262,10 +248,11 @@ lang DPPLDelayedTransform = TransformDsDist
       bindall_
       [ vertex
       , ulet_ "" (appFromEnv runtimeDelayEnv "valueDs" [sampleT,nvar_ rvIdent])
-      ,  match t with TmAssume a then appFromEnv runtimeDelayEnv "getValue" [nvar_ rvIdent]
-        else match t with TmObserve o then (TmObserve {o with dist = dst}) else never
       ]
-  | TmLet ({body=TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t) ->
+      ( match t with TmAssume a then appFromEnv runtimeDelayEnv "getValue" [nvar_ rvIdent]
+        else match t with TmObserve o then (TmObserve {o with dist = dst}) else never
+      )
+  | TmDecl (x & {decl = DeclLet ({body=TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CAddf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t)}) ->
     let v1Type = mapLookup v1.ident env.env in
     let v2Type = mapLookup v2.ident env.env in
     match (match mapLookup v1.ident env.delayedEnv with Some v then
@@ -275,8 +262,8 @@ lang DPPLDelayedTransform = TransformDsDist
     let sampleT = (ulam_ "d" (assume_ (var_ "d"))) in
     let tbody =  affineAddTransformBody runtimeDelayEnv t.body sampleT (TmVar v1, TmVar v2) (v1Type,v2Type) in
     let tbody = replaceTyDelay runtimeDelayEnv (replaceTmDelayed env runtimeDelayEnv tbody) in
-    TmLet {{{t with body = tbody} with inexpr=(replaceTmDelayed env runtimeDelayEnv t.inexpr)} with tyAnnot = tyunknown_}
-  | TmLet ({body=TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CMulf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t) ->
+    TmDecl {x with decl = DeclLet {t with body = tbody}, inexpr = replaceTmDelayed env runtimeDelayEnv x.inexpr}
+  | TmDecl (x & {decl = DeclLet ({body=TmApp ({lhs = TmApp ({lhs=TmConst ({val= (CMulf ())}&c),rhs=TmVar v1}&a2), rhs=TmVar v2}&a1)}&t)}) ->
     let v1Type = mapLookup v1.ident env.env in
     let v2Type = mapLookup v2.ident env.env in
     match (match mapLookup v1.ident env.delayedEnv with Some v then
@@ -286,7 +273,7 @@ lang DPPLDelayedTransform = TransformDsDist
     let sampleT = (ulam_ "d" (assume_ (var_ "d"))) in
     let tbody =  affineScaleTransformBody runtimeDelayEnv t.body sampleT (TmVar v1, TmVar v2) (v1Type,v2Type) in
     let tbody = (replaceTyDelay runtimeDelayEnv (replaceTmDelayed env runtimeDelayEnv tbody)) in
-    TmLet {{{t with body = tbody} with inexpr=(replaceTmDelayed env runtimeDelayEnv t.inexpr)} with tyAnnot = tyunknown_}
+    TmDecl {x with decl = DeclLet {t with body = tbody}, inexpr = replaceTmDelayed env runtimeDelayEnv x.inexpr}
   | t -> smap_Expr_Expr (replaceTmDelayed env runtimeDelayEnv) t
 end
 
@@ -300,4 +287,3 @@ lang DPPLDelayedSampling = DPPLDelayedTransform + InferenceInterface + MExprPPLD
     let prog = replaceTmDelayed {env=envParam, delayedEnv=(mapEmpty nameCmp)} runtimeDelayEnv prog in
     let prog = replaceTyDelay runtimeDelayEnv prog in prog
 end
-

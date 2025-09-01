@@ -57,16 +57,16 @@ lang MExprPPLLightweightMCMC
   -- Compile CorePPL constructs to MExpr
   sem transformProbAligned env dists unalignedNames =
 
-  | TmLet ({ ident = ident, body = TmAssume t, inexpr = inexpr } & r) ->
+  | TmDecl (x & {decl = DeclLet ({ ident = ident, body = TmAssume t } & r), inexpr = inexpr}) ->
     let i = withInfo r.info in
-    TmLet { r with body =
+    TmDecl {x with decl = DeclLet { r with body =
       if setMem ident unalignedNames then
         i (appFromEnv env "sampleUnaligned" [i (int_ (uniqueSym ())), t.dist])
       else
         match t.driftKernel with Some dk
         then i (appFromEnv env "sampleAligned" [t.dist, dk])
         else errorSingle [t.info] "Missing drift kernel on an aligned assume"
-    }
+    }}
 
   | TmObserve t ->
     let i = withInfo t.info in
@@ -159,12 +159,12 @@ lang MExprPPLLightweightMCMC
   -- Note that the ANF transformation "replaces" externals with their eta
   -- expansions. Hence, we must also remove externals from scope after a `let`
   -- defines them anew.
-  | TmExt r & t ->
-    TmExt { r with inexpr = transformAddr dists env (setInsert r.ident externalIds) r.inexpr }
-  | TmLet r ->
+  | TmDecl (x & {decl = DeclExt r}) & t ->
+    TmDecl { x with inexpr = transformAddr dists env (setInsert r.ident externalIds) x.inexpr }
+  | TmDecl (x & {decl = DeclLet r}) ->
     let body = transformAddr dists env externalIds r.body in
-    let inexpr = transformAddr dists env (setRemove r.ident externalIds) r.inexpr in
-    TmLet { r with body = body, inexpr = inexpr }
+    let inexpr = transformAddr dists env (setRemove r.ident externalIds) x.inexpr in
+    TmDecl {x with decl = DeclLet {r with body = body}, inexpr = inexpr }
 
   | TmApp _ & t ->
 
@@ -259,7 +259,7 @@ lang MExprPPLLightweightMCMC
 
   sem exprTyTransform env =
   | t -> smap_Expr_Type (tyTransform env) t
-  | TmConDef r & t ->
+  | TmDecl {decl = DeclConDef r} & t ->
     -- We do not transform the top-level arrow type of the condef (due to the
     -- nested smap_Type_Type), as data values are constructed as usual.
     -- NOTE(dlunde,2022-07-13): We currently leave TyAlls wrapping the
@@ -274,7 +274,7 @@ lang MExprPPLLightweightMCMC
         "Error in mcmc-lightweight compile: Problem with TmConDef in exprTyTransform"
     in smap_Expr_Type rec t
   -- Don't touch the types of externals
-  | TmExt r -> TmExt r
+  | TmDecl (x & {decl = DeclExt _}) -> TmDecl x
 
   sem tyTransform env =
   | t -> smap_Type_Type (tyTransform env) t
@@ -319,8 +319,7 @@ lang MExprPPLLightweightMCMC
   sem exprCps env k =
 
   -- This is where we use the continuation (aligned assumes)
-  | TmLet ({ ident = ident, body = assume & TmAssume { dist = dist },
-            inexpr = inexpr } & r) & t ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = assume & TmAssume { dist = dist }} & r), inexpr = inexpr} & t ->
     let i = withInfo (infoTm t) in
     if not (transform env ident) then
       -- Unaligned TmAssume should not appear here due to transform
@@ -338,26 +337,18 @@ lang MExprPPLLightweightMCMC
       i (appf2_ assume dist k)
 
   -- Ignore unaligned assumes for now
-  | TmLet ({ body = TmAssumeUnaligned _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmDecl (x & {decl = DeclLet { body = TmAssumeUnaligned _ }}) ->
+    TmDecl {x with inexpr = exprCps env k x.inexpr }
 
-  | TmLet ({ body = TmResample _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDist _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDist (d & { dist = DWiener w })} & t) ->
+  | TmDecl (x & {decl = DeclLet { body = TmResample _ | TmDist _  | TmWeight _ | TmObserve _}}) ->
+    TmDecl { x with inexpr = exprCps env k x.inexpr }
+  | TmDecl (x & {decl = DeclLet ({ body = TmDist (d & { dist = DWiener w })} & t)}) ->
     if not (transform env t.ident) then
-      TmLet { t with inexpr = exprCps env k t.inexpr }
+      TmDecl { x with inexpr = exprCps env k x.inexpr }
     else
-      TmLet {
-        t with
-        body = TmDist { d with dist = DWiener { w with cps = true }},
-        inexpr = exprCps env k t.inexpr
+      TmDecl {x with decl = DeclLet {t with body = TmDist { d with dist = DWiener { w with cps = true }}},
+        inexpr = exprCps env k x.inexpr
       }
-  | TmLet ({ body = TmWeight _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmObserve _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
 
   -- NOTE(2023-08-08,dlunde): Many TmTypes are shared with non-PPL code and
   -- transformed versions are removed when removing duplicate code.
@@ -367,9 +358,9 @@ lang MExprPPLLightweightMCMC
     let i = tyWithInfo info in i tyunknown_
 
   sem transformPreAlignedCps unalignedNames =
-  | TmLet ({ ident = ident, body = TmAssume r} & b) & t ->
+  | TmDecl (x & {decl = DeclLet ({ ident = ident, body = TmAssume r} & b)}) & t ->
     if setMem ident unalignedNames then
-      TmLet {b with body = TmAssumeUnaligned r}
+      TmDecl {x with decl = DeclLet {b with body = TmAssumeUnaligned r}}
     else t
 
   | t -> t
@@ -447,7 +438,7 @@ lang MExprPPLLightweightMCMC
       match config.cps with "partial" then
         -- Partial checkpoint/suspension analysis
         let checkpoint = lam t.
-          match t with TmLet { ident = ident, body = TmAssume _ } then
+          match t with TmDecl {decl = DeclLet { ident = ident, body = TmAssume _ }} then
             not (setMem ident unalignedNames)
           else false
         in
