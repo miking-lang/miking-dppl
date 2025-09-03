@@ -625,7 +625,7 @@ let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmWiener = wiener_ in
-let tmReciprocal = reciprocal_ (float_ 1.0) (float 2.0) in
+let tmReciprocal = reciprocal_ (float_ 1.0) (float_ 2.0) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
