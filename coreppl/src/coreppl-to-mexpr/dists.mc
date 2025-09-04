@@ -99,6 +99,13 @@ lang TransformDist = TransformDistBase + InferenceInterface
     let t = smap_Expr_Expr (replaceTyDist env) t in
     withType (toRuntimeTyDist env (tyTm t)) t
 
+  sem replaceTyDistDecl : InferenceSymEnv -> Decl -> Decl
+  sem replaceTyDistDecl env =
+  | d ->
+    let d = smap_Decl_Expr (replaceTyDist env) d in
+    let d = smap_Decl_Type (toRuntimeTyDist env) d in
+    d
+
   sem toRuntimeTyDist : InferenceSymEnv -> Type -> Type
   sem toRuntimeTyDist env =
   | TyDist t ->

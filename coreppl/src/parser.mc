@@ -78,11 +78,11 @@ lang DPPLParser =
 
   sem replaceExternalElementaryFunctionsExpr : Map Name Const -> Expr -> Expr
   sem replaceExternalElementaryFunctionsExpr env =
-  | TmExt r ->
+  | TmDecl {decl = DeclExt r} ->
     optionMapOrElse
-      (lam. TmExt {
+      (lam. TmDecl {decl = DeclExt {
         r with inexpr = replaceExternalElementaryFunctionsExpr env r.inexpr
-      })
+      }})
       (lam const.
         replaceExternalElementaryFunctionsExpr
           (mapInsert r.ident const env)
