@@ -37,6 +37,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistPoisson {lambda : Param, scale : Float}
   | DsDistBinomial {n : Param, p : Param}
   | DsDistUniform {a : Param, b : Param}
+  | DsDistReciprocal {a : Param, b : Param}
   | DsDistGamma {shape : Param, scale : Param}
   | DsDistExponential {rate : Param}
   | DsDistLomax {scale : Param, shape : Param}
@@ -58,6 +59,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistPoisson d -> [d.lambda]
   | DsDistBinomial d -> [d.n,d.p]
   | DsDistUniform d -> [d.a,d.b]
+  | DsDistReciprocal d -> [d.a,d.b]
   | DsDistGamma d -> [d.shape,d.scale]
   | DsDistExponential d -> [d.rate]
   | DsDistLomax d -> [d.shape,d.scale]
@@ -98,6 +100,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistPoisson d -> "DsDistPoisson"
   | DsDistBinomial d -> "DsDistBinomial"
   | DsDistUniform d -> "DsDistUniform"
+  | DsDistReciprocal d -> "DsDistReciprocal"
   | DsDistGamma d -> "DsDistGamma"
   | DsDistExponential d -> "DsDistExponential"
   | DsDistLomax d -> "DsDistLomax"
@@ -335,6 +338,7 @@ lang DelayedSampling = DelayedGraph
   | DsDistPoisson t -> DistPoisson {lambda = mulf t.scale (value (unsafeCoerce sampleT) t.lambda)}
   | DsDistBinomial t -> DistBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
   | DsDistUniform t -> DistUniform {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
+  | DsDistReciprocal t -> DistReciprocal {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
   | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, scale =  value (unsafeCoerce sampleT) t.scale}
   | DsDistExponential t -> DistExponential {rate = value  (unsafeCoerce sampleT)  t.rate}
   | DsDistLomax t -> DistLomax {shape = value (unsafeCoerce sampleT) t.shape, scale = value (unsafeCoerce sampleT) t.scale}

@@ -137,6 +137,9 @@ lang DPPLParser =
   | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
                                            ty = TyUnknown {info = info},
                                            info = info})
+  | "Reciprocal" -> Some (2, lam lst. TmDist {dist = DReciprocal {a = get lst 0, b = get lst 1},
+                                           ty = TyUnknown {info = info},
+                                           info = info})
   | "UniformDiscrete" -> Some (2, lam lst. TmDist {dist = DUniformDiscrete {a = get lst 0, b = get lst 1},
                                            ty = TyUnknown {info = info},
                                            info = info})
