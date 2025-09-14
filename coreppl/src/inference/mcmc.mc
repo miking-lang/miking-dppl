@@ -86,4 +86,7 @@ lang AutoDriftKernel = Assume + DistAll
 
   | DUniform _ ->
     Some (dist_ (DUniform {a = subf_ x driftScale, b = addf_ x driftScale}))
+
+  | DReciprocal _ ->
+    Some (dist_ (DReciprocal {a = subf_ x driftScale, b = addf_ x driftScale}))
 end
