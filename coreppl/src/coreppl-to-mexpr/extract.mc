@@ -86,27 +86,35 @@ lang DPPLExtract =
     let inferId = nameSym "t" in
     let info = t.info in
     match mapLookup t.method runtimes with Some runId then
-      let inferBinding = TmLet {
-        ident = inferId,
-        tyAnnot = tyarrow_ tyunit_ (tyTm t.model),
-        tyBody = tyarrow_ tyunit_ (tyTm t.model),
-        body = TmLam {
-          ident = nameNoSym "",
-          tyAnnot = tyunit_,
-          tyParam = tyunit_,
-          body = TmApp {
-            lhs = t.model, rhs = unit_, ty = tyTm t.model, info = info},
-          ty = tyarrow_ tyunit_ (tyTm t.model), info = info},
-        inexpr = TmApp {
-          lhs = TmApp {
-            lhs = nvar_ runId,
-            rhs = inferMethodConfig t.info t.method,
-            ty = tyunknown_,
-            info = t.info},
-          rhs = TmVar {ident = inferId, ty = t.ty, info = info, frozen = false},
-          ty = tyunknown_,
-          info = t.info},
-        ty = t.ty, info = info} in
+      let inferBinding = TmDecl
+        { decl = DeclLet
+          { ident = inferId
+          , tyAnnot = tyarrow_ tyunit_ (tyTm t.model)
+          , tyBody = tyarrow_ tyunit_ (tyTm t.model)
+          , body = TmLam
+            {  ident = nameNoSym ""
+            , tyAnnot = tyunit_
+            , tyParam = tyunit_
+            , body = TmApp {lhs = t.model, rhs = unit_, ty = tyTm t.model, info = info}
+            , ty = tyarrow_ tyunit_ (tyTm t.model)
+            , info = info
+            }
+          , info = info
+          }
+        , inexpr = TmApp
+          { lhs = TmApp
+            { lhs = nvar_ runId
+            , rhs = inferMethodConfig t.info t.method
+            , ty = tyunknown_
+            , info = t.info
+            }
+          , rhs = TmVar {ident = inferId, ty = t.ty, info = info, frozen = false}
+          , ty = tyunknown_
+          , info = t.info
+          }
+        , ty = t.ty
+        , info = info
+        } in
       (mapInsert inferId t.method acc, inferBinding)
     else
       errorSingle [t.info] "Missing infer runtime"
@@ -149,10 +157,10 @@ lang DPPLExtract =
   -- model code in the top-level of the program.
   sem inlineInferBinding : Name -> Expr -> Expr
   sem inlineInferBinding inferId =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     if nameEq t.ident inferId then bodyWithoutLambdas t.body
-    else TmLet {t with inexpr = inlineInferBinding inferId t.inexpr}
-  | TmRecLets t ->
+    else TmDecl {x with inexpr = inlineInferBinding inferId x.inexpr}
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     recursive let findInferBinding = lam bindings.
       match bindings with [bind] ++ bindings then
         if nameEq bind.ident inferId then Some bind
@@ -166,9 +174,9 @@ lang DPPLExtract =
       -- Inline the body of the infer binding and place it after the recursive
       -- let-expression.
       let inexpr = bodyWithoutLambdas bind.body in
-      TmRecLets {t with bindings = removeInferBinding t.bindings,
+      TmDecl {x with decl = DeclRecLets {t with bindings = removeInferBinding t.bindings},
                         inexpr = inexpr}
-    else TmRecLets {t with inexpr = inlineInferBinding inferId t.inexpr}
+    else TmDecl {x with inexpr = inlineInferBinding inferId x.inexpr}
   | t -> smap_Expr_Expr (inlineInferBinding inferId) t
 
   sem bodyWithoutLambdas : Expr -> Expr
@@ -188,16 +196,16 @@ lang DPPLExtract =
   sem removeInferBindings
     : all data. Map Name data -> Expr -> Expr
   sem removeInferBindings inferData =
-  | TmLet t ->
-    if mapMem t.ident inferData then removeInferBindings inferData t.inexpr
-    else TmLet {t with inexpr = removeInferBindings inferData t.inexpr}
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
+    if mapMem t.ident inferData then removeInferBindings inferData x.inexpr
+    else TmDecl {x with inexpr = removeInferBindings inferData x.inexpr}
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let filterBinding = lam bind.
       if mapMem bind.ident inferData then None ()
       else Some bind
     in
-    TmRecLets {t with bindings = filterOption (map filterBinding t.bindings),
-                      inexpr = removeInferBindings inferData t.inexpr}
+    TmDecl {x with decl = DeclRecLets {t with bindings = filterOption (map filterBinding t.bindings)},
+                      inexpr = removeInferBindings inferData x.inexpr}
   | t -> smap_Expr_Expr (removeInferBindings inferData) t
 
   -- Assumes proper symbolization and ANF
@@ -216,7 +224,7 @@ lang DPPLExtract =
 
   sem determineInline : Map Name Bool -> Expr -> Map Name Bool
   sem determineInline m =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let m = determineInline m t.body in
     let m =
       -- Only inline certain things. In particular, do not move constructs with
@@ -224,7 +232,7 @@ lang DPPLExtract =
       match t.body with TmLam _ | TmVar _ then mapInsert t.ident false m
       else m
     in
-    determineInline m t.inexpr
+    determineInline m x.inexpr
   | TmVar t ->
     match mapLookup t.ident m with Some b then
       if b then mapRemove t.ident m -- More than a single use
@@ -235,19 +243,19 @@ lang DPPLExtract =
   sem inlineSingleUseH : Map Name Bool
                          -> Map Name Expr -> Expr -> (Map Name Expr, Expr)
   sem inlineSingleUseH m me =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     match inlineSingleUseH m me t.body with (me,body) in
     let inline = match mapLookup t.ident m with Some true then true else false in
     let me = if inline then mapInsert t.ident body me else me in
-    match inlineSingleUseH m me t.inexpr with (me,inexpr) in
+    match inlineSingleUseH m me x.inexpr with (me,inexpr) in
     if inline then
       match mapLookup t.ident me with None _ then
         -- The function was inlined, remove it
         (me, inexpr)
       else
-        (me, TmLet {t with body = body, inexpr = inexpr})
+        (me, TmDecl {x with decl = DeclLet {t with body = body}, inexpr = inexpr})
     else
-      (me, TmLet {t with body = body, inexpr = inexpr})
+      (me, TmDecl {x with decl = DeclLet {t with body = body}, inexpr = inexpr})
   | TmApp t & tm ->
     recursive let rec = lam me. lam expr.
       match expr with TmApp t then

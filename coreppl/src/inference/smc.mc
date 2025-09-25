@@ -89,38 +89,29 @@ lang SMCCommon = MExprPPL + Resample + MExprCPS + InferenceInterface
     | t ->
       let t = smap_Expr_Expr (addResample pred) t in
       match t
-      with TmLet ({ ident = ident, body = TmWeight _, inexpr = inexpr } & r)
-         | TmLet ({ ident = ident, body = TmObserve _, inexpr = inexpr } & r)
+      with TmDecl (x & {decl = DeclLet (r & {ident = ident, body = TmWeight _ | TmObserve _}), inexpr = inexpr})
       then
         if pred ident then
           let resample = withInfo r.info resample_ in
           let l = nlet_ (nameSym "resample") tyunit_ resample in
-          let l = withInfo r.info l in
+          let l = declWithInfo r.info l in
           let inexpr = bind_ l inexpr in
-          TmLet { r with inexpr = inexpr }
+          TmDecl { x with inexpr = inexpr }
         else t
       else t
 
   -- CPS compile
   sem exprCps env k =
-  | TmLet ({ body = TmAssume _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmObserve _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmWeight _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDist _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDist (d & { dist = DWiener w })} & t) ->
+  | TmDecl (x & {decl = DeclLet {body = TmAssume _ | TmObserve _ | TmWeight _ | TmDist _}}) ->
+    TmDecl {x with inexpr = exprCps env k x.inexpr}
+  | TmDecl (x & {decl = DeclLet ({ body = TmDist (d & { dist = DWiener w })} & t)}) ->
     if not (transform env t.ident) then
-      TmLet { t with inexpr = exprCps env k t.inexpr }
+      TmDecl {x with inexpr = exprCps env k x.inexpr }
     else
-      TmLet {
-        t with
-        body = TmDist { d with dist = DWiener { w with cps = true }},
-        inexpr = exprCps env k t.inexpr
-      }
-  | TmLet { ident = ident, body = re & TmResample {},
+      TmDecl {x with decl = DeclLet {t with body = TmDist { d with dist = DWiener { w with cps = true }}}
+        , inexpr = exprCps env k x.inexpr
+        }
+  | TmDecl {decl = DeclLet { ident = ident, body = re & TmResample _},
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in
     let k =
@@ -235,9 +226,9 @@ utest tyTm (typeCheck resample_) with tyunit_ using eqType in
 let _anf = compose normalizeTerm symbolize in
 
 utest _anf resample_ with bindall_ [
-  ulet_ "t" resample_,
+  ulet_ "t" resample_](
   var_ "t"
-] using eqExpr in
+) using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --

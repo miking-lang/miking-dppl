@@ -78,6 +78,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DUniform { a = a, b = b } ->
     let cname = _getConExn "RuntimeDistElementary_DistUniform" env.env in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+  | DReciprocal { a = a, b = b } ->
+    let cname = _getConExn "RuntimeDistElementary_DistReciprocal" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
   | DUniformDiscrete { a = a, b = b } ->
     let cname = _getConExn "RuntimeDistElementary_DistUniformDiscrete" env.env in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
@@ -85,6 +88,7 @@ lang TransformDist = TransformDistBase + InferenceInterface
     let cname = _getConExn "RuntimeDistElementary_DistWiener" env.env in
     i (nconapp_ cname
         (i (autoty_record_ [("cps", if cps then i true_ else i false_), ("a", a)])))
+
   | DEmpirical { samples = samples } ->
     i (appFromEnv env "vRuntimeDistEmpirical_constructDistEmpiricalHelper" [samples])
 
@@ -98,6 +102,13 @@ lang TransformDist = TransformDistBase + InferenceInterface
     let t = smap_Expr_Pat (replaceTyDistPat env) t in
     let t = smap_Expr_Expr (replaceTyDist env) t in
     withType (toRuntimeTyDist env (tyTm t)) t
+
+  sem replaceTyDistDecl : InferenceSymEnv -> Decl -> Decl
+  sem replaceTyDistDecl env =
+  | d ->
+    let d = smap_Decl_Expr (replaceTyDist env) d in
+    let d = smap_Decl_Type (toRuntimeTyDist env) d in
+    d
 
   sem toRuntimeTyDist : InferenceSymEnv -> Type -> Type
   sem toRuntimeTyDist env =

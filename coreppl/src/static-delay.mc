@@ -258,7 +258,8 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
                 nulet_ aName (if_ (nvar_ eqN) (if_ val (addf_ d2.a (float_ 1.)) d2.a) d2.a),
                 nulet_ bName (if_ (nvar_ eqN) (if_ val d2.b (addf_ d2.b (float_ 1.))) d2.b)
                 ]
-      else ((bind_ postAlpha postBeta)) in
+                unit_
+      else ((bindall_ [postAlpha, postBeta] unit_)) in
     let tName = nameSym "paramR" in
     let rho = CodeBlockNode {ident=tName, code=code, ret=false, plateId=ref plateId} in
     let paramNames = [aName,bName] in
@@ -286,7 +287,8 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
                 nulet_ muName ( if_ (nvar_ eqN) pMu mu0),
                 nulet_ sigmaName (if_ (nvar_ eqN) pSigma s0)
                 ]
-      else (bind_ postMu postSigma) in
+                unit_
+      else (bindall_ [postMu, postSigma] unit_) in
     let tName = nameSym "paramR" in
     let rho = CodeBlockNode {ident=tName, code=code, ret=false,plateId=ref plateId} in
     let paramNames = [muName,sigmaName] in
@@ -297,11 +299,11 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let postA = nulet_ aName (mapi_ ( ulam_ "i" (ulam_ "e" (if_ (eqi_ (var_ "i") val) (addf_ (var_ "e") (float_ 1.0)) (var_ "e")))) d2.a) in
     let code = match indices with Some (mInd, lInd) then
       let eqN =(nameSym "eq") in
-       bindall_ [nulet_ eqN ((eqi_ (nvar_ mInd) lInd)),
-                nulet_ aName (if_ (nvar_ eqN) (mapi_ ( ulam_ "i" (ulam_ "e" (if_ (eqi_ (var_ "i") val) (addf_ (var_ "e") (float_ 1.0)) (var_ "e")))) d2.a) d2.a)  ]
-      else postA in
+       [nulet_ eqN ((eqi_ (nvar_ mInd) lInd)),
+        nulet_ aName (if_ (nvar_ eqN) (mapi_ ( ulam_ "i" (ulam_ "e" (if_ (eqi_ (var_ "i") val) (addf_ (var_ "e") (float_ 1.0)) (var_ "e")))) d2.a) d2.a)  ]
+      else [postA] in
     let tName = nameSym "paramR" in
-    let rho = CodeBlockNode {ident=tName, code=code, ret=false,plateId=ref plateId} in
+    let rho = CodeBlockNode {ident=tName, code=bindall_ code unit_, ret=false,plateId=ref plateId} in
     let paramNames = [aName] in
     (rho, DDirichlet {d2 with a=nvar_ aName},paramNames)
   | _ -> error "posterior:not supported"
@@ -313,7 +315,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let postP = divf_ d2.a (addf_ d2.a d2.b) in
     let tName = nameSym "param" in
     let pName = nameSym "margP" in
-    let letT = nulet_ pName postP in
+    let letT = bind_ (nulet_ pName postP) unit_ in
     let rho = CodeBlockNode {ident=tName, code=letT, ret=false,plateId=ref plateId} in
     Some (rho, DBernoulli {d1 with p=nvar_ pName})
   | (DGaussian d1,DGaussian d2) ->
@@ -328,7 +330,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let tName = nameSym "param" in
     let mName = nameSym "margMu" in
     let sName = nameSym "margSigma" in
-    let letT = bind_ (nulet_ mName postMu) (nulet_ sName postSigma) in
+    let letT = bindall_ [nulet_ mName postMu, nulet_ sName postSigma] unit_ in
     let rho = CodeBlockNode {ident=tName, code=letT, ret=false,plateId=ref plateId} in
     Some (rho, DGaussian {{d1 with mu=nvar_ mName} with sigma=nvar_ sName})
   | (DCategorical d1,DDirichlet d2) ->
@@ -337,7 +339,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let postP = map_ (ulam_ "ai" (divf_ (var_ "ai") (nvar_ sumName))) d2.a in
     let tName = nameSym "param" in
     let pName = nameSym "margP" in
-    let letT = nulet_ pName postP in
+    let letT = bind_ (nulet_ pName postP) unit_ in
     let rho = CodeBlockNode {ident=tName, code=bind_ sumai letT, ret=false,plateId=ref plateId} in
     Some (rho, DCategorical {d1 with p=nvar_ pName})
   | _ -> None ()
@@ -395,9 +397,9 @@ lang CreatePBN = ConjugatePrior
   sem createCodeBlock pbn cAcc t =
   -- merge with a previously created block with ident 'bid'
   | (Some id, Some bid) -> match mapLookupOrElse (lam. error "createCodeBlock:Lookup failed") bid pbn.m with CodeBlockNode c in
-                           let v = CodeBlockNode {c with code=bind_ c.code (nulet_ id t)} in
+                           let v = CodeBlockNode {c with code=oldBind_ c.code (bind_ (nulet_ id t) unit_)} in
                            (v,bid)
-  | (Some id, None ()) -> let v = CodeBlockNode {ident=id,code=(nulet_ id t),ret=false, plateId=ref cAcc.plateId} in (v,id)
+  | (Some id, None ()) -> let v = CodeBlockNode {ident=id,code=bind_ (nulet_ id t) unit_,ret=false, plateId=ref cAcc.plateId} in (v,id)
   | _ -> let ident = nameSym "" in
       let isRet = match cAcc.plateId with Some _ then false else cAcc.isRet in
       let v = CodeBlockNode {ident=ident,code=t,ret=isRet, plateId=ref cAcc.plateId} in
@@ -411,21 +413,15 @@ lang CreatePBN = ConjugatePrior
     let m = mapInsert id2 (getId v) cAcc.m in
     (pbn, {{cAcc with m=m} with blockIdent=None ()})
 
-  sem replaceInexpr =
-  | TmType t -> TmType {t with inexpr=unit_}
-  | TmRecLets t -> TmRecLets {t with inexpr=unit_}
-  | TmExt t  -> TmExt {t with inexpr=unit_}
-  | TmConDef t -> TmConDef {t with inexpr=unit_}
-
   sem createPBN: PBN -> CreateAcc -> Expr -> (PBN, CreateAcc)
   sem createPBN pbn cAcc =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t, inexpr = inexpr} ->
     let res = createPBNH pbn {{cAcc with vertexId=(Some t.ident)} with isRet=false} t.body in
-    createPBN res.0 res.1 t.inexpr
-  -- all other with inexpr
-  | (TmRecLets {inexpr=inexpr} | TmType {inexpr=inexpr} | TmExt {inexpr=inexpr} | TmConDef {inexpr=inexpr}) & t ->
-    let res = createPBNH pbn {{cAcc with isRet=false} with vertexId=None ()} (replaceInexpr t) in
     createPBN res.0 res.1 inexpr
+  -- all other with inexpr
+  | TmDecl x ->
+    let res = createPBNH pbn {cAcc with isRet=false, vertexId=None ()} (TmDecl {x with inexpr = unit_}) in
+    createPBN res.0 res.1 x.inexpr
   | t -> let res = createPBNH pbn {{cAcc with isRet=true} with vertexId=None ()} t in
          (res.0,res.1)
 
@@ -499,7 +495,8 @@ lang CreatePBN = ConjugatePrior
     let pbn = {{pbn with targets=targets} with g=g} in
     (pbn,{cAcc with blockIdent=None()} ,Some v)
   | TmVar t -> if cAcc.isRet then createPBNGeneric pbn cAcc (TmVar t) else never -- aliases are removed
-  | TmRecLets t -> match createPBNGeneric pbn cAcc (TmRecLets t) with (pbn,cAcc,Some v) in
+  | tm & TmDecl {decl = DeclRecLets t} ->
+    match createPBNGeneric pbn cAcc tm with (pbn,cAcc,Some v) in
     let blockIdent = match v with CodeBlockNode c then c.ident else never in
     let res = foldl (lam acc. lam b. match acc with (pbn,cAcc) in
       let edges = setToSeq (createEdges v pbn cAcc (setEmpty cmprEdge) b.body) in
@@ -657,35 +654,36 @@ lang RecreateProg = PBNGraph + MExprAst + MExprPPL
   | RandomVarNode v -> let body = match v.val with Some val then
       TmObserve {dist=dist_ (deref v.dist), value=val,ty=tyunknown_, info = NoInfo ()}
       else TmAssume {dist=dist_ (deref v.dist), ty=tyunknown_, info = NoInfo (), driftKernel = None ()} in
-    nulet_ v.ident body
-  | AffineNode v -> nulet_ v.ident (addf_ (mulf_ (nvar_ (getId (deref v.tVertex))) v.meanScale) v.meanOffset)
-  | MultiplexerNode m -> nulet_ m.ident (get_ (nvar_ (getId m.list)) (nvar_ m.indexId))
+    bind_ (nulet_ v.ident body) unit_
+  | AffineNode v -> bind_ (nulet_ v.ident (addf_ (mulf_ (nvar_ (getId (deref v.tVertex))) v.meanScale) v.meanOffset)) unit_
+  | MultiplexerNode m -> bind_ (nulet_ m.ident (get_ (nvar_ (getId m.list)) (nvar_ m.indexId))) unit_
   | ListNode l ->
     match l.create with Some val then
       match (get l.items 0) with (RandomVarNode v)&rv in
       match deref l.lamParam with Some lamParam in
       match deref l.outParam with Some outparam then
-      nulet_ l.ident (map_ (nulam_ lamParam (bind_ (recreateCode plateVertices pbn rv) (nvar_ v.ident))) (nvar_ outparam))
+      bind_ (nulet_ l.ident (map_ (nulam_ lamParam (oldBind_ (recreateCode plateVertices pbn rv) (nvar_ v.ident))) (nvar_ outparam))) unit_
       else
-      nulet_ l.ident (create_ val (nulam_ lamParam (bind_ (recreateCode plateVertices pbn rv) (nvar_ v.ident))))
-    else nulet_ l.ident (TmSeq {tms=(map (lam i. nvar_ (getId i)) l.items), ty=tyunknown_,info=NoInfo ()})
+      bind_ (nulet_ l.ident (create_ val (nulam_ lamParam (oldBind_ (recreateCode plateVertices pbn rv) (nvar_ v.ident))))) unit_
+    else bind_ (nulet_ l.ident (TmSeq {tms=(map (lam i. nvar_ (getId i)) l.items), ty=tyunknown_,info=NoInfo ()})) unit_
   | PlateNode p ->
     let vItems = mapLookupOrElse (lam. error "recreateCode:Lookup failed") p.ident plateVertices in
-    let bdyIn = foldl (lam acc. lam v. bind_ acc (recreateCode plateVertices pbn v)) unit_ vItems in
-    let body = if eqi (length p.varIds) 1 then (iter_ (nulam_ (get p.varIds 0) bdyIn) (nvar_ p.iterlId))
-    else (iteri_ (nulam_ (get p.varIds 0) (nulam_ (get p.varIds 1) bdyIn)) (nvar_ p.iterlId)) in
-    nulet_ p.ident body
+    let bdyIn = foldr oldBind_ unit_ (map (recreateCode plateVertices pbn) vItems) in
+    let body = if eqi (length p.varIds) 1
+      then (iter_ (nulam_ (get p.varIds 0) bdyIn) (nvar_ p.iterlId))
+      else (iteri_ (nulam_ (get p.varIds 0) (nulam_ (get p.varIds 1) bdyIn)) (nvar_ p.iterlId)) in
+    bind_ (nulet_ p.ident body) unit_
 
 
   sem recreateVertex: Map Name [Vertex] -> PBN -> [Vertex] -> Expr
   sem recreateVertex plateVertices pbn =
   | [(CodeBlockNode v)&t] ++ as -> let code = (recreateCode plateVertices pbn t) in
-    if v.ret then code else bind_ code (recreateVertex plateVertices pbn as)
-  | [(RandomVarNode _)&t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
-  | [(MultiplexerNode _)&t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
-  | [(PlateNode _) & t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
-  | [(ListNode _) & t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
-  | [(AffineNode _) & t] ++ as -> bind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
+    if v.ret then code else oldBind_ code (recreateVertex plateVertices pbn as)
+  | [(RandomVarNode _)&t] ++ as -> oldBind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
+  | [(MultiplexerNode _)&t] ++ as -> oldBind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
+  | [(PlateNode _) & t] ++ as -> oldBind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
+  | [(ListNode _) & t] ++ as -> oldBind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
+  | [(AffineNode _) & t] ++ as -> oldBind_ (recreateCode plateVertices pbn t) (recreateVertex plateVertices pbn as)
   | [] -> unit_
 
 end
@@ -833,14 +831,14 @@ lang TransformPBN = ConjugatePrior
             match deref (v.mDist) with Some pMarginalizedDist in getParams pMarginalizedDist
           ) l.items) in
     -- create a list from the marginalized parameters of the list items
-    let paramBlock = CodeBlockNode {ident=nameSym "", code=nulet_ paramsId params, ret=false, plateId=l.plateId} in
+    let paramBlock = CodeBlockNode {ident=nameSym "", code=bind_ (nulet_ paramsId params) unit_, ret=false, plateId=l.plateId} in
     let pbn = addVertexPBN pbn paramBlock in
     let pbn = inheritMDependencies pbn paramBlock p.list in
     let pbn = match l.create with Some rep then match deref l.outParam with Some outparam then
         {pbn with g=digraphMaybeAddEdge (mapLookupOrElse (lam. error "") outparam pbn.m) paramBlock 0 pbn.g} else pbn else pbn in
     -- create a block to select the ith marginalized parameter from the list
     let selectedParamId = nameSym "selectedParam" in
-    let pMarginalizedDistParam = nulet_ selectedParamId (get_ (nvar_ paramsId) (nvar_ p.indexId)) in
+    let pMarginalizedDistParam = bind_ (nulet_ selectedParamId (get_ (nvar_ paramsId) (nvar_ p.indexId))) unit_ in
     let selectedBlock = CodeBlockNode {ident=nameSym "", code=pMarginalizedDistParam, ret=false, plateId=l.plateId} in
     let pbn = addVertexPBN pbn selectedBlock in
     let pbn = {pbn with g=digraphMaybeAddEdge paramBlock selectedBlock 0 pbn.g} in
@@ -886,7 +884,7 @@ lang TransformPBN = ConjugatePrior
     else None ()
 
   sem addParam pbn param =
-  | CodeBlockNode ({code=TmLet t}&c) -> match t.body with TmRecord r in
+  | CodeBlockNode ({code=TmDecl {decl = DeclLet t}}&c) -> match t.body with TmRecord r in
     let newRec = record_add (int2string (mapSize r.bindings)) param t.body in
     let newCB = (CodeBlockNode {c with code = nulet_ t.ident newRec}) in
     (addVertexPBN pbn newCB, newCB)
@@ -904,7 +902,7 @@ lang TransformPBN = ConjugatePrior
     else
       let pParamId = nameSym "param" in
       match deref mDist with Some pMarginalizedDist in
-      let paramCB = CodeBlockNode {ident=pParamId, code=nulet_ pParamId (ref_ (getParams pMarginalizedDist)), ret=false, plateId=p.plateId} in
+      let paramCB = CodeBlockNode {ident=pParamId, code=bind_ (nulet_ pParamId (ref_ (getParams pMarginalizedDist))) unit_, ret=false, plateId=p.plateId} in
       let pbn = addVertexPBN pbn paramCB in
       match deref t.plateId with Some pid in
       let plate:Vertex = (mapLookupOrElse (lam. error "") pid pbn.m) in
@@ -912,7 +910,7 @@ lang TransformPBN = ConjugatePrior
       let tAcc = {tAcc with refMap=mapInsert (getId v.1) pParamId tAcc.refMap} in (pbn, tAcc, pParamId,paramCB)
     in match res with  (pbn, tAcc, pParamId,paramCB) in
     let mParamId = nameSym "prMargP" in
-    let derefCB = CodeBlockNode {ident=nameSym "", code=nulet_ mParamId (deref_ (nvar_ pParamId)), ret=false, plateId=t.plateId} in
+    let derefCB = CodeBlockNode {ident=nameSym "", code=bind_ (nulet_ mParamId (deref_ (nvar_ pParamId))) unit_, ret=false, plateId=t.plateId} in
     let pbn = addVertexPBN pbn derefCB in
     let pbn = match mapLookup (getId v.1) tAcc.modrefMap with Some id then
       let v = mapLookupOrElse (lam. error "lookup failed") id pbn.m in
@@ -935,7 +933,7 @@ lang TransformPBN = ConjugatePrior
           seq_ (map (lam i. match i with RandomVarNode v in
               match deref (v.mDist) with Some pMarginalizedDist in ref_ (getParams pMarginalizedDist)
             ) l.items) in
-      let paramCB = CodeBlockNode {ident=pParamId, code=nulet_ pParamId (ref_ param), ret=false, plateId=l.plateId} in
+      let paramCB = CodeBlockNode {ident=pParamId, code=bind_ (nulet_ pParamId (ref_ param)) unit_, ret=false, plateId=l.plateId} in
       let pbn = addVertexPBN pbn paramCB in
       match deref t.plateId with Some pid in
       let plate:Vertex = (mapLookupOrElse (lam. error "") pid pbn.m) in
@@ -946,7 +944,7 @@ lang TransformPBN = ConjugatePrior
     match res with (pbn, tAcc, pParamId,paramCB) in
     let mParamId = nameSym "prMargP" in
     let mParam = deref_ (get_ (deref_ (nvar_ pParamId)) (nvar_ p.indexId)) in
-    let derefCB = CodeBlockNode {ident=mParamId, code=nulet_ mParamId mParam, ret=false, plateId=t.plateId} in
+    let derefCB = CodeBlockNode {ident=mParamId, code=bind_ (nulet_ mParamId mParam) unit_, ret=false, plateId=t.plateId} in
     let pbn = match mapLookup l.ident tAcc.modrefMap with Some id then
       let v = mapLookupOrElse (lam. error "lookup failed") id pbn.m in
       {pbn with g=digraphMaybeAddEdge v derefCB 0 pbn.g} else pbn in
@@ -1164,7 +1162,7 @@ lang TransformPBN = ConjugatePrior
       (nulam_ e
         (if_ (eqi_ (nvar_ i) (nvar_ p.indexId)) reorderedParam (nvar_ e)))) (params) in
     let paramName = nameSym "rP" in
-    let paramBlock = CodeBlockNode {ident=paramName, code=nulet_ paramName code, ret=false,plateId=t.plateId} in
+    let paramBlock = CodeBlockNode {ident=paramName, code=bind_ (nulet_ paramName code) unit_, ret=false,plateId=t.plateId} in
     let pbn = addVertexPBN pbn paramBlock in
     let edges = [(rho,paramBlock,0)] in
     let pbn = {pbn with g = digraphMaybeAddEdges edges pbn.g} in
@@ -1188,7 +1186,7 @@ lang TransformPBN = ConjugatePrior
         match acc with (pbn, i) in
         let param = get_ (nvar_ paramName) (int_ i) in
         let paramid = nameSym "param" in
-        let cb = CodeBlockNode {ident=nameSym "", code=nulet_ paramid param,ret=false,plateId=l.plateId} in
+        let cb = CodeBlockNode {ident=nameSym "", code=bind_ (nulet_ paramid param) unit_,ret=false,plateId=l.plateId} in
         let pbn = addVertexPBN pbn cb in
         let edges = [(rho,cb,0),(cb,e,0)] in
         let pbn = {pbn with g=digraphMaybeAddEdges edges pbn.g} in
@@ -1214,14 +1212,14 @@ lang TransformPBN = ConjugatePrior
     -- calculate postParam, and modref it to be used later iteration
     let id = mapLookupOrElse (lam. error "lookup failed") (getId v.1) tAcc.refMap in
     let modRId = nameSym "" in
-    let derefCB = CodeBlockNode {ident=modRId, code=ulet_ "" (modref_ (nvar_ id) (getParams q)), ret=false, plateId=t.plateId} in
+    let derefCB = CodeBlockNode {ident=modRId, code=bind_ (ulet_ "" (modref_ (nvar_ id) (getParams q))) unit_, ret=false, plateId=t.plateId} in
     let pbn = addVertexPBN pbn derefCB in
     let pbn = inheritRDependencies pbn tAcc (v.0,parent,rho) in
     match mapLookup p.ident tAcc.modrefMap with Some _ then
        let tAcc = {tAcc with modrefMap=mapInsert p.ident modRId tAcc.modrefMap} in (pbn, tAcc)
     else
       let rParamId = nameSym "prPostP" in
-      let outerCB = CodeBlockNode {ident=nameSym "", code=nulet_ rParamId (deref_ (nvar_ id)), ret=false, plateId=p.plateId} in
+      let outerCB = CodeBlockNode {ident=nameSym "", code=bind_ (nulet_ rParamId (deref_ (nvar_ id))) unit_, ret=false, plateId=p.plateId} in
       let pbn = addVertexPBN pbn outerCB in
       let edges = [(rho,derefCB,0),(v.0,rho,0),(outerCB, parent, 0),(plateN, outerCB, 0)] in
       let pbn = {pbn with g=digraphMaybeAddEdges edges pbn.g} in
@@ -1243,7 +1241,7 @@ lang TransformPBN = ConjugatePrior
     let id = mapLookupOrElse (lam. error "lookup failed") l.ident tAcc.refMap in
     let modrefCode = get_ (deref_ (nvar_ id)) (nvar_ p.indexId) in
     let modRId = nameSym "" in
-    let derefCB = CodeBlockNode {ident=modRId, code=ulet_ "" (modref_ modrefCode (getParams q)), ret=false, plateId=t.plateId} in
+    let derefCB = CodeBlockNode {ident=modRId, code=bind_ (ulet_ "" (modref_ modrefCode (getParams q))) unit_, ret=false, plateId=t.plateId} in
     let pbn = addVertexPBN pbn derefCB in
     let pbn = {pbn with g=digraphMaybeAddEdge rho derefCB 0 pbn.g} in
     match mapLookup l.ident tAcc.modrefMap with Some _ then
@@ -1251,7 +1249,7 @@ lang TransformPBN = ConjugatePrior
     else
       let rParamId = nameSym "prPostP" in
       let tmpId = nameSym "" in
-      let outerCB = CodeBlockNode {ident=rParamId, code=nulet_ rParamId (map_ (nulam_ tmpId (deref_ (nvar_ tmpId))) (deref_ (nvar_ id))), ret=false, plateId=l.plateId} in
+      let outerCB = CodeBlockNode {ident=rParamId, code=bind_ (nulet_ rParamId (map_ (nulam_ tmpId (deref_ (nvar_ tmpId))) (deref_ (nvar_ id)))) unit_, ret=false, plateId=l.plateId} in
       let pbn = addVertexPBN pbn outerCB in
       let edges = [(rho,derefCB,0),(outerCB, p.list, 0),(plateN, outerCB, 0)] in
       let pbn = {pbn with g=digraphMaybeAddEdges edges pbn.g} in
@@ -1269,7 +1267,7 @@ lang TransformPBN = ConjugatePrior
           match acc with (pbn, edges, cnt) in
           match i with RandomVarNode v in
           let outNameI = nameSym (join ["postParam", int2string cnt]) in
-          let outBlockI = CodeBlockNode {ident=nameSym "", code=nulet_ outNameI (get_ (nvar_ rParamId) (int_ cnt)), ret=false, plateId=l.plateId} in
+          let outBlockI = CodeBlockNode {ident=nameSym "", code=bind_ (nulet_ outNameI (get_ (nvar_ rParamId) (int_ cnt))) unit_, ret=false, plateId=l.plateId} in
           let pbn = addVertexPBN pbn outBlockI in
           let newEdges = [(outerCB,outBlockI, 0),(outBlockI, i, 0),(plateN,outBlockI,0)] in
           let q = changeParams outNameI q in
@@ -1317,16 +1315,24 @@ end
 lang StaticDelay = CreatePBN + TransformPBN + RecreateProg
 
   sem fixIter =
-  | TmApp ({lhs=TmApp ({lhs=TmConst ({val=CIter ()}&c),rhs=TmLet t}&a2),rhs=lst}&a1) ->
-    let newrhs = match t.inexpr with TmLam l then TmLam {l with body=bind_ (TmLet {t with inexpr=unit_}) l.body} else TmLet t in
+  | TmApp (a1 &
+    { lhs=TmApp (a2 &
+      { lhs=TmConst {val=CIter _}
+      , rhs=rhs & TmDecl {decl = decl & DeclLet _, inexpr = inexpr}
+      })
+    , rhs=lst
+    }) ->
+    let newrhs = match inexpr with TmLam l
+      then TmLam {l with body=bind_ decl l.body}
+      else rhs in
     TmApp {a1 with lhs=TmApp {a2 with rhs=newrhs}}
   | t -> smap_Expr_Expr (fixIter) t
 
   sem removeAlias env =
-  | TmLet ({body=TmVar v}&t) ->
+  | TmDecl {decl = DeclLet ({body=TmVar v}&t), inexpr = inexpr} ->
     let env = match mapLookup v.ident env with Some id then
     mapInsert t.ident id env else mapInsert t.ident v.ident env in
-    removeAlias env t.inexpr
+    removeAlias env inexpr
   | TmVar t -> match mapLookup t.ident env with Some id then nvar_ id else TmVar t
   | t -> smap_Expr_Expr (removeAlias env) t
 

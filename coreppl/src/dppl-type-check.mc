@@ -838,12 +838,12 @@ end
 
 lang DTCTypeOfLet = DTCTypeOfLam + DTCTypeOfApp + UnknownTypeAst
   sem typeOfH env =
-  | TmLet r ->
+  | TmDecl (x & {decl = DeclLet r}) ->
     let wi = withInfo r.info in
-    typeOfH env (wi (app_ (wi (nlam_ r.ident r.tyAnnot r.inexpr)) r.body))
-  | TmLet (r & {tyAnnot = TyUnknown _}) ->
+    typeOfH env (wi (app_ (wi (nlam_ r.ident r.tyAnnot x.inexpr)) r.body))
+  | TmDecl (x & {decl = DeclLet (r & {tyAnnot = TyUnknown _})}) ->
     result.bind (typeOfHPromote env r.body) (lam body.
-      typeOfH env (TmLet { r with tyAnnot = body.ty }))
+      typeOfH env (TmDecl {x with decl = DeclLet { r with tyAnnot = body.ty }}))
 end
 
 lang DTCTyConst = TyConst + DTCTypeError + DTCTypeOfBase
@@ -1126,16 +1126,16 @@ end
 
 -- NOTE(oerikss, 2024-10-26): We only check that the subterms are well typed and
 -- delegate type-checking of utest terms to the core PPL type-checker.
-lang TypeOfUtest = UtestAst + DTCTypeOfBase
+lang TypeOfUtest = UtestDeclAst + DTCTypeOfBase
   sem typeOfH env =
-  | TmUtest r ->
+  | TmDecl (x & {decl = DeclUtest r}) ->
     result.bind
       (result.mapM
          (typeOfH env)
          (concat
             [r.test, r.expected]
             (map (optionGetOr unit_) [r.tusing, r.tonfail])))
-      (lam. typeOfH env r.next)
+      (lam. typeOfH env x.inexpr)
 end
 
 -- ┌───────────────────┐
@@ -2913,7 +2913,7 @@ in
 
 -- Utest
 
-utest _typeOf [(_x, flt a), (_y, flt a), (_z, flt a)] (utest_ x y z)
+utest _typeOf [(_x, flt a), (_y, flt a), (_z, flt a)] (bind_ (utest_ x y) z)
   with Right (det, flt a)
   using eq
 in
@@ -2923,7 +2923,7 @@ utest _typeOf [
   (_y, flt a),
   (_z, flt a),
   (_u, arrd [flt a, flt a] tybool_)
-] (utestu_ x y z u)
+] (bind_ (utestu_ x y u) z)
   with Right (det, flt a)
   using eq
 in
@@ -2934,7 +2934,7 @@ utest _typeOf [
   (_z, flt a),
   (_u, arrd [flt a, flt a] tybool_),
   (_v, arrd [flt a, flt a] tybool_)
-] (utestuo_ x y z u v)
+] (bind_ (utestuo_ x y u v) z)
   with Right (det, flt a)
   using eq
 in

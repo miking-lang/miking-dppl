@@ -60,7 +60,7 @@ lang ProbabilisticGraphicalModel = CorePPL + MExprAst + Plate
   -- 3. TmVar with valid value 1. or 2. or 4.
   -- 4. TmSeq consists of valid elements 1. 2., 3. or 4.
   sem validate (env:Env) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     match validateBody env t.body with Some err then Some err
     else validate (mapInsert t.ident t.body env) t.inexpr
   | TmVar t -> match mapLookup t.ident env with Some t then

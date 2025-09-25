@@ -16,39 +16,24 @@ lang MExprPPLBPF =
   sem transformStopFirstAssume env =
 
   -- Terms that cannot execute an assume internally (in ANF)
-  | TmLet ({body = TmVar _ | TmLam _ | TmConst _ | TmSeq _ | TmRecord _} & r) ->
-      match transformStopFirstAssume env r.inexpr with Some inexpr then
-        Some (TmLet { r with inexpr = inexpr })
-      else None ()
-
-  | TmRecLets r ->
-    match transformStopFirstAssume env r.inexpr with Some inexpr then
-      Some (TmRecLets { r with inexpr = inexpr })
+  | TmDecl (x& {decl = DeclLet {body = TmVar _ | TmLam _ | TmConst _ | TmSeq _ | TmRecord _}}) ->
+    match transformStopFirstAssume env x.inexpr with Some inexpr then
+      Some (TmDecl { x with inexpr = inexpr })
     else None ()
 
-  | TmExt r ->
-    match transformStopFirstAssume env r.inexpr with Some inexpr then
-      Some (TmExt {r with inexpr = inexpr})
-    else None ()
-
-  | TmType r ->
-    match transformStopFirstAssume env r.inexpr with Some inexpr then
-      Some (TmType {r with inexpr = inexpr})
-    else None ()
-
-  | TmConDef r ->
-    match transformStopFirstAssume env r.inexpr with Some inexpr then
-      Some (TmConDef {r with inexpr = inexpr})
+  | TmDecl (x & {decl = DeclRecLets _ | DeclExt _ | DeclType _ | DeclConDef _}) ->
+    match transformStopFirstAssume env x.inexpr with Some inexpr then
+      Some (TmDecl { x with inexpr = inexpr })
     else None ()
 
   -- Allow tail call match with single branch (e.g., `match ... with ... in ...`)
-  | TmMatch ({ thn = thn, els = TmLet { body = TmNever _ } & els } & r)->
+  | TmMatch ({ thn = thn, els = TmDecl {decl = DeclLet { body = TmNever _ }} & els } & r)->
     match transformStopFirstAssume env thn with Some thn then
       Some (TmMatch { r with thn = thn, els = withInfo (infoTm els) never_ })
     else None ()
 
   -- If we reach an assume, do the transformation
-  | TmLet { ident = ident, body = TmAssume r, inexpr = inexpr, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmAssume r, info = info }, inexpr = inexpr} ->
     let i = withInfo info in
     Some (i (appFromEnv env "stopFirstAssume" [r.dist, i (nulam_ ident inexpr)]))
 
@@ -87,7 +72,7 @@ lang MExprPPLBPF =
       let cont = (ulam_ "x" (nconapp_ cEnd (var_ "x"))) in
       match config.cps with "partial" then
         let checkpoint = lam t.
-          match t with TmLet { ident = ident, body = body } then
+          match t with TmDecl {decl = DeclLet { ident = ident, body = body }} then
             match body with TmResample _ then true else false
           else
             errorSingle [infoTm t] "Impossible"

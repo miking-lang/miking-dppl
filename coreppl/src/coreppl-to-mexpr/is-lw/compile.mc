@@ -64,25 +64,18 @@ lang MExprPPLImportance =
   -- CPS compile
   sem exprCps env k =
   -- Do nothing at assumes or resamples
-  | TmLet ({ body = TmAssume _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmResample _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDist _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmDist (d & { dist = DWiener w })} & t) ->
+  | TmDecl (x & {decl = DeclLet {body = TmAssume _ | TmResample _ | TmDist _}}) ->
+    TmDecl {x with inexpr = exprCps env k x.inexpr}
+  | TmDecl (x & {decl = DeclLet ({ body = TmDist (d & { dist = DWiener w })} & t)}) ->
     if not (transform env t.ident) then
-      TmLet { t with inexpr = exprCps env k t.inexpr }
+      TmDecl {x with inexpr = exprCps env k x.inexpr}
     else
-      TmLet {
-        t with
-        body = TmDist { d with dist = DWiener { w with cps = true }},
-        inexpr = exprCps env k t.inexpr
+      TmDecl {x with decl = DeclLet {t with body = TmDist { d with dist = DWiener { w with cps = true }}}
+        , inexpr = exprCps env k x.inexpr
       }
 
   -- This is where we use the continuation (weight and observe)
-  | TmLet { ident = ident, body = w & TmWeight { weight = weight },
-            inexpr = inexpr} & t ->
+  | TmDecl {decl = DeclLet { ident = ident, body = w & TmWeight { weight = weight }}, inexpr = inexpr} & t ->
     let i = withInfo (infoTm t) in
     let k =
       if tailCall t then
@@ -96,7 +89,7 @@ lang MExprPPLImportance =
     i (appf2_ w weight k)
 
   -- This is where we use the continuation (weight and observe)
-  | TmLet { ident = ident, body = obs & TmObserve { value = value, dist = dist },
+  | TmDecl {decl = DeclLet { ident = ident, body = obs & TmObserve { value = value, dist = dist }},
             inexpr = inexpr } & t ->
     let i = withInfo (infoTm t) in
     let k =
@@ -165,7 +158,7 @@ lang MExprPPLImportance =
 
       match config.cps with "partial" then
         let checkpoint = lam t.
-          match t with TmLet { ident = ident, body = body } then
+          match t with TmDecl {decl = DeclLet { ident = ident, body = body }} then
             match body with TmWeight _ | TmObserve _ then true else false
           else errorSingle [infoTm t] "Impossible"
         in
