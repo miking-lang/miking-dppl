@@ -229,6 +229,21 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   modref state.priorWeight (addf (deref state.priorWeight) w);
   unsafeCoerce sample
 
+-- Function to reset the state when doing a global update
+let resetState : State Result -> () = lam state. (
+  modref state.oldAlignedTrace (emptyList ());
+  modref state.oldUnalignedTraces (emptyList ());
+  modref state.weight 0.;
+  modref state.priorWeight 0.;
+  modref state.driftHastingRatio 0.;
+  modref state.prevWeightReused 0.;
+  modref state.weightReused 0.;
+  modref state.reuseUnaligned true;
+  modref state.alignedTrace (emptyList ());
+  modref state.unalignedTraces (toList [(emptyList ())]);
+  ()
+)
+
 -- Function to run new MH iterations.
 let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Result =
   lam config. lam model.
@@ -238,16 +253,7 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
   let modGlobal: Bool = bernoulliSample gProb in
 
   if modGlobal then (
-    modref state.oldAlignedTrace (emptyList ());
-    modref state.oldUnalignedTraces (emptyList ());
-    modref state.weight 0.;
-    modref state.priorWeight 0.;
-    modref state.driftHastingRatio 0.;
-    modref state.prevWeightReused 0.;
-    modref state.weightReused 0.;
-    modref state.reuseUnaligned true;
-    modref state.alignedTrace (emptyList ());
-    modref state.unalignedTraces (toList [(emptyList ())]);
+    resetState state;
     model state
   ) else
 
@@ -380,8 +386,23 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
   -- and discard it
   (if config.pigeons then fileReadLine fileStdin; () else ());
 
-  -- First sample
-  let sample = model state in
+  -- First sample -- call the model until we get a non-zero weight
+  recursive let firstSample : (State Result -> Result) -> State Result -> Int -> State Result =
+    lam model. lam state. lam i.
+      let sample = model state in 
+      let weight = deref state.weight in
+      let weightReused = deref state.weightReused in
+      let priorWeight = deref state.priorWeight in
+      let prevWeightReused = deref state.prevWeightReused in
+      if or (leqf weight (log 0.0)) (isNaN weight) then
+        resetState state;
+        -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+        firstSample model state (addi i 1)
+      else
+        sample
+      in 
+
+  let sample = firstSample model state 1 in
   let weight = deref state.weight in
   let priorWeight = deref state.priorWeight in
   (if config.pigeons then
