@@ -1,10 +1,11 @@
 
 include "ext/file-ext.mc"
-include "ext/math-ext.mc"
 include "ext/dist-ext.mc"
 include "seq.mc"
 include "string.mc"
 include "sys.mc"
+
+include "../elementary-functions.mc"
 
 type Res a = ([Float],[a])
 type ResOption a = ([Float],[Option a])

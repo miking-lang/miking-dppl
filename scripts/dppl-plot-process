@@ -8,7 +8,7 @@ import numpy as np
 
 
 parser = argparse.ArgumentParser(
-    description="Plot Miking DPPL stochastic process from standard input. The samples are assumed to be on the form [[t1, x1], [t1, x2], ..., [tn, xn]], where ti are timestamps and xi the value at this time."
+    description="Plot Miking DPPL stochastic process from standard input. The samples are assumed to be on the form [(t1, x1), (t1, x2), ..., (tn, xn)], where ti are timestamps and xi the value at this time in the form [a, b, c, ...]."
 )
 
 parser.add_argument("-m", "--mean", action="store_true", help="Plot mean")
@@ -73,7 +73,7 @@ def plot_traces(ax, ws, ts, traces, color, label, first_plot=True):
                     layers[:, i, 1],
                     color=color,
                     alpha=pcts[i] * 0.01,
-                    label=f"{label}: {pcts[i]}%" if first_plot else f"{label}",
+                    label=f"{label}: {pcts[i]}%",
                 )
             else:
                 ax.fill_between(
@@ -82,7 +82,7 @@ def plot_traces(ax, ws, ts, traces, color, label, first_plot=True):
                     layers[:, i, 0],
                     color=color,
                     alpha=pcts[i] * 0.01,
-                    label=f"{label}: {pcts[i]}%" if first_plot else None,
+                    label=f"{label}: {pcts[i]}%",
                 )
                 ax.fill_between(
                     ts,

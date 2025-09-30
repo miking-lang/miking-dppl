@@ -28,6 +28,8 @@ include "dist.mc"
 include "infer-method.mc"
 include "ode-solver-method.mc"
 
+include "elementary-functions.mc"
+
 -------------
 -- HELPERS --
 -------------
@@ -62,18 +64,17 @@ lang ElementaryFunctions =
   | CExp {}
   | CLog {}
   | CPow {}
-
-  sem tyConst =
-  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ -> tyarrows_ [tyfloat_, tyfloat_]
-  | CPow _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
+  | CAbsf {}
+  | CSmoothdivf {}
 
   sem tyConstBase d =
-  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ -> tyarrows_ [tyfloat_, tyfloat_]
-  | CPow _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
+  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ | CAbsf _ ->
+    tyarrows_ [tyfloat_, tyfloat_]
+  | CPow _ | CSmoothdivf _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
 
   sem constArity =
-  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ -> 1
-  | CPow _ -> 2
+  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ | CAbsf _ -> 1
+  | CPow _ | CSmoothdivf _ -> 2
 
   sem getConstStringCode (indent : Int) =
   | CSin _ -> "sin"
@@ -82,6 +83,8 @@ lang ElementaryFunctions =
   | CExp _ -> "exp"
   | CLog _ -> "log"
   | CPow _ -> "pow"
+  | CAbsf _ -> "absf"
+  | CSmoothdivf _ -> "smoothdivf"
 
   sem delta info =
   | (CSin _, [TmConst (cr & {val = CFloat fr})]) ->
@@ -96,14 +99,35 @@ lang ElementaryFunctions =
     TmConst { cr with val = CFloat { fr with val = log fr.val }, info = info }
   | (CPow _, [TmConst (cr & {val = CFloat fr1}), TmConst {val = CFloat fr2}]) ->
     TmConst {
-      cr with val = CFloat { fr2 with val = pow fr1.val fr2.val }, info = info
-    }
+      cr with val = CFloat { fr2 with val = pow fr1.val fr2.val }, info = info }
+  | (CAbsf _, [TmConst (cr & {val = CFloat fr})]) ->
+    TmConst { cr with
+              val = CFloat {
+                fr with val = if ltf fr.val 0. then negf fr.val else fr.val },
+              info = info }
+  | (CSmoothdivf _, [TmConst (cr & {val = CFloat fr1}), TmConst {val = CFloat fr2}]) ->
+    TmConst {
+      cr with val = CFloat { fr2 with val = smoothdivf fr1.val fr2.val }, info = info }
 
   sem constHasSideEffect =
-  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ | CPow _ -> false
+  | CSin _
+  | CCos _
+  | CSqrt _
+  | CExp _
+  | CLog _
+  | CPow _
+  | CAbsf _
+  | CSmoothdivf _ -> false
 
   sem generateConstraintsConst graph info ident =
-  | CSin _ | CCos _ | CSqrt _ | CExp _ | CLog _ | CPow _ -> graph
+  | CSin _
+  | CCos _
+  | CSqrt _
+  | CExp _
+  | CLog _
+  | CPow _
+  | CAbsf _
+  | CSmoothdivf _ -> graph
 
   -- Builders
   sem sin_ =| x -> app_ (uconst_ (CSin ())) x
@@ -111,7 +135,9 @@ lang ElementaryFunctions =
   sem sqrt_ =| x -> app_ (uconst_ (CSqrt ())) x
   sem exp_ =| x -> app_ (uconst_ (CExp ())) x
   sem log_ =| x -> app_ (uconst_ (CLog ())) x
-  sem pow_ =| x -> app_ (uconst_ (CPow ())) x
+  sem pow_ =| x -> appf2_ (uconst_ (CPow ())) x
+  sem absf_ =| x -> app_ (uconst_ (CAbsf ())) x
+  sem smoothdivf_ =| x -> appf2_ (uconst_ (CSmoothdivf ())) x
 end
 
 
@@ -629,14 +655,14 @@ lang SolveODE =
     unify env [infoTm model]
       (arrow float (arrow tyState tyState))
       (tyTm model);
-    unify env [infoTm init] tyState (tyTm init);
+    unify env [infoTm init] (itytuple_ t.info [float, tyState]) (tyTm init);
     unify env [infoTm endTime] float (tyTm endTime);
     TmSolveODE { t with
                  method = method,
                  model = model,
                  init = init,
                  endTime = endTime,
-                 ty = tyState }
+                 ty = itytuple_ t.info [float, tyState] }
 
   -- ANF
   sem normalize (k : Expr -> Expr) =
@@ -1053,7 +1079,6 @@ lang Diff =
   | TmDiff { fn: Expr,
              arg: Expr,
              darg: Expr,
-             mod : Option DiffMod,
              ty: Type,
              info: Info }
 
@@ -1086,15 +1111,12 @@ lang Diff =
     match printParen i env t.fn with (env, fn) in
     match printParen i env t.arg with (env, arg) in
     match printParen i env t.darg with (env, darg) in
-    let mod = switch t.mod
-              case Some (Analytic _) then "A"
-              case Some (PAP _) then "P"
-              case _ then ""
-              end
-    in
-    (env, join [
-      "diff", mod, pprintNewline i,
-      fn, pprintNewline i, arg, pprintNewline i, darg])
+    (env, join [ "diff", pprintNewline i,
+                 fn,
+                 pprintNewline i,
+                 arg,
+                 pprintNewline i,
+                 darg ])
 
   -- Equality
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -1458,18 +1480,13 @@ let solveodeWithStepSize_ =
 
 let solveode_ = solveodeWithStepSize_ (float_ 0.01)
 
-let diffmod_ = use Diff in lam mod. lam fn. lam arg. lam darg. TmDiff {
+let diff_ = use Diff in lam fn. lam arg. lam darg. TmDiff {
   fn = fn,
   arg = arg,
   darg = darg,
-  mod = mod,
   ty = tyunknown_,
   info = NoInfo ()
 }
-
-let diff_ = diffmod_ (None ())
-let diffa_ = use Diff in diffmod_ (Some (Analytic ()))
-let diffp_ = use Diff in diffmod_ (Some (PAP ()))
 
 let prune_ = use Prune in
   lam d. TmPrune {dist = d, ty = tyunknown_ , info = NoInfo ()}

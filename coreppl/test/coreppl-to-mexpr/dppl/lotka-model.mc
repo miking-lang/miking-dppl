@@ -12,6 +12,8 @@ let lotkaVolterra =
        subf (mulf p.2 (mulf y.0 y.1)) (mulf p.3 y.1))
 
 mexpr
+
+-- Dummy infer to prevent wrapping the whole program in an infer
 let m = lam t : (). () in
 let d = infer (Importance { particles = 1 }) m in
 ()
