@@ -6,6 +6,7 @@ include "math.mc"
 include "seq.mc"
 include "string.mc"
 include "option.mc"
+include "sys.mc"
 
 include "../runtime-common.mc"
 include "../runtime-dists.mc"
@@ -321,63 +322,61 @@ recursive let listenPigeons : Float -> Float -> Float = lam weight. lam priorWei
   end
 end
 
--- General inference algorithm for aligned MCMC
-let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
-  lam config. lam model.
+recursive let mh : all acc. all dAcc.
+  Config Result acc dAcc -> (State Result -> Result) -> [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> (acc -> acc) -> Float -> Int -> [Result] =
+  lam config. lam model. lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam modContinueState. lam beta. lam iter.
+    match continueState with (continueState, true) then
+      let prevAlignedTrace = deref state.alignedTrace in
+      let prevUnalignedTraces = deref state.unalignedTraces in
+      let sample = runNext config model in
+      (if config.pigeons then
+        printLn "response()"
+        else ());
+      -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
+      -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
+      -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
+      -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
+      let weight = deref state.weight in
+      let priorWeight = deref state.priorWeight in
+      let driftHastingRatio = deref state.driftHastingRatio in
+      let weightReused = deref state.weightReused in
+      let prevWeightReused = deref state.prevWeightReused in
+      let logMhAcceptProb = minf 0.
+        (addf
+          (mulf beta (addf (subf weight prevWeight) driftHastingRatio))
+          (subf weightReused prevWeightReused))
+      in
+      -- print "weight: "; printLn (float2string weight);
+      -- print "prevWeight: "; printLn (float2string prevWeight);
+      -- print "weightReused: "; printLn (float2string weightReused);
+      -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+      -- printLn "-----";
+      match
+        if bernoulliSample (exp logMhAcceptProb) then
+          mcmcAccept ();
+          (true, weight, priorWeight, sample)
+        else
+        -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
+        -- as we reject and reuse the old sample.
+          modref state.alignedTrace prevAlignedTrace;
+          modref state.unalignedTraces prevUnalignedTraces;
+          (false, prevWeight, prevPriorWeight, prevSample)
+      with (accepted, weight, priorWeight, sample) in
+      let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
+      let debugInfo =
+        { accepted = accepted
+        } in
+      let debugState = config.debug.1 debugState debugInfo in
+      let continueState = config.continue.1 continueState sample in
+      match continueState with (continueState, success) in
+      let continueState = (modContinueState continueState, success) in
+      mh config model keptSamples weight priorWeight sample debugState continueState modContinueState beta (addi iter 1)
+    else keptSamples
+  end
 
-  recursive let mh : [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Float -> Int -> [Result] =
-    lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam beta. lam iter.
-      match continueState with (continueState, true) then
-        let prevAlignedTrace = deref state.alignedTrace in
-        let prevUnalignedTraces = deref state.unalignedTraces in
-        let sample = runNext config model in
-        (if config.pigeons then
-          printLn "response()"
-         else ());
-        -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
-        -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
-        -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
-        -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
-        let weight = deref state.weight in
-        let priorWeight = deref state.priorWeight in
-        let driftHastingRatio = deref state.driftHastingRatio in
-        let weightReused = deref state.weightReused in
-        let prevWeightReused = deref state.prevWeightReused in
-        let logMhAcceptProb = minf 0.
-          (addf
-            (mulf beta (addf (subf weight prevWeight) driftHastingRatio))
-            (subf weightReused prevWeightReused))
-        in
-        -- print "weight: "; printLn (float2string weight);
-        -- print "prevWeight: "; printLn (float2string prevWeight);
-        -- print "weightReused: "; printLn (float2string weightReused);
-        -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
-        -- printLn "-----";
-        match
-          if bernoulliSample (exp logMhAcceptProb) then
-            mcmcAccept ();
-            (true, weight, priorWeight, sample)
-          else
-          -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
-          -- as we reject and reuse the old sample.
-            modref state.alignedTrace prevAlignedTrace;
-            modref state.unalignedTraces prevUnalignedTraces;
-            (false, prevWeight, prevPriorWeight, prevSample)
-        with (accepted, weight, priorWeight, sample) in
-        let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
-        let debugInfo =
-          { accepted = accepted
-          } in
-        let debugState = config.debug.1 debugState debugInfo in
-        let continueState = if config.pigeons
-          then (continueState, true)
-          else config.continue.1 continueState sample in
-        let beta = if config.pigeons
-          then listenPigeons weight priorWeight
-          else 1. in
-        mh keptSamples weight priorWeight sample debugState continueState beta (addi iter 1)
-      else keptSamples
-  in
+-- General inference algorithm for aligned MCMC
+let run : all acc. all dAcc. Config Result (Int, Float, Option WriteChannel) dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
+  lam config. lam model.
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
@@ -435,19 +434,33 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
     { accepted = true
     } in
 
+  let modContinueState = lam contState. 
+    let beta = if config.pigeons
+      then listenPigeons weight priorWeight
+      else 1.0 in
+    match contState with (idx, _, optCh) in
+    (idx, beta, optCh)
+  in
+
   -- Sample the rest
   let debugState = config.debug.1 config.debug.0 debugInfo in
-  let continueState = if config.pigeons
-    then (config.continue.0, true)
-    else config.continue.1 config.continue.0 sample in
+  let optCh = if config.pigeons then
+    match sysGetEnv "TPPL_OUT" with Some fn then
+      match fileWriteOpen fn with Some wc then
+        Some wc
+      else error (join ["Failed to open file ", fn])
+    else error (join ["Environment variable `TPPL_OUT` not set"])
+  else None () in
   let beta = if config.pigeons
     then listenPigeons weight priorWeight
     else 1.0 in
-  let samples = mh samples weight priorWeight sample debugState continueState beta (addi iter 1) in
+  let contArg = ((config.continue.0).0, beta, optCh) in
+  let continueState = config.continue.1 contArg sample in
+  let samples = mh config model samples weight priorWeight sample debugState continueState modContinueState beta (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
-
+  (match optCh with Some wc then fileWriteClose wc else ());
   let numSamples = length samples in
   use RuntimeDist in
   constructDistEmpirical samples (make numSamples 1.0)

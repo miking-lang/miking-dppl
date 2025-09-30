@@ -4,12 +4,16 @@ include "ext/math-ext.mc"
 include "ext/dist-ext.mc"
 include "seq.mc"
 include "string.mc"
+include "sys.mc"
 
 type Res a = ([Float],[a])
 type ResOption a = ([Float],[Option a])
 
 -- Set the seed if specified
+-- NOTE(ErikDanielsson, 2025-09-30): Override with env. variable added to 
+-- support Pigeons.jl seed setter. We assume the seed is well formed if set
 let #var"" =
+  match sysGetEnv "PPL_SEED" with Some seedStr then setSeed (string2int seedStr) else
   if compileOptions.seedIsSome then setSeed compileOptions.seed else ()
 
 -- Constants
