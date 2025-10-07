@@ -863,8 +863,8 @@ lang Pruned = Prune
 
    -- CPS
   sem cpsCont k =
-  | TmLet ({ body = TmPruned _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+  | TmDecl (x & {decl = DeclLet {body = TmPruned _}}) ->
+    TmDecl {x with inexpr = cpsCont k x.inexpr}
 
   sem typeCheckExpr (env : TCEnv) =
   | TmPruned t ->
@@ -1372,8 +1372,8 @@ lang Delayed = Delay
 
    -- CPS
   sem cpsCont k =
-  | TmLet ({ body = TmDelayed _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+  | TmDecl (x & {decl = DeclLet {body = TmDelayed _}}) ->
+    TmDecl {x with inexpr = cpsCont k x.inexpr}
 
   sem typeCheckExpr (env : TCEnv) =
   | TmDelayed t ->
@@ -1508,7 +1508,7 @@ end
 
 let pplKeywords = [
   "assume", "observe", "weight", "resample", "cancel",
-  "Uniform", "UniformDiscrete", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
+  "Uniform", "Reciprocal", "UniformDiscrete", "Bernoulli", "Poisson", "Beta", "Gamma", "Categorical",
   "Multinomial", "Dirichlet", "Exponential", "Empirical", "Gaussian",
   "Binomial", "Wiener"
 ]
@@ -1820,18 +1820,18 @@ let _anf = compose normalizeTerm symbolize in
 
 utest _anf tmAssume with bindall_ [
   ulet_ "t" (bern_ (float_ 0.7)),
-  ulet_ "t1" (assume_ (var_ "t")),
+  ulet_ "t1" (assume_ (var_ "t"))](
   var_ "t1"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmObserve with bindall_ [
   ulet_ "t" (beta_ (float_ 1.0) (float_ 2.0)),
-  ulet_ "t1" (observe_ (float_ 1.5) (var_ "t")),
+  ulet_ "t1" (observe_ (float_ 1.5) (var_ "t"))](
   var_ "t1"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmWeight with bindall_ [
-  ulet_ "t" (weight_ (float_ 1.5)),
+  ulet_ "t" (weight_ (float_ 1.5))](
   var_ "t"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf
         (solveode_ (ulams_ ["t", "x"] (addf_ (float_ 1.) (float_ 0.)))
            tmX0 tmTEnd)
@@ -1842,44 +1842,44 @@ utest _anf
             (bind_ (ulet_ "t" (addf_ (float_ 1.) (float_ 0.)))
                (var_ "t")))
          (float_ 0.)
-         tmTEnd),
+         tmTEnd)](
     var_ "t"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmDiff with bindall_ [
-  ulet_ "t" (diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.)),
+  ulet_ "t" (diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.))](
   var_ "t"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmPrune with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
   ulet_ "t1" (categorical_ (var_ "t")),
-  ulet_ "t2" (prune_ (var_ "t1")),
+  ulet_ "t2" (prune_ (var_ "t1"))](
   var_ "t2"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmPruned with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
   ulet_ "t1" (categorical_ (var_ "t")),
   ulet_ "t2" (prune_ (var_ "t1")),
-  ulet_ "t3" (pruned_ (var_ "t2")),
+  ulet_ "t3" (pruned_ (var_ "t2"))](
   var_ "t3"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmCancel with bindall_ [
   ulet_ "t" (bern_ (float_ 0.7)),
-  ulet_ "t1" (cancel_ (var_ "t") true_),
+  ulet_ "t1" (cancel_ (var_ "t") true_)](
   var_ "t1"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmDelay with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
   ulet_ "t1" (categorical_ (var_ "t")),
-  ulet_ "t2" (delay_ (var_ "t1")),
+  ulet_ "t2" (delay_ (var_ "t1"))](
   var_ "t2"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 utest _anf tmDelayed with bindall_ [
   ulet_ "t" (seq_ [float_ 0.5,float_ 0.3,float_ 0.2]),
   ulet_ "t1" (categorical_ (var_ "t")),
   ulet_ "t2" (delay_ (var_ "t1")),
-  ulet_ "t3" (delayed_ (var_ "t2")),
+  ulet_ "t3" (delayed_ (var_ "t2"))](
   var_ "t3"
-] using eqExpr else _toStr in
+) using eqExpr else _toStr in
 
 ---------------------
 -- TYPE-LIFT TESTS --

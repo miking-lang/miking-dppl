@@ -91,7 +91,7 @@ end
 
 lang DPPLPrunedReplace = DPPLKeywordReplace + SymGetters
   sem replaceCancel env =
-  | (TmCancel t) -> 
+  | (TmCancel t) ->
     let i = withInfo t.info in
     TmWeight { weight = negf_ (appf2_ (withInfo t.info (nvar_ (_getVarExn "logObserve" env)))
  t.dist t.value),
@@ -189,7 +189,7 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedRepla
     -> CompileEnvs
     -> Map InferMethod {env : {path : String, env : SymEnv}, stateType : Type, extraEnvs : Map String {path : String, env : SymEnv}}
     -> Map Name ModelRepr
-    -> Map Name Expr
+    -> Map Name Decl
   sem compileModels options lamliftSols envs runtimes =
   | models ->
     mapMapWithKey
@@ -199,9 +199,9 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedRepla
           let extractAst = lam f. transformModelAst envs options method (extractAst f) in
           let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
           let ast = compileModel options lamliftSols envs entry id {model with extractAst = extractAst} in
-          endPhaseStatsExpr log "compile-model-one" ast;
-          let ast = removeModelDefinitions ast in
-          endPhaseStatsExpr log "remove-model-definitions-one" ast;
+          endPhaseStatsExpr log "compile-model-one" (bind_ ast unit_);
+          let ast = smap_Decl_Expr removeModelDefinitions ast in
+          endPhaseStatsExpr log "remove-model-definitions-one" (bind_ ast unit_);
           ast
         else
           match pprintInferMethod 0 pprintEnvEmpty method with (_, methodStr) in
@@ -237,7 +237,7 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedRepla
     -> {env : {path : String, env : SymEnv}, stateType : Type, extraEnvs : Map String {path : String, env : SymEnv}}
     -> Name
     -> ModelRepr
-    -> Expr
+    -> Decl
   sem compileModel options lamliftSols envs entry modelId =
   | {extractAst = extractAst, params = modelParams, method = method} ->
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
@@ -269,13 +269,13 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedRepla
     let ast =
       nulet_ modelId
         (nlams_ (snoc modelParams (stateVarId, entry.stateType)) ast) in
-    endPhaseStatsExpr log "insert-model-params-one" ast;
+    endPhaseStatsExpr log "insert-model-params-one" (bind_ ast unit_);
 
     -- Replace any occurrences of TyDist in the program with the runtime
     -- distribution type. This needs to be performed after the previous step as
     -- captured parameters may have type TyDist.
-    let ast = replaceTyDist {env = envs.distEnv, lamliftSols = lamliftSols} ast in
-    endPhaseStatsExpr log "replace-ty-dist-one" ast;
+    let ast = replaceTyDistDecl {env = envs.distEnv, lamliftSols = lamliftSols} ast in
+    endPhaseStatsExpr log "replace-ty-dist-one" (bind_ ast unit_);
 
     ast
 
@@ -289,28 +289,28 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedRepla
   -- remove it from the model code.
   sem removeModelDefinitions : Expr -> Expr
   sem removeModelDefinitions =
-  | TmType t -> removeModelDefinitions t.inexpr
-  | TmConDef t -> removeModelDefinitions t.inexpr
-  | TmExt t -> removeModelDefinitions t.inexpr
+  | TmDecl (x & {decl = DeclType _}) -> removeModelDefinitions x.inexpr
+  | TmDecl (x & {decl = DeclConDef _}) -> removeModelDefinitions x.inexpr
+  | TmDecl (x & {decl = DeclExt _}) -> removeModelDefinitions x.inexpr
   | t -> smap_Expr_Expr removeModelDefinitions t
 end
 
-lang InsertModels = VarAst + ExprAsDecl
+lang InsertModels = VarAst + DeclAst
   -- We insert each model right before its first use.  This is simple
   -- but correct, as we only need them to be placed after the
   -- corresponding runtime code.
-  sem insertModels : Map Name Expr -> Expr -> Expr
-  sem insertModels models = | tm ->
-    match exprAsDecl tm with Some (decl, inexpr) then
-      let usedModels = sfold_Decl_Expr (modelsUsedInBody models) (mapEmpty nameCmp) decl in
-      let usedModels = mapIntersectWith (lam a. lam. a) models usedModels in
-      let laterModels = mapDifference models usedModels in
-      let inexpr = insertModels laterModels inexpr in
-      bindall_ (snoc (mapValues usedModels) (declAsExpr inexpr decl))
-    else
-      bindall_ (snoc (mapValues models) tm)
+  sem insertModels : Map Name Decl -> Expr -> Expr
+  sem insertModels models =
+  | TmDecl x ->
+    let usedModels = sfold_Decl_Expr (modelsUsedInBody models) (mapEmpty nameCmp) x.decl in
+    let usedModels = mapIntersectWith (lam a. lam. a) models usedModels in
+    let laterModels = mapDifference models usedModels in
+    let inexpr = insertModels laterModels x.inexpr in
+    bindall_ (snoc (mapValues usedModels) x.decl) inexpr
+  | tm ->
+    bindall_ (mapValues models) tm
 
-  sem modelsUsedInBody : Map Name Expr -> Set Name -> Expr -> Set Name
+  sem modelsUsedInBody : all x. Map Name x -> Set Name -> Expr -> Set Name
   sem modelsUsedInBody models acc =
   | TmVar t ->
     if mapMem t.ident models
@@ -1012,14 +1012,17 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       let printSamples = if options.printSamples
         then appf2_ (nvar_ (_getVarExn "printSamples" topEnv)) retTyPrint (nvar_ distName)
         else unit_ in
-      TmLet
-      { ident = distName
-      , tyAnnot = tyunknown_
-      , tyBody = tyunknown_
-      , body = TmInfer
-        { method = setRuns (nvar_ (_getVarExn "particles" topEnv)) method
-        , model = nvar_ modelName
-        , ty = tyunknown_
+      TmDecl
+      { decl = DeclLet
+        { ident = distName
+        , tyAnnot = tyunknown_
+        , tyBody = tyunknown_
+        , body = TmInfer
+          { method = setRuns (nvar_ (_getVarExn "particles" topEnv)) method
+          , model = nvar_ modelName
+          , ty = tyunknown_
+          , info = NoInfo ()
+          }
         , info = NoInfo ()
         }
       , info = NoInfo ()
@@ -1068,7 +1071,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
      else ());
 
     recursive let f = lam decls. lam ast.
-      match exprAsDecl ast with Some (decl, ast)
+      match ast with TmDecl {decl = decl, inexpr = ast}
       then f (snoc decls decl) ast
       else (decls, ast) in
     -- NOTE(oerikss, 2025-03-14): We need to erase any type decorations specific
@@ -1102,7 +1105,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       case (false, _, false) | (false, true, true) then
         -- NOTE(vipa, 2025-02-26): Simple case, no AD, and no need to add an infer
         let decls = if isModel
-          then snoc decls (declWithInfo (infoTm expr) (decl_nulet_ (nameSym "") expr))
+          then snoc decls (declWithInfo (infoTm expr) (nulet_ (nameSym "") expr))
           else decls in
         _addDeclsByFile loader decls
       case (false, false, true) then
@@ -1110,7 +1113,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         match partition (lam d. match infoDecl d with Info {filename = f} then eqString f path else false) decls
           with (inFile, beforeFile) in
         let loader = _addDeclsByFile loader beforeFile in
-        let modelBody = foldr (lam d. lam e. declAsExpr e d) expr inFile in
+        let modelBody = bindall_ inFile expr in
         _insertBackcompatInfer options method modelBody loader
       case _ then
         -- NOTE(vipa, 2025-02-26): When using AD we make a simplifying
@@ -1138,7 +1141,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
           (_getTCEnv loader)
           hooks in
 
-        let decls = snoc decls (declWithInfo (infoTm expr) (decl_nulet_ (nameSym "") expr)) in
+      let decls = snoc decls (declWithInfo (infoTm expr) (nulet_ (nameSym "") expr)) in
         let separateLoader = _addDeclsByFile separateLoader decls in
 
         -- NOTE(vipa, 2025-02-26): Now we're going to put the decls we

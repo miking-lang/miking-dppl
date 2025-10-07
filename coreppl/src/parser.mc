@@ -78,11 +78,11 @@ lang DPPLParser =
 
   sem replaceExternalElementaryFunctionsExpr : Map Name Const -> Expr -> Expr
   sem replaceExternalElementaryFunctionsExpr env =
-  | TmExt r ->
+  | TmDecl {decl = DeclExt r} ->
     optionMapOrElse
-      (lam. TmExt {
+      (lam. TmDecl {decl = DeclExt {
         r with inexpr = replaceExternalElementaryFunctionsExpr env r.inexpr
-      })
+      }})
       (lam const.
         replaceExternalElementaryFunctionsExpr
           (mapInsert r.ident const env)
@@ -135,6 +135,9 @@ lang DPPLParser =
                                           ty = TyUnknown {info = info},
                                           info = info})
   | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
+                                           ty = TyUnknown {info = info},
+                                           info = info})
+  | "Reciprocal" -> Some (2, lam lst. TmDist {dist = DReciprocal {a = get lst 0, b = get lst 1},
                                            ty = TyUnknown {info = info},
                                            info = info})
   | "UniformDiscrete" -> Some (2, lam lst. TmDist {dist = DUniformDiscrete {a = get lst 0, b = get lst 1},

@@ -22,7 +22,7 @@ lang MExprPPLPIMH =
       let cont = (ulam_ "x" (nconapp_ cEnd (var_ "x"))) in
       match config.cps with "partial" then
         let checkpoint = lam t.
-          match t with TmLet { ident = ident, body = body } then
+          match t with TmDecl {decl = DeclLet { ident = ident, body = body }} then
             match body with TmResample _ then true else false
           else
             errorSingle [infoTm t] "Impossible"
