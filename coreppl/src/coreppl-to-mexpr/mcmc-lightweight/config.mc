@@ -13,4 +13,5 @@ type Config a acc dAcc =
   , globalProb : Float
   , driftKernel : Bool
   , pigeons : Bool
+  , pigeonsIID : Bool
   }

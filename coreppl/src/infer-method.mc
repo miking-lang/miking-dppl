@@ -35,6 +35,11 @@ let _pigeons : OptParser Bool = optMap (xor _pigeonsDefault) (optFlag
   { optFlagDef with long = "pigeons"
   , description = "Let Pigeons.jl control inference via stdio."
   })
+let _pigeonsIIDDefault : Bool = true
+let _pigeonsIID : OptParser Bool = optMap (xor _pigeonsIIDDefault) (optFlag
+  { optFlagDef with long = "pigeons-no-iid"
+  , description = "Requires --pigeons. Do not draw independent samples when sampling at temperature 0.0"
+  })
 let _driftScaleDefault : Float = 1.0
 let _driftScale : OptParser Float =
   let opt = optArg

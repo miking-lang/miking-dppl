@@ -246,12 +246,13 @@ let resetState : State Result -> () = lam state. (
 )
 
 -- Function to run new MH iterations.
-let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Result =
-  lam config. lam model.
+let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Bool -> Result =
+  lam config. lam model. lam forceGlobal. 
 
   -- Enable global modifications with probability gProb
+  -- or when sampling at temperature 0.0 with Pigeons
   let gProb = config.globalProb in
-  let modGlobal: Bool = bernoulliSample gProb in
+  let modGlobal: Bool = or forceGlobal (bernoulliSample gProb) in
 
   if modGlobal then (
     resetState state;
@@ -328,7 +329,10 @@ recursive let mh : all acc. all dAcc.
     match continueState with (continueState, true) then
       let prevAlignedTrace = deref state.alignedTrace in
       let prevUnalignedTraces = deref state.unalignedTraces in
-      let sample = runNext config model in
+      -- If we are sampling with Pigeons we might want to draw IID samples
+      -- when sampling at temperature 0.0
+      let isIID = and (eqf beta 0.0) config.pigeonsIID in
+      let sample = runNext config model isIID in
       (if config.pigeons then
         printLn "response()"
         else ());
@@ -341,10 +345,13 @@ recursive let mh : all acc. all dAcc.
       let driftHastingRatio = deref state.driftHastingRatio in
       let weightReused = deref state.weightReused in
       let prevWeightReused = deref state.prevWeightReused in
-      let logMhAcceptProb = minf 0.
-        (addf
-          (mulf beta (addf (subf weight prevWeight) driftHastingRatio))
-          (subf weightReused prevWeightReused))
+      -- Calculate the Hastings ratio.
+      let logMhAcceptProb = if isIID 
+        then if leqf weight (log 0.) then 0. else (log 0.)
+        else minf 0.
+          (addf
+            (mulf beta (addf (subf weight prevWeight) driftHastingRatio))
+            (subf weightReused prevWeightReused))
       in
       -- print "weight: "; printLn (float2string weight);
       -- print "prevWeight: "; printLn (float2string prevWeight);
@@ -454,7 +461,7 @@ let run : all acc. all dAcc. Config Result (Int, Float, Option WriteChannel) dAc
   let beta = if config.pigeons
     then listenPigeons weight priorWeight
     else 1.0 in
-  let contArg = ((config.continue.0).0, beta, optCh) in
+  let contArg = ((config.continue.0).0, 1.0, optCh) in
   let continueState = config.continue.1 contArg sample in
   let samples = mh config model samples weight priorWeight sample debugState continueState modContinueState beta (addi iter 1) in
 
