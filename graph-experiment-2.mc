@@ -237,7 +237,7 @@ end
 -- additional references storing other kinds of state, e.g., some
 -- weight or a reference to a sub-model.
 
-lang MutPVal = PValInterface + PValDefaultSelect
+lang MutPVal = PValInterface
   type IterationID = Int
 
   type PValRec a = {value : Ref a, changeId : Ref IterationID}
@@ -443,6 +443,35 @@ lang MutPVal = PValInterface + PValDefaultSelect
       , initId = st.initId
       } in
     (PVS st, PVal {value = value, changeId = changeId})
+
+  sem p_select st f a = | refs ->
+    match st with PVS st in
+    match a with PVal a in
+    let pval = f (deref a.value) refs in
+    let value = ref (deref (match pval with PVal x in x.value)) in
+    let pval = ref pval in
+    let changeId = ref (deref a.changeId) in
+    let update = lam st.
+      if eqi st.id (deref a.changeId) then
+        let prevPVal = deref pval in
+        let prevValue = deref value in
+        let newPVal = f (deref a.value) refs in
+        modref pval newPVal;
+        modref value (deref (match newPVal with PVal x in x.value));
+        modref changeId st.id;
+        let reset = lam.
+          modref pval prevPVal;
+          modref value prevValue in
+        modref st.reset (snoc (deref st.reset) reset)
+      else
+        match deref pval with PVal ret in
+        if eqi st.id (deref ret.changeId) then
+          let prevValue = deref value in
+          modref value (deref ret.value);
+          modref changeId st.id;
+          modref st.reset (snoc (deref st.reset) (lam. modref value prevValue))
+        else () in
+    (PVS {st with updates = snoc st.updates update}, PVal {changeId = changeId, value = value})
 
   sem p_weight st store f = | PVal a ->
     match st with PVS st in
@@ -957,6 +986,438 @@ lang SimplePersistentPVal = PValInterface
     (addUpdate update st, PVar xHere)
 end
 
+
+-- === Simple Persistent PVal (less copying) ===
+
+-- This implementation is the same as the one above, except each
+-- reference also knows how deep it is in sub-models, meaning we can
+-- reference values in super-models without copying to sub-models.
+
+lang SimplePersistentPVal2 = PValInterface
+  syn RefID a = | RefID { idx : Int, level : Int }
+  type IterationID = Int
+
+  type StateRec =
+    { values : PA Dyn
+    , permanentWeight : Float
+    , temporaryWeight : Float
+    , level : Int
+    , above : State
+    }
+  syn State = | State StateRec
+
+  syn PValState st y = | PVS
+    { nextId : Int
+    , specId : IterationID
+    , initState : StateRec
+    , update : [IterationID -> StateRec -> StateRec]
+    , readSubState : StateRec -> StateRec
+    , mapSubState : (StateRec -> StateRec) -> StateRec -> StateRec
+    , st : st
+    }
+
+  syn PWeightRef = | PWeightRef {} -- TODO(vipa, 2025-09-29):
+  syn PAssumeRef a = | PAssumeRef
+    { readValue : StateRec -> a
+    , writeValue : (IterationID, a) -> StateRec -> StateRec
+    , writeDrift : (PDist a -> a -> PDist a) -> StateRec -> StateRec
+    }
+  syn PExportRef a =
+  | PExportRef {readValue : StateRec -> a}
+  | PExportVal {value : a}
+  syn PSubmodelRef st =
+  | PSubmodelRef {readSt : StateRec -> st}
+  | PSubmodelVal {st : st}
+
+  type PVarRec a = {id : RefID (IterationID, a), initValue : a}
+  syn PVal y a =
+  | PVal {value : a}
+  | PVar (PVarRec a)
+
+  syn PValInstance complete st = | PVI
+    { st : st
+    , state : StateRec
+    , specId : IterationID
+    , update : IterationID -> StateRec -> StateRec
+    }
+
+  sem addUpdate : all st. all y. (IterationID -> StateRec -> StateRec) -> PValState st y -> PValState st y
+  sem addUpdate f = | PVS st -> PVS {st with update = snoc st.update f}
+
+  sem mapSt : all st. all st2. all y. (st -> st2) -> PValState st y -> PValState st2 y
+  sem mapSt f = | PVS st -> PVS
+    { st = f st.st
+    , nextId = st.nextId
+    , specId = st.specId
+    , update = st.update
+    , initState = st.initState
+    , readSubState = st.readSubState
+    , mapSubState = st.mapSubState
+    }
+
+  sem newNodeState : all st. all y. all a. PValState st y -> a -> (PValState st y, PVarRec a)
+  sem newNodeState st = | value ->
+    match st with PVS {specId = specId} in
+    match newState st (specId, value) with (st, refId) in
+    (st, {id = refId, initValue = value})
+
+  sem newState : all st. all y. all a. PValState st y -> a -> (PValState st y, RefID a)
+  sem newState st = | value ->
+    match st with PVS st in
+    let id = st.nextId in
+    let st =
+      { st with nextId = addi st.nextId 1
+      , initState = {st.initState with values = addPA st.initState.values (asDyn value)}
+      } in
+    (PVS st, RefID {idx = id, level = st.initState.level})
+
+  sem getState : all a. RefID a -> StateRec -> a
+  sem getState ref = | st ->
+    match ref with RefID {idx = idx, level = level} in
+    recursive let work = lam steps. lam st.
+      if eqi steps 0
+      then fromDyn (getPA st.values idx)
+      else work (subi steps 1) (match st.above with State st in st)
+    in work (subi st.level level) st
+
+  sem putState : all a. RefID a -> a -> StateRec -> StateRec
+  sem putState ref val = | st ->
+    match ref with RefID {idx = idx, level = level} in
+    if eqi level st.level
+    then {st with values = setPA st.values idx (asDyn val)}
+    else error "Tried to putState on a non-local state"
+
+  sem updateState : all a. RefID a -> (a -> a) -> StateRec -> StateRec
+  sem updateState ref f = | st ->
+    match ref with RefID {idx = idx, level = level} in
+    if eqi level st.level
+    then {st with values = updatePA st.values idx (lam x. asDyn (f (fromDyn x)))}
+    else error "Tried to updateState on a non-local state"
+
+  sem withInitState : all st. all y. (StateRec -> StateRec) -> PValState st y -> PValState st y
+  sem withInitState f = | PVS st -> PVS {st with initState = f st.initState}
+
+  sem instantiate f = | st ->
+    let st = PVS
+      { nextId = 0
+      , specId = 0
+      , initState =
+        { values = emptyPA
+        , permanentWeight = 0.0
+        , temporaryWeight = 0.0
+        , level = 0
+        , above = unsafeCoerce 0  -- NOTE(vipa, 2025-10-16): This one will never be accessed, and we don't want it to be an Option to avoid extra tagging
+        }
+      , update = []
+      , st = st
+      , readSubState = lam st. st
+      , mapSubState = lam f. lam st. f st
+      } in
+    match f st with PVS st in
+    let updates = st.update in
+    PVI
+    { st = st.st
+    , state = st.initState
+    , specId = addi st.specId 1
+    , update = lam specId. lam st.
+      foldl (lam st. lam f. f specId st) {st with temporaryWeight = 0.0} updates
+    }
+
+  sem getSt = | PVI x -> x.st
+
+  sem startStep = | PVI x -> PVI x
+
+  sem finalizeStep pred = | PVI x ->
+    let state = x.update x.specId x.state in
+    let acceptProb = minf 0.0
+      (addf
+        (subf state.permanentWeight x.state.permanentWeight)
+        state.temporaryWeight) in
+    let new = PVI {x with state = {state with temporaryWeight = 0.0}, specId = addi x.specId 1} in
+    if pred new acceptProb then (true, new) else
+    (false, PVI {x with specId = addi x.specId 1})
+
+  sem resampleAssume driftf aref = | PVI x ->
+    match aref with PAssumeRef a in
+    let prevValue = a.readValue x.state in
+    let state = a.writeValue (x.specId, prevValue) x.state in
+    let state = a.writeDrift driftf state in
+    PVI {x with state = state}
+
+  sem readPreviousAssume aref = | PVI x ->
+    match aref with PAssumeRef a in
+    a.readValue x.state
+
+  sem readPreviousExport eref = | PVI x ->
+    match eref with PExportRef e in
+    e.readValue x.state
+
+  sem readPreviousSubmodel mref = | PVI x ->
+    error "TODO"
+
+  sem p_cache st eq =
+  | PVal x -> (st, PVal x)
+  | PVar x ->
+    match newNodeState st x.initValue with (st, xHere) in
+    let update = lam specId. lam st.
+      match getState x.id st with (changeId, value) in
+      if eqi specId changeId then
+        match getState xHere.id st with (_, prevValue) in
+        if eq prevValue value then st else
+        putState xHere.id (specId, value) st
+      else st in
+    (addUpdate update st, PVar xHere)
+
+  sem p_export st store = | pval ->
+    match st with PVS {readSubState = readSubState} in
+    let ref = switch pval
+      case PVal x then PExportVal {value = x.value}
+      case PVar x then PExportRef {readValue = lam st. (getState x.id (readSubState st)).1}
+      end in
+    mapSt (lam st. store st ref) st
+
+  sem p_pure st = | value -> (st, PVal {value = value})
+
+  sem p_map st f =
+  | PVal x -> p_pure st (f x.value)
+  | PVar x ->
+    match newNodeState st (f x.initValue) with (st, xHere) in
+    let update = lam specId. lam st.
+      match getState x.id st with (changeId, value) in
+      if eqi specId changeId then
+        putState xHere.id (specId, f value) st
+      else st in
+    (addUpdate update st, PVar xHere)
+
+  sem p_apply st f = | a ->
+    switch (f, a)
+    case (PVal f, PVal a) then p_pure st (f.value a.value)
+    case (PVal f, a) then p_map st f.value a
+    case (f, PVal a) then p_map st (lam f. f a.value) f
+    case (PVar f, PVar a) then
+      match newNodeState st (f.initValue a.initValue) with (st, xHere) in
+      let update = lam specId. lam st.
+        match getState f.id st with (changeIdF, f) in
+        match getState a.id st with (changeIdA, a) in
+        if or (eqi specId changeIdF) (eqi specId changeIdA) then
+          putState xHere.id (specId, f a) st
+        else st in
+      (addUpdate update st, PVar xHere)
+    end
+
+  sem p_bind st store st2 f pval = | refs ->
+    switch pval
+    case PVal x then
+      -- NOTE(vipa, 2025-09-30): We will never need to re-run the
+      -- creation function here, thus we inline the sub-model in the
+      -- parent model, meaning we don't have to deal with two stores
+      let ost = match st with PVS st in st.st in
+      let st = mapSt (lam. st2) st in
+      match f st x.value refs with (st, pval) in
+      let ref = PSubmodelVal {st = match st with PVS st in st.st} in
+      let st = mapSt (lam ist. store ost ref) st in
+      (st, pval)
+    case PVar x then
+      -- NOTE(vipa, 2025-09-30): The common case, where we *do* have
+      -- to re-run the creation function, requires two stores, which
+      -- requires some handling of store "levels".
+      match st with PVS {initState = initState} in
+      let innerState : StateRec =
+        { values = emptyPA
+        , permanentWeight = 0.0
+        , temporaryWeight = 0.0
+        , level = addi initState.level 1
+        , above = State initState
+        } in
+      match newState st innerState with (st, stateRef) in
+      match st with PVS {readSubState = readSubState, mapSubState = mapSubState} in
+      let ist : PValState ist () = PVS
+        { nextId = 0
+        , specId = match st with PVS st in st.specId
+        , initState = innerState
+        , update = []
+        , st = st2
+        , readSubState = lam st. getState stateRef (readSubState st)
+        , mapSubState = lam f. mapSubState (updateState stateRef f)
+        } in
+      -- The initValue of each PVal will be up-to-date in the first
+      -- iteration, so we can unsafeCoerce it to do less work. For
+      -- later iterations we may have to update the initValues
+      -- however, thus we make a function that does so.
+      let initConvPValHList : PValHList y as -> PValHList () as = unsafeCoerce in
+      let convPValHList : StateRec -> PValHList () as = lam st.
+        let work : all a. () -> PVal y a -> ((), PVal () a) = lam. lam pval. switch pval
+          case PVal x then ((), PVal x)
+          case PVar x then ((), PVar {id = x.id, initValue = (getState x.id st).1})
+          end in
+        (mapAccumLPValHList #frozen"work" () refs).1 in
+      -- NOTE(vipa, 2025-09-30): The `ist` value at this point can be
+      -- reused for all sub-models. `ist2` below is only valid for the
+      -- first sub-model.
+      match f ist x.initValue (initConvPValHList refs) with (PVS ist2, pval) in
+      let st = withInitState (putState stateRef ist2.initState) st in
+
+      match newState st ist2.st with (st, istRef) in
+
+      match newState st pval with (st, pvalRef) in
+
+      let initValue = switch pval
+        case PVal x then x.value
+        case PVar x then x.initValue
+        end in
+      match newNodeState st initValue with (st, xHere) in
+
+      let mkUpdateF = lam fs. lam st. lam specId. lam ist.
+        foldl (lam ist. lam f. f specId ist) {ist with temporaryWeight = 0.0} fs in
+      match newState st (mkUpdateF ist2.update) with (st, updateRef) in
+
+      let st = mapSt (lam st. store st (PSubmodelRef {readSt = lam st. getState istRef (readSubState st)})) st in
+      let update = lam specId. lam st.
+        match getState x.id st with (changeId, value) in
+        if eqi specId changeId then
+          -- NOTE(vipa, 2025-09-30): The initial value has changed,
+          -- i.e., we need to re-run the creation function
+          let prevWeight = (getState stateRef st).permanentWeight in
+          let ist = match ist with PVS ist in PVS {ist with specId = specId, initState = {ist.initState with above = State st}} in
+          match f ist value (convPValHList st) with (PVS ist, pval) in
+          let st = putState stateRef ist.initState st in
+          let st = putState istRef ist.st st in
+          let st = putState updateRef (mkUpdateF ist.update) st in
+          let st = putState pvalRef pval st in
+          let newWeight = ist.initState.permanentWeight in
+          let st =
+            { st with permanentWeight = addf st.permanentWeight (subf newWeight prevWeight)
+            , temporaryWeight = addf st.temporaryWeight ist.initState.temporaryWeight
+            } in
+          let value = switch pval
+            case PVal x then x.value
+            case PVar x then x.initValue
+            end in
+          putState xHere.id (specId, value) st
+        else
+          -- NOTE(vipa, 2025-09-30): The initial value is unchanged,
+          -- i.e., we don't need to re-run the creation function, we
+          -- just need to update the current sub-model
+          let update = getState updateRef st in
+          let innerState = getState stateRef st in
+          let prevWeight = innerState.permanentWeight in
+          let innerState = update st specId {innerState with above = State st} in
+          let newWeight = innerState.permanentWeight in
+          let st =
+            { st with permanentWeight = addf st.permanentWeight (subf newWeight prevWeight)
+            , temporaryWeight = addf st.temporaryWeight innerState.temporaryWeight
+            } in
+          let st = putState stateRef innerState st in
+          match getState pvalRef st with pval in
+          match pval with PVar x then
+            match getState x.id innerState with (changeId, value) in
+            if eqi specId changeId
+            then putState xHere.id (specId, value) st
+            else st
+          else st in
+      (addUpdate update st, PVar xHere)
+    end
+
+  sem p_select st f pval = | refs ->
+    switch pval
+    case PVal x then (st, f x.value refs)
+    case PVar x then
+      let initId = match st with PVS st in st.specId in
+      let initVar = f x.initValue refs in
+      let initValue = switch initVar
+        case PVal x then x.value
+        case PVar x then x.initValue
+        end in
+      match newNodeState st initValue with (st, xHere) in
+      match newState st initVar with (st, varRef) in
+      let update = lam specId. lam st.
+        match getState x.id st with (changeId, value) in
+        if eqi specId changeId then
+          -- Value changed, pick new node
+          let var = f value refs in
+          let value = switch var
+            case PVal x then x.value
+            case PVar x then (getState x.id st).1
+            end in
+          let st = putState varRef var st in
+          putState xHere.id (specId, value) st
+        else
+          -- Value did not change, check selected value
+          match getState varRef st with PVar x then
+            match getState x.id st with (changeId, value) in
+            if eqi specId changeId then
+              putState xHere.id (specId, value) st
+            else st
+          else st in
+      (addUpdate update st, PVar xHere)
+    end
+
+  sem p_weight st store f =
+  | PVal x ->
+    let st = withInitState (lam st. {st with permanentWeight = addf st.permanentWeight (f x.value)}) st in
+    mapSt (lam st. store st (PWeightRef ())) st
+  | PVar x ->
+    let initWeight = f x.initValue in
+    let st = withInitState (lam st. {st with permanentWeight = addf st.permanentWeight initWeight}) st in
+    let st = mapSt (lam st. store st (PWeightRef ())) st in
+    match newState st initWeight with (st, weightRef) in
+    let update = lam specId. lam st.
+      match getState x.id st with (changeId, value) in
+      if eqi specId changeId then
+        let prevWeight = getState weightRef st in
+        let newWeight = f value in
+        let st = {st with permanentWeight = addf st.permanentWeight (subf newWeight prevWeight)} in
+        putState weightRef newWeight st
+      else st in
+    addUpdate update st
+
+  sem p_assume st store = | dist ->
+    let initDist = switch dist
+      case PVal x then x.value
+      case PVar x then x.initValue
+      end in
+    let fetchDist = switch dist
+      case PVal x then let specId = match st with PVS st in st.specId in lam. (specId, x.value)
+      case PVar x then getState x.id
+      end in
+    match newNodeState st (p_sample initDist) with (st, xHere) in
+    match newState st (p_logObserve initDist xHere.initValue) with (st, weightRef) in
+    match newState st (lam d. lam. d) with (st, driftRef) in
+    let update = lam specId. lam st.
+      match getState xHere.id st with (changeIdHere, prevValue) in
+      match fetchDist st with (changeIdDist, dist) in
+      let prevWeight = getState weightRef st in
+      if eqi specId changeIdHere then
+        -- Draw a new sample, i.e., value changes
+        let drift = getState driftRef st in
+        let kernel = drift dist prevValue in
+        let proposal = p_sample kernel in
+        let reverseKernel = drift dist proposal in
+
+        let newWeight = p_logObserve dist proposal in
+
+        let prevToProposalProb = p_logObserve kernel proposal in
+        let proposalToPrevProb = p_logObserve reverseKernel prevValue in
+
+        let st = putState xHere.id (specId, proposal) st in
+        let st = putState weightRef newWeight st in
+        {st with temporaryWeight = addf st.temporaryWeight
+          (addf
+            (subf newWeight prevWeight)
+            (subf proposalToPrevProb prevToProposalProb))}
+      else if eqi specId changeIdDist then
+        -- Reuse current sample, i.e., value doesn't change
+        let newWeight = p_logObserve dist prevValue in
+        let st = putState weightRef newWeight st in
+        {st with temporaryWeight = addf st.temporaryWeight (subf newWeight prevWeight)}
+      else st in
+    match st with PVS {readSubState = readSubState, mapSubState = mapSubState} in
+    let readValue = lam st. (getState xHere.id (readSubState st)).1 in
+    let writeValue = lam val. mapSubState (putState xHere.id val) in
+    let writeDrift = lam val. mapSubState (putState driftRef val) in
+    let st = mapSt (lam st. store st (PAssumeRef {readValue = readValue, writeValue = writeValue, writeDrift = writeDrift})) st in
+    (addUpdate update st, PVar xHere)
+end
 
 -- -- === Persistent PVal ===
 
@@ -1560,6 +2021,8 @@ lang SimpleResample = PValInterface
     readPreviousExport (getSt instance).1 instance
 end
 
+let showHistogram : Bool = false
+
 
 -- === Bern and ==
 
@@ -1591,6 +2054,9 @@ end
 lang RunBernAndPersistent = BernAnd + MCMCPVal + SimplePersistentPVal
 end
 
+lang RunBernAndPersistent2 = BernAnd + MCMCPVal + SimplePersistentPVal2
+end
+
 let result =
   printLn "\n=== bern_and ===";
   let globalProb = 0.1 in
@@ -1600,11 +2066,11 @@ let result =
   let summarizePVal = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto res)) in
+    if showHistogram then printLn (hist2string toString (mkHisto res)) else () in
   let summarizeBaseline = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) in
+    if showHistogram then printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) else () in
   let run =
     use RunBernAndMut in
     let instance = instantiate #frozen"run" ([], ()) in
@@ -1615,6 +2081,11 @@ let result =
     let instance = instantiate #frozen"run" ([], ()) in
     lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
   summarizePVal "pval mcmc Persistent" (timeF run);
+  let run =
+    use RunBernAndPersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent2" (timeF run);
   let run = lam.
     infer (LightweightMCMC {cps = "none", globalProb = globalProb, continue = (iterations, lam r. lam. (subi r 1, neqi r 1))}) baseline in
   summarizeBaseline "mcmc-lw" (timeF run);
@@ -1655,6 +2126,9 @@ end
 lang RunSimpleBindPersistent = SimpleBind + MCMCPVal + SimplePersistentPVal
 end
 
+lang RunSimpleBindPersistent2 = SimpleBind + MCMCPVal + SimplePersistentPVal2
+end
+
 let result =
   printLn "\n=== simple_bind ===";
   let globalProb = 0.1 in
@@ -1664,11 +2138,11 @@ let result =
   let summarizePVal = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto res)) in
+    if showHistogram then printLn (hist2string toString (mkHisto res)) else () in
   let summarizeBaseline = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) in
+    if showHistogram then printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) else () in
   let run =
     use RunSimpleBindMut in
     let instance = instantiate #frozen"run" ([], ()) in
@@ -1679,6 +2153,11 @@ let result =
     let instance = instantiate #frozen"run" ([], ()) in
     lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
   summarizePVal "pval mcmc Persistent" (timeF run);
+  let run =
+    use RunSimpleBindPersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent2" (timeF run);
   let run = lam.
     infer (LightweightMCMC {cps = "none", globalProb = globalProb, continue = (iterations, lam r. lam. (subi r 1, neqi r 1))}) baseline in
   summarizeBaseline "mcmc-lw" (timeF run);
@@ -1720,10 +2199,40 @@ lang ManualGeometric = SimpleResample
     p_export st simpleExport res
 end
 
+lang ManualGeometricCache = SimpleResample
+  sem run = | st ->
+    match p_pure st (p_bernoulli 0.5) with (st, dist) in
+    match p_assume st simpleStore dist with (st, c) in
+    match p_cache st eqb c with (st, c) in
+    recursive let f : all z. Int -> PValState () z -> Unknown -> PValHList z Unknown -> (PValState () z, PVal z Unknown) = lam i. lam st. lam c. lam list.
+      match list with PVHCons (dist, PVHNil ()) in
+      let recur = lam x. lam y. lam z. f (addi i 1) x y z in
+      if c then
+        match p_assume_ st dist with (st, c) in
+        p_bind_ st #frozen"recur" c (PVHCons (dist, PVHNil ()))
+      else
+        p_pure st i in
+    let start = lam x. f 0 x in
+    match p_bind_ st #frozen"start" c (PVHCons (dist, PVHNil ())) with (st, res) in
+    p_export st simpleExport res
+end
+
 lang RunManualGeometricMut = ManualGeometric + MCMCPVal + MutPVal
 end
 
 lang RunManualGeometricPersistent = ManualGeometric + MCMCPVal + SimplePersistentPVal
+end
+
+lang RunManualGeometricPersistent2 = ManualGeometric + MCMCPVal + SimplePersistentPVal2
+end
+
+lang RunManualGeometricCacheMut = ManualGeometricCache + MCMCPVal + MutPVal
+end
+
+lang RunManualGeometricCachePersistent = ManualGeometricCache + MCMCPVal + SimplePersistentPVal
+end
+
+lang RunManualGeometricCachePersistent2 = ManualGeometricCache + MCMCPVal + SimplePersistentPVal2
 end
 
 let result =
@@ -1735,11 +2244,11 @@ let result =
   let summarizePVal = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto res)) in
+    if showHistogram then printLn (hist2string toString (mkHisto res)) else () in
   let summarizeBaseline = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) in
+    if showHistogram then printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) else () in
   let run =
     use RunManualGeometricMut in
     let instance = instantiate #frozen"run" ([], ()) in
@@ -1750,6 +2259,26 @@ let result =
     let instance = instantiate #frozen"run" ([], ()) in
     lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
   summarizePVal "pval mcmc Persistent" (timeF run);
+  let run =
+    use RunManualGeometricPersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent2" (timeF run);
+  let run =
+    use RunManualGeometricCacheMut in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc mut cache" (timeF run);
+  let run =
+    use RunManualGeometricCachePersistent in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent cache" (timeF run);
+  let run =
+    use RunManualGeometricCachePersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent2 cache" (timeF run);
   let run = lam.
     infer (LightweightMCMC {cps = "none", globalProb = globalProb, continue = (iterations, lam r. lam. (subi r 1, neqi r 1))}) baseline in
   summarizeBaseline "mcmc-lw" (timeF run);
@@ -1800,6 +2329,12 @@ end
 lang RunCoinManyObservePersistent = CoinManyObserve + MCMCPVal + SimplePersistentPVal
 end
 
+lang RunCoinOneObservePersistent2 = CoinOneObserve + MCMCPVal + SimplePersistentPVal2
+end
+
+lang RunCoinManyObservePersistent2 = CoinManyObserve + MCMCPVal + SimplePersistentPVal2
+end
+
 let result =
   printLn "\n=== coin ===";
   let globalProb = 0.1 in
@@ -1809,11 +2344,11 @@ let result =
   let summarizePVal = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto res)) in
+    if showHistogram then printLn (hist2string toString (mkHisto res)) else () in
   let summarizeBaseline = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) in
+    if showHistogram then printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) else () in
   let run =
     use RunCoinOneObserveMut in
     let instance = instantiate #frozen"run" ([], ()) in
@@ -1834,6 +2369,16 @@ let result =
     let instance = instantiate #frozen"run" ([], ()) in
     lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
   summarizePVal "pval mcmc Persistent many observe" (timeF run);
+  let run =
+    use RunCoinOneObservePersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent2 one observe" (timeF run);
+  let run =
+    use RunCoinManyObservePersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent2 many observe" (timeF run);
   let run = lam.
     infer (LightweightMCMC {cps = "none", globalProb = globalProb, continue = (iterations, lam r. lam. (subi r 1, neqi r 1))}) baseline in
   summarizeBaseline "mcmc-lw" (timeF run);
@@ -2048,6 +2593,9 @@ end
 lang RunTreeInferenceTreeBindPersistent = TreeInferenceTreeBind + MCMCPVal + SimplePersistentPVal
 end
 
+lang RunTreeInferenceTreeBindPersistent2 = TreeInferenceTreeBind + MCMCPVal + SimplePersistentPVal2
+end
+
 lang TreeInferenceTreeSelect = SimpleResample
   sem run = | st ->
     let pickpair = lam st. lam n.
@@ -2124,6 +2672,9 @@ end
 lang RunTreeInferenceTreeSelectPersistent = TreeInferenceTreeSelect + MCMCPVal + SimplePersistentPVal
 end
 
+lang RunTreeInferenceTreeSelectPersistent2 = TreeInferenceTreeSelect + MCMCPVal + SimplePersistentPVal2
+end
+
 let result =
   printLn "\n=== tree_inference ===";
   let globalProb = 0.1 in
@@ -2133,11 +2684,11 @@ let result =
   let summarizePVal = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto res)) in
+    if showHistogram then printLn (hist2string toString (mkHisto res)) else () in
   let summarizeBaseline = lam label. lam pair.
     match pair with (time, res) in
     printLn (join [float2string time, "ms (", label, ")"]);
-    printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) in
+    if showHistogram then printLn (hist2string toString (mkHisto (distEmpiricalSamples res).0)) else () in
   let run =
     use RunTreeInferenceTreeBindMut in
     let instance = instantiate #frozen"run" ([], ()) in
@@ -2151,6 +2702,13 @@ let result =
       samples in
   summarizePVal "pval mcmc Persistent tree bind" (timeF run);
   let run =
+    use RunTreeInferenceTreeBindPersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam.
+      let samples = (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+      samples in
+  summarizePVal "pval mcmc Persistent2 tree bind" (timeF run);
+  let run =
     use RunTreeInferenceTreeSelectMut in
     let instance = instantiate #frozen"run" ([], ()) in
     lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
@@ -2160,6 +2718,11 @@ let result =
     let instance = instantiate #frozen"run" ([], ()) in
     lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
   summarizePVal "pval mcmc Persistent tree select" (timeF run);
+  let run =
+    use RunTreeInferenceTreeSelectPersistent2 in
+    let instance = instantiate #frozen"run" ([], ()) in
+    lam. (mcmc {getSample = simpleRead, step = simpleResample globalProb, iterations = iterations} instance).samples in
+  summarizePVal "pval mcmc Persistent2 tree select" (timeF run);
   let run = lam.
     infer (LightweightMCMC {cps = "none", globalProb = globalProb, continue = (iterations, lam r. lam. (subi r 1, neqi r 1))}) baseline in
   summarizeBaseline "mcmc-lw" (timeF run);
