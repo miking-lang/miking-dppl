@@ -208,7 +208,7 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + MExprANFAll + DP
         match model with {extractAst = extractAst, method = method, params = params} in
         match mapLookup method runtimes with Some entry then
           let extractAst = lam f. transformModelAst envs options method (extractAst f) in
-          let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+          let log = mkPhaseLogState options.debugDumpPhases options.debugPhases options.invariantsToCheck in
           let ast = compileModel options lamliftSols envs entry id {model with extractAst = extractAst} in
           endPhaseStatsExpr log "compile-model-one" (bind_ ast unit_);
           let ast = smap_Decl_Expr removeModelDefinitions ast in
@@ -252,7 +252,7 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + MExprANFAll + DP
     -> Decl
   sem compileModel options lamliftSols envs entry modelId =
   | {extractAst = extractAst, params = modelParams, method = method} ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases options.invariantsToCheck in
 
     -- ANF
     let extractAst = lam f. normalizeTerm (extractAst f) in
@@ -467,7 +467,7 @@ lang CPPLLoader
     let options = hook.options in
     let runtimes = deref hook.runtimes in
     let envs = hook.envs in
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases options.invariantsToCheck in
     let ast = removeMetaVarExpr ast in
     endPhaseStatsExpr log "remove-meta-var" ast;
     let runtimeRunNames = mapMap (lam entry. _getVarExn "run" entry.env) runtimes in

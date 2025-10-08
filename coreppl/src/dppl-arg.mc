@@ -2,6 +2,11 @@ include "optparse-applicative.mc"
 include "set.mc"
 include "infer-method.mc"
 
+include "mexpr/invariants.mc"
+include "mexpr/invariants/in-scope.mc"
+include "mexpr/invariants/definitions.mc"
+include "mexpr/invariants/info.mc"
+
 include "inference/is-lw.mc"
 include "inference/smc-bpf.mc"
 include "inference/smc-apf.mc"
@@ -36,6 +41,7 @@ type TransformationOptions =
   , debugPhases : Bool
   , printModel : Bool
   , seed : Option Int
+  , invariantsToCheck : use Invariant in () -> [Attr Loc]
   }
 
 type SeparatedOptions =
@@ -130,6 +136,17 @@ let transformationOptions : OptParser TransformationOptions =
     , debugPhases = debugPhases
     , debugDumpPhases = debugDumpPhases
     , seed = seed
+    , invariantsToCheck = lam.
+      use UnboundErrorAttr in
+      use WithoutInfoAttr in
+      use DefinedAttr in
+      let scope =
+        {_scopeEmpty () with tyConstructors = setOfSeq nameCmp (mapValues builtinTypeNames)} in
+      [ InScopeAttr (filledThunk scope)
+      , UnboundErrorAttr (mkThunk (lazyPure "UnboundErrorAttr#root"))
+      , WithoutInfoAttr (mkThunk (lazyPure "WithoutInfoAttr#root"))
+      , DefinedAttr (mkThunk (lazyPure "DefinedAttr#root"))
+      ]
     } in
   let printModel = optFlag
     { optFlagDef with long = "print-model"
