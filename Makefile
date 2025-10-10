@@ -52,6 +52,11 @@ install-coreppl: build/${CPPL_NAME}
 	@echo 'export PATH=$$PATH:'"${BIN_PATH}"
 	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"${SRC_PATH}\n${RESET}"
 
+.PHONY: install-cppl
+install-cppl:
+	mkdir -p ${BIN_PATH}
+	cp build/${CPPL_NAME} ${BIN_PATH}/${EXEC_NAME}
+
 .PHONY: uninstall-coreppl
 uninstall-coreppl:
 	rm -f ${BIN_PATH}/${EXEC_NAME}
