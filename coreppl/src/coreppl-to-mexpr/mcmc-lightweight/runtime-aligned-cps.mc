@@ -246,7 +246,7 @@ let resetState : State Result -> () = lam state. (
 )
 
 -- Function to run new MH iterations.
-let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Bool -> Result =
+let runNext: all acc. all accInit. all sInfo. all dAcc. Config Result acc accInit sInfo dAcc -> (State Result -> Result) -> Bool -> Result =
   lam config. lam model. lam forceGlobal. 
 
   -- Enable global modifications with probability gProb
@@ -323,19 +323,19 @@ recursive let listenPigeons : Float -> Float -> Float = lam weight. lam priorWei
   end
 end
 
-recursive let mh : all acc. all dAcc.
-  Config Result acc dAcc -> (State Result -> Result) -> [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> (acc -> acc) -> Float -> Int -> [Result] =
-  lam config. lam model. lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam modContinueState. lam beta. lam iter.
+recursive let mh : all acc. all accInit. all dAcc.
+  Config Result acc accInit (Float, Float) dAcc -> (State Result -> Result) -> [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
+  lam config. lam model. lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
     match continueState with (continueState, true) then
+      let beta = config.temperature continueState in
       let prevAlignedTrace = deref state.alignedTrace in
       let prevUnalignedTraces = deref state.unalignedTraces in
-      -- If we are sampling with Pigeons we might want to draw IID samples
-      -- when sampling at temperature 0.0
-      let isIID = and (eqf beta 0.0) config.pigeonsIID in
-      let sample = runNext config model isIID in
-      (if config.pigeons then
-        printLn "response()"
-        else ());
+      -- If we are sampling at temperature 0.0 we might want to draw global samples
+      let forceGlobal = and (eqf beta 0.0) config.pigeonsGlobal in
+      let sample = runNext config model forceGlobal in
+      -- (if config.pigeons then
+      --   printLn "response()"
+      --   else ());
       -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
       -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
       -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
@@ -346,8 +346,8 @@ recursive let mh : all acc. all dAcc.
       let weightReused = deref state.weightReused in
       let prevWeightReused = deref state.prevWeightReused in
       -- Calculate the Hastings ratio.
-      let logMhAcceptProb = if isIID 
-        then if leqf weight (log 0.) then 0. else (log 0.)
+      let logMhAcceptProb = if forceGlobal 
+        then if or (leqf weight (log 0.)) (isNaN weight) then (log 0.) else 0.
         else minf 0.
           (addf
             (mulf beta (addf (subf weight prevWeight) driftHastingRatio))
@@ -374,23 +374,22 @@ recursive let mh : all acc. all dAcc.
         { accepted = accepted
         } in
       let debugState = config.debug.1 debugState debugInfo in
-      let continueState = config.continue.1 continueState sample in
-      match continueState with (continueState, success) in
-      let continueState = (modContinueState continueState, success) in
-      mh config model keptSamples weight priorWeight sample debugState continueState modContinueState beta (addi iter 1)
+      let nextContinueState = config.continue.1 continueState (weight, priorWeight) sample in
+      -- match continueState with (continueState, success) in
+      -- let continueState = (modContinueState continueState, success) in
+      mh config model keptSamples weight priorWeight sample debugState nextContinueState (addi iter 1)
     else keptSamples
-  end
+end
 
 -- General inference algorithm for aligned MCMC
-let run : all acc. all dAcc. Config Result (Int, Float, Option WriteChannel) dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
+let run : all acc. all dAcc. Config Result acc (Option WriteChannel) (Float, Float) dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
   lam config. lam model.
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
 
-  -- Assume that the first command from pigeons is a call_sampler call
-  -- and discard it
-  (if config.pigeons then fileReadLine fileStdin; () else ());
+  -- Used to initalize any configuration specific things
+  config.init ();
 
   -- First sample -- call the model until we get a non-zero weight
   recursive let firstSample : (State Result -> Result) -> State Result -> Int -> State Result =
@@ -411,9 +410,6 @@ let run : all acc. all dAcc. Config Result (Int, Float, Option WriteChannel) dAc
   let sample = firstSample model state 1 in
   let weight = deref state.weight in
   let priorWeight = deref state.priorWeight in
-  (if config.pigeons then
-    printLn "response()"
-   else ());
 
   -- Set aligned trace length (a constant, only modified here)
   modref state.alignedTraceLength (length (deref state.alignedTrace));
@@ -441,34 +437,30 @@ let run : all acc. all dAcc. Config Result (Int, Float, Option WriteChannel) dAc
     { accepted = true
     } in
 
-  let modContinueState = lam contState. 
-    let beta = if config.pigeons
-      then listenPigeons weight priorWeight
-      else 1.0 in
-    match contState with (idx, _, optCh) in
-    (idx, beta, optCh)
-  in
-
-  -- Sample the rest
+  -- Set up debug and continue states
   let debugState = config.debug.1 config.debug.0 debugInfo in
-  let optCh = if config.pigeons then
-    match sysGetEnv "TPPL_OUT" with Some fn then
+  let optWc = match sysGetEnv "PPL_OUTPUT" with Some fn then
       match fileWriteOpen fn with Some wc then
         Some wc
       else error (join ["Failed to open file ", fn])
-    else error (join ["Environment variable `TPPL_OUT` not set"])
   else None () in
-  let beta = if config.pigeons
-    then listenPigeons weight priorWeight
-    else 1.0 in
-  let contArg = ((config.continue.0).0, 1.0, optCh) in
-  let continueState = config.continue.1 contArg sample in
-  let samples = mh config model samples weight priorWeight sample debugState continueState modContinueState beta (addi iter 1) in
+  let continueState = config.continue.0 optWc in
+  let nextContinueState = config.continue.1 continueState (weight, priorWeight) sample in
+
+  -- Sample the rest
+  let samples = mh config model samples weight priorWeight sample debugState nextContinueState (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
-  (match optCh with Some wc then fileWriteClose wc else ());
+
+  -- We on only need to output the samples if they are not written to a file already
   let numSamples = length samples in
-  use RuntimeDist in
-  constructDistEmpirical samples (make numSamples 1.0)
-    (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})
+  match optWc with Some wc then
+    fileWriteClose wc;
+    use RuntimeDist in
+    constructDistEmpirical [] [] 
+      (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})
+  else 
+    use RuntimeDist in
+    constructDistEmpirical samples (make numSamples 1.0)
+      (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})

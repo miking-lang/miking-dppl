@@ -6,12 +6,15 @@ type DebugInfo =
   { accepted : Bool
   }
 
-type Config a acc dAcc =
-  { continue : (acc, acc -> a -> (acc, Bool))
+type Config a acc accInit sInfo dAcc =
+  { continue : (accInit -> acc, acc -> sInfo -> a -> (acc, Bool))
   , keepSample : Int -> Bool
   , debug : (dAcc, dAcc -> DebugInfo -> dAcc)
+  , init : () -> ()
+  , temperature : acc -> Float
   , globalProb : Float
   , driftKernel : Bool
   , pigeons : Bool
-  , pigeonsIID : Bool
+  , pigeonsGlobal : Bool
+  , pigeonsExploreSteps : Int
   }

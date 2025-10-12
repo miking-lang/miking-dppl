@@ -35,11 +35,18 @@ let _pigeons : OptParser Bool = optMap (xor _pigeonsDefault) (optFlag
   { optFlagDef with long = "pigeons"
   , description = "Let Pigeons.jl control inference via stdio."
   })
-let _pigeonsIIDDefault : Bool = true
-let _pigeonsIID : OptParser Bool = optMap (xor _pigeonsIIDDefault) (optFlag
-  { optFlagDef with long = "pigeons-no-iid"
-  , description = "Requires --pigeons. Do not draw independent samples when sampling at temperature 0.0"
+let _pigeonsGlobalDefault : Bool = true
+let _pigeonsGlobal : OptParser Bool = optMap (xor _pigeonsGlobalDefault) (optFlag
+  { optFlagDef with long = "pigeons-no-global"
+  , description = "Requires --pigeons. Do not use global moves when sampling at temperature 0.0"
   })
+let _pigeonsExploreStepsDefault : Int = 1
+let _pigeonsExploreSteps : OptParser Int =
+  let opt = optArg
+    { optArgDefInt with long = "pigeons-explore-steps"
+    , description = concat "Requires --pigeons. The number of local MCMC steps to take before communicating with Pigeons.jl. Default: " (int2string _pigeonsExploreStepsDefault)
+    } in
+  optOr opt (optPure _pigeonsExploreStepsDefault)
 let _driftScaleDefault : Float = 1.0
 let _driftScale : OptParser Float =
   let opt = optArg
@@ -233,8 +240,14 @@ lang InferMethodBase =
   | TmConst {val = CBool {val = b}} -> b
   | tm -> errorSingle [infoTm tm] "This must be a literal boolean"
 
+  sem _exprAsIntExn : Expr -> Int
+  sem _exprAsIntExn =
+  | TmConst {val = CInt {val = i}} -> i
+  | tm -> errorSingle [infoTm tm] "This must be a literal integer"
+
   sem _exprAsFloatExn : Expr -> Float
   sem _exprAsFloatExn =
   | TmConst {val = CFloat {val = f}} -> f
   | tm -> errorSingle [infoTm tm] "This must be a literal float"
+
 end
