@@ -155,71 +155,70 @@ let modDb: all acc. all dAcc. all res. Config res acc dAcc -> Bool -> () =
          sample
       ) db)
 
-recursive let mh : all a. all acc. all dAcc.
-  Config a acc dAcc -> (State -> a) -> [a] -> Float -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
-  lam config. lam model. lam samples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
-    match continueState with (continueState, true) then
-      let beta = config.temperature continueState in
-      let forceGlobal = and (eqf beta 0.0) config.pigeonsGlobal in
-      let prevDb = deref state.db in
-      let prevTraceLength = deref state.traceLength in
-      modDb config forceGlobal;
-      modref state.weight 0.;
-      modref state.priorWeight 0.;
-      modref state.weightReused 0.;
-      modref state.prevWeightReused 0.;
-      modref state.db (emptyAddressMap ());
-      modref state.traceLength 0;
-      let sample = model state in
-      let traceLength = deref state.traceLength in
-      let weight = deref state.weight in
-      let priorWeight = deref state.priorWeight in
-      let weightReused = deref state.weightReused in
-      let prevWeightReused = deref state.prevWeightReused in
-      let logMhAcceptProb = if forceGlobal
-        then if or (leqf weight (log 0.)) (isNaN weight) then (log 0.) else 0.
-        else minf 0. (addf (addf
-                  (mulf beta (subf weight prevWeight))
-                  (subf weightReused prevWeightReused))
-                  (subf (log (int2float prevTraceLength))
-                            (log (int2float traceLength))))
-      in
-      -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
-      -- print "weight: "; printLn (float2string weight);
-      -- print "prevWeight: "; printLn (float2string prevWeight);
-      -- print "weightReused: "; printLn (float2string weightReused);
-      -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
-      -- print "prevTraceLength: "; printLn (float2string (int2float prevTraceLength));
-      -- print "traceLength: "; printLn (float2string (int2float traceLength));
-      match
-        if bernoulliSample (exp logMhAcceptProb) then
-          mcmcAccept ();
-          (true, weight, priorWeight, sample)
-        else
-        -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous database
-        -- and trace length as we reject and reuse the old sample.
-          modref state.db prevDb;
-          modref state.traceLength prevTraceLength;
-          (false, prevWeight, priorWeight, prevSample)
-      with (accepted, weight, priorWeight, sample) in
-      let samples = if config.keepSample iter then snoc samples sample else samples in
-      let debugInfo =
-        { accepted = accepted
-        } in
-      let debugState = config.debug.1 debugState debugInfo in
-      let sampleInfo =
-        { weight = weight
-        , priorWeight = priorWeight
-        } in
-      let continueState = config.continue.1 continueState sampleInfo sample in
-      mh config model samples weight priorWeight sample debugState continueState (addi iter 1)
-    else samples
-end
+
 
 let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
-  -- Used to keep track of acceptance ratio
-  mcmcAcceptInit ();
+
+  recursive let mh : [a] -> Float -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
+    lam samples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
+      match continueState with (continueState, true) then
+        let beta = config.temperature continueState in
+        let forceGlobal = and (eqf beta 0.0) config.forceGlobal in
+        let prevDb = deref state.db in
+        let prevTraceLength = deref state.traceLength in
+        modDb config forceGlobal;
+        modref state.weight 0.;
+        modref state.priorWeight 0.;
+        modref state.weightReused 0.;
+        modref state.prevWeightReused 0.;
+        modref state.db (emptyAddressMap ());
+        modref state.traceLength 0;
+        let sample = model state in
+        let traceLength = deref state.traceLength in
+        let weight = deref state.weight in
+        let priorWeight = deref state.priorWeight in
+        let weightReused = deref state.weightReused in
+        let prevWeightReused = deref state.prevWeightReused in
+        let logMhAcceptProb = if forceGlobal
+          then if or (leqf weight (log 0.)) (isNaN weight) then (log 0.) else 0.
+          else minf 0. (addf (addf
+                    (mulf beta (subf weight prevWeight))
+                    (subf weightReused prevWeightReused))
+                    (subf (log (int2float prevTraceLength))
+                              (log (int2float traceLength))))
+        in
+        -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
+        -- print "weight: "; printLn (float2string weight);
+        -- print "prevWeight: "; printLn (float2string prevWeight);
+        -- print "weightReused: "; printLn (float2string weightReused);
+        -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+        -- print "prevTraceLength: "; printLn (float2string (int2float prevTraceLength));
+        -- print "traceLength: "; printLn (float2string (int2float traceLength));
+        match
+          if bernoulliSample (exp logMhAcceptProb) then
+            mcmcAccept ();
+            (true, weight, priorWeight, sample)
+          else
+          -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous database
+          -- and trace length as we reject and reuse the old sample.
+            modref state.db prevDb;
+            modref state.traceLength prevTraceLength;
+            (false, prevWeight, priorWeight, prevSample)
+        with (accepted, weight, priorWeight, sample) in
+        let samples = if config.keepSample iter then snoc samples sample else samples in
+        let debugInfo =
+          { accepted = accepted
+          } in
+        let debugState = config.debug.1 debugState debugInfo in
+        let sampleInfo =
+          { weight = weight
+          , priorWeight = priorWeight
+          } in
+        let continueState = config.continue.1 continueState sampleInfo sample in
+        mh samples weight priorWeight sample debugState continueState (addi iter 1)
+      else samples
+  in
 
   -- First sample -- call the model until we get a non-zero weight
   recursive let firstSample : (State -> a) -> State -> Int -> a =
@@ -235,6 +234,9 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         firstSample model state (addi i 1)
       else sample
     in 
+
+  -- Used to keep track of acceptance ratio
+  mcmcAcceptInit ();
 
   let sample = firstSample model state 1 in
   let weight = deref state.weight in
@@ -256,7 +258,7 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
   let continueState = config.continue.1 continueState sampleInfo sample in
 
   -- Sample the rest
-  let samples = mh config model samples weight priorWeight sample debugState continueState (addi iter 1) in
+  let samples = mh samples weight priorWeight sample debugState continueState (addi iter 1) in
 
   -- Return: We on only need to output the samples if they are not written to a file already
   let numSamples = length samples in

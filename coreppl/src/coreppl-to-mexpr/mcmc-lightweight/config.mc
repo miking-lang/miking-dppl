@@ -18,7 +18,5 @@ type Config a acc dAcc =
   , temperature : acc -> Float
   , globalProb : Float
   , driftKernel : Bool
-  , pigeons : Bool
-  , pigeonsGlobal : Bool
-  , pigeonsExploreSteps : Int
+  , forceGlobal : Bool
   }

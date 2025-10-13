@@ -30,23 +30,6 @@ let _driftKernel : OptParser Bool = optMap (xor _driftKernelDefault) (optFlag
   { optFlagDef with long = "kernel"
   , description = "Use drift Kernel in MCMC."
   })
-let _pigeonsDefault : Bool = false
-let _pigeons : OptParser Bool = optMap (xor _pigeonsDefault) (optFlag
-  { optFlagDef with long = "pigeons"
-  , description = "Let Pigeons.jl control inference via stdio."
-  })
-let _pigeonsGlobalDefault : Bool = true
-let _pigeonsGlobal : OptParser Bool = optMap (xor _pigeonsGlobalDefault) (optFlag
-  { optFlagDef with long = "pigeons-no-global"
-  , description = "Requires --pigeons. Do not use global moves when sampling at temperature 0.0"
-  })
-let _pigeonsExploreStepsDefault : Int = 1
-let _pigeonsExploreSteps : OptParser Int =
-  let opt = optArg
-    { optArgDefInt with long = "pigeons-explore-steps"
-    , description = concat "Requires --pigeons. The number of local MCMC steps to take before communicating with Pigeons.jl. Default: " (int2string _pigeonsExploreStepsDefault)
-    } in
-  optOr opt (optPure _pigeonsExploreStepsDefault)
 let _driftScaleDefault : Float = 1.0
 let _driftScale : OptParser Float =
   let opt = optArg
