@@ -10,5 +10,5 @@ infer (APF { particles = 10 }) model;
 infer (PIMH { particles = 10, iterations = 10 }) model;
 infer (TraceMCMC { iterations = 10 }) model;
 infer (NaiveMCMC { iterations = 10 }) model;
-infer (LightweightMCMC { continue = (10, lam x. lam. (subi x 1, geqi x 0)), globalProb = 0.1 }) model;
+infer (LightweightMCMC { continue = (lam. 10, lam x. lam. lam. (subi x 1, geqi x 0)), globalProb = 0.1 }) model;
 ()

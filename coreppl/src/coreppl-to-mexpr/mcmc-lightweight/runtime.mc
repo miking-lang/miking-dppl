@@ -129,7 +129,7 @@ let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam
   unsafeCoerce (sample)
 
 -- Function to propose db changes between MH iterations.
-let modDb: all acc. all accInit. all sInfo. all dAcc. all res. Config res acc accInit sInfo dAcc -> Bool -> () =
+let modDb: all acc. all accInit. all dAcc. all res. Config res acc accInit dAcc -> Bool -> () =
   lam config. lam forceGlobal.
 
   let db = deref state.db in
@@ -156,7 +156,7 @@ let modDb: all acc. all accInit. all sInfo. all dAcc. all res. Config res acc ac
       ) db)
 
 recursive let mh : all a. all acc. all accInit. all dAcc.
-  Config a acc accInit (Float, Float) dAcc -> (State -> a) -> [a] -> Float -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
+  Config a acc accInit dAcc -> (State -> a) -> [a] -> Float -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
   lam config. lam model. lam samples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
     match continueState with (continueState, true) then
       let beta = config.temperature continueState in
@@ -207,12 +207,16 @@ recursive let mh : all a. all acc. all accInit. all dAcc.
         { accepted = accepted
         } in
       let debugState = config.debug.1 debugState debugInfo in
-      let continueState = config.continue.1 continueState (weight, priorWeight) sample in
+      let sampleInfo =
+        { weight = weight
+        , priorWeight = priorWeight
+        } in
+      let continueState = config.continue.1 continueState sampleInfo sample in
       mh config model samples weight priorWeight sample debugState continueState (addi iter 1)
     else samples
 end
 
-let run : all acc. all dAcc. all a. Config a acc (Option WriteChannel) (Float, Float) dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
+let run : all acc. all dAcc. all a. Config a acc (Option WriteChannel) dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
@@ -253,7 +257,11 @@ let run : all acc. all dAcc. all a. Config a acc (Option WriteChannel) (Float, F
       else error (join ["Failed to open file ", fn])
   else None () in
   let continueState = config.continue.0 optWc in
-  let continueState = config.continue.1 continueState (weight, priorWeight) sample in
+  let sampleInfo =
+    { weight = weight
+    , priorWeight = priorWeight
+    } in
+  let continueState = config.continue.1 continueState sampleInfo sample in
 
   -- Sample the rest
   let samples = mh config model samples weight priorWeight sample debugState continueState (addi iter 1) in

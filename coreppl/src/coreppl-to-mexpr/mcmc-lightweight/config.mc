@@ -6,8 +6,13 @@ type DebugInfo =
   { accepted : Bool
   }
 
-type Config a acc accInit sInfo dAcc =
-  { continue : (accInit -> acc, acc -> sInfo -> a -> (acc, Bool))
+type SampleInfo =
+  { weight : Float
+  , priorWeight : Float
+  }
+
+type Config a acc accInit dAcc =
+  { continue : (accInit -> acc, acc -> SampleInfo -> a -> (acc, Bool))
   , keepSample : Int -> Bool
   , debug : (dAcc, dAcc -> DebugInfo -> dAcc)
   , init : () -> ()

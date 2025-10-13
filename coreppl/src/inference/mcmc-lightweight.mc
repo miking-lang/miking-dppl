@@ -3,7 +3,7 @@ include "../infer-method.mc"
 lang LightweightMCMCMethod = InferMethodBase
   type LightweightMCMCConfig =
     { keepSample : Expr -- : Int -> Bool
-    , continue : Expr -- : (b -> a, a -> c -> r -> (a, Bool)) for some 'a', 'b' & 'c'
+    , continue : Expr -- : (b -> a, a -> SampleInfo -> r -> (a, Bool)) for some 'a' and 'b', where SampleInfo can be found in "coreppl-to-mexpr/mcmc-lightweight/config.mc"
     , temperature : Expr -- : a -> Float for same 'a'
     , init : Expr -- : () -> () 
     , globalProb : Expr -- : Float (range 0 to 1)
@@ -63,9 +63,9 @@ lang LightweightMCMCMethod = InferMethodBase
     let expectedFields =
       [ ( "continue"
         , utuple_
-          [ int_ _particlesDefault
-          , ulam_ "remaining" (ulam_ ""
-            (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)]))
+          [ ulam_ "" (int_ _particlesDefault)
+          , ulam_ "remaining" (ulam_ "" (ulam_ ""
+            (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)])))
           ]
         )
       , ("temperature", ulam_ "" (float_ 1.0))
@@ -128,11 +128,14 @@ lang LightweightMCMCMethod = InferMethodBase
     let float = TyFloat {info = info} in
     let continueInit = newmonovar env.currentLvl info in
     let continueState = newmonovar env.currentLvl info in
-    let modContinueState = newmonovar env.currentLvl info in
     let continue = typeCheckExpr env t.continue in
+    let sampleInfo = tyrecord_ 
+      [ ("weight", float) 
+      , ("priorWeight", float)
+      ] in
     let continueType = tytuple_
       [ tyarrow_ continueInit continueState
-      , tyarrows_ [continueState, modContinueState, sampleType, tytuple_ [continueState, bool]]
+      , tyarrows_ [continueState, sampleInfo, sampleType, tytuple_ [continueState, bool]]
       ] in
     unify env [info, infoTm continue] continueType (tyTm continue);
     let temperature = typeCheckExpr env t.temperature in 
@@ -176,9 +179,9 @@ lang LightweightMCMCMethod = InferMethodBase
 
   sem setRuns expr =
   | LightweightMCMC r -> LightweightMCMC {r with continue = utuple_
-    [ expr
-    , ulam_ "remaining" (ulam_ ""
-      (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)]))
+    [ ulam_ "" (expr)
+    , ulam_ "remaining" (ulam_ "" (ulam_ ""
+      (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)])))
     ] }
 end
 
@@ -187,9 +190,9 @@ let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod
   let mk = lam particles. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam debugAlignment. lam pigeons. lam pigeonsGlobal. lam pigeonsExploreSteps. LightweightMCMC
     { keepSample = ulam_ "" true_
     , continue = utuple_
-      [ int_ particles
-      , ulam_ "remaining" (ulam_ ""
-        (utuple_ [subi_ (var_ "remaining") (int_ 1), eqi_ (var_ "remaining") (int_ 0)]))
+      [ ulam_ "" (int_ particles)
+      , ulam_ "remaining" (ulam_ "" (ulam_ ""
+        (utuple_ [subi_ (var_ "remaining") (int_ 1), eqi_ (var_ "remaining") (int_ 0)])))
       ]
     , temperature = ulam_ "" (float_ 1.0)
     , init = ulam_ "" unit_

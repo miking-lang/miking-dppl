@@ -37,7 +37,7 @@ with rhs using e in
 utest r (c 0 (infer (NaiveMCMC { iterations = 1 }) _model))
 with rhs using e in
 utest r (c 0
-  (infer (LightweightMCMC { continue = (1, lam x. lam. (subi x 1, geqi x 0)), globalProb = 0.1 }) _model))
+  (infer (LightweightMCMC { continue = (lam. 1, lam x. lam. lam. (subi x 1, geqi x 0)), globalProb = 0.1 }) _model))
 with rhs using e in
 
 ()

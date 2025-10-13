@@ -246,7 +246,7 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: all acc. all accInit. all sInfo. all dAcc. Config Result acc accInit sInfo dAcc -> (State Result -> Result) -> Bool -> Result =
+let runNext: all acc. all accInit. all dAcc. Config Result acc accInit dAcc -> (State Result -> Result) -> Bool -> Result =
   lam config. lam model. lam forceGlobal. 
 
   -- Enable global modifications with probability gProb
@@ -324,7 +324,7 @@ recursive let listenPigeons : Float -> Float -> Float = lam weight. lam priorWei
 end
 
 recursive let mh : all acc. all accInit. all dAcc.
-  Config Result acc accInit (Float, Float) dAcc -> (State Result -> Result) -> [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
+  Config Result acc accInit dAcc -> (State Result -> Result) -> [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
   lam config. lam model. lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
     match continueState with (continueState, true) then
       let beta = config.temperature continueState in
@@ -375,13 +375,17 @@ recursive let mh : all acc. all accInit. all dAcc.
         { accepted = accepted
         } in
       let debugState = config.debug.1 debugState debugInfo in
-      let continueState = config.continue.1 continueState (weight, priorWeight) sample in
+      let sampleInfo =
+        { weight = weight
+        , priorWeight = priorWeight
+        } in
+      let continueState = config.continue.1 continueState sampleInfo sample in
       mh config model keptSamples weight priorWeight sample debugState continueState (addi iter 1)
     else keptSamples
 end
 
 -- General inference algorithm for aligned MCMC
-let run : all acc. all dAcc. Config Result acc (Option WriteChannel) (Float, Float) dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
+let run : all acc. all dAcc. Config Result acc (Option WriteChannel) dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
   lam config. lam model.
 
   -- Used to keep track of acceptance ratio
@@ -442,7 +446,11 @@ let run : all acc. all dAcc. Config Result acc (Option WriteChannel) (Float, Flo
       else error (join ["Failed to open file ", fn])
   else None () in
   let continueState = config.continue.0 optWc in
-  let continueState = config.continue.1 continueState (weight, priorWeight) sample in
+  let sampleInfo =
+    { weight = weight
+    , priorWeight = priorWeight
+    } in
+  let continueState = config.continue.1 continueState sampleInfo sample in
 
   -- Sample the rest
   let samples = mh config model samples weight priorWeight sample debugState continueState (addi iter 1) in
