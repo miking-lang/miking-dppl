@@ -11,11 +11,10 @@ type SampleInfo =
   , priorWeight : Float
   }
 
-type Config a acc accInit dAcc =
-  { continue : (accInit -> acc, acc -> SampleInfo -> a -> (acc, Bool))
+type Config a acc dAcc =
+  { continue : (() -> acc, acc -> SampleInfo -> a -> (acc, Bool))
   , keepSample : Int -> Bool
   , debug : (dAcc, dAcc -> DebugInfo -> dAcc)
-  , init : () -> ()
   , temperature : acc -> Float
   , globalProb : Float
   , driftKernel : Bool

@@ -246,7 +246,7 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: all acc. all accInit. all dAcc. Config Result acc accInit dAcc -> (State Result -> Result) -> Bool -> Result =
+let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Bool -> Result =
   lam config. lam model. lam forceGlobal. 
 
   -- Enable global modifications with probability gProb
@@ -323,8 +323,8 @@ recursive let listenPigeons : Float -> Float -> Float = lam weight. lam priorWei
   end
 end
 
-recursive let mh : all acc. all accInit. all dAcc.
-  Config Result acc accInit dAcc -> (State Result -> Result) -> [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
+recursive let mh : all acc. all dAcc.
+  Config Result acc dAcc -> (State Result -> Result) -> [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
   lam config. lam model. lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
     match continueState with (continueState, true) then
       let beta = config.temperature continueState in
@@ -385,14 +385,11 @@ recursive let mh : all acc. all accInit. all dAcc.
 end
 
 -- General inference algorithm for aligned MCMC
-let run : all acc. all dAcc. Config Result acc (Option WriteChannel) dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
+let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
   lam config. lam model.
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
-
-  -- Used to initalize any configuration specific things
-  config.init ();
 
   -- First sample -- call the model until we get a non-zero weight
   recursive let firstSample : (State Result -> Result) -> State Result -> Int -> State Result =
@@ -440,12 +437,8 @@ let run : all acc. all dAcc. Config Result acc (Option WriteChannel) dAcc -> (St
     { accepted = true
     } in
   let debugState = config.debug.1 config.debug.0 debugInfo in
-  let optWc = match sysGetEnv "PPL_OUTPUT" with Some fn then
-      match fileWriteOpen fn with Some wc then
-        Some wc
-      else error (join ["Failed to open file ", fn])
-  else None () in
-  let continueState = config.continue.0 optWc in
+
+  let continueState = config.continue.0 () in
   let sampleInfo =
     { weight = weight
     , priorWeight = priorWeight
@@ -460,12 +453,6 @@ let run : all acc. all dAcc. Config Result acc (Option WriteChannel) dAcc -> (St
 
   -- Return: We on only need to output the samples if they are not written to a file already
   let numSamples = length samples in
-  match optWc with Some wc then
-    fileWriteClose wc;
-    use RuntimeDist in
-    constructDistEmpirical [] [] 
-      (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})
-  else 
-    use RuntimeDist in
-    constructDistEmpirical samples (make numSamples 1.0)
-      (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})
+  use RuntimeDist in
+  constructDistEmpirical samples (make numSamples 1.0)
+    (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})
