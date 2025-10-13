@@ -94,6 +94,21 @@ let state: State Result = {
   alignedTraceLength = ref (negi 1)
 }
 
+-- Function to reset the state when doing a global update
+let resetState : State Result -> () = lam state. (
+  modref state.oldAlignedTrace (emptyList ());
+  modref state.oldUnalignedTraces (emptyList ());
+  modref state.weight 0.;
+  modref state.priorWeight 0.;
+  modref state.driftHastingRatio 0.;
+  modref state.prevWeightReused 0.;
+  modref state.weightReused 0.;
+  modref state.reuseUnaligned true;
+  ()
+)
+
+
+
 let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
 
@@ -229,21 +244,6 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   modref state.unalignedTraces (cons (cons (sample,w,i) current) rest);
   modref state.priorWeight (addf (deref state.priorWeight) w);
   unsafeCoerce sample
-
--- Function to reset the state when doing a global update
-let resetState : State Result -> () = lam state. (
-  modref state.oldAlignedTrace (emptyList ());
-  modref state.oldUnalignedTraces (emptyList ());
-  modref state.weight 0.;
-  modref state.priorWeight 0.;
-  modref state.driftHastingRatio 0.;
-  modref state.prevWeightReused 0.;
-  modref state.weightReused 0.;
-  modref state.reuseUnaligned true;
-  modref state.alignedTrace (emptyList ());
-  modref state.unalignedTraces (toList [(emptyList ())]);
-  ()
-)
 
 -- Function to run new MH iterations.
 let runNext: all acc. all accInit. all sInfo. all dAcc. Config Result acc accInit sInfo dAcc -> (State Result -> Result) -> Bool -> Result =
@@ -402,9 +402,8 @@ let run : all acc. all dAcc. Config Result acc (Option WriteChannel) (Float, Flo
         resetState state;
         -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
         firstSample model state (addi i 1)
-      else
-        sample
-      in 
+      else sample
+    in 
 
   let sample = firstSample model state 1 in
   let weight = deref state.weight in
@@ -432,11 +431,10 @@ let run : all acc. all dAcc. Config Result acc (Option WriteChannel) (Float, Flo
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in
 
+  -- Set up debug and continue states
   let debugInfo =
     { accepted = true
     } in
-
-  -- Set up debug and continue states
   let debugState = config.debug.1 config.debug.0 debugInfo in
   let optWc = match sysGetEnv "PPL_OUTPUT" with Some fn then
       match fileWriteOpen fn with Some wc then
@@ -444,15 +442,15 @@ let run : all acc. all dAcc. Config Result acc (Option WriteChannel) (Float, Flo
       else error (join ["Failed to open file ", fn])
   else None () in
   let continueState = config.continue.0 optWc in
-  let nextContinueState = config.continue.1 continueState (weight, priorWeight) sample in
+  let continueState = config.continue.1 continueState (weight, priorWeight) sample in
 
   -- Sample the rest
-  let samples = mh config model samples weight priorWeight sample debugState nextContinueState (addi iter 1) in
+  let samples = mh config model samples weight priorWeight sample debugState continueState (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
 
-  -- We on only need to output the samples if they are not written to a file already
+  -- Return: We on only need to output the samples if they are not written to a file already
   let numSamples = length samples in
   match optWc with Some wc then
     fileWriteClose wc;
