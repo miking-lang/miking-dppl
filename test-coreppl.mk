@@ -18,6 +18,7 @@ test-cli-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/cli -name "*.mc")
 test-expectation-files=$(shell find coreppl/test/coreppl-to-mexpr/expectation -name "*.mc")
 test-dppl-files=$(shell find coreppl/test/coreppl-to-mexpr/dppl -name "*.mc" -a ! -wholename "coreppl/test/coreppl-to-mexpr/dppl/examples/*")
+test-pruning-files=$(shell find coreppl/test/coreppl-to-mexpr/pruning -name "*.mc")
 
 test-inference-files=\
   $(shell find coreppl/test/coreppl-to-mexpr/inference-accuracy -name "*.mc")
@@ -47,6 +48,9 @@ infer: ${test-infer-files}
 
 .PHONY: static-delay
 static-delay: ${test-staticdelay-files}
+
+.PHONY: pruning
+pruning: ${test-pruning-files}
 
 .PHONY: expectation
 expectation: ${test-expectation-files}
@@ -89,3 +93,7 @@ ${test-expectation-files}::
 # DPPL tests
 ${test-dppl-files}::
 	@./make test-cdppl $@ "build/${CPPL_NAME}"
+
+# Pruning tests
+${test-pruning-files}::
+	@./make test-cppl $@ "build/${CPPL_NAME}"

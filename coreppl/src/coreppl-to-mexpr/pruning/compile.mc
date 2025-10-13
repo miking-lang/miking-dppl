@@ -47,7 +47,13 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
       mapInsert t.ident (IntValue ()) env else
     match tyTm (t.body) with TyPruneInt _ then
       mapInsert t.ident (PrunedValue ()) env else env in
-    createObsValue (createObsValue env t.body) x.inexpr
+    createObsValue (createObsValue env t.body) t.inexpr
+  | TmLam t -> 
+    let env = match t.tyParam with TyInt _ then
+      mapInsert t.ident (IntValue ()) env else
+    match t.tyParam with TyPruneInt _ then
+      mapInsert t.ident (PrunedValue ()) env else env in
+    sfold_Expr_Expr createObsValue env (TmLam t)
   | t -> sfold_Expr_Expr createObsValue env t
 
   sem createDistEnv: Map Name Expr -> Expr -> Map Name Expr
