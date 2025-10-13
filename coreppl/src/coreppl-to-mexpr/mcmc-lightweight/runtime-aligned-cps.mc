@@ -348,10 +348,11 @@ recursive let mh : all acc. all accInit. all dAcc.
       -- Calculate the Hastings ratio.
       let logMhAcceptProb = if forceGlobal 
         then if or (leqf weight (log 0.)) (isNaN weight) then (log 0.) else 0.
-        else minf 0.
-          (addf
-            (mulf beta (addf (subf weight prevWeight) driftHastingRatio))
-            (subf weightReused prevWeightReused))
+        else minf 0. (addf
+                  (addf 
+                    (mulf beta (subf weight prevWeight))
+                    (subf weightReused prevWeightReused))
+                  driftHastingRatio)
       in
       -- print "weight: "; printLn (float2string weight);
       -- print "prevWeight: "; printLn (float2string prevWeight);
@@ -374,10 +375,8 @@ recursive let mh : all acc. all accInit. all dAcc.
         { accepted = accepted
         } in
       let debugState = config.debug.1 debugState debugInfo in
-      let nextContinueState = config.continue.1 continueState (weight, priorWeight) sample in
-      -- match continueState with (continueState, success) in
-      -- let continueState = (modContinueState continueState, success) in
-      mh config model keptSamples weight priorWeight sample debugState nextContinueState (addi iter 1)
+      let continueState = config.continue.1 continueState (weight, priorWeight) sample in
+      mh config model keptSamples weight priorWeight sample debugState continueState (addi iter 1)
     else keptSamples
 end
 
