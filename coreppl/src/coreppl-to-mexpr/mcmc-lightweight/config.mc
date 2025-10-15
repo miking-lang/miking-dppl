@@ -16,7 +16,6 @@ type Config a acc dAcc =
   , keepSample : Int -> Bool
   , debug : (dAcc, dAcc -> DebugInfo -> dAcc)
   , temperature : acc -> Float
-  , globalProb : Float
+  , globalProb : acc -> Float
   , driftKernel : Bool
-  , forceGlobal : Bool
   }

@@ -129,14 +129,13 @@ let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam
   unsafeCoerce (sample)
 
 -- Function to propose db changes between MH iterations.
-let modDb: all acc. all dAcc. all res. Config res acc dAcc -> Bool -> () =
-  lam config. lam forceGlobal.
+let modDb: all acc. all dAcc. all res. Config res acc dAcc -> Float -> () =
+  lam config. lam globalProb.
 
   let db = deref state.db in
 
   -- Enable global modifications with probability gProb
-  let gProb = config.globalProb in
-  let modGlobal: Bool = or forceGlobal (bernoulliSample gProb) in
+  let modGlobal: Bool = bernoulliSample globalProb in
 
   if modGlobal then
     -- modref state.oldDb (mapMap (lam. None ()) db)
@@ -164,10 +163,10 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
     lam samples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
       match continueState with (continueState, true) then
         let beta = config.temperature continueState in
-        let forceGlobal = and (eqf beta 0.0) config.forceGlobal in
+        let globalProb = config.globalProb continueState in
         let prevDb = deref state.db in
         let prevTraceLength = deref state.traceLength in
-        modDb config forceGlobal;
+        modDb config globalProb;
         modref state.weight 0.;
         modref state.priorWeight 0.;
         modref state.weightReused 0.;
@@ -180,9 +179,7 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         let priorWeight = deref state.priorWeight in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
-        let logMhAcceptProb = if forceGlobal
-          then if or (leqf weight (log 0.)) (isNaN weight) then (log 0.) else 0.
-          else minf 0. (addf (addf
+        let logMhAcceptProb = minf 0. (addf (addf
                     (mulf beta (subf weight prevWeight))
                     (subf weightReused prevWeightReused))
                     (subf (log (int2float prevTraceLength))

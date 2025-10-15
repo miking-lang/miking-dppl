@@ -5,10 +5,9 @@ lang LightweightMCMCMethod = InferMethodBase
     { keepSample : Expr -- : Int -> Bool
     , continue : Expr -- : (() -> a, a -> SampleInfo -> r -> (a, Bool)) for some 'a' , where SampleInfo can be found in "coreppl-to-mexpr/mcmc-lightweight/config.mc"
     , temperature : Expr -- : a -> Float for same 'a'
-    , globalProb : Expr -- : Float (range 0 to 1)
+    , globalProb : Expr -- : a -> Float (range 0 to 1) for same 'a'
     , debug : Expr -- : (a, a -> DebugInfo -> a) for some 'a', where DebugInfo can be found in "coreppl-to-mexpr/mcmc-lightweight/config.mc"
     , driftKernel : Bool
-    , forceGlobal : Bool
     , driftScale : Float
     , cps : String
     , align : Bool
@@ -30,7 +29,6 @@ lang LightweightMCMCMethod = InferMethodBase
     match optionMapAccum (pprintCode i) env (optionMap str_ t.debugAlignment) with (env, debugAlignment) in
     let align = bool2string t.align in
     let driftKernel = bool2string t.driftKernel in
-    let forceGlobal = bool2string t.forceGlobal in
     ( env
     , join
       [ "(LightweightMCMC "
@@ -40,7 +38,6 @@ lang LightweightMCMCMethod = InferMethodBase
       , ", globalProb = ", globalProb
       , ", debug = ", debug
       , ", driftKernel = ", driftKernel
-      , ", forceGlobal = ", forceGlobal
       , ", driftScale = ", driftScale
       , ", cps = ", cps
       , ", align = ", align
@@ -62,16 +59,15 @@ lang LightweightMCMCMethod = InferMethodBase
       , ("temperature", ulam_ "" (float_ 1.0))
       , ("keepSample", ulam_ "" true_)
       , ("debug", utuple_ [unit_, ulam_ "" (ulam_ "" unit_)])
-      , ("globalProb", float_ _mcmcLightweightGlobalProbDefault)
+      , ("globalProb", ulam_ "" (float_ _mcmcLightweightGlobalProbDefault))
       , ("driftKernel", bool_ _driftKernelDefault)
-      , ("forceGlobal", bool_ true)
       , ("driftScale", float_ _driftScaleDefault)
       , ("cps", str_ _cpsDefault)
       , ("align", bool_ _alignDefault)
       , ("debugAlignment", str_ "")
       ] in
     match getFields info bindings expectedFields
-    with [continue, temperature, keepSample, debug, globalProb, driftKernel, forceGlobal, driftScale, cps, align, debugAlignment] in
+    with [continue, temperature, keepSample, debug, globalProb, driftKernel, driftScale, cps, align, debugAlignment] in
     LightweightMCMC
     { continue = continue
     , temperature = temperature
@@ -79,7 +75,6 @@ lang LightweightMCMCMethod = InferMethodBase
     , globalProb = globalProb
     , debug = debug
     , driftKernel = _exprAsBoolExn driftKernel
-    , forceGlobal = _exprAsBoolExn forceGlobal
     , driftScale = _exprAsFloatExn driftScale
     , cps = _exprAsStringExn cps
     , align = _exprAsBoolExn align
@@ -99,7 +94,6 @@ lang LightweightMCMCMethod = InferMethodBase
     , ("debug", t.debug)
     , ("globalProb", t.globalProb)
     , ("driftKernel", bool_ t.driftKernel)
-    , ("forceGlobal", bool_ t.forceGlobal)
     ]
 
   -- NOTE(vipa, 2025-04-15): 'inferMethodConfig' must be kept up to
@@ -135,7 +129,8 @@ lang LightweightMCMCMethod = InferMethodBase
     let keepSample = typeCheckExpr env t.keepSample in
     unify env [info, infoTm keepSample] (tyarrow_ tyint_ bool) (tyTm keepSample);
     let globalProb = typeCheckExpr env t.globalProb in
-    unify env [info, infoTm globalProb] float (tyTm globalProb);
+    let globalProbType = tyarrows_ [continueState, float] in
+    unify env [info, infoTm globalProb] globalProbType (tyTm globalProb);
     LightweightMCMC { t with
       continue = continue,
       temperature = temperature,
@@ -172,10 +167,9 @@ let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod
         (utuple_ [subi_ (var_ "remaining") (int_ 1), eqi_ (var_ "remaining") (int_ 0)])))
       ]
     , temperature = ulam_ "" (float_ 1.0)
-    , globalProb = float_ globalProb
+    , globalProb = ulam_ "" (float_ globalProb)
     , debug = utuple_ [unit_, ulam_ "" (ulam_ "" unit_)]
     , driftKernel = driftKernel
-    , forceGlobal = true
     , driftScale = driftScale
     , cps = cps
     , align = align

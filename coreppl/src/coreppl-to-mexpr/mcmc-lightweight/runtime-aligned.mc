@@ -209,8 +209,8 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
 
 -- Function to propose aligned trace changes between MH iterations.
 let modTrace: all a. all acc. all dAcc.
-  Config a acc dAcc -> Bool -> () =
-  lam config. lam forceGlobal.
+  Config a acc dAcc -> Float -> () =
+  lam config. lam globalProb.
 
   let alignedTraceLength: Int = deref state.alignedTraceLength in
 
@@ -227,8 +227,7 @@ let modTrace: all a. all acc. all dAcc.
   in
 
   -- Enable global modifications with probability gProb
-  let gProb = config.globalProb in
-  let modGlobal: Bool = or forceGlobal (bernoulliSample gProb) in
+  let modGlobal: Bool = bernoulliSample globalProb in
 
   if modGlobal then
     modref state.oldAlignedTrace (emptyList ());
@@ -258,8 +257,8 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
         -- If we are sampling at temperature 0.0 we might want to draw global samples
-        let forceGlobal = and (eqf beta 0.0) config.forceGlobal in
-        modTrace config forceGlobal;
+        let globalProb = config.globalProb continueState in
+        modTrace config globalProb;
         modref state.weight 0.;
         modref state.priorWeight 0.;
         modref state.driftHastingRatio 0.;
@@ -278,9 +277,7 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
         let driftHastingRatio = deref state.driftHastingRatio in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
-        let logMhAcceptProb = if forceGlobal 
-          then  if or (leqf weight (log 0.)) (isNaN weight) then log 0. else 0.
-          else minf 0. (addf
+        let logMhAcceptProb = minf 0. (addf
                     (addf
                       (mulf beta (subf weight prevWeight))
                       (subf weightReused prevWeightReused))

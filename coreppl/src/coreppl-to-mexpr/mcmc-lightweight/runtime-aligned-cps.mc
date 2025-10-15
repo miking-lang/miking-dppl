@@ -246,13 +246,11 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Bool -> Result =
-  lam config. lam model. lam forceGlobal. 
+let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Float -> Result =
+  lam config. lam model. lam globalProb. 
 
-  -- Enable global modifications with probability gProb
-  -- or when sampling at temperature 0.0 with forceGlobal
-  let gProb = config.globalProb in
-  let modGlobal: Bool = or forceGlobal (bernoulliSample gProb) in
+  -- Enable global modifications with probability globalProb
+  let modGlobal: Bool = bernoulliSample globalProb in
 
   if modGlobal then (
     resetState state;
@@ -317,9 +315,9 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         let beta = config.temperature continueState in
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
-        -- If we are sampling at temperature 0.0 we might want to draw global samples
-        let forceGlobal = and (eqf beta 0.0) config.forceGlobal in
-        let sample = runNext config model forceGlobal in
+        -- Calculate the global probability given the current state
+        let globalProb = config.globalProb continueState in
+        let sample = runNext config model globalProb in
       -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
@@ -330,9 +328,7 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
         -- Calculate the Hastings ratio.
-        let logMhAcceptProb = if forceGlobal 
-          then if or (leqf weight (log 0.)) (isNaN weight) then (log 0.) else 0.
-          else minf 0. (addf
+        let logMhAcceptProb = minf 0. (addf
                     (addf 
                       (mulf beta (subf weight prevWeight))
                       (subf weightReused prevWeightReused))
