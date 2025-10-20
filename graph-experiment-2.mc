@@ -278,6 +278,9 @@ lang MutPVal = PValInterface
 
   sem instantiate f = | st ->
     match _initModel 0 st f with (st, initWeight, update) in
+    (if eqf initWeight (negf inf) then
+      printLn "WARNING: instantiate returned -inf weight model"
+     else ());
     PVI {st = st, update = update, permanentWeight = initWeight, id = 0}
 
   sem getSt = | PVI x -> x.st
@@ -658,6 +661,9 @@ lang SimplePersistentPVal = PValInterface
       } in
     match f st with PVS st in
     let updates = st.update in
+    (if eqf st.initState.permanentWeight (negf inf) then
+      printLn "WARNING: instantiate returned -inf weight model"
+     else ());
     PVI
     { st = st.st
     , state = st.initState
@@ -1115,6 +1121,9 @@ lang SimplePersistentPVal2 = PValInterface
       } in
     match f st with PVS st in
     let updates = st.update in
+    (if eqf st.initState.permanentWeight (negf inf) then
+      printLn "WARNING: instantiate returned -inf weight model"
+     else ());
     PVI
     { st = st.st
     , state = st.initState
