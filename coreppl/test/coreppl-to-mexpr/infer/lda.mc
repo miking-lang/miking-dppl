@@ -31,6 +31,6 @@ utest r (c 500 (infer (NaiveMCMC { iterations = 50000 }) model))            with
 
 -- We need to increase the global step probability. Otherwise, lightweight MCMC
 -- easily gets stuck in a single mode.
-utest r (c 500 (infer (LightweightMCMC { continue = (50000, lam x. lam. (subi x 1, geqi x 0)), globalProb = 0.7 }) model))  with rhs using e in
+utest r (c 500 (infer (LightweightMCMC { continue = (lam. 50000, lam x. lam. lam. (subi x 1, geqi x 0)), globalProb = lam. 0.7 }) model))  with rhs using e in
 
 ()

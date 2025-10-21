@@ -26,6 +26,7 @@ type State = {
 
   -- The weight of the current execution
   weight: Ref Float,
+  priorWeight: Ref Float,
 
   -- The weight of reused values in the current execution
   prevWeightReused: Ref Float,
@@ -76,12 +77,23 @@ let constructAddress: Address -> Int -> Address = lam prev. lam sym.
 -- State (reused throughout inference)
 let state: State = {
   weight = ref 0.,
+  priorWeight = ref 0.,
   prevWeightReused = ref 0.,
   weightReused = ref 0.,
   db = ref (emptyAddressMap ()),
   traceLength = ref 0,
   oldDb = ref (emptyAddressMap ())
 }
+
+-- Function to reset the state when doing a global update
+let resetState : State -> () = lam state. (
+  modref state.db (emptyAddressMap ());
+  modref state.weight 0.;
+  modref state.priorWeight 0.;
+  modref state.prevWeightReused 0.;
+  modref state.weightReused 0.;
+  ()
+)
 
 let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
@@ -110,16 +122,20 @@ let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam
   in
   incrTraceLength ();
   modref state.db (mapInsert addr sample (deref state.db));
-  unsafeCoerce (sample.0)
+
+  -- Update the current sampling distribution
+  match sample with (sample, w) in
+  modref state.priorWeight (addf (deref state.priorWeight) w);
+  unsafeCoerce (sample)
 
 -- Function to propose db changes between MH iterations.
-let modDb: all acc. all dAcc. all res. Config res acc dAcc -> () = lam config.
+let modDb: all acc. all dAcc. all res. Config res acc dAcc -> Float -> () =
+  lam config. lam globalProb.
 
   let db = deref state.db in
 
   -- Enable global modifications with probability gProb
-  let gProb = config.globalProb in
-  let modGlobal: Bool = bernoulliSample gProb in
+  let modGlobal: Bool = bernoulliSample globalProb in
 
   if modGlobal then
     -- modref state.oldDb (mapMap (lam. None ()) db)
@@ -138,16 +154,21 @@ let modDb: all acc. all dAcc. all res. Config res acc dAcc -> () = lam config.
          sample
       ) db)
 
+
+
 let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
 
-  recursive let mh : [a] -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
-    lam samples. lam prevWeight. lam prevSample. lam debugState. lam continueState. lam iter.
+  recursive let mh : [a] -> Float -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
+    lam samples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
       match continueState with (continueState, true) then
+        let beta = config.temperature continueState in
+        let globalProb = config.globalProb continueState in
         let prevDb = deref state.db in
         let prevTraceLength = deref state.traceLength in
-        modDb config;
+        modDb config globalProb;
         modref state.weight 0.;
+        modref state.priorWeight 0.;
         modref state.weightReused 0.;
         modref state.prevWeightReused 0.;
         modref state.db (emptyAddressMap ());
@@ -155,11 +176,11 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         let sample = model state in
         let traceLength = deref state.traceLength in
         let weight = deref state.weight in
+        let priorWeight = deref state.priorWeight in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
-        let logMhAcceptProb =
-          minf 0. (addf (addf
-                    (subf weight prevWeight)
+        let logMhAcceptProb = minf 0. (addf (addf
+                    (mulf beta (subf weight prevWeight))
                     (subf weightReused prevWeightReused))
                     (subf (log (int2float prevTraceLength))
                               (log (int2float traceLength))))
@@ -174,41 +195,70 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         match
           if bernoulliSample (exp logMhAcceptProb) then
             mcmcAccept ();
-            (true, weight, sample)
+            (true, weight, priorWeight, sample)
           else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous database
           -- and trace length as we reject and reuse the old sample.
             modref state.db prevDb;
             modref state.traceLength prevTraceLength;
-            (false, prevWeight, prevSample)
-        with (accepted, weight, sample) in
+            (false, prevWeight, priorWeight, prevSample)
+        with (accepted, weight, priorWeight, sample) in
         let samples = if config.keepSample iter then snoc samples sample else samples in
         let debugInfo =
           { accepted = accepted
           } in
-        mh samples weight sample (config.debug.1 debugState debugInfo) (config.continue.1 continueState sample) (addi iter 1)
+        let debugState = config.debug.1 debugState debugInfo in
+        let sampleInfo =
+          { weight = weight
+          , priorWeight = priorWeight
+          } in
+        let continueState = config.continue.1 continueState sampleInfo sample in
+        mh samples weight priorWeight sample debugState continueState (addi iter 1)
       else samples
   in
+
+  -- First sample -- call the model until we get a non-zero weight
+  recursive let firstSample : (State -> a) -> State -> Int -> a =
+    lam model. lam state. lam i.
+      let sample = model state in 
+      let weight = deref state.weight in
+      let weightReused = deref state.weightReused in
+      let priorWeight = deref state.priorWeight in
+      let prevWeightReused = deref state.prevWeightReused in
+      if or (leqf weight (log 0.0)) (isNaN weight) then
+        resetState state;
+        -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+        firstSample model state (addi i 1)
+      else sample
+    in 
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
 
-  -- First sample
-  let sample = model state in
+  let sample = firstSample model state 1 in
   let weight = deref state.weight in
+  let priorWeight = deref state.priorWeight in
 
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in
 
+  -- Set up debug and continue states
   let debugInfo =
     { accepted = true
     } in
+  let debugState = config.debug.1 config.debug.0 debugInfo in
+  let continueState = config.continue.0 () in
+  let sampleInfo =
+    { weight = weight
+    , priorWeight = priorWeight
+    } in
+  let continueState = config.continue.1 continueState sampleInfo sample in
 
   -- Sample the rest
-  let samples = mh samples weight sample (config.debug.1 config.debug.0 debugInfo) (config.continue.1 config.continue.0 sample) (addi iter 1) in
+  let samples = mh samples weight priorWeight sample debugState continueState (addi iter 1) in
 
-  -- Return
+  -- Return: We on only need to output the samples if they are not written to a file already
   let numSamples = length samples in
   use RuntimeDist in
-  constructDistEmpirical samples (make numSamples 1.)
-    (EmpMCMC { acceptRate = mcmcAcceptRate numSamples })
+  constructDistEmpirical samples (make numSamples 1.0)
+    (EmpMCMC {acceptRate = mcmcAcceptRate numSamples})

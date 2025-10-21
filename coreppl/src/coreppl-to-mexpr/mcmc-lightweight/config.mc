@@ -6,10 +6,16 @@ type DebugInfo =
   { accepted : Bool
   }
 
+type SampleInfo =
+  { weight : Float
+  , priorWeight : Float
+  }
+
 type Config a acc dAcc =
-  { continue : (acc, acc -> a -> (acc, Bool))
+  { continue : (() -> acc, acc -> SampleInfo -> a -> (acc, Bool))
   , keepSample : Int -> Bool
   , debug : (dAcc, dAcc -> DebugInfo -> dAcc)
-  , globalProb : Float
+  , temperature : acc -> Float
+  , globalProb : acc -> Float
   , driftKernel : Bool
   }

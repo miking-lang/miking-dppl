@@ -890,8 +890,9 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
       e1
 
   sem _mapRecordExpr i fs =| e ->
-    tmRecord i (tyRecord i (map (lam t. (t.0, t.1)) fs))
-      (map (lam t. (t.0, t.2 (_recordproj_ i e t.0))) fs)
+    let ty = tyRecord i (map (lam t. (t.0, t.1)) fs) in
+    tmRecord i ty
+      (map (lam t. (t.0, t.2 (_recordproj_ i (withType ty e) t.0))) fs)
 
   sem _map2RecordExpr i fs e1 =| e2 ->
     tmRecord i (tyRecord i (map (lam t. (t.0, t.1)) fs))
