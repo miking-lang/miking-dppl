@@ -18,3 +18,7 @@ fi
 
 # Add the coreppl src location
 export MCORE_LIBS="${MCORE_LIBS-}${MCORE_LIBS:+:}coreppl=$(expand_path ./coreppl/src)"
+
+# Update path with cppl and the utility scripts
+PATH_add ./build
+PATH_add ./scripts
