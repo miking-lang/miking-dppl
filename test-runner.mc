@@ -2,7 +2,6 @@ include "coreppl/src/parser.mc"
 
 lang Composed = DPPLParser
   syn Wrap =
-  | Unwrapped
   | Wrapped
   | Unused
 
@@ -23,6 +22,12 @@ lang Composed = DPPLParser
   | PSeq x -> PSeq (f x)
   | PDist x -> PDist (f x)
 
+  sem foldPTypeC : all a. all x. (a -> x -> a) -> a -> PTypeC x -> a
+  sem foldPTypeC f acc =
+  | PRecord x -> mapFoldWithKey (lam acc. lam. lam v. f acc v) acc x
+  | PSeq x -> f acc x
+  | PDist x -> f acc x
+
   syn PureType =
   | PureTypeC (PTypeC PureType)
   | PureTypeA PTypeA
@@ -31,26 +36,31 @@ lang Composed = DPPLParser
   -- descendant is `PHere {wrapped = Wrapped ()}` or `PHere {wrapped = Unused ()}`.
   syn PType =
   | PLater (PTypeC PType)
+  | PNever PTypeA
   | PHere {wrapped : Wrap, ty : PureType}
 
   sem ptypeToString : PType -> String
   sem ptypeToString =
   | PHere x ->
     let prefix = switch x.wrapped
-      case Unwrapped _ then ""
       case Wrapped _ then "!"
       case Unused _ then "~"
       end in
     concat prefix (pureTypeToString x.ty)
+  | PNever x -> ptypeAToString x
   | PLater x -> ptypeCToString ptypeToString x
+
+  sem ptypeAToString : PTypeA -> String
+  sem ptypeAToString =
+  | PInt _ -> "Int"
+  | PFloat _ -> "Float"
+  | PBool _ -> "Bool"
+  | PChar _ -> "Char"
 
   sem pureTypeToString : PureType -> String
   sem pureTypeToString =
   | PureTypeC x -> ptypeCToString pureTypeToString x
-  | PureTypeA (PInt _) -> "Int"
-  | PureTypeA (PFloat _) -> "Float"
-  | PureTypeA (PBool _) -> "Bool"
-  | PureTypeA (PChar _) -> "Char"
+  | PureTypeA x -> ptypeAToString x
 
   sem ptypeCToString : all x. (x -> String) -> PTypeC x -> String
   sem ptypeCToString f =
@@ -64,34 +74,34 @@ lang Composed = DPPLParser
   | PDist x ->
     join ["(Dist ", f x, ")"]
 
-  sem topWrap : PType -> Wrap
-  sem topWrap =
-  | PHere x -> x.wrapped
-  | PLater _ -> Unwrapped ()
+  sem isPureIsh : PType -> Bool
+  sem isPureIsh =
+  | PNever _ -> true
+  | PHere {wrapped = Unused _} -> true
+  | PHere {wrapped = Wrapped _} -> false
+  | PLater x ->
+    let f = lam acc. lam v. if acc then isPureIsh v else false in
+    foldPTypeC f true x
+
+  sem isTopWrapped : PType -> Bool
+  sem isTopWrapped =
+  | PHere {wrapped = Wrapped _} -> true
+  | _ -> false
 
   sem unwrapOnce : PType -> Either PTypeA (PTypeC PType)
   sem unwrapOnce =
   | PHere {ty = PureTypeA ty} -> Left ty
   | PHere {wrapped = Wrapped _, ty = PureTypeC ty} ->
-    Right (mapPTypeC (lam ty. PHere {wrapped = Unwrapped (), ty = ty}) ty)
-  | PHere {wrapped = w, ty = PureTypeC ty} ->
-    Right (mapPTypeC (lam ty. PHere {wrapped = w, ty = ty}) ty)
+    Right (mapPTypeC pureToPType ty)
+  | PHere {wrapped = Unused _, ty = PureTypeC ty} ->
+    Right (mapPTypeC (lam ty. PHere {wrapped = Unused (), ty = ty}) ty)
+  | PNever x -> Left x
   | PLater x -> Right x
 
-  sem mkPSeqTy : PType -> PType
-  sem mkPSeqTy =
-  | PHere {wrapped = Unwrapped _, ty = ty} -> PHere {wrapped = Unwrapped (), ty = PureTypeC (PSeq ty)}
-  | ty -> PLater (PSeq ty)
-
-  sem mkPRecordTy : Map SID PType -> PType
-  sem mkPRecordTy = | tys ->
-    let f = lam m. lam k. lam ty.
-      match ty with PHere {wrapped = Unwrapped _, ty = ty}
-      then Some (mapInsert k ty m)
-      else None () in
-    match mapFoldlOption f (mapEmpty (mapGetCmpFun tys)) tys with Some tys
-    then PHere {wrapped = Unwrapped (), ty = PureTypeC (PRecord tys)}
-    else PLater (PRecord tys)
+  sem pureToPType : PureType -> PType
+  sem pureToPType =
+  | PureTypeA x -> PNever x
+  | PureTypeC x -> PLater (mapPTypeC pureToPType x)
 
   type PState =
     { functionDefinitions : Map Name {params : [Name], mayBeRecursive : Bool, body : Expr}
@@ -115,6 +125,7 @@ lang Composed = DPPLParser
   | CPMap _ -> "p_map"
   | CPApply _ -> "p_apply"
   | CPJoin _ -> "p_join"
+  | CPTraverseSeq _ -> "p_traverseSeq"
 
   syn Expr =
   -- NOTE(vipa, 2025-10-20): This should be a _linear_ function, and
@@ -180,24 +191,23 @@ lang Composed = DPPLParser
 
   sem _lubPType : (PType, PType) -> PType
   sem _lubPType =
+  | (lty & PNever _, PNever _) -> lty
   | (lty & PHere {wrapped = l}, rty & PHere {wrapped = r}) ->
     switch (l, r)
     case (Wrapped _, _) then lty
     case (_, Wrapped _) then rty
     case (Unused _, _) then rty
     case (_, Unused _) then lty
-    case (Unwrapped _, _) then rty
-    case (_, Unwrapped _) then lty
     end
-  | (lty & PHere {wrapped = l}, rty & PLater _) ->
+  | (lty & PHere {wrapped = l}, rty & (PLater _ | PNever _)) ->
     switch l
     case Wrapped _ then lty
-    case (Unwrapped _ | Unused _) then rty
+    case Unused _ then rty
     end
-  | (lty & PLater _, rty & PHere {wrapped = r}) ->
+  | (lty & (PLater _ | PNever _), rty & PHere {wrapped = r}) ->
     switch r
     case Wrapped _ then rty
-    case (Unwrapped _ | Unused _) then lty
+    case Unused _ then lty
     end
   | (PLater (PSeq l), PLater (PSeq r)) -> PLater (PSeq (lubPType l r))
   | (PLater (PRecord l), PLater (PRecord r)) -> PLater (PRecord (mapIntersectWith lubPType l r))
@@ -209,22 +219,22 @@ lang Composed = DPPLParser
       switch ty
       case PLater x then PureTypeC (mapPTypeC work x)
       case PHere x then x.ty
+      case PNever x then PureTypeA x
       end in
     PHere {wrapped = Wrapped (), ty = work ty}
 
   sem adjustWrapping : (PType, PType) -> Expr -> Expr
   sem adjustWrapping =
-  -- TODO(vipa, 2025-10-23): PHere Unwrapped -> PLater ...
+  | (PNever _, PNever _) -> lam x. x
+  | (PNever _, PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
   | (PHere {wrapped = Unused _}, _) -> lam x. x
-  | (PHere {wrapped = Unwrapped _}, PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
-  | (PHere {wrapped = Unwrapped _}, PHere {wrapped = Unwrapped _}) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PHere {wrapped = Wrapped _}) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PLater _) -> lam tm. errorSingle [infoTm tm] "Tried to convert a value to a less wrapped value, which is impossible"
   | (PLater (PSeq ty), PHere {wrapped = Wrapped _, ty = PureTypeC (PSeq target)}) ->
     let f = TempLam (adjustWrapping (ty, PHere {wrapped = Wrapped (), ty = target})) in
-    appf2_ (uconst_ (CPTraverseSeq ())) f
+    _app (_app (uconst_ (CPTraverseSeq ())) f)
   | (PLater (PSeq ty), PLater (PSeq target)) ->
-    map_ (TempLam (adjustWrapping (ty, target)))
+    _app (_app (uconst_ (CMap ())) (TempLam (adjustWrapping (ty, target))))
   | (PLater (PRecord tys), PHere {wrapped = Wrapped _, ty = PureTypeC (PRecord targets)}) ->
     let mkAdjustment = lam l. lam r. adjustWrapping (l, PHere {wrapped = Wrapped (), ty = r}) in
     let adjustments = mapIntersectWith mkAdjustment tys targets in
@@ -266,31 +276,76 @@ lang Composed = DPPLParser
         match_ tm (PatRecord {bindings = mapMap (lam x. npvar_ x.1) names, info = NoInfo (), ty = tyunknown_})
           (foldl _app construct (map (lam x. x.0 (nvar_ x.1)) (mapValues names)))
           never_
+  | (PLater (PDist ty), PHere {wrapped = Wrapped _, ty = PureTypeC (PDist target)}) ->
+    if isPureIsh ty
+    then app_ (uconst_ (CPPure ()))
+    else error "We somehow have a non-pure type parameter to a PDist, can't handle that"
+  | (PLater (PDist ty), PLater (PDist target)) ->
+    if isPureIsh target then lam tm. tm else error "We somehow need to wrap a type parameter to a PDist, can't do that"
   | (l, r) -> error (join ["Missing case in adjustWrapping: ", ptypeToString l, ", ", ptypeToString r])
 
-  sem purePType : Type -> PureType
-  sem purePType =
-  | TyDist x -> PureTypeC (PDist (purePType x.ty))
-  | TyFloat _ -> PureTypeA (PFloat ())
-  | TyBool _ -> PureTypeA (PBool ())
-  | TyInt _ -> PureTypeA (PInt ())
-  | TyChar _ -> PureTypeA (PChar ())
-  | ty -> printLn (getTypeStringCode 0 pprintEnvEmpty ty).1; errorSingle [infoTy ty] "Missing case for purePType"
+  sem tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC x -> x) -> Type -> x
+  sem tyToPTypeX atom composite =
+  | TyDist x -> composite (PDist (tyToPTypeX atom composite x.ty))
+  | TyFloat _ -> atom (PFloat ())
+  | TyBool _ -> atom (PBool ())
+  | TyInt _ -> atom (PInt ())
+  | TyChar _ -> atom (PChar ())
+  | TySeq x -> composite (PSeq (tyToPTypeX atom composite x.ty))
+  | ty -> printLn (getTypeStringCode 0 pprintEnvEmpty ty).1; errorSingle [infoTy ty] "Missing case for tyToPTypeX"
+
+  sem tyToPureType : Type -> PureType
+  sem tyToPureType = | ty -> tyToPTypeX (lam x. PureTypeA x) (lam x. PureTypeC x) ty
+
+  sem tyToPurePType : Type -> PType
+  sem tyToPurePType = | ty -> tyToPTypeX (lam x. PNever x) (lam x. PLater x) ty
 
   sem _app : Expr -> Expr -> Expr
   sem _app l = | r -> _app_ (l, r)
 
+  sem isIdentity : (Expr -> Expr) -> Bool
+  sem isIdentity = | f ->
+    let n = nameSym "x" in
+    match f (nvar_ n) with TmVar {ident = ident}
+    then nameEq ident n
+    else false
+
+  sem isPure : (Expr -> Expr) -> Bool
+  sem isPure = | f ->
+    let n = nameSym "x" in
+    match f (nvar_ n) with TmApp {lhs = TmConst {val = CPPure _}, rhs = TmVar {ident = ident}}
+    then nameEq ident n
+    else false
+
+  -- This is semantically the same as `app_`, except it tries a number
+  -- of rewrite rules, essentially evaluating some of it at compile
+  -- time.
   sem _app_ : (Expr, Expr) -> Expr
   sem _app_ =
+  -- we have a simple function, just apply it
   | (TempLam f, x) -> f x
-  | (f, x) -> app_ f x
-
-  sem _map : Expr -> Expr -> Expr
-  sem _map f = | x -> _map_ (f, x)
-
-  sem _map_ : (Expr, Expr) -> Expr
-  sem _map_ =
-  | ( f
+  -- p_map id = id
+  | (f & TmConst {val = CPMap _}, x & TempLam f2) ->
+    if isIdentity f2 then TempLam (lam x. x) else app_ f x
+  -- mapSeq id = id
+  | (f & TmConst {val = CMap _}, x & TempLam f2) ->
+    if isIdentity f2 then TempLam (lam x. x) else app_ f x
+  -- p_map f (p_pure x) = p_pure (f x)
+  | ( TmApp
+      { lhs = TmConst {val = CPMap _}
+      , rhs = f
+      }
+    , TmApp
+      { lhs = TmConst {val = CPPure _}
+      , rhs = x
+      }
+    ) ->
+    app_ (uconst_ (CPPure ())) (_app f x)
+  -- p_map f (p_map g x) = p_map (lam x. f (g x)) x
+  | ( TmApp
+      { lhs = TmConst {val = CPMap _}
+      , rhs = f
+      }
     , TmApp
       { lhs = TmApp
         { lhs = TmConst {val = CPMap _}
@@ -300,7 +355,11 @@ lang Composed = DPPLParser
       }
     ) ->
     appf2_ (uconst_ (CPMap ())) (TempLam (lam x. _app f (_app g x))) x
-  | ( f
+  -- p_map f (p_apply g x) = p_apply (p_map (lam g. lam x. f (g x)) g) x
+  | ( TmApp
+      { lhs = TmConst {val = CPMap _}
+      , rhs = f
+      }
     , TmApp
       { lhs = TmApp
         { lhs = TmConst {val = CPApply _}
@@ -317,43 +376,46 @@ lang Composed = DPPLParser
     -- of arguments.
     let f = TempLam (lam g. TempLam (lam x. _app f (_app g x))) in
     appf2_ (uconst_ (CPApply ())) (_map f g) x
-  | (f, x) -> appf2_ (uconst_ (CPMap ())) f x
+  -- p_apply (p_pure f) = p_map f
+  | ( TmConst {val = CPApply _}
+    , TmApp
+      { lhs = TmConst {val = CPPure _}
+      , rhs = f
+      }
+    ) ->
+    TempLam (_map f)
+  -- p_apply f (p_pure x) = p_map (lam f. f x) f
+  | ( TmApp
+      { lhs = TmConst {val = CPApply _}
+      , rhs = f
+      }
+    , TmApp
+      { lhs = TmConst {val = CPPure _}
+      , rhs = x
+      }
+    ) ->
+    _map (TempLam (lam f. _app f x)) f
+  -- p_traverseSeq pure = pure
+  | (f & TmConst {val = CPTraverseSeq _}, x & TempLam f2) ->
+    if isPure f2 then uconst_ (CPPure ()) else app_ f x
+  -- p_join (p_pure x) = x
+  | ( TmConst {val = CPJoin _}
+    , TmApp
+      { lhs = TmConst {val = CPPure _}
+      , rhs = x
+      }
+    ) -> x
+  -- base case, just make the TmApp
+  | (f, x) -> app_ f x
+
+  sem _map : Expr -> Expr -> Expr
+  sem _map f = | x -> _app (_app (uconst_ (CPMap ())) f) x
 
   sem _apply : Expr -> Expr -> Expr
-  sem _apply f = | a -> _apply_ (f, a)
-
-  sem _apply_ : (Expr, Expr) -> Expr
-  sem _apply_ =
-  | ( TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = f
-      }
-    , TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = x
-      }
-    ) -> app_ (uconst_ (CPPure ())) (_app f x)
-  | ( TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = f
-      }
-    , x & !TmApp {lhs = TmConst {val = CPPure _}}
-    ) -> _map f x
-  | ( f & !TmApp {lhs = TmConst {val = CPPure _}}
-    , TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = x
-      }
-    ) -> _map (TempLam (lam f. _app f x)) f
-  | (f, a) -> appf2_ (uconst_ (CPApply ())) f a
+  sem _apply f = | a -> _app (_app (uconst_ (CPApply ())) f) a
 
   sem _join : Expr -> Expr
-  sem _join =
-  | TmApp
-    { lhs = TmConst {val = CPPure _}
-    , rhs = x
-    } -> x
-  | tm -> app_ (uconst_ (CPJoin ())) tm
+  sem _join = | x -> _app (uconst_ (CPJoin ())) x
 
   sem specializeCall : PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
   sem specializeCall st =
@@ -380,7 +442,7 @@ lang Composed = DPPLParser
             match specializeExpr st2 definition.body with (st2, (body, retTy)) in
             if eqi 0 (ptyCmp guess retTy) then (st2, (body, retTy)) else
             speculate retTy in
-          speculate (PHere {wrapped = Unwrapped (), ty = purePType retTy})
+          speculate (PHere {wrapped = Unused (), ty = tyToPureType retTy})
         else specializeExpr st definition.body
       with (st, (body, retTy)) in
       let st = {st with valueScope = prevValueScope} in
@@ -399,8 +461,8 @@ lang Composed = DPPLParser
         } in
       (st, (foldl app_ (nvar_ name) args, retTy))
   | {f = tm & (TempLam _ | TmConst _), args = args, ret = ret} ->
-    let pureRet = PHere {wrapped = Unwrapped (), ty = purePType ret} in
-    if forAll (lam x. match x.1 with PHere {wrapped = !Wrapped _} then true else false) args then
+    let pureRet = tyToPurePType ret in
+    if forAll (lam x. isPureIsh x.1) args then
       (st, (foldl _app tm (map (lam x. x.0) args), pureRet))
     else
       let tm = app_ (uconst_ (CPPure ())) tm in
@@ -496,14 +558,18 @@ lang Composed = DPPLParser
     match unzip tms with (tms, tmTys) in
     let elemTy = match tmTys with [ty] ++ tmTys
       then foldl lubPType ty tmTys
-      else match unwrapType x.ty with TySeq x in PHere {wrapped = Unused (), ty = purePType x.ty} in
+      else match unwrapType x.ty with TySeq x in PHere {wrapped = Unused (), ty = tyToPureType x.ty} in
     let tms = zipWith (lam tmTy. adjustWrapping (tmTy, elemTy)) tmTys tms in
-    (st, (TmSeq {x with tms = tms}, mkPSeqTy elemTy))
+    (st, (TmSeq {x with tms = tms}, PLater (PSeq elemTy)))
   | TmRecord x ->
     match mapMapAccum (lam st. lam. lam tm. specializeExpr st tm) st x.bindings with (st, zipped) in
     let bindings = mapMap (lam x. x.0) zipped in
     let bindingsTy = mapMap (lam x. x.1) zipped in
-    (st, (TmRecord {x with bindings = bindings}, mkPRecordTy bindingsTy))
+    (st, (TmRecord {x with bindings = bindings}, PLater (PRecord bindingsTy)))
+  -- TODO(vipa, 2025-10-24): Specialize for infallible patterns (els =
+  -- never) so we don't get a sub-model for the then-branch
+  -- TODO(vipa, 2025-10-24): Specialize for chains of matches on the
+  -- same variable?
   | TmMatch x ->
     -- NOTE(vipa, 2025-10-22): We assume that the pattern is shallow,
     -- but not just a wildcard
@@ -514,10 +580,10 @@ lang Composed = DPPLParser
     match specializeExpr {st with valueScope = oldValueScope} x.els with (st, (els, elsTy)) in
     let st = {st with valueScope = oldValueScope} in
     let lubTy = lubPType thnTy elsTy in
-    match topWrap targetTy with Wrapped _ then
-      let pureType = PHere {wrapped = Unwrapped (), ty = purePType x.ty} in
+    if isTopWrapped targetTy then
+      let pureType = tyToPurePType x.ty in
       let retTy = ensureWrapped pureType in
-      match lubPType pureType lubTy with PHere {wrapped = Unwrapped _, ty = ty} then
+      if isPureIsh lubTy then
         -- NOTE(vipa, 2025-10-23): Both branches are pure, i.e., we
         -- can make this a `map`
         (st, (_map (TempLam (lam target. TmMatch {x with target = target, thn = thn, els = els})) target, retTy))
@@ -541,10 +607,10 @@ lang Composed = DPPLParser
         , lubTy
         )
       )
-  | tm & TmNever x -> (st, (tm, PHere {wrapped = Unused (), ty = purePType x.ty}))
-  | tm & TmConst {val = CFloat _} -> (st, (tm, PHere {wrapped = Unwrapped (), ty = PureTypeA (PFloat ())}))
-  | tm & TmConst {val = CInt _} -> (st, (tm, PHere {wrapped = Unwrapped (), ty = PureTypeA (PInt ())}))
-  | tm & TmConst {val = CBool _} -> (st, (tm, PHere {wrapped = Unwrapped (), ty = PureTypeA (PBool ())}))
+  | tm & TmNever x -> (st, (tm, PHere {wrapped = Unused (), ty = tyToPureType x.ty}))
+  | tm & TmConst {val = CFloat _} -> (st, (tm, PNever (PFloat ())))
+  | tm & TmConst {val = CInt _} -> (st, (tm, PNever (PInt ())))
+  | tm & TmConst {val = CBool _} -> (st, (tm, PNever (PBool ())))
   | tm -> errorSingle [infoTm tm] "Missing case in specializeExpr"
 
   sem addMatchNames : PState -> (Either PTypeA (PTypeC PType), Pat) -> PState
@@ -573,7 +639,7 @@ lang Composed = DPPLParser
     let valueScope = foldl f st.valueScope p.prefix in
     let valueScope = foldl f valueScope p.postfix in
     let valueScope = match p.middle with PName ident
-      then mapInsert ident (mkPSeqTy ty) valueScope
+      then mapInsert ident (PLater (PSeq ty)) valueScope
       else valueScope in
     {st with valueScope = valueScope}
 end
