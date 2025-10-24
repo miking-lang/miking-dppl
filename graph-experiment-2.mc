@@ -1003,36 +1003,35 @@ lang SimplePersistentPVal2 = PValInterface
   syn RefID a = | RefID { idx : Int, level : Int }
   type IterationID = Int
 
-  type StateRec =
-    { values : PA Dyn
+  type State =
+    { valuesAbove : PA (PA Dyn)
+    , values : PA Dyn
     , permanentWeight : Float
     , temporaryWeight : Float
-    , level : Int
-    , above : State
     }
-  syn State = | State StateRec
 
   syn PValState st y = | PVS
     { nextId : Int
     , specId : IterationID
-    , initState : StateRec
-    , update : [IterationID -> StateRec -> StateRec]
-    , readSubState : StateRec -> StateRec
-    , mapSubState : (StateRec -> StateRec) -> StateRec -> StateRec
+    , initState : State
+    , level : Int
+    , update : [IterationID -> State -> State]
+    , readSubState : PA Dyn -> PA Dyn
+    , mapSubState : (PA Dyn -> PA Dyn) -> PA Dyn -> PA Dyn
     , st : st
     }
 
   syn PWeightRef = | PWeightRef {} -- TODO(vipa, 2025-09-29):
   syn PAssumeRef a = | PAssumeRef
-    { readValue : StateRec -> a
-    , writeValue : (IterationID, a) -> StateRec -> StateRec
-    , writeDrift : (PDist a -> a -> PDist a) -> StateRec -> StateRec
+    { readValue : PA Dyn -> a
+    , writeValue : (IterationID, a) -> PA Dyn -> PA Dyn
+    , writeDrift : (PDist a -> a -> PDist a) -> PA Dyn -> PA Dyn
     }
   syn PExportRef a =
-  | PExportRef {readValue : StateRec -> a}
+  | PExportRef {readValue : PA Dyn -> a}
   | PExportVal {value : a}
   syn PSubmodelRef st =
-  | PSubmodelRef {readSt : StateRec -> st}
+  | PSubmodelRef {readSt : PA Dyn -> st}
   | PSubmodelVal {st : st}
 
   type PVarRec a = {id : RefID (IterationID, a), initValue : a}
@@ -1042,12 +1041,12 @@ lang SimplePersistentPVal2 = PValInterface
 
   syn PValInstance complete st = | PVI
     { st : st
-    , state : StateRec
+    , state : State
     , specId : IterationID
-    , update : IterationID -> StateRec -> StateRec
+    , update : IterationID -> State -> State
     }
 
-  sem addUpdate : all st. all y. (IterationID -> StateRec -> StateRec) -> PValState st y -> PValState st y
+  sem addUpdate : all st. all y. (IterationID -> State -> State) -> PValState st y -> PValState st y
   sem addUpdate f = | PVS st -> PVS {st with update = snoc st.update f}
 
   sem mapSt : all st. all st2. all y. (st -> st2) -> PValState st y -> PValState st2 y
@@ -1056,6 +1055,7 @@ lang SimplePersistentPVal2 = PValInterface
     , nextId = st.nextId
     , specId = st.specId
     , update = st.update
+    , level = st.level
     , initState = st.initState
     , readSubState = st.readSubState
     , mapSubState = st.mapSubState
@@ -1075,32 +1075,54 @@ lang SimplePersistentPVal2 = PValInterface
       { st with nextId = addi st.nextId 1
       , initState = {st.initState with values = addPA st.initState.values (asDyn value)}
       } in
-    (PVS st, RefID {idx = id, level = st.initState.level})
+    (PVS st, RefID {idx = id, level = st.level})
 
-  sem getState : all a. RefID a -> StateRec -> a
-  sem getState ref = | st ->
-    match ref with RefID {idx = idx, level = level} in
-    recursive let work = lam steps. lam st.
-      if eqi steps 0
-      then fromDyn (getPA st.values idx)
-      else work (subi steps 1) (match st.above with State st in st)
-    in work (subi st.level level) st
+  sem mkGetState : all st. all y. all a. PValState st y -> RefID a -> State -> a
+  sem mkGetState st = | ref ->
+    match st with PVS st in
+    match ref with RefID x in
+    if eqi st.level x.level
+    then lam st. fromDyn (getPA st.values x.idx)
+    else lam st. fromDyn (getPA (getPA st.valuesAbove x.level) x.idx)
 
-  sem putState : all a. RefID a -> a -> StateRec -> StateRec
-  sem putState ref val = | st ->
-    match ref with RefID {idx = idx, level = level} in
-    if eqi level st.level
-    then {st with values = setPA st.values idx (asDyn val)}
-    else error "Tried to putState on a non-local state"
+  sem mkPutState : all st. all y. all a. PValState st y -> RefID a -> a -> State -> State
+  sem mkPutState st = | ref ->
+    match st with PVS st in
+    match ref with RefID x in
+    if eqi st.level x.level
+    then lam val. lam st. {st with values = setPA st.values x.idx (asDyn val)}
+    else error "Tried to call mkPutState for reference at a different level"
 
-  sem updateState : all a. RefID a -> (a -> a) -> StateRec -> StateRec
-  sem updateState ref f = | st ->
-    match ref with RefID {idx = idx, level = level} in
-    if eqi level st.level
-    then {st with values = updatePA st.values idx (lam x. asDyn (f (fromDyn x)))}
-    else error "Tried to updateState on a non-local state"
+  sem mkUpdateState : all st. all y. all a. PValState st y -> RefID a -> (a -> a) -> State -> State
+  sem mkUpdateState st = | ref ->
+    match st with PVS st in
+    match ref with RefID x in
+    if eqi st.level x.level
+    then lam f. lam st. {st with values = updatePA st.values x.idx (lam val. asDyn (f (fromDyn val)))}
+    else error "Tried to call mkUpdateState for reference at a different level"
 
-  sem withInitState : all st. all y. (StateRec -> StateRec) -> PValState st y -> PValState st y
+  sem mkReadRef : all st. all y. all a. PValState st y -> RefID a -> PA Dyn -> a
+  sem mkReadRef st = | RefID x ->
+    match st with PVS {level = level, readSubState = readSubState} in
+    if eqi level x.level
+    then lam vals. fromDyn (getPA (readSubState vals) x.idx)
+    else error "Tried to call mkReadRef for reference at a different level"
+
+  sem mkWriteRef : all st. all y. all a. PValState st y -> RefID a -> a -> PA Dyn -> PA Dyn
+  sem mkWriteRef st = | RefID x ->
+    match st with PVS {level = level, mapSubState = mapSubState} in
+    if eqi level x.level
+    then lam val. mapSubState (lam vals. setPA vals x.idx (asDyn val))
+    else error "Tried to call mkWriteRef for reference at a different level"
+
+  sem mkMapRef : all st. all y. all a. PValState st y -> RefID a -> (a -> a) -> PA Dyn -> PA Dyn
+  sem mkMapRef st = | RefID x ->
+    match st with PVS {level = level, mapSubState = mapSubState} in
+    if eqi level x.level
+    then lam f. mapSubState (lam vals. updatePA vals x.idx (lam val. asDyn (f (fromDyn val))))
+    else error "Tried to call mkUpdateRef for reference at a different level"
+
+  sem withInitState : all st. all y. (State -> State) -> PValState st y -> PValState st y
   sem withInitState f = | PVS st -> PVS {st with initState = f st.initState}
 
   sem instantiate f = | st ->
@@ -1108,12 +1130,12 @@ lang SimplePersistentPVal2 = PValInterface
       { nextId = 0
       , specId = 0
       , initState =
-        { values = emptyPA
+        { valuesAbove = emptyPA
+        , values = emptyPA
         , permanentWeight = 0.0
         , temporaryWeight = 0.0
-        , level = 0
-        , above = unsafeCoerce 0  -- NOTE(vipa, 2025-10-16): This one will never be accessed, and we don't want it to be an Option to avoid extra tagging
         }
+      , level = 0
       , update = []
       , st = st
       , readSubState = lam st. st
@@ -1148,18 +1170,18 @@ lang SimplePersistentPVal2 = PValInterface
 
   sem resampleAssume driftf aref = | PVI x ->
     match aref with PAssumeRef a in
-    let prevValue = a.readValue x.state in
-    let state = a.writeValue (x.specId, prevValue) x.state in
-    let state = a.writeDrift driftf state in
+    let prevValue = a.readValue x.state.values in
+    let state = {x.state with values = a.writeValue (x.specId, prevValue) x.state.values} in
+    let state = {state with values = a.writeDrift driftf state.values} in
     PVI {x with state = state}
 
   sem readPreviousAssume aref = | PVI x ->
     match aref with PAssumeRef a in
-    a.readValue x.state
+    a.readValue x.state.values
 
   sem readPreviousExport eref = | PVI x ->
     match eref with PExportRef e in
-    e.readValue x.state
+    e.readValue x.state.values
 
   sem readPreviousSubmodel mref = | PVI x ->
     error "TODO"
@@ -1168,12 +1190,15 @@ lang SimplePersistentPVal2 = PValInterface
   | PVal x -> (st, PVal x)
   | PVar x ->
     match newNodeState st x.initValue with (st, xHere) in
+    let readValue = mkGetState st x.id in
+    let readPrevValue = mkGetState st xHere.id in
+    let writeValue = mkPutState st xHere.id in
     let update = lam specId. lam st.
-      match getState x.id st with (changeId, value) in
+      match readValue st with (changeId, value) in
       if eqi specId changeId then
-        match getState xHere.id st with (_, prevValue) in
+        match readPrevValue st with (_, prevValue) in
         if eq prevValue value then st else
-        putState xHere.id (specId, value) st
+        writeValue (specId, value) st
       else st in
     (addUpdate update st, PVar xHere)
 
@@ -1181,7 +1206,10 @@ lang SimplePersistentPVal2 = PValInterface
     match st with PVS {readSubState = readSubState} in
     let ref = switch pval
       case PVal x then PExportVal {value = x.value}
-      case PVar x then PExportRef {readValue = lam st. (getState x.id (readSubState st)).1}
+      case PVar x then
+        let readValue = mkReadRef st x.id in
+        let readValue = lam vals. (readValue vals).1 in
+        PExportRef {readValue = readValue}
       end in
     mapSt (lam st. store st ref) st
 
@@ -1191,10 +1219,12 @@ lang SimplePersistentPVal2 = PValInterface
   | PVal x -> p_pure st (f x.value)
   | PVar x ->
     match newNodeState st (f x.initValue) with (st, xHere) in
+    let readValue = mkGetState st x.id in
+    let writeValue = mkPutState st xHere.id in
     let update = lam specId. lam st.
-      match getState x.id st with (changeId, value) in
+      match readValue st with (changeId, value) in
       if eqi specId changeId then
-        putState xHere.id (specId, f value) st
+        writeValue (specId, f value) st
       else st in
     (addUpdate update st, PVar xHere)
 
@@ -1205,11 +1235,14 @@ lang SimplePersistentPVal2 = PValInterface
     case (f, PVal a) then p_map st (lam f. f a.value) f
     case (PVar f, PVar a) then
       match newNodeState st (f.initValue a.initValue) with (st, xHere) in
+      let readF = mkGetState st f.id in
+      let readA = mkGetState st a.id in
+      let writeValue = mkPutState st xHere.id in
       let update = lam specId. lam st.
-        match getState f.id st with (changeIdF, f) in
-        match getState a.id st with (changeIdA, a) in
+        match readF st with (changeIdF, f) in
+        match readA st with (changeIdA, a) in
         if or (eqi specId changeIdF) (eqi specId changeIdA) then
-          putState xHere.id (specId, f a) st
+          writeValue (specId, f a) st
         else st in
       (addUpdate update st, PVar xHere)
     end
@@ -1230,70 +1263,95 @@ lang SimplePersistentPVal2 = PValInterface
       -- NOTE(vipa, 2025-09-30): The common case, where we *do* have
       -- to re-run the creation function, requires two stores, which
       -- requires some handling of store "levels".
-      match st with PVS {initState = initState} in
-      let innerState : StateRec =
-        { values = emptyPA
+      match newState st emptyPA with (st, valsRef) in
+      let getVals = mkGetState st valsRef in
+      let putVals = mkPutState st valsRef in
+      match newState st 0.0 with (st, localWeightRef) in
+      let getWeight = mkGetState st localWeightRef in
+      let putWeight = mkPutState st localWeightRef in
+      match st with PVS {readSubState = readSubState, mapSubState = mapSubState, initState = initState} in
+      let innerState : State =
+        { valuesAbove = addPA initState.valuesAbove initState.values
+        , values = emptyPA
         , permanentWeight = 0.0
         , temporaryWeight = 0.0
-        , level = addi initState.level 1
-        , above = State initState
         } in
-      match newState st innerState with (st, stateRef) in
-      match st with PVS {readSubState = readSubState, mapSubState = mapSubState} in
       let ist : PValState ist () = PVS
         { nextId = 0
         , specId = match st with PVS st in st.specId
         , initState = innerState
+        , level = addi (match st with PVS st in st.level) 1
         , update = []
         , st = st2
-        , readSubState = lam st. getState stateRef (readSubState st)
-        , mapSubState = lam f. mapSubState (updateState stateRef f)
+        , readSubState = mkReadRef st valsRef
+        , mapSubState = mkMapRef st valsRef
         } in
       -- The initValue of each PVal will be up-to-date in the first
       -- iteration, so we can unsafeCoerce it to do less work. For
       -- later iterations we may have to update the initValues
       -- however, thus we make a function that does so.
       let initConvPValHList : PValHList y as -> PValHList () as = unsafeCoerce in
-      let convPValHList : StateRec -> PValHList () as = lam st.
+      let pvs = st in
+      let convPValHList : State -> PValHList () as = lam st.
         let work : all a. () -> PVal y a -> ((), PVal () a) = lam. lam pval. switch pval
           case PVal x then ((), PVal x)
-          case PVar x then ((), PVar {id = x.id, initValue = (getState x.id st).1})
+          case PVar x then ((), PVar {id = x.id, initValue = (mkGetState pvs x.id st).1})
           end in
         (mapAccumLPValHList #frozen"work" () refs).1 in
       -- NOTE(vipa, 2025-09-30): The `ist` value at this point can be
       -- reused for all sub-models. `ist2` below is only valid for the
       -- first sub-model.
       match f ist x.initValue (initConvPValHList refs) with (PVS ist2, pval) in
-      let st = withInitState (putState stateRef ist2.initState) st in
+      let st = withInitState (putVals ist2.initState.values) st in
+      let st = withInitState (putWeight ist2.initState.permanentWeight) st in
 
       match newState st ist2.st with (st, istRef) in
+      let putIst = mkPutState st istRef in
 
-      match newState st pval with (st, pvalRef) in
+      let mkPValReadF = lam ist. lam pval.
+        switch pval
+        case PVal x then match ist with PVS {specId = specId} in lam. (specId, x.value)
+        case PVar x then mkGetState ist x.id
+        end in
+      match newState st (mkPValReadF ist pval) with (st, pvalRef) in
+      let getPValRead = mkGetState st pvalRef in
+      let putPValRead = mkPutState st pvalRef in
 
       let initValue = switch pval
         case PVal x then x.value
         case PVar x then x.initValue
         end in
       match newNodeState st initValue with (st, xHere) in
+      let putValue = mkPutState st xHere.id in
 
       let mkUpdateF = lam fs. lam st. lam specId. lam ist.
         foldl (lam ist. lam f. f specId ist) {ist with temporaryWeight = 0.0} fs in
       match newState st (mkUpdateF ist2.update) with (st, updateRef) in
+      let getUpdate = mkGetState st updateRef in
+      let putUpdate = mkPutState st updateRef in
 
-      let st = mapSt (lam st. store st (PSubmodelRef {readSt = lam st. getState istRef (readSubState st)})) st in
+      let st =
+        let readSt = mkReadRef st istRef in
+        mapSt (lam st. store st (PSubmodelRef {readSt = readSt})) st in
+      let getValue = mkGetState st x.id in
       let update = lam specId. lam st.
-        match getState x.id st with (changeId, value) in
+        match getValue st with (changeId, value) in
         if eqi specId changeId then
           -- NOTE(vipa, 2025-09-30): The initial value has changed,
           -- i.e., we need to re-run the creation function
-          let prevWeight = (getState stateRef st).permanentWeight in
-          let ist = match ist with PVS ist in PVS {ist with specId = specId, initState = {ist.initState with above = State st}} in
+          let prevWeight = getWeight st in
+          let ist =
+            match ist with PVS ist in PVS
+            { ist with specId = specId
+            , initState = {ist.initState with valuesAbove = addPA st.valuesAbove st.values}
+            } in
           match f ist value (convPValHList st) with (PVS ist, pval) in
-          let st = putState stateRef ist.initState st in
-          let st = putState istRef ist.st st in
-          let st = putState updateRef (mkUpdateF ist.update) st in
-          let st = putState pvalRef pval st in
           let newWeight = ist.initState.permanentWeight in
+          let st = putVals ist.initState.values st in
+          let st = putWeight newWeight st in
+          let st = putIst ist.st st in
+          let st = putUpdate (mkUpdateF ist.update) st in
+          let st = putPValRead (mkPValReadF (PVS ist) pval) st in
           let st =
             { st with permanentWeight = addf st.permanentWeight (subf newWeight prevWeight)
             , temporaryWeight = addf st.temporaryWeight ist.initState.temporaryWeight
@@ -1302,27 +1360,30 @@ lang SimplePersistentPVal2 = PValInterface
             case PVal x then x.value
             case PVar x then x.initValue
             end in
-          putState xHere.id (specId, value) st
+          putValue (specId, value) st
         else
           -- NOTE(vipa, 2025-09-30): The initial value is unchanged,
           -- i.e., we don't need to re-run the creation function, we
           -- just need to update the current sub-model
-          let update = getState updateRef st in
-          let innerState = getState stateRef st in
-          let prevWeight = innerState.permanentWeight in
-          let innerState = update st specId {innerState with above = State st} in
+          let update = getUpdate st in
+          let innerState =
+            { valuesAbove = addPA st.valuesAbove st.values
+            , values = getVals st
+            , permanentWeight = getWeight st
+            , temporaryWeight = 0.0
+            } in
+          let innerState = update st specId innerState in
           let newWeight = innerState.permanentWeight in
+          let st = putVals innerState.values st in
+          let prevWeight = innerState.permanentWeight in
+          let st = putWeight prevWeight st in
           let st =
             { st with permanentWeight = addf st.permanentWeight (subf newWeight prevWeight)
             , temporaryWeight = addf st.temporaryWeight innerState.temporaryWeight
             } in
-          let st = putState stateRef innerState st in
-          match getState pvalRef st with pval in
-          match pval with PVar x then
-            match getState x.id innerState with (changeId, value) in
-            if eqi specId changeId
-            then putState xHere.id (specId, value) st
-            else st
+          match (getPValRead st) innerState with (changeId, value) in
+          if eqi specId changeId then
+            putValue (specId, value) st
           else st in
       (addUpdate update st, PVar xHere)
     end
@@ -1333,30 +1394,36 @@ lang SimplePersistentPVal2 = PValInterface
     case PVar x then
       let initId = match st with PVS st in st.specId in
       let initVar = f x.initValue refs in
+      let mkPValReadF = lam specId. lam pval.
+        switch pval
+        case PVal x then lam. (specId, x.value)
+        case PVar x then mkGetState st x.id
+        end in
       let initValue = switch initVar
         case PVal x then x.value
         case PVar x then x.initValue
         end in
       match newNodeState st initValue with (st, xHere) in
-      match newState st initVar with (st, varRef) in
+      match newState st (mkPValReadF (match st with PVS st in st.specId) initVar) with (st, varRef) in
+      let getReadF = mkGetState st varRef in
+      let putReadF = mkPutState st varRef in
+      let pvs = st in
+      let readValue = mkGetState st x.id in
+      let writeValue = mkPutState st xHere.id in
       let update = lam specId. lam st.
-        match getState x.id st with (changeId, value) in
+        match readValue st with (changeId, value) in
         if eqi specId changeId then
           -- Value changed, pick new node
           let var = f value refs in
-          let value = switch var
-            case PVal x then x.value
-            case PVar x then (getState x.id st).1
-            end in
-          let st = putState varRef var st in
-          putState xHere.id (specId, value) st
+          let readF = mkPValReadF specId var in
+          let st = putReadF readF st in
+          match readF st with (_, value) in
+          writeValue (specId, value) st
         else
           -- Value did not change, check selected value
-          match getState varRef st with PVar x then
-            match getState x.id st with (changeId, value) in
-            if eqi specId changeId then
-              putState xHere.id (specId, value) st
-            else st
+          match (getReadF st) st with (changeId, value) in
+          if eqi specId changeId
+          then writeValue (specId, value) st
           else st in
       (addUpdate update st, PVar xHere)
     end
@@ -1370,13 +1437,16 @@ lang SimplePersistentPVal2 = PValInterface
     let st = withInitState (lam st. {st with permanentWeight = addf st.permanentWeight initWeight}) st in
     let st = mapSt (lam st. store st (PWeightRef ())) st in
     match newState st initWeight with (st, weightRef) in
+    let readValue = mkGetState st x.id in
+    let readWeight = mkGetState st weightRef in
+    let writeWeight = mkPutState st weightRef in
     let update = lam specId. lam st.
-      match getState x.id st with (changeId, value) in
+      match readValue st with (changeId, value) in
       if eqi specId changeId then
-        let prevWeight = getState weightRef st in
+        let prevWeight = readWeight st in
         let newWeight = f value in
         let st = {st with permanentWeight = addf st.permanentWeight (subf newWeight prevWeight)} in
-        putState weightRef newWeight st
+        writeWeight newWeight st
       else st in
     addUpdate update st
 
@@ -1387,18 +1457,23 @@ lang SimplePersistentPVal2 = PValInterface
       end in
     let fetchDist = switch dist
       case PVal x then let specId = match st with PVS st in st.specId in lam. (specId, x.value)
-      case PVar x then getState x.id
+      case PVar x then mkGetState st x.id
       end in
     match newNodeState st (p_sample initDist) with (st, xHere) in
     match newState st (p_logObserve initDist xHere.initValue) with (st, weightRef) in
     match newState st (lam d. lam. d) with (st, driftRef) in
+    let readValue = mkGetState st xHere.id in
+    let writeValue = mkPutState st xHere.id in
+    let readWeight = mkGetState st weightRef in
+    let writeWeight = mkPutState st weightRef in
+    let readDrift = mkGetState st driftRef in
     let update = lam specId. lam st.
-      match getState xHere.id st with (changeIdHere, prevValue) in
+      match readValue st with (changeIdHere, prevValue) in
       match fetchDist st with (changeIdDist, dist) in
-      let prevWeight = getState weightRef st in
+      let prevWeight = readWeight st in
       if eqi specId changeIdHere then
         -- Draw a new sample, i.e., value changes
-        let drift = getState driftRef st in
+        let drift = readDrift st in
         let kernel = drift dist prevValue in
         let proposal = p_sample kernel in
         let reverseKernel = drift dist proposal in
@@ -1408,8 +1483,8 @@ lang SimplePersistentPVal2 = PValInterface
         let prevToProposalProb = p_logObserve kernel proposal in
         let proposalToPrevProb = p_logObserve reverseKernel prevValue in
 
-        let st = putState xHere.id (specId, proposal) st in
-        let st = putState weightRef newWeight st in
+        let st = writeValue (specId, proposal) st in
+        let st = writeWeight newWeight st in
         {st with temporaryWeight = addf st.temporaryWeight
           (addf
             (subf newWeight prevWeight)
@@ -1417,13 +1492,13 @@ lang SimplePersistentPVal2 = PValInterface
       else if eqi specId changeIdDist then
         -- Reuse current sample, i.e., value doesn't change
         let newWeight = p_logObserve dist prevValue in
-        let st = putState weightRef newWeight st in
+        let st = writeWeight newWeight st in
         {st with temporaryWeight = addf st.temporaryWeight (subf newWeight prevWeight)}
       else st in
-    match st with PVS {readSubState = readSubState, mapSubState = mapSubState} in
-    let readValue = lam st. (getState xHere.id (readSubState st)).1 in
-    let writeValue = lam val. mapSubState (putState xHere.id val) in
-    let writeDrift = lam val. mapSubState (putState driftRef val) in
+    let readValue = mkReadRef st xHere.id in
+    let readValue = lam vals. (readValue vals).1 in
+    let writeValue = mkWriteRef st xHere.id in
+    let writeDrift = mkWriteRef st driftRef in
     let st = mapSt (lam st. store st (PAssumeRef {readValue = readValue, writeValue = writeValue, writeDrift = writeDrift})) st in
     (addUpdate update st, PVar xHere)
 end
