@@ -6,6 +6,7 @@ include "mexpr/utils.mc"
 include "mexpr/free-vars.mc"
 include "mexpr/phase-stats.mc"
 include "mexpr/generate-pprint.mc"
+include "mexpr/resymbolize.mc"
 include "sys.mc"
 include "map.mc"
 include "mlang/loader.mc"
@@ -177,7 +178,33 @@ lang ReplaceHigherOrderConstantsLoadedPreviously = ReplaceHigherOrderConstants +
     else tm
 end
 
-lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedReplace + DPPLPrunedReplace + MExprANFAll + DPPLExtract + InferenceInterface + DPPLDelayedSampling
+-- NOTE(larshum, 2025-10-27): Within a model, we want to resymbolize all
+-- locally bound names in bindings and patterns. However, we do not resymbolize
+-- types, as all models refer to the types defined at top-level (and the types
+-- defined within a model are removed at a later stage).
+lang DPPLResymbolizeModel =
+  Resymbolize + ResymbolizeVar + ResymbolizeLam + ResymbolizeMatch +
+  ResymbolizeDecl + ResymbolizeLetDecl + ResymbolizeRecLetsDecl +
+  ResymbolizeNamedPat + ResymbolizeSeqEdgePat
+
+  sem resymbolizeExpr : Map Name Name -> Expr -> Expr
+  sem resymbolizeExpr nameMap =
+  | t -> smap_Expr_Expr (resymbolizeExpr nameMap) t
+
+  sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
+  sem resymbolizeDecl nameMap =
+  | d -> (nameMap, smap_Decl_Expr (resymbolizeExpr nameMap) d)
+
+  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat nameMap =
+  | p -> smapAccumL_Pat_Pat resymbolizePat nameMap p
+
+  sem resymbolizeType : Map Name Name -> Type -> Type
+  sem resymbolizeType nameMap =
+  | ty -> ty
+end
+
+lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedReplace + DPPLPrunedReplace + MExprANFAll + DPPLExtract + InferenceInterface + DPPLDelayedSampling + DPPLResymbolizeModel
   type CompileEnvs =
     { higherOrderSymEnv : {path : String, env : SymEnv}
     , distEnv : {path : String, env : SymEnv}
@@ -263,6 +290,9 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedRepla
       } in
     let ast = pickCompiler method interface in
     endPhaseStatsExpr log "compile-inference-one" ast;
+
+    let ast = resymbolizeBindings ast in
+    endPhaseStatsExpr log "resymbolize-bindings-one" ast;
 
     -- Bind the model code in a let-expression, which we can insert in the main
     -- AST.
