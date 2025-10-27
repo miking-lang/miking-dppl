@@ -25,7 +25,28 @@ include "inference-interface.mc"
 include "pruning/compile.mc"
 include "delayed-sampling/compile.mc"
 
-lang DPPLKeywordReplace = DPPLParser
+lang DPPLReplace = Ast
+  sem replaceDpplKeywords : Expr -> Expr
+  sem replaceDpplKeywords =
+  | t ->
+    let t = smap_Expr_Expr replaceDpplKeywords t in
+    let t = smap_Expr_Type replaceDpplKeywordsType t in
+    let t = smap_Expr_TypeLabel replaceDpplKeywordsType t in
+    let t = smap_Expr_Pat replaceDpplKeywordsPat t in
+    withType (replaceDpplKeywordsType (tyTm t)) t
+
+  sem replaceDpplKeywordsType : Type -> Type
+  sem replaceDpplKeywordsType =
+  | ty -> smap_Type_Type replaceDpplKeywordsType ty
+
+  sem replaceDpplKeywordsPat : Pat -> Pat
+  sem replaceDpplKeywordsPat =
+  | p ->
+    let p = smap_Pat_Pat replaceDpplKeywordsPat p in
+    withTypePat (replaceDpplKeywordsType (tyPat p)) p
+end
+
+lang DPPLKeywordReplace = DPPLReplace + DPPLParser
   sem _makeError : Info -> String -> Expr
   sem _makeError info =
   | keywordStr ->
@@ -50,47 +71,25 @@ lang DPPLKeywordReplace = DPPLParser
   | TmWeight t -> _makeError t.info "weight"
   | TmResample t -> _makeError t.info "resample"
   | TmCancel t -> _makeError t.info "cancel"
-  | t -> smap_Expr_Expr replaceDpplKeywords t
 end
 
-lang DPPLTransformDist = DPPLParser + TransformDist
-  -- Used to transform away distributions in the main AST.
-  sem transformDistributions : Expr -> Expr
-  sem transformDistributions =
-  | t ->
-    let t = mapPre_Expr_Expr transformTmDist t in
-    replaceTyDist t
+lang DPPLDelayedReplace = DPPLReplace + DPPLParser
+  sem replaceDpplKeywords : Expr -> Expr
+  sem replaceDpplKeywords =
+  | TmDelay t ->
+    replaceDpplKeywords (TmAssume {
+      dist = t.dist, ty = t.ty, info = t.info, driftKernel = None ()
+    })
+  | TmDelayed t -> replaceDpplKeywords t.delay
+
+   sem replaceDpplKeywordsType : Type -> Type
+   sem replaceDpplKeywordsType =
+  | TyDelayInt t -> TyInt {info = t.info}
+  | TyDelayFloat t -> TyFloat {info = t.info}
+  | TyDelaySeqF t -> TySeq {info = t.info, ty = TyFloat {info = t.info}}
 end
 
-lang DPPLDelayedReplace = DPPLParser
-   sem replaceDelayKeywords =
-   | TmDelay t -> TmAssume { dist = t.dist, ty = t.ty, info = t.info, driftKernel = None () }
-   | TmDelayed t -> t.delay
-   | t -> smap_Expr_Expr replaceDelayKeywords t
-
-  sem replaceDelayTypes =
-  | t ->
-    let t = smap_Expr_Type toRuntimeDelayTyVar t in
-    let t = smap_Expr_TypeLabel toRuntimeDelayTyVar t in
-    let t = smap_Expr_Pat replaceDelayTyVarPat t in
-    let t = smap_Expr_Expr replaceDelayTypes t in
-    withType (toRuntimeDelayTyVar (tyTm t)) t
-
-  sem toRuntimeDelayTyVar : Type -> Type
-  sem toRuntimeDelayTyVar =
-  | TyDelayInt t -> TyInt {info=t.info}
-  | TyDelayFloat t -> TyFloat {info=t.info}
-  | TyDelaySeqF t -> TySeq {info=t.info,ty=TyFloat {info=t.info}}
-  | ty -> smap_Type_Type toRuntimeDelayTyVar ty
-
-  sem replaceDelayTyVarPat : Pat -> Pat
-  sem replaceDelayTyVarPat =
-  | p ->
-    let p = smap_Pat_Pat replaceDelayTyVarPat p in
-    withTypePat (toRuntimeDelayTyVar (tyPat p)) p
-end
-
-lang DPPLPrunedReplace = DPPLKeywordReplace + SymGetters
+lang DPPLPrunedReplace = DPPLReplace + SymGetters + DPPLParser
   sem replaceCancel env =
   | (TmCancel t) ->
     let i = withInfo t.info in
@@ -100,27 +99,14 @@ lang DPPLPrunedReplace = DPPLKeywordReplace + SymGetters
                ty = t.ty}
   | t -> smap_Expr_Expr (replaceCancel env) t
 
-  sem replacePrune =
-  | TmPrune t -> assume_ t.dist
-  | TmPruned t -> t.prune
-  | t -> smap_Expr_Expr replacePrune t
+  sem replaceDpplKeywords : Expr -> Expr
+  sem replaceDpplKeywords =
+  | TmPrune t -> replaceDpplKeywords (assume_ t.dist)
+  | TmPruned t -> replaceDpplKeywords t.prune
 
-  sem replacePruneTypes =
-  | t ->
-    let t = smap_Expr_Type toRuntimePruneTyVar t in
-    let t = smap_Expr_TypeLabel toRuntimePruneTyVar t in
-    let t = smap_Expr_Pat replacePruneTyVarPat t in
-    let t = smap_Expr_Expr replacePruneTypes t in
-    withType (toRuntimePruneTyVar (tyTm t)) t
-
-  sem toRuntimePruneTyVar =
-  | TyPruneInt t -> TyInt {info=t.info}
-  | ty -> smap_Type_Type toRuntimePruneTyVar ty
-
-  sem replacePruneTyVarPat =
-  | p ->
-    let p = smap_Pat_Pat replacePruneTyVarPat p in
-    withTypePat (toRuntimePruneTyVar (tyPat p)) p
+  sem replaceDpplKeywordsType : Type -> Type
+  sem replaceDpplKeywordsType =
+  | TyPruneInt t -> TyInt {info = t.info}
 end
 
 -- Provides runtime implementations for elementary functions that are not MExpr
@@ -204,7 +190,7 @@ lang DPPLResymbolizeModel =
   | ty -> ty
 end
 
-lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedReplace + DPPLPrunedReplace + MExprANFAll + DPPLExtract + InferenceInterface + DPPLDelayedSampling + DPPLResymbolizeModel
+lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + MExprANFAll + DPPLExtract + InferenceInterface + DPPLDelayedSampling + DPPLResymbolizeModel
   type CompileEnvs =
     { higherOrderSymEnv : {path : String, env : SymEnv}
     , distEnv : {path : String, env : SymEnv}
@@ -246,10 +232,11 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + DPPLDelayedRepla
     -- pruning is used by the infer method
     let ast = if retainPruning method
       then ast
-      else replacePruneTypes (replacePrune (replaceCancel envs.distEnv ast)) in
+      else
+        use DPPLPrunedReplace in replaceDpplKeywords (replaceCancel envs.distEnv ast) in
     let ast = if retainDynamicDelayedSampling method
       then ast
-      else replaceDelayTypes (replaceDelayKeywords ast) in
+      else use DPPLDelayedReplace in replaceDpplKeywords ast in
     -- Optionally print the model AST
     (if options.printModel then
       printLn (mexprPPLToString ast)
@@ -491,12 +478,9 @@ lang CPPLLoader
     endPhaseStatsExpr log "extract-infer" ast;
     let models = compileModels options lamliftSols envs runtimes models in
     let ast = mapPre_Expr_Expr (transformTmDist {env = envs.distEnv, lamliftSols = lamliftSols}) ast in
-    let ast = replacePrune ast in
-    let ast = replacePruneTypes ast in
-    let ast = replaceDelayKeywords ast in
-    let ast = replaceDelayTypes ast in
+    endPhaseStatsExpr log "replace-tm-dist" ast;
     let ast = replaceDpplKeywords ast in
-    endPhaseStatsExpr log "replace-all-the-things" ast;
+    endPhaseStatsExpr log "replace-dppl-keywords" ast;
     let ast = insertModels models ast in
     endPhaseStatsExpr log "insert-models" ast;
     ast
