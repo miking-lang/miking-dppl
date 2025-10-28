@@ -31,6 +31,8 @@ lang PValInterface
   syn PVal a =
   syn PValState st =
 
+  syn Prune a =
+
   syn PWeightRef =
   syn PAssumeRef a =
   syn PExportRef a =
@@ -150,7 +152,76 @@ lang PValInterface
     -> PVal (PDist a)
     -> (PValState st, PVal a)
   sem p_assume_ st = | dist -> p_assume st (lam st. lam. st) dist
+
+  -- Introduce a pruned variable. Note that this is a low-level
+  -- primitive; it introduces the "superposition" by taking the
+  -- support of the corresponding distribution, but assumes the user
+  -- will later use `p_pruneWeight` to connect the superposition to
+  -- the PMF of the distribution.
+  sem p_prune : all st. all a. PValState st
+    -> PVal [a]
+    -> (PValState st, PVal (Prune a))
+  -- Introduce a weight based on pruned variables.
+  sem p_pruneWeight : all st. PValState st
+    -> PVal (Prune Float)
+    -> PValState st
+
+  sem pp_pure : all a. a -> Prune a
+  sem pp_map : all a. all b. (a -> b) -> Prune a -> Prune b
+  sem pp_apply : all a. all b. Prune (a -> b) -> Prune a -> Prune b
 end
+
+
+
+lang PruneBasics = PValInterface
+  syn Prune a =
+  | Prune {vars : Map Symbol Int, values : [a]}
+
+  sem pp_debugPrune : all a. [a] -> Prune a
+  sem pp_debugPrune = | values ->
+    Prune {vars = mapSingleton _cmpSym (gensym ()) (length values), values = values}
+
+  sem pp_pure = | a -> Prune {vars = mapEmpty _cmpSym, values = [a]}
+  sem pp_map f = | Prune x -> Prune {vars = x.vars, values = map f x.values}
+  sem pp_apply f = | Prune x ->
+    match f with Prune f in
+    let vars = mapUnion f.vars x.vars in
+    let numValues = mapFoldWithKey (lam acc. lam. lam count. muli acc count) 1 vars in
+    -- NOTE(vipa, 2025-11-06): Conceptually, for each `Prune` value we
+    -- want a mapping between index in `values` and position in the
+    -- tensor, i.e., one index per entry in `vars`. Implementation
+    -- could go directly via that mapping (which is probably simpler
+    -- to implement, and a good first step, but probably not the most
+    -- efficient). It might also be possible to "step" through the two
+    -- input sequences and the output in sync, which might be more
+    -- efficient, but harder to get right.
+    let values = never in -- TODO(vipa, 2025-11-06): Do the thing
+    Prune {vars = vars, values = values}
+
+  syn Graph =
+  sem emptyGraph : () -> Graph
+  sem pickVar : Graph -> (Option Symbol, [Prune Float], Graph)
+  sem addWeights : Prune Float -> Graph -> Graph
+
+  sem marginalizeAllPruned : [Prune Float] -> Float
+  sem marginalizeAllPruned = | weights ->
+    let graph = foldl (lam acc. lam p. addWeights p acc) (emptyGraph ()) weights in
+    recursive let work = lam graph.
+      switch pickVar graph
+      case (Some var, [p] ++ prunes, graph) then
+        let merged = foldl (lam acc. pp_apply (pp_map addf acc)) p prunes in
+        match merged with Prune x in
+        let values = never in  -- TODO(vipa, 2025-11-06): marginalize out var
+        let marginalized = Prune {vars = mapRemove var x.vars, values = values} in
+        work (addWeights marginalized graph)
+      case (None _, [Prune {values = [w]}], _) then w
+      case (None _, [], _) then 0.0
+      end in
+    work graph
+end
+
+
+
 
 
 -- === Mutable PVal model instances (should be used affinely) ===
