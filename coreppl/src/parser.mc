@@ -173,6 +173,9 @@ lang DPPLParser =
   | "Gaussian" -> Some (2, lam lst. TmDist {dist = DGaussian {mu = get lst 0, sigma = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
+  | "Geometric" -> Some (1, lam lst. TmDist {dist = DGeometric {p = get lst 0},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
   | "Binomial" -> Some (2, lam lst. TmDist {dist = DBinomial {n = get lst 0, p = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})

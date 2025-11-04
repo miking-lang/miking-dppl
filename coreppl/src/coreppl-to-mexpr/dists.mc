@@ -66,6 +66,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DGaussian { mu = mu, sigma = sigma } ->
     let cname = _getConExn "RuntimeDistElementary_DistGaussian" env.env in
     i (nconapp_ cname (i (autoty_record_ [("mu", mu), ("sigma", sigma)])))
+  | DGeometric { p = p } ->
+    let cname = _getConExn "RuntimeDistElementary_DistGeometric" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("p", p)])))
   | DMultinomial { n = n, p = p } ->
     let cname = _getConExn "RuntimeDistElementary_DistMultinomial" env.env in
     i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
