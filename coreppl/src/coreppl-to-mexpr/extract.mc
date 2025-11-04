@@ -8,7 +8,6 @@ include "mexpr/demote-recursive.mc"
 include "mexpr/shallow-patterns.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
-include "pmexpr/utils.mc"
 
 lang DPPLExtract =
   DPPLParser + MExprExtract + MExprLambdaLiftAllowSpineCapture + MExprDemoteRecursive +
