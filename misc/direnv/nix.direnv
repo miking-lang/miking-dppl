@@ -1,0 +1,24 @@
+use flake ./misc/packaging/
+
+
+### For development against a local copy of miking ###
+
+if [ -d ../miking ]; then
+    echo "Found a local miking repository, using it:" $(expand_path ../miking)
+    # Add a locally built mi to the path
+    PATH_add ../miking/build
+    # Overwrite MCORE_LIBS to point only at the locally installed things
+    export MCORE_LIBS="stdlib=$(expand_path ../miking/src/stdlib/)"
+    # Add boot location to OCAMLPATH
+    path_add OCAMLPATH ../miking/build/lib
+fi
+
+
+### For development of CorePPL ###
+
+# Add the coreppl src location
+export MCORE_LIBS="${MCORE_LIBS-}${MCORE_LIBS:+:}coreppl=$(expand_path ./coreppl/src)"
+
+# Update path with cppl and the utility scripts
+PATH_add ./build
+PATH_add ./scripts
