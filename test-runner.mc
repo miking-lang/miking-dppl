@@ -9,6 +9,15 @@ lang Composed = DPPLParser
   | PRecord (Map SID rec)
   | PSeq rec
   | PDist rec
+  -- NOTE(vipa, 2025-10-24): We assume recursion for types is direct
+  -- (no mutual recursion) and non-polymorphic. Constructors absent
+  -- from the `Map` are `Unused`.
+  | PUser (Map Name (RecTy rec))
+
+  syn RecTy rec =
+  | NoRec rec
+  | Rec
+  | RLater (PTypeC (RecTy rec))
 
   syn PTypeA =
   | PInt
@@ -21,19 +30,81 @@ lang Composed = DPPLParser
   | PRecord x -> PRecord (mapMap f x)
   | PSeq x -> PSeq (f x)
   | PDist x -> PDist (f x)
+  | PUser x ->
+    recursive let work = lam recTy. switch recTy
+      case NoRec p then NoRec (f p)
+      case Rec _ then Rec ()
+      case RLater x then RLater (mapPTypeC work x)
+      end in
+    PUser (mapMap work x)
 
   sem foldPTypeC : all a. all x. (a -> x -> a) -> a -> PTypeC x -> a
   sem foldPTypeC f acc =
   | PRecord x -> mapFoldWithKey (lam acc. lam. lam v. f acc v) acc x
   | PSeq x -> f acc x
   | PDist x -> f acc x
+  | PUser x ->
+    recursive let work = lam acc. lam recTy. switch recTy
+      case NoRec p then f acc p
+      case Rec _ then acc
+      case RLater x then foldPTypeC work acc x
+      end in
+    mapFoldWithKey (lam acc. lam. lam recTy. work acc recTy) acc x
+
+  sem mapAccumLPTypeC : all a. all x. all y. (a -> x -> (a, y)) -> PTypeC x -> (a, PTypeC y)
+
+  sem fold2PTypeC : all a. all x. all y. (a -> x -> y -> a) -> a -> PTypeC x -> PTypeC y -> a
+
+  sem map2PTypeC : all x. all y. all z. (x -> y -> z) -> PTypeC x -> PTypeC y -> PTypeC z
+  sem map2PTypeC f l = | r -> map2PTypeC_ f (l, r)
+
+  sem map2PTypeC_ : all x. all y. all z. (x -> y -> z) -> (PTypeC x, PTypeC y) -> PTypeC z
+  sem map2PTypeC_ f =
+  | (lty & PRecord l, rty & PRecord r) ->
+    let showTy = lam ty. ptypeCToString (lam. "_") ty in
+    let f = lam l. lam r.
+      match (l, r) with (Some l, Some r) then Some (f l r)
+      else error (join ["Tried to call map2PTypeC with two records with different sets of fields: ", showTy lty, " and ", showTy rty]) in
+    PRecord (mapMerge f l r)
+  | (PSeq l, PSeq r) -> PSeq (f l r)
+  | (PDist l, PDist r) -> PDist (f l r)
+  | (lty & PUser l, rty & PUser r) ->
+    let showTy = lam ty. ptypeCToString (lam. "_") ty in
+    recursive let work = lam l. lam r. switch (l, r)
+      case (NoRec l, NoRec r) then NoRec (f l r)
+      case (Rec _, Rec _) then Rec ()
+      case (RLater l, RLater r) then RLater (map2PTypeC work l r)
+      end in
+    let f = lam l. lam r.
+      match (l, r) with (Some l, Some r) then Some (work l r)
+      else printErrorLn (join ["Tried to call map2PTypeC with two user types with different sets of constructors: ", showTy lty, " and ", showTy rty]); None () in
+    PUser (mapMerge f l r)
+
+  sem mapMPTypeCOption : all a. all b. (a -> Option b) -> PTypeC a -> Option (PTypeC b)
+  sem mapMPTypeCOption f =
+  | PRecord x -> optionMap (lam m. PRecord m)
+    (mapFoldlOption (lam acc. lam k. lam v. optionMap (lam v. mapInsert k v acc) (f v)) (mapEmpty (mapGetCmpFun x)) x)
+  | PSeq x -> optionMap (lam x. PSeq x) (f x)
+  | PDist x -> optionMap (lam x. PDist x) (f x)
+  | PUser x ->
+    recursive let work = lam recTy. switch recTy
+      case NoRec p then optionMap (lam p. NoRec p) (f p)
+      case Rec _ then Some (Rec ())
+      case RLater x then optionMap (lam x. RLater x) (mapMPTypeCOption work x)
+      end in
+    optionMap (lam x. PUser x)
+      (mapFoldlOption (lam acc. lam k. lam v. optionMap (lam v. mapInsert k v acc) (work v)) (mapEmpty (mapGetCmpFun x)) x)
+
+  sem foldRecTy : all a. all x. (a -> x -> a) -> a -> RecTy x -> a
+  sem foldRecTy f acc =
+  | NoRec x -> f acc x
+  | Rec _ -> acc
+  | RLater x -> foldPTypeC (foldRecTy f) acc x
 
   syn PureType =
   | PureTypeC (PTypeC PureType)
   | PureTypeA PTypeA
 
-  -- Invariant: for all `PType`s, if it is `PLater`, at least one
-  -- descendant is `PHere {wrapped = Wrapped ()}` or `PHere {wrapped = Unused ()}`.
   syn PType =
   | PLater (PTypeC PType)
   | PNever PTypeA
@@ -73,6 +144,16 @@ lang Composed = DPPLParser
     join ["[", f x, "]"]
   | PDist x ->
     join ["(Dist ", f x, ")"]
+  | PUser x ->
+    recursive let pRecTy = lam recTy. switch recTy
+      case NoRec p then f p
+      case Rec _ then "<rec>"
+      case RLater r then cons '*' (ptypeCToString pRecTy r)
+      end in
+    let pBinding = lam pair.
+      match pair with (conName, recTy) in
+      join [nameGetStr conName, " ", pRecTy recTy] in
+    join ["(", strJoin " + " (map pBinding (mapBindings x)), ")"]
 
   sem isPureIsh : PType -> Bool
   sem isPureIsh =
@@ -103,10 +184,26 @@ lang Composed = DPPLParser
   | PureTypeA x -> PNever x
   | PureTypeC x -> PLater (mapPTypeC pureToPType x)
 
-  type PState =
+  sem recTyAsPType : PType -> RecTy PType -> PType
+  sem recTyAsPType recPoint =
+  | NoRec p -> p
+  | Rec _ -> recPoint
+  | RLater p -> PLater (mapPTypeC (recTyAsPType recPoint) p)
+
+  sem ptypeAsPureType : PType -> PureType
+  sem ptypeAsPureType =
+  | PLater x -> PureTypeC (mapPTypeC ptypeAsPureType x)
+  | PHere x -> x.ty
+  | PNever x -> PureTypeA x
+
+  type PScope =
     { functionDefinitions : Map Name {params : [Name], mayBeRecursive : Bool, body : Expr}
     , valueScope : Map Name PType
-    , specializations : Map Name (Map [PType] (Name, PType, Option DeclLetRecord))
+    , conScope : Map Name (RecTy ())
+    }
+
+  type PState =
+    { specializations : Map Name (Map [PType] (Name, PType, Option DeclLetRecord))
     }
 
   syn Const =
@@ -131,9 +228,11 @@ lang Composed = DPPLParser
   -- NOTE(vipa, 2025-10-20): This should be a _linear_ function, and
   -- should always represent a pure function
   | TempLam (Expr -> Expr)
+  | TempFix ((Expr -> Expr) -> Expr -> Expr)
 
   sem isAtomic =
   | TempLam _ -> false
+  | TempFix _ -> false
 
   sem pprintCode indent env =
   | TempLam f ->
@@ -142,6 +241,15 @@ lang Composed = DPPLParser
     match pprintCode (pprintIncr indent) env (f (nvar_ x)) with (env, body) in
     ( env
     , join ["lam ", str, ".", pprintNewline (pprintIncr indent), body]
+    )
+  | TempFix f ->
+    let x = nameSym "x" in
+    let fName = nameSym "f" in
+    match pprintVarName env fName with (env, fStr) in
+    match pprintVarName env x with (env, xStr) in
+    match pprintCode (pprintIncr indent) env (f (app_ (nvar_ fName)) (nvar_ x)) with (env, body) in
+    ( env
+    , join ["recursive let ", fStr, " = lam ", xStr, ".", pprintNewline (pprintIncr indent), body, " in ", fStr]
     )
 
   sem ptyCmp : PType -> PType -> Int
@@ -179,6 +287,14 @@ lang Composed = DPPLParser
   sem _ptyCCmp rec =
   | (PDist l, PDist r) -> rec l r
   | (PSeq l, PSeq r) -> rec l r
+  | (PRecord l, PRecord r) -> mapCmp rec l r
+  | (PUser l, PUser r) ->
+    recursive let work = lam l. lam r. switch (l, r)
+      case (NoRec l, NoRec r) then rec l r
+      case (Rec _, Rec _) then 0
+      case (RLater l, RLater r) then _ptyCCmp work (l, r)
+      end in
+    mapCmp work l r
   | (l, r) ->
     let lt = constructorTag l in
     let rt = constructorTag r in
@@ -212,93 +328,140 @@ lang Composed = DPPLParser
   | (PLater (PSeq l), PLater (PSeq r)) -> PLater (PSeq (lubPType l r))
   | (PLater (PRecord l), PLater (PRecord r)) -> PLater (PRecord (mapIntersectWith lubPType l r))
   | (PLater (PDist l), PLater (PDist r)) -> PLater (PDist (lubPType l r))
+  | (PLater (PUser l), PLater (PUser r)) ->
+    recursive let lubRecTy = lam l. lam r. switch (l, r)
+      case (NoRec l, NoRec r) then NoRec (lubPType l r)
+      case (Rec _, Rec _) then Rec ()
+      case (RLater l, RLater r) then RLater (map2PTypeC lubRecTy l r)
+      end in
+    PLater (PUser (mapMerge (optionOrWith lubRecTy) l r))
 
   sem ensureWrapped : PType -> PType
   sem ensureWrapped = | ty ->
-    recursive let work : PType -> PureType = lam ty.
-      switch ty
-      case PLater x then PureTypeC (mapPTypeC work x)
-      case PHere x then x.ty
-      case PNever x then PureTypeA x
-      end in
-    PHere {wrapped = Wrapped (), ty = work ty}
+    PHere {wrapped = Wrapped (), ty = ptypeAsPureType ty}
+
+  sem underDecls : (Expr -> Expr) -> Expr -> Expr
+  sem underDecls f =
+  | TmDecl x -> TmDecl {x with inexpr = underDecls f x.inexpr}
+  | tm -> f tm
 
   sem adjustWrapping : (PType, PType) -> Expr -> Expr
-  sem adjustWrapping =
+  sem adjustWrapping = | x ->
+    let f = _adjustWrapping x in
+    printLn (join ["adjust ", ptypeToString x.0, " to ", ptypeToString x.1, " by ", expr2str (TempLam f)]);
+    underDecls f
+
+  sem _adjustWrappingC : Bool -> PTypeC (Expr -> Expr) -> Expr -> Expr
+  sem _adjustWrappingC shouldWrap =
+  | PSeq f ->
+    if shouldWrap
+    then _app (_app (uconst_ (CPTraverseSeq ())) (TempLam f))
+    else _app (_app (uconst_ (CMap ())) (TempLam f))
+  | PRecord adjustments ->
+    let isId = if shouldWrap then isPure else isIdentity in
+    let pure = if shouldWrap then app_ (uconst_ (CPPure ())) else lam x. x in
+    let apply = if shouldWrap then _apply else _app in
+    if mapAll isId adjustments then pure else
+    recursive let construct = lam prev. lam remaining.
+      match remaining with [key] ++ remaining
+      then TempLam (lam tm. construct (snoc prev (key, tm)) remaining)
+      else TmRecord
+        { bindings = mapFromSeq cmpSID prev
+        , ty = tyunknown_
+        , info = NoInfo ()
+        } in
+    let construct = pure (construct [] (mapKeys adjustments)) in
+    lam tm.
+      match tm with TmRecord x then
+        let args = mapValues (mapIntersectWith (lam adjust. lam tm. adjust tm) adjustments x.bindings) in
+        foldl apply construct args
+      else
+        match
+          match tm with TmVar _ then (lam x. x, tm)
+          else let n = nameSym "x" in (bind_ (nulet_ n tm), withType (tyTm tm) (nvar_ n))
+        with (oBind, target) in
+        oBind (foldl apply construct (mapValues (mapMapWithKey (lam sid. lam f. f (recordproj_ (sidToString sid) target)) adjustments)))
+  | PDist f ->
+    -- OPT(vipa, 2025-11-04): Could probably just skip the extra check
+    (if if shouldWrap then isPure f else isIdentity f
+     then ()
+     else error (join ["We somehow have a non-pure type parameter to a PDist, can't handle that: ", bool2string shouldWrap, " ", expr2str (TempLam f)]));
+    if shouldWrap
+    then app_ (uconst_ (CPPure ()))
+    else lam tm. tm
+  | PUser adjustments ->
+    let isId = if shouldWrap then isPure else isIdentity in
+    let pure = if shouldWrap then app_ (uconst_ (CPPure ())) else lam x. x in
+    let apply = if shouldWrap then _apply else _app in
+    let f = lam allId. lam f. if allId then isId f else false in
+    let allId = mapFoldWithKey
+      (lam allId. lam. lam r. if allId then foldRecTy f true r else false) true adjustments in
+    if allId then pure else
+    let f = lam rec.
+      recursive let work = lam recTy. switch recTy
+        case NoRec adj then adj
+        case Rec _ then rec
+        case RLater x then _adjustWrappingC shouldWrap (mapPTypeC work x)
+        end in
+      let workTop = lam conName. lam recTy. lam tm.
+        apply (pure (TempLam (nconapp_ conName))) (work recTy tm) in
+      _switchExhaustive (mapMapWithKey workTop adjustments) in
+    _app (TempFix f)
+  | l ->
+    error (join ["Missing case for _adjustWrappingC: ", ptypeCToString (lam. "_") l])
+
+  sem _adjustWrapping : (PType, PType) -> Expr -> Expr
+  sem _adjustWrapping =
   | (PNever _, PNever _) -> lam x. x
   | (PNever _, PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
   | (PHere {wrapped = Unused _}, _) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PHere {wrapped = Wrapped _}) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PLater _) -> lam tm. errorSingle [infoTm tm] "Tried to convert a value to a less wrapped value, which is impossible"
-  | (PLater (PSeq ty), PHere {wrapped = Wrapped _, ty = PureTypeC (PSeq target)}) ->
-    let f = TempLam (adjustWrapping (ty, PHere {wrapped = Wrapped (), ty = target})) in
-    _app (_app (uconst_ (CPTraverseSeq ())) f)
-  | (PLater (PSeq ty), PLater (PSeq target)) ->
-    _app (_app (uconst_ (CMap ())) (TempLam (adjustWrapping (ty, target))))
-  | (PLater (PRecord tys), PHere {wrapped = Wrapped _, ty = PureTypeC (PRecord targets)}) ->
-    let mkAdjustment = lam l. lam r. adjustWrapping (l, PHere {wrapped = Wrapped (), ty = r}) in
-    let adjustments = mapIntersectWith mkAdjustment tys targets in
-    recursive let construct = lam prev. lam remaining.
-      match remaining with [key] ++ remaining
-      then TempLam (lam tm. construct (snoc prev (key, tm)) remaining)
-      else TmRecord
-        { bindings = mapFromSeq cmpSID prev
-        , ty = tyunknown_
-        , info = NoInfo ()
-        } in
-    let construct = app_ (uconst_ (CPPure ())) (construct [] (mapKeys adjustments)) in
-    lam tm.
-      match tm with TmRecord x then
-        let args = mapValues (mapIntersectWith (lam adjust. lam tm. adjust tm) adjustments x.bindings) in
-        foldl _apply construct args
-      else
-        let names = mapMap (lam f. (f, nameSym "p")) adjustments in
-        match_ tm (PatRecord {bindings = mapMap (lam x. npvar_ x.1) names, info = NoInfo (), ty = tyunknown_})
-          (foldl _apply construct (map (lam x. x.0 (nvar_ x.1)) (mapValues names)))
-          never_
-  | (PLater (PRecord tys), PLater (PRecord targets)) ->
-    let adjustments = mapIntersectWith (lam l. lam r. adjustWrapping (l, r)) tys targets in
-    recursive let construct = lam prev. lam remaining.
-      match remaining with [key] ++ remaining
-      then TempLam (lam tm. construct (snoc prev (key, tm)) remaining)
-      else TmRecord
-        { bindings = mapFromSeq cmpSID prev
-        , ty = tyunknown_
-        , info = NoInfo ()
-        } in
-    let construct = construct [] (mapKeys adjustments) in
-    lam tm.
-      match tm with TmRecord x then
-        let args = mapValues (mapIntersectWith (lam adjust. lam tm. adjust tm) adjustments x.bindings) in
-        foldl _app construct args
-      else
-        let names = mapMap (lam f. (f, nameSym "p")) adjustments in
-        match_ tm (PatRecord {bindings = mapMap (lam x. npvar_ x.1) names, info = NoInfo (), ty = tyunknown_})
-          (foldl _app construct (map (lam x. x.0 (nvar_ x.1)) (mapValues names)))
-          never_
-  | (PLater (PDist ty), PHere {wrapped = Wrapped _, ty = PureTypeC (PDist target)}) ->
-    if isPureIsh ty
-    then app_ (uconst_ (CPPure ()))
-    else error "We somehow have a non-pure type parameter to a PDist, can't handle that"
-  | (PLater (PDist ty), PLater (PDist target)) ->
-    if isPureIsh target then lam tm. tm else error "We somehow need to wrap a type parameter to a PDist, can't do that"
-  | (l, r) -> error (join ["Missing case in adjustWrapping: ", ptypeToString l, ", ", ptypeToString r])
+  | (PLater x, PHere {wrapped = Wrapped _, ty = PureTypeC y}) ->
+    let y = mapPTypeC (lam ty. PHere {wrapped = Wrapped (), ty = ty}) y in
+    _adjustWrappingC true (map2PTypeC (lam l. lam r. _adjustWrapping (l, r)) x y)
+  | (PLater x, PLater y) ->
+    _adjustWrappingC false (map2PTypeC (lam l. lam r. _adjustWrapping (l, r)) x y)
+  | (l, r) -> error (join ["Missing case in _adjustWrapping: ", ptypeToString l, ", ", ptypeToString r])
 
-  sem tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC x -> x) -> Type -> x
-  sem tyToPTypeX atom composite =
-  | TyDist x -> composite (PDist (tyToPTypeX atom composite x.ty))
+  sem tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC x -> x) -> (Type -> [Type] -> x) -> Type -> x
+  sem tyToPTypeX atom composite custom =
+  | TyDist x -> composite (PDist (tyToPTypeX atom composite custom x.ty))
   | TyFloat _ -> atom (PFloat ())
   | TyBool _ -> atom (PBool ())
   | TyInt _ -> atom (PInt ())
   | TyChar _ -> atom (PChar ())
-  | TySeq x -> composite (PSeq (tyToPTypeX atom composite x.ty))
+  | TySeq x -> composite (PSeq (tyToPTypeX atom composite custom x.ty))
+  | TyRecord x -> composite (PRecord (mapMap (tyToPTypeX atom composite custom) x.fields))
+  | ty & (TyApp _ | TyCon _ | TyVar _) ->
+    match getTypeArgs ty with (ty, tyArgs) in custom ty tyArgs
   | ty -> printLn (getTypeStringCode 0 pprintEnvEmpty ty).1; errorSingle [infoTy ty] "Missing case for tyToPTypeX"
 
   sem tyToPureType : Type -> PureType
-  sem tyToPureType = | ty -> tyToPTypeX (lam x. PureTypeA x) (lam x. PureTypeC x) ty
+  sem tyToPureType = | ty -> tyToPTypeX (lam x. PureTypeA x) (lam x. PureTypeC x) (lam. lam. PureTypeC (PUser (mapEmpty nameCmp))) ty
 
   sem tyToPurePType : Type -> PType
-  sem tyToPurePType = | ty -> tyToPTypeX (lam x. PNever x) (lam x. PLater x) ty
+  sem tyToPurePType = | ty -> tyToPTypeX (lam x. PNever x) (lam x. PLater x) (lam. lam. PLater (PUser (mapEmpty nameCmp))) ty
+
+  sem _switchExhaustive : Map Name (Expr -> Expr) -> Expr -> Expr
+  sem _switchExhaustive cases =
+  | tm & TmConApp x ->
+    match mapLookup x.ident cases with Some f
+    then f x.body
+    else error "_switchExhaustive was called with a non-covered case"
+  | tm ->
+    if mapIsEmpty cases then tm else
+    match
+      match (mapSize cases, tm) with (1, _) | (_, TmVar _) then (lam x. x, tm) else
+      let n = nameSym "target" in
+      (bind_ (nulet_ n tm), nvar_ n)
+    with (oBind, target) in
+    let f = lam acc. lam conName. lam f.
+      let n = nameSym "x" in
+      match_ target (npcon_ conName (npvar_ n))
+        (f (nvar_ n))
+        acc in
+    oBind (mapFoldWithKey f never_ cases)
 
   sem _app : Expr -> Expr -> Expr
   sem _app l = | r -> _app_ (l, r)
@@ -324,6 +487,8 @@ lang Composed = DPPLParser
   sem _app_ =
   -- we have a simple function, just apply it
   | (TempLam f, x) -> f x
+  -- we have a simple recursive function, just apply it
+  | (f & TempFix f2, x & !TmVar _) -> f2 (_app f) x
   -- p_map id = id
   | (f & TmConst {val = CPMap _}, x & TempLam f2) ->
     if isIdentity f2 then TempLam (lam x. x) else app_ f x
@@ -417,8 +582,8 @@ lang Composed = DPPLParser
   sem _join : Expr -> Expr
   sem _join = | x -> _app (uconst_ (CPJoin ())) x
 
-  sem specializeCall : PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
-  sem specializeCall st =
+  sem specializeCall : PScope -> PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
+  sem specializeCall sc st =
   | {f = TmVar x, args = args, ret = retTy} ->
     match unzip args with (args, argTys) in
     match optionBind (mapLookup x.ident st.specializations) (mapLookup argTys) with Some (name, ty, _) then
@@ -426,26 +591,23 @@ lang Composed = DPPLParser
     else
       -- NOTE(vipa, 2025-10-21): Not previously specialized, do it.
       let definition =
-        match mapLookup x.ident st.functionDefinitions
+        match mapLookup x.ident sc.functionDefinitions
         with Some x then x
         else error (join ["Missing entry in functionDefinitions for ", nameGetStr x.ident]) in
-      let prevValueScope = st.valueScope in
-      let valueScope = foldl2 (lam m. lam n. lam ty. mapInsert n ty m) prevValueScope definition.params argTys in
-      -- TODO(vipa, 2025-10-21): Handle recursive functions
+      let valueScope = foldl2 (lam m. lam n. lam ty. mapInsert n ty m) sc.valueScope definition.params argTys in
       let name = nameSetNewSym x.ident in
       match
-        let st = {st with valueScope = valueScope} in
+        let sc = {sc with valueScope = valueScope} in
         if definition.mayBeRecursive then
           recursive let speculate = lam guess.
             let spec = mapSingleton (seqCmp ptyCmp) argTys (name, guess, None ()) in
             let st2 = {st with specializations = mapInsertWith mapUnion x.ident spec st.specializations} in
-            match specializeExpr st2 definition.body with (st2, (body, retTy)) in
+            match specializeExpr sc st2 definition.body with (st2, (body, retTy)) in
             if eqi 0 (ptyCmp guess retTy) then (st2, (body, retTy)) else
             speculate retTy in
           speculate (PHere {wrapped = Unused (), ty = tyToPureType retTy})
-        else specializeExpr st definition.body
+        else specializeExpr sc st definition.body
       with (st, (body, retTy)) in
-      let st = {st with valueScope = prevValueScope} in
       let def : DeclLetRecord =
         { ident = name
         , tyAnnot = tyunknown_
@@ -454,8 +616,7 @@ lang Composed = DPPLParser
         , info = NoInfo ()
         } in
       let st =
-        { st with valueScope = prevValueScope
-        , specializations = mapInsertWith mapUnion x.ident
+        { specializations = mapInsertWith mapUnion x.ident
           (mapSingleton (seqCmp ptyCmp) argTys (name, retTy, Some def))
           st.specializations
         } in
@@ -474,22 +635,20 @@ lang Composed = DPPLParser
       (st, (foldl _apply tm args, ensureWrapped pureRet))
   | {f = tm} -> errorSingle [infoTm tm] "Missing case in specializeCall"
 
-  sem specializeDeclPre : PState -> Decl -> PState
-  sem specializeDeclPre st =
+  sem specializeDeclPre : PScope -> PState -> Decl -> (PScope, PState)
+  sem specializeDeclPre sc st =
   | DeclLet x ->
-    let prevValueScope = st.valueScope in
-    match specializeExpr st x.body with (st, (tm, ty)) in
-    let st = {st with valueScope = prevValueScope} in
+    match specializeExpr sc st x.body with (st, (tm, ty)) in
     let spec = mapSingleton (seqCmp ptyCmp) [] (x.ident, ty, Some {x with body = tm}) in
-    { st with valueScope = mapInsert x.ident ty st.valueScope
-    , specializations = mapInsert x.ident spec st.specializations
-    }
+    ( {sc with valueScope = mapInsert x.ident ty sc.valueScope}
+    , {st with specializations = mapInsert x.ident spec st.specializations}
+    )
   | DeclLet {ident = ident, body = body & TmLam _} ->
     recursive let work = lam params. lam tm.
       match tm with TmLam x
       then work (snoc params x.ident) x.body
       else {params = params, mayBeRecursive = false, body = tm} in
-    {st with functionDefinitions = mapInsert ident (work [] body) st.functionDefinitions}
+    ({sc with functionDefinitions = mapInsert ident (work [] body) sc.functionDefinitions}, st)
   | DeclRecLets x ->
     recursive let work = lam params. lam tm.
       match tm with TmLam x
@@ -497,7 +656,31 @@ lang Composed = DPPLParser
       else {params = params, mayBeRecursive = true, body = tm} in
     let f = lam definitions. lam decl.
       mapInsert decl.ident (work [] decl.body) definitions in
-    {st with functionDefinitions = foldl f st.functionDefinitions x.bindings}
+    ({sc with functionDefinitions = foldl f sc.functionDefinitions x.bindings}, st)
+  | DeclType _ -> (sc, st)
+  | DeclConDef x ->
+    let deconstructType : Type -> {carried : Type, tyName : Name, retParams : [Type]} = lam ty.
+      match inspectType ty with TyArrow {from = carried, to = to} in
+      match getTypeArgs to with (TyCon {ident = tyName}, retParams) in
+      {carried = carried, tyName = tyName, retParams = retParams} in
+    let tyInfo = deconstructType x.tyIdent in
+    let distributeC = lam x.
+      match mapMPTypeCOption eitherGetRight x with Some ptys
+      then Right (PLater ptys)
+      else Left (RLater (mapPTypeC (eitherEither (lam x. x) (lam. NoRec ())) x)) in
+    let checkRecursion = lam ty. lam tyArgs.
+      match ty with TyCon x then
+        if nameEq x.ident tyInfo.tyName then
+          if eqi 0 (seqCmp cmpType tyInfo.retParams tyArgs)
+          then Left (Rec ())
+          else errorSingle [x.info] "Found polymorphic recursion in constructor definition, this is not supported for now."
+        else Right (PLater (PUser (mapEmpty nameCmp)))
+      else Right (PLater (PUser (mapEmpty nameCmp))) in
+    recursive let work = lam ty.
+      match ty with TyVar _ then Left (NoRec ()) else
+      tyToPTypeX (lam x. Right (PNever x)) distributeC checkRecursion ty in
+    let recTy = eitherEither (lam x. x) (lam. NoRec ()) (work tyInfo.carried) in
+    ({sc with conScope = mapInsert x.ident recTy sc.conScope}, st)
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPre"
 
   sem specializeDeclPost : PState -> Decl -> (PState, [Decl])
@@ -515,13 +698,14 @@ lang Composed = DPPLParser
     let specs = mapOption (lam x. x.2) specs in
     let specializations = foldl (lam acc. lam decl. mapRemove decl.ident acc) st.specializations x.bindings in
     ({st with specializations = specializations}, [DeclRecLets {x with bindings = specs}])
+  | decl & (DeclType _ | DeclConDef _) -> (st, [decl])
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPost"
 
-  sem specializeExpr : PState -> Expr -> (PState, (Expr, PType))
-  sem specializeExpr st =
+  sem specializeExpr : PScope -> PState -> Expr -> (PState, (Expr, PType))
+  sem specializeExpr sc st =
   | TmDecl x ->
-    let st = specializeDeclPre st x.decl in
-    match specializeExpr st x.inexpr with (st, (tm, ty)) in
+    match specializeDeclPre sc st x.decl with (sc, st) in
+    match specializeExpr sc st x.inexpr with (st, (tm, ty)) in
     match specializeDeclPost st x.decl with (st, newDecls) in
     (st, (bindall_ newDecls tm, ty))
   | TmApp x ->
@@ -530,10 +714,55 @@ lang Composed = DPPLParser
       then collectApps (cons x.rhs acc) x.lhs
       else (tm, acc) in
     match collectApps [x.rhs] x.lhs with (f, args) in
-    match mapAccumL specializeExpr st args with (st, args) in
-    specializeCall st {f = f, args = args, ret = x.ty}
+    match mapAccumL (specializeExpr sc) st args with (st, args) in
+    specializeCall sc st {f = f, args = args, ret = x.ty}
+  | TmConApp x ->
+    let argRecTy = match mapLookup x.ident sc.conScope
+      with Some x then x
+      else errorSingle [x.info] "Missing con name in conScope" in
+    match specializeExpr sc st x.body with (st, (body, bodyTy)) in
+    -- NOTE(vipa, 2025-10-27): collect all recursive occurrences of
+    -- the type for lub, regardless of whether we're going to wrap the
+    -- entire value. This is important to not forget a constructor
+    -- that might appear.
+    recursive let computeRecTy
+      : RecTy () -> PType -> {recOccurs : [PType], recTy : RecTy PType, argTy : PType -> PType, wrapAboveRec : Bool}
+      = lam argRecTy. lam bodyTy.
+        switch argRecTy
+        case NoRec _ then
+          {recOccurs = [], recTy = NoRec bodyTy, argTy = lam. bodyTy, wrapAboveRec = false}
+        case Rec _ then
+          {recOccurs = [bodyTy], recTy = Rec (), argTy = lam bodyTy. bodyTy, wrapAboveRec = isTopWrapped bodyTy}
+        case RLater recTy then
+          -- NOTE(vipa, 2025-10-27): This will forget any `Unused`
+          -- wrapping in the argument when above a `Rec`, not sure if
+          -- that's desirable or avoidable
+          match unwrapOnce bodyTy with Right ty in
+          let res = map2PTypeC computeRecTy recTy ty in
+          let isTopWrapped = isTopWrapped bodyTy in
+          { recOccurs = foldPTypeC (lam a. lam x. concat a x.recOccurs) [] res
+          , recTy = RLater (mapPTypeC (lam x. x.recTy) res)
+          , argTy = if isTopWrapped
+            then lam ty. ensureWrapped (PLater (mapPTypeC (lam x. x.argTy ty) res))
+            else lam ty. PLater (mapPTypeC (lam x. x.argTy ty) res)
+          , wrapAboveRec = foldPTypeC (lam a. lam x. or a x.wrapAboveRec) isTopWrapped res
+          }
+        end
+    in
+    let res = computeRecTy argRecTy bodyTy in
+    let recTy = PLater (PUser (mapSingleton nameCmp x.ident res.recTy)) in
+    let recTy = foldl lubPType recTy res.recOccurs in
+    let argTy = res.argTy recTy in
+    if res.wrapAboveRec then
+      ( st
+      , ( _map (TempLam (lam body. TmConApp {x with body = body})) (adjustWrapping (bodyTy, ensureWrapped argTy) body)
+        , ensureWrapped recTy
+        )
+      )
+    else
+      (st, (nconapp_ x.ident (adjustWrapping (bodyTy, argTy) body), recTy))
   | TmAssume x ->
-    match specializeExpr st x.dist with (st, (dist, distTy)) in
+    match specializeExpr sc st x.dist with (st, (dist, distTy)) in
     let elemTy =
       match ensureWrapped distTy with PHere {ty = PureTypeC (PDist x)} in
       PHere {wrapped = Wrapped (), ty = x} in
@@ -541,20 +770,20 @@ lang Composed = DPPLParser
     let tm = app_ (uconst_ (CPAssume ())) dist in
     (st, (tm, elemTy))
   | TmDist x ->
-    match mapAccumL specializeExpr st (distParams x.dist) with (st, args) in
+    match mapAccumL (specializeExpr sc) st (distParams x.dist) with (st, args) in
     let l =
       recursive let work = lam prev. lam ps.
         match ps with [p] ++ ps
         then TempLam (lam tm. work (snoc prev tm) ps)
         else TmDist {x with dist = distWithParams x.dist prev} in
       work [] args in
-    specializeCall st {f = l, args = args, ret = x.ty}
+    specializeCall sc st {f = l, args = args, ret = x.ty}
   | tm & TmVar x ->
-    match mapLookup x.ident st.valueScope with Some ty
+    match mapLookup x.ident sc.valueScope with Some ty
     then (st, (tm, ty))
     else errorSingle [x.info] "Missing entry in valueScope"
   | TmSeq x ->
-    match mapAccumL specializeExpr st x.tms with (st, tms) in
+    match mapAccumL (specializeExpr sc) st x.tms with (st, tms) in
     match unzip tms with (tms, tmTys) in
     let elemTy = match tmTys with [ty] ++ tmTys
       then foldl lubPType ty tmTys
@@ -562,7 +791,7 @@ lang Composed = DPPLParser
     let tms = zipWith (lam tmTy. adjustWrapping (tmTy, elemTy)) tmTys tms in
     (st, (TmSeq {x with tms = tms}, PLater (PSeq elemTy)))
   | TmRecord x ->
-    match mapMapAccum (lam st. lam. lam tm. specializeExpr st tm) st x.bindings with (st, zipped) in
+    match mapMapAccum (lam st. lam. lam tm. specializeExpr sc st tm) st x.bindings with (st, zipped) in
     let bindings = mapMap (lam x. x.0) zipped in
     let bindingsTy = mapMap (lam x. x.1) zipped in
     (st, (TmRecord {x with bindings = bindings}, PLater (PRecord bindingsTy)))
@@ -573,19 +802,19 @@ lang Composed = DPPLParser
   | TmMatch x ->
     -- NOTE(vipa, 2025-10-22): We assume that the pattern is shallow,
     -- but not just a wildcard
-    match specializeExpr st x.target with (st, (target, targetTy)) in
-    let oldValueScope = st.valueScope in
-    let st = addMatchNames st (unwrapOnce targetTy, x.pat) in
-    match specializeExpr st x.thn with (st, (thn, thnTy)) in
-    match specializeExpr {st with valueScope = oldValueScope} x.els with (st, (els, elsTy)) in
-    let st = {st with valueScope = oldValueScope} in
+    match specializeExpr sc st x.target with (st, (target, targetTy)) in
+    let thnSc = addMatchNames sc (unwrapOnce targetTy, x.pat) in
+    match specializeExpr thnSc st x.thn with (st, (thn, thnTy)) in
+    match specializeExpr sc st x.els with (st, (els, elsTy)) in
     let lubTy = lubPType thnTy elsTy in
     if isTopWrapped targetTy then
+      -- NOTE(vipa, 2025-11-03): We're matching on a wrapped value,
+      -- i.e., the return must be wrapped
       let pureType = tyToPurePType x.ty in
       let retTy = ensureWrapped pureType in
       if isPureIsh lubTy then
-        -- NOTE(vipa, 2025-10-23): Both branches are pure, i.e., we
-        -- can make this a `map`
+        -- NOTE(vipa, 2025-10-23): Both branches are otherwise pure,
+        -- i.e., we can make this a `map`
         (st, (_map (TempLam (lam target. TmMatch {x with target = target, thn = thn, els = els})) target, retTy))
       else
         -- NOTE(vipa, 2025-10-23): At least one branch is not pure,
@@ -598,6 +827,8 @@ lang Composed = DPPLParser
           } in
         (st, (_join (_map (TempLam m) target), retTy))
     else
+      -- NOTE(vipa, 2025-11-03): The target is pure, i.e., we can
+      -- adjust the branches individually
       ( st
       , ( TmMatch
           { x with target = target
@@ -613,35 +844,41 @@ lang Composed = DPPLParser
   | tm & TmConst {val = CBool _} -> (st, (tm, PNever (PBool ())))
   | tm -> errorSingle [infoTm tm] "Missing case in specializeExpr"
 
-  sem addMatchNames : PState -> (Either PTypeA (PTypeC PType), Pat) -> PState
-  sem addMatchNames st =
-  | (_, PatBool _) -> st
-  | (_, PatInt _) -> st
-  | (_, PatChar _) -> st
+  sem addMatchNames : PScope -> (Either PTypeA (PTypeC PType), Pat) -> PScope
+  sem addMatchNames sc =
+  | (_, PatBool _) -> sc
+  | (_, PatInt _) -> sc
+  | (_, PatChar _) -> sc
   | (Right (PRecord ty), PatRecord pat) ->
     let f = lam ty. lam pat.
       match pat with PatNamed {ident = PName ident}
       then lam acc. mapInsert ident ty acc
       else lam acc. acc in
-    let valueScope = mapFoldWithKey (lam acc. lam. lam f. f acc) st.valueScope (mapIntersectWith f ty pat.bindings) in
-    {st with valueScope = valueScope}
+    let valueScope = mapFoldWithKey (lam acc. lam. lam f. f acc) sc.valueScope (mapIntersectWith f ty pat.bindings) in
+    {sc with valueScope = valueScope}
   | (Right (PSeq ty), PatSeqTot p) ->
     let f = lam acc. lam p.
       match p with PatNamed {ident = PName ident}
       then mapInsert ident ty acc
       else acc in
-    {st with valueScope = foldl f st.valueScope p.pats}
+    {sc with valueScope = foldl f sc.valueScope p.pats}
   | (Right (PSeq ty), PatSeqEdge p) ->
     let f = lam acc. lam p.
       match p with PatNamed {ident = PName ident}
       then mapInsert ident ty acc
       else acc in
-    let valueScope = foldl f st.valueScope p.prefix in
+    let valueScope = foldl f sc.valueScope p.prefix in
     let valueScope = foldl f valueScope p.postfix in
     let valueScope = match p.middle with PName ident
       then mapInsert ident (PLater (PSeq ty)) valueScope
       else valueScope in
-    {st with valueScope = valueScope}
+    {sc with valueScope = valueScope}
+  | (Right (recPoint & PUser ty), PatCon p) ->
+    match mapLookup p.ident ty with Some recTy then
+      match p.subpat with PatNamed {ident = PName ident} then
+        {sc with valueScope = mapInsert ident (recTyAsPType (PLater recPoint) recTy) sc.valueScope}
+      else sc
+    else error "Pattern matched on a constructor that cannot appear here. Should deal with this, but later."
 end
 
 mexpr
@@ -660,9 +897,12 @@ let ast = use DPPLParser in makeKeywords ast in
 let ast = symbolizeExpr symEnvDefault ast in
 let ast = typeCheck ast in
 let initState =
+  { specializations = mapEmpty nameCmp
+  } in
+let initScope =
   { functionDefinitions = mapEmpty nameCmp
   , valueScope = mapEmpty nameCmp
-  , specializations = mapEmpty nameCmp
+  , conScope = mapEmpty nameCmp
   } in
-match specializeExpr initState ast with (_, (ast, _)) in
+match specializeExpr initScope initState ast with (_, (ast, _)) in
 printLn (pprintCode 0 pprintEnvEmpty ast).1
