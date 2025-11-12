@@ -22,6 +22,7 @@ type State = {
 
   -- The weight of the current execution
   weight: Ref Float,
+  priorWeight: Ref Float,
   --
   useDriftKernels : Ref Bool,
   driftPrevValue: Ref (Any, Float),
@@ -68,6 +69,7 @@ let countReuseUnaligned = ref 0
 -- State (reused throughout inference)
 let state: State = {
   weight = ref 0.,
+  priorWeight = ref 0.,
   useDriftKernels = ref false,
   driftPrevValue = ref ((), 0.),
   driftHastingRatio = ref 0.,
@@ -80,6 +82,21 @@ let state: State = {
   oldUnalignedTraces = ref (emptyList ()),
   alignedTraceLength = ref (negi 1)
 }
+
+-- Function to reset the state when doing a global update
+let resetState : State -> () = lam state. (
+  modref state.oldAlignedTrace (emptyList ());
+  modref state.oldUnalignedTraces (emptyList ());
+  modref state.weight 0.;
+  modref state.priorWeight 0.;
+  modref state.driftHastingRatio 0.;
+  modref state.prevWeightReused 0.;
+  modref state.weightReused 0.;
+  modref state.reuseUnaligned true;
+  modref state.alignedTrace (emptyList ());
+  modref state.unalignedTraces (toList [(emptyList ())]);
+  ()
+)
 
 let updateWeight = lam v.
   -- print "Weight: "; print (float2string (exp v)); print " TotalWeight: "; printLn (float2string (exp (addf (deref state.weight) v)));
@@ -164,6 +181,7 @@ let sampleAligned: all a. use RuntimeDistBase in Dist a -> (a -> use RuntimeDist
     modref state.oldUnalignedTraces (tail (deref state.oldUnalignedTraces)));
 
   modref state.alignedTrace (cons sample (deref state.alignedTrace));
+  modref state.priorWeight (addf (deref state.priorWeight) sample.1);
   unsafeCoerce (sample.0)
 
 let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. lam dist.
@@ -186,10 +204,13 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   match deref state.unalignedTraces with [current] ++ rest in
   match sample with (sample,w) in
   modref state.unalignedTraces (cons (cons (sample,w,i) current) rest);
+  modref state.priorWeight (addf (deref state.priorWeight) w);
   unsafeCoerce sample
 
 -- Function to propose aligned trace changes between MH iterations.
-let modTrace: all a. all acc. all dAcc. Config a acc dAcc -> () = lam config.
+let modTrace: all a. all acc. all dAcc.
+  Config a acc dAcc -> Float -> () =
+  lam config. lam globalProb.
 
   let alignedTraceLength: Int = deref state.alignedTraceLength in
 
@@ -206,8 +227,7 @@ let modTrace: all a. all acc. all dAcc. Config a acc dAcc -> () = lam config.
   in
 
   -- Enable global modifications with probability gProb
-  let gProb = config.globalProb in
-  let modGlobal: Bool = bernoulliSample gProb in
+  let modGlobal: Bool = bernoulliSample globalProb in
 
   if modGlobal then
     modref state.oldAlignedTrace (emptyList ());
@@ -230,13 +250,17 @@ let modTrace: all a. all acc. all dAcc. Config a acc dAcc -> () = lam config.
 let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
 
-  recursive let mh : [a] -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
-    lam samples. lam prevWeight. lam prevSample. lam debugState. lam continueState. lam iter.
+  recursive let mh : [a] -> Float -> Float -> a -> dAcc -> (acc, Bool) -> Int -> [a] =
+    lam samples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
       match continueState with (continueState, true) then
+        let beta = config.temperature continueState in
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
-        modTrace config;
+        -- If we are sampling at temperature 0.0 we might want to draw global samples
+        let globalProb = config.globalProb continueState in
+        modTrace config globalProb;
         modref state.weight 0.;
+        modref state.priorWeight 0.;
         modref state.driftHastingRatio 0.;
         modref state.prevWeightReused 0.;
         modref state.weightReused 0.;
@@ -249,13 +273,13 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
         -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
         let weight = deref state.weight in
+        let priorWeight = deref state.priorWeight in
         let driftHastingRatio = deref state.driftHastingRatio in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
-        let logMhAcceptProb =
-          minf 0. (addf
+        let logMhAcceptProb = minf 0. (addf
                     (addf
-                      (subf weight prevWeight)
+                      (mulf beta (subf weight prevWeight))
                       (subf weightReused prevWeightReused))
                     driftHastingRatio)
         in
@@ -268,28 +292,50 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
         match
           if bernoulliSample (exp logMhAcceptProb) then
             mcmcAccept ();
-            (true, weight, sample)
+            (true, weight, priorWeight, sample)
           else
             -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
             -- as we reject and reuse the old sample.
             modref state.alignedTrace prevAlignedTrace;
             modref state.unalignedTraces prevUnalignedTraces;
-            (false, prevWeight, prevSample)
-        with (accepted, weight, sample) in
+            (false, prevWeight, prevPriorWeight, prevSample)
+        with (accepted, weight, priorWeight, sample) in
         let samples = if config.keepSample iter then snoc samples sample else samples in
         let debugInfo =
           { accepted = accepted
           } in
-        mh samples weight sample (config.debug.1 debugState debugInfo) (config.continue.1 continueState sample) (addi iter 1)
+        let debugState = config.debug.1 debugState debugInfo in
+        let sampleInfo =
+          { weight = weight
+          , priorWeight = priorWeight
+          } in
+        let continueState = config.continue.1 continueState sampleInfo sample in
+        mh samples weight priorWeight sample debugState continueState (addi iter 1)
       else samples
   in
+
+  -- First sample -- call the model until we get a non-zero weight
+  recursive let firstSample : (State -> a) -> State -> Int -> a =
+    lam model. lam state. lam i.
+      let sample = model state in 
+      let weight = deref state.weight in
+      let weightReused = deref state.weightReused in
+      let priorWeight = deref state.priorWeight in
+      let prevWeightReused = deref state.prevWeightReused in
+      if or (leqf weight (log 0.0)) (isNaN weight) then
+        resetState state;
+        -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+        firstSample model state (addi i 1)
+      else sample
+  in 
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
 
   -- First sample
-  let sample = model state in
+  let sample = firstSample model state 1 in
   let weight = deref state.weight in
+  let priorWeight = deref state.priorWeight in
 
   -- Set aligned trace length (a constant, only modified here)
   modref state.alignedTraceLength (length (deref state.alignedTrace));
@@ -298,16 +344,26 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in
 
+  -- Set up debug and continue states
   let debugInfo =
     { accepted = true
     } in
 
+  let debugState = config.debug.1 config.debug.0 debugInfo in
+  let continueState = config.continue.0 () in
+  let sampleInfo =
+    { weight = weight
+    , priorWeight = priorWeight
+    } in
+  let continueState = config.continue.1 continueState sampleInfo sample in
+
   -- Sample the rest
-  let samples = mh samples weight sample (config.debug.1 config.debug.0 debugInfo) (config.continue.1 config.continue.0 sample) (addi iter 1) in
+  let samples = mh samples weight priorWeight sample debugState continueState (addi iter 1) in
 
   -- printLn (join ["Number of reused aligned samples:", int2string (deref countReuse)]);
   -- printLn (join ["Number of reused unaligned samples:", int2string (deref countReuseUnaligned)]);
-  -- Return
+
+  -- Return: We on only need to output the samples if they are not written to a file already
   let numSamples = length samples in
   use RuntimeDist in
   constructDistEmpirical samples (make numSamples 1.0)

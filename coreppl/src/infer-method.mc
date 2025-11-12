@@ -223,8 +223,14 @@ lang InferMethodBase =
   | TmConst {val = CBool {val = b}} -> b
   | tm -> errorSingle [infoTm tm] "This must be a literal boolean"
 
+  sem _exprAsIntExn : Expr -> Int
+  sem _exprAsIntExn =
+  | TmConst {val = CInt {val = i}} -> i
+  | tm -> errorSingle [infoTm tm] "This must be a literal integer"
+
   sem _exprAsFloatExn : Expr -> Float
   sem _exprAsFloatExn =
   | TmConst {val = CFloat {val = f}} -> f
   | tm -> errorSingle [infoTm tm] "This must be a literal float"
+
 end
