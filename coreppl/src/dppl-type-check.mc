@@ -2394,6 +2394,11 @@ utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DGaussian {mu = x, sigma = y}))
   using eq
 in
 
+utest _typeOf [(_x, flt n)] (dist_ (DGeometric {p = x}))
+  with Right (det, tydist_ tyint_)
+  using eq
+in
+
 utest _typeOf [] (dist_ (DWiener { cps = false, a = unit_ }))
   with Right (det, tydist_ (arrd [flt n] (flt n)))
   using eq

@@ -495,6 +495,22 @@ lang GaussianDist = Dist
   | DGaussian _ -> "Gaussian"
 end
 
+lang GeometricDist = Dist
+  syn Dist =
+  | DGeometric { p : Expr }
+
+  sem smapAccumL_Dist_Expr f acc =
+  | DGeometric t ->
+    match f acc t.p with (acc, p) in
+    (acc, DGeometric { t with p = p })
+
+  sem distTy info =
+  | DGeometric _ -> ([], [ityfloat_ info], ityint_ info)
+
+  sem distName =
+  | DGeometric _ -> "Geometric"
+end
+
 lang BinomialDist = Dist
   syn Dist =
   | DBinomial { n : Expr, p : Expr }
@@ -583,6 +599,9 @@ let empirical_ = use EmpiricalDist in
 let gaussian_ = use GaussianDist in
   lam mu. lam sigma. dist_ (DGaussian {mu = mu, sigma = sigma})
 
+let geometric_ = use GeometricDist in
+  lam p. dist_ (DGeometric {p = p})
+
 let binomial_ = use BinomialDist in
   lam n. lam p. dist_ (DBinomial {n = n, p = p})
 
@@ -595,7 +614,7 @@ let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 lang DistAll =
   UniformDist + UniformDiscreteDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
-  EmpiricalDist + GaussianDist + BinomialDist + WienerDist + ReciprocalDist
+  EmpiricalDist + GeometricDist + GaussianDist + BinomialDist + WienerDist + ReciprocalDist
 end
 
 lang Test =
@@ -626,6 +645,7 @@ let tmEmpirical = empirical_ (seq_ [
   ]) in
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
+let tmGeometric = geometric_ (float_ 0.5) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmWiener = wiener_ in
 
@@ -684,6 +704,10 @@ utest mexprToString tmDirichlet with strJoin "\n" [
 
 utest mexprToString tmGaussian with strJoin "\n" [
   "Gaussian 0. 1."
+] using eqString in
+
+utest mexprToString tmGeometric with strJoin "\n" [
+  "Geometric 0.5"
 ] using eqString in
 
 utest mexprToString tmBinomial with strJoin "\n" [
@@ -753,6 +777,9 @@ utest eqExpr tmDirichlet
 utest tmGaussian with tmGaussian using eqExpr in
 utest eqExpr tmGaussian
   (gaussian_ (float_ 1.0) (float_ 1.0)) with false in
+
+utest tmGeometric with tmGeometric using eqExpr in
+utest eqExpr tmGeometric (geometric_ (float_ 0.1)) with false in
 
 utest tmBinomial with tmBinomial using eqExpr in
 utest eqExpr tmBinomial (binomial_ (int_ 4) (float_ 0.5)) with false in
@@ -825,6 +852,10 @@ utest smap_Expr_Expr mapVar tmGaussian with gaussian_ tmVar tmVar using eqExpr i
 utest sfold_Expr_Expr foldToSeq [] tmGaussian
 with [ float_ 1.0, float_ 0.0 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmGeometric with geometric_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmGeometric
+with [ float_ 0.5 ] using eqSeq eqExpr in
+
 utest smap_Expr_Expr mapVar tmBinomial with binomial_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmBinomial
 with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
@@ -846,6 +877,7 @@ utest symbolize tmExponential with tmExponential using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmGaussian with tmGaussian using eqExpr in
+utest symbolize tmGeometric with tmGeometric using eqExpr in
 utest symbolize tmBinomial with tmBinomial using eqExpr in
 
 
@@ -866,6 +898,7 @@ utest tyTm (typeCheck tmExponential) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmEmpirical) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
 utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_)
   using eqType
@@ -911,6 +944,7 @@ utest _anf tmDirichlet with bindall_ [
   var_ "t1"
 ) using eqExpr in
 utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
+utest _anf tmGeometric with bind_ (ulet_ "t" tmGeometric) (var_ "t") using eqExpr in
 utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 
@@ -931,6 +965,7 @@ utest (typeLift tmExponential).1 with tmExponential using eqExpr in
 utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
+utest (typeLift tmGeometric).1 with tmGeometric using eqExpr in
 utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
 utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 utest (typeLift tmReciprocal).1 with tmReciprocal using eqExpr in

@@ -74,6 +74,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBernoulli {p : Float}
   | DistBeta {a : Float, b : Float}
   | DistGaussian {mu : Float, sigma : Float}
+  | DistGeometric{p : Float}
   | DistMultinomial {n : Int, p : [Float]}
   | DistCategorical {p : [Float]}
   | DistDirichlet {a : [Float]}
@@ -93,6 +94,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
   | DistBeta t -> unsafeCoerce (betaSample t.a t.b)
   | DistGaussian t -> unsafeCoerce (gaussianSample t.mu t.sigma)
+  | DistGeometric t -> unsafeCoerce (geometricSample t.p)
   | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
@@ -115,6 +117,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBernoulli t -> unsafeCoerce t.p
   | DistBeta t -> unsafeCoerce (divf t.a (addf t.a t.b))
   | DistGaussian t -> unsafeCoerce t.mu
+  | DistGeometric t -> unsafeCoerce (divf (subf 1. t.p) t.p)
   | DistMultinomial t ->
     error "expectation undefined for the multinomial distribution"
   | DistCategorical t ->
@@ -134,6 +137,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
   | DistBeta t -> unsafeCoerce (betaLogPdf t.a t.b)
   | DistGaussian t -> unsafeCoerce (gaussianLogPdf t.mu t.sigma)
+  | DistGeometric t -> unsafeCoerce (geometricLogPmf t.p)
   | DistMultinomial t ->
     unsafeCoerce (lam o.
       if eqi t.n (foldl1 addi o) then multinomialLogPmf t.p o
