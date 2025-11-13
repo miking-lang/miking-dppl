@@ -362,6 +362,24 @@ lang BetaDist = Dist
   | DBeta _ -> "Beta"
 end
 
+lang Chi2Dist = Dist
+  syn Dist =
+  | DChi2 { df : Expr }
+
+  sem smapAccumL_Dist_Expr f acc =
+  | DChi2 t ->
+    match f acc t.df with (acc, df) in
+    (acc, DChi2 { t with df = df })
+
+  sem distTy info =
+  | DChi2 _ ->
+    let f = ityfloat_ info in
+    let i = ityint_ info in
+    ([], [i], f)
+  sem distName =
+  | DChi2 _ -> "Chi2"
+end
+
 lang GammaDist = Dist
   syn Dist =
   | DGamma { k : Expr, theta : Expr }
@@ -578,6 +596,9 @@ let poisson_ = use PoissonDist in
 let beta_ = use BetaDist in
   lam a. lam b. dist_ (DBeta {a = a, b = b})
 
+let chi2_ = use Chi2Dist in
+  lam df. dist_ (DChi2 {df = df})
+
 let gamma_ = use GammaDist in
   lam k. lam theta. dist_ (DGamma {k = k, theta = theta})
 
@@ -612,7 +633,7 @@ let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 ---------------------------
 
 lang DistAll =
-  UniformDist + UniformDiscreteDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
+  UniformDist + UniformDiscreteDist + BernoulliDist + PoissonDist + BetaDist + Chi2Dist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
   EmpiricalDist + GeometricDist + GaussianDist + BinomialDist + WienerDist + ReciprocalDist
 end
@@ -633,6 +654,7 @@ let tmUniformDiscrete = uniformDiscrete_ (int_ 1) (int_ 2) in
 let tmBernoulli = bern_ (float_ 0.5) in
 let tmPoisson = poisson_ (float_ 0.5) in
 let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
+let tmChi2 = chi2_ (int_ 1) in
 let tmGamma = gamma_ (float_ 1.0) (float_ 2.0) in
 let tmCategorical =
   categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
@@ -675,6 +697,10 @@ utest mexprToString tmPoisson with strJoin "\n" [
 
 utest mexprToString tmBeta with strJoin "\n" [
   "Beta 1. 2."
+] using eqString in
+
+utest mexprToString tmChi2 with strJoin "\n" [
+  "Chi2 1"
 ] using eqString in
 
 utest mexprToString tmGamma with strJoin "\n" [
@@ -737,6 +763,9 @@ utest eqExpr tmPoisson (poisson_ (float_ 0.4)) with false in
 
 utest tmBeta with tmBeta using eqExpr in
 utest eqExpr tmBeta (beta_ (float_ 1.0) (float_ 1.0)) with false in
+
+utest tmChi2 with tmChi2 using eqExpr in
+utest eqExpr tmChi2 (chi2_ (int_ 2)) with false in
 
 utest tmGamma with tmGamma using eqExpr in
 utest eqExpr tmGamma (gamma_ (float_ 1.0) (float_ 1.0)) with false in
@@ -821,6 +850,10 @@ utest smap_Expr_Expr mapVar tmBeta with beta_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmBeta
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmChi2 with chi2_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmChi2
+with [ int_ 1 ] using eqSeq eqExpr in
+
 utest smap_Expr_Expr mapVar tmGamma with gamma_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmGamma
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
@@ -870,6 +903,7 @@ utest symbolize tmUniformDiscrete with tmUniformDiscrete using eqExpr in
 utest symbolize tmBernoulli with tmBernoulli using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
+utest symbolize tmChi2 with tmChi2 using eqExpr in
 utest symbolize tmGamma with tmGamma using eqExpr in
 utest symbolize tmCategorical with tmCategorical using eqExpr in
 utest symbolize tmMultinomial with tmMultinomial using eqExpr in
@@ -891,6 +925,7 @@ utest tyTm (typeCheck tmUniformDiscrete) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBernoulli) with tydist_ tybool_ using eqType in
 utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBeta) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmChi2) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGamma) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmCategorical) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
@@ -917,6 +952,7 @@ utest _anf tmReciprocal with bind_ (ulet_ "t" tmReciprocal) (var_ "t") using eqE
 utest _anf tmUniformDiscrete with bind_ (ulet_ "t" tmUniformDiscrete) (var_ "t") using eqExpr in
 utest _anf tmBernoulli with bind_ (ulet_ "t" tmBernoulli) (var_ "t") using eqExpr in
 utest _anf tmPoisson with bind_ (ulet_ "t" tmPoisson) (var_ "t") using eqExpr in
+utest _anf tmUniform with bind_ (ulet_ "t" tmUniform) (var_ "t") using eqExpr in
 utest _anf tmBeta with bind_ (ulet_ "t" tmBeta) (var_ "t") using eqExpr in
 utest _anf tmGamma with bind_ (ulet_ "t" tmGamma) (var_ "t") using eqExpr in
 utest _anf tmCategorical with bindall_ [
@@ -958,6 +994,7 @@ utest (typeLift tmUniformDiscrete).1 with tmUniformDiscrete using eqExpr in
 utest (typeLift tmBernoulli).1 with tmBernoulli using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
 utest (typeLift tmBeta).1 with tmBeta using eqExpr in
+utest (typeLift tmChi2).1 with tmChi2 using eqExpr in
 utest (typeLift tmGamma).1 with tmGamma using eqExpr in
 utest (typeLift tmCategorical).1 with tmCategorical using eqExpr in
 utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
