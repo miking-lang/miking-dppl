@@ -2368,6 +2368,11 @@ utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DBeta {a = x, b = y}))
   using eq
 in
 
+utest _typeOf [(_x, tyint_)] (dist_ (DChi2 {df = x}))
+  with Right (det, tydist_ (flt n))
+  using eq
+in
+
 utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DGamma {k = x, theta = y}))
   with Right (det, tydist_ (flt n))
   using eq

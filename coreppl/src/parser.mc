@@ -152,6 +152,9 @@ lang DPPLParser =
   | "Beta" -> Some (2, lam lst. TmDist {dist = DBeta {a = get lst 0, b = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
+  | "Chi2" -> Some (1, lam lst. TmDist {dist = DChi2 {df = get lst 0},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
   | "Gamma" -> Some (2, lam lst. TmDist {dist = DGamma {k = get lst 0, theta = get lst 1},
                                          ty = TyUnknown {info = info},
                                          info = info})

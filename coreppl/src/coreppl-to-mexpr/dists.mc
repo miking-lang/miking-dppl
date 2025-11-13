@@ -63,6 +63,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DBeta { a = a, b = b } ->
     let cname = _getConExn "RuntimeDistElementary_DistBeta" env.env in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+  | DChi2 { df = df } ->
+    let cname = _getConExn "RuntimeDistElementary_DistChi2" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("df", df)])))
   | DGaussian { mu = mu, sigma = sigma } ->
     let cname = _getConExn "RuntimeDistElementary_DistGaussian" env.env in
     i (nconapp_ cname (i (autoty_record_ [("mu", mu), ("sigma", sigma)])))

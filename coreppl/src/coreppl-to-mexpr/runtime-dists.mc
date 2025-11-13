@@ -73,6 +73,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBinomial {n : Int, p : Float}
   | DistBernoulli {p : Float}
   | DistBeta {a : Float, b : Float}
+  | DistChi2{df : Int}
   | DistGaussian {mu : Float, sigma : Float}
   | DistGeometric{p : Float}
   | DistMultinomial {n : Int, p : [Float]}
@@ -93,6 +94,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
   | DistBeta t -> unsafeCoerce (betaSample t.a t.b)
+  | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
   | DistGaussian t -> unsafeCoerce (gaussianSample t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricSample t.p)
   | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
@@ -116,6 +118,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
   | DistBernoulli t -> unsafeCoerce t.p
   | DistBeta t -> unsafeCoerce (divf t.a (addf t.a t.b))
+  | DistChi2 t -> unsafeCoerce t.df
   | DistGaussian t -> unsafeCoerce t.mu
   | DistGeometric t -> unsafeCoerce (divf (subf 1. t.p) t.p)
   | DistMultinomial t ->
@@ -136,6 +139,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
   | DistBeta t -> unsafeCoerce (betaLogPdf t.a t.b)
+  | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)
   | DistGaussian t -> unsafeCoerce (gaussianLogPdf t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricLogPmf t.p)
   | DistMultinomial t ->
