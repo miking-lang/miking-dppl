@@ -182,6 +182,10 @@ lang DPPLParser =
   | "Wiener" -> Some (1, lam lst. TmDist {dist = DWiener {cps = false, a = get lst 0},
                                        ty = TyUnknown {info = info},
                                        info = info})
+  | "Pair" -> Some (2, lam lst. TmDist {dist = DPair {d = get lst 0, f = get lst 1},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
+
   | "solveode" -> Some (4, lam lst. TmSolveODE {method = interpretODESolverMethod (get lst 0),
                                              model = get lst 1,
                                              init = get lst 2,
