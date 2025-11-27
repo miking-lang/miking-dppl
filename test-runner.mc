@@ -1,2241 +1,301 @@
-include "these.mc"
-include "coreppl/src/parser.mc"
-include "mexpr/shallow-patterns.mc"
-include "mexpr/constant-fold.mc"
+include "coreppl::coreppl-to-mexpr/pval-graph/idealized-transformation.mc"
 
-lang TempLamAst = Ast + PrettyPrint
-  syn Expr =
-  -- NOTE(vipa, 2025-10-20): This should be a _linear_ function, and
-  -- should always represent a pure function
-  | TempLam (Expr -> Expr)
-  | TempFix ((Expr -> Expr) -> Expr -> Expr)
+let _idx0 = stringToSid "0"
+let _idx1 = stringToSid "1"
 
-  sem isAtomic =
-  | TempLam _ -> false
-  | TempFix _ -> false
-
-  sem pprintCode indent env =
-  | TempLam f ->
-    let x = nameSym "x" in
-    match pprintVarName env x with (env, str) in
-    match pprintCode (pprintIncr indent) env (f (nvar_ x)) with (env, body) in
-    ( env
-    , join ["lam ", str, ".", pprintNewline (pprintIncr indent), body]
-    )
-  | TempFix f ->
-    let x = nameSym "x" in
-    let fName = nameSym "f" in
-    match pprintVarName env fName with (env, fStr) in
-    match pprintVarName env x with (env, xStr) in
-    match pprintCode (pprintIncr indent) env (f (app_ (nvar_ fName)) (nvar_ x)) with (env, body) in
-    ( env
-    , join ["recursive let ", fStr, " = lam ", xStr, ".", pprintNewline (pprintIncr indent), body, " in ", fStr]
-    )
-end
-
-lang InlineSingleUse = DeclAst + LetDeclAst + RecLetsDeclAst + VarAst + TempLamAst
-  syn InlineMap =
-  | InlineMap (Map Name (InlineMap -> Expr))
-  type InlineSingleUseState =
-    { useCounts : Map Name Int
-    , toInline : Map Name (InlineMap -> Expr)
+lang TestLang = DPPLParser + MExprLowerNestedPatterns + MExprConstantFold + InlineSingleUse + TempLamAst + IdealizedPValTransformation + AutoTyRecord
+  type PValTransEnv =
+    { currStateName : Name
+    , functions : Map Name Bool -- True if it needs (and returns) a state argument
+    , p_pure : Name
+    , p_map : Name
+    , p_apply : Name
+    , p_bind : Name
+    , p_assume : Name
+    , p_select : Name
+    , p_weight : Name
+    , p_export : Name
+    , p_traverseSeq : Name
     }
 
-  sem inlineSingleUseLets : Expr -> Expr
-  sem inlineSingleUseLets = | tm ->
-    match collectSingleUses {useCounts = mapEmpty nameCmp, toInline = mapEmpty nameCmp} tm with (st, tm) in
-    insertSingleUses (InlineMap st.toInline) tm
+  type Peeled e = (Expr -> Expr, e)
 
-  sem collectSingleUses : InlineSingleUseState -> Expr -> (InlineSingleUseState, Expr)
-  sem collectSingleUses st =
-  | TmDecl (x & {decl = DeclLet l}) ->
-    match collectSingleUses st l.body with (st, body) in
-    match collectSingleUses st x.inexpr with (st, inexpr) in
-    match mapLookup l.ident st.useCounts with Some 1 then
-      ( { st with useCounts = mapRemove l.ident st.useCounts
-        , toInline = mapInsert l.ident (mkInlineable st.useCounts body) st.toInline
-        }
-      , inexpr
-      )
-    else (st, TmDecl {x with decl = DeclLet {l with body = body}, inexpr = inexpr})
-  | TmDecl (x & {decl = DeclRecLets l}) ->
-    let f = lam st. lam binding.
-      match collectSingleUses st binding.body with (st, body) in
-      (st, {binding with body = body}) in
-    match mapAccumL f st l.bindings with (st, bindings) in
-    match collectSingleUses st x.inexpr with (st, inexpr) in
-    let f = lam st. lam binding.
-      match mapLookup binding.ident st.useCounts with Some 1 then
-        ( { st with useCounts = mapRemove binding.ident st.useCounts
-          , toInline = mapInsert binding.ident (mkInlineable st.useCounts binding.body) st.toInline
-          }
-        , None ()
-        )
-      else (st, Some binding) in
-    match mapAccumL f st bindings with (st, bindings) in
-    match filterOption bindings with bindings & ![]
-    then (st, TmDecl {x with decl = DeclRecLets {l with bindings = bindings}, inexpr = inexpr})
-    else (st, inexpr)
-  | tm & TmVar x ->
-    ({st with useCounts = mapInsertWith addi x.ident 1 st.useCounts}, tm)
-  | tm -> smapAccumL_Expr_Expr collectSingleUses st tm
-
-  sem mkInlineable : Map Name Int -> Expr -> InlineMap -> Expr
-  sem mkInlineable useCounts =
-  | TmLam x ->
-    switch optionGetOr 0 (mapLookup x.ident useCounts)
-    case 1 then lam st.
-      match st with InlineMap toInline in
-      let f = lam arg.
-        let toInline = mapInsert x.ident (lam. arg) toInline in
-        mkInlineable useCounts x.body (InlineMap toInline) in
-      TempLam f
-    case 0 then lam st.
-      let f = lam. mkInlineable useCounts x.body st in
-      TempLam f
-    case _ then lam st.
-      let f = lam arg.
-        let body = mkInlineable useCounts x.body st in
-        let mkBinding = lam body. TmDecl
-          { decl = DeclLet
-            { ident = x.ident
-            , tyAnnot = x.tyAnnot
-            , tyBody = x.tyParam
-            , body = arg
-            , info = x.info
-            }
-          , inexpr = body
-          , info = x.info
-          , ty = tyunknown_
-          } in
-        match body with TempLam bodyF
-        then TempLam (lam bodyArg. mkBinding (bodyF bodyArg))
-        else mkBinding body in
-      TempLam f
-    end
-  | tm -> lam st. insertSingleUses st tm
-
-  sem insertSingleUses : InlineMap -> Expr -> Expr
-  sem insertSingleUses st =
-  | TmApp x ->
-    let lhs = insertSingleUses st x.lhs in
-    let rhs = insertSingleUses st x.rhs in
-    match lhs with TempLam f
-    then f rhs
-    else TmApp {x with lhs = lhs, rhs = rhs}
-  | tm & TmVar x ->
-    match st with InlineMap toInline in
-    optionGetOr tm (optionMap (lam f. f st) (mapLookup x.ident toInline))
-  | tm -> smap_Expr_Expr (insertSingleUses st) tm
-end
-
-lang Composed = DPPLParser + MExprLowerNestedPatterns + MExprConstantFold + InlineSingleUse + TempLamAst
-  syn Wrap =
-  | Wrapped
-  | Unused
-
-  syn PTypeC rec =
-  | PRecord (Map SID rec)
-  | PSeq rec
-  | PDist rec
-  -- NOTE(vipa, 2025-10-24): We assume recursion for types is direct
-  -- (no mutual recursion) and non-polymorphic. Constructors absent
-  -- from the `Map` are `Unused`.
-  | PUser (Map Name (RecTy rec))
-
-  syn RecTy rec =
-  | NoRec rec
-  | Rec
-  | RLater (PTypeC (RecTy rec))
-
-  syn PTypeA =
-  | PInt
-  | PFloat
-  | PBool
-  | PChar
-
-  sem mapPTypeC : all a. all b. (a -> b) -> PTypeC a -> PTypeC b
-  sem mapPTypeC f =
-  | PRecord x -> PRecord (mapMap f x)
-  | PSeq x -> PSeq (f x)
-  | PDist x -> PDist (f x)
-  | PUser x ->
-    recursive let work = lam recTy. switch recTy
-      case NoRec p then NoRec (f p)
-      case Rec _ then Rec ()
-      case RLater x then RLater (mapPTypeC work x)
-      end in
-    PUser (mapMap work x)
-
-  sem foldPTypeC : all a. all x. (a -> x -> a) -> a -> PTypeC x -> a
-  sem foldPTypeC f acc =
-  | PRecord x -> mapFoldWithKey (lam acc. lam. lam v. f acc v) acc x
-  | PSeq x -> f acc x
-  | PDist x -> f acc x
-  | PUser x ->
-    recursive let work = lam acc. lam recTy. switch recTy
-      case NoRec p then f acc p
-      case Rec _ then acc
-      case RLater x then foldPTypeC work acc x
-      end in
-    mapFoldWithKey (lam acc. lam. lam recTy. work acc recTy) acc x
-
-  sem map2PTypeCExn : all x. all y. all z. (x -> y -> z) -> PTypeC x -> PTypeC y -> PTypeC z
-  sem map2PTypeCExn f l = | r -> map2PTypeC (lam t. match t with These (x, y) in f x y) l r
-
-  sem map2PTypeC : all x. all y. all z. (These x y -> z) -> PTypeC x -> PTypeC y -> PTypeC z
-  sem map2PTypeC f l = | r -> map2PTypeC_ f (l, r)
-
-  sem map2PTypeC_ : all x. all y. all z. (These x y -> z) -> (PTypeC x, PTypeC y) -> PTypeC z
-  sem map2PTypeC_ f =
-  | (lty & PRecord l, rty & PRecord r) ->
-    let showTy = lam ty. ptypeCToString (lam. "_") ty in
-    let f = lam l. lam r.
-      match (l, r) with (Some l, Some r) then Some (f (These (l, r)))
-      else error (join ["Tried to call map2PTypeC with two records with different sets of fields: ", showTy lty, " and ", showTy rty]) in
-    PRecord (mapMerge f l r)
-  | (PSeq l, PSeq r) -> PSeq (f (These (l, r)))
-  | (PDist l, PDist r) -> PDist (f (These (l, r)))
-  | (lty & PUser l, rty & PUser r) ->
-    let showTy = lam ty. ptypeCToString (lam. "_") ty in
-    recursive let work : These (RecTy x) (RecTy y) -> RecTy z = lam t.
-      let handleOne = lam mkThese1. lam mkThese2. lam recTy. switch recTy
-        case NoRec x then NoRec (f (mkThese1 x))
-        case Rec _ then Rec ()
-        case RLater x then RLater (mapPTypeC (lam x. work (mkThese2 x)) x)
-        end in
-      let handleTwo = lam l : RecTy x. lam r : RecTy y. switch (l, r)
-        case (NoRec l, NoRec r) then NoRec (f (These (l, r)))
-        case (Rec _, Rec _) then Rec ()
-        case (RLater l, RLater r) then RLater (map2PTypeC work l r)
-        end in
-      theseThese (handleOne (lam x. This x) (lam x. This x)) (handleOne (lam x. That x) (lam x. That x)) handleTwo t in
-    let f = lam l. lam r. switch (l, r)
-      case (Some l, Some r) then Some (work (These (l, r)))
-      case (Some l, None _) then Some (work (This l))
-      case (None _, Some r) then Some (work (That r))
-      end in
-    PUser (mapMerge f l r)
-
-  sem mapMPTypeCOption : all a. all b. (a -> Option b) -> PTypeC a -> Option (PTypeC b)
-  sem mapMPTypeCOption f =
-  | PRecord x -> optionMap (lam m. PRecord m)
-    (mapFoldlOption (lam acc. lam k. lam v. optionMap (lam v. mapInsert k v acc) (f v)) (mapEmpty (mapGetCmpFun x)) x)
-  | PSeq x -> optionMap (lam x. PSeq x) (f x)
-  | PDist x -> optionMap (lam x. PDist x) (f x)
-  | PUser x ->
-    recursive let work = lam recTy. switch recTy
-      case NoRec p then optionMap (lam p. NoRec p) (f p)
-      case Rec _ then Some (Rec ())
-      case RLater x then optionMap (lam x. RLater x) (mapMPTypeCOption work x)
-      end in
-    optionMap (lam x. PUser x)
-      (mapFoldlOption (lam acc. lam k. lam v. optionMap (lam v. mapInsert k v acc) (work v)) (mapEmpty (mapGetCmpFun x)) x)
-
-  sem foldRecTy : all a. all x. (a -> x -> a) -> a -> RecTy x -> a
-  sem foldRecTy f acc =
-  | NoRec x -> f acc x
-  | Rec _ -> acc
-  | RLater x -> foldPTypeC (foldRecTy f) acc x
-
-  syn PureType =
-  | PureTypeC (PTypeC PureType)
-  | PureTypeA PTypeA
-
-  syn PType =
-  | PLater (PTypeC PType)
-  | PNever PTypeA
-  | PHere {wrapped : Wrap, ty : PureType}
-
-  sem ptypeToString : PType -> String
-  sem ptypeToString =
-  | PHere x ->
-    let prefix = switch x.wrapped
-      case Wrapped _ then "!"
-      case Unused _ then "~"
-      end in
-    concat prefix (pureTypeToString x.ty)
-  | PNever x -> ptypeAToString x
-  | PLater x -> ptypeCToString ptypeToString x
-
-  sem ptypeAToString : PTypeA -> String
-  sem ptypeAToString =
-  | PInt _ -> "Int"
-  | PFloat _ -> "Float"
-  | PBool _ -> "Bool"
-  | PChar _ -> "Char"
-
-  sem pureTypeToString : PureType -> String
-  sem pureTypeToString =
-  | PureTypeC x -> ptypeCToString pureTypeToString x
-  | PureTypeA x -> ptypeAToString x
-
-  sem ptypeCToString : all x. (x -> String) -> PTypeC x -> String
-  sem ptypeCToString f =
-  | PRecord x ->
-    let b = lam pair.
-      match pair with (key, value) in
-      join [sidToString key, " : ", f value] in
-    join ["{", strJoin ", " (map b (mapBindings x)), "}"]
-  | PSeq x ->
-    join ["[", f x, "]"]
-  | PDist x ->
-    join ["(Dist ", f x, ")"]
-  | PUser x ->
-    recursive let pRecTy = lam recTy. switch recTy
-      case NoRec p then f p
-      case Rec _ then "<rec>"
-      case RLater r then cons '*' (ptypeCToString pRecTy r)
-      end in
-    let pBinding = lam pair.
-      match pair with (conName, recTy) in
-      join [nameGetStr conName, " ", pRecTy recTy] in
-    join ["(", strJoin " + " (map pBinding (mapBindings x)), ")"]
-
-  sem isPureIsh : PType -> Bool
-  sem isPureIsh =
-  | PNever _ -> true
-  | PHere {wrapped = Unused _} -> true
-  | PHere {wrapped = Wrapped _} -> false
-  | PLater x ->
-    let f = lam acc. lam v. if acc then isPureIsh v else false in
-    foldPTypeC f true x
-
-  sem isTopWrapped : PType -> Bool
-  sem isTopWrapped =
-  | PHere {wrapped = Wrapped _} -> true
-  | _ -> false
-
-  sem unwrapOnce : PType -> Either PTypeA (PTypeC PType)
-  sem unwrapOnce =
-  | PHere {ty = PureTypeA ty} -> Left ty
-  | PHere {wrapped = Wrapped _, ty = PureTypeC ty} ->
-    Right (mapPTypeC pureToPType ty)
-  | PHere {wrapped = Unused _, ty = PureTypeC ty} ->
-    Right (mapPTypeC (lam ty. PHere {wrapped = Unused (), ty = ty}) ty)
-  | PNever x -> Left x
-  | PLater x -> Right x
-
-  sem pureToPType : PureType -> PType
-  sem pureToPType =
-  | PureTypeA x -> PNever x
-  | PureTypeC x -> PLater (mapPTypeC pureToPType x)
-
-  sem recTyAsPType : PType -> RecTy PType -> PType
-  sem recTyAsPType recPoint =
-  | NoRec p -> p
-  | Rec _ -> recPoint
-  | RLater p -> PLater (mapPTypeC (recTyAsPType recPoint) p)
-
-  sem ptypeAsPureType : PType -> PureType
-  sem ptypeAsPureType =
-  | PLater x -> PureTypeC (mapPTypeC ptypeAsPureType x)
-  | PHere x -> x.ty
-  | PNever x -> PureTypeA x
-
-  sem purifyPType : PType -> PType
-  sem purifyPType =
-  | PNever x -> PNever x
-  | PLater x -> PLater (mapPTypeC purifyPType x)
-  | PHere {wrapped = Wrapped _, ty = ty} -> pureToPType ty
-  | pty & PHere {wrapped = Unused _} -> pty
-
-  type PScope =
-    { functionDefinitions : Map Name {params : [Name], mayBeRecursive : Bool, body : Expr}
-    , valueScope : Map Name (Name, PType)
-    , conScope : Map Name (RecTy ())
-    }
-
-  type PState =
-    { specializations : Map Name (Map [PType] (Name, PType, Option DeclLetRecord))
-    }
-
-  syn Const =
-  | CPAssume
-  | CPWeight
-  | CPPure
-  | CPMap
-  | CPApply
-  | CPJoin
-  | CPTraverseSeq
-
-  sem getConstStringCode indent =
-  | CPAssume _ -> "p_assume"
-  | CPWeight _ -> "p_weight"
-  | CPPure _ -> "p_pure"
-  | CPMap _ -> "p_map"
-  | CPApply _ -> "p_apply"
-  | CPJoin _ -> "p_join"
-  | CPTraverseSeq _ -> "p_traverseSeq"
-
-  sem ptyCmp : PType -> PType -> Int
-  sem ptyCmp l = | r ->
-    switch (l, r)
-    case (PLater l, PLater r) then _ptyCCmp ptyCmp (l, r)
-    case (PHere l, PHere r) then
-      let res = subi (constructorTag l.wrapped) (constructorTag r.wrapped) in
-      if neqi res 0 then res else
-      recursive let work = lam l. lam r.
-        switch (l, r)
-        case (PureTypeA l, PureTypeA r) then _ptyACmp (l, r)
-        case (PureTypeC l, PureTypeC r) then _ptyCCmp work (l, r)
-        case (l, r) then subi (constructorTag l) (constructorTag r)
-        end in
-      work l.ty r.ty
-    case (l, r) then
-      subi (constructorTag l) (constructorTag r)
-    end
-
-  sem _ptyACmp : (PTypeA, PTypeA) -> Int
-  sem _ptyACmp =
-  | (PInt _, PInt _) -> 0
-  | (PFloat _, PFloat _) -> 0
-  | (PBool _, PBool _) -> 0
-  | (PChar _, PChar _) -> 0
-  | (l, r) ->
-    let lt = constructorTag l in
-    let rt = constructorTag r in
-    if eqi lt rt
-    then error "Missing equal case in _ptyACmp"
-    else subi lt rt
-
-  sem _ptyCCmp : all x. (x -> x -> Int) -> (PTypeC x, PTypeC x) -> Int
-  sem _ptyCCmp rec =
-  | (PDist l, PDist r) -> rec l r
-  | (PSeq l, PSeq r) -> rec l r
-  | (PRecord l, PRecord r) -> mapCmp rec l r
-  | (PUser l, PUser r) ->
-    recursive let work = lam l. lam r. switch (l, r)
-      case (NoRec l, NoRec r) then rec l r
-      case (Rec _, Rec _) then 0
-      case (RLater l, RLater r) then _ptyCCmp work (l, r)
-      end in
-    mapCmp work l r
-  | (l, r) ->
-    let lt = constructorTag l in
-    let rt = constructorTag r in
-    if eqi lt rt
-    then error "Missing equal case in _ptyCCmp"
-    else subi lt rt
-
-  sem lubPType : PType -> PType -> PType
-  sem lubPType l = | r -> _lubPType (l, r)
-
-  sem _lubPType : (PType, PType) -> PType
-  sem _lubPType =
-  | (lty & PNever _, PNever _) -> lty
-  | (lty & PHere {wrapped = l}, rty & PHere {wrapped = r}) ->
-    switch (l, r)
-    case (Wrapped _, _) then lty
-    case (_, Wrapped _) then rty
-    case (Unused _, _) then rty
-    case (_, Unused _) then lty
-    end
-  | (lty & PHere {wrapped = l}, rty & (PLater _ | PNever _)) ->
-    switch l
-    case Wrapped _ then lty
-    case Unused _ then rty
-    end
-  | (lty & (PLater _ | PNever _), rty & PHere {wrapped = r}) ->
-    switch r
-    case Wrapped _ then rty
-    case Unused _ then lty
-    end
-  | (PLater (PSeq l), PLater (PSeq r)) -> PLater (PSeq (lubPType l r))
-  | (PLater (PRecord l), PLater (PRecord r)) -> PLater (PRecord (mapIntersectWith lubPType l r))
-  | (PLater (PDist l), PLater (PDist r)) -> PLater (PDist (lubPType l r))
-  | (PLater (PUser l), PLater (PUser r)) ->
-    recursive let lubRecTy = lam l. lam r. switch (l, r)
-      case (NoRec l, NoRec r) then NoRec (lubPType l r)
-      case (Rec _, Rec _) then Rec ()
-      case (RLater l, RLater r) then RLater (map2PTypeCExn lubRecTy l r)
-      end in
-    PLater (PUser (mapMerge (optionOrWith lubRecTy) l r))
-
-  sem ensureWrapped : PType -> PType
-  sem ensureWrapped = | ty ->
-    PHere {wrapped = Wrapped (), ty = ptypeAsPureType ty}
-
-  sem underDecls : (Expr -> Expr) -> Expr -> Expr
-  sem underDecls f =
-  | TmDecl x -> TmDecl {x with inexpr = underDecls f x.inexpr}
-  | tm -> f tm
-
-  sem adjustWrapping : (PType, PType) -> Expr -> Expr
-  sem adjustWrapping = | x ->
-    let f = _adjustWrapping x in
-    -- printLn (join ["adjust ", ptypeToString x.0, " to ", ptypeToString x.1, " by ", expr2str (TempLam f)]);
-    underDecls f
-
-  sem _adjustWrappingC : Bool -> PTypeC (Expr -> Expr) -> Expr -> Expr
-  sem _adjustWrappingC shouldWrap =
-  | PSeq f ->
-    if shouldWrap
-    then _app (_app (uconst_ (CPTraverseSeq ())) (TempLam f))
-    else _app (_app (uconst_ (CMap ())) (TempLam f))
-  | PRecord adjustments ->
-    let isId = if shouldWrap then isPure else isIdentity in
-    let pure = if shouldWrap then app_ (uconst_ (CPPure ())) else lam x. x in
-    let apply = if shouldWrap then _apply else _app in
-    if mapAll isId adjustments then pure else
-    recursive let construct = lam prev. lam remaining.
-      match remaining with [key] ++ remaining
-      then TempLam (lam tm. construct (snoc prev (key, tm)) remaining)
-      else TmRecord
-        { bindings = mapFromSeq cmpSID prev
-        , ty = tyunknown_
-        , info = NoInfo ()
-        } in
-    let construct = pure (construct [] (mapKeys adjustments)) in
-    lam tm.
-      match tm with TmRecord x then
-        let args = mapValues (mapIntersectWith (lam adjust. lam tm. adjust tm) adjustments x.bindings) in
-        foldl apply construct args
-      else
-        match
-          match tm with TmVar _ then (lam x. x, tm)
-          else let n = nameSym "x" in (bind_ (nulet_ n tm), withType (tyTm tm) (nvar_ n))
-        with (oBind, target) in
-        oBind (foldl apply construct (mapValues (mapMapWithKey (lam sid. lam f. f (recordproj_ (sidToString sid) target)) adjustments)))
-  | PDist f ->
-    -- OPT(vipa, 2025-11-04): Could probably just skip the extra check
-    (if if shouldWrap then isPure f else isIdentity f
-     then ()
-     else error (join ["We somehow have a non-pure type parameter to a PDist, can't handle that: ", bool2string shouldWrap, " ", expr2str (TempLam f)]));
-    if shouldWrap
-    then app_ (uconst_ (CPPure ()))
-    else lam tm. tm
-  | PUser adjustments ->
-    let isId = if shouldWrap then isPure else isIdentity in
-    let pure = if shouldWrap then app_ (uconst_ (CPPure ())) else lam x. x in
-    let apply = if shouldWrap then _apply else _app in
-    let f = lam allId. lam f. if allId then isId f else false in
-    let allId = mapFoldWithKey
-      (lam allId. lam. lam r. if allId then foldRecTy f true r else false) true adjustments in
-    if allId then pure else
-    let f = lam rec.
-      recursive let work = lam recTy. switch recTy
-        case NoRec adj then adj
-        case Rec _ then rec
-        case RLater x then _adjustWrappingC shouldWrap (mapPTypeC work x)
-        end in
-      let workTop = lam conName. lam recTy. lam tm.
-        apply (pure (TempLam (nconapp_ conName))) (work recTy tm) in
-      _switchExhaustive (mapMapWithKey workTop adjustments) in
-    _app (TempFix f)
-  | l ->
-    error (join ["Missing case for _adjustWrappingC: ", ptypeCToString (lam. "_") l])
-
-  sem _adjustWrapping : (PType, PType) -> Expr -> Expr
-  sem _adjustWrapping =
-  | (PNever _, PNever _) -> lam x. x
-  | (PNever _, PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
-  | (PHere {wrapped = Unused _}, _) -> lam x. x
-  | (PHere {wrapped = Wrapped _}, PHere {wrapped = Wrapped _}) -> lam x. x
-  | (PHere {wrapped = Wrapped _}, PLater _) -> lam tm. errorSingle [infoTm tm] "Tried to convert a value to a less wrapped value, which is impossible"
-  | (fr & PLater x, to & PHere {wrapped = Wrapped _, ty = PureTypeC y}) ->
-    let y = mapPTypeC (lam ty. PHere {wrapped = Wrapped (), ty = ty}) y in
-    let f = lam t. switch t
-      case These pair then _adjustWrapping pair
-      case This _ then error (join ["Cannot adjust from ", ptypeToString fr, " to ", ptypeToString to, ", we'd drop a constructor"])
-      case That _ then lam x. x
-      end in
-    _adjustWrappingC true (map2PTypeC f x y)
-  | (fr & PLater x, to & PLater y) ->
-    let f = lam t. switch t
-      case These pair then _adjustWrapping pair
-      case This _ then error (join ["Cannot adjust from ", ptypeToString fr, " to ", ptypeToString to, ", we'd drop a constructor"])
-      case That _ then lam x. x
-      end in
-    _adjustWrappingC false (map2PTypeC f x y)
-  | (l, r) -> error (join ["Missing case in _adjustWrapping: ", ptypeToString l, ", ", ptypeToString r])
-
-  sem _tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC Type -> x) -> (Type -> [Type] -> x) -> Type -> x
-  sem _tyToPTypeX atom composite custom =
-  | TyDist x -> composite (PDist x.ty)
-  | TyFloat _ -> atom (PFloat ())
-  | TyBool _ -> atom (PBool ())
-  | TyInt _ -> atom (PInt ())
-  | TyChar _ -> atom (PChar ())
-  | TySeq x -> composite (PSeq x.ty)
-  | TyRecord x -> composite (PRecord x.fields)
-  | ty & (TyApp _ | TyCon _ | TyVar _) ->
-    match getTypeArgs ty with (ty, tyArgs) in custom ty tyArgs
-  | ty -> errorSingle [infoTy ty] (concat "Missing case for _tyToPTypeX: " (getTypeStringCode 0 pprintEnvEmpty ty).1)
-
-  sem tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC x -> x) -> (Type -> [Type] -> x) -> Type -> x
-  sem tyToPTypeX atom composite custom = | ty ->
-    _tyToPTypeX atom (lam pty. composite (mapPTypeC (tyToPTypeX atom composite custom) pty)) custom ty
-
-  sem tyToPureType : Type -> PureType
-  sem tyToPureType = | ty -> tyToPTypeX (lam x. PureTypeA x) (lam x. PureTypeC x) (lam. lam. PureTypeC (PUser (mapEmpty nameCmp))) ty
-
-  sem tyToPurePType : Type -> PType
-  sem tyToPurePType = | ty -> tyToPTypeX (lam x. PNever x) (lam x. PLater x) (lam. lam. PLater (PUser (mapEmpty nameCmp))) ty
-
-  sem _switchExhaustive : Map Name (Expr -> Expr) -> Expr -> Expr
-  sem _switchExhaustive cases =
-  | tm & TmConApp x ->
-    match mapLookup x.ident cases with Some f
-    then f x.body
-    else error "_switchExhaustive was called with a non-covered case"
+  sem maybeEtaExpand : Expr -> {ident : Name, tyAnnot : Type, tyParam : Type, body : Expr, ty : Type, info : Info}
+  sem maybeEtaExpand =
+  | TmLam f -> f
   | tm ->
-    if mapIsEmpty cases then tm else
-    match
-      match (mapSize cases, tm) with (1, _) | (_, TmVar _) then (lam x. x, tm) else
-      let n = nameSym "target" in
-      (bind_ (nulet_ n tm), nvar_ n)
-    with (oBind, target) in
-    let f = lam acc. lam conName. lam f.
-      let n = nameSym "x" in
-      match_ target (npcon_ conName (npvar_ n))
-        (f (nvar_ n))
-        acc in
-    oBind (mapFoldWithKey f never_ cases)
-
-  sem _app : Expr -> Expr -> Expr
-  sem _app l = | r -> _app_ (l, r)
-
-  sem isIdentity : (Expr -> Expr) -> Bool
-  sem isIdentity = | f ->
     let n = nameSym "x" in
-    match f (nvar_ n) with TmVar {ident = ident}
-    then nameEq ident n
-    else false
+    { ident = n
+    , tyAnnot = tyunknown_
+    , tyParam = tyunknown_
+    , body = _app tm (nvar_ n)
+    , ty = tyTm tm
+    , info = infoTm tm
+    }
 
-  sem isPure : (Expr -> Expr) -> Bool
-  sem isPure = | f ->
-    let n = nameSym "x" in
-    match f (nvar_ n) with TmApp {lhs = TmConst {val = CPPure _}, rhs = TmVar {ident = ident}}
-    then nameEq ident n
-    else false
-
-  -- This is semantically the same as `app_`, except it tries a number
-  -- of rewrite rules, essentially evaluating some of it at compile
-  -- time.
-  sem _app_ : (Expr, Expr) -> Expr
-  sem _app_ =
-  -- we have a simple function, just apply it
-  | (TempLam f, x) -> f x
-  -- we have a simple recursive function, just apply it
-  | (f & TempFix f2, x & !TmVar _) -> f2 (_app f) x
-  -- p_map id = id
-  | (f & TmConst {val = CPMap _}, x & TempLam f2) ->
-    if isIdentity f2 then TempLam (lam x. x) else app_ f x
-  -- mapSeq id = id
-  | (f & TmConst {val = CMap _}, x & TempLam f2) ->
-    if isIdentity f2 then TempLam (lam x. x) else app_ f x
-  -- mapSeq f [x, ...] = [f x, ...]
-  | ( TmApp
-      { lhs = TmConst {val = CMap _}
-      , rhs = f
-      }
-    , TmSeq x
-    ) ->
-    TmSeq {x with tms = map (_app f) x.tms}
-  -- p_map f (p_pure x) = p_pure (f x)
-  | ( TmApp
-      { lhs = TmConst {val = CPMap _}
-      , rhs = f
-      }
-    , TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = x
-      }
-    ) ->
-    app_ (uconst_ (CPPure ())) (_app f x)
-  -- p_map f (p_map g x) = p_map (lam x. f (g x)) x
-  | ( TmApp
-      { lhs = TmConst {val = CPMap _}
-      , rhs = f
-      }
-    , TmApp
-      { lhs = TmApp
-        { lhs = TmConst {val = CPMap _}
-        , rhs = g
-        }
-      , rhs = x
-      }
-    ) ->
-    appf2_ (uconst_ (CPMap ())) (TempLam (lam x. _app f (_app g x))) x
-  -- p_map f (p_apply g x) = p_apply (p_map (lam g. lam x. f (g x)) g) x
-  | ( TmApp
-      { lhs = TmConst {val = CPMap _}
-      , rhs = f
-      }
-    , TmApp
-      { lhs = TmApp
-        { lhs = TmConst {val = CPApply _}
-        , rhs = g
-        }
-      , rhs = x
-      }
-    ) ->
-    -- OPT(vipa, 2025-10-21): This case introduces some quadratic time
-    -- complexity, e.g., in `f x1 x2 ... xn`, where x1 through xi are
-    -- wrapped and all other x are pure we will use `_map` to go
-    -- through i-1 `CPApply`s n-i times. Could probably be avoided by
-    -- having an "apply-train" term that has the function plus a list
-    -- of arguments.
-    let f = TempLam (lam g. TempLam (lam x. _app f (_app g x))) in
-    appf2_ (uconst_ (CPApply ())) (_map f g) x
-  -- p_apply (p_pure f) = p_map f
-  | ( TmConst {val = CPApply _}
-    , TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = f
-      }
-    ) ->
-    TempLam (_map f)
-  -- p_apply f (p_pure x) = p_map (lam f. f x) f
-  | ( TmApp
-      { lhs = TmConst {val = CPApply _}
-      , rhs = f
-      }
-    , TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = x
-      }
-    ) ->
-    _map (TempLam (lam f. _app f x)) f
-  -- p_traverseSeq pure = pure
-  | (f & TmConst {val = CPTraverseSeq _}, x & TempLam f2) ->
-    if isPure f2 then uconst_ (CPPure ()) else app_ f x
-  -- p_join (p_pure x) = x
+  sem pvalTransCall : PValTransEnv -> (Expr, [Expr]) -> Peeled Expr
+  sem pvalTransCall env =
+  | (TmConst {val = CPPure _}, args) ->
+    match pvalTransSeq env args with (stateName, (wrap, [val])) in
+    (wrap, appf2_ (nvar_ env.p_pure) (nvar_ stateName) val)
+  | (TmConst {val = CPMap _}, [f, val]) ->
+    match pvalTransSeq env [val] with (stateName, (wrap, [val])) in
+    (wrap, appf3_ (nvar_ env.p_map) (nvar_ stateName) f val)
+  | (TmConst {val = CPTraverseSeq _}, [f, val]) ->
+    match pvalTransSeq env [val] with (stateName, (wrap, [val])) in
+    let f = maybeEtaExpand f in
+    let innerStateName = nameSym "st" in
+    match pvalTrans {env with currStateName = innerStateName} f.body with (wrapB, body) in
+    let f = nulam_ innerStateName (TmLam {f with body = wrapB body}) in
+    (wrap, appf3_ (nvar_ env.p_traverseSeq) (nvar_ stateName) f val)
+  | (TmConst {val = CPApply _}, args) ->
+    match pvalTransSeq env args with (stateName, (wrap, [f, val])) in
+    (wrap, appf3_ (nvar_ env.p_apply) (nvar_ stateName) f val)
   | ( TmConst {val = CPJoin _}
-    , TmApp
-      { lhs = TmConst {val = CPPure _}
-      , rhs = x
-      }
-    ) -> x
-  -- base case, just make the TmApp
-  | (f, x) -> app_ f x
-
-  sem _map : Expr -> Expr -> Expr
-  sem _map f = | x -> _app (_app (uconst_ (CPMap ())) f) x
-
-  sem _apply : Expr -> Expr -> Expr
-  sem _apply f = | a -> _app (_app (uconst_ (CPApply ())) f) a
-
-  sem _join : Expr -> Expr
-  sem _join = | x -> _app (uconst_ (CPJoin ())) x
-
-  sem specializeCall : PScope -> PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
-  sem specializeCall sc st =
-  | {f = TmVar x, args = args, ret = retTy} ->
-    match unzip args with (args, argTys) in
-    match optionBind (mapLookup x.ident st.specializations) (mapLookup argTys) with Some (name, ty, _) then
-      (st, (appSeq_ (nvar_ name) args, ty))
+    , [ TmApp
+        { lhs = TmApp
+          { lhs = TmConst {val = CPMap _}
+          , rhs = f
+          }
+        , rhs = val
+        }
+      ]
+    ) ->
+    let f = maybeEtaExpand f in
+    match pvalTransSeq env [val] with (stateName, (wrapV, [val])) in
+    let innerStateName = nameSym "st" in
+    match pvalTrans {env with currStateName = innerStateName} f.body with (wrap1, body) in
+    match peelState body with (innerName, (wrap2, bodyPeeled)) in
+    if nameEq innerStateName innerName then
+      -- NOTE(vipa, 2025-11-19): The body doesn't create any new
+      -- nodes, thus we can use p_select
+      (wrapV, appf3_ (nvar_ env.p_select) (nvar_ stateName) (TmLam {f with body = wrap1 (wrap2 bodyPeeled)}) val)
     else
-      -- NOTE(vipa, 2025-10-21): Not previously specialized, do it.
-      let definition =
-        match mapLookup x.ident sc.functionDefinitions
-        with Some x then x
-        else error (join ["Missing entry in functionDefinitions for ", nameGetStr x.ident]) in
-      let params = map (lam n. (n, nameSetNewSym n)) definition.params in
-      let valueScope = foldl2 (lam m. lam n. lam ty. mapInsert n.0 (n.1, ty) m) sc.valueScope params argTys in
-      let name = nameSetNewSym x.ident in
-      match
-        let sc = {sc with valueScope = valueScope} in
-        if definition.mayBeRecursive then
-          recursive let speculate = lam guess.
-            let spec = mapSingleton (seqCmp ptyCmp) argTys (name, guess, None ()) in
-            let localSpecializations = mapMap (mapFilter (lam x. optionIsSome x.2)) st.specializations in
-            let nonLocalSpecializations = mapMap (mapFilter (lam x. optionIsNone x.2)) st.specializations in
-            let st2 = {st with specializations = mapInsertWith mapUnion x.ident spec nonLocalSpecializations} in
-            match specializeExpr sc st2 definition.body with (st2, (body, retTy)) in
-            if eqi 0 (ptyCmp guess retTy) then ({st2 with specializations = mapUnionWith mapUnion localSpecializations st2.specializations}, (body, retTy)) else
-            speculate retTy in
-          speculate (PHere {wrapped = Unused (), ty = tyToPureType retTy})
-        else specializeExpr sc st definition.body
-      with (st, (body, retTy)) in
-      let def : DeclLetRecord =
-        { ident = name
-        , tyAnnot = tyunknown_
-        , tyBody = tyunknown_
-        , body = nulams_ (map (lam x. x.1) params) body
-        , info = NoInfo ()
-        } in
-      let st =
-        { specializations = mapInsertWith mapUnion x.ident
-          (mapSingleton (seqCmp ptyCmp) argTys (name, retTy, Some def))
-          st.specializations
-        } in
-      (st, (foldl app_ (nvar_ name) args, retTy))
-  | {f = tm & (TempLam _ | TmConst _), args = args, ret = ret} ->
-    let polyType =
-      match tm with TmConst {val = c} then
-       match tyConst c with ty & TyAll _
-       then Some ty
-       else None ()
-     else None () in
-    match polyType with Some polyType then
-      match unzip args with (args, argPTys) in
-      let retPTy = tyToPurePType ret in
-      recursive let tyArgs = lam args. lam ty.
-        match unwrapType ty with TyArrow x
-        then tyArgs (snoc args x.from) x.to
-        else (args, ty) in
-      match tyArgs [] (stripTyAll polyType).1 with (argTys, retTy) in
-      -- Collect the `PType`s used to instantiate each `TyVar`,
-      -- combining them with `lubPType` since different `PType`s might
-      -- appear at different places. Additionally, find wrappedness
-      -- that cannot be absorbed by a `TyVar`.
-      let mergeCollectInfo = lam l. lam r. (or l.0 r.0, mapUnionWith lubPType l.1 r.1) in
-      let collectAtom = lam pty. lam ty. (isTopWrapped pty, mapEmpty nameCmp) in
-      let collectCustom = lam pty. lam tyCon. lam tyArgs. switch tyCon
-        case TyVar x then
-          if null tyArgs
-          then (false, mapSingleton nameCmp x.ident pty)
-          else errorSingle [x.info] "Found a type application of a type variable, that's not supported presently."
-        case TyCon x then
-          errorSingle [x.info] "This transformation does not support any TmConst's with TyCon's in their types."
-        end in
-      recursive let collectComposite = lam pty. lam ty.
-        let wrappedHere = isTopWrapped pty in
-        match unwrapOnce pty with Right pty in
-        let rec = map2PTypeCExn (lam pty. _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty)) pty ty in
-        foldPTypeC mergeCollectInfo (wrappedHere, mapEmpty nameCmp) rec in
-      let collectTy = lam pty. lam ty.
-        _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty) ty in
-      let f = lam acc. lam pty. lam ty. mergeCollectInfo acc (collectTy pty ty) in
-      match foldl2 f (collectTy retPTy retTy) argPTys argTys with (needsFullWrap, varPTys) in
-      -- Construct `PType`s using the collected `TyVar` `PType`s. We
-      -- need to do this even if `needsFullWrap` is true in case a
-      -- `TyVar` was instantiated with a `PUser` type with
-      -- constructors.
-      let constructCustom = lam tyCon. lam.
-        match tyCon with TyVar x in mapFindExn x.ident varPTys in
-      let construct = tyToPTypeX (lam x. PNever x) (lam x. PLater x) constructCustom in
-      let targetArgPTys = if needsFullWrap
-        then map (lam ty. ensureWrapped (construct ty)) argTys
-        else map construct argTys in
-      let retTy = if needsFullWrap
-        then ensureWrapped (construct retTy)
-        else construct retTy in
-      let args = zipWith adjustWrapping (zip argPTys targetArgPTys) args in
-      let pure = if needsFullWrap then app_ (uconst_ (CPPure ())) else lam x. x in
-      let apply = if needsFullWrap then _apply else _app in
-      (st, (foldl apply (pure tm) args, retTy))
-    else
-      let pureRet = tyToPurePType ret in
-      if forAll (lam x. isPureIsh x.1) args then
-        (st, (foldl _app tm (map (lam x. x.0) args), pureRet))
-      else
-        let tm = app_ (uconst_ (CPPure ())) tm in
-        let args =
-          let f = lam p.
-            match p with (tm, ty) in
-            adjustWrapping (ty, ensureWrapped ty) tm in
-          map f args in
-        (st, (foldl _apply tm args, ensureWrapped pureRet))
-  | {f = tm} -> errorSingle [infoTm tm] "Missing case in specializeCall"
+      -- NOTE(vipa, 2025-11-19): The body *does* create new nodes,
+      -- thus we need p_bind
+      -- TODO(vipa, 2025-11-19): Implement store and ist
+      let store = never_ in
+      let ist = never_ in
+      let f = nulam_ innerStateName (TmLam {f with body = wrap1 body}) in
+      (wrapV, appf5_ (nvar_ env.p_bind) (nvar_ stateName) store ist f val)
+  | (TmConst {val = CPAssume _}, args) ->
+    match pvalTransSeq env args with (stateName, (wrap, [dist])) in
+    let store = never_ in
+    (wrap, appf3_ (nvar_ env.p_assume) (nvar_ stateName) store dist)
+  | ( TmConst {val = CPWeight _}
+    , [ TmApp
+        { lhs = TmApp
+          { lhs = TmConst {val = CPMap _}
+          , rhs = f
+          }
+        , rhs = val
+        }
+      ]
+    ) ->
+    match pvalTransSeq env [f, val] with (stateName, (wrap, [f, val])) in
+    -- TODO(vipa, 2025-11-20): Implement store
+    let store = never_ in
+    (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store f val, unit_])
+  | (TmConst {val = CPWeight _}, args) ->
+    match pvalTransSeq env args with (stateName, (wrap, [weight])) in
+    -- TODO(vipa, 2025-11-20): Implement store
+    let store = never_ in
+    -- TODO(vipa, 2025-11-20): Build TmLam identity function
+    (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store (TempLam (lam tm. tm)) weight, unit_])
+  | (f & TmVar {ident = ident}, args) ->
+    match pvalTransSeq env args with (stateName, (wrap, args)) in
+    if mapLookupOr false ident env.functions
+    then (wrap, appSeq_ f (cons (nvar_ stateName) args))
+    else (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args])
+  | (f & TmConst _, args) ->
+    match pvalTransSeq env args with (stateName, (wrap, args)) in
+    (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args])
+  | (f, args) -> errorSingle [infoTm f] (concat "Missing case for pvalTransCall: " (expr2str (appSeq_ f args)))
 
-  sem specializeDeclPre : PScope -> PState -> Decl -> (PScope, PState)
-  sem specializeDeclPre sc st =
+  sem pvalTransDecl : PValTransEnv -> Decl -> (PValTransEnv, Expr -> Expr)
+  sem pvalTransDecl env =
+  | DeclLet (x & {body = TmLam _}) ->
+    match peelLambdas x.body with (wrapLams, body) in
+    let innerStateName = nameSym "st" in
+    match pvalTrans {env with currStateName = innerStateName} body with (wrap1, body) in
+    match peelState body with (innerStateName2, (wrap2, peeledBody)) in
+    if nameEq innerStateName innerStateName2
+    then (env, bind_ (DeclLet {x with body = wrapLams (wrap1 (wrap2 peeledBody))}))
+    else
+      ( {env with functions = mapInsert x.ident true env.functions}
+      , bind_ (DeclLet {x with body = nulam_ innerStateName (wrapLams (wrap1 body))})
+      )
   | DeclLet x ->
-    match specializeExpr sc st x.body with (st, (tm, ty)) in
-    let n = nameSetNewSym x.ident in
-    let spec = mapSingleton (seqCmp ptyCmp) [] (n, ty, Some {x with ident = n, body = tm}) in
-    ( {sc with valueScope = mapInsert x.ident (n, ty) sc.valueScope}
-    , {st with specializations = mapInsert x.ident spec st.specializations}
-    )
-  | DeclLet {ident = ident, body = body & TmLam _} ->
-    recursive let work = lam params. lam tm.
-      match tm with TmLam x
-      then work (snoc params x.ident) x.body
-      else {params = params, mayBeRecursive = false, body = tm} in
-    ({sc with functionDefinitions = mapInsert ident (work [] body) sc.functionDefinitions}, st)
+    match pvalTrans env x.body with (wrap1, body) in
+    match _peelState (Some x.ident) body with (stateName, (wrap2, body)) in
+    let alreadyBound = match body with TmVar v
+      then nameEq v.ident x.ident
+      else false in
+    if alreadyBound then
+      ({env with currStateName = stateName}, lam tm. wrap1 (wrap2 tm))
+    else
+      ({env with currStateName = stateName}, lam tm. wrap1 (wrap2 (bind_ (DeclLet {x with body = body}) tm)))
   | DeclRecLets x ->
-    recursive let work = lam params. lam tm.
-      match tm with TmLam x
-      then work (snoc params x.ident) x.body
-      else {params = params, mayBeRecursive = true, body = tm} in
-    let f = lam definitions. lam decl.
-      mapInsert decl.ident (work [] decl.body) definitions in
-    ({sc with functionDefinitions = foldl f sc.functionDefinitions x.bindings}, st)
-  | DeclType _ -> (sc, st)
-  | DeclConDef x ->
-    let deconstructType : Type -> {carried : Type, tyName : Name, retParams : [Type]} = lam ty.
-      match inspectType ty with TyArrow {from = carried, to = to} in
-      match getTypeArgs to with (TyCon {ident = tyName}, retParams) in
-      {carried = carried, tyName = tyName, retParams = retParams} in
-    let tyInfo = deconstructType x.tyIdent in
-    let distributeC = lam x.
-      match mapMPTypeCOption eitherGetRight x with Some ptys
-      then Right (PLater ptys)
-      else Left (RLater (mapPTypeC (eitherEither (lam x. x) (lam. NoRec ())) x)) in
-    let checkRecursion = lam ty. lam tyArgs.
-      match ty with TyCon x then
-        if nameEq x.ident tyInfo.tyName then
-          if eqi 0 (seqCmp cmpType tyInfo.retParams tyArgs)
-          then Left (Rec ())
-          else errorSingle [x.info] "Found polymorphic recursion in constructor definition, this is not supported for now."
-        else Right (PLater (PUser (mapEmpty nameCmp)))
-      else Right (PLater (PUser (mapEmpty nameCmp))) in
-    recursive let work = lam ty.
-      match ty with TyVar _ then Left (NoRec ()) else
-      tyToPTypeX (lam x. Right (PNever x)) distributeC checkRecursion ty in
-    let recTy = eitherEither (lam x. x) (lam. NoRec ()) (work tyInfo.carried) in
-    ({sc with conScope = mapInsert x.ident recTy sc.conScope}, st)
-  | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPre"
+    -- OPT(vipa, 2025-11-25): This implementation is simple (requiring
+    -- no additional analysis to determine the statefulness ahead of
+    -- time) but inefficient; it may retransform the same function
+    -- many times.
+    let initialGuess = foldl (lam acc. lam b. mapInsert b.ident false acc) (mapEmpty nameCmp) x.bindings in
+    let mkNewGuess : PValTransEnv -> (Map Name Bool, [DeclLetRecord]) = lam env.
+      let f = lam acc. lam binding.
+        match peelLambdas binding.body with (wrapLams, body) in
+        let st = nameSym "st" in
+        match pvalTrans {env with currStateName = st} body with (wrap1, body) in
+        match peelState body with (newSt, (wrap2, bodyPeeled)) in
+        if nameEq st newSt then
+          ( mapInsert binding.ident false acc
+          , {binding with body = wrapLams (wrap1 (wrap2 bodyPeeled))}
+          )
+        else
+          ( mapInsert binding.ident true acc
+          , {binding with body = nulam_ st (wrapLams (wrap1 body))}
+          )
+      in mapAccumL f (mapEmpty nameCmp) x.bindings in
+    recursive let repeatUntilValid = lam guess.
+      let guessEnv = {env with functions = mapUnion env.functions guess} in
+      match mkNewGuess guessEnv with (newGuess, bindings) in
+      if mapEq (lam a. lam b. if a then b else not b) guess newGuess
+      then (guessEnv, bindings)
+      else repeatUntilValid newGuess in
+    match repeatUntilValid initialGuess with (env, bindings) in
+    (env, bind_ (DeclRecLets {x with bindings = bindings}))
+  | decl -> errorSingle [infoDecl decl] (concat "Missing case for pvalTransDecl: " (decl2str decl))
 
-  sem specializeDeclPost : PState -> Decl -> (PState, [Decl])
-  sem specializeDeclPost st =
-  | DeclLet {ident = ident} ->
-    match mapLookup ident st.specializations with Some specs then
-      let addDefinition = lam a. lam. lam trip.
-        match trip with (_, _, Some decl)
-        then snoc a (DeclLet decl)
-        else error (join ["Missing definition for specialization in let for ", nameGetStr ident]) in
-      ({st with specializations = mapRemove ident st.specializations}, mapFoldWithKey addDefinition [] specs)
-    else (st, [])
-  | DeclRecLets x ->
-    let specs = join (map mapValues (mapOption (lam d. mapLookup d.ident st.specializations) x.bindings)) in
-    let specs = mapOption (lam x. x.2) specs in
-    let specializations = foldl (lam acc. lam decl. mapRemove decl.ident acc) st.specializations x.bindings in
-    ({st with specializations = specializations}, [DeclRecLets {x with bindings = specs}])
-  | decl & (DeclType _ | DeclConDef _) -> (st, [decl])
-  | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPost"
+  sem pvalTransSeq : PValTransEnv -> [Expr] -> (Name, Peeled [Expr])
+  sem pvalTransSeq env = | seq ->
+    let f = lam acc. lam tm.
+      match pvalTrans {env with currStateName = acc.st} tm with (wrap, tm) in
+      match peelState tm with (st, (wrap2, tm)) in
+      ({st = st, wraps = concat [wrap2, wrap] acc.wraps}, tm) in
+    match mapAccumL f {st = env.currStateName, wraps = []} seq with ({st = st, wraps = wraps}, tms) in
+    (st, (lam tm. foldl (lam acc. lam wrap. wrap acc) tm wraps, tms))
 
-  sem specializeExpr : PScope -> PState -> Expr -> (PState, (Expr, PType))
-  sem specializeExpr sc st =
+  sem pvalTrans : PValTransEnv -> Expr -> Peeled Expr
+  sem pvalTrans env =
   | TmDecl x ->
-    match specializeDeclPre sc st x.decl with (sc, st) in
-    match specializeExpr sc st x.inexpr with (st, (tm, ty)) in
-    match specializeDeclPost st x.decl with (st, newDecls) in
-    (st, (bindall_ newDecls tm, ty))
+    match pvalTransDecl env x.decl with (env, wrap) in
+    match pvalTrans env x.inexpr with (wrapi, tm) in
+    (lam tm. wrap (wrapi tm), tm)
   | TmApp x ->
-    recursive let collectApps = lam acc. lam tm.
-      match tm with TmApp x
-      then collectApps (cons x.rhs acc) x.lhs
-      else (tm, acc) in
-    match collectApps [x.rhs] x.lhs with (f, args) in
-    match mapAccumL (specializeExpr sc) st args with (st, args) in
-    (match x.ty with TyUnknown _ then warnSingle [x.info] (concat "no type on this app: " (expr2str (TmApp x))) else ());
-    specializeCall sc st {f = f, args = args, ret = x.ty}
-  | TmConApp x ->
-    let argRecTy = match mapLookup x.ident sc.conScope
-      with Some x then x
-      else errorSingle [x.info] "Missing con name in conScope" in
-    match specializeExpr sc st x.body with (st, (body, bodyTy)) in
-    -- NOTE(vipa, 2025-10-27): collect all recursive occurrences of
-    -- the type for lub, regardless of whether we're going to wrap the
-    -- entire value. This is important to not forget a constructor
-    -- that might appear.
-    recursive let computeRecTy
-      : RecTy () -> PType -> {recOccurs : [PType], recTy : RecTy PType, argTy : PType -> PType, wrapAboveRec : Bool}
-      = lam argRecTy. lam bodyTy.
-        switch argRecTy
-        case NoRec _ then
-          {recOccurs = [], recTy = NoRec bodyTy, argTy = lam. bodyTy, wrapAboveRec = false}
-        case Rec _ then
-          {recOccurs = [bodyTy], recTy = Rec (), argTy = lam bodyTy. bodyTy, wrapAboveRec = isTopWrapped bodyTy}
-        case RLater recTy then
-          -- NOTE(vipa, 2025-10-27): This will forget any `Unused`
-          -- wrapping in the argument when above a `Rec`, not sure if
-          -- that's desirable or avoidable
-          match unwrapOnce bodyTy with Right ty in
-          let res = map2PTypeCExn computeRecTy recTy ty in
-          let isTopWrapped = isTopWrapped bodyTy in
-          { recOccurs = foldPTypeC (lam a. lam x. concat a x.recOccurs) [] res
-          , recTy = RLater (mapPTypeC (lam x. x.recTy) res)
-          , argTy = if isTopWrapped
-            then lam ty. ensureWrapped (PLater (mapPTypeC (lam x. x.argTy ty) res))
-            else lam ty. PLater (mapPTypeC (lam x. x.argTy ty) res)
-          , wrapAboveRec = foldPTypeC (lam a. lam x. or a x.wrapAboveRec) isTopWrapped res
-          }
-        end
-    in
-    let res = computeRecTy argRecTy bodyTy in
-    let recTy = PLater (PUser (mapSingleton nameCmp x.ident res.recTy)) in
-    let recTy = foldl lubPType recTy res.recOccurs in
-    let argTy = res.argTy recTy in
-    if res.wrapAboveRec then
-      ( st
-      , ( _map (TempLam (lam body. TmConApp {x with body = body})) (adjustWrapping (bodyTy, ensureWrapped argTy) body)
-        , ensureWrapped recTy
-        )
-      )
-    else
-      (st, (nconapp_ x.ident (adjustWrapping (bodyTy, argTy) body), recTy))
-  | TmAssume x ->
-    match specializeExpr sc st x.dist with (st, (dist, distTy)) in
-    let elemTy =
-      match ensureWrapped distTy with PHere {ty = PureTypeC (PDist x)} in
-      PHere {wrapped = Wrapped (), ty = x} in
-    let dist = adjustWrapping (distTy, ensureWrapped distTy) dist in
-    let tm = app_ (uconst_ (CPAssume ())) dist in
-    (st, (tm, elemTy))
-  | TmDist x ->
-    match mapAccumL (specializeExpr sc) st (distParams x.dist) with (st, args) in
-    let l =
-      recursive let work = lam prev. lam ps.
-        match ps with [p] ++ ps
-        then TempLam (lam tm. work (snoc prev tm) ps)
-        else TmDist {x with dist = distWithParams x.dist prev} in
-      work [] args in
-    specializeCall sc st {f = l, args = args, ret = x.ty}
-  | TmVar x ->
-    match mapLookup x.ident sc.valueScope with Some (n, ty)
-    then (st, (TmVar {x with ident = n}, ty))
-    else errorSingle [x.info] "Missing entry in valueScope"
-  | TmSeq x ->
-    match mapAccumL (specializeExpr sc) st x.tms with (st, tms) in
-    match unzip tms with (tms, tmTys) in
-    let elemTy = match tmTys with [ty] ++ tmTys
-      then foldl lubPType ty tmTys
-      else match unwrapType x.ty with TySeq x in PHere {wrapped = Unused (), ty = tyToPureType x.ty} in
-    let tms = zipWith (lam tmTy. adjustWrapping (tmTy, elemTy)) tmTys tms in
-    (st, (TmSeq {x with tms = tms}, PLater (PSeq elemTy)))
-  | TmRecord x ->
-    match mapMapAccum (lam st. lam. lam tm. specializeExpr sc st tm) st x.bindings with (st, zipped) in
-    let bindings = mapMap (lam x. x.0) zipped in
-    let bindingsTy = mapMap (lam x. x.1) zipped in
-    (st, (TmRecord {x with bindings = bindings}, PLater (PRecord bindingsTy)))
-  -- TODO(vipa, 2025-10-24): Specialize for infallible patterns (els =
-  -- never) so we don't get a sub-model for the then-branch
+    recursive let work = lam f. lam args.
+      match f with TmApp x
+      then work x.lhs (cons x.rhs args)
+      else pvalTransCall env (f, args)
+    in work x.lhs [x.rhs]
+  | TmLam x -> errorSingle [x.info] "Encountered unbound lambda in final graph transformation."
+  | tm & (TempLam _ | TempFix _) -> error (concat "Encountered unbound templam/fix in final graph transformation: " (expr2str tm))
+  | TmMatch (x & {els = TmNever _}) ->
+    match pvalTrans env x.target with (wrap1, target) in
+    match peelState target with (stateName, (wrap2, target)) in
+    match pvalTrans {env with currStateName = stateName} x.thn with (wrapT, thn) in
+    (lam tm. wrap1 (wrap2 (TmMatch {x with target = target, thn = wrapT tm})), thn)
   | TmMatch x ->
-    -- NOTE(vipa, 2025-10-22): We assume that the pattern is shallow,
-    -- but not just a wildcard
-    match specializeExpr sc st x.target with (st, (target, targetTy)) in
-    match
-      switch (isTopWrapped targetTy, x.target)
-      case (true, TmVar x) then
-        let n = nameSetNewSym x.ident in
-        (Some n, {sc with valueScope = mapInsert x.ident (n, purifyPType targetTy) sc.valueScope})
-      case (true, _) then
-        let n = nameSym "target" in
-        (Some n, sc)
-      case (false, _) then
-        (None (), sc)
-      end
-    with (oTargetName, sc) in
-    match addMatchNames sc (unwrapOnce targetTy, x.pat) with (thnSc, pat) in
-    match specializeExpr thnSc st x.thn with (st, (thn, thnTy)) in
-    match
-      -- NOTE(vipa, 2025-11-10): We special-case `match ... in` when
-      -- it comes to PTypes
-      match x.els with TmNever _
-      then (st, (x.els, thnTy))
-      else specializeExpr sc st x.els
-    with (st, (els, elsTy)) in
-    let lubTy = lubPType thnTy elsTy in
-    match oTargetName with Some targetName then
-      -- We're matching on a wrapped value, i.e., the return must be wrapped
-      let retTy = ensureWrapped lubTy in
-      let mkLam = lam adjThn. lam adjEls. lam target.
-        bind_ (nulet_ targetName target)
-          ( TmMatch
-            { x with target = nvar_ targetName
-            , pat = pat
-            , thn = adjThn thn
-            , els = adjEls els
-            }
-          ) in
-      if isPureIsh lubTy then
-        -- NOTE(vipa, 2025-10-23): Both branches are otherwise pure,
-        -- i.e., we can make this a `map`
-        let f = TempLam (mkLam (lam x. x) (lam x. x)) in
-        (st, (_map f target, retTy))
-      else
-        -- NOTE(vipa, 2025-10-23): At least one branch is not pure,
-        -- i.e., this needs to be a `bind`
-        let f = TempLam (mkLam (adjustWrapping (thnTy, retTy)) (adjustWrapping (elsTy, retTy))) in
-        (st, (_join (_map f target), retTy))
-    else
-      -- NOTE(vipa, 2025-11-03): The target is pure, i.e., we can
-      -- adjust the branches individually
-      ( st
-      , ( TmMatch
-          { x with target = target
-          , pat = pat
-          , thn = adjustWrapping (thnTy, lubTy) thn
-          , els = adjustWrapping (elsTy, lubTy) els
-          }
-        , lubTy
-        )
+    match pvalTrans env x.target with (wrap1, target) in
+    match peelState target with (stateName, (wrap2, target)) in
+    match pvalTrans {env with currStateName = stateName} x.thn with (wrapT1, thn) in
+    match peelState thn with (stateThn, (wrapT2, thnPeeled)) in
+    match pvalTrans {env with currStateName = stateName} x.els with (wrapE1, els) in
+    match peelState els with (stateEls, (wrapE2, elsPeeled)) in
+    if and (nameEq stateName stateThn) (nameEq stateName stateEls) then
+      ( lam tm. wrap1 (wrap2 tm)
+      , autoty_tuple_
+        [ nvar_ stateName
+        , TmMatch {x with target = target, thn = wrapT1 (wrapT2 thnPeeled), els = wrapE1 (wrapE2 elsPeeled)}
+        ]
       )
-  | TmNever {ty = TyUnknown _, info = info} -> errorSingle [info] "Never without type information"
-  | tm & TmNever x -> (st, (tm, PHere {wrapped = Unused (), ty = tyToPureType x.ty}))
-  | tm & TmConst {val = CFloat _} -> (st, (tm, PNever (PFloat ())))
-  | tm & TmConst {val = CInt _} -> (st, (tm, PNever (PInt ())))
-  | tm & TmConst {val = CBool _} -> (st, (tm, PNever (PBool ())))
-  | tm -> errorSingle [infoTm tm] "Missing case in specializeExpr"
-
-  sem addMatchNames : PScope -> (Either PTypeA (PTypeC PType), Pat) -> (PScope, Pat)
-  sem addMatchNames sc =
-  | (_, pat & PatBool _) -> (sc, pat)
-  | (_, pat & PatInt _) -> (sc, pat)
-  | (_, pat & PatChar _) -> (sc, pat)
-  | (Right (PRecord ty), PatRecord pat) ->
-    let f = lam ty : PType. lam pat : Pat.
-      match pat with PatNamed (p & {ident = PName ident})
-      then lam acc. let n = nameSetNewSym ident in (mapInsert ident (n, ty) acc, PatNamed {p with ident = PName n})
-      else lam acc. (acc, pat) in
-    match mapMapAccum (lam acc. lam. lam f. f acc) sc.valueScope (mapIntersectWith f ty pat.bindings)
-      with (valueScope, bindings) in
-    ({sc with valueScope = valueScope}, PatRecord {pat with bindings = bindings})
-  | (Right (PSeq ty), PatSeqTot p) ->
-    let f = lam acc. lam p.
-      match p with PatNamed (p & {ident = PName ident})
-      then let n = nameSetNewSym ident in (mapInsert ident (n, ty) acc, PatNamed {p with ident = PName n})
-      else (acc, p) in
-    match mapAccumL f sc.valueScope p.pats with (valueScope, pats) in
-    ({sc with valueScope = valueScope}, PatSeqTot {p with pats = pats})
-  | (Right (PSeq ty), PatSeqEdge p) ->
-    let f = lam acc. lam p.
-      match p with PatNamed (p & {ident = PName ident})
-      then let n = nameSetNewSym ident in (mapInsert ident (n, ty) acc, PatNamed {p with ident = PName n})
-      else (acc, p) in
-    match mapAccumL f sc.valueScope p.prefix with (valueScope, prefix) in
-    match mapAccumL f valueScope p.postfix with (valueScope, postfix) in
-    match
-      match p.middle with PName ident
-      then let n = nameSetNewSym ident in (mapInsert ident (n, ty) valueScope, PName n)
-      else (valueScope, p.middle)
-    with (valueScope, middle) in
-    ( {sc with valueScope = valueScope}
-    , PatSeqEdge {p with prefix = prefix, postfix = postfix, middle = middle}
+    else
+      ( lam tm. wrap1 (wrap2 tm)
+      , TmMatch {x with target = target, thn = wrapT1 thn, els = wrapE1 els}
+      )
+  | tm ->
+    warnSingle [infoTm tm] "Default case for pvalTrans";
+    let f = lam acc. lam tm.
+      match pvalTrans acc.env tm with (wrap1, val) in
+      match peelState val with (stateName, (wrap2, val)) in
+      ({env = {acc.env with currStateName = stateName}, wraps = concat [wrap2, wrap1] acc.wraps}, val) in
+    match smapAccumL_Expr_Expr f {env = env, wraps = []} tm with ({env = env, wraps = wraps}, tm) in
+    ( lam tm. foldl (lam tm. lam wrap. wrap tm) tm wraps
+    , autoty_tuple_ [nvar_ env.currStateName, tm]
     )
-  | (Right (recPoint & PUser ty), PatCon p) ->
-    match mapLookup p.ident ty with Some recTy then
-      match p.subpat with PatNamed (p2 & {ident = PName ident}) then
-        let n = nameSetNewSym ident in
-        ( {sc with valueScope = mapInsert ident (n, recTyAsPType (PLater recPoint) recTy) sc.valueScope}
-        , PatCon {p with subpat = PatNamed {p2 with ident = PName n}}
-        )
-      else (sc, PatCon p)
-    else error "Pattern matched on a constructor that cannot appear here. Should deal with this, but later."
+
+  sem peelLambdas : Expr -> Peeled Expr
+  sem peelLambdas =
+  | TmLam x ->
+    match peelLambdas x.body with (wrap, body) in
+    (lam tm. TmLam {x with body = wrap tm}, body)
+  | tm -> (lam tm. tm, tm)
+
+  sem peelState : Expr -> (Name, Peeled Expr)
+  sem peelState = | tm -> _peelState (None ()) tm
+
+  sem _peelState : Option Name -> Expr -> (Name, Peeled Expr)
+  sem _peelState defaultValName =
+  | TmRecord x ->
+    -- NOTE(vipa, 2025-11-19): We know that pvalTrans, when given a
+    -- value of type `a`, will produce a value of type `(PValState st,
+    -- a)` for some `st`. By construction, we also know that if there
+    -- is such a tuple, then the first element is just a variable.
+    match mapLookup _idx0 x.bindings with Some (TmVar {ident = stIdent}) in
+    match mapLookup _idx1 x.bindings with Some expr in
+    (stIdent, (lam x. x, expr))
+  | tm ->
+    let stIdent = nameSym "st" in
+    let valIdent = optionGetOrElse (lam. nameSym "x") defaultValName in
+    let wrap = lam body.
+      -- TODO(vipa, 2025-11-19): put some types here
+      match_ tm (ptuple_ [npvar_ stIdent, npvar_ valIdent])
+        body
+        never_ in
+    (stIdent, (wrap, nvar_ valIdent))
 end
 
 mexpr
 
-use Composed in
+use TestLang in
 
-let debugStuff = ref false in
-
-let transform = lam strs.
-  let args =
-    { _defaultBootParserParseMExprStringArg ()
-    with allowFree = true
-    , keywords = pplKeywords
-    , builtin = cpplBuiltin
-    } in
-  let ast = parseMExprStringExn args (strJoin "\n" strs) in
-  let ast = use DPPLParser in makeKeywords ast in
-  let ast = symbolizeExpr symEnvDefault ast in
-  let ast = typeCheck ast in
-  (if deref debugStuff then
-    printLn (expr2str ast)
-   else ());
-  let ast = lowerAll ast in
-  (if deref debugStuff then
-    printLn (expr2str ast)
-   else ());
-  let ast = inlineSingleUseLets ast in
-  (if deref debugStuff then
-    printLn (expr2str ast)
-   else ());
-  let initState =
-    { specializations = mapEmpty nameCmp
-    } in
-  let initScope =
-    { functionDefinitions = mapEmpty nameCmp
-    , valueScope = mapEmpty nameCmp
-    , conScope = mapEmpty nameCmp
-    } in
-  match specializeExpr initScope initState ast with (_, (ast, _)) in
-  (pprintCode 0 pprintEnvEmpty ast).1 in
-
-let printFailure = lam l. lam r. strJoin "\n"
-  [ concat "    LHS: " (strReplace "\n" "\n         " l)
-  , concat "    RHS: " (strReplace "\n" "\n         " r)
-  ] in
-
-utest transform
-  [ "assume (Gaussian 0.0 1.0)"
-  ]
-with strJoin "\n"
-  [ "p_assume (p_pure (Gaussian 0. 1.))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "let x = 0.0 in"
-  , "assume (Gaussian x 1.0)"
-  ]
-with strJoin "\n"
-  [ "p_assume (p_pure (Gaussian 0. 1.))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "let x = assume (Gaussian 0.0 1.0) in"
-  , "assume (Gaussian x 1.0)"
-  ]
-with strJoin "\n"
-  [ "p_assume"
-  , "  (p_map"
-  , "     (lam x."
-  , "        Gaussian x 1.)"
-  , "     (p_assume (p_pure (Gaussian 0. 1.))))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "addf (assume (Gaussian 0.0 1.0)) (assume (Gaussian 1.0 1.0))"
-  ]
-with strJoin "\n"
-  [ "p_apply"
-  , "  (p_map addf (p_assume (p_pure (Gaussian 0. 1.))))"
-  , "  (p_assume (p_pure (Gaussian 1. 1.)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "addf (addf (assume (Gaussian 0.0 1.0)) (assume (Gaussian 1.0 1.0))) 2.0"
-  ]
-with strJoin "\n"
-  [ "p_apply"
-  , "  (p_map"
-  , "     (lam x."
-  , "        lam x1."
-  , "          addf (addf x x1) 2.)"
-  , "     (p_assume (p_pure (Gaussian 0. 1.))))"
-  , "  (p_assume (p_pure (Gaussian 1. 1.)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "let f = lam a. addf a 1.0 in"
-  , "f 1.0"
-  ]
-with strJoin "\n"
-  [ "addf 1. 1."
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "let f = lam a. addf a 1.0 in"
-  , "addf (f 1.0) (f (assume (Gaussian 0.0 1.0)))"
-  ]
-with strJoin "\n"
-  [ "let f = lam a1."
-  , "    addf a1 1. in"
-  , "let f1 = lam a."
-  , "    p_map (lam x."
-  , "         addf x 1.) a in"
-  , "p_map (addf (f 1.)) (f1 (p_assume (p_pure (Gaussian 0. 1.))))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "let f = lam a. assume (Gaussian a 1.0) in"
-  , "let g = lam a. f a in"
-  , "addf (g 1.0) (g (assume (Gaussian 0.0 1.0)))"
-  ]
-with strJoin "\n"
-  [ "let g = lam a1."
-  , "    p_assume (p_pure (Gaussian a1 1.)) in"
-  , "let g1 ="
-  , "  lam a."
-  , "    p_assume (p_map (lam x."
-  , "            Gaussian x 1.) a)"
-  , "in"
-  , "p_apply"
-  , "  (p_map addf (g 1.))"
-  , "  (g1 (p_assume (p_pure (Gaussian 0. 1.))))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "recursive let sum : Float -> Float = lam x. sum (assume (Gaussian x 1.0)) in"
-  , "sum 1.0"
-  ]
-with strJoin "\n"
-  [ "recursive"
-  , "  let sum = lam x."
-  , "      sum1 (p_assume (p_pure (Gaussian x 1.)))"
-  , "  let sum1 ="
-  , "    lam x1."
-  , "      sum1"
-  , "        (p_assume (p_map (lam x2."
-  , "                 Gaussian x2 1.) x1))"
-  , "in"
-  , "sum 1."
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "recursive"
-  , "  let odd : Float -> Bool = lam x. even (assume (Gaussian x 1.0))"
-  , "  let even = lam x. odd x"
-  , "in even 1.0"
-  ]
-with strJoin "\n"
-  [ "recursive"
-  , "  let even = lam x."
-  , "      even1 (p_assume (p_pure (Gaussian x 1.)))"
-  , "  let even1 ="
-  , "    lam x1."
-  , "      even1"
-  , "        (p_assume (p_map (lam x2."
-  , "                 Gaussian x2 1.) x1))"
-  , "in"
-  , "even 1."
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "[1.0, 2.0]"
-  ]
-with strJoin "\n"
-  [ "[ 1., 2. ]"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "[1.0, assume (Gaussian 0.0 1.0)]"
-  ]
-with strJoin "\n"
-  [ "[ p_pure 1.,"
-  , "  p_assume (p_pure (Gaussian 0. 1.)) ]"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "if true then 1 else 2"
-  ]
-with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  1"
-  , "else"
-  , "  2"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "if true then assume (Gaussian 0.0 1.0) else 42.0"
-  ]
-with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  p_assume (p_pure (Gaussian 0. 1.))"
-  , "else"
-  , "  p_pure 42."
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "match (assume (Gaussian 0.0 1.0), 2.0) with (a, b) in addf a b"
-  ]
-with strJoin "\n"
-  [ "match"
-  , "  (p_assume (p_pure (Gaussian 0. 1.)), 2.)"
-  , "with"
-  , "  (field, field1)"
-  , "in"
-  , "p_map (lam x."
-  , "       addf x field1) field"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "if assume (Bernoulli 0.5) then false else true"
-  ]
-with strJoin "\n"
-  [ "p_map"
-  , "  (lam x."
-  , "     let target = x in"
-  , "     match"
-  , "       target"
-  , "     with"
-  , "       true"
-  , "     then"
-  , "       false"
-  , "     else"
-  , "       true)"
-  , "  (p_assume (p_pure (Bernoulli 0.5)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "if assume (Bernoulli 0.5) then assume (Bernoulli 0.9) else false"
-  ]
-with strJoin "\n"
-  [ "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target = x in"
-  , "        match"
-  , "          target"
-  , "        with"
-  , "          true"
-  , "        then"
-  , "          p_assume (p_pure (Bernoulli 0.9))"
-  , "        else"
-  , "          p_pure false)"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "if true then (1, 2.0) else (2, assume (Gaussian 0.0 1.0))"
-  ]
-with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  (1, p_pure 2.)"
-  , "else"
-  , "  (2, p_assume (p_pure (Gaussian 0. 1.)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "if assume (Bernoulli 0.5) then [1.0, 2.0] else [assume (Gaussian 0.0 1.0)]"
-  ]
-with strJoin "\n"
-  [ "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target = x in"
-  , "        match"
-  , "          target"
-  , "        with"
-  , "          true"
-  , "        then"
-  , "          p_pure [ 1., 2. ]"
-  , "        else"
-  , "          p_traverseSeq"
-  , "            (lam x1."
-  , "               x1)"
-  , "            [ p_assume (p_pure (Gaussian 0. 1.)) ])"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "if true then [1., 2.] else [assume (Gaussian 0.0 1.0)]"
-  ]
-with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  [ p_pure 1.,"
-  , "    p_pure 2. ]"
-  , "else"
-  , "  [ p_assume (p_pure (Gaussian 0. 1.)) ]"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Either a b in"
-  , "con Left : all a. all b. a -> Either a b in"
-  , "con Right : all a. all b. b -> Either a b in"
-  , "if true then Left 1 else Right 2.0"
-  ]
-with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  Left"
-  , "    1"
-  , "else"
-  , "  Right"
-  , "    2."
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Either a b in"
-  , "con Left : all a. all b. a -> Either a b in"
-  , "con Right : all a. all b. b -> Either a b in"
-  , "if true then Left 1.0 else let x = assume (Gaussian 1.0 0.0) in Left x"
-  ]
-with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  Left"
-  , "    (p_pure 1.)"
-  , "else"
-  , "  Left"
-  , "    (p_assume (p_pure (Gaussian 1. 0.)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Either a b in"
-  , "con Left : all a. all b. a -> Either a b in"
-  , "con Right : all a. all b. b -> Either a b in"
-  , "if true then Left 1.0 else if assume (Bernoulli 0.5) then Left 2.0 else Left 3.0"
-  ]
-with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  p_pure (Left"
-  , "       1.)"
-  , "else"
-  , "  p_map"
-  , "    (lam x."
-  , "       let target = x in"
-  , "       match"
-  , "         target"
-  , "       with"
-  , "         true"
-  , "       then"
-  , "         Left"
-  , "           2."
-  , "       else"
-  , "         Left"
-  , "           3.)"
-  , "    (p_assume (p_pure (Bernoulli 0.5)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Either a b in"
-  , "con Left : all a. all b. a -> Either a b in"
-  , "con Right : all a. all b. b -> Either a b in"
-  , "if true then"
-  , "  let x = assume (Gaussian 1.0 0.0) in"
-  , "  Left x"
-  , "else"
-  , "  if assume (Bernoulli 0.5) then Left 2.0 else Left 3.0"
-  ]
-with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
-  , "then"
-  , "  p_map"
-  , "    (lam x."
-  , "       Left"
-  , "         x)"
-  , "    (p_assume (p_pure (Gaussian 1. 0.)))"
-  , "else"
-  , "  p_map"
-  , "    (lam x1."
-  , "       let target = x1 in"
-  , "       match"
-  , "         target"
-  , "       with"
-  , "         true"
-  , "       then"
-  , "         Left"
-  , "           2."
-  , "       else"
-  , "         Left"
-  , "           3.)"
-  , "    (p_assume (p_pure (Bernoulli 0.5)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "Node {x = 1.0, left = Leaf {x = 2.0}, right = Leaf {x = 3.0}}"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "Node"
-  , "  { x = 1.,"
-  , "    left = Leaf"
-  , "        { x = 2. },"
-  , "    right = Leaf"
-  , "        { x = 3. } }"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
-  , "Node {x = 1.0, left = Leaf {x = x}, right = Leaf {x = 3.0}}"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "Node"
-  , "  { x = 1.,"
-  , "    left = Leaf"
-  , "        { x = p_assume (p_pure (Gaussian 0. 1.)) },"
-  , "    right = Leaf"
-  , "        { x = p_pure 3. } }"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
-  , "let l = if assume (Bernoulli 0.5) then Leaf {x = x} else Leaf {x = 2.0} in"
-  , "Node {x = 1.0, left = l, right = Leaf {x = 3.0}}"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "p_map"
-  , "  (lam x."
-  , "     Node"
-  , "       { x = 1., left = x, right = Leaf"
-  , "             { x = 3. } })"
-  , "  (p_join"
-  , "     (p_map"
-  , "        (lam x1."
-  , "           let target = x1 in"
-  , "           match"
-  , "             target"
-  , "           with"
-  , "             true"
-  , "           then"
-  , "             p_map"
-  , "               (lam x2."
-  , "                  Leaf"
-  , "                    { x = x2 })"
-  , "               (p_assume (p_pure (Gaussian 0. 1.)))"
-  , "           else"
-  , "             p_pure (Leaf"
-  , "                  { x = 2. }))"
-  , "        (p_assume (p_pure (Bernoulli 0.5)))))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let merge = lam l. lam r."
-  , "  let x = assume (Gaussian 0.0 1.0) in"
-  , "  Node {x = x, left = l, right = r} in"
-  , "merge (merge (Leaf {x = 1.0}) (Leaf {x = 2.0})) (Leaf {x = 3.0})"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "let merge ="
-  , "  lam l1."
-  , "    lam r1."
-  , "      Node"
-  , "        { x = p_assume (p_pure (Gaussian 0. 1.)), left = l1, right = r1 }"
-  , "in"
-  , "let merge1 ="
-  , "  lam l."
-  , "    lam r."
-  , "      Node"
-  , "        { x = p_assume (p_pure (Gaussian 0. 1.)), left = l, right = r }"
-  , "in"
-  , "merge1"
-  , "  (merge (Leaf"
-  , "        { x = 1. }) (Leaf"
-  , "        { x = 2. }))"
-  , "  (Leaf"
-  , "     { x = 3. })"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "if assume (Bernoulli 0.5)"
-  , "then let x = assume (Gaussian 0.0 1.0) in Node {x = x, left = Leaf {x = 1.0}, right = Leaf {x = 2.0}}"
-  , "else Leaf {x = 1.0}"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target = x in"
-  , "        match"
-  , "          target"
-  , "        with"
-  , "          true"
-  , "        then"
-  , "          p_map"
-  , "            (lam x1."
-  , "               Node"
-  , "                 { x = x1,"
-  , "                   left = Leaf"
-  , "                       { x = 1. },"
-  , "                   right = Leaf"
-  , "                       { x = 2. } })"
-  , "            (p_assume (p_pure (Gaussian 0. 1.)))"
-  , "        else"
-  , "          p_pure (Leaf"
-  , "               { x = 1. }))"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type List a in"
-  , "con Nil : all a. () -> List a in"
-  , "con Cons : all a. (a, List a) -> List a in"
-  , "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "recursive let cluster = lam trees."
-  , "  match trees with Cons tmp in"
-  , "  match tmp with (tree, rest) in"
-  , "  match rest with Cons tmp then"
-  , "    match tmp with (r, trees) in"
-  , "    let newX = assume (Gaussian 0.0 1.0) in"
-  , "    cluster (Cons (Node {x = newX, left = tree, right = r}, trees))"
-  , "  else tree in"
-  , "cluster (Cons (Leaf {x = 0.0}, Cons (Leaf {x = 1.0}, Cons (Leaf {x = 2.0}, Nil ()))));"
-  , "()"
-  ]
-with strJoin "\n"
-  [ "type List a in"
-  , "con Nil: all a1. () -> List a1 in"
-  , "con Cons: all a2. (a2, List a2) -> List a2 in"
-  , "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "recursive"
-  , "  let cluster ="
-  , "    lam trees."
-  , "      match"
-  , "        trees"
-  , "      with"
-  , "        Cons tmp"
-  , "      in"
-  , "      match"
-  , "          tmp"
-  , "        with"
-  , "          (tree, rest)"
-  , "        in"
-  , "        match"
-  , "            rest"
-  , "          with"
-  , "            Cons tmp1"
-  , "          then"
-  , "            match"
-  , "              tmp1"
-  , "            with"
-  , "              (r, trees1)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)), left = tree, right = r }, trees1))"
-  , "          else"
-  , "            tree"
-  , "  let cluster1 ="
-  , "    lam trees2."
-  , "      match"
-  , "        trees2"
-  , "      with"
-  , "        Cons tmp2"
-  , "      in"
-  , "      match"
-  , "          tmp2"
-  , "        with"
-  , "          (tree1, rest1)"
-  , "        in"
-  , "        match"
-  , "            rest1"
-  , "          with"
-  , "            Cons tmp3"
-  , "          then"
-  , "            match"
-  , "              tmp3"
-  , "            with"
-  , "              (r1, trees3)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                       left = tree1,"
-  , "                       right = r1 }, trees3))"
-  , "          else"
-  , "            tree1"
-  , "in"
-  , "(cluster"
-  , "     (Cons"
-  , "        (Leaf"
-  , "          { x = 0. }, Cons"
-  , "          (Leaf"
-  , "            { x = 1. }, Cons"
-  , "            (Leaf"
-  , "              { x = 2. }, Nil"
-  , "              {})))))"
-  , "; {}"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "recursive let cluster = lam trees."
-  , "  match trees with [tree] then tree else"
-  , "  match trees with [l, r] ++ trees in"
-  , "  let newX = assume (Gaussian 0.0 1.0) in"
-  , "  cluster (cons (Node {x = newX, left = l, right = r}) trees) in"
-  , "cluster [Leaf {x = 0.0}, Leaf {x = 1.0}, Leaf {x = 2.0}]"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "recursive"
-  , "  let cluster ="
-  , "    lam trees."
-  , "      match"
-  , "        trees"
-  , "      with"
-  , "        [ _,"
-  , "          _ ] ++ _"
-  , "      then"
-  , "        cluster1"
-  , "          (cons"
-  , "             (Node"
-  , "                { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                  left = get trees 0,"
-  , "                  right = get trees 1 })"
-  , "             (splitAt trees 2).1)"
-  , "      else match"
-  , "        trees"
-  , "      with"
-  , "        [ e ]"
-  , "      in"
-  , "      e"
-  , "  let cluster1 ="
-  , "    lam trees1."
-  , "      match"
-  , "        trees1"
-  , "      with"
-  , "        [ _,"
-  , "          _ ] ++ _"
-  , "      then"
-  , "        cluster1"
-  , "          (cons"
-  , "             (Node"
-  , "                { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                  left = get trees1 0,"
-  , "                  right = get trees1 1 })"
-  , "             (splitAt trees1 2).1)"
-  , "      else match"
-  , "        trees1"
-  , "      with"
-  , "        [ e1 ]"
-  , "      in"
-  , "      e1"
-  , "in"
-  , "cluster"
-  , "  [ Leaf"
-  , "      { x = 0. },"
-  , "    Leaf"
-  , "      { x = 1. },"
-  , "    Leaf"
-  , "      { x = 2. } ]"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "match head (cons (Leaf {x = 0.0}) [Leaf {x = 1.0}]) with Leaf x in"
-  , "addf x.x 1.0"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "match"
-  , "  head"
-  , "    (cons (Leaf"
-  , "          { x = 0. }) [ Leaf"
-  , "           { x = 1. } ])"
-  , "with"
-  , "  Leaf carried"
-  , "in"
-  , "addf carried.x 1."
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
-  , "match head (cons (Leaf {x = x}) [Leaf {x = 1.0}]) with Leaf x in"
-  , "addf x.x 1.0"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "match"
-  , "  head"
-  , "    (cons"
-  , "       (Leaf"
-  , "          { x = p_assume (p_pure (Gaussian 0. 1.)) })"
-  , "       [ Leaf"
-  , "           { x = p_pure 1. } ])"
-  , "with"
-  , "  Leaf carried"
-  , "in"
-  , "p_map (lam x."
-  , "       addf x 1.) carried.x"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
-  , "match head (cons (Leaf {x = 1.0}) [Leaf {x = x}]) with Leaf x in"
-  , "addf x.x 1.0"
-  ]
-with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "match"
-  , "  head"
-  , "    (cons"
-  , "       (Leaf"
-  , "          { x = p_pure 1. })"
-  , "       [ Leaf"
-  , "           { x = p_assume (p_pure (Gaussian 0. 1.)) } ])"
-  , "with"
-  , "  Leaf carried"
-  , "in"
-  , "p_map (lam x."
-  , "       addf x 1.) carried.x"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "type List a in"
-  , "con Nil : all a. () -> List a in"
-  , "con Cons : all a. (a, List a) -> List a in"
-  , "type Tree in"
-  , "con Leaf : {x : Float} -> Tree in"
-  , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "recursive let cluster = lam trees."
-  , "  match trees with Cons (tree, Nil _) then tree else"
-  , "  match trees with Cons (l, Cons (r, trees)) in"
-  , "  let newX = assume (Gaussian 0.0 1.0) in"
-  , "  cluster (Cons (Node {x = newX, left = l, right = r}, trees)) in"
-  , "cluster (Cons (Leaf {x = 0.0}, Cons (Leaf {x = 1.0}, Cons (Leaf {x = 2.0}, Nil ()))));"
-  , "()"
-  ]
-with strJoin "\n"
-  [ "type List a in"
-  , "con Nil: all a1. () -> List a1 in"
-  , "con Cons: all a2. (a2, List a2) -> List a2 in"
-  , "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "recursive"
-  , "  let cluster ="
-  , "    lam trees."
-  , "      match"
-  , "        trees"
-  , "      with"
-  , "        Cons carried"
-  , "      in"
-  , "      match"
-  , "          carried"
-  , "        with"
-  , "          (field, field1)"
-  , "        in"
-  , "        match"
-  , "            field1"
-  , "          with"
-  , "            Nil carried1"
-  , "          then"
-  , "            field"
-  , "          else match"
-  , "            field1"
-  , "          with"
-  , "            Cons carried2"
-  , "          in"
-  , "          match"
-  , "              carried2"
-  , "            with"
-  , "              (field2, field3)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                       left = field,"
-  , "                       right = field2 }, field3))"
-  , "  let cluster1 ="
-  , "    lam trees1."
-  , "      match"
-  , "        trees1"
-  , "      with"
-  , "        Cons carried3"
-  , "      in"
-  , "      match"
-  , "          carried3"
-  , "        with"
-  , "          (field4, field5)"
-  , "        in"
-  , "        match"
-  , "            field5"
-  , "          with"
-  , "            Nil carried4"
-  , "          then"
-  , "            field4"
-  , "          else match"
-  , "            field5"
-  , "          with"
-  , "            Cons carried5"
-  , "          in"
-  , "          match"
-  , "              carried5"
-  , "            with"
-  , "              (field6, field7)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                       left = field4,"
-  , "                       right = field6 }, field7))"
-  , "in"
-  , "(cluster"
-  , "     (Cons"
-  , "        (Leaf"
-  , "          { x = 0. }, Cons"
-  , "          (Leaf"
-  , "            { x = 1. }, Cons"
-  , "            (Leaf"
-  , "              { x = 2. }, Nil"
-  , "              {})))))"
-  , "; {}"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "switch assume (Categorical [0.25, 0.25, 0.25, 0.25])"
-  , "case 0 then 0"
-  , "case 1 then 1"
-  , "case 2 then 2"
-  , "case 3 then 3"
-  , "end"
-  ]
-with strJoin "\n"
-  [ "let #var\"X\" = p_assume (p_pure (Categorical [ 0.25, 0.25, 0.25, 0.25 ]))"
-  , "in"
-  , "p_map"
-  , "  (lam x."
-  , "     let #var\"X1\" = x in"
-  , "     match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       0"
-  , "     then"
-  , "       0"
-  , "     else match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       1"
-  , "     then"
-  , "       1"
-  , "     else match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       2"
-  , "     then"
-  , "       2"
-  , "     else match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       3"
-  , "     in"
-  , "     3)"
-  , "  #var\"X\""
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "let x = if assume (Bernoulli 0.5) then (1, 2) else (2, 3) in"
-  , "match x with (a, b) in"
-  , "addi a b"
-  ]
-with strJoin "\n"
-  [ "p_map"
-  , "  (lam x."
-  , "     let target ="
-  , "       let target1 = x in"
-  , "       match"
-  , "         target1"
-  , "       with"
-  , "         true"
-  , "       then"
-  , "         (1, 2)"
-  , "       else"
-  , "         (2, 3)"
-  , "     in"
-  , "     match"
-  , "       target"
-  , "     with"
-  , "       (a, b)"
-  , "     in"
-  , "     addi a b)"
-  , "  (p_assume (p_pure (Bernoulli 0.5)))"
-  ]
-using eqString
-else printFailure
-in
-
-utest transform
-  [ "let x = if assume (Bernoulli 0.5) then (1, 2) else (2, 3) in"
-  , "match x with (a, _) in"
-  , "addi a (assume (Categorical [0.5, 0.5]))"
-  ]
-with strJoin "\n"
-  [ "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target ="
-  , "          let target1 = x in"
-  , "          match"
-  , "            target1"
-  , "          with"
-  , "            true"
-  , "          then"
-  , "            (1, 2)"
-  , "          else"
-  , "            (2, 3)"
-  , "        in"
-  , "        match"
-  , "          target"
-  , "        with"
-  , "          (a, _)"
-  , "        in"
-  , "        p_map (addi a) (p_assume (p_pure (Categorical [ 0.5, 0.5 ]))))"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
-  ]
-using eqString
-else printFailure
-in
+let args =
+  { _defaultBootParserParseMCoreFileArg ()
+  with eliminateDeadCode = false
+  , allowFree = true
+  , keywords = pplKeywords
+  , builtin = cpplBuiltin
+  } in
+let ast = parseMCoreFile args "test.mc" in
+let ast = use DPPLParser in makeKeywords ast in
+let ast = symbolizeExpr symEnvDefault ast in
+let ast = typeCheck ast in
+let ast = lowerAll ast in
+let ast = inlineSingleUseLets ast in
+let initState =
+  { specializations = mapEmpty nameCmp
+  } in
+let initScope =
+  { functionDefinitions = mapEmpty nameCmp
+  , valueScope = mapEmpty nameCmp
+  , conScope = mapEmpty nameCmp
+  } in
+match specializeExpr initScope initState ast with (_, (ast, _)) in
+printLn (pprintCode 0 pprintEnvEmpty ast).1;
+printLn "==========================";
+let initTransEnv =
+  { currStateName = nameSym "st"
+  , functions = mapEmpty nameCmp
+  , p_pure = nameSym "p_pure"
+  , p_map = nameSym "p_map"
+  , p_apply = nameSym "p_apply"
+  , p_bind = nameSym "p_bind"
+  , p_assume = nameSym "p_assume"
+  , p_select = nameSym "p_select"
+  , p_weight = nameSym "p_weight"
+  , p_export = nameSym "p_export"
+  , p_traverseSeq = nameSym "p_traverseSeq"
+  } in
+match pvalTrans initTransEnv ast with (wrap, tm) in
+printLn (pprintCode 0 pprintEnvEmpty (wrap tm)).1;
 
 ()

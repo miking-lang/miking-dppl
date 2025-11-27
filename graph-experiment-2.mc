@@ -123,6 +123,19 @@ lang PValInterface
     -> PVal a
     -> (PValState st, PVal b)
 
+  sem p_traverseSeq : all st. all a. all b. PValState st
+    -> (PValState st -> a -> (PValState st, PVal b))
+    -> [a]
+    -> (PValState st, PVal [b])
+  sem p_traverseSeq st f =
+  | [] -> p_pure st []
+  | [a] ++ as ->
+    match f st a with (st, a) in
+    match p_traverseSeq st f as with (st, as) in
+    match p_map st cons a with (st, tmp) in
+    match p_apply st tm as with (st, res) in
+    (st, res)
+
   -- Introduce a weight.
   sem p_weight : all st. all st2. all a. PValState st
     -> (st -> PWeightRef -> st2)
