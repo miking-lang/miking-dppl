@@ -41,7 +41,6 @@ mexpr
 -- then [assume (Gaussian 0.0 1.0)]
 -- else [2.0]
 
-
 recursive let mul = lam acc. lam n. lam i.
   match i with 0 then acc else mul (addi acc n) n (subi i 1)
 in mul 0 (addi 1 (assume (Categorical [0.25, 0.25, 0.25, 0.25]))) 4
