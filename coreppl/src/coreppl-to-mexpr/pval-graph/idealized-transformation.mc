@@ -17,7 +17,6 @@
 include "these.mc"
 include "coreppl::parser.mc"
 include "mexpr/shallow-patterns.mc"
-include "mexpr/constant-fold.mc"
 include "mexpr/hoas.mc"
 include "mexpr/inline-single-use-simple.mc"
 

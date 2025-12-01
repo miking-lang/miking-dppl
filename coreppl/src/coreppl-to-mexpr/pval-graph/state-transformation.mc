@@ -1,3 +1,6 @@
+-- This file provides a transformation from the output of
+-- ./idealized-transformation.mc to the real PVal graph interface.
+
 include "idealized-transformation.mc"
 
 let _idx0 = stringToSid "0"
@@ -253,7 +256,7 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     (stIdent, (wrap, nvar_ valIdent))
 end
 
-lang TestLang = DPPLParser + MExprLowerNestedPatterns + MExprConstantFold + InlineSingleUse + PValStateTransformation
+lang TestLang = DPPLParser + MExprLowerNestedPatterns + InlineSingleUse + PValStateTransformation
 end
 
 mexpr
