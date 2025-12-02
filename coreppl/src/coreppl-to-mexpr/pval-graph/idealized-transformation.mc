@@ -20,7 +20,7 @@ include "mexpr/shallow-patterns.mc"
 include "mexpr/hoas.mc"
 include "mexpr/inline-single-use-simple.mc"
 
-lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppTypeUtils
+lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst + AppTypeUtils
   syn Wrap =
   | Wrapped
   | Unused
@@ -236,13 +236,14 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
   | pty & PHere {wrapped = Unused _} -> pty
 
   type PScope =
-    { functionDefinitions : Map Name {params : [Name], mayBeRecursive : Bool, body : Expr}
+    { functionDefinitions : Map Name {params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int}
+    , depth : Int
     , valueScope : Map Name (Name, PType)
     , conScope : Map Name (RecTy ())
     }
 
   type PState =
-    { specializations : Map Name (Map [PType] (Name, PType, Option DeclLetRecord))
+    { specializations : Map Name (Map [PType] {ident : Name, ty : PType, decl : Option DeclLetRecord, depth : Int})
     }
 
   syn Const =
@@ -253,6 +254,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
   | CPApply
   | CPJoin
   | CPTraverseSeq
+  | CCalcLogWeight
 
   sem getConstStringCode indent =
   | CPAssume _ -> "p_assume"
@@ -262,6 +264,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
   | CPApply _ -> "p_apply"
   | CPJoin _ -> "p_join"
   | CPTraverseSeq _ -> "p_traverseSeq"
+  | CCalcLogWeight _ -> "calcLogWeight"
 
   sem ptyCmp : PType -> PType -> Int
   sem ptyCmp l = | r ->
@@ -346,6 +349,9 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
       case (RLater l, RLater r) then RLater (map2PTypeCExn lubRecTy l r)
       end in
     PLater (PUser (mapMerge (optionOrWith lubRecTy) l r))
+  | (l, r) ->
+    printLn (join ["Missing case in _lubPType: (", ptypeToString l, ", ", ptypeToString r, ")"]);
+    never
 
   sem ensureWrapped : PType -> PType
   sem ensureWrapped = | ty ->
@@ -584,135 +590,149 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
   sem _join : Expr -> Expr
   sem _join = | x -> _app (uconst_ (CPJoin ())) x
 
+  syn SpecializeCallKind =
+  | SCKInflexible ()
+  | SCKPolyFlexible Type
+  | SCKDefFlexible (Name, {params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int})
   sem specializeCall : PScope -> PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
   sem specializeCall sc st =
-  | {f = TmVar x, args = args, ret = retTy} ->
+  | {f = f & TmVar x, args = args, ret = retTy} ->
+    match optionBind (mapLookup x.ident st.specializations) (mapLookup (map (lam x. x.1) args)) with Some {ident = name, ty = ty} then
+      (st, (appSeq_ (nvar_ name) (map (lam x. x.0) args), ty))
+    else match mapLookup x.ident sc.functionDefinitions with Some definition
+    then _specializeCall sc st f args retTy (SCKDefFlexible (x.ident, definition))
+    else _specializeCall sc st f args retTy (SCKInflexible ())
+  | {f = f & TmConst {val = c}, args = args, ret = retTy} ->
+    match tyConst c with ty & TyAll _
+    then _specializeCall sc st f args retTy (SCKPolyFlexible ty)
+    else _specializeCall sc st f args retTy (SCKInflexible ())
+  | {f = f & TempLam _, args = args, ret = retTy} ->
+    _specializeCall sc st f args retTy (SCKInflexible ())
+
+  -- OPT(vipa, 2025-11-25): This currently checks if at least one
+  -- argument is wrapped further than a polymorphic instantiation of
+  -- the function could absorb and, if so, wraps *all* arguments. This
+  -- is a bit overly cautious in at least two cases:
+  -- * `addf a b` where `a` is pure and `b` is wrapped. This could be
+  --   `map (addf a) b` rather than `apply (map addf (pure a)) b`. Of
+  --   course, the latter will simplify to the former with `_app`, so
+  --   it's not really a problem per se.
+  -- * `get [x] i` where `x` and `i` are wrapped. This could be `join
+  --   (map (get [x]) i)` rather than `apply (map get (traverse id
+  --   [x])) i`. The latter does *not* simplify to the former.
+  sem _specializeCall : PScope -> PState -> Expr -> [(Expr, PType)] -> Type -> SpecializeCallKind -> (PState, (Expr, PType))
+  sem _specializeCall sc st tm args ret =
+  | SCKInflexible _ ->
+    let pureRet = tyToPurePType ret in
+    if forAll (lam x. isPureIsh x.1) args then
+      (st, (foldl _app tm (map (lam x. x.0) args), pureRet))
+    else
+      let tm = app_ (uconst_ (CPPure ())) tm in
+      let args =
+        let f = lam p.
+          match p with (tm, ty) in
+          adjustWrapping (ty, ensureWrapped ty) tm in
+        map f args in
+      (st, (foldl _apply tm args, ensureWrapped pureRet))
+  | SCKDefFlexible (ident, definition) ->
     match unzip args with (args, argTys) in
-    match optionBind (mapLookup x.ident st.specializations) (mapLookup argTys) with Some (name, ty, _) then
-      (st, (appSeq_ (nvar_ name) args, ty))
-    else
-      -- NOTE(vipa, 2025-10-21): Not previously specialized, do it.
-      let definition =
-        match mapLookup x.ident sc.functionDefinitions
-        with Some x then x
-        else error (join ["Missing entry in functionDefinitions for ", nameGetStr x.ident]) in
-      let params = map (lam n. (n, nameSetNewSym n)) definition.params in
-      let valueScope = foldl2 (lam m. lam n. lam ty. mapInsert n.0 (n.1, ty) m) sc.valueScope params argTys in
-      let name = nameSetNewSym x.ident in
-      match
-        let sc = {sc with valueScope = valueScope} in
-        if definition.mayBeRecursive then
-          recursive let speculate = lam guess.
-            let spec = mapSingleton (seqCmp ptyCmp) argTys (name, guess, None ()) in
-            let localSpecializations = mapMap (mapFilter (lam x. optionIsSome x.2)) st.specializations in
-            let nonLocalSpecializations = mapMap (mapFilter (lam x. optionIsNone x.2)) st.specializations in
-            let st2 = {st with specializations = mapInsertWith mapUnion x.ident spec nonLocalSpecializations} in
-            match specializeExpr sc st2 definition.body with (st2, (body, retTy)) in
-            if eqi 0 (ptyCmp guess retTy) then ({st2 with specializations = mapUnionWith mapUnion localSpecializations st2.specializations}, (body, retTy)) else
-            speculate retTy in
-          speculate (PHere {wrapped = Unused (), ty = tyToPureType retTy})
-        else specializeExpr sc st definition.body
-      with (st, (body, retTy)) in
-      let def : DeclLetRecord =
+    let params = map (lam n. (n, nameSetNewSym n)) definition.params in
+    let valueScope = foldl2 (lam m. lam n. lam ty. mapInsert n.0 (n.1, ty) m) sc.valueScope params argTys in
+    let name = nameSetNewSym ident in
+    match
+      let sc = {sc with valueScope = valueScope} in
+      if definition.mayBeRecursive then
+        recursive let speculate = lam guess.
+          let spec = mapSingleton (seqCmp ptyCmp) argTys
+            {ident = name, ty = guess, decl = None (), depth = definition.depth} in
+          let localSpecializations = mapMap (mapFilter (lam x. gti x.depth definition.depth)) st.specializations in
+          let nonLocalSpecializations = mapMap (mapFilter (lam x. leqi x.depth definition.depth)) st.specializations in
+          let st2 = {st with specializations = mapInsertWith mapUnion ident spec nonLocalSpecializations} in
+          match specializeExpr sc st2 definition.body with (st2, (body, retTy)) in
+          if eqi 0 (ptyCmp guess retTy) then ({st2 with specializations = mapUnionWith mapUnion localSpecializations st2.specializations}, (body, retTy)) else
+          speculate retTy in
+        speculate (PHere {wrapped = Unused (), ty = tyToPureType ret})
+      else specializeExpr sc st definition.body
+    with (st, (body, retTy)) in
+    let def : DeclLetRecord =
+      { ident = name
+      , tyAnnot = tyunknown_
+      , tyBody = tyunknown_
+      , body = nulams_ (map (lam x. x.1) params) body
+      , info = NoInfo ()
+      } in
+    let st =
+      let spec =
         { ident = name
-        , tyAnnot = tyunknown_
-        , tyBody = tyunknown_
-        , body = nulams_ (map (lam x. x.1) params) body
-        , info = NoInfo ()
+        , ty = retTy
+        , decl = Some def
+        , depth = definition.depth
         } in
-      let st =
-        { specializations = mapInsertWith mapUnion x.ident
-          (mapSingleton (seqCmp ptyCmp) argTys (name, retTy, Some def))
-          st.specializations
-        } in
-      (st, (foldl app_ (nvar_ name) args, retTy))
-  | {f = tm & (TempLam _ | TmConst _), args = args, ret = ret} ->
-    -- OPT(vipa, 2025-11-25): This currently checks if at least one
-    -- argument is wrapped further than a polymorphic instantiation of
-    -- the function could absorb and, if so, wraps *all*
-    -- arguments. This is a bit overly cautious in at least two cases:
-    -- * `addf a b` where `a` is pure and `b` is wrapped. This could
-    --   be `map (addf a) b` rather than `apply (map addf (pure a))
-    --   b`. Of course, the latter will simplify to the former with
-    --   `_app`, so it's not really a problem per se.
-    -- * `get [x] i` where `x` and `i` are wrapped. This could be
-    --   `join (map (get [x]) i)` rather than `apply (map get
-    --   (traverse id [x])) i`. The latter does *not* simplify to the
-    --   former.
-    let polyType =
-      match tm with TmConst {val = c} then
-       match tyConst c with ty & TyAll _
-       then Some ty
-       else None ()
-     else None () in
-    match polyType with Some polyType then
-      match unzip args with (args, argPTys) in
-      let retPTy = tyToPurePType ret in
-      recursive let tyArgs = lam args. lam ty.
-        match unwrapType ty with TyArrow x
-        then tyArgs (snoc args x.from) x.to
-        else (args, ty) in
-      match tyArgs [] (stripTyAll polyType).1 with (argTys, retTy) in
-      -- Collect the `PType`s used to instantiate each `TyVar`,
-      -- combining them with `lubPType` since different `PType`s might
-      -- appear at different places. Additionally, find wrappedness
-      -- that cannot be absorbed by a `TyVar`.
-      let mergeCollectInfo = lam l. lam r. (or l.0 r.0, mapUnionWith lubPType l.1 r.1) in
-      let collectAtom = lam pty. lam ty. (isTopWrapped pty, mapEmpty nameCmp) in
-      let collectCustom = lam pty. lam tyCon. lam tyArgs. switch tyCon
-        case TyVar x then
-          if null tyArgs
-          then (false, mapSingleton nameCmp x.ident pty)
-          else errorSingle [x.info] "Found a type application of a type variable, that's not supported presently."
-        case TyCon x then
-          errorSingle [x.info] "This transformation does not support any TmConst's with TyCon's in their types."
-        end in
-      recursive let collectComposite = lam pty. lam ty.
-        let wrappedHere = isTopWrapped pty in
-        match unwrapOnce pty with Right pty in
-        let rec = map2PTypeCExn (lam pty. _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty)) pty ty in
-        foldPTypeC mergeCollectInfo (wrappedHere, mapEmpty nameCmp) rec in
-      let collectTy = lam pty. lam ty.
-        _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty) ty in
-      let f = lam acc. lam pty. lam ty. mergeCollectInfo acc (collectTy pty ty) in
-      match foldl2 f (collectTy retPTy retTy) argPTys argTys with (needsFullWrap, varPTys) in
-      -- Construct `PType`s using the collected `TyVar` `PType`s. We
-      -- need to do this even if `needsFullWrap` is true in case a
-      -- `TyVar` was instantiated with a `PUser` type with
-      -- constructors.
-      let constructCustom = lam tyCon. lam.
-        match tyCon with TyVar x in mapFindExn x.ident varPTys in
-      let construct = tyToPTypeX (lam x. PNever x) (lam x. PLater x) constructCustom in
-      let targetArgPTys = if needsFullWrap
-        then map (lam ty. ensureWrapped (construct ty)) argTys
-        else map construct argTys in
-      let retTy = if needsFullWrap
-        then ensureWrapped (construct retTy)
-        else construct retTy in
-      let args = zipWith adjustWrapping (zip argPTys targetArgPTys) args in
-      let pure = if needsFullWrap then app_ (uconst_ (CPPure ())) else lam x. x in
-      let apply = if needsFullWrap then _apply else _app in
-      (st, (foldl apply (pure tm) args, retTy))
-    else
-      let pureRet = tyToPurePType ret in
-      if forAll (lam x. isPureIsh x.1) args then
-        (st, (foldl _app tm (map (lam x. x.0) args), pureRet))
-      else
-        let tm = app_ (uconst_ (CPPure ())) tm in
-        let args =
-          let f = lam p.
-            match p with (tm, ty) in
-            adjustWrapping (ty, ensureWrapped ty) tm in
-          map f args in
-        (st, (foldl _apply tm args, ensureWrapped pureRet))
-  | {f = tm} -> errorSingle [infoTm tm] "Missing case in specializeCall"
+      { specializations = mapInsertWith mapUnion ident
+        (mapSingleton (seqCmp ptyCmp) argTys spec)
+        st.specializations
+      } in
+    (st, (foldl app_ (nvar_ name) args, retTy))
+  | SCKPolyFlexible polyType ->
+    match unzip args with (args, argPTys) in
+    let retPTy = tyToPurePType ret in
+    recursive let tyArgs = lam args. lam ty.
+      match unwrapType ty with TyArrow x
+      then tyArgs (snoc args x.from) x.to
+      else (args, ty) in
+    match tyArgs [] (stripTyAll polyType).1 with (argTys, retTy) in
+    -- Collect the `PType`s used to instantiate each `TyVar`,
+    -- combining them with `lubPType` since different `PType`s might
+    -- appear at different places. Additionally, find wrappedness
+    -- that cannot be absorbed by a `TyVar`.
+    let mergeCollectInfo = lam l. lam r. (or l.0 r.0, mapUnionWith lubPType l.1 r.1) in
+    let collectAtom = lam pty. lam ty. (isTopWrapped pty, mapEmpty nameCmp) in
+    let collectCustom = lam pty. lam tyCon. lam tyArgs. switch tyCon
+      case TyVar x then
+        if null tyArgs
+        then (false, mapSingleton nameCmp x.ident pty)
+        else errorSingle [x.info] "Found a type application of a type variable, that's not supported presently."
+      case TyCon x then
+        errorSingle [x.info] "This transformation does not support any TmConst's with TyCon's in their types."
+      end in
+    recursive let collectComposite = lam pty. lam ty.
+      let wrappedHere = isTopWrapped pty in
+      match unwrapOnce pty with Right pty in
+      let rec = map2PTypeCExn (lam pty. _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty)) pty ty in
+      foldPTypeC mergeCollectInfo (wrappedHere, mapEmpty nameCmp) rec in
+    let collectTy = lam pty. lam ty.
+      _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty) ty in
+    let f = lam acc. lam pty. lam ty. mergeCollectInfo acc (collectTy pty ty) in
+    match foldl2 f (collectTy retPTy retTy) argPTys argTys with (needsFullWrap, varPTys) in
+    -- Construct `PType`s using the collected `TyVar` `PType`s. We
+    -- need to do this even if `needsFullWrap` is true in case a
+    -- `TyVar` was instantiated with a `PUser` type with
+    -- constructors.
+    let constructCustom = lam tyCon. lam.
+      match tyCon with TyVar x in mapFindExn x.ident varPTys in
+    let construct = tyToPTypeX (lam x. PNever x) (lam x. PLater x) constructCustom in
+    let targetArgPTys = if needsFullWrap
+      then map (lam ty. ensureWrapped (construct ty)) argTys
+      else map construct argTys in
+    let retTy = if needsFullWrap
+      then ensureWrapped (construct retTy)
+      else construct retTy in
+    let args = zipWith adjustWrapping (zip argPTys targetArgPTys) args in
+    let pure = if needsFullWrap then app_ (uconst_ (CPPure ())) else lam x. x in
+    let apply = if needsFullWrap then _apply else _app in
+    (st, (foldl apply (pure tm) args, retTy))
 
   sem specializeDeclPre : PScope -> PState -> Decl -> (PScope, PState)
   sem specializeDeclPre sc st =
   | DeclLet x ->
-    match specializeExpr sc st x.body with (st, (tm, ty)) in
+    match specializeExpr {sc with depth = subi sc.depth 1} st x.body with (st, (tm, ty)) in
     let n = nameSetNewSym x.ident in
-    let spec = mapSingleton (seqCmp ptyCmp) [] (n, ty, Some {x with ident = n, body = tm}) in
+    let spec = mapSingleton (seqCmp ptyCmp) []
+      { ident = n
+      , ty = ty
+      , decl = Some {x with ident = n, body = tm}
+      , depth = sc.depth
+      } in
     ( {sc with valueScope = mapInsert x.ident (n, ty) sc.valueScope}
     , {st with specializations = mapInsert x.ident spec st.specializations}
     )
@@ -720,13 +740,13 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
     recursive let work = lam params. lam tm.
       match tm with TmLam x
       then work (snoc params x.ident) x.body
-      else {params = params, mayBeRecursive = false, body = tm} in
+      else {params = params, mayBeRecursive = false, body = tm, depth = sc.depth} in
     ({sc with functionDefinitions = mapInsert ident (work [] body) sc.functionDefinitions}, st)
   | DeclRecLets x ->
     recursive let work = lam params. lam tm.
       match tm with TmLam x
       then work (snoc params x.ident) x.body
-      else {params = params, mayBeRecursive = true, body = tm} in
+      else {params = params, mayBeRecursive = true, body = tm, depth = sc.depth} in
     let f = lam definitions. lam decl.
       mapInsert decl.ident (work [] decl.body) definitions in
     ({sc with functionDefinitions = foldl f sc.functionDefinitions x.bindings}, st)
@@ -754,30 +774,31 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
       tyToPTypeX (lam x. Right (PNever x)) distributeC checkRecursion ty in
     let recTy = eitherEither (lam x. x) (lam. NoRec ()) (work tyInfo.carried) in
     ({sc with conScope = mapInsert x.ident recTy sc.conScope}, st)
+  | DeclExt _ -> (sc, st)
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPre"
 
   sem specializeDeclPost : PState -> Decl -> (PState, [Decl])
   sem specializeDeclPost st =
   | DeclLet {ident = ident} ->
     match mapLookup ident st.specializations with Some specs then
-      let addDefinition = lam a. lam. lam trip.
-        match trip with (_, _, Some decl)
+      let addDefinition = lam a. lam. lam spec.
+        match spec.decl with Some decl
         then snoc a (DeclLet decl)
         else error (join ["Missing definition for specialization in let for ", nameGetStr ident]) in
       ({st with specializations = mapRemove ident st.specializations}, mapFoldWithKey addDefinition [] specs)
     else (st, [])
   | DeclRecLets x ->
     let specs = join (map mapValues (mapOption (lam d. mapLookup d.ident st.specializations) x.bindings)) in
-    let specs = mapOption (lam x. x.2) specs in
+    let specs = mapOption (lam x. x.decl) specs in
     let specializations = foldl (lam acc. lam decl. mapRemove decl.ident acc) st.specializations x.bindings in
     ({st with specializations = specializations}, [DeclRecLets {x with bindings = specs}])
-  | decl & (DeclType _ | DeclConDef _) -> (st, [decl])
+  | decl & (DeclType _ | DeclConDef _ | DeclExt _) -> (st, [decl])
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPost"
 
   sem specializeExpr : PScope -> PState -> Expr -> (PState, (Expr, PType))
   sem specializeExpr sc st =
   | TmDecl x ->
-    match specializeDeclPre sc st x.decl with (sc, st) in
+    match specializeDeclPre {sc with depth = addi sc.depth 1} st x.decl with (sc, st) in
     match specializeExpr sc st x.inexpr with (st, (tm, ty)) in
     match specializeDeclPost st x.decl with (st, newDecls) in
     (st, (bindall_ newDecls tm, ty))
@@ -848,6 +869,9 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
     let weight = adjustWrapping (weightTy, ensureWrapped weightTy) weight in
     let tm = app_ (uconst_ (CPWeight ())) weight in
     (st, (tm, PLater (PRecord (mapEmpty cmpSID))))
+  | TmObserve x ->
+    let w = withType tyfloat_ (appf2_ (TempLam (lam v. app_ (uconst_ (CCalcLogWeight ())) v)) x.dist x.value) in
+    specializeExpr sc st (TmWeight {weight = w, ty = x.ty, info = x.info})
   | TmDist x ->
     match mapAccumL (specializeExpr sc) st (distParams x.dist) with (st, args) in
     let l =
@@ -964,7 +988,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
       else (acc, p) in
     match mapAccumL f sc.valueScope p.pats with (valueScope, pats) in
     ({sc with valueScope = valueScope}, PatSeqTot {p with pats = pats})
-  | (Right (PSeq ty), PatSeqEdge p) ->
+  | (Right (seqTy & PSeq ty), PatSeqEdge p) ->
     let f = lam acc. lam p.
       match p with PatNamed (p & {ident = PName ident})
       then let n = nameSetNewSym ident in (mapInsert ident (n, ty) acc, PatNamed {p with ident = PName n})
@@ -973,7 +997,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
     match mapAccumL f valueScope p.postfix with (valueScope, postfix) in
     match
       match p.middle with PName ident
-      then let n = nameSetNewSym ident in (mapInsert ident (n, ty) valueScope, PName n)
+      then let n = nameSetNewSym ident in (mapInsert ident (n, PLater seqTy) valueScope, PName n)
       else (valueScope, p.middle)
     with (valueScope, middle) in
     ( {sc with valueScope = valueScope}
@@ -988,6 +1012,8 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + TempLamAst + AppType
         )
       else (sc, PatCon p)
     else error "Pattern matched on a constructor that cannot appear here. Should deal with this, but later."
+  | (l, r) ->
+    errorSingle [infoPat r] (concat "Missing case " (eitherEither ptypeAToString (ptypeCToString ptypeToString) l))
 end
 
 lang TestLang = DPPLParser + MExprLowerNestedPatterns + InlineSingleUse + TempLamAst + IdealizedPValTransformation

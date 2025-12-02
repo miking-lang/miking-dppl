@@ -1,3 +1,14 @@
+-- This file provides a transformation that removes second-class
+-- functions, i.e., functions that are never stored in another value
+-- or returned from a function, by specializing higher-order functions
+-- to their functional inputs.
+--
+-- Assumptions:
+-- * TODO(vipa, 2025-12-02): Likely something about being fully applied.
+--
+-- Note that the transformation will not ensure that all `ty` fields
+-- are correct; re-run typechecking afterwards if that's desirable.
+
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 include "coreppl::parser.mc"
@@ -136,10 +147,16 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
     , {st with toInsert = mapRemove env.depth st.toInsert}
     , Some (DeclRecLets {x with bindings = bindings})
     )
+  | decl & DeclExt x ->
+    ( {env with bindings = mapInsert x.ident (BKRef {depth = env.depth}) env.bindings}
+    , {st with depths = mapInsert x.ident (pureRMaxInt env.depth) st.depths}
+    , Some decl
+    )
+  | decl & DeclType _ -> (env, st, Some decl)
   | decl -> errorSingle [infoDecl decl] (concat "Missing case for decl: " (decl2str decl))
 
-  sem remSecLamCall : RemSecLamEnv -> RemSecLamState -> (Expr, [Expr]) -> Option (RemSecLamState, Expr)
-  sem remSecLamCall env st =
+  sem remSecLamCall : RemSecLamEnv -> RemSecLamState -> Type -> (Expr, [Expr]) -> Option (RemSecLamState, Expr)
+  sem remSecLamCall env st retTy =
   | (TmVar x, args) -> switch mapLookup x.ident env.bindings
     case Some (BKFuncDef (fd & {depth = depth})) then
       -- TODO(vipa, 2025-12-01): We're not keeping the symbolize
@@ -230,7 +247,7 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
         else
           ({st with pendingRecursiveDefinitions = snoc st.pendingRecursiveDefinitions (getDepth, binding)}, fName)
       with (st, fName) in
-      Some (st, appSeq_ (nvar_ fName) (join args))
+      Some (st, withType retTy (appSeq_ (nvar_ fName) (join args)))
     case _ then None ()
     end
   | _ -> None ()
@@ -254,7 +271,7 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
       else (tm, xs, args) in
     match work [x] [x.rhs] x.lhs with (f, xs, args) in
     match mapAccumL (remSecLamExpr env) st args with (st, args) in
-    match remSecLamCall env st (f, args) with Some ret then ret else
+    match remSecLamCall env st x.ty (f, args) with Some ret then ret else
     -- NOTE(vipa, 2025-11-28): Reconstruct with the original TmApp
     -- fields
     match remSecLamExpr env st f with (st, f) in
