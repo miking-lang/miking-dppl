@@ -182,7 +182,7 @@ lang DPPLParser =
   | "Wiener" -> Some (1, lam lst. TmDist {dist = DWiener {cps = false, a = get lst 0},
                                        ty = TyUnknown {info = info},
                                        info = info})
-  | "Pair" -> Some (2, lam lst. TmDist {dist = DPair {d = get lst 0, f = get lst 1},
+  | "Pair" -> Some (2, lam lst. TmDist {dist = DPair {p = get lst 0, ixs = get lst 1},
                                         ty = TyUnknown {info = info},
                                         info = info})
 

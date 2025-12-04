@@ -551,20 +551,20 @@ end
 
 lang PairDist = Dist
   syn Dist =
-  | DPair { d : Expr, f : Expr}
+  | DPair { p : Expr, ixs : Expr}
 
   sem smapAccumL_Dist_Expr f acc =
   | DPair t ->
-    match f acc t.d with (acc, d) in
-    match f acc t.f with (acc, f) in
-    (acc, DPair {{ t with d = d } with f = f })
+    match f acc t.p with (acc, p) in
+    match f acc t.ixs with (acc, ixs) in
+    (acc, DPair {{ t with p = p } with ixs = ixs })
 
   sem distTy info =
   | DPair _ ->
     let f = ityfloat_ info in
     let s = ityseq_ info in
     let i = ityint_ info in
-    ([], [s (s f), ityarrow_ info f f], tytuple_ [tytuple_ [i, i], s (s f), f])
+    ([], [s f, s (tytuple_ [i,i])], tytuple_ [tytuple_ [i, i], i])
 
   sem distName =
   | DPair _ -> "Pair"
@@ -629,7 +629,7 @@ let binomial_ = use BinomialDist in
 let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 
 let pair_ = use PairDist in
-  lam d. lam f. dist_ (DPair {d = d, f = f})
+  lam p. lam ixs. dist_ (DPair {p = p, ixs = ixs})
 
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
@@ -672,7 +672,7 @@ let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 let tmGeometric = geometric_ (float_ 0.5) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmWiener = wiener_ in
-let tmPair = pair_ (seq_ [seq_ [float_ 1.3], seq_ [float_ 1.3,float_ 1.3], seq_ [float_ 1.5,float_ 1.3,float_ 1.3]]) (ulam_ "x" (addf_ (float_ 2.) (var_ "x"))) in
+let tmPair = pair_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [utuple_ [int_ 0, int_ 1]]) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -742,12 +742,7 @@ utest mexprToString tmBinomial with strJoin "\n" [
 utest mexprToString tmWiener with "Wiener {}"  using eqString in
 
 utest mexprToString tmPair with strJoin "\n" [
-  "Pair",
-  "  [ [ 1.3 ],",
-  "    [ 1.3, 1.3 ],",
-  "    [ 1.5, 1.3, 1.3 ] ]",
-  "  (lam x.",
-  "     addf 2. x)"
+  "Pair [ 0.3, 0.7 ] [ (0, 1) ]"
 ] using eqString in
 --------------------
 -- EQUALITY TESTS --
@@ -896,7 +891,7 @@ with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmPair with pair_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmPair
-with [ ulam_ "x" (addf_ (float_ 2.) (var_ "x")), seq_ [seq_ [float_ 1.3], seq_ [float_ 1.3,float_ 1.3], seq_ [float_ 1.5,float_ 1.3,float_ 1.3]]] using eqSeq eqExpr in
+with [ seq_ [utuple_ [int_ 0, int_ 1]], seq_ [float_ 0.3, float_ 0.7]] using eqSeq eqExpr in
 
 ---------------------
 -- SYMBOLIZE TESTS --
@@ -939,7 +934,7 @@ utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_) using eqType in
-utest tyTm (typeCheck tmPair) with tydist_ (tytuple_ [tytuple_ [tyint_, tyint_], tyseq_ (tyseq_ tyfloat_), tyfloat_])  using eqType in
+utest tyTm (typeCheck tmPair) with tydist_ (tytuple_ [tytuple_ [tyint_, tyint_], tyint_])  using eqType in
 
 ---------------
 -- ANF TESTS --
@@ -985,12 +980,11 @@ utest _anf tmGeometric with bind_ (ulet_ "t" tmGeometric) (var_ "t") using eqExp
 utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 utest _anf tmPair with bindall_ [
-  ulet_ "t" (seq_ [float_ 1.3]),
-  ulet_ "t1" (seq_ [float_ 1.3,float_ 1.3]),
-  ulet_ "t2" (seq_ [float_ 1.5,float_ 1.3,float_ 1.3]),
-  ulet_ "t3" (seq_ [var_ "t",var_ "t1",var_ "t2"]),
-  ulet_ "t4" (pair_ (var_ "t3") (ulam_ "x" (bindall_ [ulet_ "t5" (addf_ (float_ 2.) (var_ "x"))](var_ "t5"))))
-](var_ "t4") using eqExpr in
+  ulet_ "t" (seq_ [float_ 0.3, float_ 0.7]),
+  ulet_ "t1" (utuple_ [int_ 0, int_ 1]),
+  ulet_ "t2" (seq_ [var_ "t1"]),
+  ulet_ "t3" (pair_ (var_ "t") (var_ "t2"))
+](var_ "t3") using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --

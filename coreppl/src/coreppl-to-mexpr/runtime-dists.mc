@@ -85,7 +85,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistLomax {scale: Float, shape : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
   | DistNegativeBinomial {n:Int, p: Float}
-  | DistPair {d:[[Float]], f:Float->Float}
+  | DistPair {p:[Float], ixs:[(Int,Int)]}
 
   sem sample =
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
@@ -108,7 +108,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
   | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
-  | DistPair t -> unsafeCoerce (pairSample t.d t.f)
+  | DistPair t -> unsafeCoerce (pairSample t.p t.ixs)
 
   -- Expectation of primitive distributions over real values
   sem expectation =
@@ -154,7 +154,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
   | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
-  | DistPair t -> unsafeCoerce (pairLogPmf t.d t.f)
+  | DistPair t -> unsafeCoerce (pairLogPmf t.p)
 
 end
 
