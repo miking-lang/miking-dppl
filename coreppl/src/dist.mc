@@ -213,6 +213,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst {}
   | CDistEmpiricalAcceptRate {}
   | CDistExpectation {}
+  | CDistLogObserve {}
 
   sem getConstStringCode (indent : Int) =
   | CDistEmpiricalSamples _ -> "distEmpiricalSamples"
@@ -220,6 +221,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst _ -> "distEmpiricalNormConst"
   | CDistEmpiricalAcceptRate _ -> "distEmpiricalAcceptRate"
   | CDistExpectation _ -> "expectation"
+  | CDistLogObserve _ -> "logObserve"
 
   sem _tydist =
   | a -> TyDist {info = NoInfo (), ty = a}
@@ -232,6 +234,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
   | CDistEmpiricalAcceptRate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
   | CDistExpectation _ -> tyarrow_ (_tydist tyfloat_) tyfloat_
+  | CDistLogObserve _ -> mktyall_ "a" (lam a. tyarrows_ [_tydist a, a, tyfloat_])
 
   sem constArity =
   | CDistEmpiricalSamples _ -> 1
@@ -239,6 +242,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst _ -> 1
   | CDistEmpiricalAcceptRate _ -> 1
   | CDistExpectation _ -> 1
+  | CDistLogObserve _ -> 2
 
   sem exprToJson =
   | TmDist x -> JsonObject (mapFromSeq cmpString
