@@ -38,7 +38,8 @@ lang TransformDist = TransformDistBase + InferenceInterface
        | CDistEmpiricalDegenerate _
        | CDistEmpiricalNormConst _
        | CDistEmpiricalAcceptRate _
-       | CDistExpectation _) ->
+       | CDistExpectation _
+       | CDistLogObserve _) ->
     withInfo (infoTm constTm) (appFromEnv env (getConstStringCode 0 c) [])
 
   -- TODO(larshum, 2022-10-12): This code assumes the MLang transformation
