@@ -104,6 +104,8 @@ let resetState : State Result -> () = lam state. (
   modref state.prevWeightReused 0.;
   modref state.weightReused 0.;
   modref state.reuseUnaligned true;
+  modref state.alignedTrace (emptyList ());
+  modref state.unalignedTraces (emptyList ());
   ()
 )
 
