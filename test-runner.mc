@@ -81,7 +81,7 @@ let initScope =
   , valueScope = mapEmpty nameCmp
   , conScope = mapEmpty nameCmp
   } in
-match specializeExpr initScope initState ast with (_, (ast, _)) in
+let ast = specializeExprReturn initScope initState ast in
 let pprintEnv = pprintLn pprintEnv "idealized transformation" ast in
 let initTransEnv =
   { currStateName = nameSym "st"

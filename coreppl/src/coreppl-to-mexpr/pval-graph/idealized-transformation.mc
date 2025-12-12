@@ -254,6 +254,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | CPApply
   | CPJoin
   | CPTraverseSeq
+  | CPExport
 
   sem getConstStringCode indent =
   | CPAssume _ -> "p_assume"
@@ -262,6 +263,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | CPMap _ -> "p_map"
   | CPApply _ -> "p_apply"
   | CPJoin _ -> "p_join"
+  | CPExport _ -> "p_export"
   | CPTraverseSeq _ -> "p_traverseSeq"
 
   sem ptyCmp : PType -> PType -> Int
@@ -792,6 +794,12 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     ({st with specializations = specializations}, [DeclRecLets {x with bindings = specs}])
   | decl & (DeclType _ | DeclConDef _ | DeclExt _) -> (st, [decl])
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPost"
+
+  sem specializeExprReturn : PScope -> PState -> Expr -> Expr
+  sem specializeExprReturn sc st = | tm ->
+    match specializeExpr sc st tm with (st, (tm, ty)) in
+    let tm = adjustWrapping (ty, ensureWrapped ty) tm in
+    app_ (uconst_ (CPExport ())) tm
 
   sem specializeExpr : PScope -> PState -> Expr -> (PState, (Expr, PType))
   sem specializeExpr sc st =

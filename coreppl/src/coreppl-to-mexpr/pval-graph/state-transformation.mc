@@ -31,9 +31,11 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
 
   sem pvalTrans : PValTransEnv -> Expr -> Expr
   sem pvalTrans env = | tm ->
-    match pvalTransExpr env tm with (wrap1, tm) in
-    match peelState tm with (stateName, (wrap2, tm)) in
-    nulam_ env.currStateName (wrap1 (wrap2 (appf3_ (nvar_ env.p_export) (nvar_ stateName) (nvar_ env.storeExport) tm)))
+    match pvalTransExpr env tm with (wrap, tm) in
+    let st = match tm with TmRecord x
+      then mapFindExn _idx0 x.bindings
+      else tupleproj_ 0 tm in
+    nulam_ env.currStateName (wrap st)
 
   sem maybeEtaExpand : Expr -> {ident : Name, tyAnnot : Type, tyParam : Type, body : Expr, ty : Type, info : Info}
   sem maybeEtaExpand =
@@ -134,6 +136,9 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
       -- switch to mapAccumL
       let f = nulam_ innerStateName (TmLam {f with body = wrap1 body}) in
       (wrapV, appf3_ (nvar_ env.mapAccumL) f (nvar_ stateName) val)
+  | (TmConst {val = CPExport _}, [val]) ->
+    match pvalTransSeq env [val] with (stateName, (wrapV, [val])) in
+    (wrapV, autoty_tuple_ [appf3_ (nvar_ env.p_export) (nvar_ stateName) (nvar_ env.storeExport) val, unit_])
   | (f & TmConst _, args) ->
     match pvalTransSeq env args with (stateName, (wrap, args)) in
     (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args])
@@ -273,10 +278,8 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     case Some stTm then
       let stIdent = nameSym "st" in
       (stIdent, (bind_ (nulet_ stIdent stTm), expr))
-    case Some tm then
-      errorSingle [infoTm tm] (concat "Unexpected term in _peelState: " (expr2str tm))
     case None _ then
-      errorSingle [x.info] (concat "Unexpected none in _peelState: " (expr2str tm))
+      errorSingle [x.info] (concat "Unexpected None in _peelState: " (expr2str tm))
     end
   | tm ->
     let stIdent = nameSym "st" in
