@@ -254,7 +254,6 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | CPApply
   | CPJoin
   | CPTraverseSeq
-  | CCalcLogWeight
 
   sem getConstStringCode indent =
   | CPAssume _ -> "p_assume"
@@ -264,7 +263,6 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | CPApply _ -> "p_apply"
   | CPJoin _ -> "p_join"
   | CPTraverseSeq _ -> "p_traverseSeq"
-  | CCalcLogWeight _ -> "calcLogWeight"
 
   sem ptyCmp : PType -> PType -> Int
   sem ptyCmp l = | r ->
@@ -870,7 +868,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let tm = app_ (uconst_ (CPWeight ())) weight in
     (st, (tm, PLater (PRecord (mapEmpty cmpSID))))
   | TmObserve x ->
-    let w = withType tyfloat_ (appf2_ (TempLam (lam v. app_ (uconst_ (CCalcLogWeight ())) v)) x.dist x.value) in
+    let w = withType tyfloat_ (appf2_ (TempLam (lam v. app_ (uconst_ (CDistLogObserve ())) v)) x.dist x.value) in
     specializeExpr sc st (TmWeight {weight = w, ty = x.ty, info = x.info})
   | TmDist x ->
     match mapAccumL (specializeExpr sc) st (distParams x.dist) with (st, args) in
