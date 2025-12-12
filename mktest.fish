@@ -4,8 +4,6 @@ build/temp > build/model.mc
 and sed \
   -e "/^ *external /d" \
   -e "s/\(Bernoulli\|Exponential\|Gaussian\|Gamma\|Poisson\|Uniform\)/mk\1/g" \
-  -e "s/calcLogWeight/logObserve/g" \
-  -e "s/externalExp/(lam x. externalExp x)/g" \
   build/model.mc > build/transformed-model.mc
 and sed -e "/{{HERE}}/{r build/transformed-model.mc" -e "d}" \
   test-template.mc > build/full-temp.mc

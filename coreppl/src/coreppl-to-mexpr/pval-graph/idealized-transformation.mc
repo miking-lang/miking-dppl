@@ -624,6 +624,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem _specializeCall sc st tm args ret =
   | SCKInflexible _ ->
     let pureRet = tyToPurePType ret in
+    -- NOTE(vipa, 2025-12-12): Ensure we're fully applying the
+    -- function, since it might be an external, which may not appear
+    -- in any other situation
+    let tm = foldr (lam. lam tm. TempLam (_app tm)) tm args in
     if forAll (lam x. isPureIsh x.1) args then
       (st, (foldl _app tm (map (lam x. x.0) args), pureRet))
     else
