@@ -56,7 +56,7 @@ let pureRMaxInt : Int -> RMaxInt = lam i. RMaxInt {knownMin = i, unknowns = mapE
 
 -- === Actual Implementation ===
 
-lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst + AppAst + ConstAst + DataDeclAst + DataAst + DataPat + PrettyPrint
+lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst + AppAst + ConstAst + DataDeclAst + DataAst + DataPat + PrettyPrint + ConstPrettyPrint
   syn BindingKind =
   | BKRef {depth : Int}
   | BKFuncDef {fPos : [Bool], body : Expr, depth : Int}
@@ -73,6 +73,11 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
     , depths : Map Name RMaxInt
     , currMaxDepthUsed : RMaxInt
     }
+
+  sem stripLambdaTyAnnot : Expr -> Expr
+  sem stripLambdaTyAnnot =
+  | TmLam x -> TmLam {x with tyAnnot = tyunknown_, body = stripLambdaTyAnnot x.body}
+  | tm -> tm
 
   sem lambdaFuncPositions : Expr -> [Bool]
   sem lambdaFuncPositions =
@@ -113,7 +118,7 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
       , if null fPos
         then st
         else {st with depths = mapInsert x.ident (pureRMaxInt env.depth) st.depths}
-      , Some (DeclLet {x with body = body})
+      , Some (DeclLet {x with body = stripLambdaTyAnnot body, tyAnnot = tyunknown_})
       )
   | DeclRecLets x ->
     let classify = lam pair. lam binding.
@@ -136,7 +141,7 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
     if null bindings then (env, st, None ()) else
     let remSecLamBinding = lam st. lam binding.
       match remSecLamExpr env st binding.body with (st, body) in
-      (st, {binding with body = body}) in
+      (st, {binding with body = stripLambdaTyAnnot body, tyAnnot = tyunknown_}) in
     match mapAccumL remSecLamBinding st bindings with (st, bindings) in
     let declToBindings = lam decl. switch decl
       case DeclLet x then [x]
@@ -145,7 +150,7 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
     let toInsert = optionMapOr [] (lam decls. join (map declToBindings decls)) (mapLookup env.depth st.toInsert) in
     ( env
     , {st with toInsert = mapRemove env.depth st.toInsert}
-    , Some (DeclRecLets {x with bindings = bindings})
+    , Some (DeclRecLets {x with bindings = concat toInsert bindings})
     )
   | decl & DeclExt x ->
     ( {env with bindings = mapInsert x.ident (BKRef {depth = env.depth}) env.bindings}
@@ -208,7 +213,7 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
                 args in
               let depth = optionGetOr (pureRMaxInt 0) (optionBind (eitherGetRight key.fName) (lam n. mapLookup n st.depths)) in
               ({env with bindings = mapInsert lamRecord.ident (BKFuncArg {replacement = replacement, depth = depth}) env.bindings}, records)
-            else (env, [lamRecord]) in
+            else (env, [{lamRecord with tyAnnot = tyunknown_}]) in
           match mapAccumL (lam env. lam f. f env) env (zipWith f argSpecs lamRecords) with (env, lamRecords) in
           match remSecLamExpr env st bodyUnderLam with (st, bodyUnderLam) in
           (st, foldr (lam l. lam tm. TmLam {l with body = tm}) bodyUnderLam (join lamRecords))

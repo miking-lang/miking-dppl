@@ -41,8 +41,9 @@ let ast = typeCheck ast in
 let ast = lowerAll ast in
 let ast = inlineSingleUseLets ast in
 let ast = deadcodeElimination ast in
-let ast = liftLambdas ast in
 let pprintEnv = pprintEnvEmpty in
+let pprintEnv = pprintLn pprintEnv "dead-code elimination" ast in
+let ast = liftLambdas ast in
 let pprintEnv = pprintLn pprintEnv "lam-lift" ast in
 let initEnv =
   { depth = 0
@@ -66,12 +67,15 @@ let initState =
 match remSecLamExpr initEnv initState ast with (_, ast) in
 -- printLn (use TyAnnotFull in pprintAst ast);
 let pprintEnv = pprintLn pprintEnv "remove second-class lambdas" ast in
-let ast = typeCheck ast in  -- NOTE(vipa, 2025-12-02): This is
-                            -- regrettable, but it's kinda hard to
-                            -- substitute in correct types inside
-                            -- polymorphic functions that have been
-                            -- specialized. We want something better
-                            -- here later.
+let ast = typeCheck (stripTempLam ast) in  -- NOTE(vipa, 2025-12-02):
+                                           -- This is regrettable, but
+                                           -- it's kinda hard to
+                                           -- substitute in correct
+                                           -- types inside polymorphic
+                                           -- functions that have been
+                                           -- specialized. We want
+                                           -- something better here
+                                           -- later.
 let initState =
   { specializations = mapEmpty nameCmp
   } in
