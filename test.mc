@@ -1,5 +1,62 @@
-include "seq.mc"
+include "int.mc"
+-- include "seq.mc"
 include "math.mc"
+let maxi = lam a. lam b. if gti a b then a else b
+
+let create = lam l. lam f.
+  recursive let rec = lam i. lam acc.
+    if geqi i 0 then rec (subi i 1) (cons (f i) acc)
+    else acc
+  in rec (subi l 1) []
+
+let make : all a. Int -> a -> [a] = lam n. lam v. create n (lam. v)
+
+let foldl = lam f. lam acc. lam s.
+  recursive let rec = lam acc. lam s.
+    match s with [] then acc
+    else match s with [a] ++ ss then rec (f acc a) ss
+    else never
+  in rec acc s
+
+let join : all a. [[a]] -> [a] = lam seqs. foldl concat [] seqs
+
+recursive
+  let any : all a. (a -> Bool) -> [a] -> Bool = lam p. lam seq.
+    if null seq
+    then false
+    else if p (head seq) then true else any p (tail seq)
+end
+
+recursive let foldl2 : all a. all b. all c. (a -> b -> c -> a) -> a -> [b] -> [c] -> a = lam f. lam a. lam bs. lam cs.
+  match (bs, cs) with ([b] ++ bs, [c] ++ cs)
+  then foldl2 f (f a b c) bs cs
+  else a
+end
+
+let zipWith : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c] =
+  lam f. foldl2 (lam acc. lam x1. lam x2. snoc acc (f x1 x2)) []
+
+let mapAccumL : all a. all b. all c. (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
+  lam f : (a -> b -> (a, c)). lam acc. lam seq.
+    foldl
+      (lam tacc : (a, [c]). lam x.
+         match f tacc.0 x with (acc, y) then (acc, snoc tacc.1 y) else never)
+      (acc, []) seq
+
+let zipWithIndex : all a. all b. all c. (Int -> a -> b -> c) -> [a] -> [b] -> [c] =
+  lam f. lam a1. lam a2.
+  recursive let work = lam acc. lam i. lam seq1. lam seq2.
+    match seq1 with [e1] ++ seq1tail then
+      match seq2 with [e2] ++ seq2tail then
+        work (cons (f i e1 e2) acc)
+             (addi i 1)
+             seq1tail
+             seq2tail
+      else reverse acc
+    else reverse acc
+  in
+  work [] 0 a1 a2
+
 type Tree
 con Leaf : {age: Float, msg: [[Float]], id: Int} -> Tree
 
@@ -23,14 +80,14 @@ let sapply = lam x. lam f.
 
 recursive let zipAll = lam lists.
 if (any null lists) then []
-else 
+else
   let heads = map head lists in
   let tails = map tail lists in
   snoc (zipAll tails) heads
 end
 
-let mapIndex = lam f. lam n. 
-  recursive let helper = lam acc. lam i. 
+let mapIndex = lam f. lam n.
+  recursive let helper = lam acc. lam i.
   if eqi i n then reverse acc
   else helper (cons (f i) acc) (addi i 1)
   in helper [] 0
@@ -68,8 +125,8 @@ let getLogLikes = lam msg. lam pi.
   let like = foldl2 (lam acc. lam x. lam p. addf acc (mulf x p)) 0. msg pi in
   log like
 
-/-let ctmc = lam i. lam qt. 
-  [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt] 
+/-let ctmc = lam i. lam qt.
+  [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt]
 -/
 recursive
 let buildForest =  lam data. lam forest:[Tree]. lam index. lam data_len. lam seq_len.
@@ -143,7 +200,7 @@ in
 let tree = model () in
 match collectSplits (get tree 0) with (_, splits) in
 --splits
-recursive 
+recursive
 let iterateTree = lam tree. lam tl.
   let age = getAge tree in
   match tree with Node n then
