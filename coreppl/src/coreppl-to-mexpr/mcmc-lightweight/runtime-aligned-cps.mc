@@ -146,7 +146,7 @@ let reuseSample: all a. use RuntimeDistBase in Dist a -> Any -> Float -> (Any, F
     let wNew = use RuntimeDist in logObserve dist s in
     -- print (join ["Mod weightReused: ", float2string wNew, "; "]);
     -- printLn (join ["Mod prevWeightReused: ", float2string w]);
-    if eqfApprox 1e-14 wNew 0.0 then
+    if eqf wNew (negf inf) then
       newSample dist
     else
       modref state.weightReused (addf (deref state.weightReused) wNew);

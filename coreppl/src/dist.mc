@@ -555,20 +555,20 @@ end
 
 lang PairDist = Dist
   syn Dist =
-  | DPair { p : Expr, ixs : Expr}
+  | DPair { p : Expr, pairSets : Expr}
 
   sem smapAccumL_Dist_Expr f acc =
   | DPair t ->
     match f acc t.p with (acc, p) in
-    match f acc t.ixs with (acc, ixs) in
-    (acc, DPair {{ t with p = p } with ixs = ixs })
+    match f acc t.pairSets with (acc, pairSets) in
+    (acc, DPair {{ t with p = p } with pairSets = pairSets })
 
   sem distTy info =
   | DPair _ ->
     let f = ityfloat_ info in
     let s = ityseq_ info in
     let i = ityint_ info in
-    ([], [s f, s (tytuple_ [i,i])], tytuple_ [tytuple_ [i, i], i])
+    ([], [s f, s (s i)], s i)
 
   sem distName =
   | DPair _ -> "Pair"
@@ -633,7 +633,7 @@ let binomial_ = use BinomialDist in
 let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 
 let pair_ = use PairDist in
-  lam p. lam ixs. dist_ (DPair {p = p, ixs = ixs})
+  lam p. lam pairSets. dist_ (DPair {p = p, pairSets = pairSets})
 
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
@@ -676,7 +676,7 @@ let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 let tmGeometric = geometric_ (float_ 0.5) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmWiener = wiener_ in
-let tmPair = pair_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [utuple_ [int_ 0, int_ 1]]) in
+let tmPair = pair_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [ seq_ [int_ 0, int_ 1]]) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -746,7 +746,7 @@ utest mexprToString tmBinomial with strJoin "\n" [
 utest mexprToString tmWiener with "Wiener {}"  using eqString in
 
 utest mexprToString tmPair with strJoin "\n" [
-  "Pair [ 0.3, 0.7 ] [ (0, 1) ]"
+  "Pair [ 0.3, 0.7 ] [ [ 0, 1 ] ]"
 ] using eqString in
 --------------------
 -- EQUALITY TESTS --
@@ -895,7 +895,7 @@ with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmPair with pair_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmPair
-with [ seq_ [utuple_ [int_ 0, int_ 1]], seq_ [float_ 0.3, float_ 0.7]] using eqSeq eqExpr in
+with [ seq_ [ seq_ [int_ 0, int_ 1]], seq_ [float_ 0.3, float_ 0.7]] using eqSeq eqExpr in
 
 ---------------------
 -- SYMBOLIZE TESTS --
@@ -938,7 +938,7 @@ utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_) using eqType in
-utest tyTm (typeCheck tmPair) with tydist_ (tytuple_ [tytuple_ [tyint_, tyint_], tyint_])  using eqType in
+utest tyTm (typeCheck tmPair) with tydist_ (tyseq_ tyint_)  using eqType in
 
 ---------------
 -- ANF TESTS --
@@ -985,7 +985,7 @@ utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr 
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 utest _anf tmPair with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.7]),
-  ulet_ "t1" (utuple_ [int_ 0, int_ 1]),
+  ulet_ "t1" (seq_ [int_ 0, int_ 1]),
   ulet_ "t2" (seq_ [var_ "t1"]),
   ulet_ "t3" (pair_ (var_ "t") (var_ "t2"))
 ](var_ "t3") using eqExpr in
