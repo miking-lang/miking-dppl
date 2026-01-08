@@ -257,14 +257,14 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | CPExport
 
   sem getConstStringCode indent =
-  | CPAssume _ -> "p_assume"
-  | CPWeight _ -> "p_weight"
-  | CPPure _ -> "p_pure"
-  | CPMap _ -> "p_map"
-  | CPApply _ -> "p_apply"
-  | CPJoin _ -> "p_join"
-  | CPExport _ -> "p_export"
-  | CPTraverseSeq _ -> "p_traverseSeq"
+  | CPAssume _ -> "px_assume"
+  | CPWeight _ -> "px_weight"
+  | CPPure _ -> "px_pure"
+  | CPMap _ -> "px_map"
+  | CPApply _ -> "px_apply"
+  | CPJoin _ -> "px_join"
+  | CPExport _ -> "px_export"
+  | CPTraverseSeq _ -> "px_traverseSeq"
 
   sem ptyCmp : PType -> PType -> Int
   sem ptyCmp l = | r ->
