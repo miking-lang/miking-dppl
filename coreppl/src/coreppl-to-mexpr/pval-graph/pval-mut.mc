@@ -53,9 +53,6 @@ lang MutPVal = PValInterface
 
   sem instantiate f = | st ->
     match _initModel 0 st f with (st, initWeight, update) in
-    (if eqf initWeight (negf inf) then
-      printLn "WARNING: instantiate returned -inf weight model"
-     else ());
     PVI {st = st, update = update, permanentWeight = initWeight, id = 0}
 
   sem getWeight = | PVI x -> x.permanentWeight
@@ -67,7 +64,7 @@ lang MutPVal = PValInterface
   sem finalizeStep pred = | PVI x ->
     let st =
       { id = x.id
-      , permanentWeight = ref x.permanentWeight
+      , permanentWeight = ref 0.0
       , temporaryWeight = ref 0.0
       , reset = ref []
       } in
@@ -165,7 +162,6 @@ lang MutPVal = PValInterface
     let model = ref model in
     let st2 = ref st2 in
     let pval = ref pval in
-    let localWeight = ref initWeight in
 
     let update = lam st.
       if eqi st.id (deref a.changeId) then
@@ -173,36 +169,27 @@ lang MutPVal = PValInterface
         let prevValue = deref value in
         let prevModel = deref model in
         let prevSt2 = deref st2 in
-        let prevWeight = deref localWeight in
         let prevPVal = deref pval in
 
         match _initModel st.id initSt2 f with ((newPVal, newSt2), newWeight, newModel) in
         let newValue = deref newPVal.value in
-        modref st.permanentWeight (addf (deref st.permanentWeight) (subf newWeight prevWeight));
+        modref st.permanentWeight (addf (deref st.permanentWeight) newWeight);
 
         modref value newValue;
         modref changeId st.id;
         modref model newModel;
         modref st2 newSt2;
         modref pval newPVal;
-        modref localWeight newWeight;
 
         let reset = lam.
           modref value prevValue;
           modref model prevModel;
           modref st2 prevSt2;
-          modref pval prevPVal;
-          modref localWeight prevWeight in
+          modref pval prevPVal in
         modref st.reset (snoc (deref st.reset) reset)
       else
         -- We've not updated the argument, update the sub-model
-        let prevWeight = deref localWeight in
-        let innerSt = {st with permanentWeight = ref prevWeight} in
-        (deref model) innerSt;
-        let newWeight = deref innerSt.permanentWeight in
-        modref st.permanentWeight (addf (deref st.permanentWeight) (subf newWeight prevWeight));
-        modref localWeight newWeight;
-        modref st.reset (snoc (deref st.reset) (lam. modref localWeight prevWeight));
+        (deref model) st;
         if eqi st.id (deref (deref pval).changeId) then
           -- The sub-model has updated output, propagate
           let prevValue = deref value in
@@ -258,10 +245,10 @@ lang MutPVal = PValInterface
       if eqi st.id (deref a.changeId) then
         let prevWeight = deref w in
         let newWeight = f (deref a.value) in
-        modref st.permanentWeight (addf (deref st.permanentWeight) (subf newWeight prevWeight));
+        modref st.permanentWeight (addf (deref st.permanentWeight) newWeight);
         modref w newWeight;
         modref st.reset (snoc (deref st.reset) (lam. modref w prevWeight))
-      else () in
+      else modref st.permanentWeight (addf (deref st.permanentWeight) (deref w)) in
     let st =
       { st = store st.st (PWeightRef ())
       , updates = snoc st.updates update
