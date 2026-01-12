@@ -1,5 +1,7 @@
 include "coreppl::coreppl-to-mexpr/pval-graph/simple-mcmc.mc"
 include "coreppl::coreppl-to-mexpr/pval-graph/pval-mut.mc"
+include "coreppl::coreppl-to-mexpr/pval-graph/pval-debug.mc"
+include "ext/mat-ext.mc"
 include "common.mc"
 
 -- NOTE(vipa, 2025-12-09): In lieu of proper distribution translations
@@ -10,6 +12,8 @@ let mkGaussian = lam mu. lam sigma. use RuntimeDistElementary in DistGaussian {m
 let mkGamma = lam shape. lam scale. use RuntimeDistElementary in DistGamma {shape = shape, scale = scale}
 let mkPoisson = lam lambda. use RuntimeDistElementary in DistPoisson {lambda = lambda}
 let mkUniform = lam a. lam b. use RuntimeDistElementary in DistUniform {a = a, b = b}
+let mkDirichlet = lam a. use RuntimeDistElementary in DistDirichlet {a = a}
+let mkCategorical = lam p. use RuntimeDistElementary in DistCategorical {p = p}
 
 lang Model = SimpleMCMCPVal
   sem model = | st ->
@@ -19,6 +23,9 @@ lang Model = SimpleMCMCPVal
 end
 
 lang ComposedMut = Model + MutPVal + RuntimeDistElementary
+end
+
+lang ComposedVisi = Model + PValVisiGraph + RuntimeDistElementary
 end
 
 let timeF : all a. (() -> a) -> (Float, a)
@@ -76,6 +83,9 @@ let summarizePVal = lam label. lam pair.
   printLn (float2string res.acceptanceRatio);
   if showHistogram then printLn (hist2string toString (mkHisto res.samples)) else () in
 let run =
+  use ComposedVisi in
+  -- printJsonLn (graphToJson (instantiate model (simpleInit ())));
+  -- exit 0;
   use ComposedMut in
   recursive let findGoodInstance = lam.
     let instance = instantiate model (simpleInit ()) in

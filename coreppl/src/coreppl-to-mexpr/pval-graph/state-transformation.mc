@@ -12,8 +12,10 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     , functions : Map Name Bool -- True if it needs (and returns) a state argument
     , p_pure : Name
     , p_map : Name
+    , p_subMap : Name
     , p_apply : Name
     , p_bind : Name
+    , p_join : Name
     , p_assume : Name
     , p_select : Name
     , p_weight : Name
@@ -56,8 +58,22 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     match pvalTransSeq env args with (stateName, (wrap, [val])) in
     (wrap, autoty_tuple_ [nvar_ stateName, app_ (nvar_ env.p_pure) val])
   | (TmConst {val = CPMap _}, [f, val]) ->
-    match pvalTransSeq env [val] with (stateName, (wrap, [val])) in
-    (wrap, appf3_ (nvar_ env.p_map) (nvar_ stateName) f val)
+    match peelLambdas f with (wrapLams, body) in
+    match pvalTransSeq env [val] with (stateName, (wrapV, [val])) in
+    let innerStateName = nameSym "st" in
+    match pvalTransExpr {env with currStateName = innerStateName} body with (wrap1, body) in
+    match peelState body with (innerName, (wrap2, bodyPeeled)) in
+    if nameEq innerStateName innerName then
+      -- NOTE(vipa, 2026-01-12): The body doesn't create any new
+      -- nodes, thus we can use p_map
+      (wrapV, appf3_ (nvar_ env.p_map) (nvar_ stateName) (wrapLams (wrap1 (wrap2 bodyPeeled))) val)
+    else
+      -- NOTE(vipa, 2026-01-12): The body does create new nodes, thus
+      -- we need p_subMap
+      let store = nvar_ env.storeSubmodel in
+      let ist = env.initSubmodel in
+      let f = nulam_ innerStateName (wrapLams (wrap1 body)) in
+      (wrapV, appf5_ (nvar_ env.p_subMap) (nvar_ stateName) store ist f val)
   | (TmConst {val = CPTraverseSeq _}, [f, val]) ->
     match pvalTransSeq env [val] with (stateName, (wrap, [val])) in
     let f = maybeEtaExpand f in
@@ -94,6 +110,9 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
       let ist = env.initSubmodel in
       let f = nulam_ innerStateName (TmLam {f with body = wrap1 body}) in
       (wrapV, appf5_ (nvar_ env.p_bind) (nvar_ stateName) store ist f val)
+  | (TmConst {val = CPJoin _}, args) ->
+    match pvalTransSeq env args with (stateName, (wrap, [val])) in
+    (wrap, appf2_ (nvar_ env.p_join) (nvar_ stateName) val)
   | (TmConst {val = CPAssume _}, args) ->
     match pvalTransSeq env args with (stateName, (wrap, [dist])) in
     let store = nvar_ env.storeAssume in
@@ -215,11 +234,18 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     match pvalTransExpr env x.inexpr with (wrapi, tm) in
     (lam tm. wrap (wrapi tm), tm)
   | TmApp x ->
-    recursive let work = lam f. lam args.
-      match f with TmApp x
-      then work x.lhs (cons x.rhs args)
-      else pvalTransCall env (f, args)
-    in work x.lhs [x.rhs]
+    recursive let work = lam f. lam env. lam args.
+      switch f
+      case TmApp x then
+        work x.lhs env (cons x.rhs args)
+      case TmDecl x then
+        match pvalTransDecl env x.decl with (env, wrap) in
+        match work x.inexpr env args with (wrapi, tm) in
+        (lam tm. wrap (wrapi tm), tm)
+      case f then
+        pvalTransCall env (f, args)
+      end
+    in work x.lhs env [x.rhs]
   | TmLam x -> errorSingle [x.info] "Encountered unbound lambda in final graph transformation."
   | tm & (TempLam _ | TempFix _) -> error (concat "Encountered unbound templam/fix in final graph transformation: " (expr2str tm))
   | TmMatch (x & {els = TmNever _}) ->

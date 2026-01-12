@@ -214,7 +214,9 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
               let depth = optionGetOr (pureRMaxInt 0) (optionBind (eitherGetRight key.fName) (lam n. mapLookup n st.depths)) in
               ({env with bindings = mapInsert lamRecord.ident (BKFuncArg {replacement = replacement, depth = depth}) env.bindings}, records)
             else (env, [{lamRecord with tyAnnot = tyunknown_}]) in
-          match mapAccumL (lam env. lam f. f env) env (zipWith f argSpecs lamRecords) with (env, lamRecords) in
+          match mapAccumL (lam env. lam f. f env) env (zipWith f argSpecs lamRecords) with (env, newLamRecords) in
+          -- NOTE(vipa, 2026-01-13): We might be partially applied, this should handle that
+          let lamRecords = concat newLamRecords (map (lam x. [{x with tyAnnot = tyunknown_}]) (subsequence lamRecords (length argSpecs) (subi (length lamRecords) (length argSpecs)))) in
           match remSecLamExpr env st bodyUnderLam with (st, bodyUnderLam) in
           (st, foldr (lam l. lam tm. TmLam {l with body = tm}) bodyUnderLam (join lamRecords))
         with (st, body) in

@@ -2,10 +2,24 @@ include "mexpr/deadcode.mc"
 include "coreppl::coreppl-to-mexpr/pval-graph/remove-second-class-lambdas.mc"
 include "coreppl::coreppl-to-mexpr/pval-graph/idealized-transformation.mc"
 include "coreppl::coreppl-to-mexpr/pval-graph/state-transformation.mc"
+include "coreppl::coreppl-to-mexpr/pval-graph/eta-expansion.mc"
 
-lang TestLang = DPPLParser + MExprLowerNestedPatterns + MExprLambdaLift + InlineSingleUse + RemoveSecondClassFunctions + IdealizedPValTransformation + PValStateTransformation + MExprDeadcodeElimination
+lang TestLang = DPPLParser + MExprLowerNestedPatterns + MExprLambdaLift + InlineSingleUse + RemoveSecondClassFunctions + IdealizedPValTransformation + PValStateTransformation + MExprDeadcodeElimination + EtaExpansion
   sem tmHasSideEffect nmap acc =
   | (TmWeight _ | TmObserve _) -> true
+
+  sem liftTysAndConstructors : Expr -> Expr
+  sem liftTysAndConstructors = | tm ->
+    match liftTysAndConstructorsExpr [] tm with (decls, tm) in
+    bindall_ decls tm
+
+  sem liftTysAndConstructorsExpr : [Decl] -> Expr -> ([Decl], Expr)
+  sem liftTysAndConstructorsExpr decls =
+  | TmDecl {decl = decl & DeclType _, inexpr = inexpr} ->
+    liftTysAndConstructorsExpr (cons decl decls) inexpr
+  | TmDecl {decl = decl & DeclConDef _, inexpr = inexpr} ->
+    liftTysAndConstructorsExpr (snoc decls decl) inexpr
+  | tm -> smapAccumL_Expr_Expr liftTysAndConstructorsExpr decls tm
 end
 
 lang TyAnnotFull = DPPLParser + MExprPrettyPrint + PprintTyAnnot + HtmlAnnotator + MetaVarTypePrettyPrint
@@ -38,11 +52,15 @@ let ast = parseMCoreFile args "test.mc" in
 let ast = use DPPLParser in makeKeywords ast in
 let ast = symbolizeExpr symEnvDefault ast in
 let ast = typeCheck ast in
+let pprintEnv = pprintEnvEmpty in
+let pprintEnv = pprintLn pprintEnv "type-check" ast in
 let ast = lowerAll ast in
 let ast = inlineSingleUseLets ast in
-let ast = deadcodeElimination ast in
-let pprintEnv = pprintEnvEmpty in
+let pprintEnv = pprintLn pprintEnv "inline-single-use" ast in
+let ast = deadcodeElimination (stripTempLam ast) in
 let pprintEnv = pprintLn pprintEnv "dead-code elimination" ast in
+let ast = etaExpand false ast in
+let pprintEnv = pprintLn pprintEnv "eta-expand" ast in
 let ast = liftLambdas ast in
 let pprintEnv = pprintLn pprintEnv "lam-lift" ast in
 let initEnv =
@@ -76,6 +94,8 @@ let ast = typeCheck (stripTempLam ast) in  -- NOTE(vipa, 2025-12-02):
                                            -- specialized. We want
                                            -- something better here
                                            -- later.
+let ast = liftTysAndConstructors ast in
+let pprintEnv = pprintLn pprintEnv "lift tys and constructors" ast in
 let initState =
   { specializations = mapEmpty nameCmp
   } in
@@ -86,14 +106,17 @@ let initScope =
   , conScope = mapEmpty nameCmp
   } in
 let ast = specializeExprReturn initScope initState ast in
+let ast = stripTempLam ast in
 let pprintEnv = pprintLn pprintEnv "idealized transformation" ast in
 let initTransEnv =
   { currStateName = nameSym "st"
   , functions = mapEmpty nameCmp
   , p_pure = nameSym "p_pure"
   , p_map = nameSym "p_map"
+  , p_subMap = nameSym "p_subMap"
   , p_apply = nameSym "p_apply"
   , p_bind = nameSym "p_bind"
+  , p_join = nameSym "p_join"
   , p_assume = nameSym "p_assume"
   , p_select = nameSym "p_select"
   , p_weight = nameSym "p_weight"

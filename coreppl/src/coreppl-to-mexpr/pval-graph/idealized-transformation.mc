@@ -45,6 +45,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | PFloat
   | PBool
   | PChar
+  | PUnknown
 
   sem mapPTypeC : all a. all b. (a -> b) -> PTypeC a -> PTypeC b
   sem mapPTypeC f =
@@ -89,7 +90,6 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | (PSeq l, PSeq r) -> PSeq (f (These (l, r)))
   | (PDist l, PDist r) -> PDist (f (These (l, r)))
   | (lty & PUser l, rty & PUser r) ->
-    let showTy = lam ty. ptypeCToString (lam. "_") ty in
     recursive let work : These (RecTy x) (RecTy y) -> RecTy z = lam t.
       -- NOTE(vipa, 2025-11-11): I could do rank-2 polymorphism here
       -- to only pass one mkThese function, but since the function is
@@ -159,6 +159,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | PFloat _ -> "Float"
   | PBool _ -> "Bool"
   | PChar _ -> "Char"
+  | PUnknown _ -> "Unknown"
 
   sem pureTypeToString : PureType -> String
   sem pureTypeToString =
@@ -290,6 +291,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | (PFloat _, PFloat _) -> 0
   | (PBool _, PBool _) -> 0
   | (PChar _, PChar _) -> 0
+  | (PUnknown _, PUnknown _) -> 0
   | (l, r) ->
     let lt = constructorTag l in
     let rt = constructorTag r in
@@ -319,39 +321,34 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem lubPType : PType -> PType -> PType
   sem lubPType l = | r -> _lubPType (l, r)
 
+  -- lub rules:
+  -- * symmetric: lub a b = lub b a
+  -- * idempotent: lub a a = a
+  -- * lub (wrapped a) b = wrapped (asPure (lub a b))
+  -- * lub (unused a) b = b
+  -- * lub unknown a = a
+
   sem _lubPType : (PType, PType) -> PType
   sem _lubPType =
-  | (lty & PNever _, PNever _) -> lty
-  | (lty & PHere {wrapped = l}, rty & PHere {wrapped = r}) ->
-    switch (l, r)
-    case (Wrapped _, _) then lty
-    case (_, Wrapped _) then rty
-    case (Unused _, _) then rty
-    case (_, Unused _) then lty
-    end
-  | (lty & PHere {wrapped = l}, rty & (PLater _ | PNever _)) ->
-    switch l
-    case Wrapped _ then lty
-    case Unused _ then rty
-    end
-  | (lty & (PLater _ | PNever _), rty & PHere {wrapped = r}) ->
-    switch r
-    case Wrapped _ then rty
-    case Unused _ then lty
-    end
-  | (PLater (PSeq l), PLater (PSeq r)) -> PLater (PSeq (lubPType l r))
-  | (PLater (PRecord l), PLater (PRecord r)) -> PLater (PRecord (mapIntersectWith lubPType l r))
-  | (PLater (PDist l), PLater (PDist r)) -> PLater (PDist (lubPType l r))
-  | (PLater (PUser l), PLater (PUser r)) ->
-    recursive let lubRecTy = lam l. lam r. switch (l, r)
-      case (NoRec l, NoRec r) then NoRec (lubPType l r)
-      case (Rec _, Rec _) then Rec ()
-      case (RLater l, RLater r) then RLater (map2PTypeCExn lubRecTy l r)
-      end in
-    PLater (PUser (mapMerge (optionOrWith lubRecTy) l r))
+  | (PHere {wrapped = Wrapped _, ty = w}, ty & !PHere {wrapped = Unused _})
+  | (ty & !PHere {wrapped = Unused _}, PHere {wrapped = Wrapped _, ty = w}) ->
+    ensureWrapped (lubPType (pureToPType w) ty)
+  | (PHere {wrapped = Unused _}, ty)
+  | (ty, PHere {wrapped = Unused _}) ->
+    ty
+  | (PLater l, PLater r) ->
+    PLater (map2PTypeC (theseThese (lam x. x) (lam x. x) lubPType) l r)
+  | (PNever l, PNever r) -> PNever (_lubPAType (l, r))
+  | (PNever (PUnknown _), ty & PLater _)
+  | (ty & PLater _, PNever (PUnknown _)) -> ty
   | (l, r) ->
     printLn (join ["Missing case in _lubPType: (", ptypeToString l, ", ", ptypeToString r, ")"]);
     never
+
+  sem _lubPAType : (PTypeA, PTypeA) -> PTypeA
+  sem _lubPAType =
+  | (PUnknown _, ty) | (ty, PUnknown _) -> ty
+  | (ty, _) -> ty
 
   sem ensureWrapped : PType -> PType
   sem ensureWrapped = | ty ->
@@ -414,6 +411,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let allId = mapFoldWithKey
       (lam allId. lam. lam r. if allId then foldRecTy f true r else false) true adjustments in
     if allId then pure else
+    let canMakeProgress = lam tm. match tm with TmConApp _ then true else false in
     let f = lam rec.
       recursive let work = lam recTy. switch recTy
         case NoRec adj then adj
@@ -423,14 +421,20 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       let workTop = lam conName. lam recTy. lam tm.
         apply (pure (TempLam (nconapp_ conName))) (work recTy tm) in
       _switchExhaustive (mapMapWithKey workTop adjustments) in
-    _app (TempFix f)
+    let tm = TempFix
+      { canMakeProgress = canMakeProgress
+      , f = f
+      , info = NoInfo ()
+      , ty = tyunknown_
+      } in
+    _app tm
   | l ->
     error (join ["Missing case for _adjustWrappingC: ", ptypeCToString (lam. "_") l])
 
   sem _adjustWrapping : (PType, PType) -> Expr -> Expr
   sem _adjustWrapping =
-  | (PNever _, PNever _) -> lam x. x
-  | (PNever _, PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
+  | (PNever _, PNever _) | (PNever (PUnknown _), _) -> lam x. x
+  | (PNever !(PUnknown _), PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
   | (PHere {wrapped = Unused _}, _) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PHere {wrapped = Wrapped _}) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PLater _) -> lam tm. errorSingle [infoTm tm] "Tried to convert a value to a less wrapped value, which is impossible"
@@ -462,6 +466,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | TyRecord x -> composite (PRecord x.fields)
   | ty & (TyApp _ | TyCon _ | TyVar _) ->
     match getTypeArgs ty with (ty, tyArgs) in custom ty tyArgs
+  | TyAlias x -> _tyToPTypeX atom composite custom x.content
   | ty -> errorSingle [infoTy ty] (concat "Missing case for _tyToPTypeX: " (getTypeStringCode 0 pprintEnvEmpty ty).1)
 
   sem tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC x -> x) -> (Type -> [Type] -> x) -> Type -> x
@@ -469,10 +474,20 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     _tyToPTypeX atom (lam pty. composite (mapPTypeC (tyToPTypeX atom composite custom) pty)) custom ty
 
   sem tyToPureType : Type -> PureType
-  sem tyToPureType = | ty -> tyToPTypeX (lam x. PureTypeA x) (lam x. PureTypeC x) (lam. lam. PureTypeC (PUser (mapEmpty nameCmp))) ty
+  sem tyToPureType = | ty ->
+    let custom = lam ty. lam tyargs.
+      match ty with TyVar _
+      then PureTypeA (PUnknown ())
+      else PureTypeC (PUser (mapEmpty nameCmp)) in
+    tyToPTypeX (lam x. PureTypeA x) (lam x. PureTypeC x) custom ty
 
   sem tyToPurePType : Type -> PType
-  sem tyToPurePType = | ty -> tyToPTypeX (lam x. PNever x) (lam x. PLater x) (lam. lam. PLater (PUser (mapEmpty nameCmp))) ty
+  sem tyToPurePType = | ty ->
+    let custom = lam ty. lam tyargs.
+      match ty with TyVar _
+      then PNever (PUnknown ())
+      else PLater (PUser (mapEmpty nameCmp)) in
+    tyToPTypeX (lam x. PNever x) (lam x. PLater x) custom ty
 
   sem _switchExhaustive : Map Name (Expr -> Expr) -> Expr -> Expr
   sem _switchExhaustive cases =
@@ -608,6 +623,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     else _specializeCall sc st f args retTy (SCKInflexible ())
   | {f = f & TempLam _, args = args, ret = retTy} ->
     _specializeCall sc st f args retTy (SCKInflexible ())
+  | {f = f} -> errorSingle [infoTm f] (join ["Missing case in specializeCall: ", expr2str f])
 
   -- OPT(vipa, 2025-11-25): This currently checks if at least one
   -- argument is wrapped further than a polymorphic instantiation of
@@ -627,7 +643,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     -- NOTE(vipa, 2025-12-12): Ensure we're fully applying the
     -- function, since it might be an external, which may not appear
     -- in any other situation
-    let tm = foldr (lam. lam tm. TempLam (_app tm)) tm args in
+    let tm = foldr (lam. lam cont. lam prefix. TempLam (lam arg. cont (snoc prefix arg))) (foldl _app tm) args [] in
     if forAll (lam x. isPureIsh x.1) args then
       (st, (foldl _app tm (map (lam x. x.0) args), pureRet))
     else
@@ -778,7 +794,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       tyToPTypeX (lam x. Right (PNever x)) distributeC checkRecursion ty in
     let recTy = eitherEither (lam x. x) (lam. NoRec ()) (work tyInfo.carried) in
     ({sc with conScope = mapInsert x.ident recTy sc.conScope}, st)
-  | DeclExt _ -> (sc, st)
+  | DeclExt x ->
+    match unwrapType x.tyIdent with !(TyArrow _ | TyAll _)
+    then ({sc with valueScope = mapInsert x.ident (x.ident, tyToPurePType x.tyIdent) sc.valueScope}, st)
+    else (sc, st)
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPre"
 
   sem specializeDeclPost : PState -> Decl -> (PState, [Decl])
@@ -813,14 +832,27 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     match specializeDeclPost st x.decl with (st, newDecls) in
     (st, (bindall_ newDecls tm, ty))
   | TmApp x ->
-    recursive let collectApps = lam acc. lam tm.
-      match tm with TmApp x
-      then collectApps (cons x.rhs acc) x.lhs
-      else (tm, acc) in
-    match collectApps [x.rhs] x.lhs with (f, args) in
+    recursive let collectApps = lam args. lam decls. lam tm.
+      switch tm
+      case TmApp x then collectApps (cons x.rhs args) decls x.lhs
+      case TmDecl x then collectApps args (cons x.decl decls) x.inexpr
+      case _ then (tm, args, decls)
+      end in
+    -- TODO(vipa, 2026-01-14): We could put argument collection as an
+    -- argument to specializeExpr, then just leave TmApps in place,
+    -- and wrap the actual function in some TempLams that perform
+    -- argument transformation. This means we could handle, e.g.,
+    -- `(match _ with _ then f a else _) b`.
+    match collectApps [x.rhs] [] x.lhs with (f, args, decls) in
+    match foldl (lam acc. specializeDeclPre {acc.0 with depth = addi acc.0 .depth 1} acc.1) (sc, st) decls with (sc, st) in
     match mapAccumL (specializeExpr sc) st args with (st, args) in
     (match x.ty with TyUnknown _ then warnSingle [x.info] (concat "no type on this app: " (expr2str (TmApp x))) else ());
-    specializeCall sc st {f = f, args = args, ret = x.ty}
+    match specializeCall sc st {f = f, args = args, ret = x.ty} with (st, (tm, ty)) in
+    let f = lam decl. lam pair : (PState, Expr).
+      match specializeDeclPost pair.0 decl with (st, newDecls) in
+      (st, bindall_ newDecls tm) in
+    match foldr f (st, tm) decls with (st, tm) in
+    (st, (tm, ty))
   | TmConApp x ->
     let argRecTy = match mapLookup x.ident sc.conScope
       with Some x then x
@@ -908,6 +940,21 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let bindings = mapMap (lam x. x.0) zipped in
     let bindingsTy = mapMap (lam x. x.1) zipped in
     (st, (TmRecord {x with bindings = bindings}, PLater (PRecord bindingsTy)))
+  | TmRecordUpdate x ->
+    match specializeExpr sc st x.rec with (st, (rec, recTy)) in
+    match specializeExpr sc st x.value with (st, (value, valueTy)) in
+    switch recTy
+    case PHere {wrapped = Wrapped _, ty = PureTypeC (PRecord r)} then
+      let f = TempLam (lam rec. TempLam (lam value. TmRecordUpdate {x with rec = rec, value = value})) in
+      let wrappedValueTy = ensureWrapped valueTy in
+      match wrappedValueTy with PHere {ty = pureValueTy} in
+      let value = adjustWrapping (valueTy, wrappedValueTy) value in
+      let tm = _apply (_map f rec) value in
+      let ty = PHere {wrapped = Wrapped (), ty = PureTypeC (PRecord (mapInsert x.key pureValueTy r))} in
+      (st, (tm, ty))
+    case PLater (PRecord r) then
+      (st, (TmRecordUpdate {x with rec = rec, value = value}, PLater (PRecord (mapInsert x.key valueTy r))))
+    end
   -- TODO(vipa, 2025-10-24): Specialize for infallible patterns (els =
   -- never) so we don't get a sub-model for the then-branch
   | TmMatch x ->
@@ -926,63 +973,72 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
         (None (), sc)
       end
     with (oTargetName, sc) in
-    match addMatchNames sc (unwrapOnce targetTy, x.pat) with (thnSc, pat) in
-    match specializeExpr thnSc st x.thn with (st, (thn, thnTy)) in
-    match
-      -- NOTE(vipa, 2025-11-10): We special-case `match ... in` when
-      -- it comes to PTypes
-      match x.els with TmNever _
-      then (st, (x.els, thnTy))
-      else specializeExpr sc st x.els
-    with (st, (els, elsTy)) in
-    let lubTy = lubPType thnTy elsTy in
-    match oTargetName with Some targetName then
-      -- We're matching on a wrapped value, i.e., the return must be wrapped
-      let retTy = ensureWrapped lubTy in
-      let mkLam = lam adjThn. lam adjEls. lam target.
-        bind_ (nulet_ targetName target)
-          ( TmMatch
-            { x with target = nvar_ targetName
+    match addMatchNames sc (unwrapOnce targetTy, x.pat) with Some (thnSc, pat) then
+      match specializeExpr thnSc st x.thn with (st, (thn, thnTy)) in
+      match
+        -- NOTE(vipa, 2025-11-10): We special-case `match ... in` when
+        -- it comes to PTypes
+        match x.els with TmNever _
+        then (st, (x.els, thnTy))
+        else specializeExpr sc st x.els
+      with (st, (els, elsTy)) in
+      let lubTy = lubPType thnTy elsTy in
+      match oTargetName with Some targetName then
+        -- We're matching on a wrapped value, i.e., the return must be wrapped
+        let retTy = ensureWrapped lubTy in
+        let mkLam = lam adjThn. lam adjEls. lam target.
+          bind_ (nulet_ targetName target)
+            ( TmMatch
+              { x with target = nvar_ targetName
+              , pat = pat
+              , thn = adjThn thn
+              , els = adjEls els
+              }
+            ) in
+        if isPureIsh lubTy then
+          -- NOTE(vipa, 2025-10-23): Both branches are otherwise pure,
+          -- i.e., we can make this a `map`
+          let f = TempLam (mkLam (lam x. x) (lam x. x)) in
+          (st, (_map f target, retTy))
+        else
+          -- NOTE(vipa, 2025-10-23): At least one branch is not pure,
+          -- i.e., this needs to be a `bind`
+          -- printLn (join ["thnTy: ", ptypeToString thnTy, " elsTy: ", ptypeToString elsTy]);
+          let f = TempLam (mkLam (adjustWrapping (thnTy, retTy)) (adjustWrapping (elsTy, retTy))) in
+          (st, (_join (_map f target), retTy))
+      else
+        -- NOTE(vipa, 2025-11-03): The target is pure, i.e., we can
+        -- adjust the branches individually
+        ( st
+        , ( TmMatch
+            { x with target = target
             , pat = pat
             , thn = adjThn thn
             , els = adjEls els
             }
-          ) in
-      if isPureIsh lubTy then
-        -- NOTE(vipa, 2025-10-23): Both branches are otherwise pure,
-        -- i.e., we can make this a `map`
-        let f = TempLam (mkLam (lam x. x) (lam x. x)) in
-        (st, (_map f target, retTy))
-      else
-        -- NOTE(vipa, 2025-10-23): At least one branch is not pure,
-        -- i.e., this needs to be a `bind`
-        let f = TempLam (mkLam (adjustWrapping (thnTy, retTy)) (adjustWrapping (elsTy, retTy))) in
-        (st, (_join (_map f target), retTy))
-    else
-      -- NOTE(vipa, 2025-11-03): The target is pure, i.e., we can
-      -- adjust the branches individually
-      ( st
-      , ( TmMatch
-          { x with target = target
-          , pat = pat
-          , thn = adjustWrapping (thnTy, lubTy) thn
-          , els = adjustWrapping (elsTy, lubTy) els
-          }
-        , lubTy
+          , lubTy
+          )
         )
-      )
+    else
+      -- NOTE(vipa, 2026-01-14): The `thn` branch is dead, which means
+      -- we don't have type information for its variables, which means
+      -- we can't really generate code for it. Of course, since it's
+      -- dead, we can just remove it
+      match specializeExpr sc st x.els with (st, (els, elsTy)) in
+      (st, (semi_ target els, elsTy))
   | TmNever {ty = TyUnknown _, info = info} -> errorSingle [info] "Never without type information"
   | tm & TmNever x -> (st, (tm, PHere {wrapped = Unused (), ty = tyToPureType x.ty}))
   | tm & TmConst {val = CFloat _} -> (st, (tm, PNever (PFloat ())))
   | tm & TmConst {val = CInt _} -> (st, (tm, PNever (PInt ())))
   | tm & TmConst {val = CBool _} -> (st, (tm, PNever (PBool ())))
-  | tm -> errorSingle [infoTm tm] "Missing case in specializeExpr"
+  | tm & TmConst {val = CChar _} -> (st, (tm, PNever (PChar ())))
+  | tm -> errorSingle [infoTm tm] (concat "Missing case in specializeExpr: " (expr2str tm))
 
-  sem addMatchNames : PScope -> (Either PTypeA (PTypeC PType), Pat) -> (PScope, Pat)
+  sem addMatchNames : PScope -> (Either PTypeA (PTypeC PType), Pat) -> Option (PScope, Pat)
   sem addMatchNames sc =
-  | (_, pat & PatBool _) -> (sc, pat)
-  | (_, pat & PatInt _) -> (sc, pat)
-  | (_, pat & PatChar _) -> (sc, pat)
+  | (_, pat & PatBool _) -> Some (sc, pat)
+  | (_, pat & PatInt _) -> Some (sc, pat)
+  | (_, pat & PatChar _) -> Some (sc, pat)
   | (Right (PRecord ty), PatRecord pat) ->
     let f = lam ty : PType. lam pat : Pat.
       match pat with PatNamed (p & {ident = PName ident})
@@ -990,14 +1046,14 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       else lam acc. (acc, pat) in
     match mapMapAccum (lam acc. lam. lam f. f acc) sc.valueScope (mapIntersectWith f ty pat.bindings)
       with (valueScope, bindings) in
-    ({sc with valueScope = valueScope}, PatRecord {pat with bindings = bindings})
+    Some ({sc with valueScope = valueScope}, PatRecord {pat with bindings = bindings})
   | (Right (PSeq ty), PatSeqTot p) ->
     let f = lam acc. lam p.
       match p with PatNamed (p & {ident = PName ident})
       then let n = nameSetNewSym ident in (mapInsert ident (n, ty) acc, PatNamed {p with ident = PName n})
       else (acc, p) in
     match mapAccumL f sc.valueScope p.pats with (valueScope, pats) in
-    ({sc with valueScope = valueScope}, PatSeqTot {p with pats = pats})
+    Some ({sc with valueScope = valueScope}, PatSeqTot {p with pats = pats})
   | (Right (seqTy & PSeq ty), PatSeqEdge p) ->
     let f = lam acc. lam p.
       match p with PatNamed (p & {ident = PName ident})
@@ -1010,6 +1066,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       then let n = nameSetNewSym ident in (mapInsert ident (n, PLater seqTy) valueScope, PName n)
       else (valueScope, p.middle)
     with (valueScope, middle) in
+    Some
     ( {sc with valueScope = valueScope}
     , PatSeqEdge {p with prefix = prefix, postfix = postfix, middle = middle}
     )
@@ -1017,11 +1074,12 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     match mapLookup p.ident ty with Some recTy then
       match p.subpat with PatNamed (p2 & {ident = PName ident}) then
         let n = nameSetNewSym ident in
+        Some
         ( {sc with valueScope = mapInsert ident (n, recTyAsPType (PLater recPoint) recTy) sc.valueScope}
         , PatCon {p with subpat = PatNamed {p2 with ident = PName n}}
         )
-      else (sc, PatCon p)
-    else error "Pattern matched on a constructor that cannot appear here. Should deal with this, but later."
+      else Some (sc, PatCon p)
+    else None ()
   | (l, r) ->
     errorSingle [infoPat r] (concat "Missing case " (eitherEither ptypeAToString (ptypeCToString ptypeToString) l))
 end
