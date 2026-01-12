@@ -108,6 +108,34 @@ lang PValInterface = RuntimeDistBase
     -> PVal a
     -> (PValState st, PVal b)
 
+  -- Create a sub-model without extracting a value from it. This plus
+  -- p_join is equivalent with p_bind.
+  sem p_subMap : all st. all st2. all ist. all ist2. all a. all b. PValState st
+    -> (st -> PSubmodelRef ist2 -> st2)
+    -> ist
+    -> (PValState ist -> a -> (PValState ist2, b))
+    -> PVal a
+    -> (PValState st2, PVal b)
+
+  -- Flatten nesting of PVals.
+  sem p_join : all st. all a. PValState st
+    -> PVal (PVal a)
+    -> (PValState st, PVal a)
+
+  -- Create a black-box node that can do anything. Can read inputs
+  -- from the surrounding graph, and will re-run when any read input
+  -- changes.
+  sem p_chunk : all st. all b. PValState st
+    -> (all x. PChunkState x -> b)
+    -> (PValState st, PVal b)
+  -- API detail, needed to actually interact with the graph from
+  -- within a chunk.
+  syn PChunkState x =
+  -- Read a value from a PVal when inside a chunk.
+  sem p_readPVal : all x. all a. PChunkState x -> PVal a -> a
+  -- Add an accumulating weight to a chunk.
+  sem p_weightChunk : all x. PChunkState x -> Float -> ()
+
   sem p_traverseSeq : all st. all a. all b. PValState st
     -> (PValState st -> a -> (PValState st, PVal b))
     -> [a]
@@ -139,6 +167,12 @@ lang PValInterface = RuntimeDistBase
     -> PVal a
     -> (PValState st, PVal b)
   sem p_bind_ st f = | a -> p_bind st (lam st. lam. st) () f a
+
+  sem p_subMap_ : all st. all a. all b. PValState st
+    -> (PValState () -> a -> (PValState (), b))
+    -> PVal a
+    -> (PValState st, PVal b)
+  sem p_subMap_ st f = | a -> p_subMap st (lam st. lam. st) () f a
 
   sem p_weight_ : all st. all a. PValState st
     -> (a -> Float)

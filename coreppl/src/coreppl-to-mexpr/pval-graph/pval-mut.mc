@@ -236,6 +236,106 @@ lang MutPVal = PValInterface
         else () in
     (PVS {st with updates = snoc st.updates update}, PVal {changeId = changeId, value = value})
 
+  syn PChunkState x = | PCS {watched : Ref [Ref IterationID], permanentWeight : Ref Float}
+  sem p_readPVal st = | PVal x ->
+    match st with PCS st in
+    modref st.watched (snoc (deref st.watched) x.changeId);
+    deref x.value
+  sem p_weightChunk st = | w ->
+    match st with PCS st in
+    modref st.permanentWeight (addf (deref st.permanentWeight) w)
+  sem p_chunk st = | f ->
+    match st with PVS st in
+
+    let watched = ref [] in
+    let localWeight = ref 0.0 in
+    let ist = PCS {watched = watched, permanentWeight = localWeight} in
+    let value = ref (f ist) in
+    let changeId = ref st.initId in
+
+    let update = lam st.
+      if any (lam id. eqi st.id (deref id)) (deref watched) then
+        let prevValue = deref value in
+        let prevWatched = deref watched in
+        let prevWeight = deref localWeight in
+        modref watched [];
+        modref localWeight 0.0;
+        -- NOTE(vipa, 2026-01-08): This will affect watched and
+        -- localWeight through side-effects, i.e., it must be after
+        -- their resets
+        modref value (f ist);
+        modref changeId st.id;
+        let reset = lam.
+          modref watched prevWatched;
+          modref localWeight prevWeight;
+          modref value prevValue in
+        modref st.permanentWeight (addf (deref st.permanentWeight) (deref localWeight));
+        modref st.reset (snoc (deref st.reset) reset)
+      else modref st.permanentWeight (addf (deref st.permanentWeight) (deref localWeight)) in
+
+    (PVS {st with updates = snoc st.updates update}, PVal {value = value, changeId = changeId})
+
+  sem p_subMap st store ist f = | PVal a ->
+    match st with PVS st in
+
+    let initSt = PVS {initId = st.initId, updates = [], initWeight = 0.0, st = ist} in
+    match f initSt (deref a.value) with (PVS {updates = updates, initWeight = initWeight, st = ist2}, value) in
+    let value = ref value in
+    let changeId = ref st.initId in
+    let ist2 = ref ist2 in
+    let updates = ref (lam st. for_ updates (lam up. up st)) in
+
+    let update = lam st.
+      if eqi st.id (deref a.changeId) then
+        -- Input changed, rebuild sub-model
+        let prevValue = deref value in
+        let prevIst2 = deref ist2 in
+        let prevUpdates = deref updates in
+        match f initSt (deref a.value) with (PVS {updates = newUpdates, initWeight = w, st = newIst2}, newValue) in
+        modref st.permanentWeight (addf (deref st.permanentWeight) w);
+        modref value newValue;
+        modref changeId st.id;
+        modref ist2 newIst2;
+        modref updates (lam st. for_ newUpdates (lam up. up st));
+        let reset = lam.
+          modref value prevValue;
+          modref ist2 prevIst2;
+          modref updates prevUpdates in
+        modref st.reset (snoc (deref st.reset) reset)
+      else
+        -- Input unchanged, just update sub-model
+        (deref updates) st in
+
+    let st =
+      { st = store st.st (PSubmodelRef {readSt = lam. deref ist2})
+      , initWeight = initWeight
+      , updates = snoc st.updates update
+      , initId = st.initId
+      } in
+    (PVS st, PVal {value = value, changeId = changeId})
+
+  sem p_join st = | PVal a ->
+    match st with PVS st in
+    let value = ref (match deref a.value with PVal inner in deref inner.value) in
+    let changeId = ref st.initId in
+    let update = lam st.
+      if eqi st.id (deref a.changeId) then
+        -- Outer value has changed
+        let prevValue = deref value in
+        modref value (match deref a.value with PVal inner in deref inner.value);
+        modref changeId st.id;
+        modref st.reset (snoc (deref st.reset) (lam. modref value prevValue))
+      else
+        match deref a.value with PVal inner in
+        if eqi st.id (deref inner.changeId) then
+          -- Inner value has changed
+          let prevValue = deref value in
+          modref value (deref inner.value);
+          modref changeId st.id;
+          modref st.reset (snoc (deref st.reset) (lam. modref value prevValue))
+        else () in
+    (PVS {st with updates = snoc st.updates update}, PVal {value = value, changeId = changeId})
+
   sem p_weight st store f = | PVal a ->
     match st with PVS st in
     let w = f (deref a.value) in
