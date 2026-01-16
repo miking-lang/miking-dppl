@@ -7,6 +7,8 @@
 --   'and', 'or', or 'not' patterns,
 -- * All lambdas are let-bound, and all references to them appear
 --   fully applied.
+-- * All type and constructor definitions are first in the program
+--   (they're lifted)
 --
 -- The idealized PVal API assumes that PVal can be used directly as a
 -- regular monad, plus builtins for assume and weight; all operations
@@ -127,11 +129,23 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     optionMap (lam x. PUser x)
       (mapFoldlOption (lam acc. lam k. lam v. optionMap (lam v. mapInsert k v acc) (work v)) (mapEmpty (mapGetCmpFun x)) x)
 
+  sem mapAccumLPTypeC : all a. all x. all y. (a -> x -> (a, y)) -> a -> PTypeC x -> (a, PTypeC y)
+  sem mapAccumLPTypeC f acc =
+  | PRecord x -> match mapMapAccum (lam a. lam. lam v. f a v) acc x with (acc, y) in (acc, PRecord y)
+  | PSeq x -> match f acc x with (acc, y) in (acc, PSeq y)
+  | PUser m -> match mapMapAccum (lam a. lam. lam v. mapAccumLRecTy f a v) acc m with (acc, m) in (acc, PUser m)
+
   sem foldRecTy : all a. all x. (a -> x -> a) -> a -> RecTy x -> a
   sem foldRecTy f acc =
   | NoRec x -> f acc x
   | Rec _ -> acc
   | RLater x -> foldPTypeC (foldRecTy f) acc x
+
+  sem mapAccumLRecTy : all a. all x. all y. (a -> x -> (a, y)) -> a -> RecTy x -> (a, RecTy y)
+  sem mapAccumLRecTy f acc =
+  | NoRec x -> match f acc x with (acc, y) in (acc, NoRec y)
+  | Rec _ -> (acc, Rec ())
+  | RLater x -> match mapAccumLPTypeC (mapAccumLRecTy f) acc x with (acc, y) in (acc, RLater y)
 
   syn PureType =
   | PureTypeC (PTypeC PureType)
@@ -455,6 +469,16 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     _adjustWrappingC false (map2PTypeC f x y)
   | (l, r) -> error (join ["Missing case in _adjustWrapping: ", ptypeToString l, ", ", ptypeToString r])
 
+
+  sem ptypeCToType : PTypeC Type -> Type
+  sem ptypeCToType =
+  | PRecord x -> TyRecord
+    { fields = x
+    , info = NoInfo ()
+    }
+  | PSeq x -> tyseq_ x
+  | PDist x -> tydist_ x
+
   sem _tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC Type -> x) -> (Type -> [Type] -> x) -> Type -> x
   sem _tyToPTypeX atom composite custom =
   | TyDist x -> composite (PDist x.ty)
@@ -770,30 +794,6 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let f = lam definitions. lam decl.
       mapInsert decl.ident (work [] decl.body) definitions in
     ({sc with functionDefinitions = foldl f sc.functionDefinitions x.bindings}, st)
-  | DeclType _ -> (sc, st)
-  | DeclConDef x ->
-    let deconstructType : Type -> {carried : Type, tyName : Name, retParams : [Type]} = lam ty.
-      match inspectType ty with TyArrow {from = carried, to = to} in
-      match getTypeArgs to with (TyCon {ident = tyName}, retParams) in
-      {carried = carried, tyName = tyName, retParams = retParams} in
-    let tyInfo = deconstructType x.tyIdent in
-    let distributeC = lam x.
-      match mapMPTypeCOption eitherGetRight x with Some ptys
-      then Right (PLater ptys)
-      else Left (RLater (mapPTypeC (eitherEither (lam x. x) (lam. NoRec ())) x)) in
-    let checkRecursion = lam ty. lam tyArgs.
-      match ty with TyCon x then
-        if nameEq x.ident tyInfo.tyName then
-          if eqi 0 (seqCmp cmpType tyInfo.retParams tyArgs)
-          then Left (Rec ())
-          else errorSingle [x.info] "Found polymorphic recursion in constructor definition, this is not supported for now."
-        else Right (PLater (PUser (mapEmpty nameCmp)))
-      else Right (PLater (PUser (mapEmpty nameCmp))) in
-    recursive let work = lam ty.
-      match ty with TyVar _ then Left (NoRec ()) else
-      tyToPTypeX (lam x. Right (PNever x)) distributeC checkRecursion ty in
-    let recTy = eitherEither (lam x. x) (lam. NoRec ()) (work tyInfo.carried) in
-    ({sc with conScope = mapInsert x.ident recTy sc.conScope}, st)
   | DeclExt x ->
     match unwrapType x.tyIdent with !(TyArrow _ | TyAll _)
     then ({sc with valueScope = mapInsert x.ident (x.ident, tyToPurePType x.tyIdent) sc.valueScope}, st)
@@ -815,14 +815,87 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let specs = mapOption (lam x. x.decl) specs in
     let specializations = foldl (lam acc. lam decl. mapRemove decl.ident acc) st.specializations x.bindings in
     ({st with specializations = specializations}, [DeclRecLets {x with bindings = specs}])
-  | decl & (DeclType _ | DeclConDef _ | DeclExt _) -> (st, [decl])
+  | decl & (DeclExt _) -> (st, [decl])
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPost"
 
   sem specializeExprReturn : PScope -> PState -> Expr -> Expr
   sem specializeExprReturn sc st = | tm ->
-    match specializeExpr sc st tm with (st, (tm, ty)) in
+    match specializeExprTypes sc st tm with (st, (tm, ty)) in
     let tm = adjustWrapping (ty, ensureWrapped ty) tm in
     app_ (uconst_ (CPExport ())) tm
+
+  sem specializeExprTypes : PScope -> PState -> Expr -> (PState, (Expr, PType))
+  sem specializeExprTypes sc st = | tm ->
+    recursive let collectTypes = lam constructorsByType : Map Name (Map Name (RecTy ())). lam tm.
+      switch tm
+      case TmDecl {decl = DeclConDef x, inexpr = inexpr} then
+        let deconstructType : Type -> {carried : Type, tyName : Name, retParams : [Type]} = lam ty.
+          match inspectType ty with TyArrow {from = carried, to = to} in
+          match getTypeArgs to with (TyCon {ident = tyName}, retParams) in
+          {carried = carried, tyName = tyName, retParams = retParams} in
+        let tyInfo = deconstructType x.tyIdent in
+        let distributeC = lam x.
+          match mapMPTypeCOption eitherGetRight x with Some ptys
+          then Right (PLater ptys)
+          else Left (RLater (mapPTypeC (eitherEither (lam x. x) (lam. NoRec ())) x)) in
+        let checkRecursion = lam ty. lam tyArgs.
+          match ty with TyCon x then
+            if nameEq x.ident tyInfo.tyName then
+              if eqi 0 (seqCmp cmpType tyInfo.retParams tyArgs)
+              then Left (Rec ())
+              else errorSingle [x.info] "Found polymorphic recursion in constructor definition, this is not supported for now."
+            else Right (PLater (PUser (mapEmpty nameCmp)))
+          else Right (PLater (PUser (mapEmpty nameCmp))) in
+        recursive let work = lam ty.
+          match ty with TyVar _ then Left (NoRec ()) else
+          tyToPTypeX (lam x. Right (PNever x)) distributeC checkRecursion ty in
+        let recTy = eitherEither (lam x. x) (lam. NoRec ()) (work tyInfo.carried) in
+        let constructorsByType = mapInsertWith mapUnion tyInfo.tyName (mapSingleton nameCmp x.ident recTy) constructorsByType in
+        collectTypes constructorsByType inexpr
+      case TmDecl {decl = DeclType {ident = ident, tyIdent = TyVariant _}, inexpr = inexpr} then
+        let constructorsByType = mapInsertWith mapUnion ident (mapEmpty nameCmp) constructorsByType in
+        collectTypes constructorsByType inexpr
+      case TmDecl {decl = DeclType _, inexpr = inexpr} then
+        -- NOTE(vipa, 2026-01-20): We skip aliases because we expect
+        -- everything to be inferred after this, and performing the
+        -- proper translation is difficult (and pre-existing types
+        -- using aliases are in a TyAlias constructor anyway, meaning
+        -- we can see what's underneath without keeping track of it
+        -- ourselves).
+        collectTypes constructorsByType inexpr
+      case tm then
+        (constructorsByType, tm)
+      end in
+    match collectTypes (mapEmpty nameCmp) tm with (constructorsByType, tm) in
+    let sc = {sc with conScope = mapFoldWithKey (lam a. lam. lam v. mapUnion a v) (mapEmpty nameCmp) constructorsByType} in
+    let declsForType : Name -> Map Name (RecTy ()) -> [Decl] = lam tyName. lam constructors.
+      match mapMapAccum (lam i. lam. lam v. mapAccumLRecTy (lam i. lam. (addi i 1, i)) i v) 0 constructors
+        with (numParams, idxedConstructors) in
+      let tyDecl = DeclType
+        { ident = tyName
+        , params = create numParams (lam. nameSym "p")
+        , tyIdent = tyvariant_ []
+        , info = NoInfo ()
+        } in
+      let mkConstructorDecl = lam conName. lam r.
+        let params = create numParams (lam. nameSym "p") in
+        let recTy = foldl (lam ty. lam n. tyapp_ ty (ntyvar_ n)) (ntycon_ tyName) params in
+        recursive let convert = lam r.
+          switch r
+          case NoRec i then ntyvar_ (get params i)
+          case Rec _ then recTy
+          case RLater x then ptypeCToType (mapPTypeC convert x)
+          end in
+        let lhs = convert r in
+        DeclConDef
+        { ident = conName
+        , tyIdent = foldr ntyall_ (tyarrow_ lhs recTy) params
+        , info = NoInfo ()
+        } in
+      cons tyDecl (mapValues (mapMapWithKey mkConstructorDecl idxedConstructors)) in
+    let tyDecls = join (mapValues (mapMapWithKey declsForType constructorsByType)) in
+    match specializeExpr sc st tm with (st, (tm, ty)) in
+    (st, (bindall_ tyDecls tm, ty))
 
   sem specializeExpr : PScope -> PState -> Expr -> (PState, (Expr, PType))
   sem specializeExpr sc st =
@@ -844,12 +917,13 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     -- argument transformation. This means we could handle, e.g.,
     -- `(match _ with _ then f a else _) b`.
     match collectApps [x.rhs] [] x.lhs with (f, args, decls) in
-    match foldl (lam acc. specializeDeclPre {acc.0 with depth = addi acc.0 .depth 1} acc.1) (sc, st) decls with (sc, st) in
+    match foldl (lam acc. match acc with (sc, st) in specializeDeclPre {sc with depth = addi sc.depth 1} st) (sc, st) decls with (sc, st) in
     match mapAccumL (specializeExpr sc) st args with (st, args) in
     (match x.ty with TyUnknown _ then warnSingle [x.info] (concat "no type on this app: " (expr2str (TmApp x))) else ());
     match specializeCall sc st {f = f, args = args, ret = x.ty} with (st, (tm, ty)) in
     let f = lam decl. lam pair : (PState, Expr).
-      match specializeDeclPost pair.0 decl with (st, newDecls) in
+      match pair with (st, tm) in
+      match specializeDeclPost st decl with (st, newDecls) in
       (st, bindall_ newDecls tm) in
     match foldr f (st, tm) decls with (st, tm) in
     (st, (tm, ty))
@@ -1013,8 +1087,8 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
         , ( TmMatch
             { x with target = target
             , pat = pat
-            , thn = adjThn thn
-            , els = adjEls els
+            , thn = adjustWrapping (thnTy, lubTy) thn
+            , els = adjustWrapping (elsTy, lubTy) els
             }
           , lubTy
           )
