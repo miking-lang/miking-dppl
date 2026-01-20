@@ -103,11 +103,15 @@ let initScope =
   { functionDefinitions = mapEmpty nameCmp
   , depth = 0
   , valueScope = mapEmpty nameCmp
+  , revValueScope = mapEmpty nameCmp
   , conScope = mapEmpty nameCmp
   } in
 let ast = specializeExprReturn initScope initState ast in
-let ast = stripTempLam ast in
 let pprintEnv = pprintLn pprintEnv "idealized transformation" ast in
+let ast = stripTempLam ast in
+let ast = inlineSingleUseLets ast in
+let ast = stripTempLam ast in
+let pprintEnv = pprintLn pprintEnv "idealized transformation (inlined)" ast in
 let initTransEnv =
   { currStateName = nameSym "st"
   , functions = mapEmpty nameCmp

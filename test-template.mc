@@ -75,8 +75,10 @@ let showHistogram : Bool = true in
 
 let globalProb = 1.0 in
 let iterations = 1000 in
-let toString = interval2string in
-let mkHisto = bucket 10 0.0 0.2 in
+let toString = lam. "()" in
+let mkHisto = histogram (lam. lam. 0) in
+-- let toString = interval2string in
+-- let mkHisto = bucket 10 0.0 1. in
 let summarizePVal = lam label. lam pair.
   match pair with (time, res) in
   printLn (join [float2string time, "ms (", label, ")"]);

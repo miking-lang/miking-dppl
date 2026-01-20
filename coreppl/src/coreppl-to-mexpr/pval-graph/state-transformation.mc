@@ -40,19 +40,6 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
       else tupleproj_ 0 tm in
     nulam_ env.currStateName (wrap st)
 
-  sem maybeEtaExpand : Expr -> {ident : Name, tyAnnot : Type, tyParam : Type, body : Expr, ty : Type, info : Info}
-  sem maybeEtaExpand =
-  | TmLam f -> f
-  | tm ->
-    let n = nameSym "x" in
-    { ident = n
-    , tyAnnot = tyunknown_
-    , tyParam = tyunknown_
-    , body = _app tm (nvar_ n)
-    , ty = tyTm tm
-    , info = infoTm tm
-    }
-
   sem pvalTransCall : PValTransEnv -> (Expr, [Expr]) -> (Option Int, Peeled Expr)
   sem pvalTransCall env =
   | (TmConst {val = CPPure _}, [val]) ->
@@ -272,8 +259,8 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
         pvalTransCall env (f, args)
       end
     in work x.lhs env [x.rhs]
-  | TmLam x -> errorSingle [x.info] "Encountered unbound lambda in final graph transformation."
-  | tm & (TempLam _ | TempFix _) -> error (concat "Encountered unbound templam/fix in final graph transformation: " (expr2str tm))
+  | tm & TmLam _ -> errorSingle [infoTm tm] (concat "Encountered unbound lambda in final graph transformation: " (expr2str tm))
+  | tm & (TempLam _ | TempFix _) -> errorSingle [infoTm tm] (concat "Encountered unbound templam/fix in final graph transformation: " (expr2str tm))
   | TmMatch (x & {els = TmNever _}) ->
     match pvalTransExprNoSub env x.target with (wrap1, target) in
     match peelState target with (stateName, (wrap2, target)) in

@@ -150,7 +150,7 @@ lang PValInterface = RuntimeDistBase
     -> [a]
     -> (PValState st, PVal [b])
   sem p_traverseSeq st f =
-  | [] -> p_pure st []
+  | [] -> (st, p_pure [])
   | [a] ++ as ->
     match f st a with (st, a) in
     match p_traverseSeq st f as with (st, as) in
