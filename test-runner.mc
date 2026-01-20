@@ -29,7 +29,7 @@ mexpr
 
 use TestLang in
 
-let debug = false in
+let debug = match argv with [_, "noDebug"] ++ _ then false else true in
 
 let pprintLn =
   if debug then
