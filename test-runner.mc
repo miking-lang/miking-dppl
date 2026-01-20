@@ -115,6 +115,7 @@ let initTransEnv =
   , p_map = nameSym "p_map"
   , p_subMap = nameSym "p_subMap"
   , p_apply = nameSym "p_apply"
+  , p_subApply = nameSym "p_subApply"
   , p_bind = nameSym "p_bind"
   , p_join = nameSym "p_join"
   , p_assume = nameSym "p_assume"

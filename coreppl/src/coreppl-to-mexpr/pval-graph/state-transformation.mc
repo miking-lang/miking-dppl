@@ -14,6 +14,7 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     , p_map : Name
     , p_subMap : Name
     , p_apply : Name
+    , p_subApply : Name
     , p_bind : Name
     , p_join : Name
     , p_assume : Name
@@ -33,7 +34,7 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
 
   sem pvalTrans : PValTransEnv -> Expr -> Expr
   sem pvalTrans env = | tm ->
-    match pvalTransExpr env tm with (wrap, tm) in
+    match pvalTransExprNoSub env tm with (wrap, tm) in
     let st = match tm with TmRecord x
       then mapFindExn _idx0 x.bindings
       else tupleproj_ 0 tm in
@@ -52,38 +53,47 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     , info = infoTm tm
     }
 
-  sem pvalTransCall : PValTransEnv -> (Expr, [Expr]) -> Peeled Expr
+  sem pvalTransCall : PValTransEnv -> (Expr, [Expr]) -> (Option Int, Peeled Expr)
   sem pvalTransCall env =
-  | (TmConst {val = CPPure _}, args) ->
-    match pvalTransSeq env args with (stateName, (wrap, [val])) in
-    (wrap, autoty_tuple_ [nvar_ stateName, app_ (nvar_ env.p_pure) val])
+  | (TmConst {val = CPPure _}, [val]) ->
+    match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
+    (None (), (wrap, autoty_tuple_ [nvar_ stateName, app_ (nvar_ env.p_pure) val]))
   | (TmConst {val = CPMap _}, [f, val]) ->
-    match peelLambdas f with (wrapLams, body) in
-    match pvalTransSeq env [val] with (stateName, (wrapV, [val])) in
+    match peelLambdas f with (numLams, (wrapLams, body)) in
+    match pvalTransPeelNoSub env val with (stateName, (wrapV, val)) in
     let innerStateName = nameSym "st" in
-    match pvalTransExpr {env with currStateName = innerStateName} body with (wrap1, body) in
+    match pvalTransExprNoSub {env with currStateName = innerStateName} body with (wrap1, body) in
     match peelState body with (innerName, (wrap2, bodyPeeled)) in
     if nameEq innerStateName innerName then
       -- NOTE(vipa, 2026-01-12): The body doesn't create any new
       -- nodes, thus we can use p_map
-      (wrapV, appf3_ (nvar_ env.p_map) (nvar_ stateName) (wrapLams (wrap1 (wrap2 bodyPeeled))) val)
+      (None (), (wrapV, appf3_ (nvar_ env.p_map) (nvar_ stateName) (wrapLams (wrap1 (wrap2 bodyPeeled))) val))
     else
       -- NOTE(vipa, 2026-01-12): The body does create new nodes, thus
-      -- we need p_subMap
+      -- we need p_subMap or p_subApply
       let store = nvar_ env.storeSubmodel in
       let ist = env.initSubmodel in
-      let f = nulam_ innerStateName (wrapLams (wrap1 body)) in
-      (wrapV, appf5_ (nvar_ env.p_subMap) (nvar_ stateName) store ist f val)
+      let f = wrapLams (nulam_ innerStateName (wrap1 body)) in
+      if eqi numLams 1
+      then (None (), (wrapV, appf5_ (nvar_ env.p_subMap) (nvar_ stateName) store ist f val))
+      else (Some (subi numLams 1), (wrapV, appf3_ (nvar_ env.p_map) (nvar_ stateName) f val))
   | (TmConst {val = CPTraverseSeq _}, [f, val]) ->
-    match pvalTransSeq env [val] with (stateName, (wrap, [val])) in
+    match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
     let f = maybeEtaExpand f in
     let innerStateName = nameSym "st" in
-    match pvalTransExpr {env with currStateName = innerStateName} f.body with (wrapB, body) in
+    match pvalTransExprNoSub {env with currStateName = innerStateName} f.body with (wrapB, body) in
     let f = nulam_ innerStateName (TmLam {f with body = wrapB body}) in
-    (wrap, appf3_ (nvar_ env.p_traverseSeq) (nvar_ stateName) f val)
-  | (TmConst {val = CPApply _}, args) ->
-    match pvalTransSeq env args with (stateName, (wrap, [f, val])) in
-    (wrap, appf3_ (nvar_ env.p_apply) (nvar_ stateName) f val)
+    (None (), (wrap, appf3_ (nvar_ env.p_traverseSeq) (nvar_ stateName) f val))
+  | (TmConst {val = CPApply _}, [f, val]) ->
+    match pvalTransPeel env f with (sub, stateName, (wrapF, f)) in
+    match pvalTransPeelNoSub {env with currStateName = stateName} val with (stateName, (wrapVal, val)) in
+    let wrap = lam tm. wrapF (wrapVal tm) in
+    match sub with Some 1 then
+      let store = nvar_ env.storeSubmodel in
+      let ist = env.initSubmodel in
+      (None (), (wrap, appf5_ (nvar_ env.p_subApply) (nvar_ stateName) store ist f val))
+    else
+      (optionMap (lam x. subi x 1) sub, (wrap, appf3_ (nvar_ env.p_apply) (nvar_ stateName) f val))
   | ( TmConst {val = CPJoin _}
     , [ TmApp
         { lhs = TmApp
@@ -95,28 +105,28 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
       ]
     ) ->
     let f = maybeEtaExpand f in
-    match pvalTransSeq env [val] with (stateName, (wrapV, [val])) in
+    match pvalTransPeelNoSub env val with (stateName, (wrapV, val)) in
     let innerStateName = nameSym "st" in
-    match pvalTransExpr {env with currStateName = innerStateName} f.body with (wrap1, body) in
+    match pvalTransExprNoSub {env with currStateName = innerStateName} f.body with (wrap1, body) in
     match peelState body with (innerName, (wrap2, bodyPeeled)) in
     if nameEq innerStateName innerName then
       -- NOTE(vipa, 2025-11-19): The body doesn't create any new
       -- nodes, thus we can use p_select
-      (wrapV, appf3_ (nvar_ env.p_select) (nvar_ stateName) (TmLam {f with body = wrap1 (wrap2 bodyPeeled)}) val)
+      (None (), (wrapV, appf3_ (nvar_ env.p_select) (nvar_ stateName) (TmLam {f with body = wrap1 (wrap2 bodyPeeled)}) val))
     else
       -- NOTE(vipa, 2025-11-19): The body *does* create new nodes,
       -- thus we need p_bind
       let store = nvar_ env.storeSubmodel in
       let ist = env.initSubmodel in
       let f = nulam_ innerStateName (TmLam {f with body = wrap1 body}) in
-      (wrapV, appf5_ (nvar_ env.p_bind) (nvar_ stateName) store ist f val)
-  | (TmConst {val = CPJoin _}, args) ->
-    match pvalTransSeq env args with (stateName, (wrap, [val])) in
-    (wrap, appf2_ (nvar_ env.p_join) (nvar_ stateName) val)
-  | (TmConst {val = CPAssume _}, args) ->
-    match pvalTransSeq env args with (stateName, (wrap, [dist])) in
+      (None (), (wrapV, appf5_ (nvar_ env.p_bind) (nvar_ stateName) store ist f val))
+  | (TmConst {val = CPJoin _}, [val]) ->
+    match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
+    (None (), (wrap, appf2_ (nvar_ env.p_join) (nvar_ stateName) val))
+  | (TmConst {val = CPAssume _}, [dist]) ->
+    match pvalTransPeelNoSub env dist with (stateName, (wrap, dist)) in
     let store = nvar_ env.storeAssume in
-    (wrap, appf3_ (nvar_ env.p_assume) (nvar_ stateName) store dist)
+    (None (), (wrap, appf3_ (nvar_ env.p_assume) (nvar_ stateName) store dist))
   | ( TmConst {val = CPWeight _}
     , [ TmApp
         { lhs = TmApp
@@ -127,48 +137,48 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
         }
       ]
     ) ->
-    match pvalTransSeq env [val] with (stateName, (wrap, [val])) in
+    match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
     let store = nvar_ env.storeWeight in
-    (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store f val, unit_])
-  | (TmConst {val = CPWeight _}, args) ->
-    match pvalTransSeq env args with (stateName, (wrap, [weight])) in
+    (None (), (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store f val, unit_]))
+  | (TmConst {val = CPWeight _}, [weight]) ->
+    match pvalTransPeelNoSub env weight with (stateName, (wrap, weight)) in
     let store = nvar_ env.storeWeight in
     -- TODO(vipa, 2025-11-20): Build TmLam identity function
-    (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store (TempLam (lam tm. tm)) weight, unit_])
+    (None (), (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store (TempLam (lam tm. tm)) weight, unit_]))
   | (f & TmVar {ident = ident}, args) ->
-    match pvalTransSeq env args with (stateName, (wrap, args)) in
+    match pvalTransSeqNoSub env args with (stateName, (wrap, args)) in
     if mapLookupOr false ident env.functions
-    then (wrap, appSeq_ f (cons (nvar_ stateName) args))
-    else (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args])
+    then (None (), (wrap, appSeq_ f (cons (nvar_ stateName) args)))
+    else (None (), (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args]))
   | (c & TmConst {val = CMap _}, [f, val]) ->
-    match pvalTransSeq env [val] with (stateName, (wrapV, [val])) in
+    match pvalTransPeelNoSub env val with (stateName, (wrapV, val)) in
     let f = maybeEtaExpand f in
     let innerStateName = nameSym "st" in
-    match pvalTransExpr {env with currStateName = innerStateName} f.body with (wrap1, body) in
+    match pvalTransExprNoSub {env with currStateName = innerStateName} f.body with (wrap1, body) in
     match peelState body with (innerName, (wrap2, bodyPeeled)) in
     if nameEq innerStateName innerName then
       -- NOTE(vipa, 2025-12-02): The body doesn't create any new
       -- nodes, stay with `CMap`
-      (wrapV, autoty_tuple_ [nvar_ stateName, appf2_ c (TmLam {f with body = wrap1 (wrap2 bodyPeeled)}) val])
+      (None (), (wrapV, autoty_tuple_ [nvar_ stateName, appf2_ c (TmLam {f with body = wrap1 (wrap2 bodyPeeled)}) val]))
     else
       -- NOTE(vipa, 2025-12-02): The body *does* create new nodes,
       -- switch to mapAccumL
       let f = nulam_ innerStateName (TmLam {f with body = wrap1 body}) in
-      (wrapV, appf3_ (nvar_ env.mapAccumL) f (nvar_ stateName) val)
+      (None (), (wrapV, appf3_ (nvar_ env.mapAccumL) f (nvar_ stateName) val))
   | (TmConst {val = CPExport _}, [val]) ->
-    match pvalTransSeq env [val] with (stateName, (wrapV, [val])) in
-    (wrapV, autoty_tuple_ [appf3_ (nvar_ env.p_export) (nvar_ stateName) (nvar_ env.storeExport) val, unit_])
+    match pvalTransPeelNoSub env val with (stateName, (wrapV, val)) in
+    (None (), (wrapV, autoty_tuple_ [appf3_ (nvar_ env.p_export) (nvar_ stateName) (nvar_ env.storeExport) val, unit_]))
   | (f & TmConst _, args) ->
-    match pvalTransSeq env args with (stateName, (wrap, args)) in
-    (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args])
+    match pvalTransSeqNoSub env args with (stateName, (wrap, args)) in
+    (None (), (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args]))
   | (f, args) -> errorSingle [infoTm f] (concat "Missing case for pvalTransCall: " (expr2str (appSeq_ f args)))
 
   sem pvalTransDecl : PValTransEnv -> Decl -> (PValTransEnv, Expr -> Expr)
   sem pvalTransDecl env =
   | DeclLet (x & {body = TmLam _}) ->
-    match peelLambdas x.body with (wrapLams, body) in
+    match peelLambdas x.body with (_, (wrapLams, body)) in
     let innerStateName = nameSym "st" in
-    match pvalTransExpr {env with currStateName = innerStateName} body with (wrap1, body) in
+    match pvalTransExprNoSub {env with currStateName = innerStateName} body with (wrap1, body) in
     match peelState body with (innerStateName2, (wrap2, peeledBody)) in
     if nameEq innerStateName innerStateName2
     then (env, bind_ (DeclLet {x with body = wrapLams (wrap1 (wrap2 peeledBody))}))
@@ -177,7 +187,7 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
       , bind_ (DeclLet {x with body = nulam_ innerStateName (wrapLams (wrap1 body))})
       )
   | DeclLet x ->
-    match pvalTransExpr env x.body with (wrap1, body) in
+    match pvalTransExprNoSub env x.body with (wrap1, body) in
     match _peelState (Some x.ident) body with (stateName, (wrap2, body)) in
     let alreadyBound = match body with TmVar v
       then nameEq v.ident x.ident
@@ -194,9 +204,9 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     let initialGuess = foldl (lam acc. lam b. mapInsert b.ident false acc) (mapEmpty nameCmp) x.bindings in
     let mkNewGuess : PValTransEnv -> (Map Name Bool, [DeclLetRecord]) = lam env.
       let f = lam acc. lam binding.
-        match peelLambdas binding.body with (wrapLams, body) in
+        match peelLambdas binding.body with (_, (wrapLams, body)) in
         let st = nameSym "st" in
-        match pvalTransExpr {env with currStateName = st} body with (wrap1, body) in
+        match pvalTransExprNoSub {env with currStateName = st} body with (wrap1, body) in
         match peelState body with (newSt, (wrap2, bodyPeeled)) in
         if nameEq st newSt then
           ( mapInsert binding.ident false acc
@@ -218,21 +228,37 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
   | decl & (DeclType _ | DeclConDef _ | DeclExt _) -> (env, bind_ decl)
   | decl -> errorSingle [infoDecl decl] (concat "Missing case for pvalTransDecl: " (decl2str decl))
 
-  sem pvalTransSeq : PValTransEnv -> [Expr] -> (Name, Peeled [Expr])
-  sem pvalTransSeq env = | seq ->
+  sem pvalTransPeel : PValTransEnv -> Expr -> (Option Int, Name, Peeled Expr)
+  sem pvalTransPeel env = | tm ->
+    match pvalTransExpr env tm with (sub, (wrap, tm)) in
+    match peelState tm with (st, (wrap2, tm)) in
+    (sub, st, (lam tm. wrap (wrap2 tm), tm))
+
+  sem pvalTransPeelNoSub : PValTransEnv -> Expr -> (Name, Peeled Expr)
+  sem pvalTransPeelNoSub env = | tm ->
+    match pvalTransPeel env tm with (None _, st, tm) then (st, tm) else
+    errorSingle [infoTm tm] "Compiler error: expected all sub-models to be dischanged here, but they were not (in pvalTransPeelNoSub)"
+
+  sem pvalTransSeqNoSub : PValTransEnv -> [Expr] -> (Name, Peeled [Expr])
+  sem pvalTransSeqNoSub env = | seq ->
     let f = lam acc. lam tm.
-      match pvalTransExpr {env with currStateName = acc.st} tm with (wrap, tm) in
+      match pvalTransExprNoSub {env with currStateName = acc.st} tm with (wrap, tm) in
       match peelState tm with (st, (wrap2, tm)) in
       ({st = st, wraps = concat [wrap2, wrap] acc.wraps}, tm) in
     match mapAccumL f {st = env.currStateName, wraps = []} seq with ({st = st, wraps = wraps}, tms) in
     (st, (lam tm. foldl (lam acc. lam wrap. wrap acc) tm wraps, tms))
 
-  sem pvalTransExpr : PValTransEnv -> Expr -> Peeled Expr
+  sem pvalTransExprNoSub : PValTransEnv -> Expr -> Peeled Expr
+  sem pvalTransExprNoSub env = | tm ->
+    match pvalTransExpr env tm with (None _, ret) then ret else
+    errorSingle [infoTm tm] "Compiler error: expected all sub-models to be dischanged here, but they were not (in pvalTransExprNoSub)"
+
+  sem pvalTransExpr : PValTransEnv -> Expr -> (Option Int, Peeled Expr)
   sem pvalTransExpr env =
   | TmDecl x ->
     match pvalTransDecl env x.decl with (env, wrap) in
-    match pvalTransExpr env x.inexpr with (wrapi, tm) in
-    (lam tm. wrap (wrapi tm), tm)
+    match pvalTransExpr env x.inexpr with (sub, (wrapi, tm)) in
+    (sub, (lam tm. wrap (wrapi tm), tm))
   | TmApp x ->
     recursive let work = lam f. lam env. lam args.
       switch f
@@ -240,8 +266,8 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
         work x.lhs env (cons x.rhs args)
       case TmDecl x then
         match pvalTransDecl env x.decl with (env, wrap) in
-        match work x.inexpr env args with (wrapi, tm) in
-        (lam tm. wrap (wrapi tm), tm)
+        match work x.inexpr env args with (sub, (wrapi, tm)) in
+        (sub, (lam tm. wrap (wrapi tm), tm))
       case f then
         pvalTransCall env (f, args)
       end
@@ -249,44 +275,52 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
   | TmLam x -> errorSingle [x.info] "Encountered unbound lambda in final graph transformation."
   | tm & (TempLam _ | TempFix _) -> error (concat "Encountered unbound templam/fix in final graph transformation: " (expr2str tm))
   | TmMatch (x & {els = TmNever _}) ->
-    match pvalTransExpr env x.target with (wrap1, target) in
+    match pvalTransExprNoSub env x.target with (wrap1, target) in
     match peelState target with (stateName, (wrap2, target)) in
-    match pvalTransExpr {env with currStateName = stateName} x.thn with (wrapT, thn) in
-    (lam tm. wrap1 (wrap2 (TmMatch {x with target = target, thn = wrapT tm})), thn)
+    match pvalTransExprNoSub {env with currStateName = stateName} x.thn with (wrapT, thn) in
+    (None (), (lam tm. wrap1 (wrap2 (TmMatch {x with target = target, thn = wrapT tm})), thn))
   | TmMatch x ->
-    match pvalTransExpr env x.target with (wrap1, target) in
+    match pvalTransExprNoSub env x.target with (wrap1, target) in
     match peelState target with (stateName, (wrap2, target)) in
-    match pvalTransExpr {env with currStateName = stateName} x.thn with (wrapT1, thn) in
+    match pvalTransExprNoSub {env with currStateName = stateName} x.thn with (wrapT1, thn) in
     match peelState thn with (stateThn, (wrapT2, thnPeeled)) in
-    match pvalTransExpr {env with currStateName = stateName} x.els with (wrapE1, els) in
+    match pvalTransExprNoSub {env with currStateName = stateName} x.els with (wrapE1, els) in
     match peelState els with (stateEls, (wrapE2, elsPeeled)) in
     if and (nameEq stateName stateThn) (nameEq stateName stateEls) then
-      ( lam tm. wrap1 (wrap2 tm)
-      , autoty_tuple_
-        [ nvar_ stateName
-        , TmMatch {x with target = target, thn = wrapT1 (wrapT2 thnPeeled), els = wrapE1 (wrapE2 elsPeeled)}
-        ]
+      ( None ()
+      , ( lam tm. wrap1 (wrap2 tm)
+        , autoty_tuple_
+          [ nvar_ stateName
+          , TmMatch {x with target = target, thn = wrapT1 (wrapT2 thnPeeled), els = wrapE1 (wrapE2 elsPeeled)}
+          ]
+        )
       )
     else
-      ( lam tm. wrap1 (wrap2 tm)
-      , TmMatch {x with target = target, thn = wrapT1 thn, els = wrapE1 els}
+      ( None ()
+      , ( lam tm. wrap1 (wrap2 tm)
+        , TmMatch {x with target = target, thn = wrapT1 thn, els = wrapE1 els}
+        )
       )
   | tm ->
     let f = lam acc. lam tm.
-      match pvalTransExpr acc.env tm with (wrap1, val) in
+      match pvalTransExprNoSub acc.env tm with (wrap1, val) in
       match peelState val with (stateName, (wrap2, val)) in
       ({env = {acc.env with currStateName = stateName}, wraps = concat [wrap2, wrap1] acc.wraps}, val) in
     match smapAccumL_Expr_Expr f {env = env, wraps = []} tm with ({env = env, wraps = wraps}, tm) in
-    ( lam tm. foldl (lam tm. lam wrap. wrap tm) tm wraps
-    , autoty_tuple_ [nvar_ env.currStateName, tm]
+    ( None ()
+    , ( lam tm. foldl (lam tm. lam wrap. wrap tm) tm wraps
+      , autoty_tuple_ [nvar_ env.currStateName, tm]
+      )
     )
 
-  sem peelLambdas : Expr -> Peeled Expr
+  sem peelLambdas : Expr -> (Int, Peeled Expr)
   sem peelLambdas =
   | TmLam x ->
-    match peelLambdas x.body with (wrap, body) in
-    (lam tm. TmLam {x with body = wrap tm}, body)
-  | tm -> (lam tm. tm, tm)
+    match peelLambdas x.body with (count, (wrap, body)) in
+    (addi count 1, (lam tm. TmLam {x with body = wrap tm}, body))
+  | tm & TempLam _ ->
+    peelLambdas (TmLam (maybeEtaExpand tm))
+  | tm -> (0, (lam tm. tm, tm))
 
   sem peelState : Expr -> (Name, Peeled Expr)
   sem peelState = | tm -> _peelState (None ()) tm

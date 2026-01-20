@@ -279,7 +279,7 @@ lang MutPVal = PValInterface
     match st with PVS st in
 
     let initSt = PVS {initId = st.initId, updates = [], initWeight = 0.0, st = ist} in
-    match f initSt (deref a.value) with (PVS {updates = updates, initWeight = initWeight, st = ist2}, value) in
+    match f (deref a.value) initSt with (PVS {updates = updates, initWeight = initWeight, st = ist2}, value) in
     let value = ref value in
     let changeId = ref st.initId in
     let ist2 = ref ist2 in
@@ -291,7 +291,49 @@ lang MutPVal = PValInterface
         let prevValue = deref value in
         let prevIst2 = deref ist2 in
         let prevUpdates = deref updates in
-        match f initSt (deref a.value) with (PVS {updates = newUpdates, initWeight = w, st = newIst2}, newValue) in
+        match f (deref a.value) initSt with (PVS {updates = newUpdates, initWeight = w, st = newIst2}, newValue) in
+        modref st.permanentWeight (addf (deref st.permanentWeight) w);
+        modref value newValue;
+        modref changeId st.id;
+        modref ist2 newIst2;
+        modref updates (lam st. for_ newUpdates (lam up. up st));
+        let reset = lam.
+          modref value prevValue;
+          modref ist2 prevIst2;
+          modref updates prevUpdates in
+        modref st.reset (snoc (deref st.reset) reset)
+      else
+        -- Input unchanged, just update sub-model
+        (deref updates) st in
+
+    let st =
+      { st = store st.st (PSubmodelRef {readSt = lam. deref ist2})
+      , initWeight = initWeight
+      , updates = snoc st.updates update
+      , initId = st.initId
+      } in
+    (PVS st, PVal {value = value, changeId = changeId})
+
+  sem p_subApply st store ist f = | PVal a ->
+    match st with PVS st in
+    match f with PVal f in
+
+    let initSt = PVS {initId = st.initId, updates = [], initWeight = 0.0, st = ist} in
+    match (deref f.value) (deref a.value) initSt
+      with (PVS {updates = updates, initWeight = initWeight, st = ist2}, value) in
+    let value = ref value in
+    let changeId = ref st.initId in
+    let ist2 = ref ist2 in
+    let updates = ref (lam st. for_ updates (lam up. up st)) in
+
+    let update = lam st.
+      if or (eqi st.id (deref f.changeId)) (eqi st.id (deref a.changeId)) then
+        -- Input changed, rebuild sub-model
+        let prevValue = deref value in
+        let prevIst2 = deref ist2 in
+        let prevUpdates = deref updates in
+        match (deref f.value) (deref a.value) initSt
+          with (PVS {updates = newUpdates, initWeight = w, st = newIst2}, newValue) in
         modref st.permanentWeight (addf (deref st.permanentWeight) w);
         modref value newValue;
         modref changeId st.id;

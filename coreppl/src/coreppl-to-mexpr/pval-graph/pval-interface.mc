@@ -88,7 +88,7 @@ lang PValInterface = RuntimeDistBase
   -- Combine two probabilistic values. Often used in conjunction with
   -- `p_map`. (from the Applicative type class)
   sem p_apply : all st. all a. all b. PValState st
-  -> PVal (a -> b)
+    -> PVal (a -> b)
     -> PVal a
     -> (PValState st, PVal b)
   -- Create a sub-model whose shape depends on a probabilistic
@@ -113,7 +113,16 @@ lang PValInterface = RuntimeDistBase
   sem p_subMap : all st. all st2. all ist. all ist2. all a. all b. PValState st
     -> (st -> PSubmodelRef ist2 -> st2)
     -> ist
-    -> (PValState ist -> a -> (PValState ist2, b))
+    -> (a -> PValState ist -> (PValState ist2, b))
+    -> PVal a
+    -> (PValState st2, PVal b)
+  -- Create a sub-model after applying some arguments, without
+  -- extracting a value from it. This allows sub-models whose
+  -- structure depends on more than one parameter.
+  sem p_subApply : all st. all st2. all ist. all ist2. all a. all b. PValState st
+    -> (st -> PSubmodelRef ist2 -> st2)
+    -> ist
+    -> PVal (a -> PValState ist -> (PValState ist2, b))
     -> PVal a
     -> (PValState st2, PVal b)
 
