@@ -403,7 +403,7 @@ lang MutPVal3 = PValInterface
 
     let st =
       { st = store st.st (PSubmodelRef {readSt = lam. deref ist2})
-      , initWeight = initWeight
+      , initWeight = addf st.initWeight initWeight
       , updates = snoc st.updates update
       , initId = st.initId
       } in

@@ -143,7 +143,6 @@ lang MutPVal2 = PValInterface
       match f st (deref a.value) with (PVS st, PVal pval) in
       PVS {st = (pval, st.st), updates = st.updates, initWeight = st.initWeight, initId = st.initId} in
     match _initModel st.initId initSt2 f with ((pval, st2), initWeight, model) in
-    let initWeight = addf st.initWeight initWeight in
 
     let value = ref (deref pval.value) in
     let changeId = ref (deref pval.changeId) in
@@ -190,7 +189,7 @@ lang MutPVal2 = PValInterface
     in
     let st =
       { st = store st.st (PSubmodelRef {readSt = lam. deref st2})
-      , initWeight = initWeight
+      , initWeight = addf st.initWeight initWeight
       , updates = snoc st.updates update
       , initId = st.initId
       } in
