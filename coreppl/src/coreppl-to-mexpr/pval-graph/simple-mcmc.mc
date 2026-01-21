@@ -1,4 +1,5 @@
 include "pval-interface.mc"
+include "json.mc"
 
 
 -- === General implementation of MCMC ===
@@ -87,6 +88,13 @@ lang SimpleState = PValInterface
       foldr resampleSomeAssume instance st.here
     else
       resampleSomeAssume (_chooseUniform st.here) instance
+
+  sem simpleStateToDebugJson : all partial. all x. all y. PValInstance partial (SimpleState x) -> SimpleState y -> JsonValue
+  sem simpleStateToDebugJson instance = | SimpleState x ->
+    JsonObject (mapFromSeq cmpString
+      [ ("assumes", JsonInt (length x.here))
+      , ("sub-models", JsonArray (map (lam ref. simpleStateToDebugJson instance (readPreviousSubmodel ref instance)) x.below))
+      ])
 end
 
 lang SimpleMCMCPVal = SimpleState + MCMCPVal

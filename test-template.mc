@@ -95,8 +95,9 @@ let run =
     then findGoodInstance ()
     else instance in
   match timeF findGoodInstance with (time, instance) in
-  match getSt instance with SimpleState st in
-  printLn (join [int2string (length st.here), ", ", int2string (length st.below)]);
+  printJsonLn (simpleStateToDebugJson instance (getSt instance));
+  -- match getSt instance with SimpleState st in
+  -- printLn (join [int2string (length st.here), ", ", int2string (length st.below)]);
   printLn (join ["Took ", float2string time, "ms to find good instance."]);
   lam. mcmc (mkMCMCConfig iterations globalProb) instance in
 summarizePVal "mut" (timeF run);
