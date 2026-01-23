@@ -51,7 +51,7 @@ lang LightweightMCMCMethod = InferMethodBase
     let expectedFields =
       [ ( "continue"
         , utuple_
-          [ ulam_ "" (int_ _particlesDefault)
+          [ ulam_ "" (int_ _iterationsDefault)
           , ulam_ "remaining" (ulam_ "" (ulam_ ""
             (utuple_ [subi_ (var_ "remaining") (int_ 1), neqi_ (var_ "remaining") (int_ 0)])))
           ]
@@ -175,5 +175,5 @@ let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod
     , align = align
     , debugAlignment = debugAlignment
     } in
-  let method = optApply (optApply (optMap5 mk _particles _mcmcLightweightGlobalProb _driftKernel _driftScale _cps) _align) _debugAlignment in
+  let method = optApply (optApply (optMap5 mk _iterations _mcmcLightweightGlobalProb _driftKernel _driftScale _cps) _align) _debugAlignment in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") method
