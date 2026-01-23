@@ -28,8 +28,8 @@ lang PIMHMethod = InferMethodBase
   sem inferMethodFromCon info bindings =
   | "PIMH" ->
     let expectedFields =
-      [ ("particles", int_ _particlesDefault)
-      , ("iterations", int_ _pmcmcParticlesDefault)
+      [ ("iterations", int_ _iterationsDefault)
+      , ("particles", int_ _particlesDefault)
       , ("cps", str_ _cpsDefault)
       ] in
     match getFields info bindings expectedFields with [particles, iterations, cps] in
@@ -71,5 +71,5 @@ let pmcmcPimhOptions : OptParser (use PIMHMethod in InferMethod) =
     , iterations = int_ iterations
     , cps = cps
     } in
-  let method = optMap3 mk _pmcmcParticles _particles _cps in
+  let method = optMap3 mk _particles _iterations _cps in
   optMap2 (lam. lam x. x) (_methodFlag false "pmcmc-pimh") method

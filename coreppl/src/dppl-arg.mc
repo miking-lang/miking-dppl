@@ -142,9 +142,9 @@ let transformationOptions : OptParser TransformationOptions =
       , arg = "<option>"
       , description = join
         [ "Temporary flag that decides the simplification approach after extraction"
-        , "in the MExpr compiler backend. The supported options are: none, inline,"
-        , "and peval. Default: ", default, ". Eventually, we will remove this option"
-        , "and only use peval."
+        , " in the MExpr compiler backend. The supported options are: none, inline,"
+        , " and peval. Default: ", default, ". Eventually, we will remove this option"
+        , " and only use peval."
         ]
       } in
     optOr opt (optPure default) in
