@@ -464,8 +464,7 @@ lang MutPVal = PValInterface
     let w = ref (logObserve (deref dist.value) (deref value)) in
     let drift = ref (lam d. lam. d) in
     let update = lam st.
-      if eqi st.id (deref changeId) then
-        -- Draw a new sample, i.e., value changes
+      let drawNew = lam st.
         let prevValue = deref value in
         let prevWeight = deref w in
 
@@ -490,11 +489,15 @@ lang MutPVal = PValInterface
             (addf
               (deref st.temporaryWeight)
               (subf newWeight prevWeight))
-            (subf proposalToPrevProb prevToProposalProb))
+            (subf proposalToPrevProb prevToProposalProb)) in
+      if eqi st.id (deref changeId) then
+        -- Draw a new sample, i.e., value changes
+        drawNew st
       else if eqi st.id (deref dist.changeId) then
         -- Reuse current sample, i.e., value doesn't change
-        let prevWeight = deref w in
         let newWeight = logObserve (deref dist.value) (deref value) in
+        if eqf newWeight (negf inf) then drawNew st else
+        let prevWeight = deref w in
         modref w newWeight;
         modref st.reset (snoc (deref st.reset) (lam. modref w prevWeight));
         modref st.temporaryWeight (addf (deref st.temporaryWeight) (subf newWeight prevWeight))
