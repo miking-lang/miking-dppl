@@ -131,7 +131,7 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     match pvalTransPeelNoSub env weight with (stateName, (wrap, weight)) in
     let store = nvar_ env.storeWeight in
     -- TODO(vipa, 2025-11-20): Build TmLam identity function
-    (None (), (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store (TempLam (lam tm. tm)) weight, unit_]))
+    (None (), (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store (tempLam_ (lam tm. tm)) weight, unit_]))
   | (f & TmVar {ident = ident}, args) ->
     match pvalTransSeqNoSub env args with (stateName, (wrap, args)) in
     if mapLookupOr false ident env.functions

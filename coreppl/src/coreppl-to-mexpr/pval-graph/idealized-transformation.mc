@@ -388,8 +388,8 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem _adjustWrappingC shouldWrap =
   | PSeq f ->
     if shouldWrap
-    then _app (_app (uconst_ (CPTraverseSeq ())) (TempLam f))
-    else _app (_app (uconst_ (CMap ())) (TempLam f))
+    then _app (_app (uconst_ (CPTraverseSeq ())) (tempLam_ f))
+    else _app (_app (uconst_ (CMap ())) (tempLam_ f))
   | PRecord adjustments ->
     let isId = if shouldWrap then isPure else isIdentity in
     let pure = if shouldWrap then app_ (uconst_ (CPPure ())) else lam x. x in
@@ -397,7 +397,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     if mapAll isId adjustments then pure else
     recursive let construct = lam prev. lam remaining.
       match remaining with [key] ++ remaining
-      then TempLam (lam tm. construct (snoc prev (key, tm)) remaining)
+      then tempLam_ (lam tm. construct (snoc prev (key, tm)) remaining)
       else TmRecord
         { bindings = mapFromSeq cmpSID prev
         , ty = tyunknown_
@@ -418,7 +418,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     -- OPT(vipa, 2025-11-04): Could probably just skip the extra check
     (if if shouldWrap then isPure f else isIdentity f
      then ()
-     else error (join ["We somehow have a non-pure type parameter to a PDist, can't handle that: ", bool2string shouldWrap, " ", expr2str (TempLam f)]));
+     else error (join ["We somehow have a non-pure type parameter to a PDist, can't handle that: ", bool2string shouldWrap, " ", expr2str (tempLam_ f)]));
     if shouldWrap
     then app_ (uconst_ (CPPure ()))
     else lam tm. tm
@@ -438,7 +438,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
         case RLater x then _adjustWrappingC shouldWrap (mapPTypeC work x)
         end in
       let workTop = lam conName. lam recTy. lam tm.
-        apply (pure (TempLam (nconapp_ conName))) (work recTy tm) in
+        apply (pure (tempLam_ (nconapp_ conName))) (work recTy tm) in
       _switchExhaustive (mapMapWithKey workTop adjustments) in
     let tm = TempFix
       { canMakeProgress = canMakeProgress
@@ -548,7 +548,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem _app_ =
   -- p_map id = id
   | (f & TmConst {val = CPMap _}, x & TempLam f2) ->
-    if isIdentity f2 then TempLam (lam x. x) else app_ f x
+    if isIdentity f2.f then tempLam_ (lam x. x) else app_ f x
   -- p_map f (p_pure x) = p_pure (f x)
   | ( TmApp
       { lhs = TmConst {val = CPMap _}
@@ -573,7 +573,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       , rhs = x
       }
     ) ->
-    appf2_ (uconst_ (CPMap ())) (TempLam (lam x. _app f (_app g x))) x
+    appf2_ (uconst_ (CPMap ())) (tempLam_ (lam x. _app f (_app g x))) x
   -- p_map f (p_apply g x) = p_apply (p_map (lam g. lam x. f (g x)) g) x
   | ( TmApp
       { lhs = TmConst {val = CPMap _}
@@ -593,7 +593,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     -- through i-1 `CPApply`s n-i times. Could probably be avoided by
     -- having an "apply-train" term that has the function plus a list
     -- of arguments.
-    let f = TempLam (lam g. TempLam (lam x. _app f (_app g x))) in
+    let f = tempLam_ (lam g. tempLam_ (lam x. _app f (_app g x))) in
     appf2_ (uconst_ (CPApply ())) (_map f g) x
   -- p_apply (p_pure f) = p_map f
   | ( TmConst {val = CPApply _}
@@ -602,7 +602,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       , rhs = f
       }
     ) ->
-    TempLam (_map f)
+    tempLam_ (_map f)
   -- p_apply f (p_pure x) = p_map (lam f. f x) f
   | ( TmApp
       { lhs = TmConst {val = CPApply _}
@@ -613,10 +613,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       , rhs = x
       }
     ) ->
-    _map (TempLam (lam f. _app f x)) f
+    _map (tempLam_ (lam f. _app f x)) f
   -- p_traverseSeq pure = pure
   | (f & TmConst {val = CPTraverseSeq _}, x & TempLam f2) ->
-    if isPure f2 then uconst_ (CPPure ()) else app_ f x
+    if isPure f2.f then uconst_ (CPPure ()) else app_ f x
   -- p_join (p_pure x) = x
   | ( TmConst {val = CPJoin _}
     , TmApp
@@ -672,7 +672,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     -- NOTE(vipa, 2025-12-12): Ensure we're fully applying the
     -- function, since it might be an external, which may not appear
     -- in any other situation
-    let tm = foldr (lam. lam cont. lam prefix. TempLam (lam arg. cont (snoc prefix arg))) (foldl _app tm) args [] in
+    let tm = foldr (lam. lam cont. lam prefix. tempLam_ (lam arg. cont (snoc prefix arg))) (foldl _app tm) args [] in
     if forAll (lam x. isPureIsh x.1) args then
       (st, (foldl _app tm (map (lam x. x.0) args), pureRet))
     else
@@ -970,7 +970,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let argTy = res.argTy recTy in
     if res.wrapAboveRec then
       ( st
-      , ( _map (TempLam (lam body. TmConApp {x with body = body})) (adjustWrapping (bodyTy, ensureWrapped argTy) body)
+      , ( _map (tempLam_ (lam body. TmConApp {x with body = body})) (adjustWrapping (bodyTy, ensureWrapped argTy) body)
         , ensureWrapped recTy
         )
       )
@@ -990,14 +990,14 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let tm = app_ (uconst_ (CPWeight ())) weight in
     (st, (tm, PLater (PRecord (mapEmpty cmpSID))))
   | TmObserve x ->
-    let w = withType tyfloat_ (appf2_ (TempLam (lam v. app_ (uconst_ (CDistLogObserve ())) v)) x.dist x.value) in
+    let w = withType tyfloat_ (appf2_ (tempLam_ (lam v. app_ (uconst_ (CDistLogObserve ())) v)) x.dist x.value) in
     specializeExpr sc st (TmWeight {weight = w, ty = x.ty, info = x.info})
   | TmDist x ->
     match mapAccumL (specializeExpr sc) st (distParams x.dist) with (st, args) in
     let l =
       recursive let work = lam prev. lam ps.
         match ps with [p] ++ ps
-        then TempLam (lam tm. work (snoc prev tm) ps)
+        then tempLam_ (lam tm. work (snoc prev tm) ps)
         else TmDist {x with dist = distWithParams x.dist prev} in
       work [] args in
     specializeCall sc st {f = l, args = args, ret = x.ty}
@@ -1023,7 +1023,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     match specializeExpr sc st x.value with (st, (value, valueTy)) in
     switch recTy
     case PHere {wrapped = Wrapped _, ty = PureTypeC (PRecord r)} then
-      let f = TempLam (lam rec. TempLam (lam value. TmRecordUpdate {x with rec = rec, value = value})) in
+      let f = tempLam_ (lam rec. tempLam_ (lam value. TmRecordUpdate {x with rec = rec, value = value})) in
       let wrappedValueTy = ensureWrapped valueTy in
       match wrappedValueTy with PHere {ty = pureValueTy} in
       let value = adjustWrapping (valueTy, wrappedValueTy) value in
@@ -1085,7 +1085,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
                   then addBinding n (f.ident, purifyPType ty) sc
                   else sc in
                 match work sc alreadyOpened f.body with (st, (body, finalInnerTy)) in
-                (st, (TempLam (lam tm. bind_ (nulet_ f.ident tm) body), finalInnerTy))
+                (st, (tempLam_ (lam tm. bind_ (nulet_ f.ident tm) body), finalInnerTy))
               else
                 match mapF sc st (f, unwrapOnce (purifyPType targetTy)) with (st, (f, finalInnerTy)) in
                 if isPureIsh finalInnerTy then (st, (f, finalInnerTy)) else
@@ -1106,7 +1106,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
               -- NOTE(vipa, 2026-01-21): Insert a no-op map node so we
               -- can just recurse to it, as a way to not duplicate the
               -- case above
-              work alreadyOpened rewrap (app_ (app_ (uconst_ (CPMap ())) (TempLam (lam tm. tm))) tm)
+              work alreadyOpened rewrap (app_ (app_ (uconst_ (CPMap ())) (tempLam_ (lam tm. tm))) tm)
             else
               mapF sc st (tm, unwrapOnce targetTy)  -- Simple case, no wrappedness
           end
