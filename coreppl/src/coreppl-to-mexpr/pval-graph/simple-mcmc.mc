@@ -19,7 +19,7 @@ lang MCMCPVal = PValInterface
 
   sem mcmc : all st. all a. MCMCConfig st a -> PValInstance Complete st -> MCMCResult st a
   sem mcmc config = | instance ->
-    let acceptPred = lam. lam prob. bernoulliSample (exp prob) in
+    let acceptPred = lam prob. bernoulliSample (exp prob) in
     recursive let work = lam acc.
       if eqi acc.iterations 0 then acc else
       match finalizeStep acceptPred (config.step (startStep acc.instance)) with (accepted, instance) in

@@ -33,7 +33,22 @@ lang MutPVal = PValInterface
   type UpdateFunction = PState -> ()
 
   syn PValInstance complete st =
-  | PVI {st : st, update : UpdateFunction, permanentWeight : Float, id : IterationID}
+  | PVI
+    { st : st
+    , update : UpdateFunction
+    , permanentWeight : Float
+    , id : IterationID
+    }
+  | PVIPart
+    { st : st
+    , update : UpdateFunction
+    , id : IterationID
+    , dirty : Bool
+    , prevPermanentWeight : Float
+    , permanentWeight : Float
+    , temporaryWeight : Float
+    , reset : [() -> ()]
+    }
 
   sem initModel : all st. all st2. all a. st -> (PValState st -> PValState st2) -> (st2, Float, UpdateFunction)
   sem initModel initSt = | f -> _initModel 0 initSt f
@@ -55,34 +70,77 @@ lang MutPVal = PValInterface
     match _initModel 0 st f with (st, initWeight, update) in
     PVI {st = st, update = update, permanentWeight = initWeight, id = 0}
 
-  sem getWeight = | PVI x -> x.permanentWeight
+  sem getWeight =
+  | PVI x -> x.permanentWeight
+  | PVIPart x -> x.permanentWeight
 
-  sem getSt = | PVI x -> x.st
+  sem getSt =
+  | PVI x -> x.st
+  | PVIPart x -> x.st
 
-  sem startStep = | PVI x -> PVI {x with id = addi x.id 1}
+  sem startStep = | PVI x ->
+    PVIPart
+    { st = x.st
+    , update = x.update
+    , id = addi x.id 1
+    , dirty = false
+    , prevPermanentWeight = x.permanentWeight
+    , permanentWeight = x.permanentWeight
+    , temporaryWeight = 0.0
+    , reset = []
+    }
 
-  sem finalizeStep pred = | PVI x ->
-    let st =
-      { id = x.id
-      , permanentWeight = ref 0.0
-      , temporaryWeight = ref 0.0
-      , reset = ref []
-      } in
-    x.update st;
+  sem intermediateStep = | PVIPart x ->
+    if x.dirty then
+      let st =
+        { id = x.id
+        , permanentWeight = ref 0.0
+        , temporaryWeight = ref 0.0
+        , reset = ref []
+        } in
+      x.update st;
+      PVIPart
+      { x with dirty = false
+      , id = addi st.id 1
+      , permanentWeight = deref st.permanentWeight
+      , temporaryWeight = addf x.temporaryWeight (deref st.temporaryWeight)
+      -- NOTE(vipa, 2026-01-26): The order is important, we want the
+      -- oldest reset to run last
+      , reset = concat (deref st.reset) x.reset
+      }
+    else PVIPart x
+
+  sem finalizeStep pred = | pvi ->
+    match intermediateStep pvi with PVIPart x in
     let acceptProb = minf 0.0
       (addf
-        (subf (deref st.permanentWeight) x.permanentWeight)
-        (deref st.temporaryWeight)) in
-    let new = PVI {x with permanentWeight = deref st.permanentWeight} in
-    if pred new acceptProb then (true, new) else
-    for_ (deref st.reset) (lam f. f ());
-    (false, PVI x)
+        (subf x.permanentWeight x.prevPermanentWeight)
+        x.temporaryWeight) in
+    if pred acceptProb then
+      ( true
+      , PVI
+        { st = x.st
+        , update = x.update
+        , permanentWeight = x.permanentWeight
+        , id = subi x.id 1
+        }
+      )
+    else
+      for_ x.reset (lam f. f ());
+      ( false
+      , PVI
+        { st = x.st
+        , update = x.update
+        , permanentWeight = x.prevPermanentWeight
+        , id = subi x.id 1
+        }
+      )
 
-  sem resampleAssume driftf aref = | pvi & PVI p ->
+  sem resampleAssume driftf aref = | PVIPart p ->
     match aref with PAssumeRef x in
     modref x.drift driftf;
     modref x.changeId p.id;
-    pvi
+    PVIPart {p with dirty = true}
 
   sem readPreviousAssume aref = | _ ->
     match aref with PAssumeRef x in

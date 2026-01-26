@@ -30,11 +30,17 @@ lang PValInterface = RuntimeDistBase
   sem getWeight : all complete. all st. PValInstance complete st -> Float
   -- Start accumulating actions to perform in a single update step.
   sem startStep : all st. PValInstance Complete st -> PValInstance Partial st
+  -- Take an intermediate step, i.e., perform all scheduled resamples
+  -- and propagate all updated values. All `read*` functions will read
+  -- updated values after calling this function. An eventual call to
+  -- `finalizeStep` will accept or reject _all_ intermediate steps in
+  -- one go.
+  sem intermediateStep : all st. PValInstance Partial st -> PValInstance Partial st
   -- Takes a predicate, typically probabilistic, that decides whether
   -- to return the model instance as it was before the step (if false)
   -- or after (if true). The predicate is given the post-step instance
   -- and an mcmc acceptance (log-)ratio computed from the step itself.
-  sem finalizeStep : all st. (PValInstance Complete st -> Float -> Bool) -> PValInstance Partial st -> (Bool, PValInstance Complete st)
+  sem finalizeStep : all st. (Float -> Bool) -> PValInstance Partial st -> (Bool, PValInstance Complete st)
   -- Mark a given assume to be resampled in the upcoming step with the
   -- given drift kernel. The first argument is the distribution we
   -- *should* have drawn from, to make it easy to use no drift kernel.
