@@ -86,6 +86,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistLomax {scale: Float, shape : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
   | DistNegativeBinomial {n:Int, p: Float}
+  | DistPair {p:[Float], pairSets: [[Int]]}
 
   sem sample =
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
@@ -109,6 +110,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
   | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
+  | DistPair t -> unsafeCoerce (pairSample t.p t.pairSets)
 
   -- Expectation of primitive distributions over real values
   sem expectation =
@@ -131,6 +133,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistReciprocal t -> unsafeCoerce (divf (subf t.a t.b) (log (divf t.a t.b)))
   | DistUniformDiscrete t -> unsafeCoerce (divf (int2float (addi t.a t.b)) 2.)
   | DistWiener _ -> error "expectation undefined for the Wiener process"
+  | DistPair t -> error "expectation undefined for the pair distribution"
 
   sem logObserve =
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
@@ -155,6 +158,8 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
   | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
+  | DistPair t -> unsafeCoerce (pairLogPmf t.p t.pairSets)
+
 end
 
 -- Empirical distribution

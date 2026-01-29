@@ -114,9 +114,12 @@ let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam
     match mapLookup addr oldDb with Some (Some (sample,w)) then
       let s: a = unsafeCoerce sample in
       let wNew = logObserve dist s in
-      modref state.weightReused (addf (deref state.weightReused) wNew);
-      modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
-      (sample, wNew)
+      if eqf wNew (negf inf) then
+        newSample ()
+      else
+        modref state.weightReused (addf (deref state.weightReused) wNew);
+        modref state.prevWeightReused (addf (deref state.prevWeightReused) w);
+        (sample, wNew)
     else
       newSample ()
   in

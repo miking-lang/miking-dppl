@@ -213,6 +213,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst {}
   | CDistEmpiricalAcceptRate {}
   | CDistExpectation {}
+  | CDistLogObserve {}
 
   sem getConstStringCode (indent : Int) =
   | CDistEmpiricalSamples _ -> "distEmpiricalSamples"
@@ -220,6 +221,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst _ -> "distEmpiricalNormConst"
   | CDistEmpiricalAcceptRate _ -> "distEmpiricalAcceptRate"
   | CDistExpectation _ -> "expectation"
+  | CDistLogObserve _ -> "logObserve"
 
   sem _tydist =
   | a -> TyDist {info = NoInfo (), ty = a}
@@ -232,6 +234,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
   | CDistEmpiricalAcceptRate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
   | CDistExpectation _ -> tyarrow_ (_tydist tyfloat_) tyfloat_
+  | CDistLogObserve _ -> mktyall_ "a" (lam a. tyarrows_ [_tydist a, a, tyfloat_])
 
   sem constArity =
   | CDistEmpiricalSamples _ -> 1
@@ -239,6 +242,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalNormConst _ -> 1
   | CDistEmpiricalAcceptRate _ -> 1
   | CDistExpectation _ -> 1
+  | CDistLogObserve _ -> 2
 
   sem exprToJson =
   | TmDist x -> JsonObject (mapFromSeq cmpString
@@ -567,6 +571,27 @@ lang WienerDist = Dist
   | DWiener _ -> "Wiener"
 end
 
+lang PairDist = Dist
+  syn Dist =
+  | DPair { p : Expr, pairSets : Expr}
+
+  sem smapAccumL_Dist_Expr f acc =
+  | DPair t ->
+    match f acc t.p with (acc, p) in
+    match f acc t.pairSets with (acc, pairSets) in
+    (acc, DPair {{ t with p = p } with pairSets = pairSets })
+
+  sem distTy info =
+  | DPair _ ->
+    let f = ityfloat_ info in
+    let s = ityseq_ info in
+    let i = ityint_ info in
+    ([], [s f, s (s i)], s i)
+
+  sem distName =
+  | DPair _ -> "Pair"
+end
+
 
 -----------------
 -- AST BUILDER --
@@ -628,6 +653,9 @@ let binomial_ = use BinomialDist in
 
 let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 
+let pair_ = use PairDist in
+  lam p. lam pairSets. dist_ (DPair {p = p, pairSets = pairSets})
+
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
 ---------------------------
@@ -635,7 +663,7 @@ let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 lang DistAll =
   UniformDist + UniformDiscreteDist + BernoulliDist + PoissonDist + BetaDist + Chi2Dist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
-  EmpiricalDist + GeometricDist + GaussianDist + BinomialDist + WienerDist + ReciprocalDist
+  EmpiricalDist + GeometricDist + GaussianDist + BinomialDist + WienerDist + ReciprocalDist + PairDist
 end
 
 lang Test =
@@ -670,6 +698,7 @@ let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 let tmGeometric = geometric_ (float_ 0.5) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmWiener = wiener_ in
+let tmPair = pair_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [ seq_ [int_ 0, int_ 1]]) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -742,6 +771,9 @@ utest mexprToString tmBinomial with strJoin "\n" [
 
 utest mexprToString tmWiener with "Wiener {}"  using eqString in
 
+utest mexprToString tmPair with strJoin "\n" [
+  "Pair [ 0.3, 0.7 ] [ [ 0, 1 ] ]"
+] using eqString in
 --------------------
 -- EQUALITY TESTS --
 --------------------
@@ -816,7 +848,8 @@ utest eqExpr tmBinomial (binomial_ (int_ 4) (float_ 0.5)) with false in
 utest tmWiener with tmWiener using eqExpr in
 utest eqExpr tmWiener tmBinomial with false in
 
-
+utest tmPair with tmPair using eqExpr in
+utest eqExpr tmPair tmBinomial with false in
 
 ----------------------
 -- SMAP/SFOLD TESTS --
@@ -893,6 +926,10 @@ utest smap_Expr_Expr mapVar tmBinomial with binomial_ tmVar tmVar using eqExpr i
 utest sfold_Expr_Expr foldToSeq [] tmBinomial
 with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
 
+utest smap_Expr_Expr mapVar tmPair with pair_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmPair
+with [ seq_ [ seq_ [int_ 0, int_ 1]], seq_ [float_ 0.3, float_ 0.7]] using eqSeq eqExpr in
+
 ---------------------
 -- SYMBOLIZE TESTS --
 ---------------------
@@ -913,7 +950,7 @@ utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmGaussian with tmGaussian using eqExpr in
 utest symbolize tmGeometric with tmGeometric using eqExpr in
 utest symbolize tmBinomial with tmBinomial using eqExpr in
-
+utest symbolize tmPair with tmPair using eqExpr in
 
 -------------------------
 -- TYPE-ANNOTATE TESTS --
@@ -935,9 +972,8 @@ utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType i
 utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
-utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_)
-  using eqType
-in
+utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_) using eqType in
+utest tyTm (typeCheck tmPair) with tydist_ (tyseq_ tyint_)  using eqType in
 
 ---------------
 -- ANF TESTS --
@@ -983,6 +1019,12 @@ utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr 
 utest _anf tmGeometric with bind_ (ulet_ "t" tmGeometric) (var_ "t") using eqExpr in
 utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
+utest _anf tmPair with bindall_ [
+  ulet_ "t" (seq_ [float_ 0.3, float_ 0.7]),
+  ulet_ "t1" (seq_ [int_ 0, int_ 1]),
+  ulet_ "t2" (seq_ [var_ "t1"]),
+  ulet_ "t3" (pair_ (var_ "t") (var_ "t2"))
+](var_ "t3") using eqExpr in
 
 ---------------------
 -- TYPE-LIFT TESTS --
@@ -1006,5 +1048,6 @@ utest (typeLift tmGeometric).1 with tmGeometric using eqExpr in
 utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
 utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 utest (typeLift tmReciprocal).1 with tmReciprocal using eqExpr in
+utest (typeLift tmPair).1 with tmPair using eqExpr in
 
 ()

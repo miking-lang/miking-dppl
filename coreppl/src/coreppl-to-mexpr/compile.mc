@@ -93,7 +93,7 @@ lang DPPLPrunedReplace = DPPLReplace + SymGetters + DPPLParser
   sem replaceCancel env =
   | (TmCancel t) ->
     let i = withInfo t.info in
-    TmWeight { weight = negf_ (appf2_ (withInfo t.info (nvar_ (_getVarExn "logObserve" env)))
+    TmWeight { weight = negf_ (appf2_ (withInfo t.info (uconst_ (CDistLogObserve ())))
  t.dist t.value),
                info = t.info,
                ty = t.ty}
@@ -401,6 +401,7 @@ lang CPPLLoader
       , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
       , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
       , ("expectation", CDistExpectation ())
+      , ("logObserve", CDistLogObserve ())
       ] in
     let f = lam loader. lam pair.
       let decl = DeclLet
