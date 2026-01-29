@@ -22,7 +22,7 @@ let _cpsDefault : String = "full"
 let _cps : OptParser String =
   let opt = optArg
     { optArgDefString with long = "cps"
-    , description = concat "Configuration of CPS transformation (only applicable to certain inference algorithms). The supported options are: none, partial, and full. Default: " _cpsDefault
+    , description = concat "Configuration of CPS transformation. The supported options are: none, partial, and full. Default: " _cpsDefault
     } in
   optOr opt (optPure _cpsDefault)
 let _driftKernelDefault : Bool = false
@@ -30,11 +30,11 @@ let _driftKernel : OptParser Bool = optMap (xor _driftKernelDefault) (optFlag
   { optFlagDef with long = "kernel"
   , description = "Use drift Kernel in MCMC."
   })
-let _driftScaleDefault : Float = 1.0
+let _driftScaleDefault : Float = 0.1
 let _driftScale : OptParser Float =
   let opt = optArg
     { optArgDefFloat with long = "drift"
-    , description = concat "Floating point number which corresponds to the standard deviation (sigma) of the normal distribution that will be used for the automatic drift kernel. Default: " (float2string _driftScaleDefault)
+    , description = concat "Standard deviation of the automatic drift kernels. Default: " (float2string _driftScaleDefault)
     } in
   optOr opt (optPure _driftScaleDefault)
 let _dynamicDelayDefault : Bool = false
@@ -50,24 +50,24 @@ let _earlyStop : OptParser Bool = optMap (xor _earlyStopDefault) (optFlag
 let _mcmcLightweightGlobalProbDefault : Float = 0.1
 let _mcmcLightweightGlobalProb : OptParser Float =
   let opt = optArg
-    { optArgDefFloat with long = "mcmc-lw-gprob"
+    { optArgDefFloat with long = "mcmc-global-prob"
     , description = concat "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: " (float2string _mcmcLightweightGlobalProbDefault)
     } in
   optOr opt (optPure _mcmcLightweightGlobalProbDefault)
-let _particlesDefault : Int = 5000
+let _particlesDefault : Int = 1000
 let _particles : OptParser Int =
   let opt = optArg
     { optArgDefInt with long = "particles", short = "p"
-    , description = concat "The number of particles (i.e., samples or iterations). The default is " (int2string _particlesDefault)
+    , description = concat "The number of particles in smc. The default is " (int2string _particlesDefault)
     } in
   optOr opt (optPure _particlesDefault)
-let _pmcmcParticlesDefault : Int = 2
-let _pmcmcParticles : OptParser Int =
+let _iterationsDefault : Int = 10000
+let _iterations : OptParser Int =
   let opt = optArg
-    { optArgDefInt with long = "pmcmcParticles"
-    , description = concat "The number of particles for the smc proposal computation. The default is " (int2string _pmcmcParticlesDefault)
+    { optArgDefInt with long = "iterations", short = "i"
+    , description = concat "The number of iterations in mcmc. The default is " (int2string _iterationsDefault)
     } in
-  optOr opt (optPure _pmcmcParticlesDefault)
+  optOr opt (optPure _iterationsDefault)
 let _pruneDefault : Bool = false
 let _prune : OptParser Bool = optMap (xor _pruneDefault) (optFlag
   { optFlagDef with long = "prune"

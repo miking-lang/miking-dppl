@@ -16,7 +16,7 @@ lang TraceMCMCMethod = InferMethodBase
   sem inferMethodFromCon info bindings =
   | methodStr & "TraceMCMC" ->
     let expectedFields = [
-      ("iterations", int_ _particlesDefault)
+      ("iterations", int_ _iterationsDefault)
     ] in
     match getFields info bindings expectedFields with [iterations] in
     TraceMCMC { iterations = iterations }
@@ -50,5 +50,5 @@ let mcmcTraceOptions : OptParser (use TraceMCMCMethod in InferMethod) =
   let mk = lam iterations. TraceMCMC
     { iterations = int_ iterations
     } in
-  let method = optMap mk _particles in
+  let method = optMap mk _iterations in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-trace") method
