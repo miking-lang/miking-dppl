@@ -92,8 +92,8 @@ lang TransformDist = TransformDistBase + InferenceInterface
     let cname = _getConExn "RuntimeDistElementary_DistWiener" env.env in
     i (nconapp_ cname
         (i (autoty_record_ [("cps", if cps then i true_ else i false_), ("a", a)])))
-  | DPair { p = p , pairSets = pairSets} ->
-    let cname = _getConExn "RuntimeDistElementary_DistPair" env.env in
+  | DTreeInferenceCategorical { p = p , pairSets = pairSets} ->
+    let cname = _getConExn "RuntimeDistElementary_DistTreeInferenceCategorical" env.env in
     i (nconapp_ cname (i (autoty_record_ [("p", p), ("pairSets", pairSets)])))
   | DEmpirical { samples = samples } ->
     i (appFromEnv env "vRuntimeDistEmpirical_constructDistEmpiricalHelper" [samples])

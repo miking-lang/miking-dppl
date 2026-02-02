@@ -553,25 +553,25 @@ lang WienerDist = Dist
   | DWiener _ -> "Wiener"
 end
 
-lang PairDist = Dist
+lang TreeInferenceCategoricalDist = Dist
   syn Dist =
-  | DPair { p : Expr, pairSets : Expr}
+  | DTreeInferenceCategorical { p : Expr, pairSets : Expr}
 
   sem smapAccumL_Dist_Expr f acc =
-  | DPair t ->
+  | DTreeInferenceCategorical t ->
     match f acc t.p with (acc, p) in
     match f acc t.pairSets with (acc, pairSets) in
-    (acc, DPair {{ t with p = p } with pairSets = pairSets })
+    (acc, DTreeInferenceCategorical {{ t with p = p } with pairSets = pairSets })
 
   sem distTy info =
-  | DPair _ ->
+  | DTreeInferenceCategorical _ ->
     let f = ityfloat_ info in
     let s = ityseq_ info in
     let i = ityint_ info in
     ([], [s f, s (s i)], s i)
 
   sem distName =
-  | DPair _ -> "Pair"
+  | DTreeInferenceCategorical _ -> "TreeInferenceCategorical"
 end
 
 
@@ -588,7 +588,7 @@ let tydist_ = use Dist in
 let uniform_ = use UniformDist in
   lam a. lam b. dist_ (DUniform {a = a, b = b})
 
-let reciprocal_ = use ReciprocalDist in 
+let reciprocal_ = use ReciprocalDist in
   lam a. lam b. dist_ (DReciprocal {a = a, b = b})
 
 let uniformDiscrete_ = use UniformDiscreteDist in
@@ -632,8 +632,8 @@ let binomial_ = use BinomialDist in
 
 let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })
 
-let pair_ = use PairDist in
-  lam p. lam pairSets. dist_ (DPair {p = p, pairSets = pairSets})
+let treeinferencecat_ = use TreeInferenceCategoricalDist in
+  lam p. lam pairSets. dist_ (DTreeInferenceCategorical {p = p, pairSets = pairSets})
 
 ---------------------------
 -- LANGUAGE COMPOSITIONS --
@@ -642,7 +642,7 @@ let pair_ = use PairDist in
 lang DistAll =
   UniformDist + UniformDiscreteDist + BernoulliDist + PoissonDist + BetaDist + GammaDist +
   CategoricalDist + MultinomialDist + DirichletDist +  ExponentialDist +
-  EmpiricalDist + GeometricDist + GaussianDist + BinomialDist + WienerDist + ReciprocalDist + PairDist
+  EmpiricalDist + GeometricDist + GaussianDist + BinomialDist + WienerDist + ReciprocalDist + TreeInferenceCategoricalDist
 end
 
 lang Test =
@@ -676,7 +676,7 @@ let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
 let tmGeometric = geometric_ (float_ 0.5) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmWiener = wiener_ in
-let tmPair = pair_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [ seq_ [int_ 0, int_ 1]]) in
+let tmTree = treeinferencecat_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [ seq_ [int_ 0, int_ 1]]) in
 
 ------------------------
 -- PRETTY-PRINT TESTS --
@@ -745,8 +745,8 @@ utest mexprToString tmBinomial with strJoin "\n" [
 
 utest mexprToString tmWiener with "Wiener {}"  using eqString in
 
-utest mexprToString tmPair with strJoin "\n" [
-  "Pair [ 0.3, 0.7 ] [ [ 0, 1 ] ]"
+utest mexprToString tmTree with strJoin "\n" [
+  "TreeInferenceCategorical [ 0.3, 0.7 ] [ [ 0, 1 ] ]"
 ] using eqString in
 --------------------
 -- EQUALITY TESTS --
@@ -819,8 +819,8 @@ utest eqExpr tmBinomial (binomial_ (int_ 4) (float_ 0.5)) with false in
 utest tmWiener with tmWiener using eqExpr in
 utest eqExpr tmWiener tmBinomial with false in
 
-utest tmPair with tmPair using eqExpr in
-utest eqExpr tmPair tmBinomial with false in
+utest tmTree with tmTree using eqExpr in
+utest eqExpr tmTree tmBinomial with false in
 
 ----------------------
 -- SMAP/SFOLD TESTS --
@@ -893,8 +893,8 @@ utest smap_Expr_Expr mapVar tmBinomial with binomial_ tmVar tmVar using eqExpr i
 utest sfold_Expr_Expr foldToSeq [] tmBinomial
 with [ float_ 0.5, int_ 5] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmPair with pair_ tmVar tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmPair
+utest smap_Expr_Expr mapVar tmTree with treeinferencecat_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmTree
 with [ seq_ [ seq_ [int_ 0, int_ 1]], seq_ [float_ 0.3, float_ 0.7]] using eqSeq eqExpr in
 
 ---------------------
@@ -916,7 +916,7 @@ utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmGaussian with tmGaussian using eqExpr in
 utest symbolize tmGeometric with tmGeometric using eqExpr in
 utest symbolize tmBinomial with tmBinomial using eqExpr in
-utest symbolize tmPair with tmPair using eqExpr in
+utest symbolize tmTree with tmTree using eqExpr in
 
 -------------------------
 -- TYPE-ANNOTATE TESTS --
@@ -938,7 +938,7 @@ utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_) using eqType in
-utest tyTm (typeCheck tmPair) with tydist_ (tyseq_ tyint_)  using eqType in
+utest tyTm (typeCheck tmTree) with tydist_ (tyseq_ tyint_)  using eqType in
 
 ---------------
 -- ANF TESTS --
@@ -983,11 +983,11 @@ utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr 
 utest _anf tmGeometric with bind_ (ulet_ "t" tmGeometric) (var_ "t") using eqExpr in
 utest _anf tmBinomial with bind_ (ulet_ "t" tmBinomial) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
-utest _anf tmPair with bindall_ [
+utest _anf tmTree with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.7]),
   ulet_ "t1" (seq_ [int_ 0, int_ 1]),
   ulet_ "t2" (seq_ [var_ "t1"]),
-  ulet_ "t3" (pair_ (var_ "t") (var_ "t2"))
+  ulet_ "t3" (treeinferencecat_ (var_ "t") (var_ "t2"))
 ](var_ "t3") using eqExpr in
 
 ---------------------
@@ -1011,6 +1011,6 @@ utest (typeLift tmGeometric).1 with tmGeometric using eqExpr in
 utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
 utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 utest (typeLift tmReciprocal).1 with tmReciprocal using eqExpr in
-utest (typeLift tmPair).1 with tmPair using eqExpr in
+utest (typeLift tmTree).1 with tmTree using eqExpr in
 
 ()
