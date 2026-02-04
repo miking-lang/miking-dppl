@@ -4,7 +4,7 @@ include "coreppl::coreppl-to-mexpr/pval-graph/idealized-transformation.mc"
 include "coreppl::coreppl-to-mexpr/pval-graph/state-transformation.mc"
 include "coreppl::coreppl-to-mexpr/pval-graph/eta-expansion.mc"
 
-lang TestLang = DPPLParser + MExprLowerNestedPatterns + MExprLambdaLift + InlineSingleUse + RemoveSecondClassFunctions + IdealizedPValTransformation + PValStateTransformation + MExprDeadcodeElimination + EtaExpansion
+lang TestLang = DPPLParser + MExprLowerNestedPatterns + MExprLambdaLift + InlineSingleUse + RemoveSecondClassFunctions + IdealizedPValTransformation + PValStateTransformation + MExprDeadcodeElimination + EtaExpansion + MExprFreeNames
   sem tmHasSideEffect nmap acc =
   | (TmWeight _ | TmObserve _) -> true
 

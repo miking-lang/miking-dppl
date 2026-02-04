@@ -22,7 +22,7 @@ include "mexpr/shallow-patterns.mc"
 include "mexpr/hoas.mc"
 include "mexpr/inline-single-use-simple.mc"
 
-lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst + AppTypeUtils
+lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst + AppTypeUtils + FreeNames
   syn Wrap =
   | Wrapped
   | Unused
@@ -908,6 +908,34 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     match specializeExpr sc st x.inexpr with (st, (tm, ty)) in
     match specializeDeclPost st x.decl with (st, newDecls) in
     (st, (bindall_ newDecls tm, ty))
+  | TmOpaque x ->
+    -- NOTE(vipa, 2026-02-06): We make sure all values referenced from
+    -- within the TmOpaque are available unwrapped, then run the
+    -- transformation as usual inside, which has the effect of
+    -- renaming variables appropriately to reference values and
+    -- functions.
+    let used = freeNames x.body in
+    let impureUsed = mapFilter (lam pair. not (isPureIsh pair.1))
+      (mapIntersectWith (lam. lam r. r) (freeNames x.body) sc.valueScope) in
+    let mkArg = lam binding.
+      match binding with (origIdent, (newIdent, ty)) in
+      let wrappedTy = ensureWrapped ty in
+      let arg = adjustWrapping (ty, wrappedTy) (nvar_ newIdent) in
+      ((origIdent, (nameSetNewSym origIdent, purifyPType ty)), arg) in
+    match unzip (map (mkArg) (mapBindings impureUsed)) with (newBindings, args) in
+    let sc = foldl (lam sc. lam binding. addBinding binding.0 binding.1 sc) sc newBindings in
+    -- TODO(vipa, 2026-02-06): This call to will only make changes if
+    -- the TmOpaque (or a function it calls) contain a probabilistic
+    -- construct, which isn't allowed. We're not detecting that atm,
+    -- and that seems like a pretty bad footgun.
+    match specializeExpr sc st x.body with (st, (body, ty)) in
+    (if not (isPureIsh ty) then
+       errorSingle [x.info] "This TmOpaque returned a probabilistic value, which isn't allowed"
+     else ());
+    let body = foldr (lam binding. lam tm. tempLam_ (lam arg. bind_ (nulet_ binding.1 .0 arg) tm)) (TmOpaque {x with body = body}) newBindings in
+    match args with [arg] ++ args
+    then (st, (foldl _apply (_map body arg) args, ensureWrapped ty))
+    else (st, (body, ty))
   | TmApp x ->
     recursive let collectApps = lam args. lam decls. lam tm.
       switch tm
@@ -941,33 +969,32 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     -- entire value. This is important to not forget a constructor
     -- that might appear.
     recursive let computeRecTy
-      : RecTy () -> PType -> {recOccurs : [PType], recTy : RecTy PType, argTy : PType -> PType, wrapAboveRec : Bool}
+      : RecTy () -> PType -> {recOccurs : [PType], recTy : RecTy PType, wrapAboveRec : Bool}
       = lam argRecTy. lam bodyTy.
         switch argRecTy
         case NoRec _ then
-          {recOccurs = [], recTy = NoRec bodyTy, argTy = lam. bodyTy, wrapAboveRec = false}
+          {recOccurs = [], recTy = NoRec bodyTy, wrapAboveRec = false}
         case Rec _ then
-          {recOccurs = [bodyTy], recTy = Rec (), argTy = lam bodyTy. bodyTy, wrapAboveRec = isTopWrapped bodyTy}
+          {recOccurs = [bodyTy], recTy = Rec (), wrapAboveRec = isTopWrapped bodyTy}
         case RLater recTy then
           -- NOTE(vipa, 2025-10-27): This will forget any `Unused`
           -- wrapping in the argument when above a `Rec`, not sure if
           -- that's desirable or avoidable
           match unwrapOnce bodyTy with Right ty in
           let res = map2PTypeCExn computeRecTy recTy ty in
-          let isTopWrapped = isTopWrapped bodyTy in
           { recOccurs = foldPTypeC (lam a. lam x. concat a x.recOccurs) [] res
           , recTy = RLater (mapPTypeC (lam x. x.recTy) res)
-          , argTy = if isTopWrapped
-            then lam ty. ensureWrapped (PLater (mapPTypeC (lam x. x.argTy ty) res))
-            else lam ty. PLater (mapPTypeC (lam x. x.argTy ty) res)
-          , wrapAboveRec = foldPTypeC (lam a. lam x. or a x.wrapAboveRec) isTopWrapped res
+          , wrapAboveRec = foldPTypeC (lam a. lam x. or a x.wrapAboveRec) (isTopWrapped bodyTy) res
           }
         end
     in
     let res = computeRecTy argRecTy bodyTy in
     let recTy = PLater (PUser (mapSingleton nameCmp x.ident res.recTy)) in
     let recTy = foldl lubPType recTy res.recOccurs in
-    let argTy = res.argTy recTy in
+    let argTy =
+      match unwrapOnce recTy with Right (PUser m) in
+      recTyAsPType recTy (mapFindExn x.ident m) in
+    -- warnSingle [x.info] (join ["TmConApp ", nameGetStr x.ident, ", bodyTy: ", ptypeToString bodyTy, " argTy (ignoring recursive wrapping): ", ptypeToString argTy]);
     if res.wrapAboveRec then
       ( st
       , ( _map (tempLam_ (lam body. TmConApp {x with body = body})) (adjustWrapping (bodyTy, ensureWrapped argTy) body)
@@ -1004,7 +1031,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | TmVar x ->
     match mapLookup x.ident sc.valueScope with Some (n, ty)
     then (st, (TmVar {x with ident = n}, ty))
-    else errorSingle [x.info] "Missing entry in valueScope"
+    else errorSingle [x.info] (concat "Missing entry in valueScope " (expr2str (TmVar x)))
   | TmSeq x ->
     match mapAccumL (specializeExpr sc) st x.tms with (st, tms) in
     match unzip tms with (tms, tmTys) in
