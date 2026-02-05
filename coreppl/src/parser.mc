@@ -185,6 +185,13 @@ lang DPPLParser =
   | "Wiener" -> Some (1, lam lst. TmDist {dist = DWiener {cps = false, a = get lst 0},
                                        ty = TyUnknown {info = info},
                                        info = info})
+  | "TreeInferenceCategorical" -> Some (2, lam lst. TmDist {dist = DTreeInferenceCategorical {p = get lst 0, pairSets = get lst 1},
+                                        ty = TyUnknown {info = info},
+                                        info = info})
+  | "assumeDrift" -> Some (2, lam lst. TmAssume {dist = get lst 0,
+                                                 ty = TyUnknown {info = info},
+                                                 info = info,
+                                                 driftKernel = Some (get lst 1)})
   | "solveode" -> Some (4, lam lst. TmSolveODE {method = interpretODESolverMethod (get lst 0),
                                              model = get lst 1,
                                              init = get lst 2,
