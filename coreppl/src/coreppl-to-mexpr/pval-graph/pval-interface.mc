@@ -42,15 +42,14 @@ lang PValInterface = RuntimeDistBase
   -- and an mcmc acceptance (log-)ratio computed from the step itself.
   sem finalizeStep : all st. (Float -> Bool) -> PValInstance Partial st -> (Bool, PValInstance Complete st)
   -- Mark a given assume to be resampled in the upcoming step with the
-  -- given drift kernel. The first argument is the distribution we
-  -- *should* have drawn from, to make it easy to use no drift kernel.
-  sem resampleAssume : all st. all a. (Dist a -> a -> Dist a) -> PAssumeRef a -> PValInstance Partial st -> PValInstance Partial st
+  -- given drift kernel, if any.
+  sem resampleAssume : all st. all a. Option (a -> Dist a) -> PAssumeRef a -> PValInstance Partial st -> PValInstance Partial st
   -- Read the current value produced by the given assume. In a
   -- `Partial` instance this returns the value before the step was
   -- initiated.
   sem readPreviousAssume : all complete. all st. all a. PAssumeRef a -> PValInstance complete st -> a
   -- Type-erased version of an AssumeRef.
-  sem asSomeAssume : all a. (Dist a -> a -> Dist a) -> PAssumeRef a -> PSomeAssumeRef
+  sem asSomeAssume : all a. Option (a -> Dist a) -> PAssumeRef a -> PSomeAssumeRef
   sem asSomeAssume drift = | ref ->
     let f : all st. PValInstance Partial st -> PValInstance Partial st = lam st. resampleAssume drift ref st in
     PSomeAssumeRef #frozen"f"

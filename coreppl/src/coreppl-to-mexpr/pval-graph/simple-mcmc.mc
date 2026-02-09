@@ -54,7 +54,7 @@ lang SimpleState = PValInterface
   sem simpleStoreAssume : all a. all x. SimpleState x -> PAssumeRef a -> SimpleState x
   sem simpleStoreAssume st = | ref ->
     match st with SimpleState st in
-    SimpleState {st with here = snoc st.here (asSomeAssume (lam d. lam. d) ref)}
+    SimpleState {st with here = snoc st.here (asSomeAssume (None ()) ref)}
 
   sem simpleStoreExport : all x1. all x2. SimpleState x1 -> PExportRef x2 -> SimpleState (PExportRef x2)
   sem simpleStoreExport st = | ref ->

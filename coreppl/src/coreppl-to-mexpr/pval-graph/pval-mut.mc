@@ -20,7 +20,7 @@ lang MutPVal = PValInterface
 
   syn PValState st = | PVS {initId : IterationID, updates : [PState -> ()], initWeight : Float, st : st}
   syn PWeightRef = | PWeightRef {} -- TODO(vipa, 2025-09-23): figure out what we want to be able to do here, and thus what we need to store
-  syn PAssumeRef a = | PAssumeRef {drift : Ref (Dist a -> a -> Dist a), changeId : Ref IterationID, read : () -> a}
+  syn PAssumeRef a = | PAssumeRef {drift : Ref (Option (a -> Dist a)), changeId : Ref IterationID, read : () -> a}
   syn PExportRef a = | PExportRef {read : () -> a}
   syn PSubmodelRef st = | PSubmodelRef {readSt : () -> st}
 
@@ -462,41 +462,48 @@ lang MutPVal = PValInterface
     let value = ref (sample (deref dist.value)) in
     let changeId = ref st.initId in
     let w = ref (logObserve (deref dist.value) (deref value)) in
-    let drift = ref (lam d. lam. d) in
+    let drift = ref (None ()) in
     let update = lam st.
       let drawNew = lam drift. lam st.
         let prevValue = deref value in
         let prevWeight = deref w in
 
-        let kernel = drift (deref dist.value) prevValue in
-        let proposal = sample kernel in
-        let reverseKernel = drift (deref dist.value) proposal in
+        match
+          match drift with Some drift then
+            let kernel = drift prevValue in
+            let proposal = sample kernel in
+            let reverseKernel = drift proposal in
 
-        let newWeight = logObserve (deref dist.value) proposal in
+            let newWeight = logObserve (deref dist.value) proposal in
 
-        let prevToProposalProb = logObserve kernel proposal in
-        let proposalToPrevProb = logObserve reverseKernel prevValue in
+            let prevToProposalProb = logObserve kernel proposal in
+            let proposalToPrevProb = logObserve reverseKernel prevValue in
 
-        modref value proposal;
+            ( proposal
+            , newWeight
+            , addf (subf newWeight prevWeight) (subf proposalToPrevProb prevToProposalProb)
+            )
+          else
+            let newValue = sample (deref dist.value) in
+            let newWeight = logObserve (deref dist.value) newValue in
+            (newValue, newWeight, subf newWeight prevWeight)
+        with (newValue, newWeight, newTemp) in
+
+        modref value newValue;
         modref w newWeight;
         modref changeId st.id;
         let reset = lam.
           modref value prevValue;
           modref w prevWeight in
         modref st.reset (snoc (deref st.reset) reset);
-        modref st.temporaryWeight
-          (addf
-            (addf
-              (deref st.temporaryWeight)
-              (subf newWeight prevWeight))
-            (subf proposalToPrevProb prevToProposalProb)) in
+        modref st.temporaryWeight (addf (deref st.temporaryWeight) newTemp) in
       if eqi st.id (deref changeId) then
         -- Draw a new sample, i.e., value changes
         drawNew (deref drift) st
       else if eqi st.id (deref dist.changeId) then
         -- Reuse current sample, i.e., value doesn't change
         let newWeight = logObserve (deref dist.value) (deref value) in
-        if eqf newWeight (negf inf) then drawNew (lam dist. lam. dist) st else
+        if eqf newWeight (negf inf) then drawNew (None ()) st else
         let prevWeight = deref w in
         modref w newWeight;
         modref st.reset (snoc (deref st.reset) (lam. modref w prevWeight));
