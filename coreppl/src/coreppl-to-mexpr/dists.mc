@@ -84,9 +84,12 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DPoisson { lambda = lambda } ->
     let cname = _getConExn "RuntimeDistElementary_DistPoisson" env.env in
     i (nconapp_ cname (i (autoty_record_ [("lambda", lambda)])))
+<<<<<<< HEAD
   | DTreeInferenceCategorical { p = p , pairSets = pairSets} ->
     let cname = _getConExn "RuntimeDistElementary_DistTreeInferenceCategorical" env.env in
     i (nconapp_ cname (i (autoty_record_ [("p", p), ("pairSets", pairSets)])))
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
   | DUniform { a = a, b = b } ->
     let cname = _getConExn "RuntimeDistElementary_DistUniform" env.env in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))

@@ -173,9 +173,12 @@ lang DPPLParser =
   | "Poisson" -> Some (1, lam lst. TmDist {dist = DPoisson {lambda = get lst 0},
                                            ty = TyUnknown {info = info},
                                            info = info})
+<<<<<<< HEAD
   | "TreeInferenceCategorical" -> Some (2, lam lst. TmDist {dist = DTreeInferenceCategorical {p = get lst 0, pairSets = get lst 1},
                                                             ty = TyUnknown {info = info},
                                                             info = info})
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
   | "Uniform" -> Some (2, lam lst. TmDist {dist = DUniform {a = get lst 0, b = get lst 1},
                                            ty = TyUnknown {info = info},
                                            info = info})

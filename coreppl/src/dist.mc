@@ -261,6 +261,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
 
 end
 
+<<<<<<< HEAD
   ------------------------------------------------------------------------------
   -- From there, and on any part of the code that involves distribution
   -- implementations, the distributions are sorted alphabetically 
@@ -268,6 +269,8 @@ end
   -- for future implementations
   ------------------------------------------------------------------------------
 
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
 lang BernoulliDist = Dist
   syn Dist =
   | DBernoulli { p : Expr }
@@ -505,6 +508,7 @@ lang PoissonDist = Dist
   | DPoisson _ -> "Poisson"
 end
 
+<<<<<<< HEAD
 lang TreeInferenceCategoricalDist = Dist
   syn Dist =
   | DTreeInferenceCategorical { p : Expr, pairSets : Expr}
@@ -526,6 +530,8 @@ lang TreeInferenceCategoricalDist = Dist
   | DTreeInferenceCategorical _ -> "TreeInferenceCategorical"
 end
 
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
 lang UniformDist = Dist
   syn Dist =
   | DUniform { a : Expr, b : Expr }
@@ -669,8 +675,12 @@ let treeinferencecat_ = use TreeInferenceCategoricalDist in
 lang DistAll =
   BernoulliDist + BetaDist + BinomialDist + CategoricalDist + Chi2Dist + DirichletDist +
   EmpiricalDist + ExponentialDist + GammaDist + GaussianDist + GeometricDist + MultinomialDist +
+<<<<<<< HEAD
   PoissonDist + TreeInferenceCategoricalDist + UniformDist + UniformDiscreteDist + ReciprocalDist + 
   WienerDist
+=======
+  PoissonDist + UniformDist + UniformDiscreteDist + ReciprocalDist + WienerDist
+>>>>>>> 136b56720366675323722c144971d80699166b8c
 end
 
 lang Test =
@@ -847,9 +857,12 @@ with false in
 utest tmPoisson with tmPoisson using eqExpr in
 utest eqExpr tmPoisson (poisson_ (float_ 0.4)) with false in
 
+<<<<<<< HEAD
 utest tmTree with tmTree using eqExpr in
 utest eqExpr tmTree tmBinomial with false in
 
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
 utest tmUniform with tmUniform using eqExpr in
 utest eqExpr tmUniform (uniform_ (float_ 1.0) (float_ 1.0)) with false in
 
@@ -936,10 +949,13 @@ with [ int_ 2, int_ 1 ] using eqSeq eqExpr in
 utest smap_Expr_Expr mapVar tmReciprocal with reciprocal_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmReciprocal
 with [ float_ 2.0, float_ 1.0] using eqSeq eqExpr in
+<<<<<<< HEAD
 
 utest smap_Expr_Expr mapVar tmTree with treeinferencecat_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmTree
 with [ seq_ [ seq_ [int_ 0, int_ 1]], seq_ [float_ 0.3, float_ 0.7]] using eqSeq eqExpr in
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
 
 ---------------------
 -- SYMBOLIZE TESTS --
@@ -958,7 +974,10 @@ utest symbolize tmGaussian with tmGaussian using eqExpr in
 utest symbolize tmGeometric with tmGeometric using eqExpr in
 utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
+<<<<<<< HEAD
 utest symbolize tmTree with tmTree using eqExpr in
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
 utest symbolize tmUniform with tmUniform using eqExpr in
 utest symbolize tmUniformDiscrete with tmUniformDiscrete using eqExpr in
 utest symbolize tmReciprocal with tmReciprocal using eqExpr in
@@ -1056,7 +1075,10 @@ utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
 utest (typeLift tmGeometric).1 with tmGeometric using eqExpr in
 utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
+<<<<<<< HEAD
 utest (typeLift tmTree).1 with tmTree using eqExpr in
+=======
+>>>>>>> 136b56720366675323722c144971d80699166b8c
 utest (typeLift tmUniform).1 with tmUniform using eqExpr in
 utest (typeLift tmUniformDiscrete).1 with tmUniformDiscrete using eqExpr in
 utest (typeLift tmReciprocal).1 with tmReciprocal using eqExpr in
