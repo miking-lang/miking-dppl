@@ -212,10 +212,11 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
 
 -- Function to propose aligned trace changes between MH iterations.
 let modTrace: all a. all acc. all dAcc.
-  Config a acc dAcc -> Float -> () =
-  lam config. lam globalProb.
+  Config a acc dAcc -> () =
+  lam config.
 
-  let alignedTraceLength: Int = deref state.alignedTraceLength in
+  let alignedTraceLength: Int = deref state.alignedTraceLength in  
+  let resBehav = config.resampleBehavior (unsafeCoerce 1) alignedTraceLength in
 
   recursive let rec: Int -> [(Any,Float)] -> [Option (Any,Float)]
                        -> [Option (Any,Float)] =
@@ -230,24 +231,22 @@ let modTrace: all a. all acc. all dAcc.
   in
 
   -- Enable global modifications with probability gProb
-  let modGlobal: Bool = bernoulliSample globalProb in
+  match resBehav with (iter, (unalignedResamp, invalidIndex)) then
+    if eqi invalidIndex (negi 2) then
+      modref state.oldAlignedTrace (emptyList ());
+      modref state.oldUnalignedTraces (emptyList ())
+    else
+      -- One index must always change
+      modref state.oldAlignedTrace
+        (rec invalidIndex (deref state.alignedTrace) (emptyList ()));
 
-  if modGlobal then
-    modref state.oldAlignedTrace (emptyList ());
-    modref state.oldUnalignedTraces (emptyList ())
-  else
-    -- One index must always change
-    let invalidIndex: Int = uniformDiscreteSample 0 (subi alignedTraceLength 1) in
-    modref state.oldAlignedTrace
-      (rec invalidIndex (deref state.alignedTrace) (emptyList ()));
-
-    -- Also set correct old unaligned traces (always reused if possible, no
-    -- invalidation)
-    modref state.oldUnalignedTraces (mapReverse (lam trace.
-      reverse trace
-    ) (deref state.unalignedTraces));
-
-    ()
+      -- Also set correct old unaligned traces (always reused if possible, no
+      -- invalidation)
+      modref state.oldUnalignedTraces (mapReverse (lam trace.
+        reverse trace
+      ) (deref state.unalignedTraces));
+      ()
+  else error "Impossible"
 
 -- General inference algorithm for aligned MCMC
 let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
@@ -260,8 +259,7 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
         -- If we are sampling at temperature 0.0 we might want to draw global samples
-        let globalProb = config.globalProb continueState in
-        modTrace config globalProb;
+        modTrace config;
         modref state.weight 0.;
         modref state.priorWeight 0.;
         modref state.driftHastingRatio 0.;

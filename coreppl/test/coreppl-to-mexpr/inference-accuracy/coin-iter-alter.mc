@@ -10,7 +10,7 @@ mexpr
 
 let s = 10e-3 in
 let eq = eqCoin s in
-let t = testCpplMExpr "coin-iter-alter.mc" 30000 in
+let t = testCpplMExpr "coin-iter-alter.mc" 40000 in
 let res: [(Int, String)]  = [
   (0  ,"-m 'is-lw' --cps none"),
   (0  ,"-m 'is-lw' --cps partial"),
@@ -37,8 +37,9 @@ let res: [(Int, String)]  = [
   (500,"-m 'mcmc-lightweight' --align --cps partial"),
   (500,"-m 'mcmc-lightweight' --align --cps full"),
   (500,"-m 'mcmc-lightweight'"),
-  (500, "-m 'mcmc-lightweight' --align --cps none --kernel --drift 2. --mcmc-lw-gprob 0."),
-  (500, "-m 'mcmc-lightweight' --align --cps partial --kernel --drift 2. --mcmc-lw-gprob 0.")
+  (500, "-m 'mcmc-lightweight' --align --cps none --kernel --drift 2. --mcmc-lw-gprob 0.1"),
+  (500, "-m 'mcmc-lightweight' --align --cps partial --kernel --drift 2. --mcmc-lw-gprob 0.1"),
+  (500, "-m 'mcmc-lightweight' --align --cps full --kernel --drift 2. --mcmc-lw-gprob 0.1")
 ] in
 -- these values come from outside calculation on a BetaBernouilli conjugate prior for alpha = 3, beta = 5 => Beta( 9, 9)
 let quantile: [(Float, Float, Float)] = [(0.2781183, 0.7218817, 0.95), 

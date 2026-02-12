@@ -16,6 +16,6 @@ type Config a acc dAcc =
   , keepSample : Int -> Bool
   , debug : (dAcc, dAcc -> DebugInfo -> dAcc)
   , temperature : acc -> Float
-  , globalProb : acc -> Float
   , driftKernel : Bool
+  , resampleBehavior : (acc -> Int -> (acc,([Bool], Int))) -- iter -> alignedTraceLength -> (iter, ([unalignedTraces to redrawn], Align to redraw (-1 none, -2 all)))
   }
