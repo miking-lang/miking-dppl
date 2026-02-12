@@ -64,102 +64,107 @@ lang RuntimeDistBase
   sem logObserve : all a. Dist a -> (a -> Float)
 end
 
+  ------------------------------------------------------------------------------
+  -- From there, and on any part of the code that involves distribution
+  -- implementations, the distributions are sorted alphabetically 
+  -- by their names. It would be appreciated if you could keep it that way 
+  -- for future implementations
+  ------------------------------------------------------------------------------
+
 -- Elementary distributions
 lang RuntimeDistElementary = RuntimeDistBase
   syn Dist a =
-  | DistGamma {shape : Float, scale : Float}
-  | DistExponential {rate : Float}
-  | DistPoisson {lambda : Float}
-  | DistBinomial {n : Int, p : Float}
   | DistBernoulli {p : Float}
   | DistBeta {a : Float, b : Float}
-  | DistChi2{df : Int}
-  | DistGaussian {mu : Float, sigma : Float}
-  | DistGeometric{p : Float}
-  | DistMultinomial {n : Int, p : [Float]}
-  | DistCategorical {p : [Float]}
-  | DistDirichlet {a : [Float]}
-  | DistUniform {a : Float, b : Float}
-  | DistReciprocal {a: Float, b: Float}
-  | DistUniformDiscrete {a : Int, b : Int}
-  | DistWiener {cps : Bool, a : ()}
-  | DistLomax {scale: Float, shape : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
+  | DistBinomial {n : Int, p : Float}
+  | DistCategorical {p : [Float]}
+  | DistChi2 {df : Int}
+  | DistDirichlet {a : [Float]}
+  | DistExponential {rate : Float}
+  | DistGamma {shape : Float, scale : Float}
+  | DistGaussian {mu : Float, sigma : Float}
+  | DistGeometric {p : Float}
+  | DistLomax {scale: Float, shape : Float}
+  | DistMultinomial {n : Int, p : [Float]}
   | DistNegativeBinomial {n:Int, p: Float}
+  | DistPoisson {lambda : Float}
   | DistTreeInferenceCategorical {p:[Float], pairSets: [[Int]]}
-
+  | DistUniform {a : Float, b : Float}
+  | DistUniformDiscrete {a : Int, b : Int}
+  | DistReciprocal {a: Float, b: Float}
+  | DistWiener {cps : Bool, a : ()}
+ 
   sem sample =
-  | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
-  | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
-  | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
-  | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
   | DistBeta t -> unsafeCoerce (betaSample t.a t.b)
+  | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
+  | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
+  | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
   | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
+  | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
+  | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
+  | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
   | DistGaussian t -> unsafeCoerce (gaussianSample t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricSample t.p)
-  | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
-  | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
-  | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
-  | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
-  | DistReciprocal t -> unsafeCoerce (reciprocalSample t.a t.b)
-  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteSample t.a t.b)
-  | DistWiener {cps = false, a = a} -> unsafeCoerce (wienerSample a)
-  | DistWiener {cps = true, a = a} ->
-    unsafeCoerce (let w = wienerSample a in lam k. lam x. k (w x))
   | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
-  | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
+  | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
+  | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalSample t.p t.pairSets)
+  | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
+  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteSample t.a t.b)
+  | DistReciprocal t -> unsafeCoerce (reciprocalSample t.a t.b)
+  | DistWiener {cps = false, a = a} -> unsafeCoerce (wienerSample a)
+  | DistWiener {cps = true, a = a} -> unsafeCoerce (let w = wienerSample a in lam k. lam x. k (w x))
 
   -- Expectation of primitive distributions over real values
   sem expectation =
-  | DistGamma t -> unsafeCoerce (mulf t.shape t.scale)
-  | DistExponential t -> unsafeCoerce (divf 1. t.rate)
-  | DistPoisson t -> unsafeCoerce t.lambda
-  | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
   | DistBernoulli t -> unsafeCoerce t.p
   | DistBeta t -> unsafeCoerce (divf t.a (addf t.a t.b))
+  | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
+  | DistCategorical t ->
+    error "expectation undefined for the categorical distribution"
   | DistChi2 t -> unsafeCoerce t.df
+  | DistDirichlet t ->
+    error "expectation undefined for the Dirichlet distribution"
+  | DistExponential t -> unsafeCoerce (divf 1. t.rate)
+  | DistGamma t -> unsafeCoerce (mulf t.shape t.scale)
   | DistGaussian t -> unsafeCoerce t.mu
   | DistGeometric t -> unsafeCoerce (divf (subf 1. t.p) t.p)
   | DistMultinomial t ->
     error "expectation undefined for the multinomial distribution"
-  | DistCategorical t ->
-    error "expectation undefined for the categorical distribution"
-  | DistDirichlet t ->
-    error "expectation undefined for the Dirichlet distribution"
+  | DistPoisson t -> unsafeCoerce t.lambda
   | DistUniform t -> unsafeCoerce (divf (addf t.a t.b) 2.)
-  | DistReciprocal t -> unsafeCoerce (divf (subf t.a t.b) (log (divf t.a t.b)))
   | DistUniformDiscrete t -> unsafeCoerce (divf (int2float (addi t.a t.b)) 2.)
+  | DistReciprocal t -> unsafeCoerce (divf (subf t.a t.b) (log (divf t.a t.b)))
   | DistWiener _ -> error "expectation undefined for the Wiener process"
   | DistTreeInferenceCategorical t -> error "expectation undefined for the tree inference categorical distribution"
 
   sem logObserve =
-  | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
-  | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
-  | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
-  | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
   | DistBeta t -> unsafeCoerce (betaLogPdf t.a t.b)
+  | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
+  | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
+  | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
   | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)
+  | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
+  | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
+  | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
   | DistGaussian t -> unsafeCoerce (gaussianLogPdf t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricLogPmf t.p)
+  | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
   | DistMultinomial t ->
     unsafeCoerce (lam o.
       if eqi t.n (foldl1 addi o) then multinomialLogPmf t.p o
       else negf inf)
-  | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
-  | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
-  | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
-  | DistReciprocal t -> unsafeCoerce (reciprocalLogPdf t.a t.b)
-  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteLogPdf t.a t.b)
-  | DistWiener _ -> error "logObserve undefined for the Wiener process"
-  | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
-  | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
+  | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalLogPmf t.p t.pairSets)
-
+  | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
+  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteLogPdf t.a t.b)
+  | DistReciprocal t -> unsafeCoerce (reciprocalLogPdf t.a t.b)
+  | DistWiener _ -> error "logObserve undefined for the Wiener process"
 end
 
 -- Empirical distribution

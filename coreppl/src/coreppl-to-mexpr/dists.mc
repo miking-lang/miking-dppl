@@ -46,27 +46,32 @@ lang TransformDist = TransformDistBase + InferenceInterface
   -- performs name mangling as of writing. Therefore, it will break after we
   -- make the change.
   sem transformTmDistH i env =
-  | DGamma { k = k, theta = theta } ->
-    let cname = _getConExn "RuntimeDistElementary_DistGamma" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("shape", k), ("scale", theta)])))
-  | DExponential { rate = rate } ->
-    let cname = _getConExn "RuntimeDistElementary_DistExponential" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
-  | DPoisson { lambda = lambda } ->
-    let cname = _getConExn "RuntimeDistElementary_DistPoisson" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("lambda", lambda)])))
-  | DBinomial { n = n, p = p } ->
-    let cname = _getConExn "RuntimeDistElementary_DistBinomial" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
   | DBernoulli { p = p } ->
     let cname = _getConExn "RuntimeDistElementary_DistBernoulli" env.env in
     i (nconapp_ cname (i (autoty_record_ [("p", p)])))
   | DBeta { a = a, b = b } ->
     let cname = _getConExn "RuntimeDistElementary_DistBeta" env.env in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+  | DBinomial { n = n, p = p } ->
+    let cname = _getConExn "RuntimeDistElementary_DistBinomial" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
+  | DCategorical { p = p } ->
+    let cname = _getConExn "RuntimeDistElementary_DistCategorical" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("p", p)])))
   | DChi2 { df = df } ->
     let cname = _getConExn "RuntimeDistElementary_DistChi2" env.env in
     i (nconapp_ cname (i (autoty_record_ [("df", df)])))
+  | DDirichlet { a = a } ->
+    let cname = _getConExn "RuntimeDistElementary_DistDirichlet" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("a", a)])))
+  | DEmpirical { samples = samples } ->
+    i (appFromEnv env "vRuntimeDistEmpirical_constructDistEmpiricalHelper" [samples])
+  | DExponential { rate = rate } ->
+    let cname = _getConExn "RuntimeDistElementary_DistExponential" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
+  | DGamma { k = k, theta = theta } ->
+    let cname = _getConExn "RuntimeDistElementary_DistGamma" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("shape", k), ("scale", theta)])))
   | DGaussian { mu = mu, sigma = sigma } ->
     let cname = _getConExn "RuntimeDistElementary_DistGaussian" env.env in
     i (nconapp_ cname (i (autoty_record_ [("mu", mu), ("sigma", sigma)])))
@@ -76,30 +81,25 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DMultinomial { n = n, p = p } ->
     let cname = _getConExn "RuntimeDistElementary_DistMultinomial" env.env in
     i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
-  | DDirichlet { a = a } ->
-    let cname = _getConExn "RuntimeDistElementary_DistDirichlet" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("a", a)])))
-  | DCategorical { p = p } ->
-    let cname = _getConExn "RuntimeDistElementary_DistCategorical" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("p", p)])))
+  | DPoisson { lambda = lambda } ->
+    let cname = _getConExn "RuntimeDistElementary_DistPoisson" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("lambda", lambda)])))
+  | DTreeInferenceCategorical { p = p , pairSets = pairSets} ->
+    let cname = _getConExn "RuntimeDistElementary_DistTreeInferenceCategorical" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("p", p), ("pairSets", pairSets)])))
   | DUniform { a = a, b = b } ->
     let cname = _getConExn "RuntimeDistElementary_DistUniform" env.env in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
-  | DReciprocal { a = a, b = b } ->
-    let cname = _getConExn "RuntimeDistElementary_DistReciprocal" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
   | DUniformDiscrete { a = a, b = b } ->
     let cname = _getConExn "RuntimeDistElementary_DistUniformDiscrete" env.env in
+    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+  | DReciprocal { a = a, b = b } ->
+    let cname = _getConExn "RuntimeDistElementary_DistReciprocal" env.env in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
   | DWiener { cps = cps, a = a } ->
     let cname = _getConExn "RuntimeDistElementary_DistWiener" env.env in
     i (nconapp_ cname
         (i (autoty_record_ [("cps", if cps then i true_ else i false_), ("a", a)])))
-  | DTreeInferenceCategorical { p = p , pairSets = pairSets} ->
-    let cname = _getConExn "RuntimeDistElementary_DistTreeInferenceCategorical" env.env in
-    i (nconapp_ cname (i (autoty_record_ [("p", p), ("pairSets", pairSets)])))
-  | DEmpirical { samples = samples } ->
-    i (appFromEnv env "vRuntimeDistEmpirical_constructDistEmpiricalHelper" [samples])
 
   -- We need to replace occurrences of TyDist after transforming to MExpr
   -- distributions.

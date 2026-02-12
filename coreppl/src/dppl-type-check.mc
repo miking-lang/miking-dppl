@@ -2348,18 +2348,8 @@ in
 
 -- Dist
 
-utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DUniform {a = x, b = y}))
-  with Right (det, tydist_ (flt n))
-  using eq
-in
-
 utest _typeOf [(_x, flt n)] (dist_ (DBernoulli {p = x}))
   with Right (det, tydist_ tybool_)
-  using eq
-in
-
-utest _typeOf [(_x, flt n)] (dist_ (DPoisson {lambda = x}))
-  with Right (det, tydist_ tyint_)
   using eq
 in
 
@@ -2368,13 +2358,8 @@ utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DBeta {a = x, b = y}))
   using eq
 in
 
-utest _typeOf [(_x, tyint_)] (dist_ (DChi2 {df = x}))
-  with Right (det, tydist_ (flt n))
-  using eq
-in
-
-utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DGamma {k = x, theta = y}))
-  with Right (det, tydist_ (flt n))
+utest _typeOf [(_x, tyint_), (_y, flt n)] (dist_ (DBinomial {n = x, p = y}))
+  with Right (det, tydist_ tyint_)
   using eq
 in
 
@@ -2383,13 +2368,23 @@ utest _typeOf [(_x, tyseq_ (flt n))] (dist_ (DCategorical {p = x}))
   using eq
 in
 
-utest _typeOf [(_x, tyint_), (_y, tyseq_ (flt n))]
-        (dist_ (DMultinomial {n = x, p = y}))
-  with Right (det, tydist_ (tyseq_ tyint_))
+utest _typeOf [(_x, tyint_)] (dist_ (DChi2 {df = x}))
+  with Right (det, tydist_ (flt n))
+  using eq
+in
+
+utest _typeOf [(_x, (tyseq_ (tytuple_ [flt n, flt n])))]
+        (dist_ (DEmpirical {samples = x}))
+  with Left [DTCPolyDistError (None ())]
   using eq
 in
 
 utest _typeOf [(_x, flt n)] (dist_ (DExponential {rate = x}))
+  with Right (det, tydist_ (flt n))
+  using eq
+in
+
+utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DGamma {k = x, theta = y}))
   with Right (det, tydist_ (flt n))
   using eq
 in
@@ -2404,19 +2399,24 @@ utest _typeOf [(_x, flt n)] (dist_ (DGeometric {p = x}))
   using eq
 in
 
-utest _typeOf [] (dist_ (DWiener { cps = false, a = unit_ }))
-  with Right (det, tydist_ (arrd [flt n] (flt n)))
+utest _typeOf [(_x, tyint_), (_y, tyseq_ (flt n))]
+        (dist_ (DMultinomial {n = x, p = y}))
+  with Right (det, tydist_ (tyseq_ tyint_))
   using eq
 in
 
-utest _typeOf [(_x, flt n)] (dist_ (DExponential {rate = x}))
+utest _typeOf [(_x, flt n)] (dist_ (DPoisson {lambda = x}))
+  with Right (det, tydist_ tyint_)
+  using eq
+in
+
+utest _typeOf [(_x, flt n), (_y, flt n)] (dist_ (DUniform {a = x, b = y}))
   with Right (det, tydist_ (flt n))
   using eq
 in
 
-utest _typeOf [(_x, (tyseq_ (tytuple_ [flt n, flt n])))]
-        (dist_ (DEmpirical {samples = x}))
-  with Left [DTCPolyDistError (None ())]
+utest _typeOf [] (dist_ (DWiener { cps = false, a = unit_ }))
+  with Right (det, tydist_ (arrd [flt n] (flt n)))
   using eq
 in
 
