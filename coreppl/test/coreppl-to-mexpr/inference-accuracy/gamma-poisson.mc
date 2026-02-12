@@ -37,8 +37,9 @@ let res: [(Int, String)]  = [
   (500,"-m 'mcmc-lightweight' --align --cps partial"),
   (500,"-m 'mcmc-lightweight' --align --cps full"),
   (500,"-m 'mcmc-lightweight'"),
-  (500, "-m 'mcmc-lightweight' --align --cps none --kernel --drift 0.05 --mcmc-lw-gprob 0.0"),
-  (500, "-m 'mcmc-lightweight' --align --cps partial --kernel --drift 0.05 --mcmc-lw-gprob 0.0")
+  (500, "-m 'mcmc-lightweight' --align --cps none --kernel --drift 0.05 --mcmc-lw-gprob 0.1"),
+  (500, "-m 'mcmc-lightweight' --align --cps partial --kernel --drift 0.05 --mcmc-lw-gprob 0.1"),
+  (500, "-m 'mcmc-lightweight' --align --cps full --kernel --drift 0.05 --mcmc-lw-gprob 0.1")
 ] in
 -- these values come from outside calculation on a GammaPoisson conjugate prior for n = 100, alpha = 100, beta = 1, p = [obs] => Gamma(shape = alpha+sum(p), rate = beta+n)
 let quantile: [(Float, Float, Float)] = [(100.2653, 104.2089, 0.95), 

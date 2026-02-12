@@ -62,7 +62,9 @@ type State a = {
   oldUnalignedTraces: Ref [[(Any, Float, Int)]],
 
   -- Aligned trace length (a constant, determined at the first run)
-  alignedTraceLength: Ref Int
+  alignedTraceLength: Ref Int,
+
+  unalignedResamp: Ref [Bool]
 
 }
 
@@ -91,7 +93,8 @@ let state: State Result = {
   reuseUnaligned = ref true,
   oldAlignedTrace = ref (emptyList ()),
   oldUnalignedTraces = ref (emptyList ()),
-  alignedTraceLength = ref (negi 1)
+  alignedTraceLength = ref (negi 1),
+  unalignedResamp = ref (emptyList ())
 }
 
 -- Function to reset the state when doing a global update
@@ -106,10 +109,26 @@ let resetState : State Result -> () = lam state. (
   modref state.reuseUnaligned true;
   modref state.alignedTrace (emptyList ());
   modref state.unalignedTraces (emptyList ());
+  modref state.unalignedResamp (emptyList ());
   ()
 )
 
-
+-- Function to modify the state accordently to the need of the inference method
+let modifyState : State Result -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
+                  -> [(Any,Float)] -> [[(Any, Float, Int)]] -> [(Any, Float, Int)]
+                  -> [Bool] -> Cont Result -> () = 
+                  lam state. lam alignedTrace. lam unalignedTraces. lam oldAlignedTrace. 
+                  lam oldUnalignedTraces. lam s2. lam unalignedResamp. lam cont.
+    modref state.oldAlignedTrace oldAlignedTrace;
+    modref state.oldUnalignedTraces (cons (emptyList ()) (cons (reverse s2) oldUnalignedTraces));
+    modref state.weight cont.weight;
+    modref state.priorWeight cont.priorWeight;
+    modref state.prevWeightReused 0.;
+    modref state.weightReused 0.;
+    modref state.alignedTrace alignedTrace;
+    modref state.unalignedTraces unalignedTraces;
+    modref state.unalignedResamp unalignedResamp;
+  ()
 
 let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
@@ -175,8 +194,14 @@ let sampleAlignedBase
 
     let sample: (Any, Float) = f drift dist in
 
-    -- Reset reuseUnaligned
-    modref state.reuseUnaligned true;
+    -- set reuseUnaligned
+    (if eqi (length (deref state.unalignedResamp)) 0 then
+      modref state.reuseUnaligned true
+    else
+      modref state.reuseUnaligned (head (deref state.unalignedResamp)));
+
+    (match deref state.unalignedResamp with [] then () else
+      modref state.unalignedResamp (tail (deref state.unalignedResamp)));
 
     -- Add new empty unaligned trace for next segment.
     let unalignedTraces: [[(Any, Float, Int)]] = deref state.unalignedTraces in
@@ -248,63 +273,62 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
   unsafeCoerce sample
 
 -- Function to run new MH iterations.
-let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Float -> Result =
-  lam config. lam model. lam globalProb. 
+-- Pass the acc from resampleBehavior and return it
+let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Int -> Result =
+  lam config. lam model. lam iter.
 
-  -- Enable global modifications with probability globalProb
-  let modGlobal: Bool = bernoulliSample globalProb in
+  let resBehav = config.resampleBehavior (unsafeCoerce iter) (length (deref state.alignedTrace)) in
 
-  if modGlobal then (
-    resetState state;
-    model state
-  ) else
+  match resBehav with (iter, (unalignedResamp, invalidIndex)) then
+    if eqi invalidIndex (negi 2) then
+      resetState state;
+      model state
+    else
 
-    recursive let rec: Int -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
-                           -> [(Any,Float)]        -> [[(Any, Float, Int)]]
-                           -> Result =
-      lam i. lam alignedTrace. lam unalignedTraces.
-      lam oldAlignedTrace. lam oldUnalignedTraces.
-        match (alignedTrace,unalignedTraces)
-        with ([s1] ++ alignedTrace, [s2] ++ unalignedTraces) then
-          if gti i 0 then
-            rec (subi i 1) alignedTrace unalignedTraces
-              (cons (s1.0, s1.1) oldAlignedTrace)
-              (cons (reverse s2) oldUnalignedTraces)
-          else (
-            let cont = s1.2 in
-            modref state.oldAlignedTrace oldAlignedTrace;
-            modref state.oldUnalignedTraces (cons (emptyList ()) (cons (reverse s2) oldUnalignedTraces));
-            modref state.weight cont.weight;
-            modref state.priorWeight cont.priorWeight;
-            modref state.prevWeightReused 0.;
-            modref state.weightReused 0.;
-            modref state.alignedTrace alignedTrace;
-            modref state.unalignedTraces unalignedTraces;
-            -- printLn (join ["New aligned trace length: ", int2string (length (deref state.alignedTrace))]);
-            -- printLn (join ["Old aligned trace length: ", int2string (length (deref state.oldAlignedTrace))]);
-            -- printLn (join ["New unaligned traces length: ", int2string (length (deref state.unalignedTraces))]);
-            -- printLn (join ["Old unaligned traces length: ", int2string (length (deref state.oldUnalignedTraces))]);
-            -- printLn "---";
+      recursive let rec: Int -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
+                            -> [(Any,Float)]        -> [[(Any, Float, Int)]]
+                            -> Result =
+        lam i. lam alignedTrace. lam unalignedTraces.
+        lam oldAlignedTrace. lam oldUnalignedTraces.
+          match (alignedTrace,unalignedTraces)
+          with ([s1] ++ alignedTrace, [s2] ++ unalignedTraces) then
+            if gti i 0 then
+              rec (subi i 1) alignedTrace unalignedTraces
+                (cons (s1.0, s1.1) oldAlignedTrace)
+                (cons (reverse s2) oldUnalignedTraces)
+            else (
+              let cont = s1.2 in
+              -- Load the resample bool seq for unaligned trace
+              let cutP = subi (length unalignedResamp) (addi invalidIndex 1) in
+              let resamp = (splitAt unalignedResamp cutP).1 in
+              -- Here to modify what left from the trace
+              (modifyState state alignedTrace unalignedTraces oldAlignedTrace oldUnalignedTraces s2 resamp cont);
+              
 
-            -- This is where we actually run the program
-            -- printLn "A";
-            if config.driftKernel then
-              sampleAlignedKernel s1.0 s1.1 cont.drift cont.dist cont.cont
-            else
-              sampleAlignedForceNew cont.drift cont.dist cont.cont
-          )
-        else error "Impossible"
-    in
+              -- printLn (join ["New aligned trace length: ", int2string (length (deref state.alignedTrace))]);
+              -- printLn (join ["Old aligned trace length: ", int2string (length (deref state.oldAlignedTrace))]);
+              -- printLn (join ["New unaligned traces length: ", int2string (length (deref state.unalignedTraces))]);
+              -- printLn (join ["Old unaligned traces length: ", int2string (length (deref state.oldUnalignedTraces))]);
+              -- printLn "---";
+
+              -- This is where we actually run the program
+              -- printLn "A";
+              if config.driftKernel then
+                sampleAlignedKernel s1.0 s1.1 cont.drift cont.dist cont.cont
+              else
+                sampleAlignedForceNew cont.drift cont.dist cont.cont
+            )
+          else error "Impossible"
+      in
 
     -- One index must always change
-    let invalidIndex: Int =
-      uniformDiscreteSample 0 (subi (deref state.alignedTraceLength) 1) in
     -- printLn (join ["Aligned trace length: ", int2string (length (deref state.alignedTrace))]);
     -- printLn (join ["Unaligned traces length: ", int2string (length (deref state.unalignedTraces))]);
     -- printLn (join ["The invalid index is: ", int2string invalidIndex]);
     rec invalidIndex (deref state.alignedTrace) (deref state.unalignedTraces)
       (emptyList ()) (emptyList ())
-
+    
+  else error "Impossible"
 
 
 -- General inference algorithm for aligned MCMC
@@ -318,8 +342,7 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
         -- Calculate the global probability given the current state
-        let globalProb = config.globalProb continueState in
-        let sample = runNext config model globalProb in
+        let sample = runNext config model iter in
       -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";

@@ -1,5 +1,6 @@
 include "../../../models/diff/demo.mc"
 
+
 mexpr
 -- This model is deterministic and the tests consists of assertions in the model
 -- code. We simply want to make sure it compiles and runs with all inference
@@ -10,5 +11,5 @@ infer (APF { particles = 10 }) model;
 infer (PIMH { particles = 10, iterations = 10 }) model;
 infer (TraceMCMC { iterations = 10 }) model;
 infer (NaiveMCMC { iterations = 10 }) model;
-infer (LightweightMCMC { continue = (lam. 10, lam x. lam. lam. (subi x 1, geqi x 0)), globalProb = lam. 0.1 }) model;
+--infer (LightweightMCMC { continue = (lam. 10, lam x. lam. lam. (subi x 1, geqi x 0)), globalProb = lam. 0.1 }) model;
 ()

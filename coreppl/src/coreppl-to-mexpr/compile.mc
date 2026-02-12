@@ -26,10 +26,10 @@ include "pruning/compile.mc"
 include "delayed-sampling/compile.mc"
 
 lang DPPLReplace = Ast
-  sem replaceDpplKeywords : Expr -> Expr
-  sem replaceDpplKeywords =
+  sem replaceDpplKeywords : {path : String, env : SymEnv} -> Expr -> Expr
+  sem replaceDpplKeywords distEnv =
   | t ->
-    let t = smap_Expr_Expr replaceDpplKeywords t in
+    let t = smap_Expr_Expr (replaceDpplKeywords distEnv) t in
     let t = smap_Expr_Type replaceDpplKeywordsType t in
     let t = smap_Expr_TypeLabel replaceDpplKeywordsType t in
     let t = smap_Expr_Pat replaceDpplKeywordsPat t in
@@ -46,7 +46,7 @@ lang DPPLReplace = Ast
     withTypePat (replaceDpplKeywordsType (tyPat p)) p
 end
 
-lang DPPLKeywordReplace = DPPLReplace + DPPLParser
+lang DPPLKeywordReplace = DPPLReplace + DPPLParser + SymGetters
   sem _makeError : Info -> String -> Expr
   sem _makeError info =
   | keywordStr ->
@@ -64,9 +64,9 @@ lang DPPLKeywordReplace = DPPLReplace + DPPLParser
                    info = info},
       ty = TyUnknown {info = info}, info = info}
 
-  sem replaceDpplKeywords : Expr -> Expr
-  sem replaceDpplKeywords =
-  | TmAssume t -> _makeError t.info "assume"
+  sem replaceDpplKeywords distEnv =
+  | TmAssume t -> 
+    app_ (nvar_ (_getVarExn "sample" distEnv)) (replaceDpplKeywords distEnv t.dist)
   | TmObserve t -> _makeError t.info "observe"
   | TmWeight t -> _makeError t.info "weight"
   | TmResample t -> _makeError t.info "resample"
@@ -74,13 +74,12 @@ lang DPPLKeywordReplace = DPPLReplace + DPPLParser
 end
 
 lang DPPLDelayedReplace = DPPLReplace + DPPLParser
-  sem replaceDpplKeywords : Expr -> Expr
-  sem replaceDpplKeywords =
+  sem replaceDpplKeywords distEnv =
   | TmDelay t ->
-    replaceDpplKeywords (TmAssume {
+    replaceDpplKeywords distEnv (TmAssume {
       dist = t.dist, ty = t.ty, info = t.info, driftKernel = None ()
     })
-  | TmDelayed t -> replaceDpplKeywords t.delay
+  | TmDelayed t -> replaceDpplKeywords distEnv t.delay
 
    sem replaceDpplKeywordsType : Type -> Type
    sem replaceDpplKeywordsType =
@@ -99,10 +98,9 @@ lang DPPLPrunedReplace = DPPLReplace + SymGetters + DPPLParser
                ty = t.ty}
   | t -> smap_Expr_Expr (replaceCancel env) t
 
-  sem replaceDpplKeywords : Expr -> Expr
-  sem replaceDpplKeywords =
-  | TmPrune t -> replaceDpplKeywords (assume_ t.dist)
-  | TmPruned t -> replaceDpplKeywords t.prune
+  sem replaceDpplKeywords distEnv =
+  | TmPrune t -> replaceDpplKeywords distEnv (assume_ t.dist)
+  | TmPruned t -> replaceDpplKeywords distEnv t.prune
 
   sem replaceDpplKeywordsType : Type -> Type
   sem replaceDpplKeywordsType =
@@ -233,10 +231,10 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + MExprANFAll + DP
     let ast = if retainPruning method
       then ast
       else
-        use DPPLPrunedReplace in replaceDpplKeywords (replaceCancel envs.distEnv ast) in
+        use DPPLPrunedReplace in replaceDpplKeywords envs.distEnv (replaceCancel envs.distEnv ast) in
     let ast = if retainDynamicDelayedSampling method
       then ast
-      else use DPPLDelayedReplace in replaceDpplKeywords ast in
+      else use DPPLDelayedReplace in replaceDpplKeywords envs.distEnv ast in
     -- Optionally print the model AST
     (if options.printModel then
       printLn (mexprPPLToString ast)
@@ -480,7 +478,7 @@ lang CPPLLoader
     let models = compileModels options lamliftSols envs runtimes models in
     let ast = mapPre_Expr_Expr (transformTmDist {env = envs.distEnv, lamliftSols = lamliftSols}) ast in
     endPhaseStatsExpr log "replace-tm-dist" ast;
-    let ast = replaceDpplKeywords ast in
+    let ast = replaceDpplKeywords envs.distEnv ast in
     endPhaseStatsExpr log "replace-dppl-keywords" ast;
     let ast = insertModels models ast in
     endPhaseStatsExpr log "insert-models" ast;

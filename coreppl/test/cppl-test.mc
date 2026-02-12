@@ -10,3 +10,13 @@ let cpplResOfDist: all a. (a -> String) -> Int -> Dist a -> CpplRes =
     let lweights =  subsequence ws (mini nws burn) nws in
     let nc = distEmpiricalNormConst dist in
     { samples = map f samples, lweights = lweights, extra = Some nc }
+
+let resampleBehavior: all a. Float -> a -> Int -> (a,([Bool], Int)) = 
+  lam globalProb. lam acc. lam length.
+    let valu = if (assume (Bernoulli globalProb)) then
+      negi 2
+    else
+      assume (UniformDiscrete 0 (subi length 1))
+    in
+    let vec = create length (lam. true) in
+    (acc,(vec, valu))
