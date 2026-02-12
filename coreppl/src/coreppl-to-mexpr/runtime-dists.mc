@@ -89,10 +89,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistMultinomial {n : Int, p : [Float]}
   | DistNegativeBinomial {n:Int, p: Float}
   | DistPoisson {lambda : Float}
-<<<<<<< HEAD
   | DistTreeInferenceCategorical {p:[Float], pairSets: [[Int]]}
-=======
->>>>>>> 136b56720366675323722c144971d80699166b8c
   | DistUniform {a : Float, b : Float}
   | DistUniformDiscrete {a : Int, b : Int}
   | DistReciprocal {a: Float, b: Float}
@@ -114,10 +111,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
   | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
-<<<<<<< HEAD
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalSample t.p t.pairSets)
-=======
->>>>>>> 136b56720366675323722c144971d80699166b8c
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
   | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteSample t.a t.b)
   | DistReciprocal t -> unsafeCoerce (reciprocalSample t.a t.b)
@@ -166,10 +160,7 @@ lang RuntimeDistElementary = RuntimeDistBase
       else negf inf)
   | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
   | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
-<<<<<<< HEAD
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalLogPmf t.p t.pairSets)
-=======
->>>>>>> 136b56720366675323722c144971d80699166b8c
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
   | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteLogPdf t.a t.b)
   | DistReciprocal t -> unsafeCoerce (reciprocalLogPdf t.a t.b)
