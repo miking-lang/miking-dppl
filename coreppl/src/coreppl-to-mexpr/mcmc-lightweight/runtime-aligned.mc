@@ -212,11 +212,8 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
 
 -- Function to propose aligned trace changes between MH iterations.
 let modTrace: all a. all acc. all dAcc.
-  Config a acc dAcc -> () =
-  lam config.
-
-  let alignedTraceLength: Int = deref state.alignedTraceLength in  
-  let resBehav = config.resampleBehavior (unsafeCoerce 1) alignedTraceLength in
+  Config a acc dAcc -> acc -> acc =
+  lam config. lam acc.
 
   recursive let rec: Int -> [(Any,Float)] -> [Option (Any,Float)]
                        -> [Option (Any,Float)] =
@@ -226,15 +223,17 @@ let modTrace: all a. all acc. all dAcc.
         let acc: [Option (Any, Float)] =
           cons (if eqi i 0 then modref state.driftPrevValue sample; None () else Some sample) acc in
         rec (subi i 1) samples acc
-
       else acc
   in
 
+  let alignedTraceLength: Int = deref state.alignedTraceLength in  
+  let resBehav = config.resampleBehavior acc alignedTraceLength in
   -- Enable global modifications with probability gProb
-  match resBehav with (iter, (unalignedResamp, invalidIndex)) then
+  match resBehav with (acc, (unalignedResamp, invalidIndex)) then
     if eqi invalidIndex (negi 2) then
       modref state.oldAlignedTrace (emptyList ());
-      modref state.oldUnalignedTraces (emptyList ())
+      modref state.oldUnalignedTraces (emptyList ());
+      acc
     else
       -- One index must always change
       modref state.oldAlignedTrace
@@ -245,7 +244,7 @@ let modTrace: all a. all acc. all dAcc.
       modref state.oldUnalignedTraces (mapReverse (lam trace.
         reverse trace
       ) (deref state.unalignedTraces));
-      ()
+      acc
   else error "Impossible"
 
 -- General inference algorithm for aligned MCMC
@@ -259,7 +258,7 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
         -- If we are sampling at temperature 0.0 we might want to draw global samples
-        modTrace config;
+        let continueState = modTrace config continueState in
         modref state.weight 0.;
         modref state.priorWeight 0.;
         modref state.driftHastingRatio 0.;

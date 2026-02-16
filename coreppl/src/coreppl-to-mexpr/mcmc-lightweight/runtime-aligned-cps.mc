@@ -274,17 +274,16 @@ let sampleUnaligned: all a. Int -> use RuntimeDistBase in Dist a -> a = lam i. l
 
 -- Function to run new MH iterations.
 -- Pass the acc from resampleBehavior and return it
-let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> Int -> Result =
-  lam config. lam model. lam iter.
+let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> acc -> (acc, Result) =
+  lam config. lam model. lam acc.
 
-  let resBehav = config.resampleBehavior (unsafeCoerce iter) (length (deref state.alignedTrace)) in
+  let resBehav = config.resampleBehavior acc (length (deref state.alignedTrace)) in
 
-  match resBehav with (iter, (unalignedResamp, invalidIndex)) then
+  match resBehav with (acc, (unalignedResamp, invalidIndex)) then
     if eqi invalidIndex (negi 2) then
       resetState state;
-      model state
+      (acc, (model state))
     else
-
       recursive let rec: Int -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
                             -> [(Any,Float)]        -> [[(Any, Float, Int)]]
                             -> Result =
@@ -325,9 +324,8 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
     -- printLn (join ["Aligned trace length: ", int2string (length (deref state.alignedTrace))]);
     -- printLn (join ["Unaligned traces length: ", int2string (length (deref state.unalignedTraces))]);
     -- printLn (join ["The invalid index is: ", int2string invalidIndex]);
-    rec invalidIndex (deref state.alignedTrace) (deref state.unalignedTraces)
-      (emptyList ()) (emptyList ())
-    
+    (acc, (rec invalidIndex (deref state.alignedTrace) (deref state.unalignedTraces)
+      (emptyList ()) (emptyList ())))
   else error "Impossible"
 
 
@@ -342,50 +340,51 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         let prevAlignedTrace = deref state.alignedTrace in
         let prevUnalignedTraces = deref state.unalignedTraces in
         -- Calculate the global probability given the current state
-        let sample = runNext config model iter in
-      -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
-        -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
-        -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
-        -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
-        let weight = deref state.weight in
-        let priorWeight = deref state.priorWeight in
-        let driftHastingRatio = deref state.driftHastingRatio in
-        let weightReused = deref state.weightReused in
-        let prevWeightReused = deref state.prevWeightReused in
-        -- Calculate the Hastings ratio.
-        let logMhAcceptProb = minf 0. (addf
-                    (addf 
-                      (mulf beta (subf weight prevWeight))
-                      (subf weightReused prevWeightReused))
-                    driftHastingRatio)
-        in
-        -- print "weight: "; printLn (float2string weight);
-        -- print "prevWeight: "; printLn (float2string prevWeight);
-        -- print "weightReused: "; printLn (float2string weightReused);
-        -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
-        -- printLn "-----";
-        match
-          if bernoulliSample (exp logMhAcceptProb) then
-            mcmcAccept ();
-            (true, weight, priorWeight, sample)
-          else
-          -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
-          -- as we reject and reuse the old sample.
-            modref state.alignedTrace prevAlignedTrace;
-            modref state.unalignedTraces prevUnalignedTraces;
-            (false, prevWeight, prevPriorWeight, prevSample)
-        with (accepted, weight, priorWeight, sample) in
-        let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
-        let debugInfo =
-          { accepted = accepted
-          } in
-        let debugState = config.debug.1 debugState debugInfo in
-        let sampleInfo =
-          { weight = weight
-          , priorWeight = priorWeight
-          } in
-        let continueState = config.continue.1 continueState sampleInfo sample in
-        mh keptSamples weight priorWeight sample debugState continueState (addi iter 1)
+        match (runNext config model continueState) with (continueState, sample) then
+        -- print "prevAlignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) prevAlignedTrace)); printLn "]";
+          -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
+          -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
+          -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
+          let weight = deref state.weight in
+          let priorWeight = deref state.priorWeight in
+          let driftHastingRatio = deref state.driftHastingRatio in
+          let weightReused = deref state.weightReused in
+          let prevWeightReused = deref state.prevWeightReused in
+          -- Calculate the Hastings ratio.
+          let logMhAcceptProb = minf 0. (addf
+                      (addf 
+                        (mulf beta (subf weight prevWeight))
+                        (subf weightReused prevWeightReused))
+                      driftHastingRatio)
+          in
+          -- print "weight: "; printLn (float2string weight);
+          -- print "prevWeight: "; printLn (float2string prevWeight);
+          -- print "weightReused: "; printLn (float2string weightReused);
+          -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
+          -- printLn "-----";
+          match
+            if bernoulliSample (exp logMhAcceptProb) then
+              mcmcAccept ();
+              (true, weight, priorWeight, sample)
+            else
+            -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
+            -- as we reject and reuse the old sample.
+              modref state.alignedTrace prevAlignedTrace;
+              modref state.unalignedTraces prevUnalignedTraces;
+              (false, prevWeight, prevPriorWeight, prevSample)
+          with (accepted, weight, priorWeight, sample) in
+          let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
+          let debugInfo =
+            { accepted = accepted
+            } in
+          let debugState = config.debug.1 debugState debugInfo in
+          let sampleInfo =
+            { weight = weight
+            , priorWeight = priorWeight
+            } in
+          let continueState = config.continue.1 continueState sampleInfo sample in
+          mh keptSamples weight priorWeight sample debugState continueState (addi iter 1)
+          else error "Impossible"
       else keptSamples
   in
 

@@ -33,10 +33,10 @@ let res: [(Int, String)]  = [
   (500,"-m 'pmcmc-pimh' --cps full"),
   (500,"-m 'mcmc-trace'"),
   (500,"-m 'mcmc-naive'"),
+  (500,"-m 'mcmc-lightweight'"),
   (500,"-m 'mcmc-lightweight' --align --cps none"),
   (500,"-m 'mcmc-lightweight' --align --cps partial"),
   (500,"-m 'mcmc-lightweight' --align --cps full"),
-  (500,"-m 'mcmc-lightweight'"),
   (500, "-m 'mcmc-lightweight' --align --cps none --kernel --drift 2. --mcmc-lw-gprob 0.1"),
   (500, "-m 'mcmc-lightweight' --align --cps partial --kernel --drift 2. --mcmc-lw-gprob 0.1"),
   (500, "-m 'mcmc-lightweight' --align --cps full --kernel --drift 2. --mcmc-lw-gprob 0.1")
