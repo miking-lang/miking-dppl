@@ -88,4 +88,4 @@ let isLwOptions : OptParser (use ImportanceSamplingMethod in InferMethod) =
     , prune = prune
     } in
   let method = optMap5 mk _particles _earlyStop _cps _dynamicDelay _prune in
-  optMap2 (lam. lam x. x) (_methodFlag true "is-lw") method
+  optMap2 (lam. lam x. x) (_methodFlag true "is") method
