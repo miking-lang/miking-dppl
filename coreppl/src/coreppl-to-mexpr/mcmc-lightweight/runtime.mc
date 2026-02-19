@@ -138,8 +138,8 @@ let modDb: all acc. all dAcc. all res. Config res acc dAcc -> acc -> acc =
   let db = deref state.db in
   let resBehav = config.resampleBehavior acc (deref state.traceLength) in
 
-  match resBehav with (acc, (unalignedResamp, invalidIndex)) then
-  if eqi invalidIndex (negi 2) then
+  match resBehav with (acc, (unalignedResamp, invalidIndex)) in
+  if lti invalidIndex 0 then
     -- modref state.oldDb (mapMap (lam. None ()) db)
     modref state.oldDb (emptyAddressMap ());
     acc
@@ -156,7 +156,6 @@ let modDb: all acc. all dAcc. all res. Config res acc dAcc -> acc -> acc =
         sample
       ) db);
     acc
-  else error "Impossible"
 
 let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.

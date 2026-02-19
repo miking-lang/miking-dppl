@@ -229,23 +229,26 @@ let modTrace: all a. all acc. all dAcc.
   let alignedTraceLength: Int = deref state.alignedTraceLength in  
   let resBehav = config.resampleBehavior acc alignedTraceLength in
   -- Enable global modifications with probability gProb
-  match resBehav with (acc, (unalignedResamp, invalidIndex)) then
-    if eqi invalidIndex (negi 2) then
-      modref state.oldAlignedTrace (emptyList ());
-      modref state.oldUnalignedTraces (emptyList ());
-      acc
-    else
-      -- One index must always change
-      modref state.oldAlignedTrace
-        (rec invalidIndex (deref state.alignedTrace) (emptyList ()));
+  match resBehav with (acc, (unalignedResamp, invalidIndex)) in
+  if lti invalidIndex 0 then
+    (if eqi invalidIndex (negi 2) then 
+      modref state.oldAlignedTrace (emptyList ()) else ());
+    modref state.oldUnalignedTraces (emptyList ());
+    acc
+  else
+    -- One index must always change
+    modref state.oldAlignedTrace
+      (rec invalidIndex (deref state.alignedTrace) (emptyList ()));
 
-      -- Also set correct old unaligned traces (always reused if possible, no
-      -- invalidation)
-      modref state.oldUnalignedTraces (mapReverse (lam trace.
-        reverse trace
-      ) (deref state.unalignedTraces));
-      acc
-  else error "Impossible"
+    -- Also set correct old unaligned traces (always reused if possible, no
+    -- invalidation)
+    modref state.oldUnalignedTraces (mapReverse (lam trace.
+      reverse trace ) (deref state.unalignedTraces));
+    -- correct the trace accordeling to unalignedResamp
+    let oldUnalignedTraces = zipWith (lam t. lam b. if b then t else []) 
+      (deref state.oldUnalignedTraces) (mapReverse (lam trace. trace) unalignedResamp) in
+    modref state.oldUnalignedTraces oldUnalignedTraces;
+    acc
 
 -- General inference algorithm for aligned MCMC
 let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =

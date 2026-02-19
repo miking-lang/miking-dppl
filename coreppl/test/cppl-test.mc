@@ -14,7 +14,7 @@ let cpplResOfDist: all a. (a -> String) -> Int -> Dist a -> CpplRes =
 let resampleBehavior: all a. Float -> a -> Int -> (a,([Bool], Int)) = 
   lam globalProb. lam acc. lam length.
     let valu = if (assume (Bernoulli globalProb)) then
-      negi 2
+      negi 1
     else
       assume (UniformDiscrete 0 (subi length 1))
     in
