@@ -231,9 +231,13 @@ let modTrace: all a. all acc. all dAcc.
   -- Enable global modifications with probability gProb
   match resBehav with (acc, (unalignedResamp, invalidIndex)) in
   if lti invalidIndex 0 then
-    (if eqi invalidIndex (negi 2) then 
-      modref state.oldAlignedTrace (emptyList ()) else ());
-    modref state.oldUnalignedTraces (emptyList ());
+    let oldUnalignedTraces = 
+      zipWith (lam t. lam b. if b then t else []) (deref state.oldUnalignedTraces) unalignedResamp in
+    let oldAlignedTrace = deref state.oldAlignedTrace in
+    modref state.oldAlignedTrace (emptyList ());
+    (if eqi invalidIndex (negi 1) then 
+      modref state.oldAlignedTrace oldAlignedTrace else ());
+    modref state.oldUnalignedTraces oldUnalignedTraces;
     acc
   else
     -- One index must always change

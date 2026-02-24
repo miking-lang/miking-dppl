@@ -288,7 +288,7 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
         match (alignedTrace,unalignedTraces, unalignedResamp)
         with ([s1] ++ alignedTrace, [s2] ++ unalignedTraces, [s3] ++ unalignedResamp) then
           (if (not s3) then 
-            error "mcmc-lw doesn't support redrawing unaligned assumes before the chosen aligned assume." 
+            error "mcmc doesn't support redrawing unaligned assumes before the chosen aligned assume." 
            else ());
           if gti i 0 then
             rec (subi i 1) alignedTrace unalignedTraces
