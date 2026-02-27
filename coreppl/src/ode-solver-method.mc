@@ -8,7 +8,8 @@ include "mexpr/eq.mc"
 include "mexpr/ast-builder.mc"
 
 include "method-helper.mc"
-include "dppl-arg.mc"
+-- mcmc-lightweight.mc: Cycle detected in included files: /src/coreppl.mc
+--include "dppl-arg.mc"
 
 -- ODE solver method names
 let odeDefault = nameSym "Default"

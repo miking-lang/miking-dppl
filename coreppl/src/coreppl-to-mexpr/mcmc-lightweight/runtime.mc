@@ -132,32 +132,30 @@ let sample: all a. Address -> use RuntimeDistBase in Dist a -> a = lam addr. lam
   unsafeCoerce (sample)
 
 -- Function to propose db changes between MH iterations.
-let modDb: all acc. all dAcc. all res. Config res acc dAcc -> Float -> () =
-  lam config. lam globalProb.
+let modDb: all acc. all dAcc. all res. Config res acc dAcc -> acc -> acc =
+  lam config. lam acc.
 
   let db = deref state.db in
+  let resBehav = config.resampleBehavior acc (deref state.traceLength) in
 
-  -- Enable global modifications with probability gProb
-  let modGlobal: Bool = bernoulliSample globalProb in
-
-  if modGlobal then
+  match resBehav with (acc, (unalignedResamp, invalidIndex)) in
+  if lti invalidIndex 0 then
     -- modref state.oldDb (mapMap (lam. None ()) db)
-    modref state.oldDb (emptyAddressMap ())
+    modref state.oldDb (emptyAddressMap ());
+    acc
   else
     -- One item in the db (chosen at random) must always change
-    let invalidIndex: Int = uniformDiscreteSample 0 (subi (deref state.traceLength) 1) in
     let currentIndex: Ref Int = ref 0 in
     modref state.oldDb
       (mapMap (lam sample: (Any,Float).
-         -- Invalidate sample if it has the invalid index
-         let sample = if eqi invalidIndex (deref currentIndex) then
+        -- Invalidate sample if it has the invalid index
+        let sample = if eqi invalidIndex (deref currentIndex) then
                         None ()
                       else Some sample in
-         modref currentIndex (addi (deref currentIndex) 1);
-         sample
-      ) db)
-
-
+        modref currentIndex (addi (deref currentIndex) 1);
+        sample
+      ) db);
+    acc
 
 let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use RuntimeDistBase in Dist a =
   lam config. lam model.
@@ -166,10 +164,9 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
     lam samples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
       match continueState with (continueState, true) then
         let beta = config.temperature continueState in
-        let globalProb = config.globalProb continueState in
         let prevDb = deref state.db in
         let prevTraceLength = deref state.traceLength in
-        modDb config globalProb;
+        let continueState = modDb config continueState in
         modref state.weight 0.;
         modref state.priorWeight 0.;
         modref state.weightReused 0.;
