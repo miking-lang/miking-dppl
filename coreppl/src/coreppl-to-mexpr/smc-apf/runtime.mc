@@ -43,7 +43,13 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> use RuntimeDistBase in Di
     in
     createList particleCount (lam i. startRec i 0)
   in
-  let propagate = lam particles.
+  let propagate = lam particles. lam timeStart.
+    let timeEnd = wallTimeMs () in
+    (if (lti 1 config.timeOutSec) then
+      if (gtf (subf timeEnd timeStart) (int2float (muli config.timeOutSec 1000))) then 
+        error (join["Timeout. The inference takes more than ", (int2string config.timeOutSec) , " (sec) to complete."])
+      else ()
+    else ());
     let maxWeight = foldl (lam acc. lam p. if geqf p.weight acc then p.weight else acc) negInf particles in
     let expWeights = reverse (mapReverse (lam p. exp (subf p.weight maxWeight)) particles) in
     let expWeightSum = foldl (lam acc. lam w. (addf acc w)) 0. expWeights in
@@ -83,16 +89,17 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> use RuntimeDistBase in Di
     in
     propagateRec 0 0 (toList [])
   in
-  recursive let runRec = lam particles.
+  recursive let runRec = lam particles. lam timeStart.
     if forAll (lam p. match p.checkpoint with End _ then true else false) particles then
       let propagations = (foldl (lam acc. lam p. (addi acc p.propagations)) 0 particles) in
       let corrFactor = subf logParticleCount (log (int2float (subi propagations 1))) in
       unzip (mapReverse (lam p. (addf p.weight corrFactor, match p.checkpoint with End a in a)) particles)
     else
-      runRec (propagate particles)
+      runRec (propagate particles timeStart) timeStart
   in
   let particles = start () in
-  match runRec particles with (weights,samples) in
+  let timeStart = wallTimeMs () in
+  match (runRec particles timeStart) with (weights,samples) in
 
   -- Return
   if config.subsample then

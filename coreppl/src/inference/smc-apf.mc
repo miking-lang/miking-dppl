@@ -5,6 +5,7 @@ lang APFMethod = InferMethodBase
     { particles : Expr -- : Int
     , subsample : Expr -- : Bool
     , subsampleSize : Expr -- : Int
+    , timeOutSec : Expr -- : Int
     , resample : String
     , prune : Bool
     , cps : String
@@ -18,6 +19,7 @@ lang APFMethod = InferMethodBase
     match pprintCode i env x.particles with (env, particles) in
     match pprintCode i env x.subsample with (env, subsample) in
     match pprintCode i env x.subsampleSize with (env, subsampleSize) in
+    match pprintCode i env x.timeOutSec with (env, timeOutSec) in
     match pprintCode i env (str_ x.resample) with (env, resample) in
     match pprintCode i env (str_ x.cps) with (env, cps) in
     let prune = bool2string x.prune in
@@ -27,6 +29,7 @@ lang APFMethod = InferMethodBase
       , "{ particles = ", particles
       , ", subsample = ", subsample
       , ", subsampleSize = ", subsampleSize
+      , ", timeOutSec = ", timeOutSec
       , ", resample = ", resample
       , ", prune = ", prune
       , ", cps = ", cps
@@ -40,16 +43,18 @@ lang APFMethod = InferMethodBase
       [ ("particles", int_ _particlesDefault)
       , ("subsample", bool_ _subsampleDefault)
       , ("subsampleSize", int_ _subsampleSizeDefault)
+      --, ("timeOutSec", int_ _timeOutSecDefault)
       , ("resample", str_ _resampleDefault)
       , ("prune", bool_ _pruneDefault)
       , ("cps", str_ _cpsDefault)
       ] in
     match getFields info bindings expectedFields
-      with [particles, subsample, subsampleSize, resample, prune, cps] in
+      with [particles, subsample, subsampleSize, resample, prune, cps, timeOutSec] in
     APF
     { particles = particles
     , subsample = subsample
     , subsampleSize = subsampleSize
+    , timeOutSec = timeOutSec
     , resample = _exprAsStringExn resample
     , prune = _exprAsBoolExn prune
     , cps = _exprAsStringExn cps
@@ -60,6 +65,7 @@ lang APFMethod = InferMethodBase
     [ ("particles", x.particles)
     , ("subsample", x.subsample)
     , ("subsampleSize", x.subsampleSize)
+    , ("timeOutSec", x.timeOutSec)
     ]
 
   sem typeCheckInferMethod env info sampleType =
@@ -70,9 +76,11 @@ lang APFMethod = InferMethodBase
     unify env [info, infoTm particles] int (tyTm particles);
     let subsampleSize = typeCheckExpr env x.subsampleSize in
     unify env [info, infoTm subsampleSize] int (tyTm subsampleSize);
+    let timeOutSec = typeCheckExpr env x.timeOutSec in
+    unify env [info, infoTm timeOutSec] int (tyTm timeOutSec);
     let subsample = typeCheckExpr env x.subsample in
     unify env [info, infoTm subsample] bool (tyTm subsample);
-    APF {x with particles = particles, subsample = subsample, subsampleSize = subsampleSize}
+    APF {x with particles = particles, subsample = subsample, subsampleSize = subsampleSize, timeOutSec = timeOutSec}
 
   sem smapAccumL_InferMethod_Expr f acc =
   | APF r ->
@@ -85,15 +93,24 @@ lang APFMethod = InferMethodBase
   | APF r -> APF {r with particles = expr}
 end
 
+let _timeOutSecDefault : Int = 0
+let _timeOutSec : OptParser Int =
+  let opt = optArg
+    { optArgDefInt with long = "timeout", short = "t"
+    , description = concat "The maximum amount of time (in secondes) allowed for the inference to finish. Values less than 1 mean no time limit. Default : " (int2string _timeOutSecDefault)
+    } in
+  optOr opt (optPure _timeOutSecDefault)
+
 let smcApfOptions : OptParser (use APFMethod in InferMethod) =
   use APFMethod in
-  let mk = lam particles. lam subsample. lam subsampleSize. lam resample. lam prune. lam cps. APF
+  let mk = lam particles. lam subsample. lam subsampleSize. lam resample. lam prune. lam cps. lam timeOutSec. APF
     { particles = int_ particles
     , subsample = bool_ subsample
     , subsampleSize = int_ subsampleSize
+    , timeOutSec = int_ timeOutSec
     , resample = resample
     , prune = prune
     , cps = cps
     } in
-  let method = optApply (optMap5 mk _particles _subsample _subsampleSize _resample _prune) _cps in
+  let method = optApply ( optApply (optMap5 mk _particles _subsample _subsampleSize _resample _prune) _cps) _timeOutSec in
   optMap2 (lam. lam x. x) (_methodFlag false "smc-apf") method
