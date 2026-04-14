@@ -165,7 +165,7 @@ let eq = eqfApprox 0.05 in
 
 let #var"θDist" = infer (APF { particles = 1000 }) model in
 match distEmpiricalSamples #var"θDist" with (samples, weights) in
-writeFile "baysian-parameter-estimation.json"
+writeFile (get argv 1)
   (jsonObject [
     ("weights", (seqToJson (map floatToJson weights))),
     ("samples", (seqToJson (map floatToJson samples))),

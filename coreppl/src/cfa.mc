@@ -1280,7 +1280,7 @@ utest _testWithSymbolize false t [
 
 -- Test in `coreppl/models/diversification-models/crbd-synthetic.mc`
 let t = parseMCorePPLFile false
-          "coreppl/models/diversification-models/crbd-synthetic.mc" in
+          "../models/diversification-models/crbd-synthetic.mc" in
 utest _testSymbolized false t ["w1","w2","w3", "w4", "w5"] with [
   ("w1", false),
   ("w2", false),

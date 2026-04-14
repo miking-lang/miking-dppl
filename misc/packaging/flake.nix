@@ -48,7 +48,7 @@
             devShells.default = pkgs.mkShell {
               name = "Miking dev shell";
               inputsFrom = [ packages.miking-dppl-lib packages.miking-dppl-unwrapped ];
-              nativeBuildInputs = [ pkgs.ocamlPackages.owl pkgs.gdb ];
+              nativeBuildInputs = [ pkgs.ocamlPackages.owl pkgs.gdb pkgs.tup ];
             };
           };
     in flake-utils.lib.eachDefaultSystem mkPkg // rec {

@@ -22,8 +22,8 @@ let dpplPath =
   else error "MIDPPL_PATH not defined"
 
 let cppl =
-  match sysGetEnv "CPPL_NAME" with Some cppl then join [dpplPath, "/build/", cppl]
-  else error "CPPL_NAME not defined"
+  match sysGetEnv "CPPL" with Some cppl then cppl
+  else error "CPPL not defined"
 
 let parseRun: String -> CpplRes = lam output.
   let output = strSplit "\n" output in
@@ -66,8 +66,8 @@ let testCpplMExpr: String -> Int -> Int -> String -> CpplRes =
   lam model. lam samples. lam burn. lam compileArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
-    let run = sysRunCommandWithUtest [cppl, "--seed 0", compileArgs, m ] "" wd in
-    let run = sysRunCommandWithUtest [ "./out", (int2string samples) ] "" wd in
+    let run = sysRunCommandWithUtest [cppl, join ["--seed 0 --output ", wd, "/out"], compileArgs, m ] "" "." in
+    let run = sysRunCommandWithUtest ["./out", int2string samples] "" wd in
     sysDeleteDir wd;
     burnCpplRes burn (parseRun run.stdout)
 

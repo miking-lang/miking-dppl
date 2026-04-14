@@ -114,7 +114,7 @@ let model = lam t : ().
 in
 let snsDist = infer (Importance { particles = 100 }) model in
 match distEmpiricalSamples snsDist with (samples, weights) in
-writeFile "ode-sensitivites.json"
+writeFile (get argv 1)
   (jsonObject [
     ("xs", seqToJson (map floatToJson xs)),
     ("samples",

@@ -46,7 +46,7 @@ in
 let dist = infer (APF { particles = 1000 }) model in
 
 match distEmpiricalSamples dist with (samples, weights) in
-writeFile "baysian-parameter-estimation-sensitivities.json"
+writeFile (get argv 1)
   (jsonObject [
     ("weights", (seqToJson (map floatToJson weights))),
     ("xs", (seqToJson (map floatToJson xs))),

@@ -1,0 +1,2 @@
+include_rules
+run &(genrules) --tup-rules $(ROOT)
