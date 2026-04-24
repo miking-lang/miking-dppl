@@ -1,19 +1,6 @@
-CPPL := ../../../../../build/cppl
-EXAMPLES := baysian-parameter-estimation.json baysian-parameter-estimation-sensitivities.json ode-sensitivites.json rode-faster.json
 
-.PHONY: all
-all: $(EXAMPLES)
-
+# TODO(vipa, 2026-04-14): This file needs to get the paths to the
+# .json file
 .PHONY: plot
 plot:
 	python plot.py
-
-%.exe: %.mc
-	$(CPPL) --seed 1 --test --dppl-typecheck --output $@ $<
-
-%.json: %.exe
-	./$<
-
-.PHONY: clean
-clean:
-	rm -rf *.json *.exe

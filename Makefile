@@ -1,4 +1,8 @@
-include vars.mk
+CPPL_NAME=cppl
+PLOT_NAME=dppl-plot
+BIN_PATH=${HOME}/.local/bin
+SRC_PATH=${HOME}/.local/src/coreppl/
+CPPL_SRC=coreppl/src/.
 
 #####################
 ## General targets ##
@@ -24,12 +28,9 @@ test: test-coreppl
 ## CorePPL ##
 #############
 
-cppl_tmp_file := $(shell mktemp)
 build/${CPPL_NAME}: $(shell find coreppl/src -name "*.mc")
-	time mi compile coreppl/src/${CPPL_NAME}.mc --output ${cppl_tmp_file}
 	mkdir -p build
-	cp ${cppl_tmp_file} build/${CPPL_NAME}
-	rm ${cppl_tmp_file}
+	mi compile coreppl/src/${CPPL_NAME}.mc --output $@
 
 .PHONY: clean-coreppl
 clean-coreppl:
@@ -62,22 +63,16 @@ uninstall-coreppl:
 	rm -f ${BIN_PATH}/${EXEC_NAME}
 	rm -rf ${SRC_PATH}
 
-.PHONY: test-coreppl
-test-coreppl: build/${CPPL_NAME}
-	@$(MAKE) -s -f test-coreppl.mk all
+misc/test: misc/test-spec.mc
+	mi compile $< --output $@
 
-.PHONY: test-coreppl-compiler
-test-coreppl-compiler:
-	@$(MAKE) -s -f test-coreppl.mk compiler
+.PHONY: test-coreppl
+test-coreppl: misc/test
+	+misc/test
 
 .PHONY: test-coreppl-inference
-test-coreppl-inference:
-	@$(MAKE) -s -f test-coreppl.mk inference
-
-.PHONY: test-coredppl
-test-coredppl: build/${CPPL_NAME}
-	@$(MAKE) -s -f test-coreppl.mk cdppl
-	@$(MAKE) -s -f test-coreppl.mk cdppl-examples
+test-coreppl-inference: misc/test
+	+misc/test --all-dep `find coreppl/test/coreppl-to-mexpr/inference-accuracy -name '*.mc'`
 
 #############
 ## Scripts ##

@@ -1,0 +1,4 @@
+include_rules
+run &(genrules) --tup-rules $(ROOT)
+
+: cppl.mc |> mi compile %f --output %o |> cppl <cppl>

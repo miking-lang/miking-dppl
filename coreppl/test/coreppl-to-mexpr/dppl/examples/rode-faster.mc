@@ -61,7 +61,7 @@ mexpr
 let dist = infer (Importance { particles = 5 }) rode in
 
 match distEmpiricalSamples dist with (samples, weights) in
-writeFile "rode-faster.json"
+writeFile (get argv 1)
   (let write = lam j : Int.
     seqToJson
       (create (length samples)
