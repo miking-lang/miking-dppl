@@ -198,7 +198,7 @@ utest dtcMaxc (N ()) (N ()) with (N ())
 -- │ Annotated AST │
 -- └───────────────┘
 
-lang DTCAstBase = Ast + Eq
+lang DTCAstBase = Ast + Eq + OpaqueAst
   -- NOTE(oerikss, 2024-10-07): The semantic functions in this fragment assumes
   -- that types and terms have been symbolized. I.e., it relies on unique
   -- identifiers in types and terms.
@@ -226,8 +226,10 @@ lang DTCAstBase = Ast + Eq
 
   -- Drops decorations from terms
   sem eraseDecorations : Expr -> Expr
-  sem eraseDecorations =| tm ->
+  sem eraseDecorations =
+  | tm ->
     smap_Expr_Expr eraseDecorations (smap_Expr_Type eraseDecorationsType tm)
+  | tm & TmOpaque _ -> tm
 
   -- Subtyping and type promotion
   -- NOTE(oerikss, 2024-10-04): The defualt case only compares contructors of

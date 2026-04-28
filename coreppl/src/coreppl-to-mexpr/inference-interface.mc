@@ -19,6 +19,7 @@ lang InferenceInterface = Sym + SymGetters
     -- *entire* AST before extracting the model-relevant code
     , extractNormal : (Expr -> Expr) -> Expr
     , extractNoHigherOrderConsts : (Expr -> Expr) -> Expr
+    , stripOpaque : Expr -> Expr
     , stateName : Name
     }
 
