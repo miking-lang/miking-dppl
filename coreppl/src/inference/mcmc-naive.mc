@@ -16,7 +16,7 @@ lang NaiveMCMCMethod = InferMethodBase
   sem inferMethodFromCon info bindings =
   | "NaiveMCMC" ->
     let expectedFields = [
-      ("iterations", int_ _particlesDefault)
+      ("iterations", int_ _iterationsDefault)
     ] in
     match getFields info bindings expectedFields with [iterations] in
     NaiveMCMC { iterations = iterations }
@@ -50,5 +50,5 @@ let mcmcNaiveOptions : OptParser (use NaiveMCMCMethod in InferMethod) =
   let mk = lam iterations. NaiveMCMC
     { iterations = int_ iterations
     } in
-  let method = optMap mk _particles in
+  let method = optMap mk _iterations in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-naive") method
