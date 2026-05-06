@@ -409,21 +409,10 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
   -- Set aligned trace length (a constant, only modified here)
   modref state.alignedTraceLength (length (deref state.alignedTrace));
 
-  -- If the program contains no samples at all, then `alignedTrace` is
-  -- empty, and `mh` will crash. However, such a program requires no
-  -- inference at all, thus we exit early here.
-  if null (deref state.alignedTrace) then
-    -- NOTE(vipa, 2025-02-14): It's important that this line is
-    -- *before* the use, otherwise `sample` will refer to the `sem`
-    -- from `RuntimeDist`. Because we don't type-check the return
-    -- value of this function in practice, and the `Dist` type places
-    -- no restrictions on the type of its samples this compiles, but
-    -- fails at run time
-    let res = [sample] in
-    use RuntimeDist in
-    constructDistEmpirical res [1.]
-      (EmpMCMC { acceptRate = mcmcAcceptRate 1 })
-  else
+  (if eqi 0 (deref state.alignedTraceLength) then
+     printErrorLn "This model appears to not have any aligned `assume`s, which is a requirement for this inference method.";
+     exit 1
+   else ());
 
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in
