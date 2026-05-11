@@ -330,6 +330,9 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
 let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) -> use RuntimeDistBase in Dist Result =
   lam config. lam model.
 
+  resetState state;
+  modref state.alignedTraceLength (negi 1);
+
   recursive let mh : [Result] -> Float -> Float -> Result -> dAcc -> (acc, Bool) -> Int -> [Result] =
     lam keptSamples. lam prevWeight. lam prevPriorWeight. lam prevSample. lam debugState. lam continueState. lam iter.
       match continueState with (continueState, true) then
