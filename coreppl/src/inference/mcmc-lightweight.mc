@@ -62,7 +62,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
       , ("debug", utuple_ [unit_, ulam_ "" (ulam_ "" unit_)])
       , ("resampleBehavior"
         , ulam_ "acc" (ulam_ "length"(
-        ( utuple_ 
+        ( utuple_
           [var_ "acc"
           , if_ (assume_ (bern_ (float_ _mcmcLightweightGlobalProbDefault)))
           (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ false))) ,(negi_ (int_ 2))])
@@ -71,7 +71,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
           ]
         )))
         )
-      --need to build a lambda as current behavior of MCMC lightweight 
+      --need to build a lambda as current behavior of MCMC lightweight
       , ("driftKernel", bool_ _driftKernelDefault)
       , ("driftScale", float_ _driftScaleDefault)
       , ("cps", str_ _cpsDefault)
@@ -117,8 +117,8 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
     let float = TyFloat {info = info} in
     let continueState = newmonovar env.currentLvl info in
     let continue = typeCheckExpr env t.continue in
-    let sampleInfo = tyrecord_ 
-      [ ("weight", float) 
+    let sampleInfo = tyrecord_
+      [ ("weight", float)
       , ("priorWeight", float)
       ] in
     let continueType = tytuple_
@@ -126,13 +126,15 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
       , tyarrows_ [continueState, sampleInfo, sampleType, tytuple_ [continueState, bool]]
       ] in
     unify env [info, infoTm continue] continueType (tyTm continue);
-    let temperature = typeCheckExpr env t.temperature in 
+    let temperature = typeCheckExpr env t.temperature in
     let temperatureType = tyarrow_ continueState float in
     unify env [info, infoTm temperature] temperatureType (tyTm temperature);
     let debugState = newmonovar env.currentLvl info in
     let debug = typeCheckExpr env t.debug in
     let debugInfo = tyrecord_
       [ ("accepted", bool)
+      , ("prevWeight", float)
+      , ("proposalWeight", float)
       ] in
     let debugType = tytuple_
       [ debugState
@@ -142,7 +144,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
     let keepSample = typeCheckExpr env t.keepSample in
     unify env [info, infoTm keepSample] (tyarrow_ int bool) (tyTm keepSample);
     let resampleBehavior = typeCheckExpr env t.resampleBehavior in
-    let resampleBehaviorType = tyarrows_ 
+    let resampleBehaviorType = tyarrows_
       [continueState, int, tytuple_ [continueState, tytuple_[tyseq_ bool, int]]]
     in
     unify env [info, infoTm resampleBehavior] resampleBehaviorType (tyTm resampleBehavior);
@@ -182,9 +184,9 @@ let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod
         (utuple_ [subi_ (var_ "remaining") (int_ 1), eqi_ (var_ "remaining") (int_ 0)])))
       ]
     , temperature = ulam_ "" (float_ 1.0)
-    , resampleBehavior = 
+    , resampleBehavior =
         ulam_ "acc" (ulam_ "length"(
-        ( utuple_ 
+        ( utuple_
           [var_ "acc"
           , if_ (assume_ (bern_ (float_ globalProb)))
           (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ false))) ,(negi_ (int_ 2))])

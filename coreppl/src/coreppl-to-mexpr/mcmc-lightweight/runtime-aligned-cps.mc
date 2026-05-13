@@ -321,7 +321,6 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
   -- printLn (join ["Aligned trace length: ", int2string (length (deref state.alignedTrace))]);
   -- printLn (join ["Unaligned traces length: ", int2string (length (deref state.unalignedTraces))]);
   -- printLn (join ["The invalid index is: ", int2string invalidIndex]);
-
   (acc, (rec invalidIndex (deref state.alignedTrace) (deref state.unalignedTraces)
     (emptyList ()) (emptyList ())) unalignedResamp)
 
@@ -342,19 +341,19 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         -- print "alignedTrace: ["; print (strJoin ", " (map (lam tup. float2string tup.1) (deref state.alignedTrace))); printLn "]";
         -- print "prevUnalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) prevUnalignedTraces)); printLn "]";
         -- print "unalignedTraces: ["; print (strJoin ", " (map (lam ls. join ["[", strJoin "," (map (lam tup. float2string tup.1) ls), "]"]) (deref state.unalignedTraces))); printLn "]";
-        let weight = deref state.weight in
+        let proposalWeight = deref state.weight in
         let priorWeight = deref state.priorWeight in
         let driftHastingRatio = deref state.driftHastingRatio in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
         -- Calculate the Hastings ratio.
         let logMhAcceptProb = minf 0. (addf
-                    (addf 
-                      (mulf beta (subf weight prevWeight))
+                    (addf
+                      (mulf beta (subf proposalWeight prevWeight))
                       (subf weightReused prevWeightReused))
                     driftHastingRatio)
         in
-        -- print "weight: "; printLn (float2string weight);
+        -- print "proposalWeight: "; printLn (float2string proposalWeight);
         -- print "prevWeight: "; printLn (float2string prevWeight);
         -- print "weightReused: "; printLn (float2string weightReused);
         -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
@@ -362,7 +361,7 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         match
           if bernoulliSample (exp logMhAcceptProb) then
             mcmcAccept ();
-            (true, weight, priorWeight, sample)
+            (true, proposalWeight, priorWeight, sample)
           else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous traces
           -- as we reject and reuse the old sample.
@@ -373,6 +372,8 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         let keptSamples = if config.keepSample iter then snoc keptSamples sample else keptSamples in
         let debugInfo =
           { accepted = accepted
+          , prevWeight = prevWeight
+          , proposalWeight = proposalWeight
           } in
         let debugState = config.debug.1 debugState debugInfo in
         let sampleInfo =
@@ -397,11 +398,11 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
         -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
         firstSample model state (addi i 1)
       else sample
-    in 
+    in
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
- 
+
   let sample = firstSample model state 1 in
   let weight = deref state.weight in
   let priorWeight = deref state.priorWeight in
@@ -431,6 +432,8 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
   -- Set up debug and continue states
   let debugInfo =
     { accepted = true
+    , prevWeight = negf inf
+    , proposalWeight = weight
     } in
   let debugState = config.debug.1 config.debug.0 debugInfo in
 
