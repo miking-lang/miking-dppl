@@ -90,14 +90,12 @@ let state: State Result = {
   unalignedTraces = ref (toList [(emptyList ())]),
   reuseUnaligned = ref true,
   oldAlignedTrace = ref (emptyList ()),
-  oldUnalignedTraces = ref (emptyList ()),
+  oldUnalignedTraces = ref (cons (emptyList ()) (emptyList ())),
   alignedTraceLength = ref (negi 1)
 }
 
 -- Function to reset the state when doing a global update
 let resetState : State Result -> () = lam state. (
-  modref state.oldAlignedTrace (emptyList ());
-  modref state.oldUnalignedTraces (emptyList ());
   modref state.weight 0.;
   modref state.priorWeight 0.;
   modref state.driftHastingRatio 0.;
@@ -105,25 +103,14 @@ let resetState : State Result -> () = lam state. (
   modref state.weightReused 0.;
   modref state.reuseUnaligned true;
   modref state.alignedTrace (emptyList ());
-  modref state.unalignedTraces (emptyList ());
+  modref state.unalignedTraces (cons (emptyList ()) (emptyList ()));
+  modref state.oldAlignedTrace (emptyList ());
+  modref state.oldUnalignedTraces (emptyList ());
+  -- NOTE(vipa, 2026-05-08): We explicitly do not reset
+  -- alignedTraceLength, the point of that variable is to be constant
+  -- throughout inference
   ()
 )
-
--- Function to modify the state accordently to the need of the inference method
-let modifyState : State Result -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
-                  -> [(Any,Float)] -> [[(Any, Float, Int)]] -> [(Any, Float, Int)]
-                  -> Float -> Float -> () = 
-                  lam state. lam alignedTrace. lam unalignedTraces. lam oldAlignedTrace. 
-                  lam oldUnalignedTraces. lam s2. lam weight. lam priorWeight.
-    modref state.oldAlignedTrace oldAlignedTrace;
-    modref state.oldUnalignedTraces (cons (emptyList ()) (cons (reverse s2) oldUnalignedTraces));
-    modref state.weight weight;
-    modref state.priorWeight priorWeight;
-    modref state.prevWeightReused 0.;
-    modref state.weightReused 0.;
-    modref state.alignedTrace alignedTrace;
-    modref state.unalignedTraces unalignedTraces;
-  ()
 
 let updateWeight = lam v.
   modref state.weight (addf (deref state.weight) v)
@@ -269,14 +256,17 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
   let resBehav = config.resampleBehavior acc (deref state.alignedTraceLength) in
 
   match resBehav with (acc, (unalignedResamp, invalidIndex)) in
+  let unalignedResamp = cons true unalignedResamp in
   if lti invalidIndex 0 then
-    let oldUnalignedTraces = 
-      zipWith (lam t. lam b. if b then t else []) (deref state.oldUnalignedTraces) unalignedResamp in
-    let oldAlignedTrace = deref state.oldAlignedTrace in
+    let oldUnalignedTraces = zipWith (lam t. lam b. if b then t else [])
+      (mapReverse reverse (deref state.unalignedTraces))
+      unalignedResamp in
+    let oldAlignedTrace = if eqi invalidIndex (negi 1)
+      then mapReverse (lam x. (x.0, x.1)) (deref state.alignedTrace)
+      else emptyList () in
     resetState state;
-    (if eqi invalidIndex (negi 1) then 
-      modref state.oldAlignedTrace oldAlignedTrace else ());
     modref state.oldUnalignedTraces oldUnalignedTraces;
+    modref state.oldAlignedTrace oldAlignedTrace;
     (acc, (model state))
   else
     recursive let rec: Int -> [(Any,Float,Cont Result)] -> [[(Any, Float, Int)]]
@@ -287,19 +277,26 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
       lam unalignedResamp.
         match (alignedTrace,unalignedTraces, unalignedResamp)
         with ([s1] ++ alignedTrace, [s2] ++ unalignedTraces, [s3] ++ unalignedResamp) then
-          (if (not s3) then 
-            error "mcmc doesn't support redrawing unaligned assumes before the chosen aligned assume." 
-           else ());
+          let s2 = if s3 then reverse s2 else [] in
           if gti i 0 then
             rec (subi i 1) alignedTrace unalignedTraces
               (cons (s1.0, s1.1) oldAlignedTrace)
-              (cons (reverse s2) oldUnalignedTraces)
-              (cons s3 unalignedResamp)
+              (cons s2 oldUnalignedTraces)
+              unalignedResamp
           else (
+            (if any (lam x. not x) unalignedResamp then
+              error "Tried to redraw an unaligned section before the aligned assume being redrawn, which is not supported"
+             else ());
             let cont = s1.2 in
             -- Here to modify what left from the trace
-            let oldUnalignedTraces = zipWith (lam t. lam b. if b then t else []) oldUnalignedTraces unalignedResamp in
-            (modifyState state alignedTrace unalignedTraces oldAlignedTrace oldUnalignedTraces s2 cont.weight cont.priorWeight);
+            modref state.oldAlignedTrace oldAlignedTrace;
+            modref state.oldUnalignedTraces (cons (emptyList ()) (cons s2 oldUnalignedTraces));
+            modref state.weight cont.weight;
+            modref state.priorWeight cont.priorWeight;
+            modref state.prevWeightReused 0.;
+            modref state.weightReused 0.;
+            modref state.alignedTrace alignedTrace;
+            modref state.unalignedTraces unalignedTraces;
 
             -- printLn (join ["New aligned trace length: ", int2string (length (deref state.alignedTrace))]);
             -- printLn (join ["Old aligned trace length: ", int2string (length (deref state.oldAlignedTrace))]);
@@ -318,12 +315,14 @@ let runNext: all acc. all dAcc. Config Result acc dAcc -> (State Result -> Resul
     in
 
   -- One index must always change
+
+  let invalidIndex = subi (subi (deref state.alignedTraceLength) invalidIndex) 1 in
   -- printLn (join ["Aligned trace length: ", int2string (length (deref state.alignedTrace))]);
   -- printLn (join ["Unaligned traces length: ", int2string (length (deref state.unalignedTraces))]);
   -- printLn (join ["The invalid index is: ", int2string invalidIndex]);
 
   (acc, (rec invalidIndex (deref state.alignedTrace) (deref state.unalignedTraces)
-    (emptyList ()) (emptyList ())) unalignedResamp)
+    (emptyList ()) (emptyList ())) (reverse unalignedResamp))
 
 
 -- General inference algorithm for aligned MCMC
@@ -387,7 +386,7 @@ let run : all acc. all dAcc. Config Result acc dAcc -> (State Result -> Result) 
   -- First sample -- call the model until we get a non-zero weight
   recursive let firstSample : (State Result -> Result) -> State Result -> Int -> State Result =
     lam model. lam state. lam i.
-      let sample = model state in 
+      let sample = model state in
       let weight = deref state.weight in
       let weightReused = deref state.weightReused in
       let priorWeight = deref state.priorWeight in
