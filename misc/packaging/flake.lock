@@ -60,11 +60,11 @@
       },
       "locked": {
         "dir": "misc/packaging",
-        "lastModified": 1758204776,
-        "narHash": "sha256-F1cpvgjRxSAqyiZ4G51u6nzz75acUcrL8NDdsTjen0k=",
+        "lastModified": 1773425393,
+        "narHash": "sha256-HxlFD7T2cg6JMwiycF9ZFXEhrpnS4B/NrKGlDcGXwUc=",
         "owner": "miking-lang",
         "repo": "miking",
-        "rev": "f8e0106b059b4f5855e7e2051521e15142dae9a7",
+        "rev": "bde10bb95751ae32bdb467266c4f5b766c2bf7a3",
         "type": "github"
       },
       "original": {
@@ -76,11 +76,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1750134718,
-        "narHash": "sha256-v263g4GbxXv87hMXMCpjkIxd/viIF7p3JpJrwgKdNiI=",
+        "lastModified": 1776169885,
+        "narHash": "sha256-l/iNYDZ4bGOAFQY2q8y5OAfBBtrDAaPuRQqWaFHVRXM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "9e83b64f727c88a7711a2c463a7b16eedb69a84c",
+        "rev": "4bd9165a9165d7b5e33ae57f3eecbcb28fb231c9",
         "type": "github"
       },
       "original": {
@@ -111,11 +111,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1749729514,
-        "narHash": "sha256-MQ1GUPC8/wHxpztRyND1p8W0X8UpdDcsdt9BlKr0LaU=",
+        "lastModified": 1763399696,
+        "narHash": "sha256-H19tupNDXwLeInGpkHLploEY6AxdI4VbkSD2QoFiYFU=",
         "owner": "elegios",
         "repo": "relocatable.nix",
-        "rev": "5723dca6e9b7e54c102c009d2fd129663c4f2f59",
+        "rev": "81ff68c1f3a7a359dfcf5274b59adecafc016783",
         "type": "github"
       },
       "original": {
