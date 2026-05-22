@@ -624,13 +624,13 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
                 (lam _p.
                   -- Asserts parameters only if needed
                   _mapFloatExprsExpr i (adAssertFloat env i) (lam x. x) _p.1
-                    (_var_ i _p.1 _p.0))
+                    (_ivar_ i _p.1 _p.0))
                 _ps in
             let body =
-              foldr (lam p. lam fn. _app_ i fn p) (_var_ i r.tyIdent r.ident)
+              foldr (lam p. lam fn. _iapp_ i fn p) (_ivar_ i r.tyIdent r.ident)
                 ps in
             let body =
-              foldl (lam body. lam _p. _lam_ i _p.0 _p.1 body) body _ps in
+              foldl (lam body. lam _p. _ilam_ i _p.0 _p.1 body) body _ps in
             decl_let body in
           _queueAddDecl loader decl1
         else loader
@@ -664,26 +664,26 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
   | TmDiff r ->
     match _tyTm r.fn with TyArrow tyr then
       let i = r.info in
-      let _var_ = _var_ i in
-      let _lam_ = _lam_ i in
-      let _app_ = _app_ i in
-      let _let_ = _let_ i in
+      let _ivar_ = _ivar_ i in
+      let _ilam_ = _ilam_ i in
+      let _iapp_ = _iapp_ i in
+      let _ilet_ = _ilet_ i in
       let ityfloat_ = ityfloat_ i in
       let _eps = nameSym "eps" in
-      let eps = _var_ ityfloat_ _eps in
+      let eps = _ivar_ ityfloat_ _eps in
       let _pri = nameSym "pri" in
-      let pri = _var_ tyr.from _pri in
+      let pri = _ivar_ tyr.from _pri in
       let _tgn = nameSym "tgn" in
-      let tgn = _var_ tyr.from _tgn in
+      let tgn = _ivar_ tyr.from _tgn in
       let _res = nameSym "res" in
-      let res = _var_ tyr.to _res in
-      _let_ _eps
-        (_app_ (adGetVarExn env i (ityarrow_ i tyunit_ ityfloat_) "geneps")
-           (_unit_ i))
-        (_let_ _pri (adLiftExpr env r.arg)
-           (_let_ _tgn (adLiftExpr env r.darg)
-              (_let_ _res
-                 (_app_
+      let res = _ivar_ tyr.to _res in
+      _ilet_ _eps
+        (_iapp_ (adGetVarExn env i (ityarrow_ i tyunit_ ityfloat_) "geneps")
+           (_iunit_ i))
+        (_ilet_ _pri (adLiftExpr env r.arg)
+           (_ilet_ _tgn (adLiftExpr env r.darg)
+              (_ilet_ _res
+                 (_iapp_
                     (adLiftExpr env r.fn)
                     (adTypeDirectedDual env i eps pri tgn tyr.from))
                  (adTypeDirectedTangent env i eps res tyr.to))))
@@ -706,9 +706,9 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
         if _hasFloatExprsMap ty then
           let i = infoTm e in
           let _x = nameSym "x" in
-          _let_ i _x e
+          _ilet_ i _x e
             (_mapFloatExprsExpr i (adAssertFloat env i) (lam x. x) ty
-               (_var_ i ty _x))
+               (_ivar_ i ty _x))
         else e
       in
       smap_Expr_Expr (compose f (adLiftExpr env)) e
@@ -753,7 +753,7 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
       adGetVarExn env i
         (foldr1 (ityarrow_ i) [ityfloat_, ityfloat_, ityfloat_, ityfloat_])
         "dual" in
-    _appf3_ i dual eps pri tgn
+    _iappf3_ i dual eps pri tgn
 
   sem adTangent : ADHookEnv -> Info -> Expr -> Expr -> Expr
   sem adTangent env i eps =| e ->
@@ -762,7 +762,7 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
       adGetVarExn env i
         (foldr1 (ityarrow_ i) [ityfloat_, ityfloat_, ityfloat_])
         "tangent" in
-    _appf2_ i tangent eps e
+    _iappf2_ i tangent eps e
 
   sem adTypeDirectedDual
     : ADHookEnv -> Info -> Expr -> Expr -> Expr -> Type -> Expr
@@ -812,7 +812,7 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
     let assertfloat =
       adGetVarExn env i (ityarrow_ i (ityfloat_ i) (ityfloat_ i))
         "assertFloat" in
-    _app_ i assertfloat e
+    _iapp_ i assertfloat e
 
   sem _tyAssertErrMsg =| fn -> concat "Failed a type assertion in " fn
 
@@ -828,64 +828,64 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
   sem _tmBuildErrMsg =| caller ->
     concat "failed to build type preserving term, expected in " caller
 
-  sem _var_ i ty =| n -> withInfo i (withType ty (nvar_ n))
+  sem _ivar_ i ty =| n -> withInfo i (withType ty (nvar_ n))
 
-  sem _lam_ i n ty =| e ->
+  sem _ilam_ i n ty =| e ->
     let ty = ityarrow_ i ty (tyTm e) in
     tmLam i ty n (TyUnknown { info = i }) e
 
-  sem _app_ i f =| e ->
+  sem _iapp_ i f =| e ->
     let ty =
       match _tyTm f with TyArrow r then r.to
-      else printErrorLn (type2str (_tyTm f)); error (_tmBuildErrMsg "_app_") in
+      else printErrorLn (type2str (_tyTm f)); error (_tmBuildErrMsg "_iapp_") in
     withInfo i (withType ty (app_ f e))
 
-  sem _appf2_ i f e1 =| e2 -> _app_ i (_app_ i f e1) e2
+  sem _iappf2_ i f e1 =| e2 -> _iapp_ i (_iapp_ i f e1) e2
 
-  sem _appf3_ i f e1 e2 =| e3 -> _app_ i (_appf2_ i f e1 e2) e3
+  sem _iappf3_ i f e1 e2 =| e3 -> _iapp_ i (_iappf2_ i f e1 e2) e3
 
-  sem _let_ i n e1 =| e2 ->
+  sem _ilet_ i n e1 =| e2 ->
     withInfo i (withType (_tyTm e2) (bind_ (nulet_ n e1) e2))
 
-  sem _unit_ =| i -> withInfo i (withType tyunit_ unit_)
+  sem _iunit_ =| i -> withInfo i (withType tyunit_ unit_)
 
-  sem _recordproj_ i e =| key ->
+  sem _irecordproj_ i e =| key ->
     let fields =
       match _tyTm e with TyRecord r then r.fields else
-        error (_tmBuildErrMsg "_recordproj_") in
+        error (_tmBuildErrMsg "_irecordproj_") in
     let ty = mapFindExn (stringToSid key) fields in
     withInfo i (withType ty (recordproj_ key e))
 
-  sem _get_ i e =| j ->
+  sem _iget_ i e =| j ->
     let ty = match _tyTm e with TySeq r then r.ty
-             else error (_tmBuildErrMsg "_get_") in
-    (match _tyTm j with ! TyInt _ then error (_tmBuildErrMsg "_get_") else ());
+             else error (_tmBuildErrMsg "_iget_") in
+    (match _tyTm j with ! TyInt _ then error (_tmBuildErrMsg "_iget_") else ());
     let c =
       let ty = ityarrow_ i (_tyTm e) (ityarrow_ i (ityint_ i) ty) in
       withInfo i (const_ ty (CGet ())) in
-    _appf2_ i c e j
+    _iappf2_ i c e j
 
-  sem _map_ i f =| e ->
+  sem _imap_ i f =| e ->
     let ty = match _tyTm f with TyArrow r then r.to
-             else error (_tmBuildErrMsg "_map_") in
+             else error (_tmBuildErrMsg "_imap_") in
     let c =
       let ty = ityarrow_ i (_tyTm f) (ityarrow_ i (_tyTm e) (ityseq_ i ty)) in
       withInfo i (const_ ty (CMap ())) in
-    _appf2_ i c f e
+    _iappf2_ i c f e
 
-  sem _mapi_ i f =| e ->
+  sem _imapi_ i f =| e ->
     let ty = match _tyTm f with TyArrow { to = TyArrow r } then r.to
-             else error (_tmBuildErrMsg "_mapi_") in
+             else error (_tmBuildErrMsg "_imapi_") in
     let c =
       let ty = ityarrow_ i (_tyTm f) (ityarrow_ i (_tyTm e) (ityseq_ i ty)) in
       withInfo i (const_ ty (CMapi ())) in
-    _appf2_ i c f e
+    _iappf2_ i c f e
 
   sem _mapSeqExpr i f =| e ->
     let ty = match _tyTm e with TySeq r then r.ty
              else error (_tmBuildErrMsg "_mapSeqExpr") in
     let _x = nameSym "x" in
-    _map_ i (_lam_ i _x ty (f (_var_ i ty _x))) e
+    _imap_ i (_ilam_ i _x ty (f (_ivar_ i ty _x))) e
 
   sem _map2SeqExpr i f e1 =| e2 ->
     let ty =
@@ -893,24 +893,24 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
         error (_tmBuildErrMsg "_map2SeqExpr") in
     let _x = nameSym "x" in
     let _i = nameSym "i" in
-    let _lam_ = _lam_ i in
-    let _var_ = _var_ i in
+    let _ilam_ = _ilam_ i in
+    let _ivar_ = _ivar_ i in
     let ityint_ = ityint_ i in
-    _mapi_ i
-      (_lam_ _i ityint_
-         (_lam_ _x ty
-            (f (_var_ ty _x) (_get_ i e2 (_var_ ityint_ _i)))))
+    _imapi_ i
+      (_ilam_ _i ityint_
+         (_ilam_ _x ty
+            (f (_ivar_ ty _x) (_iget_ i e2 (_ivar_ ityint_ _i)))))
       e1
 
   sem _mapRecordExpr i fs =| e ->
     let ty = tyRecord i (map (lam t. (t.0, t.1)) fs) in
     tmRecord i ty
-      (map (lam t. (t.0, t.2 (_recordproj_ i (withType ty e) t.0))) fs)
+      (map (lam t. (t.0, t.2 (_irecordproj_ i (withType ty e) t.0))) fs)
 
   sem _map2RecordExpr i fs e1 =| e2 ->
     tmRecord i (tyRecord i (map (lam t. (t.0, t.1)) fs))
       (map
-         (lam t. (t.0, t.2 (_recordproj_ i e1 t.0) (_recordproj_ i e2 t.0)))
+         (lam t. (t.0, t.2 (_irecordproj_ i e1 t.0) (_irecordproj_ i e2 t.0)))
          fs)
 
   sem _mapRecordExprOverField i f fields =| e ->
@@ -939,7 +939,7 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
         lam e.
           let _x = nameSym "x" in
           let ty = _tyTm e in
-          _lam_ i _x ty (to (_app_ i e (from (_var_ i ty _x)))))
+          _ilam_ i _x ty (to (_iapp_ i e (from (_ivar_ i ty _x)))))
     in
     switch (_mapFloatExprs i to from r.from, _mapFloatExprs i from to r.to)
     case (Some from, Some to) then f from to
