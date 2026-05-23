@@ -348,6 +348,11 @@ let run : all a. all acc. all dAcc. Config a acc dAcc -> (State -> a) -> use Run
   modref state.alignedTraceLength (length (deref state.alignedTrace));
   modref state.useDriftKernels config.driftKernel;
 
+  (if eqi 0 (deref state.alignedTraceLength) then
+     printErrorLn "This model appears to not have any aligned `assume`s, which is a requirement for this inference method.";
+     exit 1
+   else ());
+
   let iter = 0 in
   let samples = if config.keepSample iter then [sample] else [] in
 
