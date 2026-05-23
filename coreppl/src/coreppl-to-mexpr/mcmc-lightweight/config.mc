@@ -4,6 +4,8 @@
 
 type DebugInfo =
   { accepted : Bool
+  , prevWeight : Float
+  , proposalWeight : Float
   }
 
 type SampleInfo =

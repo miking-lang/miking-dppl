@@ -175,18 +175,18 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         modref state.traceLength 0;
         let sample = model state in
         let traceLength = deref state.traceLength in
-        let weight = deref state.weight in
+        let proposalWeight = deref state.weight in
         let priorWeight = deref state.priorWeight in
         let weightReused = deref state.weightReused in
         let prevWeightReused = deref state.prevWeightReused in
         let logMhAcceptProb = minf 0. (addf (addf
-                    (mulf beta (subf weight prevWeight))
+                    (mulf beta (subf proposalWeight prevWeight))
                     (subf weightReused prevWeightReused))
                     (subf (log (int2float prevTraceLength))
                               (log (int2float traceLength))))
         in
         -- print "logMhAcceptProb: "; printLn (float2string logMhAcceptProb);
-        -- print "weight: "; printLn (float2string weight);
+        -- print "proposalWeight: "; printLn (float2string proposalWeight);
         -- print "prevWeight: "; printLn (float2string prevWeight);
         -- print "weightReused: "; printLn (float2string weightReused);
         -- print "prevWeightReused: "; printLn (float2string prevWeightReused);
@@ -195,7 +195,7 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         match
           if bernoulliSample (exp logMhAcceptProb) then
             mcmcAccept ();
-            (true, weight, priorWeight, sample)
+            (true, proposalWeight, priorWeight, sample)
           else
           -- NOTE(dlunde,2022-10-06): VERY IMPORTANT: Restore previous database
           -- and trace length as we reject and reuse the old sample.
@@ -206,6 +206,8 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         let samples = if config.keepSample iter then snoc samples sample else samples in
         let debugInfo =
           { accepted = accepted
+          , proposalWeight = proposalWeight
+          , prevWeight = prevWeight
           } in
         let debugState = config.debug.1 debugState debugInfo in
         let sampleInfo =
@@ -220,7 +222,7 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
   -- First sample -- call the model until we get a non-zero weight
   recursive let firstSample : (State -> a) -> State -> Int -> a =
     lam model. lam state. lam i.
-      let sample = model state in 
+      let sample = model state in
       let weight = deref state.weight in
       let weightReused = deref state.weightReused in
       let priorWeight = deref state.priorWeight in
@@ -230,7 +232,7 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
         -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
         firstSample model state (addi i 1)
       else sample
-    in 
+    in
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
@@ -245,6 +247,8 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
   -- Set up debug and continue states
   let debugInfo =
     { accepted = true
+    , prevWeight = negf inf
+    , proposalWeight = weight
     } in
   let debugState = config.debug.1 config.debug.0 debugInfo in
   let continueState = config.continue.0 () in
