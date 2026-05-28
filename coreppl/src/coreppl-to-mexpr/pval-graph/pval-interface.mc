@@ -121,6 +121,13 @@ lang PValInterface = RuntimeDistBase
 
   -- Create a sub-model without extracting a value from it. This plus
   -- p_join is equivalent with p_bind.
+  sem p_sub : all st. all st2. all ist. all ist2. all b. PValState st
+    -> (st -> PSubmodelRef ist2 -> st2)
+    -> ist
+    -> PVal (PValState ist -> (PValState ist2, b))
+    -> (PValState st2, PVal b)
+  -- Create a sub-model without extracting a value from it. This plus
+  -- p_join is equivalent with p_bind.
   sem p_subMap : all st. all st2. all ist. all ist2. all a. all b. PValState st
     -> (st -> PSubmodelRef ist2 -> st2)
     -> ist
@@ -204,4 +211,23 @@ lang PValInterface = RuntimeDistBase
     -> PVal (Dist a)
     -> (PValState st, PVal a)
   sem p_assume_ st = | dist -> p_assume st (lam st. lam. st) dist
+end
+
+lang PValDefaultImpls = PValInterface
+  sem p_bind st store ist f = | a ->
+    match p_map st (lam a. lam st. f st a) a with (st, f) in
+    match p_sub st store ist f with (st, ret) in
+    p_join st ret
+
+  sem p_select st f = | a ->
+    match p_map st f a with (st, ret) in
+    p_join st ret
+
+  sem p_subMap st store ist f = | a ->
+    match p_map st f a with (st, f) in
+    p_sub st store ist f
+
+  sem p_subApply st store ist f = | a ->
+    match p_apply st f a with (st, f) in
+    p_sub st store ist f
 end
