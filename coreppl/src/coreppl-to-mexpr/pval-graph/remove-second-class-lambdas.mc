@@ -300,6 +300,7 @@ lang RemoveSecondClassFunctions = RecLetsDeclAst + LetDeclAst + VarAst + LamAst 
       then {st with currMaxDepthUsed = maxri st.currMaxDepthUsed (pureRMaxInt depth)}
       else st in
     smapAccumL_Expr_Expr (remSecLamExpr env) st tm
+  | tm & TmOpaque _ -> (st, tm)
   | tm ->
     let st = sfold_Expr_Pat (remSecLamPat env) st tm in
     smapAccumL_Expr_Expr (remSecLamExpr env) st tm

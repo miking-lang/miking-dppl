@@ -147,6 +147,12 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | Rec _ -> (acc, Rec ())
   | RLater x -> match mapAccumLPTypeC (mapAccumLRecTy f) acc x with (acc, y) in (acc, RLater y)
 
+  sem mapRecTy : all x. all y. (x -> y) -> RecTy x -> RecTy y
+  sem mapRecTy f =
+  | NoRec x -> NoRec (f x)
+  | Rec _ -> Rec ()
+  | RLater x -> RLater (mapPTypeC (mapRecTy f) x)
+
   syn PureType =
   | PureTypeC (PTypeC PureType)
   | PureTypeA PTypeA
@@ -250,12 +256,17 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | PHere {wrapped = Wrapped _, ty = ty} -> pureToPType ty
   | pty & PHere {wrapped = Unused _} -> pty
 
+
+  syn InstType = | InstType (all ty. InstTypeF ty (Map Name (RecTy ty)))
+  type InstTypeF ty ret = Map Name InstType -> [ty] -> (PTypeA -> ty) -> (PTypeC ty -> ty) -> ret
+
   type PScope =
-    { functionDefinitions : Map Name {params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int}
+    { functionDefinitions : Map Name {fName : Name, params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int}
     , depth : Int
     , valueScope : Map Name (Name, PType)    -- Type is type of *rhs* name
     , revValueScope : Map Name (Name, PType) -- Type is type of *lhs* name
     , conScope : Map Name (RecTy ())
+    , tyConAsPure : Map Name InstType
     }
 
   sem addBinding : Name -> (Name, PType) -> PScope -> PScope
@@ -373,16 +384,18 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem ensureWrapped = | ty ->
     PHere {wrapped = Wrapped (), ty = ptypeAsPureType ty}
 
-  sem underDecls : (Expr -> Expr) -> Expr -> Expr
-  sem underDecls f =
-  | TmDecl x -> TmDecl {x with inexpr = underDecls f x.inexpr}
-  | tm -> f tm
-
   sem adjustWrapping : (PType, PType) -> Expr -> Expr
   sem adjustWrapping = | x ->
     let f = _adjustWrapping x in
+    recursive let zoom = lam tm.
+      switch tm
+      case TmDecl x then TmDecl {x with inexpr = zoom x.inexpr}
+      case TmMatch x then TmMatch {x with thn = zoom x.thn, els = zoom x.els}
+      case tm & TmNever _ then tm
+      case tm then f tm
+      end in
     -- printLn (join ["adjust ", ptypeToString x.0, " to ", ptypeToString x.1, " by ", expr2str (TempLam f)]);
-    underDecls f
+    zoom
 
   sem _adjustWrappingC : Bool -> PTypeC (Expr -> Expr) -> Expr -> Expr
   sem _adjustWrappingC shouldWrap =
@@ -398,9 +411,11 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     recursive let construct = lam prev. lam remaining.
       match remaining with [key] ++ remaining
       then tempLam_ (lam tm. construct (snoc prev (key, tm)) remaining)
-      else TmRecord
+      else
+        let bindings = mapFromSeq cmpSID prev in
+        TmRecord
         { bindings = mapFromSeq cmpSID prev
-        , ty = tyunknown_
+        , ty = TyRecord {info = NoInfo (), fields = mapMap (lam. tyunknown_) bindings}
         , info = NoInfo ()
         } in
     let construct = pure (construct [] (mapKeys adjustments)) in
@@ -413,6 +428,9 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
           match tm with TmVar _ then (lam x. x, tm)
           else let n = nameSym "x" in (bind_ (nulet_ n tm), withType (tyTm tm) (nvar_ n))
         with (oBind, target) in
+        let target = match tyTm target with TyUnknown _
+          then withType (TyRecord {info = NoInfo (), fields = mapMap (lam. tyunknown_) adjustments}) target
+          else target in
         oBind (foldl apply construct (mapValues (mapMapWithKey (lam sid. lam f. f (recordproj_ (sidToString sid) target)) adjustments)))
   | PDist f ->
     -- OPT(vipa, 2025-11-04): Could probably just skip the extra check
@@ -502,21 +520,46 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem tyToPTypeX atom composite custom = | ty ->
     _tyToPTypeX atom (lam pty. composite (mapPTypeC (tyToPTypeX atom composite custom) pty)) custom ty
 
-  sem tyToPureType : Type -> PureType
-  sem tyToPureType = | ty ->
-    let custom = lam ty. lam tyargs.
-      match ty with TyVar _
-      then PureTypeA (PUnknown ())
-      else PureTypeC (PUser (mapEmpty nameCmp)) in
-    tyToPTypeX (lam x. PureTypeA x) (lam x. PureTypeC x) custom ty
+  sem tyToPureType : PScope -> Type -> PureType
+  sem tyToPureType sc = | ty ->
+    let handleA = lam x. PureTypeA x in
+    let handleC = lam x. PureTypeC x in
+    let handleCustom = lam ty. lam tyargs.
+      switch ty
+      case TyCon x then
+        match mapLookup x.ident sc.tyConAsPure with Some (InstType f)
+        then PureTypeC (PUser (f sc.tyConAsPure (map (tyToPureType sc) tyargs) handleA handleC))
+        else PureTypeC (PUser (mapEmpty nameCmp))
+      case TyVar _ then
+        PureTypeA (PUnknown ())
+      end in
+    tyToPTypeX handleA handleC handleCustom ty
 
-  sem tyToPurePType : Type -> PType
-  sem tyToPurePType = | ty ->
-    let custom = lam ty. lam tyargs.
-      match ty with TyVar _
-      then PNever (PUnknown ())
-      else PLater (PUser (mapEmpty nameCmp)) in
-    tyToPTypeX (lam x. PNever x) (lam x. PLater x) custom ty
+  sem tyToPurePType : PScope -> Type -> PType
+  sem tyToPurePType sc = | ty ->
+    let handleA = lam x. PNever x in
+    let handleC = lam x. PLater x in
+    let handleCustom = lam ty. lam tyargs.
+      switch ty
+      case TyCon x then
+        match mapLookup x.ident sc.tyConAsPure with Some (InstType f)
+        then PLater (PUser (f sc.tyConAsPure (map (tyToPurePType sc) tyargs) handleA handleC))
+        else PLater (PUser (mapEmpty nameCmp))
+      case TyVar _ then
+        PNever (PUnknown ())
+      end in
+    tyToPTypeX handleA handleC handleCustom ty
+
+  sem tyToPurePTypeEmptyUser : Type -> PType
+  sem tyToPurePTypeEmptyUser = | ty ->
+    let handleA = lam x. PNever x in
+    let handleC = lam x. PLater x in
+    let handleCustom = lam ty. lam tyargs.
+      switch ty
+      case TyCon x then PLater (PUser (mapEmpty nameCmp))
+      case TyVar _ then PNever (PUnknown ())
+      end in
+    tyToPTypeX handleA handleC handleCustom ty
 
   sem _switchExhaustive : Map Name (Expr -> Expr) -> Expr -> Expr
   sem _switchExhaustive cases =
@@ -614,9 +657,22 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       }
     ) ->
     _map (tempLam_ (lam f. _app f x)) f
-  -- p_traverseSeq pure = pure
+  -- p_traverseSeq p_pure = p_pure
   | (f & TmConst {val = CPTraverseSeq _}, x & TempLam f2) ->
     if isPure f2.f then uconst_ (CPPure ()) else app_ f x
+  -- p_traverseSeq f [a, b] = p_apply (p_map (lam a. lam b. [a, b]) (f a)) (f b)
+  | ( TmApp
+      { lhs = TmConst {val = CPTraverseSeq _}
+      , rhs = f
+      }
+    , TmSeq s
+    ) ->
+    recursive let work = lam prev. lam next.
+      match next with [_] ++ next
+      then tempLam_ (lam tm. work (snoc prev tm) next)
+      else TmSeq {s with tms = prev} in
+    let construct = app_ (uconst_ (CPPure ())) (work [] s.tms) in
+    foldl _apply construct (map (_app f) s.tms)
   -- p_join (p_pure x) = x
   | ( TmConst {val = CPJoin _}
     , TmApp
@@ -637,14 +693,19 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   syn SpecializeCallKind =
   | SCKInflexible ()
   | SCKPolyFlexible Type
-  | SCKDefFlexible (Name, {params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int})
+  | SCKDefFlexible {fName : Name, params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int}
   sem specializeCall : PScope -> PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
   sem specializeCall sc st =
   | {f = f & TmVar x, args = args, ret = retTy} ->
-    match optionBind (mapLookup x.ident st.specializations) (mapLookup (map (lam x. x.1) args)) with Some {ident = name, ty = ty} then
+    match
+      match mapLookup x.ident sc.functionDefinitions with Some definition
+      then (definition.fName, Some definition)
+      else (x.ident, None ())
+    with (ident, definition) in
+    match optionBind (mapLookup ident st.specializations) (mapLookup (map (lam x. x.1) args)) with Some {ident = name, ty = ty} then
       (st, (appSeq_ (nvar_ name) (map (lam x. x.0) args), ty))
-    else match mapLookup x.ident sc.functionDefinitions with Some definition
-    then _specializeCall sc st f args retTy (SCKDefFlexible (x.ident, definition))
+    else match definition with Some definition
+    then _specializeCall sc st f args retTy (SCKDefFlexible definition)
     else _specializeCall sc st f args retTy (SCKInflexible ())
   | {f = f & TmConst {val = c}, args = args, ret = retTy} ->
     match tyConst c with ty & TyAll _
@@ -654,21 +715,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     _specializeCall sc st f args retTy (SCKInflexible ())
   | {f = f} -> errorSingle [infoTm f] (join ["Missing case in specializeCall: ", expr2str f])
 
-  -- OPT(vipa, 2025-11-25): This currently checks if at least one
-  -- argument is wrapped further than a polymorphic instantiation of
-  -- the function could absorb and, if so, wraps *all* arguments. This
-  -- is a bit overly cautious in at least two cases:
-  -- * `addf a b` where `a` is pure and `b` is wrapped. This could be
-  --   `map (addf a) b` rather than `apply (map addf (pure a)) b`. Of
-  --   course, the latter will simplify to the former with `_app`, so
-  --   it's not really a problem per se.
-  -- * `get [x] i` where `x` and `i` are wrapped. This could be `join
-  --   (map (get [x]) i)` rather than `apply (map get (traverse id
-  --   [x])) i`. The latter does *not* simplify to the former.
   sem _specializeCall : PScope -> PState -> Expr -> [(Expr, PType)] -> Type -> SpecializeCallKind -> (PState, (Expr, PType))
   sem _specializeCall sc st tm args ret =
   | SCKInflexible _ ->
-    let pureRet = tyToPurePType ret in
+    let pureRet = tyToPurePType sc ret in
     -- NOTE(vipa, 2025-12-12): Ensure we're fully applying the
     -- function, since it might be an external, which may not appear
     -- in any other situation
@@ -683,11 +733,11 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
           adjustWrapping (ty, ensureWrapped ty) tm in
         map f args in
       (st, (foldl _apply tm args, ensureWrapped pureRet))
-  | SCKDefFlexible (ident, definition) ->
+  | SCKDefFlexible definition ->
     match unzip args with (args, argTys) in
     let params = map (lam n. (n, nameSetNewSym n)) definition.params in
     let sc = foldl2 (lam sc. lam n. lam ty. addBinding n.0 (n.1, ty) sc) sc params argTys in
-    let name = nameSetNewSym ident in
+    let name = nameSetNewSym definition.fName in
     match
       if definition.mayBeRecursive then
         recursive let speculate = lam guess.
@@ -695,11 +745,11 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
             {ident = name, ty = guess, decl = None (), depth = definition.depth} in
           let localSpecializations = mapMap (mapFilter (lam x. gti x.depth definition.depth)) st.specializations in
           let nonLocalSpecializations = mapMap (mapFilter (lam x. leqi x.depth definition.depth)) st.specializations in
-          let st2 = {st with specializations = mapInsertWith mapUnion ident spec nonLocalSpecializations} in
+          let st2 = {st with specializations = mapInsertWith mapUnion definition.fName spec nonLocalSpecializations} in
           match specializeExpr sc st2 definition.body with (st2, (body, retTy)) in
           if eqi 0 (ptyCmp guess retTy) then ({st2 with specializations = mapUnionWith mapUnion localSpecializations st2.specializations}, (body, retTy)) else
           speculate retTy in
-        speculate (PHere {wrapped = Unused (), ty = tyToPureType ret})
+        speculate (PHere {wrapped = Unused (), ty = tyToPureType sc ret})
       else specializeExpr sc st definition.body
     with (st, (body, retTy)) in
     let def : DeclLetRecord =
@@ -716,14 +766,26 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
         , decl = Some def
         , depth = definition.depth
         } in
-      { specializations = mapInsertWith mapUnion ident
+      { specializations = mapInsertWith mapUnion definition.fName
         (mapSingleton (seqCmp ptyCmp) argTys spec)
         st.specializations
       } in
     (st, (foldl app_ (nvar_ name) args, retTy))
   | SCKPolyFlexible polyType ->
+    -- OPT(vipa, 2025-11-25): This currently checks if at least one
+    -- argument is wrapped further than a polymorphic instantiation of
+    -- the function could absorb and, if so, wraps *all*
+    -- arguments. This is a bit overly cautious in at least two cases:
+    -- * `addf a b` where `a` is pure and `b` is wrapped. This could
+    --   be `map (addf a) b` rather than `apply (map addf (pure a))
+    --   b`. Of course, the latter will simplify to the former with
+    --   `_app`, so it's not really a problem per se.
+    -- * `get [x] i` where `x` and `i` are wrapped. This could be
+    --   `join (map (get [x]) i)` rather than `apply (map get
+    --   (traverse id [x])) i`. The latter does *not* simplify to the
+    --   former.
     match unzip args with (args, argPTys) in
-    let retPTy = tyToPurePType ret in
+    let retPTy = tyToPurePTypeEmptyUser ret in
     recursive let tyArgs = lam args. lam ty.
       match unwrapType ty with TyArrow x
       then tyArgs (snoc args x.from) x.to
@@ -770,9 +832,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let apply = if needsFullWrap then _apply else _app in
     (st, (foldl apply (pure tm) args, retTy))
 
-  sem specializeDeclPre : PScope -> PState -> Decl -> (PScope, PState)
-  sem specializeDeclPre sc st =
-  | DeclLet x ->
+  sem _defaultLetSpecialization sc st = | x ->
     match specializeExpr {sc with depth = subi sc.depth 1} st x.body with (st, (tm, ty)) in
     let n = nameSetNewSym x.ident in
     let spec = mapSingleton (seqCmp ptyCmp) []
@@ -784,23 +844,31 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     ( addBinding x.ident (n, ty) sc
     , {st with specializations = mapInsert x.ident spec st.specializations}
     )
+
+  sem specializeDeclPre : PScope -> PState -> Decl -> (PScope, PState)
+  sem specializeDeclPre sc st =
+  | DeclLet x -> _defaultLetSpecialization sc st x
+  | DeclLet (x & {ident = ident, body = body & TmVar {ident = vIdent}}) ->
+    match mapLookup vIdent sc.functionDefinitions with Some def
+    then ({sc with functionDefinitions = mapInsert ident def sc.functionDefinitions}, st)
+    else _defaultLetSpecialization sc st x
   | DeclLet {ident = ident, body = body & TmLam _} ->
     recursive let work = lam params. lam tm.
       match tm with TmLam x
       then work (snoc params x.ident) x.body
-      else {params = params, mayBeRecursive = false, body = tm, depth = sc.depth} in
+      else {fName = ident, params = params, mayBeRecursive = false, body = tm, depth = sc.depth} in
     ({sc with functionDefinitions = mapInsert ident (work [] body) sc.functionDefinitions}, st)
   | DeclRecLets x ->
-    recursive let work = lam params. lam tm.
+    recursive let work = lam fName. lam params. lam tm.
       match tm with TmLam x
-      then work (snoc params x.ident) x.body
-      else {params = params, mayBeRecursive = true, body = tm, depth = sc.depth} in
+      then work fName (snoc params x.ident) x.body
+      else {fName = fName, params = params, mayBeRecursive = true, body = tm, depth = sc.depth} in
     let f = lam definitions. lam decl.
-      mapInsert decl.ident (work [] decl.body) definitions in
+      mapInsert decl.ident (work decl.ident [] decl.body) definitions in
     ({sc with functionDefinitions = foldl f sc.functionDefinitions x.bindings}, st)
   | DeclExt x ->
     match unwrapType x.tyIdent with !(TyArrow _ | TyAll _)
-    then (addBinding x.ident (x.ident, tyToPurePType x.tyIdent) sc, st)
+    then (addBinding x.ident (x.ident, tyToPurePType sc x.tyIdent) sc, st)
     else (sc, st)
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPre"
 
@@ -822,15 +890,16 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | decl & (DeclExt _) -> (st, [decl])
   | decl -> errorSingle [infoDecl decl] "Missing case in specializeDeclPost"
 
-  sem specializeExprReturn : PScope -> PState -> Expr -> Expr
-  sem specializeExprReturn sc st = | tm ->
-    match specializeExprTypes sc st tm with (st, (tm, ty)) in
+  sem specializeExprReturn : PScope -> PState -> Map Name Type -> Expr -> Expr
+  sem specializeExprReturn sc st freeVariables = | tm ->
+    match specializeExprTypes sc st freeVariables tm with (st, (tm, ty)) in
     let tm = adjustWrapping (ty, ensureWrapped ty) tm in
     app_ (uconst_ (CPExport ())) tm
 
-  sem specializeExprTypes : PScope -> PState -> Expr -> (PState, (Expr, PType))
-  sem specializeExprTypes sc st = | tm ->
-    recursive let collectTypes = lam constructorsByType : Map Name (Map Name (RecTy ())). lam tm.
+  sem specializeExprTypes : PScope -> PState -> Map Name Type -> Expr -> (PState, (Expr, PType))
+  sem specializeExprTypes sc st freeVariables = | tm ->
+    type TyF = all ty. InstTypeF ty ty in
+    recursive let collectTypes = lam constructorsByType : Map Name (Map Name (RecTy TyF)). lam tm.
       switch tm
       case TmDecl {decl = DeclConDef x, inexpr = inexpr} then
         let deconstructType : Type -> {carried : Type, tyName : Name, retParams : [Type]} = lam ty.
@@ -838,22 +907,47 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
           match getTypeArgs to with (TyCon {ident = tyName}, retParams) in
           {carried = carried, tyName = tyName, retParams = retParams} in
         let tyInfo = deconstructType x.tyIdent in
-        let distributeC = lam x.
-          match mapMPTypeCOption eitherGetRight x with Some ptys
-          then Right (PLater ptys)
-          else Left (RLater (mapPTypeC (eitherEither (lam x. x) (lam. NoRec ())) x)) in
-        let checkRecursion = lam ty. lam tyArgs.
-          match ty with TyCon x then
+        let argIdxes : Map Name Int = foldli
+          (lam m. lam idx. lam ty. match ty with TyVar x then mapInsert x.ident idx m else m)
+          (mapEmpty nameCmp)
+          tyInfo.retParams in
+        let handleA : PTypeA -> Either (RecTy TyF) TyF = lam ty.
+          let f : TyF = lam m. lam. lam fa. lam. fa ty in
+          Right #frozen"f" in
+        let handleC : PTypeC (Either (RecTy TyF) TyF) -> Either (RecTy TyF) TyF = lam ty.
+          match mapMPTypeCOption eitherGetRight ty with Some ptys then
+            let f : TyF = lam m. lam args. lam fa. lam fc. fc (mapPTypeC (lam tyf : TyF. tyf m args fa fc) ptys) in
+            Right #frozen"f"
+          else
+            Left (RLater (mapPTypeC (eitherEither (lam x : RecTy TyF. x) (lam tyf : TyF. NoRec #frozen"tyf")) ty)) in
+        recursive let handleCustom : Type -> [Type] -> Either (RecTy TyF) TyF = lam ty. lam tyArgs.
+          switch ty
+          case TyVar x then
+            (if null tyArgs then () else
+              errorSingle [x.info] "Found type application of type variable in constructor definition, this is not supported.");
+            match mapLookup x.ident argIdxes with Some idx then
+              let f : TyF = lam. lam args. lam. lam. get args idx in
+              Right #frozen"f"
+            else
+              let f : TyF = lam. lam. lam fa. lam. fa (PUnknown ()) in
+              Right #frozen"f"
+          case TyCon x then
             if nameEq x.ident tyInfo.tyName then
               if eqi 0 (seqCmp cmpType tyInfo.retParams tyArgs)
               then Left (Rec ())
               else errorSingle [x.info] "Found polymorphic recursion in constructor definition, this is not supported for now."
-            else Right (PLater (PUser (mapEmpty nameCmp)))
-          else Right (PLater (PUser (mapEmpty nameCmp))) in
-        recursive let work = lam ty.
-          match ty with TyVar _ then Left (NoRec ()) else
-          tyToPTypeX (lam x. Right (PNever x)) distributeC checkRecursion ty in
-        let recTy = eitherEither (lam x. x) (lam. NoRec ()) (work tyInfo.carried) in
+            else
+              let conv = lam ty. eitherGetRight (tyToPTypeX handleA handleC handleCustom ty) in
+              match optionMapM conv tyArgs with Some tyArgs then
+                let f : TyF = lam m. lam args. lam fa. lam fc.
+                  match mapLookup x.ident m with Some (InstType itf)
+                  then fc (PUser (itf m (map (lam tyf : TyF. tyf m args fa fc) tyArgs) fa fc))
+                  else fc (PUser (mapEmpty nameCmp)) in
+                Right #frozen"f"
+              else errorSingle [x.info] "Found recursion through the argument of another type in constructor definition, this is not supported."
+          end in
+        let recTy = eitherEither (lam x : RecTy TyF. x) (lam tyf : TyF. NoRec #frozen"tyf")
+          (tyToPTypeX handleA handleC handleCustom tyInfo.carried) in
         let constructorsByType = mapInsertWith mapUnion tyInfo.tyName (mapSingleton nameCmp x.ident recTy) constructorsByType in
         collectTypes constructorsByType inexpr
       case TmDecl {decl = DeclType {ident = ident, tyIdent = TyVariant _}, inexpr = inexpr} then
@@ -871,7 +965,18 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
         (constructorsByType, tm)
       end in
     match collectTypes (mapEmpty nameCmp) tm with (constructorsByType, tm) in
-    let sc = {sc with conScope = mapFoldWithKey (lam a. lam. lam v. mapUnion a v) (mapEmpty nameCmp) constructorsByType} in
+    let constructorsByTypeUnit = mapMap (mapMap (mapRecTy (lam tyf : TyF. ()))) constructorsByType in
+    let sc =
+      { sc with conScope = mapFoldWithKey
+        (lam a. lam. lam v. mapUnion a v)
+        sc.conScope constructorsByTypeUnit
+      , tyConAsPure = mapMap
+        (lam constructors : Map Name (RecTy TyF).
+          let f : all ty. InstTypeF ty (Map Name (RecTy ty)) = lam m. lam args. lam fa. lam fc.
+            mapMap (mapRecTy (lam tyf : TyF. tyf m args fa fc)) constructors in
+          InstType #frozen"f")
+        constructorsByType
+      } in
     let declsForType : Name -> Map Name (RecTy ()) -> [Decl] = lam tyName. lam constructors.
       match mapMapAccum (lam i. lam. lam v. mapAccumLRecTy (lam i. lam. (addi i 1, i)) i v) 0 constructors
         with (numParams, idxedConstructors) in
@@ -897,7 +1002,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
         , info = NoInfo ()
         } in
       cons tyDecl (mapValues (mapMapWithKey mkConstructorDecl idxedConstructors)) in
-    let tyDecls = join (mapValues (mapMapWithKey declsForType constructorsByType)) in
+    let tyDecls = join (mapValues (mapMapWithKey declsForType constructorsByTypeUnit)) in
+    let sc = mapFoldWithKey
+      (lam sc. lam n. lam ty. addBinding n (n, tyToPurePType sc ty) sc)
+      sc freeVariables in
     match specializeExpr sc st tm with (st, (tm, ty)) in
     (st, (bindall_ tyDecls tm, ty))
 
@@ -1031,13 +1139,13 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | TmVar x ->
     match mapLookup x.ident sc.valueScope with Some (n, ty)
     then (st, (TmVar {x with ident = n}, ty))
-    else errorSingle [x.info] (concat "Missing entry in valueScope " (expr2str (TmVar x)))
+    else errorSingle [x.info] (concat "Compiler error: missing entry in valueScope " (expr2str (TmVar x)))
   | TmSeq x ->
     match mapAccumL (specializeExpr sc) st x.tms with (st, tms) in
     match unzip tms with (tms, tmTys) in
     let elemTy = match tmTys with [ty] ++ tmTys
       then foldl lubPType ty tmTys
-      else match unwrapType x.ty with TySeq x in PHere {wrapped = Unused (), ty = tyToPureType x.ty} in
+      else match unwrapType x.ty with TySeq x in PHere {wrapped = Unused (), ty = tyToPureType sc x.ty} in
     let tms = zipWith (lam tmTy. adjustWrapping (tmTy, elemTy)) tmTys tms in
     (st, (TmSeq {x with tms = tms}, PLater (PSeq elemTy)))
   | TmRecord x ->
@@ -1064,7 +1172,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   -- never) so we don't get a sub-model for the then-branch
   | TmMatch x -> specializeMatch sc st x
   | TmNever {ty = TyUnknown _, info = info} -> errorSingle [info] "Never without type information"
-  | tm & TmNever x -> (st, (tm, PHere {wrapped = Unused (), ty = tyToPureType x.ty}))
+  | tm & TmNever x -> (st, (tm, PHere {wrapped = Unused (), ty = tyToPureType sc x.ty}))
   | tm & TmConst {val = CFloat _} -> (st, (tm, PNever (PFloat ())))
   | tm & TmConst {val = CInt _} -> (st, (tm, PNever (PInt ())))
   | tm & TmConst {val = CBool _} -> (st, (tm, PNever (PBool ())))
@@ -1265,8 +1373,10 @@ let transform = lam strs.
     , valueScope = mapEmpty nameCmp
     , revValueScope = mapEmpty nameCmp
     , conScope = mapEmpty nameCmp
+    , depth = 0
+    , tyConAsPure = mapEmpty nameCmp
     } in
-  match specializeExpr initScope initState ast with (_, (ast, _)) in
+  match specializeExprTypes initScope initState (mapEmpty nameCmp) ast with (_, (ast, _)) in
   (pprintCode 0 pprintEnvEmpty ast).1 in
 
 let printFailure = lam l. lam r. strJoin "\n"
@@ -1278,7 +1388,7 @@ utest transform
   [ "assume (Gaussian 0.0 1.0)"
   ]
 with strJoin "\n"
-  [ "p_assume (p_pure (Gaussian 0. 1.))"
+  [ "px_assume (px_pure (Gaussian 0. 1.))"
   ]
 using eqString
 else printFailure
@@ -1289,7 +1399,7 @@ utest transform
   , "assume (Gaussian x 1.0)"
   ]
 with strJoin "\n"
-  [ "p_assume (p_pure (Gaussian 0. 1.))"
+  [ "px_assume (px_pure (Gaussian 0. 1.))"
   ]
 using eqString
 else printFailure
@@ -1300,11 +1410,11 @@ utest transform
   , "assume (Gaussian x 1.0)"
   ]
 with strJoin "\n"
-  [ "p_assume"
-  , "  (p_map"
-  , "     (lam x."
+  [ "px_assume"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
   , "        Gaussian x 1.)"
-  , "     (p_assume (p_pure (Gaussian 0. 1.))))"
+  , "     (px_assume (px_pure (Gaussian 0. 1.))))"
   ]
 using eqString
 else printFailure
@@ -1314,9 +1424,13 @@ utest transform
   [ "addf (assume (Gaussian 0.0 1.0)) (assume (Gaussian 1.0 1.0))"
   ]
 with strJoin "\n"
-  [ "p_apply"
-  , "  (p_map addf (p_assume (p_pure (Gaussian 0. 1.))))"
-  , "  (p_assume (p_pure (Gaussian 1. 1.)))"
+  [ "px_apply"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
+  , "        /-temp-/lam x1."
+  , "          addf x x1)"
+  , "     (px_assume (px_pure (Gaussian 0. 1.))))"
+  , "  (px_assume (px_pure (Gaussian 1. 1.)))"
   ]
 using eqString
 else printFailure
@@ -1326,13 +1440,13 @@ utest transform
   [ "addf (addf (assume (Gaussian 0.0 1.0)) (assume (Gaussian 1.0 1.0))) 2.0"
   ]
 with strJoin "\n"
-  [ "p_apply"
-  , "  (p_map"
-  , "     (lam x."
-  , "        lam x1."
+  [ "px_apply"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
+  , "        /-temp-/lam x1."
   , "          addf (addf x x1) 2.)"
-  , "     (p_assume (p_pure (Gaussian 0. 1.))))"
-  , "  (p_assume (p_pure (Gaussian 1. 1.)))"
+  , "     (px_assume (px_pure (Gaussian 0. 1.))))"
+  , "  (px_assume (px_pure (Gaussian 1. 1.)))"
   ]
 using eqString
 else printFailure
@@ -1357,9 +1471,13 @@ with strJoin "\n"
   [ "let f = lam a1."
   , "    addf a1 1. in"
   , "let f1 = lam a."
-  , "    p_map (lam x."
-  , "         addf x 1.) a in"
-  , "p_map (addf (f 1.)) (f1 (p_assume (p_pure (Gaussian 0. 1.))))"
+  , "    px_map (/-temp-/lam x1."
+  , "         addf x1 1.) a"
+  , "in"
+  , "px_map"
+  , "  (/-temp-/lam x."
+  , "     addf (f 1.) x)"
+  , "  (f1 (px_assume (px_pure (Gaussian 0. 1.))))"
   ]
 using eqString
 else printFailure
@@ -1372,15 +1490,19 @@ utest transform
   ]
 with strJoin "\n"
   [ "let g = lam a1."
-  , "    p_assume (p_pure (Gaussian a1 1.)) in"
+  , "    px_assume (px_pure (Gaussian a1 1.)) in"
   , "let g1 ="
   , "  lam a."
-  , "    p_assume (p_map (lam x."
-  , "            Gaussian x 1.) a)"
+  , "    px_assume (px_map (/-temp-/lam x2."
+  , "            Gaussian x2 1.) a)"
   , "in"
-  , "p_apply"
-  , "  (p_map addf (g 1.))"
-  , "  (g1 (p_assume (p_pure (Gaussian 0. 1.))))"
+  , "px_apply"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
+  , "        /-temp-/lam x1."
+  , "          addf x x1)"
+  , "     (g 1.))"
+  , "  (g1 (px_assume (px_pure (Gaussian 0. 1.))))"
   ]
 using eqString
 else printFailure
@@ -1393,11 +1515,12 @@ utest transform
 with strJoin "\n"
   [ "recursive"
   , "  let sum = lam x."
-  , "      sum1 (p_assume (p_pure (Gaussian x 1.)))"
+  , "      sum1 (px_assume (px_pure (Gaussian x 1.)))"
   , "  let sum1 ="
   , "    lam x1."
   , "      sum1"
-  , "        (p_assume (p_map (lam x2."
+  , "        (px_assume"
+  , "           (px_map (/-temp-/lam x2."
   , "                 Gaussian x2 1.) x1))"
   , "in"
   , "sum 1."
@@ -1415,11 +1538,12 @@ utest transform
 with strJoin "\n"
   [ "recursive"
   , "  let even = lam x."
-  , "      even1 (p_assume (p_pure (Gaussian x 1.)))"
+  , "      even1 (px_assume (px_pure (Gaussian x 1.)))"
   , "  let even1 ="
   , "    lam x1."
   , "      even1"
-  , "        (p_assume (p_map (lam x2."
+  , "        (px_assume"
+  , "           (px_map (/-temp-/lam x2."
   , "                 Gaussian x2 1.) x1))"
   , "in"
   , "even 1."
@@ -1442,8 +1566,8 @@ utest transform
   [ "[1.0, assume (Gaussian 0.0 1.0)]"
   ]
 with strJoin "\n"
-  [ "[ p_pure 1.,"
-  , "  p_assume (p_pure (Gaussian 0. 1.)) ]"
+  [ "[ px_pure 1.,"
+  , "  px_assume (px_pure (Gaussian 0. 1.)) ]"
   ]
 using eqString
 else printFailure
@@ -1453,10 +1577,7 @@ utest transform
   [ "if true then 1 else 2"
   ]
 with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "match true with true"
   , "then"
   , "  1"
   , "else"
@@ -1470,14 +1591,11 @@ utest transform
   [ "if true then assume (Gaussian 0.0 1.0) else 42.0"
   ]
 with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "match true with true"
   , "then"
-  , "  p_assume (p_pure (Gaussian 0. 1.))"
+  , "  px_assume (px_pure (Gaussian 0. 1.))"
   , "else"
-  , "  p_pure 42."
+  , "  px_pure 42."
   ]
 using eqString
 else printFailure
@@ -1487,13 +1605,10 @@ utest transform
   [ "match (assume (Gaussian 0.0 1.0), 2.0) with (a, b) in addf a b"
   ]
 with strJoin "\n"
-  [ "match"
-  , "  (p_assume (p_pure (Gaussian 0. 1.)), 2.)"
-  , "with"
-  , "  (field, field1)"
+  [ "match (px_assume (px_pure (Gaussian 0. 1.)), 2.) with (field, field1)"
   , "in"
-  , "p_map (lam x."
-  , "       addf x field1) field"
+  , "px_map (/-temp-/lam x."
+  , "     addf x field1) field"
   ]
 using eqString
 else printFailure
@@ -1503,18 +1618,15 @@ utest transform
   [ "if assume (Bernoulli 0.5) then false else true"
   ]
 with strJoin "\n"
-  [ "p_map"
-  , "  (lam x."
-  , "     let target = x in"
-  , "     match"
-  , "       target"
-  , "     with"
-  , "       true"
+  [ "px_map"
+  , "  (/-temp-/lam x."
+  , "     let x1 = x in"
+  , "     match x1 with true"
   , "     then"
   , "       false"
   , "     else"
   , "       true)"
-  , "  (p_assume (p_pure (Bernoulli 0.5)))"
+  , "  (px_assume (px_pure (Bernoulli 0.5)))"
   ]
 using eqString
 else printFailure
@@ -1524,19 +1636,16 @@ utest transform
   [ "if assume (Bernoulli 0.5) then assume (Bernoulli 0.9) else false"
   ]
 with strJoin "\n"
-  [ "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target = x in"
-  , "        match"
-  , "          target"
-  , "        with"
-  , "          true"
+  [ "px_join"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
+  , "        let x1 = x in"
+  , "        match x1 with true"
   , "        then"
-  , "          p_assume (p_pure (Bernoulli 0.9))"
+  , "          px_assume (px_pure (Bernoulli 0.9))"
   , "        else"
-  , "          p_pure false)"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
+  , "          px_pure false)"
+  , "     (px_assume (px_pure (Bernoulli 0.5))))"
   ]
 using eqString
 else printFailure
@@ -1546,14 +1655,11 @@ utest transform
   [ "if true then (1, 2.0) else (2, assume (Gaussian 0.0 1.0))"
   ]
 with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "match true with true"
   , "then"
-  , "  (1, p_pure 2.)"
+  , "  (1, px_pure 2.)"
   , "else"
-  , "  (2, p_assume (p_pure (Gaussian 0. 1.)))"
+  , "  (2, px_assume (px_pure (Gaussian 0. 1.)))"
   ]
 using eqString
 else printFailure
@@ -1563,22 +1669,19 @@ utest transform
   [ "if assume (Bernoulli 0.5) then [1.0, 2.0] else [assume (Gaussian 0.0 1.0)]"
   ]
 with strJoin "\n"
-  [ "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target = x in"
-  , "        match"
-  , "          target"
-  , "        with"
-  , "          true"
+  [ "px_join"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
+  , "        let x1 = x in"
+  , "        match x1 with true"
   , "        then"
-  , "          p_pure [ 1., 2. ]"
+  , "          px_pure [ 1., 2. ]"
   , "        else"
-  , "          p_traverseSeq"
-  , "            (lam x1."
-  , "               x1)"
-  , "            [ p_assume (p_pure (Gaussian 0. 1.)) ])"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
+  , "          px_map"
+  , "            (/-temp-/lam x2."
+  , "               [ x2 ])"
+  , "            (px_assume (px_pure (Gaussian 0. 1.))))"
+  , "     (px_assume (px_pure (Bernoulli 0.5))))"
   ]
 using eqString
 else printFailure
@@ -1588,15 +1691,12 @@ utest transform
   [ "if true then [1., 2.] else [assume (Gaussian 0.0 1.0)]"
   ]
 with strJoin "\n"
-  [ "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "match true with true"
   , "then"
-  , "  [ p_pure 1.,"
-  , "    p_pure 2. ]"
+  , "  [ px_pure 1.,"
+  , "    px_pure 2. ]"
   , "else"
-  , "  [ p_assume (p_pure (Gaussian 0. 1.)) ]"
+  , "  [ px_assume (px_pure (Gaussian 0. 1.)) ]"
   ]
 using eqString
 else printFailure
@@ -1609,13 +1709,10 @@ utest transform
   , "if true then Left 1 else Right 2.0"
   ]
 with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "type Either p p1 in"
+  , "con Left: all p2. all p3. p2 -> Either p2 p3 in"
+  , "con Right: all p4. all p5. p5 -> Either p4 p5 in"
+  , "match true with true"
   , "then"
   , "  Left"
   , "    1"
@@ -1634,19 +1731,16 @@ utest transform
   , "if true then Left 1.0 else let x = assume (Gaussian 1.0 0.0) in Left x"
   ]
 with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "type Either p p1 in"
+  , "con Left: all p2. all p3. p2 -> Either p2 p3 in"
+  , "con Right: all p4. all p5. p5 -> Either p4 p5 in"
+  , "match true with true"
   , "then"
   , "  Left"
-  , "    (p_pure 1.)"
+  , "    (px_pure 1.)"
   , "else"
   , "  Left"
-  , "    (p_assume (p_pure (Gaussian 1. 0.)))"
+  , "    (px_assume (px_pure (Gaussian 1. 0.)))"
   ]
 using eqString
 else printFailure
@@ -1659,31 +1753,25 @@ utest transform
   , "if true then Left 1.0 else if assume (Bernoulli 0.5) then Left 2.0 else Left 3.0"
   ]
 with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "type Either p p1 in"
+  , "con Left: all p2. all p3. p2 -> Either p2 p3 in"
+  , "con Right: all p4. all p5. p5 -> Either p4 p5 in"
+  , "match true with true"
   , "then"
-  , "  p_pure (Left"
+  , "  px_pure (Left"
   , "       1.)"
   , "else"
-  , "  p_map"
-  , "    (lam x."
-  , "       let target = x in"
-  , "       match"
-  , "         target"
-  , "       with"
-  , "         true"
+  , "  px_map"
+  , "    (/-temp-/lam x."
+  , "       let x1 = x in"
+  , "       match x1 with true"
   , "       then"
   , "         Left"
   , "           2."
   , "       else"
   , "         Left"
   , "           3.)"
-  , "    (p_assume (p_pure (Bernoulli 0.5)))"
+  , "    (px_assume (px_pure (Bernoulli 0.5)))"
   ]
 using eqString
 else printFailure
@@ -1700,34 +1788,28 @@ utest transform
   , "  if assume (Bernoulli 0.5) then Left 2.0 else Left 3.0"
   ]
 with strJoin "\n"
-  [ "type Either a b in"
-  , "con Left: all a1. all b1. a1 -> Either a1 b1 in"
-  , "con Right: all a2. all b2. b2 -> Either a2 b2 in"
-  , "match"
-  , "  true"
-  , "with"
-  , "  true"
+  [ "type Either p p1 in"
+  , "con Left: all p2. all p3. p2 -> Either p2 p3 in"
+  , "con Right: all p4. all p5. p5 -> Either p4 p5 in"
+  , "match true with true"
   , "then"
-  , "  p_map"
-  , "    (lam x."
+  , "  px_map"
+  , "    (/-temp-/lam x."
   , "       Left"
   , "         x)"
-  , "    (p_assume (p_pure (Gaussian 1. 0.)))"
+  , "    (px_assume (px_pure (Gaussian 1. 0.)))"
   , "else"
-  , "  p_map"
-  , "    (lam x1."
-  , "       let target = x1 in"
-  , "       match"
-  , "         target"
-  , "       with"
-  , "         true"
+  , "  px_map"
+  , "    (/-temp-/lam x1."
+  , "       let x2 = x1 in"
+  , "       match x2 with true"
   , "       then"
   , "         Left"
   , "           2."
   , "       else"
   , "         Left"
   , "           3.)"
-  , "    (p_assume (p_pure (Bernoulli 0.5)))"
+  , "    (px_assume (px_pure (Bernoulli 0.5)))"
   ]
 using eqString
 else printFailure
@@ -1740,9 +1822,10 @@ utest transform
   , "Node {x = 1.0, left = Leaf {x = 2.0}, right = Leaf {x = 3.0}}"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
   , "Node"
   , "  { x = 1.,"
   , "    left = Leaf"
@@ -1762,15 +1845,17 @@ utest transform
   , "Node {x = 1.0, left = Leaf {x = x}, right = Leaf {x = 3.0}}"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
   , "Node"
   , "  { x = 1.,"
-  , "    left = Leaf"
-  , "        { x = p_assume (p_pure (Gaussian 0. 1.)) },"
+  , "    left ="
+  , "      Leaf"
+  , "        { x = px_assume (px_pure (Gaussian 0. 1.)) },"
   , "    right = Leaf"
-  , "        { x = p_pure 3. } }"
+  , "        { x = px_pure 3. } }"
   ]
 using eqString
 else printFailure
@@ -1785,32 +1870,30 @@ utest transform
   , "Node {x = 1.0, left = l, right = Leaf {x = 3.0}}"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "p_map"
-  , "  (lam x."
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
+  , "px_map"
+  , "  (/-temp-/lam x."
   , "     Node"
   , "       { x = 1., left = x, right = Leaf"
   , "             { x = 3. } })"
-  , "  (p_join"
-  , "     (p_map"
-  , "        (lam x1."
-  , "           let target = x1 in"
-  , "           match"
-  , "             target"
-  , "           with"
-  , "             true"
+  , "  (px_join"
+  , "     (px_map"
+  , "        (/-temp-/lam x1."
+  , "           let x2 = x1 in"
+  , "           match x2 with true"
   , "           then"
-  , "             p_map"
-  , "               (lam x2."
+  , "             px_map"
+  , "               (/-temp-/lam x3."
   , "                  Leaf"
-  , "                    { x = x2 })"
-  , "               (p_assume (p_pure (Gaussian 0. 1.)))"
+  , "                    { x = x3 })"
+  , "               (px_assume (px_pure (Gaussian 0. 1.)))"
   , "           else"
-  , "             p_pure (Leaf"
+  , "             px_pure (Leaf"
   , "                  { x = 2. }))"
-  , "        (p_assume (p_pure (Bernoulli 0.5)))))"
+  , "        (px_assume (px_pure (Bernoulli 0.5)))))"
   ]
 using eqString
 else printFailure
@@ -1826,20 +1909,21 @@ utest transform
   , "merge (merge (Leaf {x = 1.0}) (Leaf {x = 2.0})) (Leaf {x = 3.0})"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
   , "let merge ="
   , "  lam l1."
   , "    lam r1."
   , "      Node"
-  , "        { x = p_assume (p_pure (Gaussian 0. 1.)), left = l1, right = r1 }"
+  , "        { x = px_assume (px_pure (Gaussian 0. 1.)), left = l1, right = r1 }"
   , "in"
   , "let merge1 ="
   , "  lam l."
   , "    lam r."
   , "      Node"
-  , "        { x = p_assume (p_pure (Gaussian 0. 1.)), left = l, right = r }"
+  , "        { x = px_assume (px_pure (Gaussian 0. 1.)), left = l, right = r }"
   , "in"
   , "merge1"
   , "  (merge (Leaf"
@@ -1861,31 +1945,29 @@ utest transform
   , "else Leaf {x = 1.0}"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
-  , "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target = x in"
-  , "        match"
-  , "          target"
-  , "        with"
-  , "          true"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
+  , "px_join"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
+  , "        let x1 = x in"
+  , "        match x1 with true"
   , "        then"
-  , "          p_map"
-  , "            (lam x1."
+  , "          px_map"
+  , "            (/-temp-/lam x2."
   , "               Node"
-  , "                 { x = x1,"
+  , "                 { x = x2,"
   , "                   left = Leaf"
   , "                       { x = 1. },"
   , "                   right = Leaf"
   , "                       { x = 2. } })"
-  , "            (p_assume (p_pure (Gaussian 0. 1.)))"
+  , "            (px_assume (px_pure (Gaussian 0. 1.)))"
   , "        else"
-  , "          p_pure (Leaf"
+  , "          px_pure (Leaf"
   , "               { x = 1. }))"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
+  , "     (px_assume (px_pure (Bernoulli 0.5))))"
   ]
 using eqString
 else printFailure
@@ -1910,71 +1992,50 @@ utest transform
   , "()"
   ]
 with strJoin "\n"
-  [ "type List a in"
-  , "con Nil: all a1. () -> List a1 in"
-  , "con Cons: all a2. (a2, List a2) -> List a2 in"
-  , "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type List p p1 in"
+  , "con Nil: all p2. all p3. p2 -> List p2 p3 in"
+  , "con Cons: all p4. all p5. (p5, List p4 p5) -> List p4 p5 in"
+  , "type Tree p6 p7 in"
+  , "con Leaf: all p8. all p9. p8 -> Tree p8 p9 in"
+  , "con Node: all p10. all p11. {x: p11, left: Tree p10 p11, right: Tree p10 p11} -> Tree p10 p11"
+  , "in"
   , "recursive"
   , "  let cluster ="
   , "    lam trees."
-  , "      match"
-  , "        trees"
-  , "      with"
-  , "        Cons tmp"
+  , "      match trees with Cons tmp"
   , "      in"
-  , "      match"
-  , "          tmp"
-  , "        with"
-  , "          (tree, rest)"
+  , "      match tmp with (tree, rest)"
+  , "      in"
+  , "      match rest with Cons tmp1"
+  , "      then"
+  , "        match tmp1 with (r, trees1)"
   , "        in"
-  , "        match"
-  , "            rest"
-  , "          with"
-  , "            Cons tmp1"
-  , "          then"
-  , "            match"
-  , "              tmp1"
-  , "            with"
-  , "              (r, trees1)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)), left = tree, right = r }, trees1))"
-  , "          else"
-  , "            tree"
+  , "        cluster1"
+  , "          (Cons"
+  , "             (Node"
+  , "               { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                 left = tree,"
+  , "                 right = r }, trees1))"
+  , "      else"
+  , "        tree"
   , "  let cluster1 ="
   , "    lam trees2."
-  , "      match"
-  , "        trees2"
-  , "      with"
-  , "        Cons tmp2"
+  , "      match trees2 with Cons tmp2"
   , "      in"
-  , "      match"
-  , "          tmp2"
-  , "        with"
-  , "          (tree1, rest1)"
+  , "      match tmp2 with (tree1, rest1)"
+  , "      in"
+  , "      match rest1 with Cons tmp3"
+  , "      then"
+  , "        match tmp3 with (r1, trees3)"
   , "        in"
-  , "        match"
-  , "            rest1"
-  , "          with"
-  , "            Cons tmp3"
-  , "          then"
-  , "            match"
-  , "              tmp3"
-  , "            with"
-  , "              (r1, trees3)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                       left = tree1,"
-  , "                       right = r1 }, trees3))"
-  , "          else"
-  , "            tree1"
+  , "        cluster1"
+  , "          (Cons"
+  , "             (Node"
+  , "               { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                 left = tree1,"
+  , "                 right = r1 }, trees3))"
+  , "      else"
+  , "        tree1"
   , "in"
   , "(cluster"
   , "     (Cons"
@@ -2003,50 +2064,39 @@ utest transform
   , "cluster [Leaf {x = 0.0}, Leaf {x = 1.0}, Leaf {x = 2.0}]"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
   , "recursive"
   , "  let cluster ="
   , "    lam trees."
-  , "      match"
-  , "        trees"
-  , "      with"
-  , "        [ _,"
+  , "      match trees with [ _,"
   , "          _ ] ++ _"
   , "      then"
   , "        cluster1"
   , "          (cons"
   , "             (Node"
-  , "                { x = p_assume (p_pure (Gaussian 0. 1.)),"
+  , "                { x = px_assume (px_pure (Gaussian 0. 1.)),"
   , "                  left = get trees 0,"
   , "                  right = get trees 1 })"
   , "             (splitAt trees 2).1)"
-  , "      else match"
-  , "        trees"
-  , "      with"
-  , "        [ e ]"
+  , "      else match trees with [ e ]"
   , "      in"
   , "      e"
   , "  let cluster1 ="
   , "    lam trees1."
-  , "      match"
-  , "        trees1"
-  , "      with"
-  , "        [ _,"
+  , "      match trees1 with [ _,"
   , "          _ ] ++ _"
   , "      then"
   , "        cluster1"
   , "          (cons"
   , "             (Node"
-  , "                { x = p_assume (p_pure (Gaussian 0. 1.)),"
+  , "                { x = px_assume (px_pure (Gaussian 0. 1.)),"
   , "                  left = get trees1 0,"
   , "                  right = get trees1 1 })"
   , "             (splitAt trees1 2).1)"
-  , "      else match"
-  , "        trees1"
-  , "      with"
-  , "        [ e1 ]"
+  , "      else match trees1 with [ e1 ]"
   , "      in"
   , "      e1"
   , "in"
@@ -2070,9 +2120,10 @@ utest transform
   , "addf x.x 1.0"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
   , "match"
   , "  head"
   , "    (cons (Leaf"
@@ -2096,21 +2147,22 @@ utest transform
   , "addf x.x 1.0"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
   , "match"
   , "  head"
   , "    (cons"
   , "       (Leaf"
-  , "          { x = p_assume (p_pure (Gaussian 0. 1.)) })"
+  , "          { x = px_assume (px_pure (Gaussian 0. 1.)) })"
   , "       [ Leaf"
-  , "           { x = p_pure 1. } ])"
+  , "           { x = px_pure 1. } ])"
   , "with"
   , "  Leaf carried"
   , "in"
-  , "p_map (lam x."
-  , "       addf x 1.) carried.x"
+  , "px_map (/-temp-/lam x."
+  , "     addf x 1.) carried.x"
   ]
 using eqString
 else printFailure
@@ -2125,21 +2177,22 @@ utest transform
   , "addf x.x 1.0"
   ]
 with strJoin "\n"
-  [ "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type Tree p p1 in"
+  , "con Leaf: all p2. all p3. p2 -> Tree p2 p3 in"
+  , "con Node: all p4. all p5. {x: p5, left: Tree p4 p5, right: Tree p4 p5} -> Tree p4 p5"
+  , "in"
   , "match"
   , "  head"
   , "    (cons"
   , "       (Leaf"
-  , "          { x = p_pure 1. })"
+  , "          { x = px_pure 1. })"
   , "       [ Leaf"
-  , "           { x = p_assume (p_pure (Gaussian 0. 1.)) } ])"
+  , "           { x = px_assume (px_pure (Gaussian 0. 1.)) } ])"
   , "with"
   , "  Leaf carried"
   , "in"
-  , "p_map (lam x."
-  , "       addf x 1.) carried.x"
+  , "px_map (/-temp-/lam x."
+  , "     addf x 1.) carried.x"
   ]
 using eqString
 else printFailure
@@ -2161,92 +2214,77 @@ utest transform
   , "()"
   ]
 with strJoin "\n"
-  [ "type List a in"
-  , "con Nil: all a1. () -> List a1 in"
-  , "con Cons: all a2. (a2, List a2) -> List a2 in"
-  , "type Tree in"
-  , "con Leaf: {x: Float} -> Tree in"
-  , "con Node: {x: Float, left: Tree, right: Tree} -> Tree in"
+  [ "type List p p1 in"
+  , "con Nil: all p2. all p3. p2 -> List p2 p3 in"
+  , "con Cons: all p4. all p5. (p5, List p4 p5) -> List p4 p5 in"
+  , "type Tree p6 p7 in"
+  , "con Leaf: all p8. all p9. p8 -> Tree p8 p9 in"
+  , "con Node: all p10. all p11. {x: p11, left: Tree p10 p11, right: Tree p10 p11} -> Tree p10 p11"
+  , "in"
   , "recursive"
   , "  let cluster ="
   , "    lam trees."
-  , "      match"
-  , "        trees"
-  , "      with"
-  , "        Cons carried"
-  , "      in"
-  , "      match"
-  , "          carried"
-  , "        with"
-  , "          (field, field1)"
+  , "      let matchBody = lam #var\"\"."
+  , "          never in"
+  , "      match trees with Cons carried"
+  , "      then"
+  , "        match carried with (field, field1)"
   , "        in"
-  , "        match"
-  , "            field1"
-  , "          with"
-  , "            Nil carried1"
-  , "          then"
-  , "            field"
-  , "          else match"
-  , "            field1"
-  , "          with"
-  , "            Cons carried2"
+  , "        match field1 with Nil carried1"
+  , "        then"
+  , "          field"
+  , "        else match field1 with Cons carried2"
+  , "        then"
+  , "          match carried2 with (field2, field3)"
   , "          in"
-  , "          match"
-  , "              carried2"
-  , "            with"
-  , "              (field2, field3)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                       left = field,"
-  , "                       right = field2 }, field3))"
+  , "          cluster1"
+  , "            (Cons"
+  , "               (Node"
+  , "                 { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                   left = field,"
+  , "                   right = field2 }, field3))"
+  , "        else"
+  , "          matchBody {}"
+  , "      else"
+  , "        matchBody {}"
   , "  let cluster1 ="
   , "    lam trees1."
-  , "      match"
-  , "        trees1"
-  , "      with"
-  , "        Cons carried3"
-  , "      in"
-  , "      match"
-  , "          carried3"
-  , "        with"
-  , "          (field4, field5)"
+  , "      let matchBody1 = lam #var\"1\"."
+  , "          never in"
+  , "      match trees1 with Cons carried3"
+  , "      then"
+  , "        match carried3 with (field4, field5)"
   , "        in"
-  , "        match"
-  , "            field5"
-  , "          with"
-  , "            Nil carried4"
-  , "          then"
-  , "            field4"
-  , "          else match"
-  , "            field5"
-  , "          with"
-  , "            Cons carried5"
+  , "        match field5 with Nil carried4"
+  , "        then"
+  , "          field4"
+  , "        else match field5 with Cons carried5"
+  , "        then"
+  , "          match carried5 with (field6, field7)"
   , "          in"
-  , "          match"
-  , "              carried5"
-  , "            with"
-  , "              (field6, field7)"
-  , "            in"
-  , "            cluster1"
-  , "                (Cons"
-  , "                   (Node"
-  , "                     { x = p_assume (p_pure (Gaussian 0. 1.)),"
-  , "                       left = field4,"
-  , "                       right = field6 }, field7))"
+  , "          cluster1"
+  , "            (Cons"
+  , "               (Node"
+  , "                 { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                   left = field4,"
+  , "                   right = field6 }, field7))"
+  , "        else"
+  , "          matchBody1 {}"
+  , "      else"
+  , "        matchBody1 {}"
   , "in"
-  , "(cluster"
-  , "     (Cons"
-  , "        (Leaf"
-  , "          { x = 0. }, Cons"
-  , "          (Leaf"
-  , "            { x = 1. }, Cons"
-  , "            (Leaf"
-  , "              { x = 2. }, Nil"
-  , "              {})))))"
-  , "; {}"
+  , "let #var\"2\" ="
+  , "  cluster"
+  , "    (Cons"
+  , "       (Leaf"
+  , "         { x = 0. }, Cons"
+  , "         (Leaf"
+  , "           { x = 1. }, Cons"
+  , "           (Leaf"
+  , "             { x = 2. }, Nil"
+  , "             {}))))"
+  , "in"
+  , "{}"
   ]
 using eqString
 else printFailure
@@ -2261,33 +2299,21 @@ utest transform
   , "end"
   ]
 with strJoin "\n"
-  [ "let #var\"X\" = p_assume (p_pure (Categorical [ 0.25, 0.25, 0.25, 0.25 ]))"
+  [ "let #var\"X\" = px_assume (px_pure (Categorical [ 0.25, 0.25, 0.25, 0.25 ]))"
   , "in"
-  , "p_map"
-  , "  (lam x."
-  , "     let #var\"X1\" = x in"
-  , "     match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       0"
+  , "px_map"
+  , "  (/-temp-/lam x."
+  , "     let x1 = x in"
+  , "     match x1 with 0"
   , "     then"
   , "       0"
-  , "     else match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       1"
+  , "     else match x1 with 1"
   , "     then"
   , "       1"
-  , "     else match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       2"
+  , "     else match x1 with 2"
   , "     then"
   , "       2"
-  , "     else match"
-  , "       #var\"X1\""
-  , "     with"
-  , "       3"
+  , "     else match x1 with 3"
   , "     in"
   , "     3)"
   , "  #var\"X\""
@@ -2302,26 +2328,21 @@ utest transform
   , "addi a b"
   ]
 with strJoin "\n"
-  [ "p_map"
-  , "  (lam x."
-  , "     let target ="
-  , "       let target1 = x in"
-  , "       match"
-  , "         target1"
-  , "       with"
-  , "         true"
+  [ "px_map"
+  , "  (/-temp-/lam x."
+  , "     let x1 = x in"
+  , "     match"
+  , "       let x2 = x1 in"
+  , "       match x2 with true"
   , "       then"
   , "         (1, 2)"
   , "       else"
   , "         (2, 3)"
-  , "     in"
-  , "     match"
-  , "       target"
   , "     with"
   , "       (a, b)"
   , "     in"
   , "     addi a b)"
-  , "  (p_assume (p_pure (Bernoulli 0.5)))"
+  , "  (px_assume (px_pure (Bernoulli 0.5)))"
   ]
 using eqString
 else printFailure
@@ -2333,27 +2354,26 @@ utest transform
   , "addi a (assume (Categorical [0.5, 0.5]))"
   ]
 with strJoin "\n"
-  [ "p_join"
-  , "  (p_map"
-  , "     (lam x."
-  , "        let target ="
-  , "          let target1 = x in"
-  , "          match"
-  , "            target1"
-  , "          with"
-  , "            true"
+
+  [ "px_join"
+  , "  (px_map"
+  , "     (/-temp-/lam x."
+  , "        let x1 = x in"
+  , "        match"
+  , "          let x2 = x1 in"
+  , "          match x2 with true"
   , "          then"
   , "            (1, 2)"
   , "          else"
   , "            (2, 3)"
-  , "        in"
-  , "        match"
-  , "          target"
   , "        with"
   , "          (a, _)"
   , "        in"
-  , "        p_map (addi a) (p_assume (p_pure (Categorical [ 0.5, 0.5 ]))))"
-  , "     (p_assume (p_pure (Bernoulli 0.5))))"
+  , "        px_map"
+  , "          (/-temp-/lam x3."
+  , "             addi a x3)"
+  , "          (px_assume (px_pure (Categorical [ 0.5, 0.5 ]))))"
+  , "     (px_assume (px_pure (Bernoulli 0.5))))"
   ]
 using eqString
 else printFailure

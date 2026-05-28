@@ -10,24 +10,24 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
   type PValTransEnv =
     { currStateName : Name
     , functions : Map Name Bool -- True if it needs (and returns) a state argument
-    , p_pure : Name
-    , p_map : Name
-    , p_subMap : Name
-    , p_apply : Name
-    , p_subApply : Name
-    , p_bind : Name
-    , p_join : Name
-    , p_assume : Name
-    , p_select : Name
-    , p_weight : Name
-    , p_export : Name
-    , p_traverseSeq : Name
-    , storeAssume : Name
-    , storeSubmodel : Name
-    , storeExport : Name
-    , storeWeight : Name
+    , p_pure : Expr
+    , p_map : Expr
+    , p_subMap : Expr
+    , p_apply : Expr
+    , p_subApply : Expr
+    , p_bind : Expr
+    , p_join : Expr
+    , p_assume : Expr
+    , p_select : Expr
+    , p_weight : Expr
+    , p_export : Expr
+    , p_traverseSeq : Expr
+    , storeAssume : Expr
+    , storeSubmodel : Expr
+    , storeExport : Expr
+    , storeWeight : Expr
     , initSubmodel : Expr
-    , mapAccumL : Name
+    , mapAccumL : Expr
     }
 
   type Peeled e = (Expr -> Expr, e)
@@ -38,13 +38,13 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     let st = match tm with TmRecord x
       then mapFindExn _idx0 x.bindings
       else tupleproj_ 0 tm in
-    nulam_ env.currStateName (wrap st)
+    wrap st
 
   sem pvalTransCall : PValTransEnv -> (Expr, [Expr]) -> (Option Int, Peeled Expr)
   sem pvalTransCall env =
   | (TmConst {val = CPPure _}, [val]) ->
     match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
-    (None (), (wrap, autoty_tuple_ [nvar_ stateName, app_ (nvar_ env.p_pure) val]))
+    (None (), (wrap, autoty_tuple_ [nvar_ stateName, app_ env.p_pure val]))
   | (TmConst {val = CPMap _}, [f, val]) ->
     match peelLambdas f with (numLams, (wrapLams, body)) in
     match pvalTransPeelNoSub env val with (stateName, (wrapV, val)) in
@@ -54,33 +54,33 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     if nameEq innerStateName innerName then
       -- NOTE(vipa, 2026-01-12): The body doesn't create any new
       -- nodes, thus we can use p_map
-      (None (), (wrapV, appf3_ (nvar_ env.p_map) (nvar_ stateName) (wrapLams (wrap1 (wrap2 bodyPeeled))) val))
+      (None (), (wrapV, appf3_ env.p_map (nvar_ stateName) (wrapLams (wrap1 (wrap2 bodyPeeled))) val))
     else
       -- NOTE(vipa, 2026-01-12): The body does create new nodes, thus
       -- we need p_subMap or p_subApply
-      let store = nvar_ env.storeSubmodel in
+      let store = env.storeSubmodel in
       let ist = env.initSubmodel in
       let f = wrapLams (nulam_ innerStateName (wrap1 body)) in
       if eqi numLams 1
-      then (None (), (wrapV, appf5_ (nvar_ env.p_subMap) (nvar_ stateName) store ist f val))
-      else (Some (subi numLams 1), (wrapV, appf3_ (nvar_ env.p_map) (nvar_ stateName) f val))
+      then (None (), (wrapV, appf5_ env.p_subMap (nvar_ stateName) store ist f val))
+      else (Some (subi numLams 1), (wrapV, appf3_ env.p_map (nvar_ stateName) f val))
   | (TmConst {val = CPTraverseSeq _}, [f, val]) ->
     match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
     let f = maybeEtaExpand f in
     let innerStateName = nameSym "st" in
     match pvalTransExprNoSub {env with currStateName = innerStateName} f.body with (wrapB, body) in
     let f = nulam_ innerStateName (TmLam {f with body = wrapB body}) in
-    (None (), (wrap, appf3_ (nvar_ env.p_traverseSeq) (nvar_ stateName) f val))
+    (None (), (wrap, appf3_ env.p_traverseSeq (nvar_ stateName) f val))
   | (TmConst {val = CPApply _}, [f, val]) ->
     match pvalTransPeel env f with (sub, stateName, (wrapF, f)) in
     match pvalTransPeelNoSub {env with currStateName = stateName} val with (stateName, (wrapVal, val)) in
     let wrap = lam tm. wrapF (wrapVal tm) in
     match sub with Some 1 then
-      let store = nvar_ env.storeSubmodel in
+      let store = env.storeSubmodel in
       let ist = env.initSubmodel in
-      (None (), (wrap, appf5_ (nvar_ env.p_subApply) (nvar_ stateName) store ist f val))
+      (None (), (wrap, appf5_ env.p_subApply (nvar_ stateName) store ist f val))
     else
-      (optionMap (lam x. subi x 1) sub, (wrap, appf3_ (nvar_ env.p_apply) (nvar_ stateName) f val))
+      (optionMap (lam x. subi x 1) sub, (wrap, appf3_ env.p_apply (nvar_ stateName) f val))
   | ( TmConst {val = CPJoin _}
     , [ TmApp
         { lhs = TmApp
@@ -99,21 +99,21 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     if nameEq innerStateName innerName then
       -- NOTE(vipa, 2025-11-19): The body doesn't create any new
       -- nodes, thus we can use p_select
-      (None (), (wrapV, appf3_ (nvar_ env.p_select) (nvar_ stateName) (TmLam {f with body = wrap1 (wrap2 bodyPeeled)}) val))
+      (None (), (wrapV, appf3_ env.p_select (nvar_ stateName) (TmLam {f with body = wrap1 (wrap2 bodyPeeled)}) val))
     else
       -- NOTE(vipa, 2025-11-19): The body *does* create new nodes,
       -- thus we need p_bind
-      let store = nvar_ env.storeSubmodel in
+      let store = env.storeSubmodel in
       let ist = env.initSubmodel in
       let f = nulam_ innerStateName (TmLam {f with body = wrap1 body}) in
-      (None (), (wrapV, appf5_ (nvar_ env.p_bind) (nvar_ stateName) store ist f val))
+      (None (), (wrapV, appf5_ env.p_bind (nvar_ stateName) store ist f val))
   | (TmConst {val = CPJoin _}, [val]) ->
     match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
-    (None (), (wrap, appf2_ (nvar_ env.p_join) (nvar_ stateName) val))
+    (None (), (wrap, appf2_ env.p_join (nvar_ stateName) val))
   | (TmConst {val = CPAssume _}, [dist]) ->
     match pvalTransPeelNoSub env dist with (stateName, (wrap, dist)) in
-    let store = nvar_ env.storeAssume in
-    (None (), (wrap, appf3_ (nvar_ env.p_assume) (nvar_ stateName) store dist))
+    let store = env.storeAssume in
+    (None (), (wrap, appf3_ env.p_assume (nvar_ stateName) store dist))
   | ( TmConst {val = CPWeight _}
     , [ TmApp
         { lhs = TmApp
@@ -125,13 +125,13 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
       ]
     ) ->
     match pvalTransPeelNoSub env val with (stateName, (wrap, val)) in
-    let store = nvar_ env.storeWeight in
-    (None (), (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store f val, unit_]))
+    let store = env.storeWeight in
+    (None (), (wrap, autoty_tuple_ [appf4_ env.p_weight (nvar_ stateName) store f val, unit_]))
   | (TmConst {val = CPWeight _}, [weight]) ->
     match pvalTransPeelNoSub env weight with (stateName, (wrap, weight)) in
-    let store = nvar_ env.storeWeight in
+    let store = env.storeWeight in
     -- TODO(vipa, 2025-11-20): Build TmLam identity function
-    (None (), (wrap, autoty_tuple_ [appf4_ (nvar_ env.p_weight) (nvar_ stateName) store (tempLam_ (lam tm. tm)) weight, unit_]))
+    (None (), (wrap, autoty_tuple_ [appf4_ env.p_weight (nvar_ stateName) store (tempLam_ (lam tm. tm)) weight, unit_]))
   | (f & TmVar {ident = ident}, args) ->
     match pvalTransSeqNoSub env args with (stateName, (wrap, args)) in
     if mapLookupOr false ident env.functions
@@ -151,10 +151,10 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
       -- NOTE(vipa, 2025-12-02): The body *does* create new nodes,
       -- switch to mapAccumL
       let f = nulam_ innerStateName (TmLam {f with body = wrap1 body}) in
-      (None (), (wrapV, appf3_ (nvar_ env.mapAccumL) f (nvar_ stateName) val))
+      (None (), (wrapV, appf3_ env.mapAccumL f (nvar_ stateName) val))
   | (TmConst {val = CPExport _}, [val]) ->
     match pvalTransPeelNoSub env val with (stateName, (wrapV, val)) in
-    (None (), (wrapV, autoty_tuple_ [appf3_ (nvar_ env.p_export) (nvar_ stateName) (nvar_ env.storeExport) val, unit_]))
+    (None (), (wrapV, autoty_tuple_ [appf3_ env.p_export (nvar_ stateName) env.storeExport val, unit_]))
   | (f & TmConst _, args) ->
     match pvalTransSeqNoSub env args with (stateName, (wrap, args)) in
     (None (), (wrap, autoty_tuple_ [nvar_ stateName, appSeq_ f args]))
@@ -288,6 +288,10 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
         , TmMatch {x with target = target, thn = wrapT1 thn, els = wrapE1 els}
         )
       )
+  | tm & TmOpaque _ ->
+    ( None ()
+    , (lam tm. tm, autoty_tuple_ [nvar_ env.currStateName, tm])
+    )
   | tm ->
     let f = lam acc. lam tm.
       match pvalTransExprNoSub acc.env tm with (wrap1, val) in
@@ -307,6 +311,12 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     (addi count 1, (lam tm. TmLam {x with body = wrap tm}, body))
   | tm & TempLam _ ->
     peelLambdas (TmLam (maybeEtaExpand tm))
+  -- NOTE(vipa, 2026-05-27): This case could technically look for any
+  -- non-side-effecting rhs of a let, but for now we only need it to
+  -- support renamings, so that's what we detect
+  | TmDecl (x & {decl = DeclLet {body = TmVar _}}) ->
+    match peelLambdas x.inexpr with (count, (wrap, body)) in
+    (count, (lam tm. TmDecl {x with inexpr = wrap tm}, body))
   | tm -> (0, (lam tm. tm, tm))
 
   sem peelState : Expr -> (Name, Peeled Expr)
@@ -333,7 +343,7 @@ lang PValStateTransformation = TempLamAst + AutoTyRecord + IdealizedPValTransfor
     let valIdent = optionGetOrElse (lam. nameSym "x") defaultValName in
     let wrap = lam body.
       -- TODO(vipa, 2025-11-19): put some types here
-      match_ tm (ptuple_ [npvar_ stIdent, npvar_ valIdent])
+      match_ tm (withTypePat (tytuple_ [tyunknown_, tyTm tm]) (ptuple_ [npvar_ stIdent, npvar_ valIdent]))
         body
         never_ in
     (stIdent, (wrap, nvar_ valIdent))
@@ -376,24 +386,35 @@ let transform = lam strs.
   let initScope =
     { functionDefinitions = mapEmpty nameCmp
     , valueScope = mapEmpty nameCmp
+    , revValueScope = mapEmpty nameCmp
     , conScope = mapEmpty nameCmp
+    , depth = 0
+    , tyConAsPure = mapEmpty nameCmp
     } in
   match specializeExpr initScope initState ast with (_, (ast, _)) in
   let initTransEnv =
     { currStateName = nameSym "st"
     , functions = mapEmpty nameCmp
-    , p_pure = nameSym "p_pure"
-    , p_map = nameSym "p_map"
-    , p_apply = nameSym "p_apply"
-    , p_bind = nameSym "p_bind"
-    , p_assume = nameSym "p_assume"
-    , p_select = nameSym "p_select"
-    , p_weight = nameSym "p_weight"
-    , p_export = nameSym "p_export"
-    , p_traverseSeq = nameSym "p_traverseSeq"
-    , mapAccumL = nameSym "mapAccumL"
+    , p_pure = nvar_ (nameSym "p_pure")
+    , p_map = nvar_ (nameSym "p_map")
+    , p_subMap = nvar_ (nameSym "p_subMap")
+    , p_apply = nvar_ (nameSym "p_apply")
+    , p_subApply = nvar_ (nameSym "p_subApply")
+    , p_bind = nvar_ (nameSym "p_bind")
+    , p_join = nvar_ (nameSym "p_join")
+    , p_assume = nvar_ (nameSym "p_assume")
+    , p_select = nvar_ (nameSym "p_select")
+    , p_weight = nvar_ (nameSym "p_weight")
+    , p_export = nvar_ (nameSym "p_export")
+    , p_traverseSeq = nvar_ (nameSym "p_traverseSeq")
+    , mapAccumL = nvar_ (nameSym "mapAccumL")
+    , storeAssume = nvar_ (nameSym "simpleStoreAssume")
+    , storeSubmodel = nvar_ (nameSym "simpleStoreSubmodel")
+    , storeExport = nvar_ (nameSym "simpleStoreExport")
+    , storeWeight = nvar_ (nameSym "simpleStoreWeight")
+    , initSubmodel = app_ (nvar_ (nameSym "simpleInit")) unit_
     } in
-  match pvalTransExpr initTransEnv ast with (wrap, tm) in
+  match pvalTransExprNoSub initTransEnv ast with (wrap, tm) in
   (pprintCode 0 pprintEnvEmpty (wrap tm)).1 in
 
 let printFailure = lam l. lam r. strJoin "\n"
@@ -406,18 +427,13 @@ utest transform
   ]
 with strJoin "\n"
   [ "match"
-  , "  p_pure st (Gaussian 0. 1.)"
+  , "  p_assume st simpleStoreAssume (p_pure (Gaussian 0. 1.))"
   , "with"
   , "  (st1, x)"
   , "in"
-  , "match"
-  , "    p_assume st1 never x"
-  , "  with"
-  , "    (st2, x1)"
-  , "  in"
-  , "  (p_weight st2 never (lam x2."
-  , "         addf x2 2.) x1, {})"
-]
+  , "(p_weight st1 simpleStoreWeight (/-temp-/lam x1."
+  , "     addf x1 2.) x, {})"
+  ]
 using eqString
 else printFailure
 in
@@ -427,19 +443,17 @@ utest transform
   , "weight (addf (assume (Gaussian 0.0 1.0)) (addf a a))"
   ]
 with strJoin "\n"
-  [ "let a = 2. in"
-  , "match"
-  , "  p_pure st (Gaussian 0. 1.)"
+  [ "match"
+  , "  p_assume st simpleStoreAssume (p_pure (Gaussian 0. 1.))"
   , "with"
   , "  (st1, x)"
   , "in"
-  , "match"
-  , "    p_assume st1 never x"
-  , "  with"
-  , "    (st2, x1)"
-  , "  in"
-  , "  (p_weight st2 never (lam x2."
-  , "         addf x2 (addf a a)) x1, {})"
+  , "(p_weight"
+  , "  st1"
+  , "  simpleStoreWeight"
+  , "  (/-temp-/lam x1."
+  , "     addf x1 (addf 2. 2.))"
+  , "  x, {})"
   ]
 using eqString
 else printFailure
@@ -451,27 +465,21 @@ utest transform
   ]
 with strJoin "\n"
   [ "match"
-  , "  p_pure st (Gaussian 0. 1.)"
+  , "  p_assume st simpleStoreAssume (p_pure (Gaussian 0. 1.))"
   , "with"
-  , "  (st1, x)"
+  , "  (st1, a)"
   , "in"
   , "match"
-  , "    p_assume st1 never x"
-  , "  with"
-  , "    (st2, a)"
-  , "  in"
-  , "  match"
-  , "      p_map st2 addf a"
-  , "    with"
-  , "      (st3, x1)"
-  , "    in"
-  , "    match"
-  , "        p_apply st3 x1 a"
-  , "      with"
-  , "        (st4, x2)"
-  , "      in"
-  , "      (p_weight st4 never (lam x3."
-  , "             x3) x2, {})"
+  , "  p_map st1 (lam x."
+  , "       lam x1."
+  , "         addf x x1) a"
+  , "with"
+  , "  (st2, x2)"
+  , "in"
+  , "match p_apply st2 x2 a with (st3, x3)"
+  , "in"
+  , "(p_weight st3 simpleStoreWeight (/-temp-/lam x4."
+  , "     x4) x3, {})"
   ]
 using eqString
 else printFailure
@@ -497,36 +505,27 @@ utest transform
 with strJoin "\n"
   [ "let f ="
   , "  lam st4."
-  , "    lam x3."
+  , "    lam x5."
   , "      match"
-  , "        p_pure st4 (Gaussian 1. 0.)"
+  , "        p_assume st4 simpleStoreAssume (p_pure (Gaussian 1. 0.))"
   , "      with"
-  , "        (st5, x4)"
+  , "        (st5, x6)"
   , "      in"
-  , "      match"
-  , "          p_assume st5 never x4"
-  , "        with"
-  , "          (st6, x5)"
-  , "        in"
-  , "        p_map st6 (lam x6."
-  , "               addf x6 x3) x5"
+  , "      p_map st5 (lam x7."
+  , "           addf x7 x5) x6"
+  , "in"
+  , "match f st 1. with (st1, x)"
   , "in"
   , "match"
-  , "  f st 1."
+  , "  p_map st1 (lam x1."
+  , "       lam x2."
+  , "         addf x1 x2) x"
   , "with"
-  , "  (st1, x)"
+  , "  (st2, x3)"
   , "in"
-  , "match"
-  , "    p_map st1 addf x"
-  , "  with"
-  , "    (st2, x1)"
-  , "  in"
-  , "  match"
-  , "      f st2 2."
-  , "    with"
-  , "      (st3, x2)"
-  , "    in"
-  , "    p_apply st3 x1 x2"
+  , "match f st2 2. with (st3, x4)"
+  , "in"
+  , "p_apply st3 x3 x4"
   ]
 using eqString
 else printFailure
@@ -541,52 +540,33 @@ utest transform
   ]
 with strJoin "\n"
   [ "let draw ="
-  , "  lam st8."
+  , "  lam st6."
   , "    lam x7."
-  , "      match"
-  , "        p_pure st8 (Gaussian x7 1.)"
-  , "      with"
-  , "        (st9, x8)"
-  , "      in"
-  , "      p_assume st9 never x8"
+  , "      p_assume st6 simpleStoreAssume (p_pure (Gaussian x7 1.))"
+  , "in"
+  , "match draw st 0. with (st1, x)"
   , "in"
   , "match"
-  , "  draw st 0."
+  , "  p_map"
+  , "    st1"
+  , "    (lam x1."
+  , "       lam x2."
+  , "         get [ x1,"
+  , "             x2 ])"
+  , "    x"
   , "with"
-  , "  (st1, x)"
+  , "  (st2, x3)"
+  , "in"
+  , "match draw st2 1. with (st3, x4)"
+  , "in"
+  , "match p_apply st3 x3 x4 with (st4, x5)"
   , "in"
   , "match"
-  , "    draw st1 1."
-  , "  with"
-  , "    (st2, x1)"
-  , "  in"
-  , "  match"
-  , "      p_traverseSeq"
-  , "        st2"
-  , "        (lam st3."
-  , "           lam x2."
-  , "             (st3, x2))"
-  , "        [ x,"
-  , "          x1 ]"
-  , "    with"
-  , "      (st4, x3)"
-  , "    in"
-  , "    match"
-  , "        p_map st4 get x3"
-  , "      with"
-  , "        (st5, x4)"
-  , "      in"
-  , "      match"
-  , "          p_pure st5 (Categorical [ 0.5, 0.5 ])"
-  , "        with"
-  , "          (st6, x5)"
-  , "        in"
-  , "        match"
-  , "            p_assume st6 never x5"
-  , "          with"
-  , "            (st7, x6)"
-  , "          in"
-  , "          p_apply st7 x4 x6"
+  , "  p_assume st4 simpleStoreAssume (p_pure (Categorical [ 0.5, 0.5 ]))"
+  , "with"
+  , "  (st5, x6)"
+  , "in"
+  , "p_apply st5 x5 x6"
   ]
 using eqString
 else printFailure
@@ -603,45 +583,29 @@ utest transform
   ]
 with strJoin "\n"
   [ "let draw ="
-  , "  lam st4."
+  , "  lam st3."
   , "    lam x2."
-  , "      match"
-  , "        p_pure st4 (Gaussian x2 1.)"
-  , "      with"
-  , "        (st5, x3)"
-  , "      in"
-  , "      p_assume st5 never x3"
+  , "      p_assume st3 simpleStoreAssume (p_pure (Gaussian x2 1.))"
   , "in"
   , "match"
-  , "  p_pure st (Categorical [ 0.5, 0.5 ])"
+  , "  p_assume st simpleStoreAssume (p_pure (Categorical [ 0.5, 0.5 ]))"
   , "with"
-  , "  (st1, x)"
+  , "  (st1, #var\"X\")"
   , "in"
-  , "match"
-  , "    p_assume st1 never x"
-  , "  with"
-  , "    (st2, #var\"X\")"
-  , "  in"
-  , "  p_bind"
-  , "      st2"
-  , "      never"
-  , "      never"
-  , "      (lam st3."
-  , "         lam x1."
-  , "           let #var\"X1\" = x1 in"
-  , "           match"
-  , "             #var\"X1\""
-  , "           with"
-  , "             0"
-  , "           then"
-  , "             draw st3 0."
-  , "           else match"
-  , "             #var\"X1\""
-  , "           with"
-  , "             1"
-  , "           in"
-  , "           draw st3 1.)"
-  , "      #var\"X\""
+  , "p_bind"
+  , "  st1"
+  , "  simpleStoreSubmodel"
+  , "  (simpleInit {})"
+  , "  (lam st2."
+  , "     lam x."
+  , "       let x1 = x in"
+  , "       match x1 with 0"
+  , "       then"
+  , "         draw st2 0."
+  , "       else match x1 with 1"
+  , "       in"
+  , "       draw st2 1.)"
+  , "  #var\"X\""
   ]
 using eqString
 else printFailure
@@ -659,62 +623,39 @@ utest transform
   ]
 with strJoin "\n"
   [ "let draw ="
-  , "  lam st7."
-  , "    lam x3."
-  , "      match"
-  , "        p_pure st7 (Gaussian x3 1.)"
-  , "      with"
-  , "        (st8, x4)"
-  , "      in"
-  , "      p_assume st8 never x4"
+  , "  lam st6."
+  , "    lam x5."
+  , "      p_assume st6 simpleStoreAssume (p_pure (Gaussian x5 1.))"
+  , "in"
+  , "match draw st 0. with (st1, a)"
+  , "in"
+  , "match draw st1 1. with (st2, b)"
   , "in"
   , "match"
-  , "  draw st 0."
+  , "  p_map st2 (lam x."
+  , "       lam x1."
+  , "         addf x x1) a"
   , "with"
-  , "  (st1, a)"
+  , "  (st3, x2)"
+  , "in"
+  , "match p_apply st3 x2 b with (st4, z)"
   , "in"
   , "match"
-  , "    draw st1 1."
-  , "  with"
-  , "    (st2, b)"
-  , "  in"
-  , "  match"
-  , "      p_map st2 addf a"
-  , "    with"
-  , "      (st3, x)"
-  , "    in"
-  , "    match"
-  , "        p_apply st3 x b"
-  , "      with"
-  , "        (st4, z)"
-  , "      in"
-  , "      match"
-  , "          p_pure st4 (Categorical [ 0.5, 0.5 ])"
-  , "        with"
-  , "          (st5, x1)"
-  , "        in"
-  , "        match"
-  , "            p_assume st5 never x1"
-  , "          with"
-  , "            (st6, #var\"X\")"
-  , "          in"
-  , "          p_select"
-  , "              st6"
-  , "              (lam x2."
-  , "                 let #var\"X1\" = x2 in"
-  , "                 match"
-  , "                   #var\"X1\""
-  , "                 with"
-  , "                   0"
-  , "                 then"
-  , "                   a"
-  , "                 else match"
-  , "                   #var\"X1\""
-  , "                 with"
-  , "                   1"
-  , "                 in"
-  , "                 b)"
-  , "              #var\"X\""
+  , "  p_assume st4 simpleStoreAssume (p_pure (Categorical [ 0.5, 0.5 ]))"
+  , "with"
+  , "  (st5, #var\"X\")"
+  , "in"
+  , "p_select"
+  , "  st5"
+  , "  (lam x3."
+  , "     let x4 = x3 in"
+  , "     match x4 with 0"
+  , "     then"
+  , "       a"
+  , "     else match x4 with 1"
+  , "     in"
+  , "     b)"
+  , "  #var\"X\""
   ]
 using eqString
 else printFailure
@@ -727,46 +668,29 @@ utest transform
   ]
 with strJoin "\n"
   [ "match"
-  , "  p_pure st (Bernoulli 0.5)"
+  , "  p_assume st simpleStoreAssume (p_pure (Bernoulli 0.5))"
   , "with"
   , "  (st1, x)"
   , "in"
-  , "match"
-  , "    p_assume st1 never x"
-  , "  with"
-  , "    (st2, x1)"
-  , "  in"
-  , "  p_bind"
-  , "      st2"
-  , "      never"
-  , "      never"
-  , "      (lam st3."
-  , "         lam x2."
-  , "           let target = x2 in"
-  , "           match"
-  , "             target"
-  , "           with"
-  , "             true"
-  , "           then"
-  , "             match"
-  , "               p_pure st3 (Gaussian 0. 1.)"
-  , "             with"
-  , "               (st4, x3)"
-  , "             in"
-  , "             match"
-  , "                 p_assume st4 never x3"
-  , "               with"
-  , "                 (st5, x4)"
-  , "               in"
-  , "               p_traverseSeq"
-  , "                   st5"
-  , "                   (lam st6."
-  , "                      lam x5."
-  , "                        (st6, x5))"
-  , "                   [ x4 ]"
-  , "           else"
-  , "             p_pure st3 [ 2. ])"
-  , "      x1"
+  , "p_bind"
+  , "  st1"
+  , "  simpleStoreSubmodel"
+  , "  (simpleInit {})"
+  , "  (lam st2."
+  , "     lam x1."
+  , "       let x2 = x1 in"
+  , "       match x2 with true"
+  , "       then"
+  , "         match"
+  , "           p_assume st2 simpleStoreAssume (p_pure (Gaussian 0. 1.))"
+  , "         with"
+  , "           (st3, x3)"
+  , "         in"
+  , "         p_map st3 (lam x4."
+  , "              [ x4 ]) x3"
+  , "       else"
+  , "         (st2, p_pure [ 2. ]))"
+  , "  x"
   ]
 using eqString
 else printFailure
@@ -778,63 +702,54 @@ utest transform
   , "in mul 0 (addi 1 (assume (Categorical [0.25, 0.25, 0.25, 0.25]))) 4"
   ]
 with strJoin "\n"
+
   [ "recursive"
   , "  let mul ="
   , "    lam st."
   , "      lam acc."
   , "        lam n."
   , "          lam i."
-  , "            match"
-  , "              i"
-  , "            with"
-  , "              0"
+  , "            match i with 0"
   , "            then"
-  , "              p_pure st acc"
-  , "            else match"
-  , "              p_map st (addi acc) n"
-  , "            with"
-  , "              (st1, x)"
+  , "              (st, p_pure acc)"
+  , "            else match p_map st (lam x."
+  , "                   addi acc x) n with (st1, x1)"
   , "            in"
-  , "            mul1 st1 x n (subi i 1)"
+  , "            mul1 st1 x1 n (subi i 1)"
   , "  let mul1 ="
   , "    lam st2."
   , "      lam acc1."
   , "        lam n1."
   , "          lam i1."
-  , "            match"
-  , "              i1"
-  , "            with"
-  , "              0"
+  , "            match i1 with 0"
   , "            then"
   , "              (st2, acc1)"
   , "            else match"
-  , "              p_map st2 addi acc1"
+  , "              p_map"
+  , "                st2"
+  , "                (lam x2."
+  , "                   lam x3."
+  , "                     addi x2 x3)"
+  , "                acc1"
   , "            with"
-  , "              (st3, x1)"
+  , "              (st3, x4)"
   , "            in"
-  , "            match"
-  , "                p_apply st3 x1 n1"
-  , "              with"
-  , "                (st4, x2)"
-  , "              in"
-  , "              mul1 st4 x2 n1 (subi i1 1)"
+  , "            match p_apply st3 x4 n1 with (st4, x5)"
+  , "            in"
+  , "            mul1 st4 x5 n1 (subi i1 1)"
   , "in"
   , "match"
-  , "  p_pure st5 (Categorical [ 0.25, 0.25, 0.25, 0.25 ])"
+  , "  p_assume"
+  , "    st5"
+  , "    simpleStoreAssume"
+  , "    (p_pure (Categorical [ 0.25, 0.25, 0.25, 0.25 ]))"
   , "with"
-  , "  (st6, x3)"
+  , "  (st6, x6)"
   , "in"
-  , "match"
-  , "    p_assume st6 never x3"
-  , "  with"
-  , "    (st7, x4)"
-  , "  in"
-  , "  match"
-  , "      p_map st7 (addi 1) x4"
-  , "    with"
-  , "      (st8, x5)"
-  , "    in"
-  , "    mul st8 0 x5 4"
+  , "match p_map st6 (lam x7."
+  , "       addi 1 x7) x6 with (st7, x8)"
+  , "in"
+  , "mul st7 0 x8 4"
   ]
 using eqString
 else printFailure

@@ -49,9 +49,15 @@ lang PValInterface = RuntimeDistBase
   -- initiated.
   sem readPreviousAssume : all complete. all st. all a. PAssumeRef a -> PValInstance complete st -> a
   -- Type-erased version of an AssumeRef.
+  sem asSomeAssumeSt : all a. Option (all st. PValInstance Partial st -> a -> Dist a) -> PAssumeRef a -> PSomeAssumeRef
+  sem asSomeAssumeSt drift = | ref ->
+    let f : all st. PValInstance Partial st -> PValInstance Partial st =
+      lam st. resampleAssume (optionMap (lam f : all st. PValInstance Partial st -> a -> Dist a. f st) drift) ref st in
+    PSomeAssumeRef #frozen"f"
   sem asSomeAssume : all a. Option (a -> Dist a) -> PAssumeRef a -> PSomeAssumeRef
   sem asSomeAssume drift = | ref ->
-    let f : all st. PValInstance Partial st -> PValInstance Partial st = lam st. resampleAssume drift ref st in
+    let f : all st. PValInstance Partial st -> PValInstance Partial st =
+      lam st. resampleAssume drift ref st in
     PSomeAssumeRef #frozen"f"
   -- Resampling of a type-erased AssumeRef.
   sem resampleSomeAssume : all st. PSomeAssumeRef -> PValInstance Partial st -> PValInstance Partial st
@@ -183,7 +189,7 @@ lang PValInterface = RuntimeDistBase
   sem p_bind_ st f = | a -> p_bind st (lam st. lam. st) () f a
 
   sem p_subMap_ : all st. all a. all b. PValState st
-    -> (PValState () -> a -> (PValState (), b))
+    -> (a -> PValState () -> (PValState (), b))
     -> PVal a
     -> (PValState st, PVal b)
   sem p_subMap_ st f = | a -> p_subMap st (lam st. lam. st) () f a

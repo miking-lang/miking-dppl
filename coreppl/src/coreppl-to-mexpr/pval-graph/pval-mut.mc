@@ -515,5 +515,5 @@ lang MutPVal = PValInterface
       , initWeight = st.initWeight
       , initId = st.initId
       } in
-    (PVS st , PVal {value = value, changeId = changeId})
+    (PVS st, PVal {value = value, changeId = changeId})
 end

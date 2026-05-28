@@ -1,7 +1,7 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
-lang EtaExpansion = Ast + AppAst + FunTypeAst
+lang EtaExpansion = Ast + AppAst + FunTypeAst + OpaqueAst
   sem etaExpand : Bool -> Expr -> Expr
   sem etaExpand covered =
   | TmApp x ->
@@ -14,5 +14,6 @@ lang EtaExpansion = Ast + AppAst + FunTypeAst
       else lam tm. tm in
     let tm = TmApp {x with lhs = etaExpand true x.lhs, rhs = etaExpand false x.rhs} in
     if covered then tm else saturate x.ty tm
+  | tm & TmOpaque _ -> tm
   | tm -> smap_Expr_Expr (etaExpand false) tm
 end

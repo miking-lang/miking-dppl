@@ -2,6 +2,8 @@ include "../../../models/coin.mc"
 include "../../cppl-test.mc"
 include "../../test.mc"
 
+include "../../../src/coreppl-to-mexpr/pval-graph/config.mc"
+
 include "seq.mc"
 include "sys.mc"
 include "string.mc"
@@ -25,5 +27,7 @@ utest r (c 500 (infer (PIMH { particles = 10, iterations = 100 }) model))       
 utest r (c 500 (infer (TraceMCMC { iterations = 1000 }) model))                         with rhs using e in
 utest r (c 500 (infer (NaiveMCMC { iterations = 1000 }) model))                         with rhs using e in
 utest r (c 500 (infer (LightweightMCMC { continue = (lam. 1000, lam x. lam. lam. (subi x 1, geqi x 0)), resampleBehavior = rB }) model)) with rhs using e in
+let myRunThing : SimplePValRun Float = simplePValGraphMCMC {globalProb = 0.1, iterations = 1000} in
+utest r (c 500 (infer (SimplePValGraph {run = #frozen"myRunThing"}) model)) with rhs using e in
 
 ()
