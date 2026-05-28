@@ -20,6 +20,7 @@ lang InferenceInterface = Sym + SymGetters
     , extractNormal : (Expr -> Expr) -> Expr
     , extractNoHigherOrderConsts : (Expr -> Expr) -> Expr
     , stripOpaque : Expr -> Expr
+    , normalizeTerm : Expr -> Expr
     , stateName : Name
     }
 

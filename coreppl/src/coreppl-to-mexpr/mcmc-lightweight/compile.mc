@@ -34,7 +34,7 @@ lang MExprPPLLightweightMCMC
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases (lam. []) in  -- NOTE(vipa, 2026-03-10): These fragments aren't built to be extended, meaning they won't get the fragments needed to process the invariants, thus we process no invariants here
 
-    let t = x.extractNormal (lam tm. generateKernels config.driftScale (x.stripOpaque tm)) in
+    let t = x.normalizeTerm (x.extractNormal (lam tm. generateKernels config.driftScale (x.stripOpaque tm))) in
     endPhaseStatsExpr log "extract-normal-one" t;
 
     -- Alignment analysis
@@ -89,7 +89,7 @@ lang MExprPPLLightweightMCMC
   sem compile config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases (lam. []) in  -- NOTE(vipa, 2026-03-10): These fragments aren't built to be extended, meaning they won't get the fragments needed to process the invariants, thus we process no invariants here
-    let t = x.extractNoHigherOrderConsts x.stripOpaque in
+    let t = x.normalizeTerm (x.extractNoHigherOrderConsts x.stripOpaque) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- Addressing transform combined with CorePPL->MExpr transform
@@ -411,7 +411,7 @@ lang MExprPPLLightweightMCMC
   sem compileAlignedCps config =
   | x ->
     let log = mkPhaseLogState x.options.debugDumpPhases x.options.debugPhases (lam. []) in  -- NOTE(vipa, 2026-03-10): These fragments aren't built to be extended, meaning they won't get the fragments needed to process the invariants, thus we process no invariants here
-    let t = x.extractNoHigherOrderConsts (lam tm. generateKernels config.driftScale (x.stripOpaque tm)) in
+    let t = x.normalizeTerm (x.extractNoHigherOrderConsts (lam tm. generateKernels config.driftScale (x.stripOpaque tm))) in
     endPhaseStatsExpr log "extract-no-higher-order-consts-one" t;
 
     -- printLn ""; printLn "--- INITIAL ANF PROGRAM ---";
