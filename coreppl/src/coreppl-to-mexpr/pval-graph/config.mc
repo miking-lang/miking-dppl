@@ -16,6 +16,7 @@ type SimplePValRun ret = all instance. SimplePValInterface instance ret -> {smc 
 
 type SimplePValConfig ret =
   { run : SimplePValRun ret
+  , debugOutput : String
   }
 
 type SimpleMCMCConfig =

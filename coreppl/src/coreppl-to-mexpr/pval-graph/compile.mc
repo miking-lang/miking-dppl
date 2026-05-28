@@ -147,7 +147,9 @@ lang SimplePValGraphCompiler
     -- TODO(vipa, 2026-05-26): This is the end of the block mentioned
     -- in the TODO above with the same date.
 
-    let getPValVar = lam str. appFromEnv x.runtime (concat "vSimplePValGraph_" str) [] in
+    let getPValVar = if null config.debugOutput
+      then lam str. appFromEnv x.runtime (concat "vSimplePValGraph_" str) []
+      else lam str. appFromEnv x.runtime (concat "vDebugSimplePValGraph_" str) [] in
     let initTransEnv =
       { currStateName = x.stateName
       , functions = mapEmpty nameCmp
