@@ -19,7 +19,7 @@ include "ode-solver-method.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample + DTCAst +
-  KeywordMaker +
+  KeywordMaker + KeywordMakerOpaque +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +

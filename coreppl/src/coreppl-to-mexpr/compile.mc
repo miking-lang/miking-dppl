@@ -25,9 +25,10 @@ include "inference-interface.mc"
 include "pruning/compile.mc"
 include "delayed-sampling/compile.mc"
 
-lang DPPLReplace = Ast
+lang DPPLReplace = Ast + OpaqueAst
   sem replaceDpplKeywords : {path : String, env : SymEnv} -> Expr -> Expr
   sem replaceDpplKeywords distEnv =
+  | t & TmOpaque _ -> t
   | t ->
     let t = smap_Expr_Expr (replaceDpplKeywords distEnv) t in
     let t = smap_Expr_Type replaceDpplKeywordsType t in
@@ -88,7 +89,7 @@ lang DPPLDelayedReplace = DPPLReplace + DPPLParser
   | TyDelaySeqF t -> TySeq {info = t.info, ty = TyFloat {info = t.info}}
 end
 
-lang DPPLPrunedReplace = DPPLReplace + SymGetters + DPPLParser
+lang DPPLPrunedReplace = DPPLReplace + SymGetters + DPPLParser + OpaqueAst
   sem replaceCancel env =
   | (TmCancel t) ->
     let i = withInfo t.info in
@@ -96,6 +97,7 @@ lang DPPLPrunedReplace = DPPLReplace + SymGetters + DPPLParser
  t.dist t.value),
                info = t.info,
                ty = t.ty}
+  | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr (replaceCancel env) t
 
   sem replaceDpplKeywords distEnv =
@@ -115,6 +117,7 @@ lang ElementaryFunctionsTransform = ElementaryFunctions
   sem elementaryFunctionsTransformExpr : (String -> Name) -> Expr -> Expr
   sem elementaryFunctionsTransformExpr stringToName =
   | tm & TmConst r -> elementaryFunctionsTransformConst stringToName tm r.val
+  | tm & TmOpaque _ -> tm
   | tm -> smap_Expr_Expr (elementaryFunctionsTransformExpr stringToName) tm
 
   sem elementaryFunctionsTransformConst : (String -> Name) -> Expr -> Const -> Expr
@@ -153,9 +156,10 @@ lang ReplaceHigherOrderConstants
   sem replaceHigherOrderConstants : {path : String, env : SymEnv} -> Expr -> Expr
 end
 
-lang ReplaceHigherOrderConstantsLoadedPreviously = ReplaceHigherOrderConstants + SymGetters
+lang ReplaceHigherOrderConstantsLoadedPreviously = ReplaceHigherOrderConstants + SymGetters + OpaqueAst
   sem replaceHigherOrderConstants env =
   | tm -> smap_Expr_Expr (replaceHigherOrderConstants env) tm
+  | tm & TmOpaque _ -> tm
   | tm & TmConst x ->
     match _replaceHigherOrderConstant x.val with Some name then
       withType x.ty (withInfo x.info (nvar_ (_getVarExn name env)))
@@ -169,7 +173,7 @@ end
 lang DPPLResymbolizeModel =
   Resymbolize + ResymbolizeVar + ResymbolizeLam + ResymbolizeMatch +
   ResymbolizeDecl + ResymbolizeLetDecl + ResymbolizeRecLetsDecl +
-  ResymbolizeNamedPat + ResymbolizeSeqEdgePat
+  ResymbolizeNamedPat + ResymbolizeSeqEdgePat + ResymbolizeOpaque
 
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
   sem resymbolizeExpr nameMap =
@@ -267,6 +271,12 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + MExprANFAll + DP
     let interface =
       { extractNormal = lam f. extractAst f
       , extractNoHigherOrderConsts = lam f. extractAst (lam ast. replaceHigherOrderConstants envs.higherOrderSymEnv (f ast))
+      , stripOpaque =
+        recursive let work = lam tm.
+          match tm with TmOpaque x
+          then work x.body
+          else smap_Expr_Expr work tm
+        in work
       , options = options
       , runtime = {env = entry.env, lamliftSols = lamliftSols}
       , dists = {env = envs.distEnv, lamliftSols = lamliftSols}
@@ -307,6 +317,7 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + MExprANFAll + DP
   | TmDecl (x & {decl = DeclType _}) -> removeModelDefinitions x.inexpr
   | TmDecl (x & {decl = DeclConDef _}) -> removeModelDefinitions x.inexpr
   | TmDecl (x & {decl = DeclExt _}) -> removeModelDefinitions x.inexpr
+  | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr removeModelDefinitions t
 end
 

@@ -117,6 +117,7 @@ lang DPPLExtract =
       (mapInsert inferId t.method acc, inferBinding)
     else
       errorSingle [t.info] "Missing infer runtime"
+  | t & TmOpaque _ -> (acc, t)
   | t -> smapAccumL_Expr_Expr (bindInferExpressionsH runtimes) acc t
 
   -- Extracts an AST consisting of the model whose binding has the provided

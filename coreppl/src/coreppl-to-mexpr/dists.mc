@@ -105,6 +105,7 @@ lang TransformDist = TransformDistBase + InferenceInterface
   -- distributions.
   sem replaceTyDist: InferenceSymEnv -> Expr -> Expr
   sem replaceTyDist env =
+  | t & TmOpaque _ -> t
   | t ->
     let t = smap_Expr_Type (toRuntimeTyDist env) t in
     let t = smap_Expr_TypeLabel (toRuntimeTyDist env) t in
