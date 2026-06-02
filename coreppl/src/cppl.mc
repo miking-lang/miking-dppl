@@ -90,6 +90,10 @@ let hooks = mkEmptyHooks ocamlCompile in
 let ast = lowerAll ast in
 endPhaseStatsExpr log "lower-all" ast;
 
+(if options.frontend.printMCore then
+  printLn (expr2str ast)
+ else ());
+
 if options.frontend.exitBefore then exit 0 else
 
 let res = compileMCore ast hooks in
