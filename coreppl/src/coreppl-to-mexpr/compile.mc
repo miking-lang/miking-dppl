@@ -65,7 +65,7 @@ lang DPPLKeywordReplace = DPPLReplace + DPPLParser + SymGetters
       ty = TyUnknown {info = info}, info = info}
 
   sem replaceDpplKeywords distEnv =
-  | TmAssume t -> 
+  | TmAssume t ->
     app_ (nvar_ (_getVarExn "sample" distEnv)) (replaceDpplKeywords distEnv t.dist)
   | TmObserve t -> _makeError t.info "observe"
   | TmWeight t -> _makeError t.info "weight"
@@ -964,6 +964,8 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
 
   syn Hook =
   | CorePPLFileHook {options : CPPLFileOptions, method : InferMethod}
+
+  sem _fileType = | _ ++ ".cppl" -> FCorePPL {isModel = false}
 
   sem _insertBackcompatInfer : CPPLFileOptions -> InferMethod -> Expr -> Loader -> Loader
   sem _insertBackcompatInfer options method modelBody = | loader ->
