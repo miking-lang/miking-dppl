@@ -17,7 +17,8 @@ mexpr
 match distEmpiricalSamples #var"Dist_dy/dθ_trace" with (samples, weights) in
 let samples =
   map
-    (mapi (lam i : Int. lam t : (Float, [Float]). (get timesExt i, t.1)))
+    (lam ts : [(Float, [Float])].
+      mapi (lam i : Int. lam t : (Float, [Float]). (get timesExt i, t.1)) ts)
     samples in
 printWeightedTrace samples weights
 

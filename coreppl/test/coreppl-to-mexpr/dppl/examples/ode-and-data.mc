@@ -96,3 +96,9 @@ let data =
     (trace true_y (x0, y0) times)
 
 let future = 10.
+
+mexpr
+
+let m = lam t : (). () in
+infer (Importance { particles = 2 }) m;
+()

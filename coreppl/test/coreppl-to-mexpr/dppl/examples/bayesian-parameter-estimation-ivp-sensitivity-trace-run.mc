@@ -7,7 +7,7 @@ let #var"true_dy/dθ_trace" =
     #var"true_θ" 1. in
 
 match distEmpiricalSamples #var"Dist_dy/dθ_trace" with (samples, weights) in
-writeFile "bayesian-parameter-estimation-ivp-sensitivity-trace-run.json"
+writeFile (get argv 1)
   (jsonObject [
     ("weights", (seqToJson (map floatToJson weights))),
     ("xs", (seqToJson (map floatToJson timesExt))),

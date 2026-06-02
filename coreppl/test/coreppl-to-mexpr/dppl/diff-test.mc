@@ -10,13 +10,13 @@ let eqfApprox = lam a : FloatP. lam b : FloatP. ltf (absf (subf a b)) 1.e-12 in
 -- Test nested differentiation.
 --------------------------------------------------------------------------------
 
-let diff1 = lam f : FloatP -> Float. lam x : FloatP. diff f x 1. in
+let diff1 = lam f : FloatP -> ModP FloatP. lam x : FloatP. diff f x 1. in
 
-let _pow = lam x : FloatA. lam n : Int.
-  foldl mulf 1. (create n (lam i : Int. x))
+let _pow = lam x : FloatP. lam n : Int.
+  foldl (lam x : FloatP. lam y : FloatP. mulf x y) 1. (create n (lam i : Int. x))
 in
 
-let f = lam x : FloatA.
+let f = lam x : FloatP.
   addf (addf (addf (_pow x 4) (_pow x 3)) (_pow x 2)) x
 in
 
@@ -27,8 +27,8 @@ utest diff1 (diff1 (diff1 f)) 2. with 54. in
 utest diff1 (diff1 (diff1 (diff1 f))) 2. with 24. in
 utest diff1 (diff1 (diff1 (diff1 (diff1 f)))) 2. with 0. in
 
-let inner = lam x : FloatA. lam y : FloatA. mulf x y in
-let outer = lam x : FloatA. mulf x (diff1 (inner x) 2.) in
+let inner = lam x : FloatP. lam y : FloatP. mulf x y in
+let outer = lam x : FloatP. mulf x (diff1 (inner x) 2.) in
 utest diff1 outer 1. with 2. in
 
 --------------------------------------------------------------------------------
@@ -150,26 +150,26 @@ utest
     utest mulf (divf x.0 x.1) x.1 with x.0 using eqfApprox in
     utest mulf x.0 (divf x.1 x.0) with x.1 using eqfApprox in
 
-    let diff1 = lam f : FloatP -> FloatP -> Float. lam x : (FloatP, FloatP).
+    let diff1 = lam f : FloatP -> FloatP -> ModP FloatP. lam x : (FloatP, FloatP).
       diff (lam a : FloatP. f a x.1) x.0 1.
     in
-    let diff2 = lam f : FloatP -> FloatP -> Float. lam x : (FloatP, FloatP).
+    let diff2 = lam f : FloatP -> FloatP -> ModP FloatP. lam x : (FloatP, FloatP).
       diff (f x.0) x.1 1.
     in
     let diffTot =
-      lam f : FloatP -> FloatP -> Float.
+      lam f : FloatP -> FloatP -> ModP FloatP.
         lam x : (FloatP, FloatP).
           lam dx : (FloatP, FloatP).
             diff (lam x : (FloatP, FloatP). f x.0 x.1) x dx
     in
     -- addf
-    let f = lam a : FloatA. lam b : FloatA. addf a b in
+    let f = lam a : FloatP. lam b : FloatP. addf a b in
     let df = lam x : (FloatA, FloatA). lam dx : (FloatA, FloatA). addf dx.0 dx.1 in
     utest diff1 f x with df x (1., 0.) in
     utest diff2 f x with df x (0., 1.) in
     utest diffTot f x dx with df x dx in
     -- mulf
-    let f = lam a : FloatA. lam b : FloatA. mulf a b in
+    let f = lam a : FloatP. lam b : FloatP. mulf a b in
     let df = lam x : (FloatA, FloatA). lam dx : (FloatA, FloatA).
       addf (mulf x.1 dx.0) (mulf x.0 dx.1)
     in
@@ -177,7 +177,7 @@ utest
     utest diff2 f x with df x (0., 1.) in
     utest diffTot f x dx with df x dx in
     -- subf
-    let f = lam a : FloatA. lam b : FloatA. subf a b in
+    let f = lam a : FloatP. lam b : FloatP. subf a b in
     let df = lam x : (FloatA, FloatA). lam dx : (FloatA, FloatA). subf dx.0 dx.1 in
     utest diff1 f x with df x (1., 0.) in
     utest diff2 f x with df x (0., 1.) in
@@ -191,7 +191,7 @@ utest
     utest diff2 f x with df x (0., 1.) using eqfApprox in
     utest diffTot f x dx with df x dx using eqfApprox in
     -- pow
-    let f = lam a : FloatA. lam b : FloatA. pow a b in
+    let f = lam a : FloatP. lam b : FloatP. pow a b in
     let df = lam x : (FloatP, FloatP). lam dx : (FloatP, FloatP).
       addf
         (mulf (mulf x.1 (pow x.0 (subf x.1 1.))) dx.0)
@@ -235,12 +235,12 @@ utest
     let df = lam x : FloatA. lam dx : FloatA. mulf (exp x) dx in
     utest diff f x dx with df x dx in
     -- log
-    let f = lam x : FloatA. log x in
-    let df = lam x : FloatA. lam dx : FloatA. divf dx x in
+    let f = lam x : FloatP. log x in
+    let df = lam x : FloatP. lam dx : FloatA. divf dx x in
     utest diff f x dx with df x dx in
     -- sqrt
-    let f = lam x : FloatA. sqrt x in
-    let df = lam x : FloatA. lam dx : FloatA. divf dx (mulf 2. (sqrt x)) in
+    let f = lam x : FloatP. sqrt x in
+    let df = lam x : FloatP. lam dx : FloatA. divf dx (mulf 2. (sqrt x)) in
     utest diff f x dx with df x dx in
     -- absf
     let f = lam x : FloatP. absf x in
@@ -270,7 +270,7 @@ let diff1 = lam f : FloatP -> Float. lam x : FloatP. diff f x 1. in
 -- Terms not-failing float assertions (when float assertions enabled)
 --------------------------------------------------------------------------------
 
-let diff1 = lam f : FloatA -> Float. lam x : FloatA. diff f x 1. in
+let diff1 = lam f : FloatA -> FloatA. lam x : FloatA. diff f x 1. in
 
 utest diff1 (lam x : FloatA. mulf (int2float (floorfi 1.)) x) 1. with 1. in
 utest diff1 (lam x : FloatA. mulf (int2float (ceilfi 1.)) x) 1. with 1. in

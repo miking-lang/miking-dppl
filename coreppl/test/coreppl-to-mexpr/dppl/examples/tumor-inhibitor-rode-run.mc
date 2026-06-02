@@ -3,7 +3,7 @@ include "tumor-inhibitor-rode.mc"
 mexpr
 
 match distEmpiricalSamples #var"Dist_RODE" with (samples, weights) in
-writeFile "tumor-inhibitor-rode-run.json"
+writeFile (get argv 1)
   (let write = lam j : Int.
     seqToJson
       (create (length samples)

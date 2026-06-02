@@ -74,7 +74,7 @@ let model = lam.
   -- condition the solution trace on the data
   iter
     (lam p. match p with (x, d) in
-          let y = solve (ode theta) init x in
+          let y = (solve (ode theta) init x).1 in
           observe d (Gaussian (output y) sigma))
     data;
 

@@ -2,6 +2,8 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
+from pathlib import Path
+import sys
 
 plt.style.use("tableau-colorblind10")
 
@@ -18,6 +20,13 @@ BLUE = CB_BLUE
 RED = CB_VERMILLION
 GREEN = CB_BLUISH_GREEN
 GRAY = "tab:gray"
+
+
+if len(sys.argv) < 2:
+    print("Usage: plot.py <DATA DIR>")
+    sys.exit(1)
+
+data_dir = sys.argv[1]
 
 
 def post_process_weights_samples(weights, samples):
@@ -64,8 +73,9 @@ def plot_hist(ax, samples, weights, bins):
 
 
 def plot_scalar_dist(file_name):
+    path = Path(data_dir) / file_name
     try:
-        with open(file_name, "r") as file:
+        with open(path, "r") as file:
             data = json.load(file)
             weights, samples = post_process_weights_samples(
                 data["weights"], data["samples"]
@@ -76,9 +86,9 @@ def plot_scalar_dist(file_name):
             fig.suptitle(file_name)
             plot_hist(ax, samples, weights, 200)
             fig.tight_layout()
-            fig.savefig(file_name.replace("-run.json", ".pdf"))
+            fig.savefig(file_name.replace("-run.mc.json", ".pdf"))
     except FileNotFoundError:
-        print(f"{file_name} not found")
+        print(f"{path} not found")
 
 
 def plot_trace(
@@ -136,7 +146,8 @@ def plot_trace(
 
 def plot_trace_dist(file_name, prey_label, pred_label, yminofs, ymaxofs):
     try:
-        with open(file_name, "r") as file:
+        path = Path(data_dir) / file_name
+        with open(path, "r") as file:
             data = json.load(file)
             xs = np.asarray(data["xs"])
             trueTrace = np.asarray(data["trueTrace"])
@@ -156,14 +167,15 @@ def plot_trace_dist(file_name, prey_label, pred_label, yminofs, ymaxofs):
                 yminofs,
             )
             fig.tight_layout()
-            fig.savefig(file_name.replace("-run.json", ".pdf"))
+            fig.savefig(file_name.replace("-run.mc.json", ".pdf"))
     except FileNotFoundError:
-        print(f"{file_name} not found")
+        print(f"{path} not found")
 
 
 def plot_sens_dist(file_name):
     try:
-        with open(file_name, "r") as file:
+        path = Path(data_dir) / file_name
+        with open(path, "r") as file:
             data = json.load(file)
             xs = np.asarray(data["xs"])
             samples = np.asarray(data["samples"])
@@ -191,24 +203,24 @@ def plot_sens_dist(file_name):
             plot(1)
             ax[0].set_ylabel(r"$s_{\theta}(x)$")
             # fig.tight_layout()
-            fig.savefig(file_name.replace("-run.json", ".pdf"))
+            fig.savefig(file_name.replace("-run.mc.json", ".pdf"))
     except FileNotFoundError:
-        print(f"{file_name} not found")
+        print(f"{path} not found")
 
 
-plot_scalar_dist("bayesian-parameter-estimation-run.json")
-plot_scalar_dist("bayesian-parameter-estimation-ivp-solution-run.json")
-plot_scalar_dist("bayesian-parameter-estimation-ivp-sensitivity-run.json")
+plot_scalar_dist("bayesian-parameter-estimation-run.mc.json")
+plot_scalar_dist("bayesian-parameter-estimation-ivp-solution-run.mc.json")
+plot_scalar_dist("bayesian-parameter-estimation-ivp-sensitivity-run.mc.json")
 
 plot_trace_dist(
-    "bayesian-parameter-estimation-ivp-solution-trace-run.json",
+    "bayesian-parameter-estimation-ivp-solution-trace-run.mc.json",
     "prey  density",
     "pred. density",
     1,
     4,
 )
 plot_trace_dist(
-    "bayesian-parameter-estimation-ivp-sensitivity-trace-run.json",
+    "bayesian-parameter-estimation-ivp-sensitivity-trace-run.mc.json",
     "prey  density sens.",
     "pred. density sens.",
     5,
@@ -216,14 +228,17 @@ plot_trace_dist(
 )
 
 try:
-    file1 = "bayesian-parameter-estimation-run.json"
-    with open(file1, "r") as file1:
-        file2 = "bayesian-parameter-estimation-ivp-solution-trace-run.json"
-        with open(file2, "r") as file2:
+    file1 = "bayesian-parameter-estimation-run.mc.json"
+    path1 = Path(data_dir) / file1
+    with open(path1, "r") as file1:
+        file2 = "bayesian-parameter-estimation-ivp-solution-trace-run.mc.json"
+        path2 = Path(data_dir) / file2
+        with open(path2, "r") as file2:
             file3 = (
-                "bayesian-parameter-estimation-ivp-sensitivity-trace-run.json"
+                "bayesian-parameter-estimation-ivp-sensitivity-trace-run.mc.json"
             )
-            with open(file3, "r") as file3:
+            path3 = Path(data_dir) / file3
+            with open(path3, "r") as file3:
                 data1 = json.load(file1)
                 data2 = json.load(file2)
                 data3 = json.load(file3)
@@ -281,12 +296,13 @@ try:
 except FileNotFoundError:
     print(f"All files not found")
 
-plot_sens_dist("ode-sensitivites-two-methods-scalar-run.json")
-plot_sens_dist("ode-sensitivites-two-methods-run.json")
+plot_sens_dist("ode-sensitivites-two-methods-scalar-run.mc.json")
+plot_sens_dist("ode-sensitivites-two-methods-run.mc.json")
 
 try:
-    file = "rode-run.json"
-    with open(file, "r") as file:
+    file = "rode-run.mc.json"
+    path = Path(data_dir) / file
+    with open(path, "r") as file:
         data = json.load(file)
         xs = np.asarray(data["xs"])
         ys = np.asarray(data["ys"])
@@ -314,11 +330,12 @@ try:
         # fig.tight_layout()
         fig.savefig("rode.pdf")
 except FileNotFoundError:
-    print(f"{file} not found")
+    print(f"{path} not found")
 
 try:
-    file = "tumor-inhibitor-rode-run.json"
-    with open(file, "r") as file:
+    file = "tumor-inhibitor-rode-run.mc.json"
+    path = Path(data_dir) / file
+    with open(path, "r") as file:
         data = json.load(file)
         xs = np.asarray(data["xs"])
         sol = np.asarray(data["sol"])
@@ -389,11 +406,12 @@ try:
         fig.savefig("tumor-inhibitor-rode-overview.pdf")
 
 except FileNotFoundError:
-    print(f"{file} not found")
+    print(f"{path} not found")
 
 try:
-    file = "tumor-inhibitor-rode-run.json"
-    with open(file, "r") as file:
+    file = "tumor-inhibitor-rode-run.mc.json"
+    path = Path(data_dir) / file
+    with open(path, "r") as file:
         data = json.load(file)
         xs = np.asarray(data["xs"])
         sol = np.asarray(data["sol"])
@@ -493,6 +511,6 @@ try:
         fig.savefig("tumor-inhibitor-rode-wiener.pdf")
 
 except FileNotFoundError:
-    print(f"{file} not found")
+    print(f"{path} not found")
 
 plt.show()

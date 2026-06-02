@@ -3,7 +3,7 @@ include "rode.mc"
 mexpr
 
 match distEmpiricalSamples #var"Dist_RODE" with (samples, weights) in
-writeFile "rode-run.json"
+writeFile (get argv 1)
   (let write = lam j : Int.
     seqToJson
       (create (length samples)

@@ -1570,7 +1570,7 @@ let tmWeight = weight_ (float_ 1.5) in
 let tmODE =
   ulams_ ["t", "x"] (float_ 1.)
 in
-let tmX0 = float_ 0. in
+let tmX0 = utuple_ [float_ 0., float_ 0.] in
 let tmTEnd = float_ 1. in
 let tmSolveODE = solveode_ tmODE tmX0 tmTEnd in
 let tmDiff = diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.) in
@@ -1626,7 +1626,7 @@ with strJoin "\n" [
   "  (lam t.",
   "     lam x.",
   "       1.)",
-  "  0.",
+  "  (0., 0.)",
   "  1."
 ] using eqString else _toStr in
 
@@ -1821,7 +1821,8 @@ utest symbolize tmDelayed with tmDelayed using eqExpr in
 utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmObserve) with tyunit_ using eqType in
 utest tyTm (typeCheck tmWeight) with tyunit_ using eqType in
-utest tyTm (typeCheck tmSolveODE) with tyfloat_ using eqType in
+utest tyTm (typeCheck tmSolveODE) with tytuple_ [tyfloat_, tyfloat_]
+  using eqType in
 utest tyTm (typeCheck tmDiff) with tyfloat_ using eqType in
 utest tyTm (typeCheck tmAssume) with tybool_ using eqType in
 utest tyTm (typeCheck tmPrune) with typruneint_ using eqType in
@@ -1853,14 +1854,15 @@ utest _anf
         (solveode_ (ulams_ ["t", "x"] (addf_ (float_ 1.) (float_ 0.)))
            tmX0 tmTEnd)
   with bindall_ [
-    ulet_ "t"
+    ulet_ "t" (utuple_ [float_ 0., float_ 0.]),
+    ulet_ "t1"
       (solveode_
-         (ulams_ ["t", "x"]
+         (ulams_ ["t1", "x"]
             (bind_ (ulet_ "t" (addf_ (float_ 1.) (float_ 0.)))
                (var_ "t")))
-         (float_ 0.)
+         (var_ "t")
          tmTEnd)](
-    var_ "t"
+    var_ "t1"
 ) using eqExpr else _toStr in
 utest _anf tmDiff with bindall_ [
   ulet_ "t" (diff_ (lam_ "x" tyfloat_ (var_ "x")) (float_ 1.) (float_ 2.))](

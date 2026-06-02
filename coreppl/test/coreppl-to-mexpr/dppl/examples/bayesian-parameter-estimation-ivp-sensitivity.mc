@@ -10,7 +10,7 @@ let #var"Dist_z/dθ(future)" = infer (Importance { particles = 1000 }) _model
 
 mexpr
 
-printFloatDist #var"Dist_g/dθ(future)"
+printFloatDist #var"Dist_z/dθ(future)"
 
 -- Local Variables:
 -- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck baysian-parameter-estimation-ivp-sensitivity.mc && ./out | dppl-plot && rm ./out"
