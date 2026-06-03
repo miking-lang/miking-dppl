@@ -20,14 +20,17 @@ let solve =
 
 let trace =
   lam y : (Float, (FloatS, FloatS, FloatS)) -> ModS (Float ->
-    (ModS (FloatS, FloatS, FloatS))).
+    (ModS (FloatA, (FloatS, FloatS, FloatS)))).
     lam xy0 : (Float, (Float, Float, Float)).
       lam xs : [Float].
         tail
           (reverse
              (foldl
                 (lam xys : [(Float, (FloatS, FloatS, FloatS))]. lam x1 : Float.
-                  cons (x1, (y (head xys) x1)) xys)
+                  match y (head xys) x1 with (x1t, y1) in
+                  -- Assert that we reach the expected solution time.
+                  utest x1t with x1 using eqfApprox 1.e-15 in
+                  cons (x1, y1) xys)
                 [xy0] xs))
 
 let _h = 0.2
@@ -92,11 +95,11 @@ let rode = lam t : ().
                 (f1 cpi, f2 cpi, f3 cpi wt) in
 
           -- Solution
-          (solve f tcpi0 t).1 in
+          solve f tcpi0 t in
 
   -- Trace solution, its sensitivity, and the wiener realization
   let #var"θ" = (z0, nu, r,  e,  mu, aP, bP, aI, bI) in
-  let ej       = (0., 0., 0., 0., 0., 0., 0., 1., 0.) in
+  let ej      = (0., 0., 0., 0., 0., 0., 0., 1., 0.) in
   [ trace (sol #var"θ") (t0, (c0, p0, i0)) times
   , diff
       (lam #var"θ" : (FloatS, FloatS, FloatS, FloatS, FloatS, FloatS, FloatS, FloatS, FloatS).

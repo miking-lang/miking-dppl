@@ -59,6 +59,9 @@ let _model = lam t : ().
   let #var"θ" = assume (Uniform 0.1 0.5) in
   [ map (lam x : Float. match s1 #var"θ" x with (_, s) in (x, [s])) times
   , map (lam x : Float. match s2 #var"θ" x with (_, s) in (x, [s])) times
+
+    -- Analytic solution
+  , map (lam x : Float. (x, [mulf (negf x) (exp (mulf (negf #var"θ") x))])) times
   ]
 
 let #var"Dist_sθ" = infer (Importance { particles = 10 }) _model
@@ -66,6 +69,24 @@ let #var"Dist_sθ" = infer (Importance { particles = 10 }) _model
 mexpr
 
 match distEmpiricalSamples #var"Dist_sθ" with (samples, weights) in
+
+-- Assert that the solutions are correct.
+iter
+  (lam x : [[(Float, [Float])]].
+    match x with [s1, s2, sa] then
+      iteri
+        (lam i : Int. lam t : (Float, [Float]).
+          match (t, get s2 i, get sa i)
+            with ((x, [s1]), (_, [s2]), (xa, [sa])) then
+            utest x with xa using eqfApprox 1.e-15 in
+            utest s1 with s2 using eqfApprox 1.e-12 in
+            utest s1 with sa using eqfApprox 1.e-12 in
+            ()
+          else error "impossible")
+        s1
+    else error "impossible")
+  samples;
+
 let samples =
   map
     (lam x : [[(Float, [Float])]].
@@ -77,5 +98,5 @@ let samples =
 printWeightedTraces samples weights
 
 -- local variables:
--- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods-scalar.mc && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods-scalar.mc && ./out | dppl-plot-process --lines && rm ./out"
 -- End:

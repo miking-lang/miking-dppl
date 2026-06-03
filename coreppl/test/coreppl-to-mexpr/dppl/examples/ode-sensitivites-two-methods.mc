@@ -45,6 +45,25 @@ let #var"Dist_dy/dθ" = infer (Importance { particles = 100 }) _model
 mexpr
 
 match distEmpiricalSamples #var"Dist_dy/dθ" with (samples, weights) in
+
+-- Assert that the solutions are equal, not identically zero, and that they have
+-- reached the expected time.
+iter
+  (lam x : [[(Float, [Float])]].
+    match x with [s1, s2] then
+      iteri
+        (lam i : Int. lam t : (Float, [Float]).
+          utest t.0 with get times i using eqfApprox 1.e-15 in
+          iteri
+            (lam j : Int. lam yj : Float.
+              (if neqi i 0 then utest eqf yj 0. with false in () else ());
+              utest yj with get (get s2 i).1 j using eqfApprox 1.e-12 in ())
+            t.1;
+          ())
+        s1
+    else error "impossible")
+  samples;
+
 let samples =
   map
     (lam x : [[(Float, [Float])]].
@@ -58,5 +77,5 @@ let samples =
 printWeightedTraces samples weights
 
 -- local variables:
--- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods.mc && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods.mc && ./out | dppl-plot-process --lines && rm ./out"
 -- End:
