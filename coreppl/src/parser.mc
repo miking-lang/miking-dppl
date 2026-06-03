@@ -15,6 +15,7 @@ include "inference/mcmc-lightweight.mc"
 include "inference/mcmc-naive.mc"
 include "inference/mcmc-trace.mc"
 include "inference/pmcmc-pimh.mc"
+include "inference/pval-graph.mc"
 include "ode-solver-method.mc"
 
 lang DPPLParser =
@@ -23,7 +24,7 @@ lang DPPLParser =
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
-  PIMHMethod +
+  PIMHMethod + SimplePValGraphMethod +
 
   ODESolverMethod
 

@@ -28,6 +28,7 @@ include "coreppl-to-mexpr/mcmc-naive/compile.mc"
 include "coreppl-to-mexpr/mcmc-trace/compile.mc"
 include "coreppl-to-mexpr/mcmc-lightweight/compile.mc"
 include "coreppl-to-mexpr/pmcmc-pimh/compile.mc"
+include "coreppl-to-mexpr/pval-graph/compile.mc"
 
 lang CPPLLang = CorePPLFileTypeLoader
   + MExprAst + UtestLoader + ODELoader + MExprGenerateEq
@@ -36,6 +37,7 @@ lang CPPLLang = CorePPLFileTypeLoader
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
   + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
   + LightweightMCMCCompilerPicker
+  + SimplePValGraphCompiler
   + UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
 end
 

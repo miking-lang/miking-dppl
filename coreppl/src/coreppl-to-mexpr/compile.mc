@@ -258,19 +258,12 @@ lang CompileModels = ReplaceHigherOrderConstants + PhaseStats + MExprANFAll + DP
   | {extractAst = extractAst, params = modelParams, method = method} ->
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases options.invariantsToCheck in
 
-    -- ANF
-    let extractAst = lam f. normalizeTerm (extractAst f) in
-
-    -- ANF with higher-order intrinsics replaced with alternatives in
-    -- seq-native.mc
-    -- TODO(dlunde,2022-10-24): @Lars I'm not sure how I should combine this
-    -- with your updates.
-
     -- Apply inference-specific transformation
     let stateVarId = nameNoSym "state" in
     let interface =
       { extractNormal = lam f. extractAst f
       , extractNoHigherOrderConsts = lam f. extractAst (lam ast. replaceHigherOrderConstants envs.higherOrderSymEnv (f ast))
+      , normalizeTerm = normalizeTerm
       , stripOpaque =
         recursive let work = lam tm.
           match tm with TmOpaque x
