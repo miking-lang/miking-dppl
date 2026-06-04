@@ -59,8 +59,6 @@ let ode = lam #var"θ" : [FloatA]. lam x : FloatA. lam y : [FloatA].
 let y = lam #var"θ" : [FloatA]. lam xy0 : (FloatA, [[FloatA]]). lam x : FloatPC.
   solve (lam x : FloatA. lam ys : [[FloatA]]. [ode #var"θ" x (head ys)]) xy0 x
 
-let f = ode
-
 -- The righthand side of the j'th sensitivity equation
 let #var"fSⱼ" =
   lam f : [FloatA] -> FloatA -> ModA ([FloatA] -> ModA [FloatA]).
@@ -85,7 +83,7 @@ let fS =
 
 -- IVP solution with sensitivities
 let yS = lam #var"θ" : [FloatA]. lam xy0 : (FloatA, [[FloatA]]). lam x1 : FloatPC.
-  solve (fS f #var"θ") xy0 x1
+  solve (fS ode #var"θ") xy0 x1
 
 let _model = lam t : ().
   let #var"θ₁" = assume (Uniform 1.0 2.0) in
