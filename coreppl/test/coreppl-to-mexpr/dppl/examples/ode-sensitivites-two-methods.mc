@@ -91,7 +91,7 @@ let _model = lam t : ().
   let #var"θ₁" = assume (Uniform 1.0 2.0) in
   let #var"θ" = [#var"θ₁", 1., 1., 3.] in
   let #var"nθ" = length #var"θ" in
-  let j = 0 in
+  let j = 0 in                  -- choose sensitivity 0 to 3
   let yS0 =
     cons
       y0
