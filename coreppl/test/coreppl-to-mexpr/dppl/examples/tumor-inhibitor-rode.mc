@@ -1,23 +1,25 @@
 include "../lib.mc"
 
+-- Specialize solver
 let solve =
   lam f :
     FloatC -> ModS ((FloatS, FloatS, FloatS) -> (ModS (FloatS, FloatS, FloatS))).
     lam xy0 : (FloatC, (FloatS, FloatS, FloatS)).
       lam x1 : FloatC.
-        solveode (EFEC {
-          add = addt,
-          smul = smult,
-          stepSize = 1e-4,
-          ok =
-            lam yh : (FloatP, FloatP, FloatP).
-              lam y2h2 : (FloatP, FloatP, FloatP).
-                ltf
-                  (l2normt (subt yh y2h2))
-                  (mulf 3. 1e-2)
-        })
+        solveode (EFEC
+          { add = addt
+          , smul = smult
+          , stepSize = 1e-4,
+            ok =
+              lam yh : (FloatP, FloatP, FloatP).
+                lam y2h2 : (FloatP, FloatP, FloatP).
+                  ltf
+                    (l2normt (subt yh y2h2))
+                    (mulf 3. 1e-2)
+          })
           f xy0 x1
 
+-- Creates a solution trace from a IVP solution
 let trace =
   lam y : (Float, (FloatS, FloatS, FloatS)) -> ModS (Float ->
     (ModS (FloatA, (FloatS, FloatS, FloatS)))).
