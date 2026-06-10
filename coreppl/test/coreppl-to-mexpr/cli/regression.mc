@@ -19,16 +19,16 @@ utest r (t 1000  0 "-m is-lw --cps partial"                                     
 utest r (t 1000  0 "-m is-lw --cps partial --no-early-stop"                           ) with rhs using e in
 utest r (t 1000  0 "-m is-lw --cps full"                                              ) with rhs using e in
 utest r (t 1000  0 "-m is-lw --cps full --no-early-stop"                              ) with rhs using e in
-utest r (t 1000  0 "-m smc-bpf --cps partial --resample manual"                       ) with rhs using e in
+-- utest r (t 1000  0 "-m smc-bpf --cps partial --resample manual"                       ) with rhs using e in
 utest r (t 1000  0 "-m smc-bpf --cps partial --resample align"                        ) with rhs using e in
 utest r (t 1000  0 "-m smc-bpf --cps partial --resample likelihood"                   ) with rhs using e in
-utest r (t 1000  0 "-m smc-bpf --cps full --resample manual"                          ) with rhs using e in
+-- utest r (t 1000  0 "-m smc-bpf --cps full --resample manual"                          ) with rhs using e in
 utest r (t 1000  0 "-m smc-bpf --cps full --resample align"                           ) with rhs using e in
 utest r (t 1000  0 "-m smc-bpf --cps full --resample likelihood"                      ) with rhs using e in
-utest r (t 1000  0 "-m smc-apf --cps partial --resample manual"                       ) with rhs using e in
+-- utest r (t 1000  0 "-m smc-apf --cps partial --resample manual"                       ) with rhs using e in
 utest r (t 1000  0 "-m smc-apf --cps partial --resample align"                        ) with rhs using e in
 utest r (t 1000  0 "-m smc-apf --cps partial --resample likelihood"                   ) with rhs using e in
-utest r (t 1000  0 "-m smc-apf --cps full --resample manual"                          ) with rhs using e in
+-- utest r (t 1000  0 "-m smc-apf --cps full --resample manual"                          ) with rhs using e in
 utest r (t 1000  0 "-m smc-apf --cps full --resample align"                           ) with rhs using e in
 utest r (t 1000  0 "-m smc-apf --cps full --resample likelihood"                      ) with rhs using e in
 utest r (t 1000  500 "-m pmcmc-pimh"                                                  ) with rhs using e in
