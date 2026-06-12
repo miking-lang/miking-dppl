@@ -91,7 +91,7 @@ let frontendOptions : OptParser FrontendOptions =
   optApply (optMap5 mk printMCore exitBefore outputMl output test) input
 
 let cpplFileOptions : OptParser CPPLFileOptions =
-  let mk = lam dpplTypeCheck. lam dpplTypeCheck. lam printSamples. lam printAcceptanceRate. lam defaultParticles.
+  let mk = lam dpplTypeCheck. lam printSamples. lam printAcceptanceRate. lam defaultParticles.
     { dpplTypeCheck = dpplTypeCheck
     , printSamples = printSamples
     , printAcceptanceRate = printAcceptanceRate
@@ -116,7 +116,7 @@ let cpplFileOptions : OptParser CPPLFileOptions =
       , description = concat "The number of particles (i.e., samples or iterations). Takes precedence over --particles in a program without infers. The default is " (int2string default)
       } in
     optOr opt (optPure default) in
-  optMap5 mk dpplTypeCheck dpplTypeCheck printSamples printAcceptanceRate defaultParticles
+  optMap4 mk dpplTypeCheck printSamples printAcceptanceRate defaultParticles
 
 let inferenceMethodOptions : OptParser (use InferMethodBase in InferMethod) = foldl1 optOr
   [ isLwOptions

@@ -139,7 +139,6 @@ testMain [substituter] directories location (lam api.
     (and (strStartsWith "coreppl/test/coreppl-to-mexpr/dppl/") (strEndsWith ".mc"))
     [(cdpplCompile, Succ ()), (cdpplRun, Succ ())];
 
-  -- TODO(vipa, 2026-04-14): running plot.py?
   -- NOTE(vipa, 2026-04-14): dppl examples
   let dpplExampleCompile = api.midStep
     { tag = "dpplExampleCompile"
@@ -153,14 +152,8 @@ testMain [substituter] directories location (lam api.
     } in
 
   api.tests []
-    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/dppl/examples/") (strEndsWith ".mc"))
+    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/dppl/examples/") (strEndsWith "-run.mc"))
     [(cdpplCompile, Dont ()), (cdpplRun, Dont ()), (dpplExampleCompile, Succ ()), (dpplExampleJson, Succ ())];
-
-  -- NOTE(vipa, 2026-04-14): This file is different, it doesn't
-  -- actually produce a json file, so don't run it as though it would
-  api.tests []
-    (eqString "coreppl/test/coreppl-to-mexpr/dppl/examples/rode.mc")
-    [(dpplExampleJson, Dont ())];
 
   ()
 );

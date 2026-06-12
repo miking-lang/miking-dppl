@@ -15,6 +15,8 @@ include "method-helper.mc"
 let odeDefault = nameSym "Default"
 let odeRK4 = nameSym "RK4"
 let odeEF = nameSym "EF"
+let odeEFEC = nameSym "EFEC"
+let odeRK4EC = nameSym "RK4EC"
 let odeEFA = nameSym "EFA"
 
 -- Defines the basic components required in the implementation of an ODE solver
@@ -25,12 +27,15 @@ let odeEFA = nameSym "EFA"
 lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
 
   type MethodArg = { stepSize : Expr, add : Expr, smul : Expr }
+  type MethodArgEC = { stepSize : Expr, add : Expr, smul : Expr, ok : Expr }
 
   syn ODESolverMethod =
   | ODESolverDefault MethodArg
   | RK4 MethodArg
   | EF MethodArg
-  | EFA { n : Expr, stepSize : Expr, add : Expr, smul : Expr }
+  | RK4EC MethodArgEC
+  | EFEC MethodArgEC
+  | EFA { n : Expr, stepSize : Expr, add : Expr, smul : Expr } -- Experimental
 
   -- Map/Accum over expressions in ODE solver method.
   sem smapAccumL_ODESolverMethod_Expr
@@ -45,6 +50,12 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
   | EF r ->
     match _smapAccumL_ODESolverMethod_Expr f acc r with (acc, r) in
     (acc, EF r)
+  | RK4EC r ->
+    match _smapAccumL_ODESolverMethodEC_Expr f acc r with (acc, r) in
+    (acc, RK4EC r)
+  | EFEC r ->
+    match _smapAccumL_ODESolverMethodEC_Expr f acc r with (acc, r) in
+    (acc, EFEC r)
   | EFA r ->
     match f acc r.n with (acc, n) in
     match
@@ -59,6 +70,13 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
     match f acc r.add with (acc, add) in
     match f acc r.smul with (acc, smul) in
     (acc, { r with stepSize = stepSize, add = add, smul = smul })
+
+  sem _smapAccumL_ODESolverMethodEC_Expr f acc =| r ->
+    match f acc r.stepSize with (acc, stepSize) in
+    match f acc r.add with (acc, add) in
+    match f acc r.smul with (acc, smul) in
+    match f acc r.ok with (acc, ok) in
+    (acc, { r with stepSize = stepSize, add = add, smul = smul, ok = ok })
 
   sem sfold_ODESolverMetod_Expr : all a. (a -> Expr -> a) -> a -> ODESolverMethod -> a
   sem sfold_ODESolverMetod_Expr f acc =| m ->
@@ -75,6 +93,8 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
   | ODESolverDefault r
   | RK4 r
   | EF r -> optionFoldlM (eqExprH env) free [r.stepSize, r.add, r.smul]
+  | RK4EC r
+  | EFEC r -> optionFoldlM (eqExprH env) free [r.stepSize, r.add, r.smul, r.ok]
   | EFA r -> optionFoldlM (eqExprH env) free [r.n, r.stepSize, r.add, r.smul]
 
   sem odeSolverMethodName : ODESolverMethod -> Name
@@ -82,6 +102,8 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
   | ODESolverDefault _ -> odeDefault
   | RK4 _ -> odeRK4
   | EF _ -> odeEF
+  | RK4EC _ -> odeRK4EC
+  | EFEC _ -> odeEFEC
   | EFA _ -> odeEFA
 
   -- Constructs an ODE solver method as a TmConApp.
@@ -96,7 +118,9 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
     ODESolverDefault (_odeSolverMethodFromCon1 info bindings)
   | "RK4" -> RK4 (_odeSolverMethodFromCon1 info bindings)
   | "EF" -> EF (_odeSolverMethodFromCon1 info bindings)
-  | "EFA" -> EFA (_odeSolverMethodFromCon2 info bindings)
+  | "RK4EC" -> RK4EC (_odeSolverMethodFromCon2 info bindings)
+  | "EFEC" -> EFEC (_odeSolverMethodFromCon2 info bindings)
+  | "EFA" -> EFA (_odeSolverMethodFromCon3 info bindings)
   | s -> errorSingle [info] (concat "Unknown ODE solver method: " s)
 
   sem _odeSolverMethodFromCon1 info =| bindings ->
@@ -109,6 +133,19 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
     else error "impossible"
 
   sem _odeSolverMethodFromCon2 info =| bindings ->
+    match getFields info bindings [
+      ("stepSize", withInfo info (float_ 0.05)),
+      ("add", withInfo info (uconst_ (CAddf ()))),
+      ("smul", withInfo info (uconst_ (CMulf ()))),
+      ("ok", let wi = withInfo info in
+             let _y2h2 = nameSym "y2h2" in
+             let _yh = nameSym "yh" in
+             (wi (nulam_ _y2h2 (wi (nulam_ _yh (wi false_))))))
+    ] with [stepSize, add, smul, ok]
+    then { stepSize = stepSize, add = add, smul = smul, ok = ok }
+    else error "impossible"
+
+  sem _odeSolverMethodFromCon3 info =| bindings ->
     match getFields info bindings [
       ("n", withInfo info (int_ 10)),
       ("stepSize", withInfo info (float_ 0.05)),
@@ -129,6 +166,13 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
     ("stepSize", r.stepSize),
     ("add", r.add),
     ("smul", r.smul)
+  ]
+  | RK4EC r
+  | EFEC r -> fieldsToRecord info [
+    ("stepSize", r.stepSize),
+    ("add", r.add),
+    ("smul", r.smul),
+    ("ok", r.ok)
   ]
   | EFA r -> fieldsToRecord info [
     ("n", r.n),
@@ -166,4 +210,21 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
     unify env [info, infoTm smul]
       (arrow float (arrow tyState tyState)) (tyTm smul);
     { stepSize = stepSize, add = add, smul = smul }
+
+  sem _typeCheckODESolverMethodEC env info tyState =| r ->
+    let float = TyFloat {info = info} in
+    let bool = TyBool {info = info} in
+    let arrow = ityarrow_ info in
+    let stepSize = typeCheckExpr env r.stepSize in
+    let add = typeCheckExpr env r.add in
+    let smul = typeCheckExpr env r.smul in
+    let ok = typeCheckExpr env r.ok in
+    unify env [info, infoTm stepSize] float (tyTm stepSize);
+    unify env [info, infoTm add]
+      (arrow tyState (arrow tyState tyState)) (tyTm add);
+    unify env [info, infoTm smul]
+      (arrow float (arrow tyState tyState)) (tyTm smul);
+    unify env [info, infoTm ok]
+      (arrow tyState (arrow tyState bool)) (tyTm ok);
+    { stepSize = stepSize, add = add, smul = smul, ok = ok }
 end

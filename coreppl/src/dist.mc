@@ -263,8 +263,8 @@ end
 
   ------------------------------------------------------------------------------
   -- From there, and on any part of the code that involves distribution
-  -- implementations, the distributions are sorted alphabetically 
-  -- by their names. It would be appreciated if you could keep it that way 
+  -- implementations, the distributions are sorted alphabetically
+  -- by their names. It would be appreciated if you could keep it that way
   -- for future implementations
   ------------------------------------------------------------------------------
 
@@ -654,7 +654,7 @@ let uniform_ = use UniformDist in
 let uniformDiscrete_ = use UniformDiscreteDist in
   lam a. lam b. dist_ (DUniformDiscrete {a = a, b = b})
 
-let reciprocal_ = use ReciprocalDist in 
+let reciprocal_ = use ReciprocalDist in
   lam a. lam b. dist_ (DReciprocal {a = a, b = b})
 
 let wiener_ = use WienerDist in dist_ (DWiener { cps = false, a = unit_ })

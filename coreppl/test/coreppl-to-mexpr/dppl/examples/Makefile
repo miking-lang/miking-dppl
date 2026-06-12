@@ -1,6 +1,10 @@
+ROOT := $(shell git rev-parse --show-toplevel)
+REL  := $(shell realpath --relative-to=$(ROOT) $(CURDIR))
 
-# TODO(vipa, 2026-04-14): This file needs to get the paths to the
-# .json file
-.PHONY: plot
-plot:
-	python plot.py
+.PHONY: plots
+plots:
+	python plot.py "$(ROOT)/build/$(REL)"
+
+.PHONY: clean
+clean:
+	rm -rf *.pdf

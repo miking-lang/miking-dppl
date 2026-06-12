@@ -12,18 +12,19 @@ let model: Method -> () -> [Float] = lam m. lam.
     let v = get xs 1 in
     [v, (negf x)]
   in
+  let t0 = 0. in
   let x0 = [1., 0.] in
   switch m
   case RungeKutta _ then
-    solveode
-      (RK4 { stepSize = 1e-3, add = zipWith addf, smul = lam s. map (mulf s) })
-      f x0 3.
+    (solveode
+       (RK4 { stepSize = 1e-3, add = zipWith addf, smul = lam s. map (mulf s) })
+       f (t0, x0) 3.).1
   case EulerForward _ then
-    solveode
-      (EF { stepSize = 1e-3, add = zipWith addf, smul = lam s. map (mulf s) })
-      f x0 3.
+    (solveode
+       (EF { stepSize = 1e-3, add = zipWith addf, smul = lam s. map (mulf s) })
+       f (t0, x0) 3.).1
   case _ then
-    solveode
-      (Default { stepSize = 1e-3, add = zipWith addf, smul = lam s. map (mulf s) })
-      f x0 3.
+    (solveode
+       (Default { stepSize = 1e-3, add = zipWith addf, smul = lam s. map (mulf s) })
+       f (t0, x0) 3.).1
   end
