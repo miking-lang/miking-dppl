@@ -11,6 +11,11 @@ let model : () -> () = lam.
     if x then () else error (concat "Assertion failed: " msg)
   in
 
+  -- NOTE(vipa, 2026-06-10): We insert a resample to allow SMC
+  -- algorithms to run this model, even though it doesn't matter at
+  -- all for this particular model
+  resample;
+
   -- ┌────────────────────┐
   -- │ Scalar Derivatives │
   -- └────────────────────┘

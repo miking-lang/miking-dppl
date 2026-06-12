@@ -13,6 +13,10 @@ let model: Method -> () -> [Float] = lam m. lam.
     [v, (negf x)]
   in
   let t0 = 0. in
+  -- NOTE(vipa, 2026-06-10): We insert a resample to allow SMC
+  -- algorithms to run this model, even though it doesn't matter at
+  -- all for this particular model
+  resample;
   let x0 = [1., 0.] in
   switch m
   case RungeKutta _ then
