@@ -389,7 +389,7 @@ let transform = lam strs.
     , revValueScope = mapEmpty nameCmp
     , conScope = mapEmpty nameCmp
     , depth = 0
-    , tyConAsPure = mapEmpty nameCmp
+    , tyConInst = mapEmpty nameCmp
     } in
   match specializeExpr initScope initState ast with (_, (ast, _)) in
   let initTransEnv =
@@ -540,33 +540,28 @@ utest transform
   ]
 with strJoin "\n"
   [ "let draw ="
-  , "  lam st6."
-  , "    lam x7."
-  , "      p_assume st6 simpleStoreAssume (p_pure (Gaussian x7 1.))"
-  , "in"
-  , "match draw st 0. with (st1, x)"
+  , "  lam st5."
+  , "    lam x4."
+  , "      p_assume st5 simpleStoreAssume (p_pure (Gaussian x4 1.))"
   , "in"
   , "match"
-  , "  p_map"
-  , "    st1"
-  , "    (lam x1."
-  , "       lam x2."
-  , "         get [ x1,"
-  , "             x2 ])"
-  , "    x"
+  , "  p_assume st simpleStoreAssume (p_pure (Categorical [ 0.5, 0.5 ]))"
   , "with"
-  , "  (st2, x3)"
+  , "  (st1, x)"
   , "in"
-  , "match draw st2 1. with (st3, x4)"
-  , "in"
-  , "match p_apply st3 x3 x4 with (st4, x5)"
-  , "in"
-  , "match"
-  , "  p_assume st4 simpleStoreAssume (p_pure (Categorical [ 0.5, 0.5 ]))"
-  , "with"
-  , "  (st5, x6)"
-  , "in"
-  , "p_apply st5 x5 x6"
+  , "p_bind"
+  , "  st1"
+  , "  simpleStoreSubmodel"
+  , "  (simpleInit {})"
+  , "  (lam st2."
+  , "     lam x1."
+  , "       match draw st2 0. with (st3, x2)"
+  , "       in"
+  , "       match draw st3 1. with (st4, x3)"
+  , "       in"
+  , "       (st4, get [ x2,"
+  , "           x3 ] x1))"
+  , "  x"
   ]
 using eqString
 else printFailure

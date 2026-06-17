@@ -537,7 +537,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     tyToPTypeX handleA handleC handleCustom ty
 
   sem tyToPurePType : PScope -> Type -> PType
-  sem tyToPurePType sc = | ty ->
+  sem tyToPurePType sc = | ty -> _tyToPurePType (mapEmpty nameCmp) sc ty
+
+  sem _tyToPurePType : Map Name PType -> PScope -> Type -> PType
+  sem _tyToPurePType vars sc = | ty ->
     let handleA = lam x. PNever x in
     let handleC = lam x. PLater x in
     let handleCustom = lam ty. lam tyargs.
@@ -546,8 +549,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
         match mapLookup x.ident sc.tyConInst with Some f
         then PLater (PUser (mapMap (mapRecTy (tyToPurePType sc)) (f tyargs)))
         else PLater (PUser (mapEmpty nameCmp))
-      case TyVar _ then
-        PNever (PUnknown ())
+      case TyVar x then
+        match mapLookup x.ident vars with Some pty
+        then pty
+        else PNever (PUnknown ())
       end in
     tyToPTypeX handleA handleC handleCustom ty
 
@@ -591,8 +596,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
 
   sem _app_ =
   -- p_map id = id
+  -- p_map p_pure = p_pure
   | (f & TmConst {val = CPMap _}, x & TempLam f2) ->
-    if isIdentity f2.f then tempLam_ (lam x. x) else app_ f x
+    if isIdentity f2.f then tempLam_ (lam x. x) else
+    if isPure f2.f then x else app_ f x
   -- p_map f (p_pure x) = p_pure (f x)
   | ( TmApp
       { lhs = TmConst {val = CPMap _}
@@ -773,65 +780,172 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
       } in
     (st, (foldl app_ (nvar_ name) args, retTy))
   | SCKPolyFlexible polyType ->
-    -- OPT(vipa, 2025-11-25): This currently checks if at least one
-    -- argument is wrapped further than a polymorphic instantiation of
-    -- the function could absorb and, if so, wraps *all*
-    -- arguments. This is a bit overly cautious in at least two cases:
-    -- * `addf a b` where `a` is pure and `b` is wrapped. This could
-    --   be `map (addf a) b` rather than `apply (map addf (pure a))
-    --   b`. Of course, the latter will simplify to the former with
-    --   `_app`, so it's not really a problem per se.
-    -- * `get [x] i` where `x` and `i` are wrapped. This could be
-    --   `join (map (get [x]) i)` rather than `apply (map get
-    --   (traverse id [x])) i`. The latter does *not* simplify to the
-    --   former.
-    match unzip args with (args, argPTys) in
-    let retPTy = tyToPurePTypeEmptyUser ret in
+    -- NOTE(vipa, 2026-06-22): First, we find all occurrences of type
+    -- variables in arguments, so we can reconstruct an appropriate
+    -- return type later. At the same time, we also check if there's
+    -- any wrappedness that cannot be hidden inside a type variable. A
+    -- type variable can only hide wrappedness if it's never under a
+    -- PTypeC that's wrapped, or under a PDist (regardless of its
+    -- wrapping).
+    -- NOTE(vipa, 2026-07-03): Also, this approach strongly assumes
+    -- that there actually are no ways for a polymorphic function to
+    -- examine the polymorphic type variables. This breaks in the
+    -- presence of GADTs (but can be worked around by wrapping such a
+    -- call in `TmOpaque`), bounded polymorphism, or functions that
+    -- take other functions as arguments. We assume our system lacks
+    -- all of these.
     recursive let tyArgs = lam args. lam ty.
       match unwrapType ty with TyArrow x
       then tyArgs (snoc args x.from) x.to
       else (args, ty) in
-    match tyArgs [] (stripTyAll polyType).1 with (argTys, retTy) in
-    -- Collect the `PType`s used to instantiate each `TyVar`,
-    -- combining them with `lubPType` since different `PType`s might
-    -- appear at different places. Additionally, find wrappedness
-    -- that cannot be absorbed by a `TyVar`.
-    let mergeCollectInfo = lam l. lam r. (or l.0 r.0, mapUnionWith lubPType l.1 r.1) in
-    let collectAtom = lam pty. lam ty. (isTopWrapped pty, mapEmpty nameCmp) in
-    let collectCustom = lam pty. lam tyCon. lam tyArgs. switch tyCon
-      case TyVar x then
-        if null tyArgs
-        then (false, mapSingleton nameCmp x.ident pty)
-        else errorSingle [x.info] "Found a type application of a type variable, that's not supported presently."
-      case TyCon x then
-        errorSingle [x.info] "This transformation does not support any TmConst's with TyCon's in their types."
+    match stripTyAll polyType with (tyvars, monoType) in
+    match tyArgs [] monoType with (argTys, retTy) in
+    match unzip args with (args, argPTys) in
+    let usableVars = setOfSeq nameCmp (map (lam x. x.0) tyvars) in
+    recursive let removeUnusableVars = lam inDist. lam usableVars. lam ty.
+      switch ty
+      case TyVar x then if inDist then setRemove x.ident usableVars else usableVars
+      case TyDist x then removeUnusableVars true usableVars x.ty
+      case ty then sfold_Type_Type (removeUnusableVars inDist) usableVars ty
       end in
-    recursive let collectComposite = lam pty. lam ty.
-      let wrappedHere = isTopWrapped pty in
-      match unwrapOnce pty with Right pty in
-      let rec = map2PTypeCExn (lam pty. _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty)) pty ty in
-      foldPTypeC mergeCollectInfo (wrappedHere, mapEmpty nameCmp) rec in
-    let collectTy = lam pty. lam ty.
-      _tyToPTypeX (collectAtom pty) (collectComposite pty) (collectCustom pty) ty in
-    let f = lam acc. lam pty. lam ty. mergeCollectInfo acc (collectTy pty ty) in
-    match foldl2 f (collectTy retPTy retTy) argPTys argTys with (needsFullWrap, varPTys) in
-    -- Construct `PType`s using the collected `TyVar` `PType`s. We
-    -- need to do this even if `needsFullWrap` is true in case a
-    -- `TyVar` was instantiated with a `PUser` type with
-    -- constructors.
-    let constructCustom = lam tyCon. lam.
-      match tyCon with TyVar x in mapFindExn x.ident varPTys in
-    let construct = tyToPTypeX (lam x. PNever x) (lam x. PLater x) constructCustom in
-    let targetArgPTys = if needsFullWrap
-      then map (lam ty. ensureWrapped (construct ty)) argTys
-      else map construct argTys in
-    let retTy = if needsFullWrap
-      then ensureWrapped (construct retTy)
-      else construct retTy in
-    let args = zipWith adjustWrapping (zip argPTys targetArgPTys) args in
-    let pure = if needsFullWrap then app_ (uconst_ (CPPure ())) else lam x. x in
-    let apply = if needsFullWrap then _apply else _app in
-    (st, (foldl apply (pure tm) args, retTy))
+    let usableVars = foldl (removeUnusableVars false) usableVars argTys in
+    type CollectInfo = {wrappedAbove : Bool, occurrences : Map Name PType, covered : Set Name} in
+    let emptyCollect : CollectInfo = {wrappedAbove = false, occurrences = mapEmpty nameCmp, covered = setEmpty nameCmp} in
+    let mergeCollect : CollectInfo -> CollectInfo -> CollectInfo = lam a. lam b.
+      { wrappedAbove = or a.wrappedAbove b.wrappedAbove
+      , occurrences = mapUnionWith lubPType a.occurrences b.occurrences
+      , covered = setUnion a.covered b.covered
+      } in
+    recursive
+      let collectA
+        : PType -> PTypeA -> CollectInfo
+        = lam pty. lam. {emptyCollect with wrappedAbove = not (isPureIsh pty)}
+      let collectC
+        : PType -> PTypeC Type -> CollectInfo
+        = lam pty. lam ty.
+          let isTopWrapped = isTopWrapped pty in
+          let localInfo = {emptyCollect with wrappedAbove = isTopWrapped} in
+          let pty = switch unwrapOnce pty
+            case Right pty then pty
+            case Left (PUnknown _) then mapPTypeC (lam. PNever (PUnknown ())) ty
+            case _ then error "Compiler error: got neither composite nor unknown in collectC"
+            end in
+          let f = lam th. match th with These (l, r) then work l r else emptyCollect in
+          let info = foldPTypeC mergeCollect localInfo (map2PTypeC f pty ty) in
+          if isTopWrapped
+          then {info with covered = setUnion info.covered (setOfKeys info.occurrences)}
+          else info
+      let collectCustom
+        : PType -> Type -> [Type] -> CollectInfo
+        = lam pty. lam tyf. lam tyargs. switch (tyf, tyargs)
+          case (TyVar x, []) then
+            {emptyCollect with wrappedAbove = false, occurrences = mapSingleton nameCmp x.ident pty}
+          case (TyVar x, ![]) then
+            errorSingle [x.info] "Found a type application of a type variable, that's not supported presently."
+          case (TyCon x, tyargs) then
+            let ty =
+              match mapLookup x.ident sc.tyConInst with Some f
+              then PUser (f tyargs)
+              else PUser (mapEmpty nameCmp) in
+            collectC pty ty
+          end
+      let work
+        : PType -> Type -> CollectInfo
+        = lam pty. _tyToPTypeX (collectA pty) (collectC pty) (collectCustom pty)
+    in
+    let initialCollect =
+      {emptyCollect with occurrences = mapFromSeq nameCmp (map (lam n. (n.0, PNever (PUnknown ()))) tyvars)} in
+    let info = foldl mergeCollect emptyCollect (zipWith work argPTys argTys) in
+    let usableVars = setSubtract usableVars info.covered in
+    -- NOTE(vipa, 2026-06-22): The set of `usableVars` is not the set
+    -- of type variables that can hide wrappedness.
+    let wrappedAbove = if info.wrappedAbove
+      then true
+      else mapAny (lam. lam pty. not (isPureIsh pty)) (mapDifference info.occurrences usableVars) in
+    recursive
+      let adjustA
+        : Map Name PType -> Bool -> PType -> PTypeA -> Expr -> Expr
+        = lam. lam shouldWrap. lam pty. lam. switch (shouldWrap, pty)
+          case (_, PNever (PUnknown _) | PHere {wrapped = Unused _}) then lam x. x
+          case (true, PNever _) then app_ (uconst_ (CPPure ()))
+          case (true, PHere {wrapped = Wrapped _}) then lam x. x
+          case (false, !PHere {wrapped = Wrapped _}) then lam x. x
+          case (false, PHere {wrapped = Wrapped _}) then error "Bad adjustment"
+          end
+      let adjustC
+        : Map Name PType -> Bool -> PType -> PTypeC Type -> Expr -> Expr
+        = lam vars. lam shouldWrap. lam pty. lam ty.
+          let isWrapped = isTopWrapped pty in
+          let shouldWrapBelow = match ty with PDist _
+           then false
+           else and shouldWrap (not isWrapped) in
+          let pty = switch unwrapOnce pty
+            case Right pty then pty
+            case Left (PUnknown _) then mapPTypeC (lam. PNever (PUnknown ())) ty
+            case _ then error "Compiler error: got neither composite nor unknown in collectC"
+            end in
+          let f = lam th. switch th
+            case These (pty, ty) then adjust vars shouldWrapBelow pty ty
+            case This _ then error "Compiler error: probably impossible"
+            case That _ then lam x. x
+            end in
+          let pty = map2PTypeC f pty ty in
+          switch (isWrapped, shouldWrap)
+          case (true, true) then _map (tempLam_ (_adjustWrappingC false pty))
+          case (true, false) then error "Compiler error: probably impossible"
+          case (false, true) then _adjustWrappingC true pty
+          case (false, false) then _adjustWrappingC false pty
+          end
+      let adjustCustom
+        : Map Name PType -> Bool -> PType -> Type -> [Type] -> Expr -> Expr
+        = lam vars. lam shouldWrap. lam pty. lam tyc. lam tyargs.
+          switch (tyc, tyargs)
+          case (TyVar x, []) then
+            match mapLookup x.ident vars with Some targetPty
+            then if shouldWrap
+              then lam tm. app_ (uconst_ (CPPure ())) (adjustWrapping (pty, targetPty) tm)
+              else adjustWrapping (pty, targetPty)
+            else if shouldWrap
+              then adjustWrapping (pty, ensureWrapped pty)
+              else lam x. x
+          case (TyVar x, ![]) then
+            errorSingle [x.info] "Found a type application of a type variable, that's not supported presently."
+          case (TyCon x, tyargs) then
+            match mapLookup x.ident sc.tyConInst with Some inst
+            then adjustC vars shouldWrap pty (PUser (inst tyargs))
+            else adjustA vars shouldWrap pty (PUnknown ())
+          end
+      let adjust
+        : Map Name PType -> Bool -> PType -> Type -> Expr -> Expr
+        = lam vars. lam shouldWrap. lam pty. lam ty.
+          _tyToPTypeX (adjustA vars shouldWrap pty) (adjustC vars shouldWrap pty) (adjustCustom vars shouldWrap pty) ty
+    in
+    if wrappedAbove then
+      -- NOTE(vipa, 2026-06-18): We need wrapping above, which in the
+      -- general case might require a `join` if a polymorphic variable
+      -- captured some wrappedness. Here we depend on automatic
+      -- simplification via smart constructors to not have to special
+      -- case in that way; the extra `join` and wrapping will cancel
+      -- out and both will disappear if they're unnecessary.
+      let pureOccurrences = mapMapWithKey
+        (lam var. lam pty. if setMem var usableVars then pty else purifyPType pty)
+        info.occurrences in
+      let args = zipWith (lam f. lam a. f a)
+        (zipWith (adjust (mapIntersectWith (lam a. lam. a) info.occurrences usableVars) true) argPTys argTys) args in
+      let tm = foldl _apply (app_ (uconst_ (CPPure ())) tm) args in
+      let pty = _tyToPurePType pureOccurrences sc retTy in
+      let retPty = ensureWrapped pty in
+      let tm = _join (_map (tempLam_ (adjustWrapping (pty, retPty))) tm) in
+      (st, (tm, retPty))
+    else
+      -- NOTE(vipa, 2026-06-17): All wrapping can be handled by
+      -- polymorphism, we just need to make sure all arguments fully
+      -- agree on the type of each polymorphic variable
+      let args = zipWith (lam f. lam a. f a)
+        (zipWith (adjust info.occurrences false) argPTys argTys) args in
+      let tm = appSeq_ tm args in
+      let retPty = _tyToPurePType info.occurrences sc retTy in
+      (st, (tm, retPty))
 
   sem _defaultLetSpecialization sc st = | x ->
     match specializeExpr {sc with depth = subi sc.depth 1} st x.body with (st, (tm, ty)) in
@@ -1285,9 +1399,25 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
 
   sem addMatchNames : PScope -> (Either PTypeA (PTypeC PType), Pat) -> Option (PScope, Pat)
   sem addMatchNames sc =
-  | (_, pat & PatBool _) -> Some (sc, pat)
-  | (_, pat & PatInt _) -> Some (sc, pat)
-  | (_, pat & PatChar _) -> Some (sc, pat)
+  | (!(Left (PUnknown _)), pat & PatBool _) -> Some (sc, pat)
+  | (!(Left (PUnknown _)), pat & PatInt _) -> Some (sc, pat)
+  | (!(Left (PUnknown _)), pat & PatChar _) -> Some (sc, pat)
+  | (Left (PUnknown _), pat) ->
+    let mAddBinding = lam sc. lam pat.
+      match pat with PatNamed (p & {ident = PName ident}) then
+        let n = nameSetNewSym ident in
+        ( addBinding ident (n, PNever (PUnknown ())) sc
+        , PatNamed {p with ident = PName n}
+        )
+      else (sc, pat) in
+    match smapAccumL_Pat_Pat mAddBinding sc pat with (sc, pat) in
+    match pat with PatSeqEdge (p & {middle = PName ident}) then
+      let n = nameSetNewSym ident in
+      Some
+      ( addBinding ident (n, PNever (PUnknown ())) sc
+      , PatSeqEdge {p with middle = PName n}
+      )
+    else Some (sc, pat)
   | (Right (PRecord ty), PatRecord pat) ->
     let f = lam ty : PType. lam pat : Pat.
       match pat with PatNamed (p & {ident = PName ident})
@@ -1377,7 +1507,7 @@ let transform = lam strs.
     , revValueScope = mapEmpty nameCmp
     , conScope = mapEmpty nameCmp
     , depth = 0
-    , tyConAsPure = mapEmpty nameCmp
+    , tyConInst = mapEmpty nameCmp
     } in
   match specializeExprTypes initScope initState (mapEmpty nameCmp) ast with (_, (ast, _)) in
   (pprintCode 0 pprintEnvEmpty ast).1 in
@@ -1700,6 +1830,28 @@ with strJoin "\n"
   , "    px_pure 2. ]"
   , "else"
   , "  [ px_assume (px_pure (Gaussian 0. 1.)) ]"
+  ]
+using eqString
+else printFailure
+in
+
+-- OPT(vipa, 2026-06-22): This is not an ideal transformation, the
+-- `draw`s are aligned, and could be done outside the `px_join` and
+-- `px_map`, but they aren't. Could be solved by ANF, but I feel like
+-- that would cause other issues, primarily related to no longer being
+-- able to spot rewrite opportunities.
+utest transform
+  [ "let draw = lam x. assume (Gaussian x 1.0) in"
+  , "get [draw 0.0, draw 1.0] (assume (Categorical [0.5, 0.5]))"
+  ]
+with strJoin "\n"
+  [ "let draw = lam x."
+  , "    px_assume (px_pure (Gaussian x 1.)) in"
+  , "px_join"
+  , "  (px_map"
+  , "     (get [ draw 0.,"
+  , "          draw 1. ])"
+  , "     (px_assume (px_pure (Categorical [ 0.5, 0.5 ]))))"
   ]
 using eqString
 else printFailure
