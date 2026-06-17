@@ -139,7 +139,7 @@ lang SimplePValGraphCompiler
       , valueScope = mapEmpty nameCmp
       , revValueScope = mapEmpty nameCmp
       , conScope = mapEmpty nameCmp
-      , tyConAsPure = mapEmpty nameCmp
+      , tyConInst = mapEmpty nameCmp
       } in
     let ast = stripTempLam (specializeExprReturn initScope initState freeVariables ast) in
     endPhaseStatsExpr log "idealized-transformation-one" ast;

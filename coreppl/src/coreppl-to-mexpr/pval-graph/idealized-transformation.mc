@@ -257,16 +257,13 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | pty & PHere {wrapped = Unused _} -> pty
 
 
-  syn InstType = | InstType (all ty. InstTypeF ty (Map Name (RecTy ty)))
-  type InstTypeF ty ret = Map Name InstType -> [ty] -> (PTypeA -> ty) -> (PTypeC ty -> ty) -> ret
-
   type PScope =
     { functionDefinitions : Map Name {fName : Name, params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int}
     , depth : Int
     , valueScope : Map Name (Name, PType)    -- Type is type of *rhs* name
     , revValueScope : Map Name (Name, PType) -- Type is type of *lhs* name
     , conScope : Map Name (RecTy ())
-    , tyConAsPure : Map Name InstType
+    , tyConInst : Map Name ([Type] -> Map Name (RecTy Type))
     }
 
   sem addBinding : Name -> (Name, PType) -> PScope -> PScope
@@ -516,6 +513,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   | TyAlias x -> _tyToPTypeX atom composite custom x.content
   | ty -> errorSingle [infoTy ty] (concat "Missing case for _tyToPTypeX: " (getTypeStringCode 0 pprintEnvEmpty ty).1)
 
+  sem tyToPTypeXPara : all x. (Type -> PTypeA -> x) -> (Type -> PTypeC x -> x) -> (Type -> Type -> [Type] -> x) -> Type -> x
+  sem tyToPTypeXPara atom composite custom = | ty ->
+    _tyToPTypeX (atom ty) (lam pty. composite ty (mapPTypeC (tyToPTypeXPara atom composite custom) pty)) (custom ty) ty
+
   sem tyToPTypeX : all x. (PTypeA -> x) -> (PTypeC x -> x) -> (Type -> [Type] -> x) -> Type -> x
   sem tyToPTypeX atom composite custom = | ty ->
     _tyToPTypeX atom (lam pty. composite (mapPTypeC (tyToPTypeX atom composite custom) pty)) custom ty
@@ -527,8 +528,8 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let handleCustom = lam ty. lam tyargs.
       switch ty
       case TyCon x then
-        match mapLookup x.ident sc.tyConAsPure with Some (InstType f)
-        then PureTypeC (PUser (f sc.tyConAsPure (map (tyToPureType sc) tyargs) handleA handleC))
+        match mapLookup x.ident sc.tyConInst with Some f
+        then PureTypeC (PUser (mapMap (mapRecTy (tyToPureType sc)) (f tyargs)))
         else PureTypeC (PUser (mapEmpty nameCmp))
       case TyVar _ then
         PureTypeA (PUnknown ())
@@ -542,8 +543,8 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     let handleCustom = lam ty. lam tyargs.
       switch ty
       case TyCon x then
-        match mapLookup x.ident sc.tyConAsPure with Some (InstType f)
-        then PLater (PUser (f sc.tyConAsPure (map (tyToPurePType sc) tyargs) handleA handleC))
+        match mapLookup x.ident sc.tyConInst with Some f
+        then PLater (PUser (mapMap (mapRecTy (tyToPurePType sc)) (f tyargs)))
         else PLater (PUser (mapEmpty nameCmp))
       case TyVar _ then
         PNever (PUnknown ())
@@ -898,10 +899,11 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
 
   sem specializeExprTypes : PScope -> PState -> Map Name Type -> Expr -> (PState, (Expr, PType))
   sem specializeExprTypes sc st freeVariables = | tm ->
-    type TyF = all ty. InstTypeF ty ty in
-    recursive let collectTypes = lam constructorsByType : Map Name (Map Name (RecTy TyF)). lam tm.
-      switch tm
-      case TmDecl {decl = DeclConDef x, inexpr = inexpr} then
+    type TyF = [Type] -> Type in
+    let tyConInst : Thunk (Map Name ([Type] -> Map Name (RecTy Type))) =
+      mkThunk (lazyPure "tyConInst") in
+    let collectType : Decl -> Option (Name, Option (Name, Lazy (RecTy TyF))) = lam decl. switch decl
+      case DeclConDef x then
         let deconstructType : Type -> {carried : Type, tyName : Name, retParams : [Type]} = lam ty.
           match inspectType ty with TyArrow {from = carried, to = to} in
           match getTypeArgs to with (TyCon {ident = tyName}, retParams) in
@@ -911,71 +913,72 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
           (lam m. lam idx. lam ty. match ty with TyVar x then mapInsert x.ident idx m else m)
           (mapEmpty nameCmp)
           tyInfo.retParams in
-        let handleA : PTypeA -> Either (RecTy TyF) TyF = lam ty.
-          let f : TyF = lam m. lam. lam fa. lam. fa ty in
-          Right #frozen"f" in
-        let handleC : PTypeC (Either (RecTy TyF) TyF) -> Either (RecTy TyF) TyF = lam ty.
-          match mapMPTypeCOption eitherGetRight ty with Some ptys then
-            let f : TyF = lam m. lam args. lam fa. lam fc. fc (mapPTypeC (lam tyf : TyF. tyf m args fa fc) ptys) in
-            Right #frozen"f"
-          else
-            Left (RLater (mapPTypeC (eitherEither (lam x : RecTy TyF. x) (lam tyf : TyF. NoRec #frozen"tyf")) ty)) in
-        recursive let handleCustom : Type -> [Type] -> Either (RecTy TyF) TyF = lam ty. lam tyArgs.
-          switch ty
-          case TyVar x then
-            (if null tyArgs then () else
-              errorSingle [x.info] "Found type application of type variable in constructor definition, this is not supported.");
-            match mapLookup x.ident argIdxes with Some idx then
-              let f : TyF = lam. lam args. lam. lam. get args idx in
-              Right #frozen"f"
-            else
-              let f : TyF = lam. lam. lam fa. lam. fa (PUnknown ()) in
-              Right #frozen"f"
-          case TyCon x then
-            if nameEq x.ident tyInfo.tyName then
-              if eqi 0 (seqCmp cmpType tyInfo.retParams tyArgs)
-              then Left (Rec ())
-              else errorSingle [x.info] "Found polymorphic recursion in constructor definition, this is not supported for now."
-            else
-              let conv = lam ty. eitherGetRight (tyToPTypeX handleA handleC handleCustom ty) in
-              match optionMapM conv tyArgs with Some tyArgs then
-                let f : TyF = lam m. lam args. lam fa. lam fc.
-                  match mapLookup x.ident m with Some (InstType itf)
-                  then fc (PUser (itf m (map (lam tyf : TyF. tyf m args fa fc) tyArgs) fa fc))
-                  else fc (PUser (mapEmpty nameCmp)) in
-                Right #frozen"f"
-              else errorSingle [x.info] "Found recursion through the argument of another type in constructor definition, this is not supported."
-          end in
-        let recTy = eitherEither (lam x : RecTy TyF. x) (lam tyf : TyF. NoRec #frozen"tyf")
-          (tyToPTypeX handleA handleC handleCustom tyInfo.carried) in
-        let constructorsByType = mapInsertWith mapUnion tyInfo.tyName (mapSingleton nameCmp x.ident recTy) constructorsByType in
-        collectTypes constructorsByType inexpr
-      case TmDecl {decl = DeclType {ident = ident, tyIdent = TyVariant _}, inexpr = inexpr} then
-        let constructorsByType = mapInsertWith mapUnion ident (mapEmpty nameCmp) constructorsByType in
-        collectTypes constructorsByType inexpr
-      case TmDecl {decl = DeclType _, inexpr = inexpr} then
-        -- NOTE(vipa, 2026-01-20): We skip aliases because we expect
-        -- everything to be inferred after this, and performing the
-        -- proper translation is difficult (and pre-existing types
-        -- using aliases are in a TyAlias constructor anyway, meaning
-        -- we can see what's underneath without keeping track of it
-        -- ourselves).
-        collectTypes constructorsByType inexpr
-      case tm then
-        (constructorsByType, tm)
+        recursive let substituteTyArgs = lam tyargs. lam ty.
+          match ty with TyVar x then
+            match mapLookup x.ident argIdxes with Some idx
+            then get tyargs idx
+            else ty
+          else smap_Type_Type (substituteTyArgs tyargs) ty in
+        let f : () -> RecTy TyF = lam.
+          let tyConInst = tyConInst.read () in
+          let handleA : Type -> PTypeA -> Either (RecTy TyF) TyF
+            = lam ty. lam. Right (lam. ty) in
+          let handleC : Type -> PTypeC (Either (RecTy TyF) TyF) -> Either (RecTy TyF) TyF
+            = lam ty. lam pty.
+              if foldPTypeC (lam acc. lam x. if acc then eitherIsRight x else acc) true pty
+              then Right (lam tyargs. substituteTyArgs tyargs ty)
+              else Left (RLater (mapPTypeC (eitherEither (lam x. x) (lam f. NoRec f)) pty)) in
+          recursive
+            let handleCustom : Type -> Type -> [Type] -> Either (RecTy TyF) TyF
+              = lam ty. lam tyf. lam tyargs. switch (tyf, tyargs)
+                case (TyVar _, []) then
+                  Right (lam tyargs. substituteTyArgs tyargs ty)
+                case (TyVar x, _) then
+                  errorSingle [x.info] "Found type application of type variable in constructor definition, this is not supported."
+                case (TyCon x, tyargs) then
+                  if nameEq x.ident tyInfo.tyName then
+                    -- NOTE(vipa, 2026-06-17): Self-recursion
+                    if eqi 0 (seqCmp cmpType tyInfo.retParams tyargs)
+                    then Left (Rec ())
+                    else errorSingle [x.info] "Found polymorphic recursion in constructor definition, this is not supported for now."
+                  else
+                    -- NOTE(vipa, 2026-06-17): Some other type
+                    let pty = match mapLookup x.ident tyConInst with Some f
+                      then PUser (f tyargs)
+                      else PUser (mapEmpty nameCmp) in
+                    handleC ty (mapPTypeC para pty)
+                end
+            let para = lam ty. tyToPTypeXPara handleA handleC handleCustom ty
+          in eitherEither (lam x. x) (lam x. NoRec x) (para tyInfo.carried)
+        in Some (tyInfo.tyName, Some (x.ident, lazy f))
+      case DeclType {ident = ident, tyIdent = TyVariant _} then
+        Some (ident, None ())
+      case _ then None ()
       end in
+    recursive let collectTypes = lam constructorsByType : Map Name (Map Name (Lazy (RecTy TyF))). lam tm : Expr.
+      match tm with TmDecl {decl = decl & (DeclConDef _ | DeclType _), inexpr = inexpr} then
+        let constructorsByType = switch collectType decl
+          case Some (tyName, Some (conName, conBody)) then
+            mapInsertWith mapUnion tyName (mapSingleton nameCmp conName conBody) constructorsByType
+          case Some (tyName, None _) then
+            mapInsertWith mapUnion tyName (mapEmpty nameCmp) constructorsByType
+          case _ then
+            constructorsByType
+          end in
+        collectTypes constructorsByType inexpr
+      else (constructorsByType, tm) in
     match collectTypes (mapEmpty nameCmp) tm with (constructorsByType, tm) in
-    let constructorsByTypeUnit = mapMap (mapMap (mapRecTy (lam tyf : TyF. ()))) constructorsByType in
+    let inst : Map Name (Lazy (RecTy TyF)) -> [Type] -> Map Name (RecTy Type) = lam m. lam tyargs.
+      mapMap (lam lrf. mapRecTy (lam f. f tyargs) (lazyForce lrf)) m in
+    tyConInst.write (mapMap inst constructorsByType);
+    let tyConInst : Map Name ([Type] -> Map Name (RecTy Type)) = tyConInst.read () in
+    let constructorsByTypeUnit : Map Name (Map Name (RecTy ())) =
+      mapMap (mapMap (lam lrf. mapRecTy (lam. ()) (lazyForce lrf))) constructorsByType in
     let sc =
       { sc with conScope = mapFoldWithKey
         (lam a. lam. lam v. mapUnion a v)
         sc.conScope constructorsByTypeUnit
-      , tyConAsPure = mapMap
-        (lam constructors : Map Name (RecTy TyF).
-          let f : all ty. InstTypeF ty (Map Name (RecTy ty)) = lam m. lam args. lam fa. lam fc.
-            mapMap (mapRecTy (lam tyf : TyF. tyf m args fa fc)) constructors in
-          InstType #frozen"f")
-        constructorsByType
+      , tyConInst = tyConInst
       } in
     let declsForType : Name -> Map Name (RecTy ()) -> [Decl] = lam tyName. lam constructors.
       match mapMapAccum (lam i. lam. lam v. mapAccumLRecTy (lam i. lam. (addi i 1, i)) i v) 0 constructors
