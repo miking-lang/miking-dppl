@@ -468,8 +468,9 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
 
   sem _adjustWrapping : (PType, PType) -> Expr -> Expr
   sem _adjustWrapping =
-  | (PNever _, PNever _) | (PNever (PUnknown _), _) -> lam x. x
-  | (PNever !(PUnknown _), PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
+  | (PNever _, PNever _) -> lam x. x
+  | (PNever (PUnknown _), PLater _) -> lam x. x
+  | (PNever _, PHere {wrapped = Wrapped _}) -> app_ (uconst_ (CPPure ()))
   | (PHere {wrapped = Unused _}, _) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PHere {wrapped = Wrapped _}) -> lam x. x
   | (PHere {wrapped = Wrapped _}, PLater _) -> lam tm. errorSingle [infoTm tm] "Tried to convert a value to a less wrapped value, which is impossible"
@@ -706,20 +707,30 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem specializeCall : PScope -> PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
   sem specializeCall sc st =
   | {f = f & TmVar x, args = args, ret = retTy} ->
-    match mapLookup x.ident sc.nonProbFunctions with Some (n, ty) then
-      match ty with TyAll _
-      then _specializeCall sc st (nvar_ n) args retTy (SCKPolyFlexible ty)
-      else _specializeCall sc st (nvar_ n) args retTy (SCKInflexible ())
-    else
     match
       match mapLookup x.ident sc.functionDefinitions with Some definition
       then (definition.fName, Some definition)
       else (x.ident, None ())
     with (ident, definition) in
-    match optionBind (mapLookup ident st.specializations) (mapLookup (map (lam x. x.1) args)) with Some {ident = name, ty = ty} then
+    let spec = optionBind (mapLookup ident st.specializations) (mapLookup (map (lam x. x.1) args)) in
+    match spec with Some {ident = name, ty = ty} then
       (st, (appSeq_ (nvar_ name) (map (lam x. x.0) args), ty))
-    else match definition with Some definition
-    then _specializeCall sc st f args retTy (SCKDefFlexible definition)
+    else match definition with Some definition then
+      match _specializeCall sc st f args retTy (SCKDefFlexible definition) with ret & (_, (_, pty)) in
+      if isTopWrapped pty then
+        -- NOTE(vipa, 2026-06-23): Pervasive transformation gives a
+        -- completely probabilistic return, see if we can go via a
+        -- non-probabilistic version instead, to minimize the number
+        -- of nodes in the graph
+        match mapLookup x.ident sc.nonProbFunctions with Some (n, ty) then
+          -- OPT(vipa, 2026-06-23): Insert a specialization for this,
+          -- to not have to redo the previous specialization over and
+          -- over
+          match ty with TyAll _
+          then _specializeCall sc st (nvar_ n) args retTy (SCKPolyFlexible ty)
+          else _specializeCall sc st (nvar_ n) args retTy (SCKInflexible ())
+        else ret
+      else ret
     else _specializeCall sc st f args retTy (SCKInflexible ())
   | {f = f & TmConst {val = c}, args = args, ret = retTy} ->
     match tyConst c with ty & TyAll _
@@ -974,6 +985,10 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     match mapLookup x.ident sc.nonProbFunctions with Some (n, _) then Some (TmVar {x with ident = n}) else
     match mapLookup x.ident sc.valueScope with Some (n, _) then Some (TmVar {x with ident = n}) else
     Some (TmVar x)
+  | TmOpaque x ->
+    match _asNonProbBody sc x.body with Some body
+    then Some (TmOpaque {x with body = body})
+    else None ()
   | tm ->
     let smapMOption : (Expr -> Option Expr) -> Expr -> Option Expr = lam f. lam tm.
       let f = lam acc. lam tm. if acc
@@ -1008,6 +1023,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
           , decl = Some {x with ident = n, body = wrap body}
           , depth = sc.depth
           } in
+        asDef
         ( {pair.0 with nonProbFunctions = mapInsert x.ident (n, unwrapType x.tyBody) (pair.0).nonProbFunctions}
         , {pair.1 with specializations = mapInsert x.ident spec (pair.1).specializations}
         ) in
@@ -1662,13 +1678,11 @@ with strJoin "\n"
   [ "let f = lam a1."
   , "    addf a1 1. in"
   , "let f1 = lam a."
-  , "    px_map (/-temp-/lam x1."
-  , "         addf x1 1.) a"
-  , "in"
+  , "    addf a 1. in"
   , "px_map"
   , "  (/-temp-/lam x."
-  , "     addf (f 1.) x)"
-  , "  (f1 (px_assume (px_pure (Gaussian 0. 1.))))"
+  , "     addf (f1 1.) (f x))"
+  , "  (px_assume (px_pure (Gaussian 0. 1.)))"
   ]
 using eqString
 else printFailure
@@ -2437,7 +2451,9 @@ with strJoin "\n"
   , "recursive"
   , "  let cluster ="
   , "    lam trees."
-  , "      let matchBody = lam #var\"\"."
+  , "      let matchBody = lam #var\"1\"."
+  , "          never in"
+  , "      let matchBody1 = lam #var\"\"."
   , "          never in"
   , "      match trees with Cons carried"
   , "      then"
@@ -2457,12 +2473,14 @@ with strJoin "\n"
   , "                   left = field,"
   , "                   right = field2 }, field3))"
   , "        else"
-  , "          matchBody {}"
+  , "          matchBody1 {}"
   , "      else"
-  , "        matchBody {}"
+  , "        matchBody1 {}"
   , "  let cluster1 ="
   , "    lam trees1."
-  , "      let matchBody1 = lam #var\"1\"."
+  , "      let matchBody2 = lam #var\"1\"."
+  , "          never in"
+  , "      let matchBody3 = lam #var\"2\"."
   , "          never in"
   , "      match trees1 with Cons carried3"
   , "      then"
@@ -2482,11 +2500,11 @@ with strJoin "\n"
   , "                   left = field4,"
   , "                   right = field6 }, field7))"
   , "        else"
-  , "          matchBody1 {}"
+  , "          matchBody3 {}"
   , "      else"
-  , "        matchBody1 {}"
+  , "        matchBody3 {}"
   , "in"
-  , "let #var\"2\" ="
+  , "let #var\"3\" ="
   , "  cluster"
   , "    (Cons"
   , "       (Leaf"

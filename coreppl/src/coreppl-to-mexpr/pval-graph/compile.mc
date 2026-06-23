@@ -96,6 +96,9 @@ lang SimplePValGraphCompiler
     let ast = stripTempLam (remSecLamExpr initEnv initState ast).1 in
     endPhaseStatsExpr log "remove-second-class-lambdas-one" ast;
 
+    let ast = demoteRecursive ast in
+    endPhaseStatsExpr log "demote-recursive-one" ast;
+
     let freeVariables = freeVars ast in
     let freeVariables : Map Name Type =
       recursive let work = lam acc. lam tm.
@@ -133,9 +136,6 @@ lang SimplePValGraphCompiler
 
     -- TODO(vipa, 2026-05-26): This is the end of the block mentioned
     -- in the TODO above with the same date.
-
-    let ast = demoteRecursive ast in
-    endPhaseStatsExpr log "demote-recursive-one" ast;
 
     let initState =
       { specializations = mapEmpty nameCmp
