@@ -259,6 +259,7 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
 
   type PScope =
     { functionDefinitions : Map Name {fName : Name, params : [Name], mayBeRecursive : Bool, body : Expr, depth : Int}
+    , nonProbFunctions : Map Name (Name, Type)
     , depth : Int
     , valueScope : Map Name (Name, PType)    -- Type is type of *rhs* name
     , revValueScope : Map Name (Name, PType) -- Type is type of *lhs* name
@@ -705,6 +706,11 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
   sem specializeCall : PScope -> PState -> {f : Expr, args : [(Expr, PType)], ret : Type} -> (PState, (Expr, PType))
   sem specializeCall sc st =
   | {f = f & TmVar x, args = args, ret = retTy} ->
+    match mapLookup x.ident sc.nonProbFunctions with Some (n, ty) then
+      match ty with TyAll _
+      then _specializeCall sc st (nvar_ n) args retTy (SCKPolyFlexible ty)
+      else _specializeCall sc st (nvar_ n) args retTy (SCKInflexible ())
+    else
     match
       match mapLookup x.ident sc.functionDefinitions with Some definition
       then (definition.fName, Some definition)
@@ -960,27 +966,78 @@ lang IdealizedPValTransformation = Dist + Assume + Weight + Observe + TempLamAst
     , {st with specializations = mapInsert x.ident spec st.specializations}
     )
 
+  sem _asNonProbBody : PScope -> Expr -> Option Expr
+  sem _asNonProbBody sc =
+  | TmAssume _ | TmObserve _ | TmWeight _ -> None ()
+  | TmVar x ->
+    match mapLookup x.ident sc.functionDefinitions with Some _ then None () else
+    match mapLookup x.ident sc.nonProbFunctions with Some (n, _) then Some (TmVar {x with ident = n}) else
+    match mapLookup x.ident sc.valueScope with Some (n, _) then Some (TmVar {x with ident = n}) else
+    Some (TmVar x)
+  | tm ->
+    let smapMOption : (Expr -> Option Expr) -> Expr -> Option Expr = lam f. lam tm.
+      let f = lam acc. lam tm. if acc
+        then match f tm with Some tm
+          then (true, tm)
+          else (false, tm)
+        else (acc, tm) in
+      match smapAccumL_Expr_Expr f true tm with (true, tm)
+      then Some tm
+      else None () in
+    smapMOption (_asNonProbBody sc) tm
+
+  sem _prepLambdaBinding : PScope -> Name -> Bool -> DeclLetRecord -> ((PScope, PState) -> (PScope, PState), Option ((PScope, PState) -> (PScope, PState)))
+  sem _prepLambdaBinding sc n mayBeRecursive = | x ->
+    -- NOTE(vipa, 2026-06-22): This strongly assumes that there are no
+    -- free variables that might be wrapped in any way. That holds as
+    -- long as lambda lifting has been done, which we also generally
+    -- assume throughout the transformation.
+    recursive let work = lam wrap. lam params. lam tm.
+      match tm with TmLam x
+      then work (lam tm. wrap (TmLam {x with body = tm})) (snoc params x.ident) x.body
+      else (wrap, params, tm) in
+    match work (lam tm. tm) [] x.body with (wrap, params, body) in
+    let asDef = lam pair.
+      let def = {fName = x.ident, params = params, mayBeRecursive = mayBeRecursive, body = body, depth = sc.depth} in
+      ({pair.0 with functionDefinitions = mapInsert x.ident def (pair.0).functionDefinitions}, pair.1) in
+    match _asNonProbBody sc body with Some body then
+      let asNonProb = lam pair.
+        let spec = mapSingleton (seqCmp ptyCmp) []
+          { ident = n
+          , ty = PNever (PUnknown ())
+          , decl = Some {x with ident = n, body = wrap body}
+          , depth = sc.depth
+          } in
+        ( {pair.0 with nonProbFunctions = mapInsert x.ident (n, unwrapType x.tyBody) (pair.0).nonProbFunctions}
+        , {pair.1 with specializations = mapInsert x.ident spec (pair.1).specializations}
+        ) in
+      (asDef, Some asNonProb)
+    else (asDef, None ())
+
   sem specializeDeclPre : PScope -> PState -> Decl -> (PScope, PState)
   sem specializeDeclPre sc st =
   | DeclLet x -> _defaultLetSpecialization sc st x
   | DeclLet (x & {ident = ident, body = body & TmVar {ident = vIdent}}) ->
     match mapLookup vIdent sc.functionDefinitions with Some def
     then ({sc with functionDefinitions = mapInsert ident def sc.functionDefinitions}, st)
+    else match mapLookup vIdent sc.nonProbFunctions with Some def
+    then ({sc with nonProbFunctions = mapInsert ident def sc.nonProbFunctions}, st)
     else _defaultLetSpecialization sc st x
-  | DeclLet {ident = ident, body = body & TmLam _} ->
-    recursive let work = lam params. lam tm.
-      match tm with TmLam x
-      then work (snoc params x.ident) x.body
-      else {fName = ident, params = params, mayBeRecursive = false, body = tm, depth = sc.depth} in
-    ({sc with functionDefinitions = mapInsert ident (work [] body) sc.functionDefinitions}, st)
+  | DeclLet (x & {ident = ident, body = body & TmLam _}) ->
+    let res = _prepLambdaBinding sc (nameSetNewSym ident) false x in
+    optionGetOr res.0 res.1 (sc, st)
   | DeclRecLets x ->
-    recursive let work = lam fName. lam params. lam tm.
-      match tm with TmLam x
-      then work fName (snoc params x.ident) x.body
-      else {fName = fName, params = params, mayBeRecursive = true, body = tm, depth = sc.depth} in
-    let f = lam definitions. lam decl.
-      mapInsert decl.ident (work decl.ident [] decl.body) definitions in
-    ({sc with functionDefinitions = foldl f sc.functionDefinitions x.bindings}, st)
+    let addNonProb = lam acc. lam binding.
+      match acc with (sc, fs) in
+      let n = nameSetNewSym binding.ident in
+      ( {sc with nonProbFunctions = mapInsert binding.ident (n, binding.tyBody) sc.nonProbFunctions}
+      , snoc fs (lam sc. _prepLambdaBinding sc n true binding)
+      ) in
+    match foldl addNonProb (sc, []) x.bindings with (tempSc, fs) in
+    match unzip (map (lam f. f tempSc) fs) with (asDefs, asNonProbs) in
+    match optionMapM (lam x. x) asNonProbs with Some asNonProbs
+    then foldl (lam acc. lam f. f acc) (tempSc, st) asNonProbs
+    else foldl (lam acc. lam f. f acc) (sc, st) asDefs
   | DeclExt x ->
     match unwrapType x.tyIdent with !(TyArrow _ | TyAll _)
     then (addBinding x.ident (x.ident, tyToPurePType sc x.tyIdent) sc, st)
@@ -1503,6 +1560,7 @@ let transform = lam strs.
     } in
   let initScope =
     { functionDefinitions = mapEmpty nameCmp
+    , nonProbFunctions = mapEmpty nameCmp
     , valueScope = mapEmpty nameCmp
     , revValueScope = mapEmpty nameCmp
     , conScope = mapEmpty nameCmp

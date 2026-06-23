@@ -388,6 +388,7 @@ let transform = lam strs.
     , valueScope = mapEmpty nameCmp
     , revValueScope = mapEmpty nameCmp
     , conScope = mapEmpty nameCmp
+    , nonProbFunctions = mapEmpty nameCmp
     , depth = 0
     , tyConInst = mapEmpty nameCmp
     } in

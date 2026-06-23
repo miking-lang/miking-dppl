@@ -1,6 +1,7 @@
 include "mexpr/phase-stats.mc"
 include "mexpr/inline-single-use-simple.mc"
 include "mexpr/lamlift.mc"
+include "mexpr/demote-recursive.mc"
 include "../dists.mc"
 include "../../inference/pval-graph.mc"
 
@@ -13,7 +14,7 @@ lang SimplePValGraphCompiler
   = SimplePValGraphMethod + PhaseStats + InferenceInterface
   + LowerNestedPatterns + InlineSingleUse + RemoveSecondClassFunctions
   + IdealizedPValTransformation + PValStateTransformation + EtaExpansion
-  + TransformDist + MExprLambdaLift
+  + TransformDist + MExprLambdaLift + MExprDemoteRecursive
 
   sem pickRuntime = | SimplePValGraph _ -> ("pval-graph/runtime-pval-simple.mc", mapEmpty cmpString)
   sem pickCompiler = | SimplePValGraph x -> compileSimplePValGraph x
@@ -133,11 +134,15 @@ lang SimplePValGraphCompiler
     -- TODO(vipa, 2026-05-26): This is the end of the block mentioned
     -- in the TODO above with the same date.
 
+    let ast = demoteRecursive ast in
+    endPhaseStatsExpr log "demote-recursive-one" ast;
+
     let initState =
       { specializations = mapEmpty nameCmp
       } in
     let initScope =
       { functionDefinitions = mapEmpty nameCmp
+      , nonProbFunctions = mapEmpty nameCmp
       , depth = 0
       , valueScope = mapEmpty nameCmp
       , revValueScope = mapEmpty nameCmp
