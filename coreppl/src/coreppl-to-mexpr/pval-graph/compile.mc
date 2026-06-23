@@ -147,6 +147,15 @@ lang SimplePValGraphCompiler
     let ast = stripTempLam (specializeExprReturn initScope initState freeVariables ast) in
     endPhaseStatsExpr log "idealized-transformation-one" ast;
 
+    (if null config.debugIdealized then () else
+      recursive let promoteInferred = lam tm.
+        let tm = match tm with TmDecl (x & {decl = DeclLet y})
+          then TmDecl {x with decl = DeclLet {y with tyAnnot = y.tyBody}}
+          else tm in
+        match tm with TmOpaque _ then tm else smap_Expr_Expr promoteInferred tm in
+      writeFile config.debugIdealized (expr2str (promoteInferred ast))
+    );
+
     let getPValVar = if null config.debugOutput
       then lam str. appFromEnv x.runtime (concat "vSimplePValGraph_" str) []
       else lam str. appFromEnv x.runtime (concat "vDebugSimplePValGraph_" str) [] in
