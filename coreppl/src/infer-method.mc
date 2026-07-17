@@ -91,7 +91,7 @@ let _maxPropagationsDefault : Int = 1000
 let _maxPropagations : OptParser Int =
   let opt = optArg
     { optArgDefInt with long = "max-propagations"
-    , description = concat "The number of time smc-apf (at a specific resample step) will try to find a non-zero weight path for a particule. Default: " (int2string _maxPropagationsDefault)
+    , description = concat "The maximum number of attempts tried by smc-apf (at a given resample step) to find a non-zero weighted path for a particle. Default: " (int2string _maxPropagationsDefault)
     } in
   optOr opt (optPure _maxPropagationsDefault)
 let _subsampleDefault : Bool = false
