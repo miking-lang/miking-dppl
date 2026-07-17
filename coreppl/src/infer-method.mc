@@ -87,6 +87,13 @@ let _resampleFrac : OptParser Float =
     , description = concat "Floating point number to trigger resampling for SMC-BPF when ESS is less than resampleFrac × particleCount. Default: " (float2string _resampleFracDefault)
     } in
   optOr opt (optPure _resampleFracDefault)
+let _maxPropagationsDefault : Int = 1000
+let _maxPropagations : OptParser Int =
+  let opt = optArg
+    { optArgDefInt with long = "max-propa"
+    , description = concat "The number of time smc-apf (at a specific resample step) will try to find a non-zero weight path for a particule. Default: " (int2string _maxPropagationsDefault)
+    } in
+  optOr opt (optPure _maxPropagationsDefault)
 let _subsampleDefault : Bool = false
 let _subsample : OptParser Bool = optMap (xor _subsampleDefault) (optFlag
   { optFlagDef with long = "subsample"
