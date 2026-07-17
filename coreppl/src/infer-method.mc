@@ -90,7 +90,7 @@ let _resampleFrac : OptParser Float =
 let _maxPropagationsDefault : Int = 1000
 let _maxPropagations : OptParser Int =
   let opt = optArg
-    { optArgDefInt with long = "max-propa"
+    { optArgDefInt with long = "max-propagations"
     , description = concat "The number of time smc-apf (at a specific resample step) will try to find a non-zero weight path for a particule. Default: " (int2string _maxPropagationsDefault)
     } in
   optOr opt (optPure _maxPropagationsDefault)
