@@ -11,7 +11,7 @@
 
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
-include "coreppl::parser.mc"
+include "../../parser.mc"
 
 
 let _cmpSym : Symbol -> Symbol -> Int = lam l. lam r. subi (sym2hash l) (sym2hash r)

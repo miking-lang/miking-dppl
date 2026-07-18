@@ -17,7 +17,7 @@
 -- passed between calls to `pure`, `map`, etc.
 
 include "these.mc"
-include "coreppl::parser.mc"
+include "../../parser.mc"
 include "mexpr/shallow-patterns.mc"
 include "mexpr/hoas.mc"
 include "mexpr/inline-single-use-simple.mc"
