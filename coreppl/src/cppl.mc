@@ -45,7 +45,7 @@ mexpr
 
 use CPPLLang in
 
-let options = optParseWithHelp cpplName cpplDescription options (tail argv) in
+let options = optParseWithHelp {optParserHelpDef cpplName with description = cpplDescription} options (tail argv) in
 -- Read and parse the file
 let filename = stdlibResolveFileOr (lam x. error x) "." options.frontend.input in
 let isFromModelFileOrStatic = lam x.
