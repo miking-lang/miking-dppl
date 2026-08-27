@@ -3,6 +3,8 @@ include "../infer-method.mc"
 lang SimplePValGraphMethod = InferMethodBase
   type SimplePValGraphConfig =
     { run : Expr -- Type described in coreppl-to-mexpr/pval-graph/config.mc
+    , debugOutput : String
+    , debugIdealized : String
     }
   syn InferMethod =
   | SimplePValGraph SimplePValGraphConfig
@@ -11,10 +13,14 @@ lang SimplePValGraphMethod = InferMethodBase
   | SimplePValGraph x ->
     let i = pprintIncr indent in
     match pprintCode i env x.run with (env, run) in
+    match pprintCode i env (str_ x.debugOutput) with (env, debugOutput) in
+    match pprintCode i env (str_ x.debugIdealized) with (env, debugIdealized) in
     ( env
     , join
       [ "(SimplePValGraph "
       , "{ run = ", run
+      , ", debugOutput = ", debugOutput
+      , ", debugIdealized = ", debugIdealized
       , "})"
       ]
     )
@@ -23,15 +29,21 @@ lang SimplePValGraphMethod = InferMethodBase
   | "SimplePValGraph" ->
     let expectedFields =
       [ ("run", ulam_ "" (error_ (str_ "Inference error: SimplePValGraph got no run function")))
+      , ("debugOutput", str_ "")
+      , ("debugIdealized", str_ "")
       ] in
-    match getFields info bindings expectedFields with [run] in
+    match getFields info bindings expectedFields with [run, debugOutput, debugIdealized] in
     SimplePValGraph
     { run = run
+    , debugOutput = _exprAsStringExn debugOutput
+    , debugIdealized = _exprAsStringExn debugIdealized
     }
 
   sem inferMethodConfig info =
   | SimplePValGraph x -> fieldsToRecord info
     [ ("run", x.run)
+    , ("debugOutput", str_ x.debugOutput)
+    , ("debugIdealized", str_ x.debugIdealized)
     ]
 
   sem typeCheckInferMethod env info sampleType =
