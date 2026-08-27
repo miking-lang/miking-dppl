@@ -3,8 +3,9 @@ include "../runtime-dists.mc"
 
 include "./config.mc"
 include "./pval-mut.mc"
+include "./pval-debug.mc"
 
-lang SimplePValGraph = MutPVal + RuntimeDist
+lang SimplePValGraphBase = PValInterface + RuntimeDist
   sem simpleStoreAssume : all a. [PSomeAssumeRef] -> PAssumeRef a -> [PSomeAssumeRef]
   sem simpleStoreAssume st = | r ->
     snoc st (asSomeAssume (None ()) r)
@@ -19,6 +20,12 @@ lang SimplePValGraph = MutPVal + RuntimeDist
   sem reexportMapAccumL = | f -> mapAccumL f
 end
 
+lang SimplePValGraph = SimplePValGraphBase + MutPVal
+end
+
+lang DebugSimplePValGraph = SimplePValGraphBase + PValVisiGraph
+end
+
 type State = ()
 
 let run
@@ -27,6 +34,14 @@ let run
   -> Dist ret
   = lam config. lam f.
     use SimplePValGraph in
+
+    if not (null config.debugOutput) then
+      use DebugSimplePValGraph in
+      let instance = instantiate f [] in
+      let json = graphToJson instance in
+      writeFile config.debugOutput (json2string json);
+      constructDistEmpirical [] [] (EmpMCMC {acceptRate = 0.0})
+    else
 
     let interface : SimplePValInterface (PValInstance Complete ([PSomeAssumeRef], PExportRef ret)) ret =
       { instantiate = lam.
