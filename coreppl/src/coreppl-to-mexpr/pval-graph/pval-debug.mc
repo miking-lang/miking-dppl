@@ -164,6 +164,10 @@ lang PValVisiGraph = PValInterface
     let node = PVNJoin {id = length nodes, a = getID x.node, sub = getID y.node} in
     (PVS (snoc nodes node), PVal {val = y.val, node = node})
 
+  syn PChunkState x = | PCS {read : all a. PVal a -> a}
+  sem p_readPVal = | PCS x -> x.read
+  sem p_weightChunk = | _ -> lam. ()
+
   sem p_chunk st = | f ->
     match st with PVS nodes in
     let readNodes = ref [] in
@@ -171,7 +175,7 @@ lang PValVisiGraph = PValInterface
       match x with PVal x in
       modref readNodes (snoc (deref readNodes) (getID x.node));
       x.val in
-    let res = f #frozen"read" in
+    let res = f (PCS {read = #frozen"read"}) in
     let node = PVNChunk {id = length nodes, inputs = deref readNodes} in
     (PVS (snoc nodes node), PVal {val = res, node = node})
 
