@@ -78,8 +78,11 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> use RuntimeDistBase in Di
             } out)
           else never
       in
-      let resampled = systematicSample particles expWeights expWeightSum (subi particleCount index) in
-      propagateRecRec index resampled out
+      if gti propagations config.maxPropagations then
+        (toList [])
+      else
+        let resampled = systematicSample particles expWeights expWeightSum (subi particleCount index) in
+        propagateRecRec index resampled out
     in
     propagateRec 0 0 (toList [])
   in
@@ -95,7 +98,7 @@ let run : all a. Unknown -> (State -> Checkpoint a) -> use RuntimeDistBase in Di
   match runRec particles with (weights,samples) in
 
   -- Return
-  if config.subsample then
+  if (and config.subsample (neqi (length samples) 0)) then
     constructDistEmpiricalSubsample config.subsampleSize samples weights
       (EmpNorm {normConst = normConstant weights})
   else
