@@ -1085,7 +1085,7 @@ lang CorePPLFileTypeLoader
       case (_, Left errs) then
         errorMulti errs (join ["Parse error while parsing '", path, "'"])
       end in
-    let prog = use DPPLParser in
+    let prog = use DPPLKeywordMaker in
       { decls = map makeDeclKeywords prog.decls
       , expr = makeKeywords prog.expr
       } in

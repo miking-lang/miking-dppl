@@ -366,7 +366,7 @@ let transform = lam strs.
     , builtin = cpplBuiltin
     } in
   let ast = parseMExprStringExn args (strJoin "\n" strs) in
-  let ast = use DPPLParser in makeKeywords ast in
+  let ast = use DPPLKeywordMaker in makeKeywords ast in
   let ast = symbolizeExpr symEnvDefault ast in
   let ast = typeCheck ast in
   (if deref debugStuff then
