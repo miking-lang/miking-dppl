@@ -17,7 +17,8 @@ include "seq.mc"
 include "utest.mc"
 
 lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
-            TyConst + ConstPrettyPrint + ConstArity + PEval + AstToJson
+            TyConst + ConstPrettyPrint + ConstArity + PEval + AstToJson +
+            ConstSideEffectBase
 
   syn Expr =
   | TmDist { dist : Dist,
@@ -235,6 +236,14 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   | CDistEmpiricalAcceptRate _ -> tyall_ "a" (tyarrow_ (_tydist (tyvar_ "a")) tyfloat_)
   | CDistExpectation _ -> tyarrow_ (_tydist tyfloat_) tyfloat_
   | CDistLogObserve _ -> mktyall_ "a" (lam a. tyarrows_ [_tydist a, a, tyfloat_])
+
+  sem constHasSideEffect =
+  | CDistEmpiricalSamples _
+  | CDistEmpiricalDegenerate _
+  | CDistEmpiricalNormConst _
+  | CDistEmpiricalAcceptRate _
+  | CDistExpectation _
+  | CDistLogObserve _ -> false
 
   sem constArity =
   | CDistEmpiricalSamples _ -> 1

@@ -41,6 +41,7 @@ lang CPPLLang = CorePPLFileTypeLoader
   + UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
   + MLangTypeAlias + MLangSyn + MLangSem + TyUseSym + MExprPatAnalysis
   + IncludeLoader + MCoreKeywordMaker + MCoreLoader
+  + MExprDeadcodeElimination + MExprSym + DeclUseSym + RemoveMetaVar
 end
 
 mexpr
@@ -81,6 +82,15 @@ endPhaseStatsProg log "include-file" {decls = getDecls loader, expr = unit_};
 let ast = buildFullAst loader in
 endPhaseStatsExpr log "build-full-ast" ast;
 
+let ast = removeMetaVarExpr ast in
+endPhaseStatsExpr log "remove-meta-var" ast;
+
+let ast = deadcodeElimination ast in
+endPhaseStatsExpr log "deadcode-elimination" ast;
+
+let ast = forceLazyExpr ast in
+endPhaseStatsExpr log "force-lazy" ast;
+
 let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
   let opts =
     { defaultCompileOptions
@@ -99,6 +109,9 @@ let hooks = mkEmptyHooks ocamlCompile in
 
 let ast = lowerAll ast in
 endPhaseStatsExpr log "lower-all" ast;
+
+let ast = removeOpaqueExpr ast in
+endPhaseStatsExpr log "remove-opaque" ast;
 
 (if options.frontend.printMCore then
   printLn (expr2str ast)

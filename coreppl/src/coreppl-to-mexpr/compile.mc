@@ -348,7 +348,7 @@ lang CPPLLoader
   + ReplaceHigherOrderConstantsLoadedPreviously + CompileModels + InsertModels
   + ElementaryFunctionsTransform + DPPLPrunedReplace
   + DPPLKeywordReplace + DPPLDelayedReplace + DPPLParser
-  + BuiltinLoader
+  + BuiltinLoader + MExprDeadcodeElimination + LazyAst
   syn Hook =
   | CPPLHook
     { options : TransformationOptions
@@ -476,6 +476,16 @@ lang CPPLLoader
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases options.invariantsToCheck in
     let ast = removeMetaVarExpr ast in
     endPhaseStatsExpr log "remove-meta-var" ast;
+    -- TODO(vipa, 2026-09-03): In the interest of getting the current
+    -- rewrite through we're trying to put deadcodeElimination and
+    -- forceLazyExpr early. That makes it possible to get dead
+    -- references later, depending on at what point code gen for
+    -- models happen, and if such transformations insert new
+    -- references.
+    let ast = deadcodeElimination ast in
+    endPhaseStatsExpr log "deadcode-elimination" ast;
+    let ast = forceLazyExpr ast in
+    endPhaseStatsExpr log "force-lazy" ast;
     let runtimeRunNames = mapMap (lam entry. _getVarExn "run" entry.env) runtimes in
     let ast = elementaryFunctionsTransformExpr (lam str. _getVarExn str envs.externalMathEnv) ast in
     endPhaseStatsExpr log "elementary-functions-transform" ast;
