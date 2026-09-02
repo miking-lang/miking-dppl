@@ -39,6 +39,8 @@ lang CPPLLang = CorePPLFileTypeLoader
   + LightweightMCMCCompilerPicker
   + SimplePValGraphCompiler
   + UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
+  + MLangTypeAlias + MLangSyn + MLangSem + TyUseSym + MExprPatAnalysis
+  + IncludeLoader + MCoreKeywordMaker + MCoreLoader
 end
 
 mexpr
@@ -56,7 +58,7 @@ let isFromModelFileOrStatic = lam x.
 
 let log = mkPhaseLogState options.transformations.debugDumpPhases options.transformations.debugPhases options.transformations.invariantsToCheck in
 
-let loader = mkLoader symEnvDefault typcheckEnvDefault
+let loader = mkLoader typcheckEnvDefault
   [ ODEHook ()
   , StripUtestHook ()
   ] in
@@ -67,7 +69,13 @@ let loader = enableUtestGeneration (if options.frontend.test then isFromModelFil
 let loader = enablePprintGeneration loader in
 endPhaseStatsProg log "mk-cppl-loader" {decls = getDecls loader, expr = unit_};
 
-let loader = (includeFileTypeExn (FCorePPL {isModel = true}) "." filename loader).1 in
+let fileMode = switch options.fileMode
+  case "main" then CPPLMain ()
+  case "ad" then CPPLMainAD ()
+  case "implicit-infer" then CPPLMainImplicitInfer ()
+  end in
+
+let loader = (includeFileTypeExn (FCorePPL {mode = fileMode}) "." filename loader).1 in
 endPhaseStatsProg log "include-file" {decls = getDecls loader, expr = unit_};
 
 let ast = buildFullAst loader in

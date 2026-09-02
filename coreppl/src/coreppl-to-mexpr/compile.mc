@@ -185,9 +185,9 @@ lang DPPLResymbolizeModel =
   sem resymbolizeDecl nameMap =
   | d -> (nameMap, smap_Decl_Expr (resymbolizeExpr nameMap) d)
 
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap =
-  | p -> smapAccumL_Pat_Pat resymbolizePat nameMap p
+  sem resymbolizePat : MapName Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat nameMap patNames =
+  | p -> smapAccumL_Pat_Pat (resymbolizePat nameMap) patNames p
 
   sem resymbolizeType : Map Name Name -> Type -> Type
   sem resymbolizeType nameMap =
@@ -343,11 +343,12 @@ end
 -- This fragment extends the loader core language (the format each
 -- added Decl must be in) to coreppl
 lang CPPLLoader
-  = MCoreLoader
+  = LoaderInterface
   + ResolveType + SubstituteUnknown
   + ReplaceHigherOrderConstantsLoadedPreviously + CompileModels + InsertModels
   + ElementaryFunctionsTransform + DPPLPrunedReplace
   + DPPLKeywordReplace + DPPLDelayedReplace + DPPLParser
+  + BuiltinLoader
   syn Hook =
   | CPPLHook
     { options : TransformationOptions
@@ -356,6 +357,7 @@ lang CPPLLoader
       { higherOrderSymEnv : {path : String, env : SymEnv}
       , distEnv : {path : String, env : SymEnv}
       , externalMathEnv : {path : String, env : SymEnv}
+      , builtinEnv : SymEnv
       }
     }
 
@@ -364,75 +366,69 @@ lang CPPLLoader
     if hasHook (lam x. match x with CPPLHook _ then true else false) loader then loader else
 
     match includeFileExn "." "stdlib::ext/math-ext.mc" loader with (externalMathEnv, loader) in
+    match includeFileExn "." "stdlib::seq-native.mc" loader with (higherOrderSymEnv, loader) in
 
-    let preSymEnv = _getSymEnv loader in
-    -- NOTE(vipa, 2024-12-12): We load these constants but keep them
-    -- outside the symbolization environment. We later insert direct
-    -- references to these names instead of constants, when needed.
-    -- WARNING: This hides names from seq-native.mc and its transitive
-    -- dependencies from symbolize forever, even if some later file
-    -- includes one of them directly. This would work better if we
-    -- didn't use the implicit symbolize environment, rather that we
-    -- used the SymEnv for each included file directly, which is *not*
-    -- hidden and does not need to be.
-    match includeFileExn "." "stdlib::seq-native.mc" loader with (symEnv, loader) in
-    let loader = _setSymEnv preSymEnv loader in
-
-    -- NOTE(vipa, 2024-12-12): Insert compileOptions declaration
-    -- before everything else.
-    -- TODO(vipa, 2024-12-12): This could technically get captured, we
-    -- should pass the name directly to places
-    let compileOptions = DeclLet
-      { body = urecord_
-        -- NOTE(dlunde,2022-11-04): Emulating option type
-        [ ("seedIsSome", match options.seed with Some seed then bool_ true else bool_ false)
-        , ("seed", match options.seed with Some seed then int_ seed else int_ 0)
-        ]
-      , ident = nameNoSym "compileOptions"
-      , tyAnnot = tyunknown_
-      , tyBody = tyunknown_
-      , info = NoInfo ()
-      } in
-    let loader = _addDeclExn loader compileOptions in
+    match includeBuiltinEnv loader with (builtinEnv, loader) in
 
     -- NOTE(vipa, 2024-12-17): Load the runtime distribution
-    -- support. This places the related built-in functions in the
-    -- running symbolize environment
+    -- support.
     match includeFileExn "." "coreppl::coreppl-to-mexpr/runtime-dists.mc" loader with (distEnv, loader) in
-    let distBuiltins =
-      [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
-      , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
-      , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
-      , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
-      , ("expectation", CDistExpectation ())
-      , ("logObserve", CDistLogObserve ())
-      ] in
-    let f = lam loader. lam pair.
-      let decl = DeclLet
-        { ident = nameNoSym pair.0
-        , tyAnnot = tyunknown_
-        , tyBody = tyunknown_
-        , body = ulam_ "x" (app_ (uconst_ pair.1) (var_ "x"))
-        , info = NoInfo ()
-        } in
-      _addDeclExn loader decl in
-    let loader = foldl f loader distBuiltins in
 
-    let distAlias = DeclType
-      { ident = nameNoSym "Dist"
-      , params = [nameNoSym "ty"]
-      , tyIdent = TyDist {info = NoInfo (), ty = tyvar_ "ty"}
-      , info = NoInfo ()
-      } in
-    let loader = _addDeclExn loader distAlias in
+    match _captureEnv
+      (lam loader.
+        -- NOTE(vipa, 2024-12-12): Insert compileOptions declaration
+        -- before everything else.
+        let compileOptions = DeclLet
+          { body = urecord_
+            -- NOTE(dlunde,2022-11-04): Emulating option type
+            [ ("seedIsSome", match options.seed with Some seed then bool_ true else bool_ false)
+            , ("seed", match options.seed with Some seed then int_ seed else int_ 0)
+            ]
+          , ident = nameNoSym "compileOptions"
+          , tyAnnot = tyunknown_
+          , tyBody = tyunknown_
+          , info = NoInfo ()
+          } in
+        let loader = (_addDeclExn _symEnvEmpty loader compileOptions).1 in
+
+        let distBuiltins =
+          [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
+          , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
+          , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
+          , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
+          , ("expectation", CDistExpectation ())
+          , ("logObserve", CDistLogObserve ())
+          ] in
+        let f = lam loader. lam pair.
+          let decl = DeclLet
+            { ident = nameNoSym pair.0
+            , tyAnnot = tyunknown_
+            , tyBody = tyunknown_
+            , body = ulam_ "x" (app_ (uconst_ pair.1) (var_ "x"))
+            , info = NoInfo ()
+            } in
+          (_addDeclExn _symEnvEmpty loader decl).1 in
+        let loader = foldl f loader distBuiltins  in
+
+        let distAlias = DeclType
+          { ident = nameNoSym "Dist"
+          , params = [nameNoSym "ty"]
+          , tyIdent = TyDist {info = NoInfo (), ty = tyvar_ "ty"}
+          , info = NoInfo ()
+          } in
+        let loader = (_addDeclExn _symEnvEmpty loader distAlias).1 in
+        ((), loader))
+      loader
+    with (_, cpplBuiltinEnv, loader) in
 
     let hook = CPPLHook
       { options = options
       , runtimes = ref (mapEmpty cmpInferMethod)
       , envs =
-        { higherOrderSymEnv = symEnv
+        { higherOrderSymEnv = higherOrderSymEnv
         , distEnv = distEnv
         , externalMathEnv = externalMathEnv
+        , builtinEnv = mergeSymEnv builtinEnv cpplBuiltinEnv
         }
       } in
     addHook loader hook
@@ -472,7 +468,11 @@ lang CPPLLoader
   sem _postBuildFullAst loader ast = | CPPLHook hook ->
     let options = hook.options in
     let runtimes = deref hook.runtimes in
-    let envs = hook.envs in
+    let envs =
+      { distEnv = hook.envs.distEnv
+      , externalMathEnv = hook.envs.externalMathEnv
+      , higherOrderSymEnv = hook.envs.higherOrderSymEnv
+      } in
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases options.invariantsToCheck in
     let ast = removeMetaVarExpr ast in
     endPhaseStatsExpr log "remove-meta-var" ast;
@@ -504,7 +504,7 @@ lang CPPLLoader
     (loader, smap_Decl_Expr (replaceDefaultInferMethod x.inferMethod) decl)
 end
 
-lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
+lang ODELoader = SolveODE + LoaderInterface + MExprSubstitute
   -- Make transformations related to solveode. This pass removes all solveode
   -- terms and returns a transformed term and an ODE related runtime. the
   -- tranformed program can be treated like a normal probabilistic program.
@@ -557,7 +557,7 @@ lang ODELoader = SolveODE + MCoreLoader + MExprSubstitute
       (loader, decl)
 end
 
-lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
+lang ADLoader = LoaderInterface + CorePPL + Delayed + Diff +
   ElementaryFunctions + PrettyPrint + TyConst
 
   ------------------------------------------------------------------------------
@@ -602,20 +602,16 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
   sem adPostTypecheckH : ADHookEnv -> Loader -> Decl -> (Loader, Decl)
   sem adPostTypecheckH env loader =
   | d & DeclExt r ->
-    let loader =
+    let decl =
       if env.config.insertFloatAssertions then
         let tyIdent = _unwrapTypes r.tyIdent in
         if _hasFloatExprsMap tyIdent then
           let i = r.info in
-          let decl_let = lam body. DeclLet {
-            ident = r.ident,
-            tyAnnot = TyUnknown { info = i },
-            tyBody = r.tyIdent,
-            body = body,
-            info = i
-          } in
           -- NOTE(oerikss, 2025-03-03): We use an intermediate eta expanded
           -- alias because externals needs to be fully applied.
+          -- NOTE(vipa, 2026-09-02): This alias wraps the external
+          -- declaration itself, i.e. we turn `external foo : T` into
+          -- `let foo : T = external foo : T in lam ... in ...`.
           let _ps =
             recursive let recur = lam ty.
               switch ty
@@ -626,7 +622,7 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
             in
             recur tyIdent
           in
-          let decl1 =
+          let wrapperBody =
             let ps =
               map
                 (lam _p.
@@ -637,13 +633,17 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
             let body =
               foldr (lam p. lam fn. _iapp_ i fn p) (_ivar_ i r.tyIdent r.ident)
                 ps in
-            let body =
-              foldl (lam body. lam _p. _ilam_ i _p.0 _p.1 body) body _ps in
-            decl_let body in
-          _queueAddDecl loader decl1
-        else loader
-      else loader in
-    (loader, d)
+            foldl (lam body. lam _p. _ilam_ i _p.0 _p.1 body) body _ps in
+          DeclLet {
+            ident = r.ident,
+            tyAnnot = TyUnknown { info = i },
+            tyBody = r.tyIdent,
+            body = withInfo i (withType (_tyTm wrapperBody) (bind_ d wrapperBody)),
+            info = i
+          }
+        else d
+      else d in
+    (loader, decl)
   | decl -> (loader, decl)
 
   sem adAssertWellTypedDiff : Expr -> Expr
@@ -968,17 +968,26 @@ lang ADLoader = MCoreLoader + CorePPL + Delayed + Diff +
     optionMapOr e (lam map. map e) (_mapFloatExprs i from to ty)
 end
 
-lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader + DTCTypeOf + ADLoader
+lang CorePPLFileTypeLoader
+  = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader
+  + DTCTypeOf + ADLoader + IncludeDeclAst + BootParserMLang
+
+  syn CorePPLMode =
+  | CPPLDep
+  | CPPLMain
+  | CPPLMainAD
+  | CPPLMainImplicitInfer
+
   syn FileType =
-  | FCorePPL {isModel : Bool}
+  | FCorePPL {mode : CorePPLMode}
 
   syn Hook =
   | CorePPLFileHook {options : CPPLFileOptions, method : InferMethod}
 
-  sem _fileType = | _ ++ ".cppl" -> FCorePPL {isModel = false}
+  sem _fileType = | _ ++ ".cppl" -> FCorePPL {mode = CPPLDep ()}
 
-  sem _insertBackcompatInfer : CPPLFileOptions -> InferMethod -> Expr -> Loader -> Loader
-  sem _insertBackcompatInfer options method modelBody = | loader ->
+  sem _insertBackcompatInfer : CPPLFileOptions -> InferMethod -> SymEnv -> Expr -> Loader -> Loader
+  sem _insertBackcompatInfer options method symEnv modelBody = | loader ->
     let modelName = nameSym "_model" in
     let decl = DeclLet
       { ident = modelName
@@ -987,25 +996,23 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
       , body = lam_ "" tyunit_ modelBody
       , info = infoTm modelBody
       } in
-    let loader = _addDeclExn loader decl in
+    let loader = (_addDeclExn symEnv loader decl).1 in
 
     match includeFileExn "." "stdlib::common.mc" loader with (commonEnv, loader) in
+    match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
 
     let particlesName = nameSym "particles" in
     let decl = DeclLet
       { ident = particlesName
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , body = int_ options.defaultParticles
+      , body = if_ (leqi_ (length_ argv_) (int_ 1))
+        (int_ options.defaultParticles)
+        (app_ (nvar_ (_getVarExn "string2int" stringEnv)) (get_ argv_ (int_ 1)))
       , info = NoInfo ()
       } in
     let loader = _addSymbolizedDeclExn loader decl in
-    let loader =
-      let symEnv = _getSymEnv loader in
-      let symEnv = symbolizeUpdateVarEnv symEnv
-        (mapInsert (nameGetStr particlesName) particlesName symEnv.currentEnv.varEnv) in
-      _setSymEnv symEnv loader in
-    match includeFileTypeExn (FCorePPL {isModel = false}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
+    match includeFileTypeExn (FCorePPL {mode = CPPLDep ()}) "." "coreppl::coreppl-to-mexpr/top.mc" loader
       with (topEnv, loader) in
 
     let retTy = match unwrapType (mapFindExn modelName (_getTCEnv loader).varEnv)
@@ -1033,7 +1040,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         case (NaiveMCMC _ | TraceMCMC _ | LightweightMCMC _ | PIMH _, false) then
           unit_
         case _ then
-          error "Inference algorithm not supported in global mode"
+          never " in basicPrint, unsupported inference algorithm in global mode"
         end in
       let printSamples = if options.printSamples
         then appf2_ (nvar_ (_getVarExn "printSamples" topEnv)) retTyPrint (nvar_ distName)
@@ -1044,7 +1051,7 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_
         , body = TmInfer
-          { method = setRuns (nvar_ (_getVarExn "particles" topEnv)) method
+          { method = setRuns (nvar_ particlesName) method
           , model = nvar_ modelName
           , ty = tyunknown_
           , info = NoInfo ()
@@ -1064,130 +1071,81 @@ lang CorePPLFileTypeLoader = CPPLLoader + GeneratePprintLoader + MExprGeneratePp
         (ulam_ "" inferCode)
         (nvar_ (_getVarExn "sweeps" topEnv))
       } in
-    _addDeclExn loader decl
+    (_addDeclExn _symEnvEmpty loader decl).1
 
-  sem _loadFile path = | (FCorePPL {isModel = isModel}, loader & Loader x) ->
-    -- NOTE(vipa, 2024-12-12): Return if we've already included this
-    -- file
-    match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
-    let args =
-      { _defaultBootParserParseMCoreFileArg ()
-      -- NOTE(vipa, 2024-12-03): It's important to not remove dead
-      -- code, because that code might end up not-dead later, at which
-      -- point it would end up included then, out of order and in
-      -- various ways messing with assumptions made in the loader.
-      with eliminateDeadCode = false
-      -- NOTE(vipa, 2024-12-03): This largely lets us error later,
-      -- which gives better error messages.
-      , allowFree = true
-      , keywords = pplKeywords
-      , builtin = cpplBuiltin
-      } in
-    let ast = parseMCoreFile args path in
-    let ast = use DPPLParser in makeKeywords ast in
-
+  sem _loadFile path = | (FCorePPL {mode = mode}, loader) ->
     match optionGetOrElse (lam. error "missing CorePPLFileHook")
       (getHookOpt (lam h. match h with CorePPLFileHook x then Some (x.options, x.method) else None ()) loader)
     with (options, method) in
+    let cpplHook = optionGetOrElse (lam. error "missing CorePPLFileHook")
+      (getHookOpt (lam h. match h with CPPLHook x then Some x else None ()) loader) in
 
-    -- NOTE(oerikss, 2025-03-14): If the user requested it, we type-check with
-    -- the DPPL type-checker.
-    (if options.dpplTypeCheck then
-      typeOfExn (decorateTypesExn (symbolize ast)); ()
-     else ());
-
-    recursive let f = lam decls. lam ast.
-      match ast with TmDecl {decl = decl, inexpr = ast}
-      then f (snoc decls decl) ast
-      else (decls, ast) in
-    -- NOTE(oerikss, 2025-03-14): We need to erase any type decorations specific
-    -- to the new DPPL typechecker.
-    match f [] (eraseDecorations ast) with (decls, expr) in
-
-    let hasTerm : (Expr -> Bool) -> Bool = lam p.
-      recursive let hasTerm = lam acc. lam e.
-        if acc then acc else
-          if p e then true
-          else sfold_Expr_Expr hasTerm false e in
-      let hasTermD = lam acc. lam d.
-        if acc then acc else
-          sfold_Decl_Expr hasTerm false d in
-      or (foldl hasTermD false decls) (hasTerm false expr) in
-
-    let hasInfer =
-      hasTerm (lam e. match e with TmInfer _ then true else false) in
-    let needsAddedInfer = and isModel (not hasInfer) in
-
-    let hasSolve =
-      hasTerm (lam e. match e with TmSolveODE _ then true else false) in
-
-    let hasDiff = hasTerm (lam e. match e with TmDiff _ then true else false) in
-    (if and hasDiff (not isModel) then
-      error "found a `diff` outside model code which we cannot handle."
-     else ());
-
-    let loader =
-      switch (hasDiff, hasSolve, needsAddedInfer)
-      case (false, _, false) | (false, true, true) then
-        -- NOTE(vipa, 2025-02-26): Simple case, no AD, and no need to add an infer
-        let decls = if isModel
-          then snoc decls (declWithInfo (infoTm expr) (nulet_ (nameSym "") expr))
-          else decls in
-        _addDeclsByFile loader decls
-      case (false, false, true) then
-        -- NOTE(vipa, 2025-02-26): No AD or solve, but we do need to add an infer
-        match partition (lam d. match infoDecl d with Info {filename = f} then eqString f path else false) decls
-          with (inFile, beforeFile) in
-        let loader = _addDeclsByFile loader beforeFile in
-        let modelBody = bindall_ inFile expr in
-        _insertBackcompatInfer options method modelBody loader
-      case _ then
-        -- NOTE(vipa, 2025-02-26): When using AD we make a simplifying
-        -- assumption: we make the model code exist "in its own world",
-        -- i.e., we get duplication of dependencies between the model
-        -- and the rest of what's in the loader. This means that we can
-        -- lift everything in the model indiscriminately without
-        -- affecting other code and without more complicated data-flow
-        -- analysis.
-
-        -- NOTE(vipa, 2025-02-26): This is the initial separate world,
-        -- where we *might* load the ode-runtime, and where we *will* do
-        -- adtransform
-        let odeHook = getHookOpt
-          (lam x. match x with h & ODEHook _ then Some h else None ())
-          loader in
-        let hooks = match odeHook with Some hook
-          then [hook]
-          else [] in
-        match prepareADRuntime loader { insertFloatAssertions = not options.dpplTypeCheck }
-          with (adHook, loader) in
-        let hooks = snoc hooks adHook in
-        let separateLoader = mkLoader
-          (_getSymEnv loader)
-          (_getTCEnv loader)
-          hooks in
-
-      let decls = snoc decls (declWithInfo (infoTm expr) (nulet_ (nameSym "") expr)) in
-        let separateLoader = _addDeclsByFile separateLoader decls in
-
-        -- NOTE(vipa, 2025-02-26): Now we're going to put the decls we
-        -- got in the original loader, letting it run its various
-        -- hooks. This means we, e.g., type-check twice. Afterwards we
-        -- reset SymEnv and includedFiles to what they were before,
-        -- which has the effect of making these decls quite isolated
-        -- from other decls.
-        let prevSymEnv = _getSymEnv loader in
-        let prevIncluded = match loader with Loader {includedFiles = x} in x in
-        -- NOTE(vipa, 2025-02-26): We use normal `addDecl` to ensure
-        -- all hooks are run
-        let loader = foldl _addDeclExn loader (getDecls separateLoader) in
-        match loader with Loader x in
-        let loader = Loader {x with symEnv = prevSymEnv, includedFiles = prevIncluded} in
-        loader
+    let prog = switch result.consume (parseMLangFile path)
+      case (_, Right prog) then prog
+      case (_, Left errs) then
+        errorMulti errs (join ["Parse error while parsing '", path, "'"])
       end in
+    let prog = use DPPLParser in
+      { decls = map makeDeclKeywords prog.decls
+      , expr = makeKeywords prog.expr
+      } in
 
-    match loader with Loader x in
-    match mapLookup path x.includedFiles with Some env
-    then (env, loader)
-    else (_symEnvEmpty, Loader {x with includedFiles = mapInsert path _symEnvEmpty x.includedFiles})
+    let symEnv = cpplHook.envs.builtinEnv in
+
+    let needsIsolated = switch mode
+      case CPPLMainAD _ then true
+      case CPPLDep _ then false
+      case _ then options.dpplTypeCheck
+      end in
+    match
+      -- NOTE(vipa, 2026-09-02): AD and dpplTypeCheck are written to
+      -- work on an entire file _and its transitive dependencies_ at
+      -- once, so this block emulates that by creating a new Loader
+      -- and processing everything in an isolated fashion.
+      if needsIsolated then
+        -- NOTE(vipa, 2026-09-02): Retain the ODE hook if already present
+        let hooks = optionGetOr []
+          (getHookOpt
+            (lam x. match x with h & ODEHook _ then Some [h] else None ())
+            loader) in
+        -- TODO(vipa, 2026-09-02): Add a hook for running dpplTypeCheck on each decl in _preTypeCheck?
+        -- NOTE(vipa, 2026-09-02): Add the AD hook if requested
+        match
+          match mode with CPPLMainAD _ then
+            match prepareADRuntime loader {insertFloatAssertions = not options.dpplTypeCheck} with (adHook, loader) in
+            (snoc hooks adHook, loader)
+          else (hooks, loader)
+        with (hooks, loader) in
+
+        let separateLoader = mkLoader (_getTCEnv loader) hooks in
+        let decls = snoc prog.decls (declWithInfo (infoTm prog.expr) (nulet_ (nameSym "") prog.expr)) in
+        match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, separateLoader) decls
+          with (symEnv, separateLoader) in
+        (Some (getDecls separateLoader), loader)
+      else (None (), loader)
+    with (isolated, loader) in
+
+    switch mode
+    case CPPLMain _ | CPPLDep _ then
+      -- TODO(vipa, 2026-09-02): Erase dppl type annotations
+      match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, loader) prog.decls
+        with (symEnv, loader) in
+      match mode with CPPLMain _
+      then (_addDeclExn symEnv loader (declWithInfo (infoTm prog.expr) (ulet_ "" prog.expr))).1
+      else loader
+    case CPPLMainImplicitInfer _ then
+      -- TODO(vipa, 2026-09-02): Erase dppl type annotations
+      match partition (lam d. match d with DeclInclude _ then true else false) prog.decls
+        with (includes, decls) in
+      match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, loader) includes
+        with (symEnv, loader) in
+      _insertBackcompatInfer options method symEnv (bindall_ decls prog.expr) loader
+    case CPPLMainAD _ then
+      match isolated with Some isolated in
+      -- NOTE(vipa, 2026-09-02): We add the isolated decls to the main
+      -- loader to ensure all hooks are run. Note that this will
+      -- cause, e.g., typechecking to happen twice, since it already
+      -- happened in the isolated loader.
+      (foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, loader) isolated).1
+    end
 end

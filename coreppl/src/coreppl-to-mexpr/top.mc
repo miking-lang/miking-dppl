@@ -33,7 +33,5 @@ let printNormConst = lam dist.
 let printAcceptRate = lam dist.
   print (float2string (distEmpiricalAcceptRate dist)); print "\n"
 
--- The number of particles/samples/executions and sweeps from the program argument
-let particles = if leqi (length argv) 1 then particles else string2int (get argv 1)
-
+-- The number of sweeps from the program argument (particles are determined in generated code)
 let sweeps = if leqi (length argv) 2 then 1 else string2int (get argv 2)
