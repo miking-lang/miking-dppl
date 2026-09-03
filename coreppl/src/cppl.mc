@@ -33,7 +33,7 @@ include "coreppl-to-mexpr/pval-graph/compile.mc"
 lang CPPLLang = CorePPLFileTypeLoader
   + MExprAst + UtestLoader + ODELoader + MExprGenerateEq
   + MExprLowerNestedPatterns + MCoreCompileLang
-  + PhaseStats + MExprGeneratePprint
+  + PhaseStats + MExprGeneratePprint + GeneratePprintMissingCase
   + BPFCompilerPicker + APFCompilerPicker + ImportanceCompilerPicker
   + NaiveMCMCCompilerPicker + TraceMCMCCompilerPicker + PIMHCompilerPicker
   + LightweightMCMCCompilerPicker
@@ -51,11 +51,12 @@ use CPPLLang in
 let options = optParseWithHelp {optParserHelpDef cpplName with description = cpplDescription} options (tail argv) in
 -- Read and parse the file
 let filename = stdlibResolveFileOr (lam x. error x) "." options.frontend.input in
-let isFromModelFileOrStatic = lam x.
-  if x.static then true else
-  match x.info with Info x
-  then eqString x.filename filename
-  else false in
+let isFromModelFileOrDynamic = lam x.
+  if x.static
+  then match x.info with Info x
+    then eqString x.filename filename
+    else false
+  else true in
 
 let log = mkPhaseLogState options.transformations.debugDumpPhases options.transformations.debugPhases options.transformations.invariantsToCheck in
 
@@ -66,7 +67,7 @@ let loader = mkLoader typcheckEnvDefault
 let loader = addHook loader (CorePPLFileHook {options = options.cpplFiles, method = options.defaultMethod}) in
 let loader = enableDefaultInferMethod options.defaultMethod loader in
 let loader = enableCPPLCompilation options.transformations loader in
-let loader = enableUtestGeneration (if options.frontend.test then isFromModelFileOrStatic else lam. false) loader in
+let loader = enableUtestGeneration (if options.frontend.test then isFromModelFileOrDynamic else lam. false) loader in
 let loader = enablePprintGeneration loader in
 endPhaseStatsProg log "mk-cppl-loader" {decls = getDecls loader, expr = unit_};
 
