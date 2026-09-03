@@ -6,7 +6,7 @@ include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
 
-include "../runtime-common.mc"
+include "../runtime-common.cppl"
 include "../runtime-dists.mc"
 
 -- In importance sampling, the state is simply the accumulated weight.

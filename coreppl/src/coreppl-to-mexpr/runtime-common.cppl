@@ -4,6 +4,9 @@ include "ext/dist-ext.mc"
 include "seq.mc"
 include "string.mc"
 include "sys.mc"
+include "basic-types.mc"
+include "char.mc"
+include "ext/math-ext.mc"
 
 include "../elementary-functions.mc"
 

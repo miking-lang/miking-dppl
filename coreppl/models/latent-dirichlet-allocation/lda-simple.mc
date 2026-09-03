@@ -7,7 +7,7 @@ include "ext/dist-ext.mc"
 -- data-c3.mc)
 include "data-simple.mc"
 
-include "lda.mc"
+include "lda.cppl"
 
 mexpr
 let res = model () in

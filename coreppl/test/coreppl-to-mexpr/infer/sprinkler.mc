@@ -1,5 +1,5 @@
-include "../../../models/sprinkler.mc"
-include "../../cppl-test.mc"
+include "../../../models/sprinkler.cppl"
+include "../../cppl-test.cppl"
 include "../../test.mc"
 
 include "seq.mc"

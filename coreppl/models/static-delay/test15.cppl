@@ -1,4 +1,4 @@
---cppl coreppl/models/static-delay/test15.mc -m is-lw --no-print-samples --extract-simplification inline --print-model
+--cppl coreppl/models/static-delay/test15.cppl -m is-lw --no-print-samples --extract-simplification inline --print-model
 mexpr
 let lst = [assume (Gaussian 0. 1.), assume (Gaussian 0. 1.), assume (Gaussian 0. 1.), assume (Gaussian 0. 1.)] in
 iter (lam obs.

@@ -12,7 +12,7 @@ let s = 0.3 in
 let e = eqRegression s s in
 let rhs = regressionTruth in
 let r = resRegression in
-let t = testCpplMExpr "regression.mc" in
+let t = testCpplMExpr "regression.cppl" in
 
 utest r (t 1000  0 "-m is-lw --cps none"                                              ) with rhs using e in
 utest r (t 1000  0 "-m is-lw --cps partial"                                           ) with rhs using e in

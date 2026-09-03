@@ -1,5 +1,5 @@
-include "../../../models/coin-iter.mc"
-include "../../cppl-test.mc"
+include "../../../models/coin-iter.cppl"
+include "../../cppl-test.cppl"
 include "../../test.mc"
 
 include "seq.mc"

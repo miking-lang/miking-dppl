@@ -1,5 +1,5 @@
-include "../../../models/ode/harmonic.mc"
-include "../../cppl-test.mc"
+include "../../../models/ode/harmonic.cppl"
+include "../../cppl-test.cppl"
 include "../../test.mc"
 
 mexpr

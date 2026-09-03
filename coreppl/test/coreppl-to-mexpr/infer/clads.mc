@@ -1,5 +1,5 @@
 include "../../../models/diversification-models/clads2-synthetic.mc"
-include "../../cppl-test.mc"
+include "../../cppl-test.cppl"
 include "../../test.mc"
 
 include "seq.mc"

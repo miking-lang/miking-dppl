@@ -1,5 +1,5 @@
 include "../../data/toydata.mc"
-include "tree-inference-auto.mc"
+include "tree-inference-auto.cppl"
 
 mexpr
 let res = model () in ()

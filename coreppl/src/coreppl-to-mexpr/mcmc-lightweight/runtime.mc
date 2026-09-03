@@ -8,7 +8,7 @@ include "string.mc"
 include "option.mc"
 include "map.mc"
 
-include "../runtime-common.mc"
+include "../runtime-common.cppl"
 include "../runtime-dists.mc"
 
 include "./config.mc"

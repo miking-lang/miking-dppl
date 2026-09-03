@@ -1,4 +1,4 @@
---cppl coreppl/models/static-delay/test9.mc -m is-lw --no-print-samples --extract-simplification inline --print-model --static-delay
+--cppl coreppl/models/static-delay/test9.cppl -m is-lw --no-print-samples --extract-simplification inline --print-model --static-delay
 
 mexpr
 let lst = create 2 (lam. assume (Beta 4. 4.)) in

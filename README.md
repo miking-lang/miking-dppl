@@ -86,7 +86,7 @@ You compile and run the above models with the `cppl` command, and the models are
 
 ### The `infer` Keyword and its Limitations
 The experimental `infer` keyword in CorePPL allows users to apply inference algorithms within CorePPL programs.
-For examples showing how to use `infer`, see `coreppl/models/infer-loop.mc` and `coreppl/models/infer-test.mc`
+For examples showing how to use `infer`, see `coreppl/models/infer-loop.cppl` and `coreppl/models/infer-test.cppl`
 To see the available inference algorithms and their parameters for use with `infer`, you must currently consult the source code under `coreppl/src/inference`.
 
 If a CorePPL program contains no applications of `infer`, the entire program encodes one single inference problem.

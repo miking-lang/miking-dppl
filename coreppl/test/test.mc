@@ -66,7 +66,7 @@ let testCpplMExpr: String -> Int -> Int -> String -> CpplRes =
   lam model. lam samples. lam burn. lam compileArgs.
     let m = join [dpplPath, "/coreppl/models/", model] in
     let wd = sysTempDirMake () in
-    let run = sysRunCommandWithUtest [cppl, join ["--seed 0 --output ", wd, "/out"], compileArgs, m ] "" "." in
+    let run = sysRunCommandWithUtest [cppl, join ["--seed 0 --output ", wd, "/out"], "--implicit-infer", compileArgs, m ] "" "." in
     let run = sysRunCommandWithUtest ["./out", int2string samples] "" wd in
     sysDeleteDir wd;
     burnCpplRes burn (parseRun run.stdout)

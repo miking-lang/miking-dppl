@@ -1,5 +1,5 @@
-include "../../../models/coin.mc"
-include "../../cppl-test.mc"
+include "../../../models/coin.cppl"
+include "../../cppl-test.cppl"
 include "../../test.mc"
 
 include "../../../src/coreppl-to-mexpr/pval-graph/config.mc"

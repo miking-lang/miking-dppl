@@ -7,7 +7,7 @@ let s = 1e-1 in
 let e = eqPickPair s in
 let rhs = pickPairTruth in
 let r = resPickPair in
-let t = testCpplMExpr "pick-pair.mc" 10000 in
+let t = testCpplMExpr "pick-pair.cppl" 10000 in
 
 utest r (t 0 "-m is-lw --cps none") with rhs using e in
 utest r (t 0   "-m is-lw --cps partial"                         ) with rhs using e in

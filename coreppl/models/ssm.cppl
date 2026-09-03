@@ -3,6 +3,7 @@
 ---------------------------------------------------
 
 include "math.mc"
+include "float.mc"
 
 -- Noisy satellite observations of position (accuracy is improved
 -- at higher altitude)

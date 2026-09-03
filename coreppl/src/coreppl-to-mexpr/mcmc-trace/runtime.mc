@@ -6,7 +6,7 @@ include "math.mc"
 include "seq.mc"
 include "string.mc"
 
-include "../runtime-common.mc"
+include "../runtime-common.cppl"
 include "../runtime-dists.mc"
 
 -- Any-type, used for traces

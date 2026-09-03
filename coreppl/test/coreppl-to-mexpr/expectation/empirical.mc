@@ -1,5 +1,5 @@
 include "math.mc"
-include "../../cppl-test.mc"
+include "../../cppl-test.cppl"
 
 let model1 = lam.
   let a = assume (Gamma 2. 3.) in

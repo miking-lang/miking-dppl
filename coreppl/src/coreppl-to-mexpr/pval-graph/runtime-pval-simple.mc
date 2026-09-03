@@ -1,4 +1,4 @@
-include "../runtime-common.mc"
+include "../runtime-common.cppl"
 include "../runtime-dists.mc"
 
 include "./config.mc"

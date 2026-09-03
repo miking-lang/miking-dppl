@@ -1,4 +1,4 @@
---  cppl coreppl/models/static-delay/test17.mc -m is-lw --no-print-samples --extract-simplification inline --print-model --static-delay
+--  cppl coreppl/models/static-delay/test17.cppl -m is-lw --no-print-samples --extract-simplification inline --print-model --static-delay
 mexpr
 let a = assume (Gaussian 0. 1.) in
 let b = assume (Gaussian 0. 2.) in

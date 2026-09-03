@@ -1,4 +1,6 @@
 include "test.mc"
+include "int.mc"
+include "basic-types.mc"
 --include "../src/coreppl-to-mexpr/runtime-dists.mc"
 
 let cpplResOfDist: all a. (a -> String) -> Int -> Dist a -> CpplRes =

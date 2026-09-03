@@ -1,5 +1,5 @@
-include "../../../models/diff/demo.mc"
-include "../../cppl-test.mc"
+include "../../../models/diff/demo.cppl"
+include "../../cppl-test.cppl"
 
 
 mexpr

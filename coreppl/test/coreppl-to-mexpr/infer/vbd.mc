@@ -1,5 +1,5 @@
-include "../../../models/vector-borne-disease/vbd.mc"
-include "../../cppl-test.mc"
+include "../../../models/vector-borne-disease/vbd.cppl"
+include "../../cppl-test.cppl"
 include "../../test.mc"
 
 include "seq.mc"

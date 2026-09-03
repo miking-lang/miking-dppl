@@ -1,5 +1,5 @@
-include "../../../models/diff/regression.mc"
-include "../../cppl-test.mc"
+include "../../../models/diff/regression.cppl"
+include "../../cppl-test.cppl"
 include "../../test.mc"
 
 include "seq.mc"
