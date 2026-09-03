@@ -1,4 +1,5 @@
 include "math.mc"
+include "float.mc"
 include "../../cppl-test.cppl"
 
 let model1 = lam.

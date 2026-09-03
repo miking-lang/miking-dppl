@@ -1,5 +1,6 @@
 include "math.mc"
 include "ext/dist-ext.mc"
+include "float.mc"
 
 mexpr
 -- NOTE(oerikss, 2024-09-19): A hack to prevent the backwards compability part

@@ -1,6 +1,7 @@
 include "../../../models/ode/harmonic.cppl"
 include "../../cppl-test.cppl"
 include "../../test.mc"
+include "string.mc"
 
 mexpr
 

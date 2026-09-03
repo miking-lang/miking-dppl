@@ -1,3 +1,5 @@
+include "bool.mc"
+include "basic-types.mc"
 include "../runtime-common.cppl"
 include "../runtime-dists.mc"
 

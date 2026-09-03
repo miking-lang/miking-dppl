@@ -1,6 +1,8 @@
 -- -*- compile-command : "mi compile --test runtime-ad.mc --output out && ./out && rm ./out" -*-
 
 include "ext/reflection-ext.mc"
+include "ext/math-ext.mc"
+include "float.mc"
 
 let assertFloat : Float -> Float
   = lam a.

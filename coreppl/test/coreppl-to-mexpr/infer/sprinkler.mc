@@ -7,6 +7,7 @@ include "sys.mc"
 include "string.mc"
 include "common.mc"
 include "stats.mc"
+include "bool.mc"
 
 mexpr
 

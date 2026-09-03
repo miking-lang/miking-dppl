@@ -1,3 +1,4 @@
+include "bool.mc"
 include "common.mc"
 
 include "ext/dist-ext.mc"
@@ -6,6 +7,7 @@ include "math.mc"
 include "seq.mc"
 include "string.mc"
 include "option.mc"
+include "float.mc"
 include "sys.mc"
 
 include "../runtime-common.cppl"

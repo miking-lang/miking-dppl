@@ -3,6 +3,8 @@ include "ext/dist-ext.mc"
 include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
+include "float.mc"
+include "bool.mc"
 
 include "../runtime-common.cppl"
 include "../runtime-dists.mc"
