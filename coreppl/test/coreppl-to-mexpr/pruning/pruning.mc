@@ -1,6 +1,8 @@
 include "matrix.mc"
 include "ext/matrix-ext.mc"
 include "ext/dist-ext.mc"
+include "float.mc"
+include "bool.mc"
 -- Single observe --
 let modelNN = lam.
   let x = assume (Categorical [0.7, 0.3]) in

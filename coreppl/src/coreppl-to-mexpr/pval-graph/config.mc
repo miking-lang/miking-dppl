@@ -1,4 +1,6 @@
 include "ext/dist-ext.mc"
+include "ext/math-ext.mc"
+include "float.mc"
 
 -- NOTE(vipa, 2025-04-15): The contents of this file must be kept in
 -- sync with typeCheckInferMethod and inferMethodConfig of

@@ -2,6 +2,12 @@ include "pval-interface.mc"
 include "json.mc"
 include "common.mc"
 include "set.mc"
+include "basic-types.mc"
+include "map.mc"
+include "string.mc"
+include "seq.mc"
+include "option.mc"
+include "bool.mc"
 
 
 -- === Visualizations for PVal graphs ===

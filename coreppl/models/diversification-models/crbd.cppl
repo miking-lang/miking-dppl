@@ -1,5 +1,6 @@
 include "phylo.mc"
 include "math.mc"
+include "float.mc"
 
 let crbd: Tree -> Float -> Float = lam tree. lam rho.
 

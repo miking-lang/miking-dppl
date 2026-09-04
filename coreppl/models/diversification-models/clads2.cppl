@@ -1,6 +1,7 @@
 include "phylo.mc"
 include "math.mc"
 include "bool.mc"
+include "float.mc"
 
 let clads2: Tree -> Float -> Float = lam tree. lam rho.
 

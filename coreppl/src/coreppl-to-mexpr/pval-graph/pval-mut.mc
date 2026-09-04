@@ -1,5 +1,9 @@
 include "pval-interface.mc"
 include "common.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "float.mc"
+include "bool.mc"
 
 
 -- === Mutable PVal model instances (should be used affinely) ===

@@ -1,4 +1,6 @@
 include "../runtime-dists.mc"
+include "basic-types.mc"
+include "option.mc"
 
 -- === Finally tagless representation of piece-wise static PVal models ===
 
