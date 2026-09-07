@@ -36,4 +36,17 @@ lang InferenceInterface = Sym + SymGetters
       appSeq_ (nvar_ n) (concat extraArgs args)
     else
       appSeq_ (nvar_ n) args
+  sem appFromLangEnv
+    : InferenceSymEnv
+    -> String
+    -> String
+    -> [Expr]
+    -> Expr
+  sem appFromLangEnv env langName fname = | args ->
+    let n = _getVarExn fname (_getLangEnvExn langName env.env) in
+    match mapLookup n env.lamliftSols with Some sol then
+      let extraArgs = map (lam pair. withType pair.1 (nvar_ pair.0)) sol.vars in
+      appSeq_ (nvar_ n) (concat extraArgs args)
+    else
+      appSeq_ (nvar_ n) args
 end
