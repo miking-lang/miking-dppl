@@ -1,4 +1,6 @@
 include "./bayesian-parameter-estimation.cppl"
+include "./ode-and-data.cppl"
+include "../lib.cppl"
 
 /- Illustrates inferring the posterior of IVP solution sensitivites -/
 

@@ -1,4 +1,5 @@
 include "./bayesian-parameter-estimation-ivp-solution.cppl"
+include "../lib.cppl"
 
 mexpr
 

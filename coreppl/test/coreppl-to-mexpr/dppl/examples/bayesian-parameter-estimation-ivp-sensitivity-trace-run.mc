@@ -1,4 +1,6 @@
 include "bayesian-parameter-estimation-ivp-sensitivity-trace.cppl"
+include "./ode-and-data.cppl"
+include "../lib.cppl"
 
 mexpr
 

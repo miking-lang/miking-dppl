@@ -1,4 +1,6 @@
 include "bayesian-parameter-estimation-ivp-solution-trace.cppl"
+include "./ode-and-data.cppl"
+include "../lib.cppl"
 
 mexpr
 

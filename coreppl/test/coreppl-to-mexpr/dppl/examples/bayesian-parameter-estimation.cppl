@@ -1,3 +1,4 @@
+include "../lib.cppl"
 include "./ode-and-data.cppl"
 include "./bayesian-regression-model.cppl"
 

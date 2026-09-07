@@ -1,4 +1,5 @@
 include "tumor-inhibitor-rode.cppl"
+include "../lib.cppl"
 
 mexpr
 
