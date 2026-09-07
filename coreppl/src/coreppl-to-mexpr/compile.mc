@@ -992,9 +992,36 @@ lang ADLoader = LoaderInterface + CorePPL + Delayed + Diff +
     optionMapOr e (lam map. map e) (_mapFloatExprs i from to ty)
 end
 
+lang DPPLTypeCheckLoader = LoaderInterface + DTCTypeOf + DPPLParser
+  -- NOTE(vipa, 2026-09-07): The dppl type checker isn't structured to
+  -- handle things `Decl` by `Decl`, in a kind of non-trivial way, so
+  -- we just collect all of them here and then typecheck on the entire
+  -- program at the end.
+  syn Hook +=
+  | DPPLTypeCheckHook {decls : Ref [Decl]}
+
+  sem _dtcCollectAndErase : Ref [Decl] -> Decl -> Decl
+  sem _dtcCollectAndErase declsRef =
+  | d ->
+    let decorated = smap_Decl_Type decorateTypesH (smap_Decl_Expr decorateTypesExn d) in
+    modref declsRef (snoc (deref declsRef) decorated);
+    smap_Decl_Type eraseDecorationsType (smap_Decl_Expr eraseDecorations decorated)
+
+  sem _preTypecheck loader decl =| DPPLTypeCheckHook h ->
+    (loader, _dtcCollectAndErase h.decls decl)
+
+  sem _dtcCheckWholeChain : Loader -> ()
+  sem _dtcCheckWholeChain =| loader ->
+    match getHookOpt (lam h. match h with DPPLTypeCheckHook x then Some x else None ()) loader
+    with Some h then
+      typeOfExn (foldr bind_ unit_ (deref h.decls));
+      ()
+    else ()
+end
+
 lang CorePPLFileTypeLoader
   = CPPLLoader + GeneratePprintLoader + MExprGeneratePprint + ODELoader
-  + DTCTypeOf + ADLoader + IncludeDeclAst + BootParserMLang
+  + DPPLTypeCheckLoader + ADLoader + IncludeDeclAst + BootParserMLang
 
   syn CorePPLMode =
   | CPPLDep
@@ -1109,8 +1136,6 @@ lang CorePPLFileTypeLoader
       , expr = makeKeywords prog.expr
       } in
 
-    let symEnv = builtinEnv in
-
     let needsIsolated = switch mode
       case CPPLMainAD _ then true
       case CPPLDep _ then false
@@ -1129,7 +1154,6 @@ lang CorePPLFileTypeLoader
             (lam x. match x with h & ODEHook _ then Some [h] else None ())
             loader) in
         let hooks = snoc hooks (CorePPLFileHook hook) in
-        -- TODO(vipa, 2026-09-02): Add a hook for running dpplTypeCheck on each decl in _preTypeCheck?
         match
           match mode with CPPLMainAD _ then
             match prepareADRuntime loader {insertFloatAssertions = not hook.options.dpplTypeCheck} with (adHook, loader) in
@@ -1145,23 +1169,36 @@ lang CorePPLFileTypeLoader
         -- their definition
         match prepareCPPLBuiltinEnv transformOptions separateLoader with (_, isolatedBuiltinEnv, separateLoader) in
         let separateLoader = addHook separateLoader (CorePPLBuiltinEnvHook {builtinEnv = isolatedBuiltinEnv}) in
+        -- NOTE(vipa, 2026-09-07): At this point we're prepared to
+        -- load the actual program, so we add the dppl typecheck hook
+        -- here to typecheck only that.
+        let separateLoader =
+          if hook.options.dpplTypeCheck
+          then addHook separateLoader (DPPLTypeCheckHook {decls = ref []})
+          else separateLoader in
         let decls = snoc prog.decls (declWithInfo (infoTm prog.expr) (nulet_ (nameSym "") prog.expr)) in
         match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (isolatedBuiltinEnv, separateLoader) decls
           with (symEnv, separateLoader) in
+        _dtcCheckWholeChain separateLoader;
         (Some (map (smap_Decl_Expr forceLazyExpr) (getDecls separateLoader)), loader)
       else (None (), loader)
     with (isolated, loader) in
 
+    let prog =
+      { decls = map (lam d. smap_Decl_Type eraseDecorationsType (smap_Decl_Expr eraseDecorations d)) prog.decls
+      , expr = eraseDecorations prog.expr
+      } in
+
+    let symEnv = builtinEnv in
+
     switch mode
     case CPPLMain _ | CPPLDep _ then
-      -- TODO(vipa, 2026-09-02): Erase dppl type annotations
       match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, loader) prog.decls
         with (symEnv, loader) in
       match mode with CPPLMain _
       then (_addDeclExn symEnv loader (declWithInfo (infoTm prog.expr) (ulet_ "" prog.expr))).1
       else loader
     case CPPLMainImplicitInfer _ then
-      -- TODO(vipa, 2026-09-02): Erase dppl type annotations
       match partition (lam d. match d with DeclInclude _ then true else false) prog.decls
         with (includes, decls) in
       match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, loader) includes
