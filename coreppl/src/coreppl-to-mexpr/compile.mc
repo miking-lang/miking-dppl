@@ -340,6 +340,24 @@ lang InsertModels = VarAst + DeclAst
   | t -> sfold_Expr_Expr (modelsUsedInBody models) acc t
 end
 
+let cpplBuiltin = use MExprPPL in concat
+  [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
+  , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
+  , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
+  , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
+  , ("expectation", CDistExpectation ())
+  , ("logObserve", CDistLogObserve ())
+    -- External elementary functions
+  , ("sin", CSin ())
+  , ("cos", CCos ())
+  , ("sqrt", CSqrt ())
+  , ("exp", CExp ())
+  , ("log", CLog ())
+  , ("pow", CPow ())
+  , ("absf", CAbsf ())
+  , ("smoothdivf", CSmoothdivf ())
+  ] builtin
+
 -- This fragment extends the loader core language (the format each
 -- added Decl must be in) to coreppl
 lang CPPLLoader
@@ -348,7 +366,7 @@ lang CPPLLoader
   + ReplaceHigherOrderConstantsLoadedPreviously + CompileModels + InsertModels
   + ElementaryFunctionsTransform + DPPLPrunedReplace
   + DPPLKeywordReplace + DPPLDelayedReplace + DPPLParser
-  + BuiltinLoader + MExprDeadcodeElimination + LazyAst
+  + MCoreFileParsing + MExprDeadcodeElimination + LazyAst
   syn Hook =
   | CPPLHook
     { options : TransformationOptions
@@ -357,18 +375,28 @@ lang CPPLLoader
       { higherOrderSymEnv : {path : String, env : SymEnv}
       , distEnv : {path : String, env : SymEnv}
       , externalMathEnv : {path : String, env : SymEnv}
-      , builtinEnv : SymEnv
       }
     }
 
-  sem enableCPPLCompilation : TransformationOptions -> Loader -> Loader
-  sem enableCPPLCompilation options = | loader ->
-    if hasHook (lam x. match x with CPPLHook _ then true else false) loader then loader else
+  -- NOTE(vipa, 2026-09-07): We split the builtin names that should be
+  -- in scope in a CorPPL file from the hook that transforms CorePPL
+  -- constructs to make it possible to delay such transformation for
+  -- later.
+  syn Hook +=
+  | CorePPLBuiltinEnvHook { builtinEnv : SymEnv }
 
+  sem prepareCPPLBuiltinEnv
+    : TransformationOptions -> Loader
+    -> ( { higherOrderSymEnv : {path : String, env : SymEnv}
+         , distEnv : {path : String, env : SymEnv}
+         , externalMathEnv : {path : String, env : SymEnv}
+         }
+       , SymEnv
+       , Loader
+       )
+  sem prepareCPPLBuiltinEnv options = | loader ->
     match includeFileExn "." "stdlib::ext/math-ext.mc" loader with (externalMathEnv, loader) in
     match includeFileExn "." "stdlib::seq-native.mc" loader with (higherOrderSymEnv, loader) in
-
-    match includeBuiltinEnv loader with (builtinEnv, loader) in
 
     -- NOTE(vipa, 2024-12-17): Load the runtime distribution
     -- support.
@@ -391,25 +419,6 @@ lang CPPLLoader
           } in
         let loader = (_addDeclExn _symEnvEmpty loader compileOptions).1 in
 
-        let distBuiltins =
-          [ ("distEmpiricalSamples", CDistEmpiricalSamples ())
-          , ("distEmpiricalDegenerate", CDistEmpiricalDegenerate ())
-          , ("distEmpiricalNormConst", CDistEmpiricalNormConst ())
-          , ("distEmpiricalAcceptRate", CDistEmpiricalAcceptRate ())
-          , ("expectation", CDistExpectation ())
-          , ("logObserve", CDistLogObserve ())
-          ] in
-        let f = lam loader. lam pair.
-          let decl = DeclLet
-            { ident = nameNoSym pair.0
-            , tyAnnot = tyunknown_
-            , tyBody = tyunknown_
-            , body = ulam_ "x" (app_ (uconst_ pair.1) (var_ "x"))
-            , info = NoInfo ()
-            } in
-          (_addDeclExn _symEnvEmpty loader decl).1 in
-        let loader = foldl f loader distBuiltins  in
-
         let distAlias = DeclType
           { ident = nameNoSym "Dist"
           , params = [nameNoSym "ty"]
@@ -421,17 +430,25 @@ lang CPPLLoader
       loader
     with (_, cpplBuiltinEnv, loader) in
 
+    let envs =
+      { higherOrderSymEnv = higherOrderSymEnv
+      , distEnv = distEnv
+      , externalMathEnv = externalMathEnv
+      } in
+    (envs, cpplBuiltinEnv, loader)
+
+  sem enableCPPLCompilation : TransformationOptions -> Loader -> Loader
+  sem enableCPPLCompilation options = | loader ->
+    if hasHook (lam x. match x with CPPLHook _ then true else false) loader then loader else
+
+    match prepareCPPLBuiltinEnv options loader with (envs, builtinEnv, loader) in
     let hook = CPPLHook
       { options = options
       , runtimes = ref (mapEmpty cmpInferMethod)
-      , envs =
-        { higherOrderSymEnv = higherOrderSymEnv
-        , distEnv = distEnv
-        , externalMathEnv = externalMathEnv
-        , builtinEnv = mergeSymEnv builtinEnv cpplBuiltinEnv
-        }
+      , envs = envs
       } in
-    addHook loader hook
+    let loader = addHook loader hook in
+    addHook loader (CorePPLBuiltinEnvHook {builtinEnv = builtinEnv})
 
   sem _preSymbolize loader decl = | CPPLHook x ->
     let requiredRuntimes =
@@ -476,14 +493,11 @@ lang CPPLLoader
     let log = mkPhaseLogState options.debugDumpPhases options.debugPhases options.invariantsToCheck in
     let ast = removeMetaVarExpr ast in
     endPhaseStatsExpr log "remove-meta-var" ast;
-    -- TODO(vipa, 2026-09-03): In the interest of getting the current
-    -- rewrite through we're trying to put deadcodeElimination and
-    -- forceLazyExpr early. That makes it possible to get dead
-    -- references later, depending on at what point code gen for
-    -- models happen, and if such transformations insert new
-    -- references.
-    let ast = deadcodeElimination ast in
-    endPhaseStatsExpr log "deadcode-elimination" ast;
+    -- OPT(vipa, 2026-09-03): We likely force a bunch of exprs that
+    -- will be dead later here, ideally we would move this to right
+    -- after deadcode elimination. Doing that requires adding support
+    -- for TmLazy to more passes though, so I'm leaving that for the
+    -- moment
     let ast = forceLazyExpr ast in
     endPhaseStatsExpr log "force-lazy" ast;
     let runtimeRunNames = mapMap (lam entry. _getVarExn "run" entry.env) runtimes in
@@ -1084,28 +1098,23 @@ lang CorePPLFileTypeLoader
     (_addDeclExn _symEnvEmpty loader decl).1
 
   sem _loadFile path = | (FCorePPL {mode = mode}, loader) ->
-    match optionGetOrElse (lam. error "missing CorePPLFileHook")
-      (getHookOpt (lam h. match h with CorePPLFileHook x then Some (x.options, x.method) else None ()) loader)
-    with (options, method) in
-    let cpplHook = optionGetOrElse (lam. error "missing CorePPLFileHook")
-      (getHookOpt (lam h. match h with CPPLHook x then Some x else None ()) loader) in
+    let hook = optionGetOrElse (lam. error "missing CorePPLFileHook")
+      (getHookOpt (lam h. match h with CorePPLFileHook x then Some x else None ()) loader) in
+    let builtinEnv = optionGetOrElse (lam. error "missing CorePPLBuiltinEnvHook")
+      (getHookOpt (lam h. match h with CorePPLBuiltinEnvHook x then Some x.builtinEnv else None ()) loader) in
 
-    let prog = switch result.consume (parseMLangFile path)
-      case (_, Right prog) then prog
-      case (_, Left errs) then
-        errorMulti errs (join ["Parse error while parsing '", path, "'"])
-      end in
+    let prog = _parseMCoreFileRaw cpplBuiltin path in
     let prog = use DPPLKeywordMaker in
       { decls = map makeDeclKeywords prog.decls
       , expr = makeKeywords prog.expr
       } in
 
-    let symEnv = cpplHook.envs.builtinEnv in
+    let symEnv = builtinEnv in
 
     let needsIsolated = switch mode
       case CPPLMainAD _ then true
       case CPPLDep _ then false
-      case _ then options.dpplTypeCheck
+      case _ then hook.options.dpplTypeCheck
       end in
     match
       -- NOTE(vipa, 2026-09-02): AD and dpplTypeCheck are written to
@@ -1113,25 +1122,33 @@ lang CorePPLFileTypeLoader
       -- once, so this block emulates that by creating a new Loader
       -- and processing everything in an isolated fashion.
       if needsIsolated then
-        -- NOTE(vipa, 2026-09-02): Retain the ODE hook if already present
+        -- NOTE(vipa, 2026-09-07): Hooks that are re-used in the
+        -- isolated loader must be immutable
         let hooks = optionGetOr []
           (getHookOpt
             (lam x. match x with h & ODEHook _ then Some [h] else None ())
             loader) in
+        let hooks = snoc hooks (CorePPLFileHook hook) in
         -- TODO(vipa, 2026-09-02): Add a hook for running dpplTypeCheck on each decl in _preTypeCheck?
-        -- NOTE(vipa, 2026-09-02): Add the AD hook if requested
         match
           match mode with CPPLMainAD _ then
-            match prepareADRuntime loader {insertFloatAssertions = not options.dpplTypeCheck} with (adHook, loader) in
+            match prepareADRuntime loader {insertFloatAssertions = not hook.options.dpplTypeCheck} with (adHook, loader) in
             (snoc hooks adHook, loader)
           else (hooks, loader)
         with (hooks, loader) in
 
         let separateLoader = mkLoader (_getTCEnv loader) hooks in
+        let transformOptions = optionGetOrElse (lam. error "missing CPPLHook")
+          (getHookOpt (lam h. match h with CPPLHook x then Some x.options else None ()) loader) in
+        -- NOTE(vipa, 2026-09-07): We add separate definitions of
+        -- builtins here, so any isolated machinery can actually see
+        -- their definition
+        match prepareCPPLBuiltinEnv transformOptions separateLoader with (_, isolatedBuiltinEnv, separateLoader) in
+        let separateLoader = addHook separateLoader (CorePPLBuiltinEnvHook {builtinEnv = isolatedBuiltinEnv}) in
         let decls = snoc prog.decls (declWithInfo (infoTm prog.expr) (nulet_ (nameSym "") prog.expr)) in
-        match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, separateLoader) decls
+        match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (isolatedBuiltinEnv, separateLoader) decls
           with (symEnv, separateLoader) in
-        (Some (getDecls separateLoader), loader)
+        (Some (map (smap_Decl_Expr forceLazyExpr) (getDecls separateLoader)), loader)
       else (None (), loader)
     with (isolated, loader) in
 
@@ -1149,7 +1166,7 @@ lang CorePPLFileTypeLoader
         with (includes, decls) in
       match foldl (lam acc. lam decl. _addDeclExn acc.0 acc.1 decl) (symEnv, loader) includes
         with (symEnv, loader) in
-      _insertBackcompatInfer options method symEnv (bindall_ decls prog.expr) loader
+      _insertBackcompatInfer hook.options hook.method symEnv (bindall_ decls prog.expr) loader
     case CPPLMainAD _ then
       match isolated with Some isolated in
       -- NOTE(vipa, 2026-09-02): We add the isolated decls to the main

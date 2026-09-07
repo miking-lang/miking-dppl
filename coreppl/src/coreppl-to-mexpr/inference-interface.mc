@@ -36,6 +36,7 @@ lang InferenceInterface = Sym + SymGetters
       appSeq_ (nvar_ n) (concat extraArgs args)
     else
       appSeq_ (nvar_ n) args
+
   sem appFromLangEnv
     : InferenceSymEnv
     -> String

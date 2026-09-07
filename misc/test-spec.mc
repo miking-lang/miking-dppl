@@ -122,6 +122,23 @@ testMain [substituter] directories location (lam api.
     (and (strStartsWith "coreppl/test/coreppl-to-mexpr/pruning/") (strEndsWith ".mc"))
     [(cpplCompile, Succ ()), (cpplRun, Succ ())];
 
+  -- === Auto-diff ===
+
+  let adCompile = api.midStep
+    { tag = "adCompile"
+    , uses = []
+    , cmd = "%c --seed 0 --test --auto-diff %f --output %o"
+    } in
+  let adRun = api.endStep
+    { tag = "adRun"
+    , uses = [adCompile]
+    , cmd = "%pcommand %i"
+    } in
+
+  api.tests []
+    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/infer/diff-") (strEndsWith ".mc"))
+    [(cpplCompile, Dont ()), (cpplRun, Dont ()), (adCompile, Succ ()), (adRun, Succ ())];
+
   -- === Test DPPL files ===
 
   let cdpplCompile = api.midStep
