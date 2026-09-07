@@ -65,7 +65,7 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
   sem extractParam env runtimeEnv =
   | TmVar ({ident=id}&v) ->
     match mapLookup id env.distEnv with Some (TmDist ({dist=DCategorical ({p=p}&d)}&t)) in
-    match assignCons env.paramEnv runtimeEnv p with Some x then x else (nconapp_ (_getConExn "PruneGraph_SeqFParam" runtimeEnv.env) p)
+    match assignCons env.paramEnv runtimeEnv p with Some x then x else (nconapp_ (_getConExn "SeqFParam" (_getLangEnvExn "PruneGraph" runtimeEnv.env)) p)
 
   sem assignValueCons env runtimeEnv =
   | TmVar v ->
@@ -76,8 +76,8 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
   | t -> error "not in ANF-form"
 
   sem assignValueConsH env t =
-  | PrunedValue _ -> nconapp_ (_getConExn "PruneGraph_PrunedValue" env) t
-  | IntValue _ -> nconapp_ (_getConExn "PruneGraph_IntValue" env) t
+  | PrunedValue _ -> nconapp_ (_getConExn "PrunedValue" (_getLangEnvExn "PruneGraph" env)) t
+  | IntValue _ -> nconapp_ (_getConExn "IntValue" (_getLangEnvExn "PruneGraph" env)) t
 
   -- assign the parameter construct for pruned distributions
   -- e.g. PCategorical (PruneFParam p1) where p1:PruneVar
@@ -91,7 +91,7 @@ lang MExprPPLPruningCPS = MExprPPL + DPPLParser + MExprCPS
   | t -> error "not in ANF-form"
 
   sem assignConsH env t =
-  | PruneFParam _ -> nconapp_ (_getConExn "PruneGraph_PruneFParam" env) t
+  | PruneFParam _ -> nconapp_ (_getConExn "PruneFParam" (_getLangEnvExn "PruneGraph" env)) t
 
 end
 
@@ -114,7 +114,7 @@ lang DPPLPruningTransform = TransformPruningDist
     withType (toRuntimePruneTyVar env (tyTm t)) t
 
   sem toRuntimePruneTyVar env =
-  | TyPruneInt t -> ntycon_ (_getTyConExn "PruneGraph_PruneVar" env.env)
+  | TyPruneInt t -> ntycon_ (_getTyConExn "PruneVar" (_getLangEnvExn "PruneGraph" env.env))
   | ty -> smap_Type_Type (toRuntimePruneTyVar env) ty
 
   sem replacePruneTyVarPat env =
