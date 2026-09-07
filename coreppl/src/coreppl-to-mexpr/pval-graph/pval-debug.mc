@@ -77,15 +77,15 @@ lang PValVisiGraph = PValInterface
   | PVNBind {subs = subs} | PVNSubMap {subs = subs} | PVNSubApply {subs = subs} -> Some subs
   | _ -> None ()
 
-  syn PVal a = | PVal {val : a, node : PValNode}
+  syn PVal a += | PVal {val : a, node : PValNode}
 
-  syn PValState st =
+  syn PValState st +=
   | PVS [PValNode]
 
-  syn PValInstance complete st =
+  syn PValInstance complete st +=
   | PVI [PValNode]
 
-  sem instantiate f = | _ ->
+  sem instantiate f += | _ ->
     match f (PVS []) with PVS nodes in
     PVI nodes
 
@@ -105,58 +105,58 @@ lang PValVisiGraph = PValInterface
   | PVNAssume {id = id}
   | PVNExport {id = id} -> id
 
-  sem p_cache st eq = | pval & PVal x ->
+  sem p_cache st eq += | pval & PVal x ->
     match st with PVS nodes in
     let node = PVNCache {id = length nodes, a = getID x.node} in
     (PVS (snoc nodes node), PVal {val = x.val, node = node})
 
-  sem p_export st store = | PVal x ->
+  sem p_export st store += | PVal x ->
     match st with PVS nodes in
     let node = PVNExport {id = length nodes, a = getID x.node} in
     PVS (snoc nodes node)
 
-  sem p_pure = | a ->
+  sem p_pure += | a ->
     let node = PVNPure {id = negi 1} in
     PVal {val = a, node = node}
 
-  sem p_map st f = | PVal x ->
+  sem p_map st f += | PVal x ->
     match st with PVS nodes in
     let node = PVNMap {id = length nodes, a = getID x.node} in
     (PVS (snoc nodes node), PVal {val = f x.val, node = node})
 
-  sem p_apply st pval1 = | pval2 ->
+  sem p_apply st pval1 += | pval2 ->
     match st with PVS nodes in
     match pval1 with PVal {val = f, node = fnode} in
     match pval2 with PVal {val = a, node = anode} in
     let node = PVNApply {id = length nodes, f = getID fnode, a = getID anode} in
     (PVS (snoc nodes node), PVal {val = f a, node = node})
 
-  sem p_bind st store initSt2 f = | PVal x ->
+  sem p_bind st store initSt2 f += | PVal x ->
     match st with PVS nodes in
     let preLength = length nodes in
     match f (PVS nodes) x.val with (PVS nodes, PVal res) in
     let node = PVNBind {id = length nodes, a = getID x.node, subs = map getID (subsequence nodes preLength (subi (length nodes) 1)), sub = getID res.node} in
     (PVS (snoc nodes node), PVal {val = res.val, node = node})
 
-  sem p_select st f = | PVal x ->
+  sem p_select st f += | PVal x ->
     match st with PVS nodes in
     match f x.val with PVal res in
     let node = PVNSelect {id = length nodes, a = getID x.node, sub = getID res.node} in
     (PVS (snoc nodes node), PVal {val = res.val, node = node})
 
-  sem p_weight st store f = | PVal x ->
+  sem p_weight st store f += | PVal x ->
     match st with PVS nodes in
     let node = PVNWeight {id = length nodes, a = getID x.node} in
     PVS (snoc nodes node)
 
-  sem p_subMap st store initSt2 f = | PVal x ->
+  sem p_subMap st store initSt2 f += | PVal x ->
     match st with PVS nodes in
     let preLength = length nodes in
     match f x.val (PVS nodes) with (PVS nodes, b) in
     let node = PVNSubMap {id = length nodes, a = getID x.node, subs = map getID (subsequence nodes preLength (subi (length nodes) 1))} in
     (PVS (snoc nodes node), PVal {val = b, node = node})
 
-  sem p_subApply st store initSt2 f = | PVal x ->
+  sem p_subApply st store initSt2 f += | PVal x ->
     match f with PVal f in
     match st with PVS nodes in
     let preLength = length nodes in
@@ -164,17 +164,17 @@ lang PValVisiGraph = PValInterface
     let node = PVNSubApply {id = length nodes, f = getID f.node, a = getID x.node, subs = map getID (subsequence nodes preLength (subi (length nodes) 1))} in
     (PVS (snoc nodes node), PVal {val = b, node = node})
 
-  sem p_join st = | PVal x ->
+  sem p_join st += | PVal x ->
     match st with PVS nodes in
     match x.val with PVal y in
     let node = PVNJoin {id = length nodes, a = getID x.node, sub = getID y.node} in
     (PVS (snoc nodes node), PVal {val = y.val, node = node})
 
-  syn PChunkState x = | PCS {read : all a. PVal a -> a}
-  sem p_readPVal = | PCS x -> x.read
-  sem p_weightChunk = | _ -> lam. ()
+  syn PChunkState x += | PCS {read : all a. PVal a -> a}
+  sem p_readPVal pcs += | pval -> match pcs with PCS x in x.read pval
+  sem p_weightChunk pcs += | _ -> ()
 
-  sem p_chunk st = | f ->
+  sem p_chunk st += | f ->
     match st with PVS nodes in
     let readNodes = ref [] in
     let read = lam x.
@@ -185,7 +185,7 @@ lang PValVisiGraph = PValInterface
     let node = PVNChunk {id = length nodes, inputs = deref readNodes} in
     (PVS (snoc nodes node), PVal {val = res, node = node})
 
-  sem p_assume st store = | PVal x ->
+  sem p_assume st store += | PVal x ->
     match st with PVS nodes in
     let res = sample x.val in
     let node = PVNAssume {id = length nodes, a = getID x.node} in

@@ -216,20 +216,20 @@ lang PValInterface = RuntimeDistBase
 end
 
 lang PValDefaultImpls = PValInterface
-  sem p_bind st store ist f = | a ->
+  sem p_bind st store ist f += | a ->
     match p_map st (lam a. lam st. f st a) a with (st, f) in
     match p_sub st store ist f with (st, ret) in
     p_join st ret
 
-  sem p_select st f = | a ->
+  sem p_select st f += | a ->
     match p_map st f a with (st, ret) in
     p_join st ret
 
-  sem p_subMap st store ist f = | a ->
+  sem p_subMap st store ist f += | a ->
     match p_map st f a with (st, f) in
     p_sub st store ist f
 
-  sem p_subApply st store ist f = | a ->
+  sem p_subApply st store ist f += | a ->
     match p_apply st f a with (st, f) in
     p_sub st store ist f
 end

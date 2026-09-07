@@ -16,11 +16,13 @@ lang SimplePValGraphBase = PValInterface + RuntimeDist
   sem simpleStoreAssume st = | r ->
     snoc st (asSomeAssume (None ()) r)
 
+  sem simpleStoreSubmodel : all ist2. [PSomeAssumeRef] -> PSubmodelRef ist2 -> [PSomeAssumeRef]
   sem simpleStoreSubmodel st = | _ -> st
 
   sem simpleStoreExport : all a. [PSomeAssumeRef] -> PExportRef a -> ([PSomeAssumeRef], PExportRef a)
   sem simpleStoreExport st = | x -> (st, x)
 
+  sem simpleStoreWeight : [PSomeAssumeRef] -> PWeightRef -> [PSomeAssumeRef]
   sem simpleStoreWeight st = | _ -> st
 
   sem reexportMapAccumL = | f -> mapAccumL f

@@ -20,13 +20,7 @@ lang MutPVal = PValInterface
   type IterationID = Int
 
   type PValRec a = {value : Ref a, changeId : Ref IterationID}
-  syn PVal a = | PVal (PValRec a)
-
-  syn PValState st = | PVS {initId : IterationID, updates : [PState -> ()], initWeight : Float, st : st}
-  syn PWeightRef = | PWeightRef {} -- TODO(vipa, 2025-09-23): figure out what we want to be able to do here, and thus what we need to store
-  syn PAssumeRef a = | PAssumeRef {drift : Ref (Option (a -> Dist a)), changeId : Ref IterationID, read : () -> a}
-  syn PExportRef a = | PExportRef {read : () -> a}
-  syn PSubmodelRef st = | PSubmodelRef {readSt : () -> st}
+  syn PVal a += | PVal (PValRec a)
 
   type PState =
     { id : IterationID
@@ -36,7 +30,13 @@ lang MutPVal = PValInterface
     }
   type UpdateFunction = PState -> ()
 
-  syn PValInstance complete st =
+  syn PValState st += | PVS {initId : IterationID, updates : [PState -> ()], initWeight : Float, st : st}
+  syn PWeightRef += | PWeightRef {} -- TODO(vipa, 2025-09-23): figure out what we want to be able to do here, and thus what we need to store
+  syn PAssumeRef a += | PAssumeRef {drift : Ref (Option (a -> Dist a)), changeId : Ref IterationID, read : () -> a}
+  syn PExportRef a += | PExportRef {read : () -> a}
+  syn PSubmodelRef st += | PSubmodelRef {readSt : () -> st}
+
+  syn PValInstance complete st +=
   | PVI
     { st : st
     , update : UpdateFunction
@@ -70,19 +70,19 @@ lang MutPVal = PValInterface
       for_ updates (lam up. up st) in
     (st.st, st.initWeight, update)
 
-  sem instantiate f = | st ->
+  sem instantiate f += | st ->
     match _initModel 0 st f with (st, initWeight, update) in
     PVI {st = st, update = update, permanentWeight = initWeight, id = 0}
 
-  sem getWeight =
+  sem getWeight +=
   | PVI x -> x.permanentWeight
   | PVIPart x -> x.permanentWeight
 
-  sem getSt =
+  sem getSt +=
   | PVI x -> x.st
   | PVIPart x -> x.st
 
-  sem startStep = | PVI x ->
+  sem startStep += | PVI x ->
     PVIPart
     { st = x.st
     , update = x.update
@@ -94,7 +94,7 @@ lang MutPVal = PValInterface
     , reset = []
     }
 
-  sem intermediateStep = | PVIPart x ->
+  sem intermediateStep += | PVIPart x ->
     if x.dirty then
       let st =
         { id = x.id
@@ -114,7 +114,7 @@ lang MutPVal = PValInterface
       }
     else PVIPart x
 
-  sem finalizeStep pred = | pvi ->
+  sem finalizeStep pred += | pvi ->
     match intermediateStep pvi with PVIPart x in
     let acceptProb = minf 0.0
       (addf
@@ -140,25 +140,25 @@ lang MutPVal = PValInterface
         }
       )
 
-  sem resampleAssume driftf aref = | PVIPart p ->
+  sem resampleAssume driftf aref += | PVIPart p ->
     match aref with PAssumeRef x in
     modref x.drift driftf;
     modref x.changeId p.id;
     PVIPart {p with dirty = true}
 
-  sem readPreviousAssume aref = | _ ->
+  sem readPreviousAssume aref += | _ ->
     match aref with PAssumeRef x in
     x.read ()
 
-  sem readPreviousExport eref = | _ ->
+  sem readPreviousExport eref += | _ ->
     match eref with PExportRef x in
     x.read ()
 
-  sem readPreviousSubmodel mref = | _ ->
+  sem readPreviousSubmodel mref += | _ ->
     match mref with PSubmodelRef x in
     x.readSt ()
 
-  sem p_cache st eq = | PVal a ->
+  sem p_cache st eq += | PVal a ->
     match st with PVS st in
     let value = ref (deref a.value) in
     let changeId = ref st.initId in
@@ -172,7 +172,7 @@ lang MutPVal = PValInterface
       else () in
     (PVS {st with updates = snoc st.updates update}, PVal {value = value, changeId = changeId})
 
-  sem p_export st store = | PVal a ->
+  sem p_export st store += | PVal a ->
     match st with PVS st in
     let st =
       { st = store st.st (PExportRef {read = lam. deref a.value})
@@ -182,9 +182,9 @@ lang MutPVal = PValInterface
       } in
     PVS st
 
-  sem p_pure = | a -> PVal {value = ref a, changeId = ref 0}
+  sem p_pure += | a -> PVal {value = ref a, changeId = ref 0}
 
-  sem p_map st f = | PVal a ->
+  sem p_map st f += | PVal a ->
     match st with PVS st in
     let value = ref (f (deref a.value)) in
     let changeId = ref st.initId in
@@ -197,7 +197,7 @@ lang MutPVal = PValInterface
       else () in
     (PVS {st with updates = snoc st.updates update}, PVal {value = value, changeId = changeId})
 
-  sem p_apply st f = | PVal a ->
+  sem p_apply st f += | PVal a ->
     match st with PVS st in
     match f with PVal f in
     let value = ref ((deref f.value) (deref a.value)) in
@@ -211,7 +211,13 @@ lang MutPVal = PValInterface
       else () in
     (PVS {st with updates = snoc st.updates update}, PVal {value = value, changeId = changeId})
 
-  sem p_bind st store initSt2 f = | PVal a ->
+  sem p_bind : all st. all ist. all ist2. all st2. all a. all b. PValState st
+    -> (st -> PSubmodelRef ist2 -> st2)
+    -> ist
+    -> (PValState ist -> a -> (PValState ist2, PVal b))
+    -> PVal a
+    -> (PValState st2, PVal b)
+  sem p_bind st store initSt2 f += | PVal a ->
     match st with PVS st in
     let f : PValState ist -> PValState (PValRec b, ist2) = lam st.
       match f st (deref a.value) with (PVS st, PVal pval) in
@@ -270,7 +276,7 @@ lang MutPVal = PValInterface
       } in
     (PVS st, PVal {value = value, changeId = changeId})
 
-  sem p_select st f = | PVal a ->
+  sem p_select st f += | PVal a ->
     match st with PVS st in
     let pval = f (deref a.value) in
     let value = ref (deref (match pval with PVal x in x.value)) in
@@ -298,15 +304,15 @@ lang MutPVal = PValInterface
         else () in
     (PVS {st with updates = snoc st.updates update}, PVal {changeId = changeId, value = value})
 
-  syn PChunkState x = | PCS {watched : Ref [Ref IterationID], permanentWeight : Ref Float}
-  sem p_readPVal st = | PVal x ->
+  syn PChunkState x += | PCS {watched : Ref [Ref IterationID], permanentWeight : Ref Float}
+  sem p_readPVal st += | PVal x ->
     match st with PCS st in
     modref st.watched (snoc (deref st.watched) x.changeId);
     deref x.value
-  sem p_weightChunk st = | w ->
+  sem p_weightChunk st += | w ->
     match st with PCS st in
     modref st.permanentWeight (addf (deref st.permanentWeight) w)
-  sem p_chunk st = | f ->
+  sem p_chunk st += | f ->
     match st with PVS st in
 
     let watched = ref [] in
@@ -337,7 +343,7 @@ lang MutPVal = PValInterface
 
     (PVS {st with updates = snoc st.updates update}, PVal {value = value, changeId = changeId})
 
-  sem p_subMap st store ist f = | PVal a ->
+  sem p_subMap st store ist f += | PVal a ->
     match st with PVS st in
 
     let initSt = PVS {initId = st.initId, updates = [], initWeight = 0.0, st = ist} in
@@ -376,7 +382,7 @@ lang MutPVal = PValInterface
       } in
     (PVS st, PVal {value = value, changeId = changeId})
 
-  sem p_subApply st store ist f = | PVal a ->
+  sem p_subApply st store ist f += | PVal a ->
     match st with PVS st in
     match f with PVal f in
 
@@ -418,7 +424,7 @@ lang MutPVal = PValInterface
       } in
     (PVS st, PVal {value = value, changeId = changeId})
 
-  sem p_join st = | PVal a ->
+  sem p_join st += | PVal a ->
     match st with PVS st in
     let value = ref (match deref a.value with PVal inner in deref inner.value) in
     let changeId = ref st.initId in
@@ -440,7 +446,7 @@ lang MutPVal = PValInterface
         else () in
     (PVS {st with updates = snoc st.updates update}, PVal {value = value, changeId = changeId})
 
-  sem p_weight st store f = | PVal a ->
+  sem p_weight st store f += | PVal a ->
     match st with PVS st in
     let w = f (deref a.value) in
     let initWeight = addf st.initWeight w in
@@ -461,7 +467,7 @@ lang MutPVal = PValInterface
       } in
     PVS st
 
-  sem p_assume st store = | PVal dist ->
+  sem p_assume st store += | PVal dist ->
     match st with PVS st in
     let value = ref (sample (deref dist.value)) in
     let changeId = ref st.initId in
