@@ -111,15 +111,15 @@ testMain [substituter] directories location (lam api.
     } in
 
   api.tests []
-    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/infer/") (strEndsWith ".mc"))
+    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/infer/") (strEndsWith ".cppl"))
     [(cpplCompile, Succ ()), (cpplRun, Succ ())];
 
   api.tests []
-    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/expectation/") (strEndsWith ".mc"))
+    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/expectation/") (strEndsWith ".cppl"))
     [(cpplCompile, Succ ()), (cpplRun, Succ ())];
 
   api.tests []
-    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/pruning/") (strEndsWith ".mc"))
+    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/pruning/") (strEndsWith ".cppl"))
     [(cpplCompile, Succ ()), (cpplRun, Succ ())];
 
   -- === Auto-diff ===
@@ -136,7 +136,7 @@ testMain [substituter] directories location (lam api.
     } in
 
   api.tests []
-    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/infer/diff-") (strEndsWith ".mc"))
+    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/infer/diff-") (strEndsWith ".cppl"))
     [(cpplCompile, Dont ()), (cpplRun, Dont ()), (adCompile, Succ ()), (adRun, Succ ())];
 
   -- === Test DPPL files ===
@@ -153,7 +153,7 @@ testMain [substituter] directories location (lam api.
     } in
 
   api.tests []
-    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/dppl/") (strEndsWith ".mc"))
+    (and (strStartsWith "coreppl/test/coreppl-to-mexpr/dppl/") (strEndsWith ".cppl"))
     [(cdpplCompile, Succ ()), (cdpplRun, Succ ())];
 
   -- NOTE(vipa, 2026-04-14): dppl examples

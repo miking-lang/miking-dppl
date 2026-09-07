@@ -1,5 +1,5 @@
-include "./ode-and-data.mc"
-include "./bayesian-regression-model.mc"
+include "./ode-and-data.cppl"
+include "./bayesian-regression-model.cppl"
 
 let z = lam #var"θ" : FloatP.
   map (lam x : FloatP. g (y #var"θ" (x0, y0) x)) times
@@ -14,5 +14,5 @@ printFloatDist #var"Dist_θ"
 
 -- These settings assumes that cppl and dppl-plot are in PATH.
 -- Local Variables:
--- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck bayesian-parameter-estimation.mc && ./out | dppl-plot && rm -rf ./out"
+-- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck bayesian-parameter-estimation.cppl && ./out | dppl-plot && rm -rf ./out"
 -- End:

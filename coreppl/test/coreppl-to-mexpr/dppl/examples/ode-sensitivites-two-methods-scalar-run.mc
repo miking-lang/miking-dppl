@@ -1,4 +1,4 @@
-include "ode-sensitivites-two-methods-scalar.mc"
+include "ode-sensitivites-two-methods-scalar.cppl"
 
 mexpr
 

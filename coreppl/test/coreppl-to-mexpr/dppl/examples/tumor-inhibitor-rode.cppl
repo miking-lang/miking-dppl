@@ -1,4 +1,4 @@
-include "../lib.mc"
+include "../lib.cppl"
 
 -- Specialize solver
 let solve =
@@ -129,5 +129,5 @@ let samples =
 printWeightedTraces samples weights
 
 -- Local Variables:
--- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck tumor-inhibitor-rode.mc && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck tumor-inhibitor-rode.cppl && ./out | dppl-plot-process --lines && rm ./out"
 -- End:

@@ -1,5 +1,5 @@
-include "../lib.mc"
-include "../lotka-model.mc"
+include "../lib.cppl"
+include "../lotka-model.cppl"
 
 -- Specialize solver
 let solve =
@@ -146,5 +146,5 @@ let samples =
 printWeightedTraces samples weights
 
 -- local variables:
--- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods.mc && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods.cppl && ./out | dppl-plot-process --lines && rm ./out"
 -- End:

@@ -1,4 +1,4 @@
-include "../lib.mc"
+include "../lib.cppl"
 
 let solve =
   lam f : FloatC -> FloatS -> ModS FloatS.
@@ -62,5 +62,5 @@ let samples = map
 printWeightedTraces samples weights
 
 -- Local Variables:
--- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck rode.mc && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck rode.cppl && ./out | dppl-plot-process --lines && rm ./out"
 -- End:

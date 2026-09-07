@@ -1,4 +1,4 @@
-include "../lib.mc"
+include "../lib.cppl"
 
 let solve =
   lam f : FloatA -> ModC (ModA (FloatA -> ModC (ModA (FloatA)))).
@@ -98,5 +98,5 @@ let samples =
 printWeightedTraces samples weights
 
 -- local variables:
--- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods-scalar.mc && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods-scalar.cppl && ./out | dppl-plot-process --lines && rm ./out"
 -- End:

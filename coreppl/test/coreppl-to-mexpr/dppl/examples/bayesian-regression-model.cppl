@@ -1,6 +1,6 @@
 /- This example programs illustrates Bayesian regression -/
 
-include "../lib.mc"
+include "../lib.cppl"
 
 let regressionModel =
    lam d : [Float]. lam z : Float -> ModR [FloatA]. lam t : ().

@@ -1,7 +1,7 @@
 /- ODE model and data -/
 
-include "../lib.mc"
-include "../lotka-model.mc"
+include "../lib.cppl"
+include "../lotka-model.cppl"
 
 -- Specialize solver
 let solve =

@@ -1,4 +1,4 @@
-include "tumor-inhibitor-rode.mc"
+include "tumor-inhibitor-rode.cppl"
 
 mexpr
 

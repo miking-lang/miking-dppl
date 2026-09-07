@@ -1,4 +1,4 @@
--- -*- compile-command : "cppl --dppl-typecheck --test diff-test.mc && ./out && rm ./out" -*-
+-- -*- compile-command : "cppl --dppl-typecheck --test diff-test.cppl && ./out && rm ./out" -*-
 
 -- include "common.mc"
 

@@ -1,4 +1,4 @@
-include "bayesian-parameter-estimation-ivp-solution-trace.mc"
+include "bayesian-parameter-estimation-ivp-solution-trace.cppl"
 
 mexpr
 

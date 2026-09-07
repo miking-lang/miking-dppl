@@ -1,4 +1,4 @@
-include "./bayesian-parameter-estimation.mc"
+include "./bayesian-parameter-estimation.cppl"
 
 /- Illustrates inferring the posterior of IVP solutions -/
 
@@ -17,5 +17,5 @@ match distEmpiricalSamples #var"Dist_y_trace" with (samples, weights) in
 printWeightedTrace samples weights
 
 -- Local Variables:
--- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck baysian-parameter-estimation-ivp-solution-trace.mc && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck baysian-parameter-estimation-ivp-solution-trace.cppl && ./out | dppl-plot-process --lines && rm ./out"
 -- End:

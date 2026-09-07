@@ -1,4 +1,4 @@
-include "./bayesian-parameter-estimation.mc"
+include "./bayesian-parameter-estimation.cppl"
 
 mexpr
 

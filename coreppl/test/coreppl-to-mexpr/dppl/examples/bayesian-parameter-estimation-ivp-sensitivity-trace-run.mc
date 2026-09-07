@@ -1,4 +1,4 @@
-include "bayesian-parameter-estimation-ivp-sensitivity-trace.mc"
+include "bayesian-parameter-estimation-ivp-sensitivity-trace.cppl"
 
 mexpr
 
