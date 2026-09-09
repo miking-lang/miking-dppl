@@ -1,4 +1,3 @@
-include "ext/math-ext.mc"
 -- This is a determinstic model that illustrates the `diff` construct
 
 let model : () -> () = lam.
