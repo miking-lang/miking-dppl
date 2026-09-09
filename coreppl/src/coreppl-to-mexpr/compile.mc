@@ -1158,11 +1158,7 @@ lang CorePPLFileTypeLoader
       if needsIsolated then
         -- NOTE(vipa, 2026-09-07): Hooks that are re-used in the
         -- isolated loader must be immutable
-        let hooks = optionGetOr []
-          (getHookOpt
-            (lam x. match x with h & ODEHook _ then Some [h] else None ())
-            loader) in
-        let hooks = snoc hooks (CorePPLFileHook hook) in
+        let hooks = [CorePPLFileHook hook] in
         match
           match mode with CPPLMainAD _ then
             match prepareADRuntime loader {insertFloatAssertions = not hook.options.dpplTypeCheck} with (adHook, loader) in
@@ -1195,10 +1191,17 @@ lang CorePPLFileTypeLoader
       else (None (), loader)
     with (isolated, loader) in
 
+    -- NOTE(vipa, 2026-09-09): We keep dppl type annotations if we
+    -- have the typechecker running (i.e., the hook is attached),
+    -- otherwise we remove them since they're incompatible with the
+    -- normal typechecker.
     let prog =
-      { decls = map (lam d. smap_Decl_Type eraseDecorationsType (smap_Decl_Expr eraseDecorations d)) prog.decls
-      , expr = eraseDecorations prog.expr
-      } in
+      if hasHook (lam h. match h with DPPLTypeCheckHook _ then true else false) loader
+      then prog
+      else
+        { decls = map (lam d. smap_Decl_Type eraseDecorationsType (smap_Decl_Expr eraseDecorations d)) prog.decls
+        , expr = eraseDecorations prog.expr
+        } in
 
     let symEnv = builtinEnv in
     let loader = addLocalHook loader

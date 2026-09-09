@@ -1,3 +1,5 @@
+include "seq.mc"
+
 mexpr
 let pickpair = lam n.
   let p = make (subi n 1) (divf 1. (int2float (subi n 1))) in

@@ -1278,9 +1278,9 @@ utest _testWithSymbolize false t [
   ("s37", false), ("s38", false), ("s39", true)
 ] using eqTest in
 
--- Test in `coreppl/models/diversification-models/crbd-synthetic.mc`
+-- Test in `coreppl/models/diversification-models/crbd-synthetic.cppl`
 let t = parseMCorePPLFile false
-          "../models/diversification-models/crbd-synthetic.mc" in
+          "../models/diversification-models/crbd-synthetic.cppl" in
 utest _testSymbolized false t ["w1","w2","w3", "w4", "w5"] with [
   ("w1", false),
   ("w2", false),

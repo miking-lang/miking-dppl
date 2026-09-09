@@ -1,4 +1,4 @@
-include "../../../models/diversification-models/clads2-synthetic.mc"
+include "../../../models/diversification-models/clads2-synthetic.cppl"
 include "../../cppl-test.cppl"
 include "../../test.mc"
 

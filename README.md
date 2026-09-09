@@ -45,8 +45,8 @@ With `observe`, you update the likelihood with the value of the pmf or pdf for t
 For example `observe true (Bernoulli 0.5)` updates the likelihood with a factor of 0.5.
 
 The default option for inferring the distribution encoded by a CorePPL program is to compile it to MExpr (which then compiles to OCaml).
-You compile a CorePPL program `cpplprog.mc` using the command `cppl -m <method> cpplprog.mc`, where `<method>` is an inference algorithm (run the command `cppl` without any arguments to see the current list of available algorithms).
-For example, `cppl -m is-lw cpplprog.mc` compiles `cpplprog.mc` to a binary file `out` which you can subsequently run to produce likelihood-weighted samples from the distribution encoded by `cpplprog.mc`:
+You compile a CorePPL program `cpplprog.cppl` using the command `cppl -m <method> cpplprog.cppl`, where `<method>` is an inference algorithm (run the command `cppl` without any arguments to see the current list of available algorithms).
+For example, `cppl -m is-lw cpplprog.cppl` compiles `cpplprog.cppl` to a binary file `out` which you can subsequently run to produce likelihood-weighted samples from the distribution encoded by `cpplprog.cppl`:
 ```
 $ ./out 10
 -0.290110454733
@@ -72,15 +72,15 @@ For more help and options, run the `cppl` command without any arguments.
 ### Example Models
 The directory `coreppl/models` contains a set of example CorePPL programs.
 A brief overview:
-- `coin.mc`: The "Hello, world!" of probabilistic programming (similar to the example above)
-- `coin-iter.mc`: The same example implemented with the higher-order `iter` function.
-- `sprinkler.mc`: The classical sprinkler model often used to illustrate Bayesian inference.
-- `regression.mc`: Bayesian linear regression for a simple data set.
-- `ssm.mc`: A fairly simple state-space positioning model for a single data set.
-- `diversification-models/crbd*.mc`: Constant rate birth-death model from evolutionary biology for two data sets.
-- `diversification-models/clads*.mc`: Cladogenetic diversification rate shift model from evolutionary biology for the same two data sets.
-- `latent-dirichlet-allocation/lda*.mc`: Latent dirichlet allocation for some simple synthetic data sets.
-- `vector-borne-disease/vbd.mc`: An SEIR model for a single data set.
+- `coin.cppl`: The "Hello, world!" of probabilistic programming (similar to the example above)
+- `coin-iter.cppl`: The same example implemented with the higher-order `iter` function.
+- `sprinkler.cppl`: The classical sprinkler model often used to illustrate Bayesian inference.
+- `regression.cppl`: Bayesian linear regression for a simple data set.
+- `ssm.cppl`: A fairly simple state-space positioning model for a single data set.
+- `diversification-models/crbd*.cppl`: Constant rate birth-death model from evolutionary biology for two data sets.
+- `diversification-models/clads*.cppl`: Cladogenetic diversification rate shift model from evolutionary biology for the same two data sets.
+- `latent-dirichlet-allocation/lda*.cppl`: Latent dirichlet allocation for some simple synthetic data sets.
+- `vector-borne-disease/vbd.cppl`: An SEIR model for a single data set.
 
 You compile and run the above models with the `cppl` command, and the models are also the basis for the test suite run as part of `make test`. See the test files under `coreppl/test` for suitable inference algorithms and parameters.
 

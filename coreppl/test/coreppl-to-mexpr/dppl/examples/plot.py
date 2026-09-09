@@ -29,6 +29,12 @@ if len(sys.argv) < 2:
 data_dir = sys.argv[1]
 
 
+def pdf_name(file_name):
+    # Plot-data is named "<example>-run.cppl.<tag>", where <tag> is "json",
+    # or "adJson" for the examples that need `--auto-diff`.
+    return file_name.split("-run.cppl.")[0] + ".pdf"
+
+
 def post_process_weights_samples(weights, samples):
     w = np.asarray(weights)
     s = np.asarray(samples)
@@ -86,7 +92,7 @@ def plot_scalar_dist(file_name):
             fig.suptitle(file_name)
             plot_hist(ax, samples, weights, 200)
             fig.tight_layout()
-            fig.savefig(file_name.replace("-run.mc.json", ".pdf"))
+            fig.savefig(pdf_name(file_name))
     except FileNotFoundError:
         print(f"{path} not found")
 
@@ -167,7 +173,7 @@ def plot_trace_dist(file_name, prey_label, pred_label, yminofs, ymaxofs):
                 yminofs,
             )
             fig.tight_layout()
-            fig.savefig(file_name.replace("-run.mc.json", ".pdf"))
+            fig.savefig(pdf_name(file_name))
     except FileNotFoundError:
         print(f"{path} not found")
 
@@ -203,24 +209,24 @@ def plot_sens_dist(file_name):
             plot(1)
             ax[0].set_ylabel(r"$s_{\theta}(x)$")
             # fig.tight_layout()
-            fig.savefig(file_name.replace("-run.mc.json", ".pdf"))
+            fig.savefig(pdf_name(file_name))
     except FileNotFoundError:
         print(f"{path} not found")
 
 
-plot_scalar_dist("bayesian-parameter-estimation-run.mc.json")
-plot_scalar_dist("bayesian-parameter-estimation-ivp-solution-run.mc.json")
-plot_scalar_dist("bayesian-parameter-estimation-ivp-sensitivity-run.mc.json")
+plot_scalar_dist("bayesian-parameter-estimation-run.cppl.json")
+plot_scalar_dist("bayesian-parameter-estimation-ivp-solution-run.cppl.json")
+plot_scalar_dist("bayesian-parameter-estimation-ivp-sensitivity-run.cppl.adJson")
 
 plot_trace_dist(
-    "bayesian-parameter-estimation-ivp-solution-trace-run.mc.json",
+    "bayesian-parameter-estimation-ivp-solution-trace-run.cppl.json",
     "prey  density",
     "pred. density",
     1,
     4,
 )
 plot_trace_dist(
-    "bayesian-parameter-estimation-ivp-sensitivity-trace-run.mc.json",
+    "bayesian-parameter-estimation-ivp-sensitivity-trace-run.cppl.adJson",
     "prey  density sens.",
     "pred. density sens.",
     5,
@@ -228,14 +234,14 @@ plot_trace_dist(
 )
 
 try:
-    file1 = "bayesian-parameter-estimation-run.mc.json"
+    file1 = "bayesian-parameter-estimation-run.cppl.json"
     path1 = Path(data_dir) / file1
     with open(path1, "r") as file1:
-        file2 = "bayesian-parameter-estimation-ivp-solution-trace-run.mc.json"
+        file2 = "bayesian-parameter-estimation-ivp-solution-trace-run.cppl.json"
         path2 = Path(data_dir) / file2
         with open(path2, "r") as file2:
             file3 = (
-                "bayesian-parameter-estimation-ivp-sensitivity-trace-run.mc.json"
+                "bayesian-parameter-estimation-ivp-sensitivity-trace-run.cppl.adJson"
             )
             path3 = Path(data_dir) / file3
             with open(path3, "r") as file3:
@@ -296,11 +302,11 @@ try:
 except FileNotFoundError:
     print(f"All files not found")
 
-plot_sens_dist("ode-sensitivites-two-methods-scalar-run.mc.json")
-plot_sens_dist("ode-sensitivites-two-methods-run.mc.json")
+plot_sens_dist("ode-sensitivites-two-methods-scalar-run.cppl.adJson")
+plot_sens_dist("ode-sensitivites-two-methods-run.cppl.adJson")
 
 try:
-    file = "rode-run.mc.json"
+    file = "rode-run.cppl.json"
     path = Path(data_dir) / file
     with open(path, "r") as file:
         data = json.load(file)
@@ -333,7 +339,7 @@ except FileNotFoundError:
     print(f"{path} not found")
 
 try:
-    file = "tumor-inhibitor-rode-run.mc.json"
+    file = "tumor-inhibitor-rode-run.cppl.adJson"
     path = Path(data_dir) / file
     with open(path, "r") as file:
         data = json.load(file)
@@ -409,7 +415,7 @@ except FileNotFoundError:
     print(f"{path} not found")
 
 try:
-    file = "tumor-inhibitor-rode-run.mc.json"
+    file = "tumor-inhibitor-rode-run.cppl.adJson"
     path = Path(data_dir) / file
     with open(path, "r") as file:
         data = json.load(file)
