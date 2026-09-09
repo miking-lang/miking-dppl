@@ -10,5 +10,9 @@ include "data-simple.mc"
 include "lda.cppl"
 
 mexpr
-let res = model () in
+let res = model
+  { numtopics = numtopics, vocabsize = vocabsize, numdocs = numdocs
+  , docs = docs, docids = docids
+  }
+in
 strJoin " " (map (lam t. float2string (get t 0)) res)

@@ -3,7 +3,17 @@ include "string.mc"
 include "seq.mc"
 include "ext/dist-ext.mc"
 
-let model: () -> [[Float]] = lam.
+let model
+  : { numtopics : Int, vocabsize : Int, numdocs : Int
+    , docs : [(Int, Int)], docids : [Int]
+    }
+    -> [[Float]]
+  = lam params.
+  let numtopics = params.numtopics in
+  let vocabsize = params.vocabsize in
+  let numdocs = params.numdocs in
+  let docs = params.docs in
+  let docids = params.docids in
 
   let alpha: [Float] = make numtopics 1. in
   let beta: [Float] = make vocabsize 1. in
