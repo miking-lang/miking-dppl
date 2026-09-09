@@ -146,5 +146,5 @@ let samples =
 printWeightedTraces samples weights
 
 -- local variables:
--- compile-command: "cppl --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods.cppl && ./out | dppl-plot-process --lines && rm ./out"
+-- compile-command: "cppl --auto-diff --test --seed 1 --cps partial --dppl-typecheck ode-sensitivites-two-methods.cppl && ./out | dppl-plot-process --lines && rm ./out"
 -- End:

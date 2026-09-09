@@ -15,5 +15,5 @@ mexpr
 printFloatDist #var"Dist_z/dθ(future)"
 
 -- Local Variables:
--- compile-command: "cppl --seed 1 --cps partial --dppl-typecheck baysian-parameter-estimation-ivp-sensitivity.cppl && ./out | dppl-plot && rm ./out"
+-- compile-command: "cppl --auto-diff --seed 1 --cps partial --dppl-typecheck baysian-parameter-estimation-ivp-sensitivity.cppl && ./out | dppl-plot && rm ./out"
 -- End:
