@@ -128,6 +128,10 @@ lang ElementaryFunctionsTransform = ElementaryFunctions
   | CExp _ -> withInfo (infoTm tm) (nvar_ (stringToName "exp"))
   | CLog _ -> withInfo (infoTm tm) (nvar_ (stringToName "log"))
   | CPow _ -> withInfo (infoTm tm) (nvar_ (stringToName "pow"))
+  -- TODO(vipa, 2026-09-09): The remaining two Consts are not actually
+  -- defined in math-ext.mc, but no current cases use them (because
+  -- the consts are shadowed by actual definitions), so I'm leaving it
+  -- at the same level of broken for now
   | CAbsf _ -> withInfo (infoTm tm) (nvar_ (stringToName "absf"))
   | CSmoothdivf _ -> withInfo (infoTm tm) (nvar_ (stringToName "smoothdivf"))
   | _ -> tm
@@ -366,7 +370,7 @@ lang CPPLLoader
   + ReplaceHigherOrderConstantsLoadedPreviously + CompileModels + InsertModels
   + ElementaryFunctionsTransform + DPPLPrunedReplace
   + DPPLKeywordReplace + DPPLDelayedReplace + DPPLParser
-  + MCoreFileParsing + MExprDeadcodeElimination + LazyAst
+  + ConstTransformerMLang + MExprDeadcodeElimination + LazyAst
   syn Hook =
   | CPPLHook
     { options : TransformationOptions
@@ -1130,7 +1134,12 @@ lang CorePPLFileTypeLoader
     let builtinEnv = optionGetOrElse (lam. error "missing CorePPLBuiltinEnvHook")
       (getHookOpt (lam h. match h with CorePPLBuiltinEnvHook x then Some x.builtinEnv else None ()) loader) in
 
-    let prog = _parseMCoreFileRaw cpplBuiltin path in
+    let prog =
+      switch result.consume (parseMLangFile path)
+      case (_, Right prog) then prog
+      case (_, Left errs) then
+        errorMulti errs (join ["Parse error while parsing '", path, "'"])
+      end in
     let prog = use DPPLKeywordMaker in
       { decls = map makeDeclKeywords prog.decls
       , expr = makeKeywords prog.expr
@@ -1169,6 +1178,8 @@ lang CorePPLFileTypeLoader
         -- their definition
         match prepareCPPLBuiltinEnv transformOptions separateLoader with (_, isolatedBuiltinEnv, separateLoader) in
         let separateLoader = addHook separateLoader (CorePPLBuiltinEnvHook {builtinEnv = isolatedBuiltinEnv}) in
+        let separateLoader = addLocalHook separateLoader
+          (ConstTransformerHook {consts = ref (_ctBuiltinEnv cpplBuiltin)}) in
         -- NOTE(vipa, 2026-09-07): At this point we're prepared to
         -- load the actual program, so we add the dppl typecheck hook
         -- here to typecheck only that.
@@ -1190,6 +1201,8 @@ lang CorePPLFileTypeLoader
       } in
 
     let symEnv = builtinEnv in
+    let loader = addLocalHook loader
+      (ConstTransformerHook {consts = ref (_ctBuiltinEnv cpplBuiltin)}) in
 
     switch mode
     case CPPLMain _ | CPPLDep _ then
