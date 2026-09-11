@@ -9,7 +9,7 @@ include "string.mc"
 include "basic-types.mc"
 include "float.mc"
 
-include "../runtime-common.cppl"
+include "../runtime-common.dppl"
 include "../runtime-dists.mc"
 
 -- In importance sampling, the state is simply the accumulated weight.

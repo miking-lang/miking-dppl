@@ -8,7 +8,7 @@ include "string.mc"
 include "float.mc"
 include "bool.mc"
 
-include "../runtime-common.cppl"
+include "../runtime-common.dppl"
 include "../runtime-dists.mc"
 
 -- In naive MCMC, the state is simply the accumulated weight.

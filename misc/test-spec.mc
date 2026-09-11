@@ -121,7 +121,7 @@ testMain [substituter] directories location (lam api.
     , cmd = "%p command %i"
     } in
 
-  let cpplTest = anyOf (map (lam dir. filesIn dir ".cppl")
+  let cpplTest = anyOf (map (lam dir. filesIn dir ".dppl")
     [ "coreppl/test/coreppl-to-mexpr/infer/"
     , "coreppl/test/coreppl-to-mexpr/expectation/"
     , "coreppl/test/coreppl-to-mexpr/pruning/"
@@ -161,7 +161,7 @@ testMain [substituter] directories location (lam api.
     , cmd = "command %i"
     } in
 
-  -- NOTE(vipa, 2026-04-14): dppl examples, i.e., `*-run.cppl` files,
+  -- NOTE(vipa, 2026-04-14): dppl examples, i.e., `*-run.dppl` files,
   -- produce plot-data (json) rather than running utests, but are
   -- compiled just like the files they wrap.
   let dpplExampleJson = api.midStep
@@ -175,13 +175,13 @@ testMain [substituter] directories location (lam api.
     , cmd = "command %i %o"
     } in
 
-  let dpplTest = filesIn "coreppl/test/coreppl-to-mexpr/dppl/" ".cppl" in
-  let isExample = strEndsWith "-run.cppl" in
+  let dpplTest = filesIn "coreppl/test/coreppl-to-mexpr/dppl/" ".dppl" in
+  let isExample = strEndsWith "-run.dppl" in
   -- NOTE(vipa, 2026-09-09): These files use `diff`, so they need
   -- `--auto-diff` in addition to `--dppl-typecheck`. The same goes for
-  -- the `*-run.cppl` wrappers that include them.
+  -- the `*-run.dppl` wrappers that include them.
   let dpplUsesDiff =
-    let withWrapper = lam path. [concat path ".cppl", concat path "-run.cppl"] in
+    let withWrapper = lam path. [concat path ".dppl", concat path "-run.dppl"] in
     elem (join (map withWrapper
       [ "coreppl/test/coreppl-to-mexpr/dppl/diff-test"
       , "coreppl/test/coreppl-to-mexpr/dppl/examples/bayesian-parameter-estimation-ivp-sensitivity"

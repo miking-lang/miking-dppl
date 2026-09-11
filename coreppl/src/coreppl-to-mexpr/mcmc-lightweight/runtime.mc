@@ -11,7 +11,7 @@ include "basic-types.mc"
 include "float.mc"
 include "map.mc"
 
-include "../runtime-common.cppl"
+include "../runtime-common.dppl"
 include "../runtime-dists.mc"
 
 include "./config.mc"

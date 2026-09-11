@@ -3,7 +3,7 @@ include "basic-types.mc"
 include "seq.mc"
 include "json.mc"
 include "common.mc"
-include "../runtime-common.cppl"
+include "../runtime-common.dppl"
 include "../runtime-dists.mc"
 
 include "./pval-interface.mc"

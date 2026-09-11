@@ -10,7 +10,7 @@ mexpr
 
 let s = 10e-2 in
 let eq = eqCoin s in
-let t = testCpplMExpr "gamma-poisson.cppl" 4000 in
+let t = testCpplMExpr "gamma-poisson.dppl" 4000 in
 let res: [(Int, String)]  = [
   (0  ,"-m 'is-lw' --cps none"),
   (0  ,"-m 'is-lw' --cps partial"),

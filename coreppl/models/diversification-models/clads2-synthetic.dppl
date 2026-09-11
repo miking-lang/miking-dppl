@@ -1,0 +1,8 @@
+include "tree-synthetic.mc"
+include "clads2.dppl"
+
+let model: () -> Float = lam.
+  clads2 tree rho
+
+mexpr
+model ()

@@ -10,7 +10,7 @@ include "option.mc"
 include "float.mc"
 include "sys.mc"
 
-include "../runtime-common.cppl"
+include "../runtime-common.dppl"
 include "../runtime-dists.mc"
 
 include "./config.mc"

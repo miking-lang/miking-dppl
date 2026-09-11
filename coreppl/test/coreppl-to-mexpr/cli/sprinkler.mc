@@ -12,7 +12,7 @@ let s = 1e-1 in
 let e = eqSprinkler s in
 let rhs = sprinklerTruth in
 let r = resSprinkler in
-let t = testCpplMExpr "sprinkler.cppl" 1000 in
+let t = testCpplMExpr "sprinkler.dppl" 1000 in
 
 utest r (t 0   "-m is-lw --cps none"                            ) with rhs using e in
 utest r (t 0   "-m is-lw --cps partial"                         ) with rhs using e in

@@ -11,7 +11,7 @@ let s = 150. in
 let e = eqSsm s in
 let rhs = ssmTruth in
 let r = resSsm in
-let t = testCpplMExpr "ssm.cppl" 1000 in
+let t = testCpplMExpr "ssm.dppl" 1000 in
 
 utest r (t 0   "-m is-lw --cps none"                            ) with rhs using e in
 utest r (t 0   "-m is-lw --cps partial"                         ) with rhs using e in

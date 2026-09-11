@@ -14,7 +14,7 @@ mexpr
 let e = eqVbd 50e0 in
 let rhs = vbdTruth in
 let r = resNormConst in
-let t = testCpplMExpr "vector-borne-disease/vbd.cppl" in
+let t = testCpplMExpr "vector-borne-disease/vbd.dppl" in
 
 -- Not really possible to get a decent estimate with importance sampling, just
 -- check that it compiles and runs.

@@ -11,7 +11,7 @@ let s = 2e-2 in
 let e = eqCoin s in
 let rhs = coinTruth in
 let r = resCoin in
-let t = testCpplMExpr "coin-iter.cppl" 1000 in
+let t = testCpplMExpr "coin-iter.dppl" 1000 in
 
 utest r (t 0   "-m is-lw --cps none"                            ) with rhs using e in
 utest r (t 0   "-m is-lw --cps partial"                         ) with rhs using e in

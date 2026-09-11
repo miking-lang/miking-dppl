@@ -7,7 +7,7 @@ let s = 1e-1 in
 let e = lam a. lam b. not (eqPickPair s a b) in
 let rhs = pickPairTruth in
 let r = resPickPair in
-let t = testCpplMExpr "biased-pick-pair.cppl" 10000 in
+let t = testCpplMExpr "biased-pick-pair.dppl" 10000 in
 
 utest r (t 0 "-m is-lw --cps none") with rhs using e in
 utest r (t 0   "-m is-lw --cps partial"                         ) with rhs using e in

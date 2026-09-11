@@ -16,7 +16,7 @@ let en = eqCladsSynthetic 1e0 2e0 in
 let e = eqCladsSyntheticMean 1e0 in
 let rhs = cladsSyntheticTruth in
 let r = resCladsSynthetic in
-let t = testCpplMExpr "diversification-models/clads2-synthetic.cppl" in
+let t = testCpplMExpr "diversification-models/clads2-synthetic.dppl" in
 
 -- NOTE(2023-06-30,dlunde): SMC with '--resample likelihood' peforms really
 -- poorly for this model, which is why we simply give lam. lam. true as the
@@ -55,7 +55,7 @@ utest r (t 1000 500 "-m mcmc-lightweight"                          ) with rhs us
 let e = eqCladsAlcedinidae 5. in
 let rhs = cladsAlcedinidaeTruth in
 let r = resNormConst in
-let t = testCpplMExpr "diversification-models/clads2-alcedinidae.cppl" 10000 0 in
+let t = testCpplMExpr "diversification-models/clads2-alcedinidae.dppl" 10000 0 in
 
 utest r (t "-m smc-bpf --cps partial --resample align" ) with rhs using e in
 utest r (t "-m smc-bpf --cps full --resample align"    ) with rhs using e in

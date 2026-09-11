@@ -1,0 +1,8 @@
+include "tree-synthetic.mc"
+include "crbd.dppl"
+
+let model: () -> Float = lam.
+  crbd tree rho
+
+mexpr
+model ()

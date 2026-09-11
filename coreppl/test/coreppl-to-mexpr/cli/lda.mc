@@ -11,7 +11,7 @@ let s = 0.3 in
 let e = eqLda s in
 let rhs = ldaTruth in
 let r = resLda in
-let t = testCpplMExpr "latent-dirichlet-allocation/lda-simple.cppl" 30000 in
+let t = testCpplMExpr "latent-dirichlet-allocation/lda-simple.dppl" 30000 in
 
 utest r (t 0  "-m is-lw --cps none"                            ) with rhs using e in
 utest r (t 0  "-m is-lw --cps partial"                         ) with rhs using e in

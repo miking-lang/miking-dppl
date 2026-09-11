@@ -1039,7 +1039,7 @@ lang CorePPLFileTypeLoader
   syn Hook =
   | CorePPLFileHook {options : CPPLFileOptions, method : InferMethod}
 
-  sem _fileType = | _ ++ ".cppl" -> FCorePPL {mode = CPPLDep ()}
+  sem _fileType = | _ ++ ".dppl" -> FCorePPL {mode = CPPLDep ()}
 
   sem _insertBackcompatInfer : CPPLFileOptions -> InferMethod -> SymEnv -> Expr -> Loader -> Loader
   sem _insertBackcompatInfer options method symEnv modelBody = | loader ->

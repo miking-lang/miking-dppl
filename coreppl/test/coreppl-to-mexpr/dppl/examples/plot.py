@@ -30,9 +30,9 @@ data_dir = sys.argv[1]
 
 
 def pdf_name(file_name):
-    # Plot-data is named "<example>-run.cppl.<tag>", where <tag> is "json",
+    # Plot-data is named "<example>-run.dppl.<tag>", where <tag> is "json",
     # or "adJson" for the examples that need `--auto-diff`.
-    return file_name.split("-run.cppl.")[0] + ".pdf"
+    return file_name.split("-run.dppl.")[0] + ".pdf"
 
 
 def post_process_weights_samples(weights, samples):
@@ -214,19 +214,19 @@ def plot_sens_dist(file_name):
         print(f"{path} not found")
 
 
-plot_scalar_dist("bayesian-parameter-estimation-run.cppl.json")
-plot_scalar_dist("bayesian-parameter-estimation-ivp-solution-run.cppl.json")
-plot_scalar_dist("bayesian-parameter-estimation-ivp-sensitivity-run.cppl.adJson")
+plot_scalar_dist("bayesian-parameter-estimation-run.dppl.json")
+plot_scalar_dist("bayesian-parameter-estimation-ivp-solution-run.dppl.json")
+plot_scalar_dist("bayesian-parameter-estimation-ivp-sensitivity-run.dppl.adJson")
 
 plot_trace_dist(
-    "bayesian-parameter-estimation-ivp-solution-trace-run.cppl.json",
+    "bayesian-parameter-estimation-ivp-solution-trace-run.dppl.json",
     "prey  density",
     "pred. density",
     1,
     4,
 )
 plot_trace_dist(
-    "bayesian-parameter-estimation-ivp-sensitivity-trace-run.cppl.adJson",
+    "bayesian-parameter-estimation-ivp-sensitivity-trace-run.dppl.adJson",
     "prey  density sens.",
     "pred. density sens.",
     5,
@@ -234,14 +234,14 @@ plot_trace_dist(
 )
 
 try:
-    file1 = "bayesian-parameter-estimation-run.cppl.json"
+    file1 = "bayesian-parameter-estimation-run.dppl.json"
     path1 = Path(data_dir) / file1
     with open(path1, "r") as file1:
-        file2 = "bayesian-parameter-estimation-ivp-solution-trace-run.cppl.json"
+        file2 = "bayesian-parameter-estimation-ivp-solution-trace-run.dppl.json"
         path2 = Path(data_dir) / file2
         with open(path2, "r") as file2:
             file3 = (
-                "bayesian-parameter-estimation-ivp-sensitivity-trace-run.cppl.adJson"
+                "bayesian-parameter-estimation-ivp-sensitivity-trace-run.dppl.adJson"
             )
             path3 = Path(data_dir) / file3
             with open(path3, "r") as file3:
@@ -302,11 +302,11 @@ try:
 except FileNotFoundError:
     print(f"All files not found")
 
-plot_sens_dist("ode-sensitivites-two-methods-scalar-run.cppl.adJson")
-plot_sens_dist("ode-sensitivites-two-methods-run.cppl.adJson")
+plot_sens_dist("ode-sensitivites-two-methods-scalar-run.dppl.adJson")
+plot_sens_dist("ode-sensitivites-two-methods-run.dppl.adJson")
 
 try:
-    file = "rode-run.cppl.json"
+    file = "rode-run.dppl.json"
     path = Path(data_dir) / file
     with open(path, "r") as file:
         data = json.load(file)
@@ -339,7 +339,7 @@ except FileNotFoundError:
     print(f"{path} not found")
 
 try:
-    file = "tumor-inhibitor-rode-run.cppl.adJson"
+    file = "tumor-inhibitor-rode-run.dppl.adJson"
     path = Path(data_dir) / file
     with open(path, "r") as file:
         data = json.load(file)
@@ -415,7 +415,7 @@ except FileNotFoundError:
     print(f"{path} not found")
 
 try:
-    file = "tumor-inhibitor-rode-run.cppl.adJson"
+    file = "tumor-inhibitor-rode-run.dppl.adJson"
     path = Path(data_dir) / file
     with open(path, "r") as file:
         data = json.load(file)
