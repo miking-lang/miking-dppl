@@ -130,6 +130,9 @@ lang SimplePValGraphCompiler
     let ast = removeMetaVarExpr (typeCheckDeclIgnoreEscape tyEnv ast) in
     endPhaseStatsExpr log "typecheck-one" ast;
 
+    -- TODO(vipa, 2026-05-26): This is the end of the block mentioned
+    -- in the TODO above with the same date.
+
     let initState =
       { specializations = mapEmpty nameCmp
       } in
@@ -144,10 +147,9 @@ lang SimplePValGraphCompiler
     let ast = stripTempLam (specializeExprReturn initScope initState freeVariables ast) in
     endPhaseStatsExpr log "idealized-transformation-one" ast;
 
-    -- TODO(vipa, 2026-05-26): This is the end of the block mentioned
-    -- in the TODO above with the same date.
-
-    let getPValVar = lam str. appFromEnv x.runtime (concat "vSimplePValGraph_" str) [] in
+    let getPValVar = if null config.debugOutput
+      then lam str. appFromEnv x.runtime (concat "vSimplePValGraph_" str) []
+      else lam str. appFromEnv x.runtime (concat "vDebugSimplePValGraph_" str) [] in
     let initTransEnv =
       { currStateName = x.stateName
       , functions = mapEmpty nameCmp
