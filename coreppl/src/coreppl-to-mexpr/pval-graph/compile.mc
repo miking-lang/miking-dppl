@@ -1,6 +1,7 @@
 include "mexpr/phase-stats.mc"
 include "mexpr/inline-single-use-simple.mc"
 include "mexpr/lamlift.mc"
+include "mexpr/demote-recursive.mc"
 include "../dists.mc"
 include "../../inference/pval-graph.mc"
 
@@ -13,7 +14,7 @@ lang SimplePValGraphCompiler
   = SimplePValGraphMethod + PhaseStats + InferenceInterface
   + LowerNestedPatterns + InlineSingleUse + RemoveSecondClassFunctions
   + IdealizedPValTransformation + PValStateTransformation + EtaExpansion
-  + TransformDist + MExprLambdaLift
+  + TransformDist + MExprLambdaLift + MExprDemoteRecursive
 
   sem pickRuntime = | SimplePValGraph _ -> ("pval-graph/runtime-pval-simple.mc", mapEmpty cmpString)
   sem pickCompiler = | SimplePValGraph x -> compileSimplePValGraph x
@@ -95,6 +96,9 @@ lang SimplePValGraphCompiler
     let ast = stripTempLam (remSecLamExpr initEnv initState ast).1 in
     endPhaseStatsExpr log "remove-second-class-lambdas-one" ast;
 
+    let ast = demoteRecursive ast in
+    endPhaseStatsExpr log "demote-recursive-one" ast;
+
     let freeVariables = freeVars ast in
     let freeVariables : Map Name Type =
       recursive let work = lam acc. lam tm.
@@ -138,6 +142,7 @@ lang SimplePValGraphCompiler
       } in
     let initScope =
       { functionDefinitions = mapEmpty nameCmp
+      , nonProbFunctions = mapEmpty nameCmp
       , depth = 0
       , valueScope = mapEmpty nameCmp
       , revValueScope = mapEmpty nameCmp
