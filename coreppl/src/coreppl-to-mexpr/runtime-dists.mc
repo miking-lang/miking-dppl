@@ -1,6 +1,8 @@
 -- Runtime support for first-class distributions in coreppl-to-mexpr compiler.
 
+include "basic-types.mc"
 include "math.mc"
+include "ext/math-ext.mc"
 include "seq.mc"
 include "map.mc"
 include "float.mc"
@@ -73,7 +75,7 @@ end
 
 -- Elementary distributions
 lang RuntimeDistElementary = RuntimeDistBase
-  syn Dist a =
+  syn Dist a +=
   | DistBernoulli {p : Float}
   | DistBeta {a : Float, b : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
@@ -95,7 +97,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistReciprocal {a: Float, b: Float}
   | DistWiener {cps : Bool, a : ()}
  
-  sem sample =
+  sem sample +=
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
   | DistBeta t -> unsafeCoerce (betaSample t.a t.b)
   | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
@@ -119,7 +121,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistWiener {cps = true, a = a} -> unsafeCoerce (let w = wienerSample a in lam k. lam x. k (w x))
 
   -- Expectation of primitive distributions over real values
-  sem expectation =
+  sem expectation +=
   | DistBernoulli t -> unsafeCoerce t.p
   | DistBeta t -> unsafeCoerce (divf t.a (addf t.a t.b))
   | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
@@ -141,7 +143,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistWiener _ -> error "expectation undefined for the Wiener process"
   | DistTreeInferenceCategorical t -> error "expectation undefined for the tree inference categorical distribution"
 
-  sem logObserve =
+  sem logObserve +=
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
   | DistBeta t -> unsafeCoerce (betaLogPdf t.a t.b)
   | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
@@ -169,7 +171,7 @@ end
 
 -- Empirical distribution
 lang RuntimeDistEmpirical = RuntimeDistBase
-  syn Dist a =
+  syn Dist a +=
   | DistEmpirical {
       cumulativeWeights : [Float],
       logWeights : [Float],
@@ -187,6 +189,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   | EmpNorm { normConst: Float }
   | EmpMCMC { acceptRate: Float }
 
+  sem constructDistEmpiricalHelper : all a. [(Float, a)] -> Dist a
   sem constructDistEmpiricalHelper =
   | samples ->
     match unzip samples with (logWeights, samples) in
@@ -194,6 +197,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     constructDistEmpirical samples logWeights extra
 
   -- DistEmpirical should always be created via this function
+  sem constructDistEmpirical : all a. [a] -> [Float] -> EmpiricalExtra -> Dist a
   sem constructDistEmpirical samples logWeights =
   | extra ->
 
@@ -238,26 +242,30 @@ lang RuntimeDistEmpirical = RuntimeDistBase
       degenerate = degenerate, samples = samples, extra = extra
     }
 
+  sem empiricalSamples : all a. Dist a -> ([a], [Float])
   sem empiricalSamples =
   | DistEmpirical t -> (t.samples, t.logWeights)
   | _ -> ([], [])
 
+  sem empiricalDegenerate : all a. Dist a -> Bool
   sem empiricalDegenerate =
   | DistEmpirical t -> t.degenerate
   | _ -> false
 
+  sem empiricalNormConst : all a. Dist a -> Float
   sem empiricalNormConst =
   | DistEmpirical t ->
     match t.extra with EmpNorm { normConst = normConst } then normConst else nan
   | _ -> nan
 
+  sem empiricalAcceptRate : all a. Dist a -> Float
   sem empiricalAcceptRate =
   | DistEmpirical t ->
     match t.extra with EmpMCMC { acceptRate = acceptRate }
     then acceptRate else nan
   | _ -> nan
 
-  sem sample =
+  sem sample +=
   | DistEmpirical t ->
     -- NOTE(larshum, 2023-05-03): Sample by choosing a value in range [0, y)
     -- and finding the index of the maximal cumulative weight which is less
@@ -276,17 +284,18 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     else
       error "Sampling from empirical distribution failed"
 
+  sem expectationEmpiricalFloat : [Float] -> [Float] -> Float
   sem expectationEmpiricalFloat logWeights =| samples ->
     let weights = map exp logWeights in
     foldl addf 0. (zipWith mulf weights (unsafeCoerce samples))
 
-  sem expectation =
+  sem expectation +=
   | DistEmpirical t ->
     -- NOTE(oerikss, 2024-09-13): We assume that samples are floats. The
     -- type-system should reject expectation of distributions over other types.
-    unsafeCoerce (expectationEmpiricalFloat t.logWeights t.samples)
+    unsafeCoerce (expectationEmpiricalFloat t.logWeights (unsafeCoerce t.samples))
 
-  sem logObserve =
+  sem logObserve +=
   -- TODO(dlunde,2022-10-18): Implement this?
   | DistEmpirical t -> error "Log observe not supported for empirical distribution"
 
@@ -296,6 +305,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
   -- returned sub-sample from the program is not strictly desirable.
   -- In addition, as of now, constructDistEmpirical will normalize the weights,
   -- anyway.  For reference, with comments I show how to normalize the weights.
+  sem constructDistEmpiricalSubsample : all a. Int -> [a] -> [Float] -> EmpiricalExtra -> Dist a
   sem constructDistEmpiricalSubsample n samples logWeights =
   | extra ->
     let d = constructDistEmpirical samples logWeights extra in

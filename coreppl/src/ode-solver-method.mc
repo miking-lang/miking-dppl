@@ -190,6 +190,24 @@ lang ODESolverMethod = PrettyPrint + TypeCheck + Sym + Eq + MethodHelper
     ODESolverDefault (_typeCheckODESolverMethod env info tyState r)
   | RK4 r -> RK4 (_typeCheckODESolverMethod env info tyState r)
   | EF r -> EF (_typeCheckODESolverMethod env info tyState r)
+  | RK4EC r ->
+    let rr = _typeCheckODESolverMethod env info tyState {
+      stepSize = r.stepSize, add = r.add, smul = r.smul
+    } in
+    let ok = typeCheckExpr env r.ok in
+    unify env [info, infoTm ok]
+      (ityarrow_ info tyState (ityarrow_ info tyState (TyBool {info = info})))
+      (tyTm ok);
+    RK4EC { r with stepSize = rr.stepSize, add = rr.add, smul = rr.smul, ok = ok }
+  | EFEC r ->
+    let rr = _typeCheckODESolverMethod env info tyState {
+      stepSize = r.stepSize, add = r.add, smul = r.smul
+    } in
+    let ok = typeCheckExpr env r.ok in
+    unify env [info, infoTm ok]
+      (ityarrow_ info tyState (ityarrow_ info tyState (TyBool {info = info})))
+      (tyTm ok);
+    EFEC { r with stepSize = rr.stepSize, add = rr.add, smul = rr.smul, ok = ok }
   | EFA r ->
     let n = typeCheckExpr env r.n in
     unify env [info, infoTm n] (TyInt {info = info}) (tyTm n);

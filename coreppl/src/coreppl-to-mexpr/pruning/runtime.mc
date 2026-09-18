@@ -1,4 +1,5 @@
 include "math.mc"
+include "ext/math-ext.mc"
 include "seq.mc"
 
 lang PruneGraph

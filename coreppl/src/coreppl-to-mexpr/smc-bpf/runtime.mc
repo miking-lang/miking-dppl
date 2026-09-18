@@ -1,10 +1,13 @@
+include "bool.mc"
 include "common.mc"
 include "ext/dist-ext.mc"
 include "ext/math-ext.mc"
 include "seq.mc"
 include "string.mc"
+include "basic-types.mc"
+include "float.mc"
 
-include "../runtime-common.mc"
+include "../runtime-common.dppl"
 include "../runtime-dists.mc"
 
 type Checkpoint a

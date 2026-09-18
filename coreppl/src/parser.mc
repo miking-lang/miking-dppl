@@ -20,7 +20,6 @@ include "ode-solver-method.mc"
 
 lang DPPLParser =
   BootParser + MExprPrettyPrint + MExprPPL + Resample + DTCAst +
-  KeywordMaker + KeywordMakerOpaque +
 
   ImportanceSamplingMethod + BPFMethod + APFMethod +
   LightweightMCMCMethod  + NaiveMCMCMethod + TraceMCMCMethod +
@@ -118,6 +117,47 @@ lang DPPLParser =
   | "externalPow" -> Some (CPow ())
   | _ -> None ()
 
+  sem decorateTypesExn : Expr -> Expr
+  sem decorateTypesExn =| tm ->
+    smap_Expr_Expr decorateTypesExn (smap_Expr_Type decorateTypesH tm)
+
+  sem gatherTyCEs : Type -> (DTCRegSet, Option DTCEffect, Type)
+  sem gatherTyCEs =
+  | TyModC r ->
+    match gatherTyCEs r.ty with (cs, e, ty) in
+    (cons r.c cs, e, ty)
+  | TyModE r ->
+    match gatherTyCEs r.ty with (cs, None _, ty) then (cs, Some r.e, ty)
+    else errorSingle [r.info] "Parse error: Multiple effect decorations on arrow type"
+  | ty -> ([], None (), ty)
+
+  sem decorateTypesH : Type -> Type
+  sem decorateTypesH =
+  | TyFloat r -> TyFloatC { info = r.info, cs = [] }
+  | TyArrow r ->
+    match gatherTyCEs r.to with (cs, e, to) in
+    let ty = TyArrowCE
+      { info = r.info
+      , from = r.from
+      , to = to
+      , cs = cs
+      , e = optionGetOr (ModD ()) e
+      } in
+    smap_Type_Type decorateTypesH ty
+  | TyModC r ->
+    errorSingle [r.info]
+      "Parse error: Coeffect decoration appeared outside an arrow return type or float type"
+  | TyModE r ->
+    errorSingle [r.info]
+      "Parse error: Effect decoration appeared outside an arrow return type"
+  | ty -> smap_Type_Type decorateTypesH ty
+
+  sem eraseDecorationsType =
+  | TyModC r -> eraseDecorationsType r.ty
+  | TyModE r -> eraseDecorationsType r.ty
+end
+
+lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
   -- Keyword maker
   sem isKeyword =
   | TmAssume _ -> true
@@ -328,45 +368,6 @@ lang DPPLParser =
   | "FloatPS" -> Some(0, lam seq. TyFloatC { info = info, cs = dtcPS })
   | "FloatPL" -> Some(0, lam seq. TyFloatC { info = info, cs = dtcPL })
   | "FloatPC" -> Some(0, lam seq. TyFloatC { info = info, cs = dtcPC })
-
-  sem decorateTypesExn : Expr -> Expr
-  sem decorateTypesExn =| tm ->
-    smap_Expr_Expr decorateTypesExn (smap_Expr_Type decorateTypesH tm)
-
-  sem gatherTyCEs : Type -> (DTCRegSet, Option DTCEffect, Type)
-  sem gatherTyCEs =
-  | TyModC r ->
-    match gatherTyCEs r.ty with (cs, e, ty) in
-    (cons r.c cs, e, ty)
-  | TyModE r ->
-    match gatherTyCEs r.ty with (cs, None _, ty) then (cs, Some r.e, ty)
-    else errorSingle [r.info] "Parse error: Multiple effect decorations on arrow type"
-  | ty -> ([], None (), ty)
-
-  sem decorateTypesH : Type -> Type
-  sem decorateTypesH =
-  | TyFloat r -> TyFloatC { info = r.info, cs = [] }
-  | TyArrow r ->
-    match gatherTyCEs r.to with (cs, e, to) in
-    let ty = TyArrowCE
-      { info = r.info
-      , from = r.from
-      , to = to
-      , cs = cs
-      , e = optionGetOr (ModD ()) e
-      } in
-    smap_Type_Type decorateTypesH ty
-  | TyModC r ->
-    errorSingle [r.info]
-      "Parse error: Coeffect decoration appeared outside an arrow return type or float type"
-  | TyModE r ->
-    errorSingle [r.info]
-      "Parse error: Effect decoration appeared outside an arrow return type"
-  | ty -> smap_Type_Type decorateTypesH ty
-
-  sem eraseDecorationsType =
-  | TyModC r -> eraseDecorationsType r.ty
-  | TyModE r -> eraseDecorationsType r.ty
 end
 
 -- Extend builtins with CorePPL builtins
@@ -394,7 +395,7 @@ let defaultBootParserParseCorePPLFileArg =
      builtin = cpplBuiltin}
 
 let parseMCorePPLFile = lam keepUtests. lam filename.
-  use DPPLParser in
+  use DPPLKeywordMaker in
   -- Read and parse the mcore file
   let config =
     {defaultBootParserParseCorePPLFileArg with keepUtests = keepUtests} in
@@ -404,7 +405,7 @@ let parseMCorePPLFile = lam keepUtests. lam filename.
   ast
 
 let parseMCorePPLFileLib = lam keepUtests. lam filename.
-  use DPPLParser in
+  use DPPLKeywordMaker in
   -- Read and parse the mcore file
   let config = {defaultBootParserParseCorePPLFileArg with
                   keepUtests = keepUtests,
@@ -414,6 +415,6 @@ let parseMCorePPLFileLib = lam keepUtests. lam filename.
 
 -- Similar to getAst, but calls parseMExprString instead
 let parseMExprPPLString = lam cpplstr.
-  use DPPLParser in
+  use DPPLKeywordMaker in
   let ast = parseMExprStringKeywordsExn pplKeywords cpplstr in
   makeKeywords ast

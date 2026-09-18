@@ -5,8 +5,10 @@ include "ext/math-ext.mc"
 include "math.mc"
 include "seq.mc"
 include "string.mc"
+include "float.mc"
+include "bool.mc"
 
-include "../runtime-common.mc"
+include "../runtime-common.dppl"
 include "../runtime-dists.mc"
 
 -- In naive MCMC, the state is simply the accumulated weight.

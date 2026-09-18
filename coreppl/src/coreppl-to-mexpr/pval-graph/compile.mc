@@ -161,9 +161,10 @@ lang SimplePValGraphCompiler
       writeFile config.debugIdealized (expr2str (promoteInferred ast))
     );
 
-    let getPValVar = if null config.debugOutput
-      then lam str. appFromEnv x.runtime (concat "vSimplePValGraph_" str) []
-      else lam str. appFromEnv x.runtime (concat "vDebugSimplePValGraph_" str) [] in
+    let langName = if null config.debugOutput
+      then "SimplePValGraph"
+      else "DebugSimplePValGraph" in
+    let getPValVar = lam str. appFromLangEnv x.runtime langName str [] in
     let initTransEnv =
       { currStateName = x.stateName
       , functions = mapEmpty nameCmp

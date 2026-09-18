@@ -31,7 +31,7 @@ let fltX = tyfloatX_ in
 let _typeOf = lam env. lam prog.
   (result.consume
      (typeOf (dtcEnvOfSeq env)
-        (use DPPLParser in
+        (use DPPLKeywordMaker in
          decorateTypesExn
            (symbolizeAllowFree
               (makeKeywords

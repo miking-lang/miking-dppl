@@ -49,6 +49,7 @@ type SeparatedOptions =
   , cpplFiles : CPPLFileOptions
   , transformations : TransformationOptions
   , defaultMethod : use InferMethodBase in InferMethod
+  , fileMode : String
   }
 
 let frontendOptions : OptParser FrontendOptions =
@@ -187,14 +188,26 @@ let transformationOptions : OptParser TransformationOptions =
     }) in
   optApply (optMap5 mk printModel extractSimplification staticDelay debugPhases debugDumpPhases) seed
 
+let fileMode : OptParser String =
+  let implicitInfer = optNoArg
+    { optNoArgDef "implicit-infer" with long = "implicit-infer"
+    , description = "Wrap the program in an implicit infer."
+    } in
+  let ad = optNoArg
+    { optNoArgDef "ad" with long = "auto-diff"
+    , description = "Handle auto-diffrentiation in the program."
+    } in
+  foldl1 optOr [implicitInfer, ad, optPure "main"]
+
 let options : OptParser SeparatedOptions =
-  let mk = lam frontend. lam cpplFiles. lam transformations. lam defaultMethod.
+  let mk = lam frontend. lam cpplFiles. lam transformations. lam defaultMethod. lam fileMode.
     { frontend = frontend
     , cpplFiles = cpplFiles
     , transformations = transformations
     , defaultMethod = defaultMethod
+    , fileMode = fileMode
     } in
-  optMap4 mk frontendOptions cpplFileOptions transformationOptions inferenceMethodOptions
+  optMap5 mk frontendOptions cpplFileOptions transformationOptions inferenceMethodOptions fileMode
 
 let cpplName = "cppl"
 let cpplDescription = ""

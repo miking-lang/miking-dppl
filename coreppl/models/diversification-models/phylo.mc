@@ -1,3 +1,5 @@
+include "math.mc"
+include "ext/math-ext.mc"
 type Tree
 con Node: {left: Tree, right: Tree, age: Float} -> Tree
 con Leaf: {age: Float} -> Tree
