@@ -27,8 +27,8 @@ let wienerSample : () -> Float -> Float = lam.
           switch (mapFindLower t tr, mapFindUpper t tr)
           case (None _, None _) then
             error "impossible, trace should always be initialized with { 0 => 0 }"
-          case (Some (t1, a), None _) then gaussianSample a (sqrt (subf t t1))
-          case (None _, Some (t2, b)) then gaussianSample b (sqrt (subf t2 t))
+          case (Some (t1, a), None _) then normalSample a (sqrt (subf t t1))
+          case (None _, Some (t2, b)) then normalSample b (sqrt (subf t2 t))
           case (Some (t1, a), Some (t2, b)) then
             let mu =
               (addf
@@ -38,7 +38,7 @@ let wienerSample : () -> Float -> Float = lam.
             let sigma =
               sqrt (divf (mulf (subf t2 t) (subf t t1)) (subf t2 t1))
             in
-            gaussianSample mu sigma
+            normalSample mu sigma
           end
         in
         modref trace (mapInsert t w tr); w)
@@ -52,7 +52,7 @@ let wienerSampleUnsafe : () -> Float -> Float = lam.
   lam t2.
     match deref state with (w, t1) in
     if eqf t2 t1 then w else
-      let w = (gaussianSample w (sqrt (subf t2 t1))) in
+      let w = (normalSample w (sqrt (subf t2 t1))) in
       modref state (w, t2); w
 
 -- Base interface
@@ -85,7 +85,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet {a : [Float]}
   | DistExponential {rate : Float}
   | DistGamma {shape : Float, scale : Float}
-  | DistGaussian {mu : Float, sigma : Float}
+  | DistNormal {mu : Float, sigma : Float}
   | DistGeometric {p : Float}
   | DistLomax {scale: Float, shape : Float}
   | DistMultinomial {n : Int, p : [Float]}
@@ -107,7 +107,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
-  | DistGaussian t -> unsafeCoerce (gaussianSample t.mu t.sigma)
+  | DistNormal t -> unsafeCoerce (normalSample t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricSample t.p)
   | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
   | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
@@ -132,7 +132,7 @@ lang RuntimeDistElementary = RuntimeDistBase
     error "expectation undefined for the Dirichlet distribution"
   | DistExponential t -> unsafeCoerce (divf 1. t.rate)
   | DistGamma t -> unsafeCoerce (mulf t.shape t.scale)
-  | DistGaussian t -> unsafeCoerce t.mu
+  | DistNormal t -> unsafeCoerce t.mu
   | DistGeometric t -> unsafeCoerce (divf (subf 1. t.p) t.p)
   | DistMultinomial t ->
     error "expectation undefined for the multinomial distribution"
@@ -153,7 +153,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
-  | DistGaussian t -> unsafeCoerce (gaussianLogPdf t.mu t.sigma)
+  | DistNormal t -> unsafeCoerce (normalLogPdf t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricLogPmf t.p)
   | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
   | DistMultinomial t ->
@@ -357,7 +357,7 @@ let logObserve : all a. use RuntimeDist in Dist a -> a -> Float =
 
 mexpr
 
-let randomTimes = create 10 (lam. gaussianSample 0. 1.) in
+let randomTimes = create 10 (lam. normalSample 0. 1.) in
 let w = wienerSample () in
 utest map w randomTimes with map w randomTimes in
 utest map w randomTimes with map w randomTimes in

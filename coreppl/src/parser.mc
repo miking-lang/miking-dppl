@@ -246,8 +246,8 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , ty = TyUnknown {info = info}
     , info = info
     })
-  | "Gaussian" -> Some (2, lam lst. TmDist
-    { dist = DGaussian {mu = get lst 0, sigma = get lst 1}
+  | "Normal" -> Some (2, lam lst. TmDist
+    { dist = DNormal {mu = get lst 0, sigma = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })

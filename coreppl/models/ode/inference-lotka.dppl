@@ -33,7 +33,7 @@ let sigma = 0.2
 -- noise.
 let system = lam.
   map
-    (lam y. let v = assume (Gaussian 0. sigma) in addf y v)
+    (lam y. let v = assume (Normal 0. sigma) in addf y v)
     (trace p)
 
 -- Genereate new data by drawing one sample from the system. The following data
@@ -68,14 +68,14 @@ let data = zip ts data
 
 let model = lam.
   -- our prior belief of the true parameter value and measurement error
-  let theta = assume (Gaussian 1. 1.) in
+  let theta = assume (Normal 1. 1.) in
   let sigma = assume (Beta 2. 2.) in
 
   -- condition the solution trace on the data
   iter
     (lam p. match p with (x, d) in
           let y = (solve (ode theta) init x).1 in
-          observe d (Gaussian (output y) sigma))
+          observe d (Normal (output y) sigma))
     data;
 
   -- We are interested in the posterior distribution over the parameter value

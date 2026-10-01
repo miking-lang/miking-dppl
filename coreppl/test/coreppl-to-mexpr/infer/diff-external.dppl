@@ -22,16 +22,16 @@ utest diff1 (lam x. mulf (notID 2.) x) 1. with 2. in
 
 setSeed 1;
 
-utest diff1 (lam x. mulf (gaussianSample 1. 1.) x) 1. with 1.77896425246
+utest diff1 (lam x. mulf (normalSample 1. 1.) x) 1. with 0.772297701493
   using eqfApprox 1e-5
 in
 
--- utest diff1 (lam x. mulf (gaussianSample x 1.) x) 1. with 0. using eqfApprox 1e-5 in -- should result in a runtime error
+-- utest diff1 (lam x. mulf (normalSample x 1.) x) 1. with 0. using eqfApprox 1e-5 in -- should result in a runtime error
 
 
 -- Differentiation involving expected values
 
-utest diff1 (lam x. mulf (expectation (Gaussian 2. 1.)) x) 1. with 2. in
--- utest diff1 (lam x. mulf (expectation (Gaussian 2. x)) x) 1. with 2. in -- should result in a runtime error
+utest diff1 (lam x. mulf (expectation (Normal 2. 1.)) x) 1. with 2. in
+-- utest diff1 (lam x. mulf (expectation (Normal 2. x)) x) 1. with 2. in -- should result in a runtime error
 
 ()
