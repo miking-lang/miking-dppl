@@ -106,8 +106,8 @@ lang MutPVal = PValInterface
     , reset = []
     }
 
-  sem intermediateStep += | PVIPart x ->
-    if x.dirty then
+  sem finalizeStep pred += | PVIPart x ->
+    let propagate = lam x.
       let st =
         { id = x.id
         , permanentWeight = ref 0.0
@@ -115,7 +115,6 @@ lang MutPVal = PValInterface
         , reset = ref []
         } in
       x.update st;
-      PVIPart
       { x with dirty = false
       , id = addi st.id 1
       , permanentWeight = deref st.permanentWeight
@@ -124,10 +123,8 @@ lang MutPVal = PValInterface
       -- oldest reset to run last
       , reset = concat (deref st.reset) x.reset
       }
-    else PVIPart x
-
-  sem finalizeStep pred += | pvi ->
-    match intermediateStep pvi with PVIPart x in
+    in
+    let x = if x.dirty then propagate x else x in
     let acceptProb = minf 0.0
       (addf
         (subf x.permanentWeight x.prevPermanentWeight)
