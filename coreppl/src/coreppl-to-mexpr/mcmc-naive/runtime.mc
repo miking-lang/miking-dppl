@@ -39,6 +39,18 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
           mh (cons prevWeight weights) (cons prevSample samples) iter
   in
 
+    -- First sample -- call the model until we get a non-zero weight
+  recursive let firstSample : (State -> a) -> State -> Int -> a =
+    lam model. lam state. lam i.
+      let sample = model state in
+      let weight = deref state in
+      if or (leqf weight (log 0.0)) (isNaN weight) then
+        modref state 0.;
+        -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+        firstSample model state (addi i 1)
+      else sample
+    in
+
   let runs = config.iterations in
 
   -- Used to keep track of acceptance ratio
@@ -46,7 +58,7 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
 
   -- Draw an initial sample first
   let state = ref 0. in
-  let sample = model state in
+  let sample = firstSample model state 1 in
   let weight = deref state in
   let iter: Int = subi runs 1 in
 
