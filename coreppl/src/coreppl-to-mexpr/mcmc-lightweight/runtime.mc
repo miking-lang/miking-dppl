@@ -223,8 +223,8 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
   in
 
   -- First sample -- call the model until we get a non-zero weight
-  recursive let firstSample : (State -> a) -> State -> Int -> a =
-    lam model. lam state. lam i.
+  recursive let firstSample : (State -> a) -> State -> Int -> Int -> a =
+    lam model. lam state. lam i. lam maxInitReSamp.
       let sample = model state in
       let weight = deref state.weight in
       let weightReused = deref state.weightReused in
@@ -232,15 +232,19 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
       let prevWeightReused = deref state.prevWeightReused in
       if or (leqf weight (log 0.0)) (isNaN weight) then
         resetState state;
-        -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
-        firstSample model state (addi i 1)
+        (if eqi i maxInitReSamp then 
+          printErrorLn "Impossible to find a first sample with positive probabilite. Check your model and the parameters of your priors.";
+          -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+          exit 1
+        else ());
+        firstSample model state (addi i 1) maxInitReSamp
       else sample
     in
 
   -- Used to keep track of acceptance ratio
   mcmcAcceptInit ();
 
-  let sample = firstSample model state 1 in
+  let sample = firstSample model state 1 config.maxInitReSamp in
   let weight = deref state.weight in
   let priorWeight = deref state.priorWeight in
 

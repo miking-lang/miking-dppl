@@ -40,14 +40,18 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
   in
 
     -- First sample -- call the model until we get a non-zero weight
-  recursive let firstSample : (State -> a) -> State -> Int -> a =
-    lam model. lam state. lam i.
+  recursive let firstSample : (State -> a) -> State -> Int -> Int -> a =
+    lam model. lam state. lam i. lam maxInitReSamp.
       let sample = model state in
       let weight = deref state in
       if or (leqf weight (log 0.0)) (isNaN weight) then
         modref state 0.;
-        -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
-        firstSample model state (addi i 1)
+        (if eqi i maxInitReSamp then 
+          printErrorLn "Impossible to find a first sample with positive probabilite. Check your model and the parameters of your priors.";
+          -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+          exit 1
+        else ());
+        firstSample model state (addi i 1) maxInitReSamp
       else sample
     in
 
@@ -58,7 +62,7 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
 
   -- Draw an initial sample first
   let state = ref 0. in
-  let sample = firstSample model state 1 in
+  let sample = firstSample model state 1 config.maxInitReSamp in
   let weight = deref state in
   let iter: Int = subi runs 1 in
 
