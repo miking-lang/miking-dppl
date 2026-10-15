@@ -13,6 +13,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
     , cps : String
     , align : Bool
     , debugAlignment : Option String
+    , maxInitReSamp : Int
     }
   syn InferMethod =
   | LightweightMCMC LightweightMCMCConfig
@@ -30,6 +31,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
     match optionMapAccum (pprintCode i) env (optionMap str_ t.debugAlignment) with (env, debugAlignment) in
     let align = bool2string t.align in
     let driftKernel = bool2string t.driftKernel in
+    let maxInitReSamp = int2string t.maxInitReSamp in
     ( env
     , join
       [ "(LightweightMCMC "
@@ -43,6 +45,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
       , ", cps = ", cps
       , ", align = ", align
       , ", debugAlignment = ", optionGetOr "\"\"" debugAlignment
+      , ", maxInitReSamp = ", maxInitReSamp
       , "})"
       ]
     )
@@ -77,9 +80,10 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
       , ("cps", str_ _cpsDefault)
       , ("align", bool_ _alignDefault)
       , ("debugAlignment", str_ "")
+      , ("maxInitReSamp", int_ _mcmcMaxInitialRejectSamplingDefault)
       ] in
     match getFields info bindings expectedFields
-    with [continue, temperature, keepSample, debug, resampleBehavior, driftKernel, driftScale, cps, align, debugAlignment] in
+    with [continue, temperature, keepSample, debug, resampleBehavior, driftKernel, driftScale, cps, align, debugAlignment, maxInitReSamp] in
     LightweightMCMC
     { continue = continue
     , temperature = temperature
@@ -94,6 +98,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
       case "" then None ()
       case str then Some str
       end
+    , maxInitReSamp = _exprAsIntExn maxInitReSamp
     }
 
   -- NOTE(vipa, 2025-04-15): 'inferMethodConfig' must be kept up to
@@ -106,10 +111,9 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
     , ("debug", t.debug)
     , ("resampleBehavior", t.resampleBehavior)
     , ("driftKernel", bool_ t.driftKernel)
+    , ("maxInitReSamp", int_ t.maxInitReSamp)
     ]
 
-  -- NOTE(vipa, 2025-04-15): 'inferMethodConfig' must be kept up to
-  -- date with "coreppl-to-mexpr/mcmc-lightweight/config.mc"
   sem typeCheckInferMethod env info sampleType =
   | LightweightMCMC t ->
     let bool = TyBool {info = info} in
@@ -176,7 +180,7 @@ end
 
 let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod) =
   use LightweightMCMCMethod in
-  let mk = lam particles. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam debugAlignment. LightweightMCMC
+  let mk = lam particles. lam globalProb. lam driftKernel. lam driftScale. lam cps. lam align. lam debugAlignment. lam maxInitReSamp. LightweightMCMC
     { keepSample = ulam_ "" true_
     , continue = utuple_
       [ ulam_ "" (int_ particles)
@@ -200,6 +204,7 @@ let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod
     , cps = cps
     , align = align
     , debugAlignment = debugAlignment
+    , maxInitReSamp = maxInitReSamp
     } in
-  let method = optApply (optApply (optMap5 mk _particles _mcmcLightweightGlobalProb _driftKernel _driftScale _cps) _align) _debugAlignment in
+  let method = optApply (optApply (optApply (optMap5 mk _particles _mcmcLightweightGlobalProb _driftKernel _driftScale _cps) _align) _debugAlignment) _mcmcMaxInitialRejectSampling in
   optMap2 (lam. lam x. x) (_methodFlag false "mcmc-lightweight") method
