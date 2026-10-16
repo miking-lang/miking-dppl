@@ -57,8 +57,8 @@ let _mcmcLightweightGlobalProb : OptParser Float =
 let _mcmcMaxInitialRejectSamplingDefault : Int = 1000
 let _mcmcMaxInitialRejectSampling : OptParser Int =
   let opt = optArg
-    { optArgDefInt with long = "mcmc-max-rs"
-    , description = concat "The maximum number of iterations for the rejection sampling to find a non-zero-weight initial sample for the MCMC chain. Returns an empty chain if the limit is reached. Default: " (float2string _mcmcLightweightGlobalProbDefault)
+    { optArgDefInt with long = "mcmc-max-init-rs"
+    , description = concat "The maximum number of iterations for the rejection sampling to find a first sample with positive probability for the MCMC chain. Returns an error if the limit is reached. Default: " (int2string _mcmcMaxInitialRejectSamplingDefault)
     } in
   optOr opt (optPure _mcmcMaxInitialRejectSamplingDefault)
 let _particlesDefault : Int = 5000

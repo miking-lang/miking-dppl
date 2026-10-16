@@ -3,7 +3,7 @@ include "../infer-method.mc"
 lang TraceMCMCMethod = InferMethodBase
   type TraceMCMCConfig =
     { iterations : Expr -- : Int
-    , maxInitReSamp : Int
+    , maxInitReSamp : Expr -- : Int
     }
   syn InferMethod =
   | TraceMCMC TraceMCMCConfig
@@ -12,7 +12,7 @@ lang TraceMCMCMethod = InferMethodBase
   | TraceMCMC t ->
     let i = pprintIncr indent in
     match pprintCode i env t.iterations with (env, iterations) in
-    let maxInitReSamp = int2string t.maxInitReSamp in
+    match pprintCode i env t.maxInitReSamp with (env, maxInitReSamp) in
     (env, join ["(TraceMCMC {iterations = ", iterations, ", maxInitReSamp = ", maxInitReSamp, "})"])
 
   sem inferMethodFromCon info bindings =
@@ -22,13 +22,13 @@ lang TraceMCMCMethod = InferMethodBase
     , ("maxInitReSamp", int_ _mcmcMaxInitialRejectSamplingDefault)
     ] in
     match getFields info bindings expectedFields with [iterations, maxInitReSamp] in
-    TraceMCMC { iterations = iterations, maxInitReSamp = _exprAsIntExn maxInitReSamp }
+    TraceMCMC { iterations = iterations, maxInitReSamp = maxInitReSamp }
 
   sem inferMethodConfig info =
   | TraceMCMC t ->
     fieldsToRecord info [
       ("iterations", t.iterations)
-    , ("maxInitReSamp", int_ t.maxInitReSamp)
+    , ("maxInitReSamp", t.maxInitReSamp)
     ]
 
   sem typeCheckInferMethod env info sampleType =
@@ -36,14 +36,17 @@ lang TraceMCMCMethod = InferMethodBase
     let int = TyInt {info = info} in
     let iterations = typeCheckExpr env t.iterations in
     unify env [info, infoTm iterations] int (tyTm iterations);
+    let maxInitReSamp = typeCheckExpr env t.maxInitReSamp in
     TraceMCMC { t with
       iterations = iterations
+    , maxInitReSamp = maxInitReSamp
     }
 
   sem smapAccumL_InferMethod_Expr f acc =
   | TraceMCMC r ->
     match f acc r.iterations with (acc, iterations) in
-    (acc, TraceMCMC {r with iterations = iterations})
+    match f acc r.maxInitReSamp with (acc, maxInitReSamp) in
+    (acc, TraceMCMC {r with iterations = iterations, maxInitReSamp = maxInitReSamp})
 
   sem setRuns expr =
   | TraceMCMC r -> TraceMCMC {r with iterations = expr}
@@ -53,7 +56,7 @@ let mcmcTraceOptions : OptParser (use TraceMCMCMethod in InferMethod) =
   use TraceMCMCMethod in
   let mk = lam iterations. lam maxInitReSamp. TraceMCMC
     { iterations = int_ iterations
-    , maxInitReSamp = maxInitReSamp
+    , maxInitReSamp = int_ maxInitReSamp
     } in
   let method = optMap2 mk _particles _mcmcMaxInitialRejectSampling in
  optMap2 (lam. lam x. x) (_methodFlag false "mcmc-trace") method
