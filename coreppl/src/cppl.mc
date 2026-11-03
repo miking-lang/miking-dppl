@@ -20,6 +20,8 @@ include "mexpr/ast.mc"
 include "mexpr/utils.mc"
 include "mexpr/generate-utest.mc"
 include "ocaml/mcore.mc"
+include "ocaml/external-includes.mc"
+include "mi-stats::stats.ext-ocaml.mc"
 
 include "coreppl-to-mexpr/is-lw/compile.mc"
 include "coreppl-to-mexpr/smc-bpf/compile.mc"
@@ -106,7 +108,9 @@ let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clib
   sysChmodWriteAccessFile options.frontend.output;
   res.cleanup ();
   options.frontend.output in
-let hooks = mkEmptyHooks ocamlCompile in
+let hooks =
+  { mkEmptyHooks ocamlCompile with
+    externalImpls = mapUnion globalExternalImplsMap miStatsExtMap } in
 
 let ast = lowerAll ast in
 endPhaseStatsExpr log "lower-all" ast;

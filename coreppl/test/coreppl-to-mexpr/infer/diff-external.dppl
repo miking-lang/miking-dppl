@@ -1,5 +1,6 @@
 include "math.mc"
 include "ext/dist-ext.mc"
+include "mi-stats::stats.mc"
 include "float.mc"
 
 mexpr
@@ -21,6 +22,7 @@ utest diff1 (lam x. mulf (notID 2.) x) 1. with 2. in
 -- Differentiation involving externals
 
 setSeed 1;
+miStatsSetSeed 1;
 
 utest diff1 (lam x. mulf (normalSample 1. 1.) x) 1. with 0.772297701493
   using eqfApprox 1e-5

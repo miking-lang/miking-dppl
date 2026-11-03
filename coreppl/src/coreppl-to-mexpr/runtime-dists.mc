@@ -7,6 +7,7 @@ include "seq.mc"
 include "map.mc"
 include "float.mc"
 include "ext/dist-ext.mc"
+include "mi-stats::stats.mc"
 
 -- Weiner process
 let wienerSample : () -> Float -> Float = lam.
