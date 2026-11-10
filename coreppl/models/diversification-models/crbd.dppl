@@ -6,7 +6,7 @@ let crbd: Tree -> Float -> Float = lam tree. lam rho.
 
   -- Priors
   let lambda = assume (Gamma 1.0 1.0) in
-  let mu = assume (Gamma 1.0 0.5) in
+  let mu = assume (Gamma 1.0 2.0) in
 
   recursive let survives = lam tBeg.
     let t = subf tBeg (assume (Exponential (addf lambda mu))) in

@@ -70,7 +70,7 @@ lang AutoDriftKernel = Assume + DistAll
     Some (dist_ (DUniform {a = divf_ x driftScale, b = mulf_ x driftScale}))
 
   | DGamma _ ->
-    Some (dist_ (DGamma {k = divf_ x driftScale, theta = driftScale}))
+    Some (dist_ (DGamma {k = divf_ x driftScale, rate = divf_ (float_ 1.0) driftScale}))
 
   | DNormal _ ->
     Some (dist_ (DNormal {mu = x, sigma = driftScale}))

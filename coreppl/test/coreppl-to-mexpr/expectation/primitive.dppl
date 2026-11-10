@@ -4,7 +4,7 @@ mexpr
 -- compatible part of coreppl to wrap this program in a top-level infer.
 infer (Default ()) (lam. ());
 
-utest expectation (Gamma 2. 3.) with 6. in
+utest expectation (Gamma 2. (divf 1. 3.)) with 6. in
 utest expectation (Exponential 2.) with 0.5 in
 utest expectation (Beta 2. 2.) with 0.5 in
 utest expectation (Normal 1. 2.) with 1. in

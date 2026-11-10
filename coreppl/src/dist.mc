@@ -426,13 +426,13 @@ end
 
 lang GammaDist = Dist
   syn Dist =
-  | DGamma { k : Expr, theta : Expr }
+  | DGamma { k : Expr, rate : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DGamma t ->
     match f acc t.k with (acc, k) in
-    match f acc t.theta with (acc, theta) in
-    (acc, DGamma { t with k = k, theta = theta })
+    match f acc t.rate with (acc, rate) in
+    (acc, DGamma { t with k = k, rate = rate })
 
   sem distTy info =
   | DGamma _ ->
@@ -643,7 +643,7 @@ let exp_ = use ExponentialDist in
   lam rate. dist_ (DExponential {rate = rate})
 
 let gamma_ = use GammaDist in
-  lam k. lam theta. dist_ (DGamma {k = k, theta = theta})
+  lam k. lam rate. dist_ (DGamma {k = k, rate = rate})
 
 let normal_ = use NormalDist in
   lam mu. lam sigma. dist_ (DNormal {mu = mu, sigma = sigma})
@@ -704,7 +704,7 @@ let tmEmpirical = empirical_ (seq_ [
     utuple_ [float_ 3.0, float_ 1.3]
   ]) in
 let tmExponential = exp_ (float_ 1.0) in
-let tmGamma = gamma_ (float_ 1.0) (float_ 2.0) in
+let tmGamma = gamma_ (float_ 1.0) (float_ 0.5) in
 let tmNormal = normal_ (float_ 0.0) (float_ 1.0) in
 let tmGeometric = geometric_ (float_ 0.5) in
 let tmMultinomial =
@@ -754,7 +754,7 @@ utest mexprToString tmExponential with strJoin "\n" [
 ] using eqString in
 
 utest mexprToString tmGamma with strJoin "\n" [
-  "Gamma 1. 2."
+  "Gamma 1. 0.5"
 ] using eqString in
 
 utest mexprToString tmNormal with strJoin "\n" [
@@ -915,7 +915,7 @@ with [ float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmGamma with gamma_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmGamma
-with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
+with [ float_ 0.5, float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmNormal with normal_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmNormal

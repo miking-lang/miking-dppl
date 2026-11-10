@@ -3,7 +3,7 @@ include "float.mc"
 include "../../cppl-test.dppl"
 
 let model1 = lam.
-  let a = assume (Gamma 2. 3.) in
+  let a = assume (Gamma 2. (divf 1. 3.)) in
   let b = assume (Exponential 2.) in
   let c = assume (Beta 2. 2.) in
   let d = assume (Normal 1. 2.) in
@@ -11,7 +11,7 @@ let model1 = lam.
   foldl addf 0. [a, b, c, d, e]
 
 let model2 = lam.
-  let a = expectation (Gamma 2. 3.) in
+  let a = expectation (Gamma 2. (divf 1. 3.)) in
   let b = expectation (Exponential 2.) in
   let c = expectation (Beta 2. 2.) in
   let d = expectation (Normal 1. 2.) in

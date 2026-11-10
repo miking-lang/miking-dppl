@@ -85,7 +85,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistChi2 {df : Int}
   | DistDirichlet {a : [Float]}
   | DistExponential {rate : Float}
-  | DistGamma {shape : Float, scale : Float}
+  | DistGamma {shape : Float, rate : Float}
   | DistNormal {mu : Float, sigma : Float}
   | DistGeometric {p : Float}
   | DistLomax {scale: Float, shape : Float}
@@ -107,7 +107,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
-  | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
+  | DistGamma t -> unsafeCoerce (gammaSample t.shape t.rate)
   | DistNormal t -> unsafeCoerce (normalSample t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricSample t.p)
   | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
@@ -132,7 +132,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistDirichlet t ->
     error "expectation undefined for the Dirichlet distribution"
   | DistExponential t -> unsafeCoerce (divf 1. t.rate)
-  | DistGamma t -> unsafeCoerce (mulf t.shape t.scale)
+  | DistGamma t -> unsafeCoerce (divf t.shape t.rate)
   | DistNormal t -> unsafeCoerce t.mu
   | DistGeometric t -> unsafeCoerce (divf (subf 1. t.p) t.p)
   | DistMultinomial t ->
@@ -153,7 +153,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
-  | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
+  | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.rate)
   | DistNormal t -> unsafeCoerce (normalLogPdf t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricLogPmf t.p)
   | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)

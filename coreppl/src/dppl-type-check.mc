@@ -3736,7 +3736,7 @@ utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DBeta {a = x, b = y}))
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DGamma {k = x, theta = y}))
+utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DGamma {k = x, rate = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in

@@ -242,7 +242,7 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , info = info
     })
   | "Gamma" -> Some (2, lam lst. TmDist
-    { dist = DGamma {k = get lst 0, theta = get lst 1}
+    { dist = DGamma {k = get lst 0, rate = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })

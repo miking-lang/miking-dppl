@@ -69,9 +69,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DExponential { rate = rate } ->
     let cname = _getConExn "DistExponential" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
-  | DGamma { k = k, theta = theta } ->
+  | DGamma { k = k, rate = rate } ->
     let cname = _getConExn "DistGamma" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("shape", k), ("scale", theta)])))
+    i (nconapp_ cname (i (autoty_record_ [("shape", k), ("rate", rate)])))
   | DNormal { mu = mu, sigma = sigma } ->
     let cname = _getConExn "DistNormal" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("mu", mu), ("sigma", sigma)])))

@@ -37,7 +37,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistPoisson {lambda : Param, scale : Float}
   | DsDistBinomial {n : Param, p : Param}
   | DsDistUniform {a : Param, b : Param}
-  | DsDistGamma {shape : Param, scale : Param}
+  | DsDistGamma {shape : Param, rate : Param}
   | DsDistExponential {rate : Param}
   | DsDistLomax {scale : Param, shape : Param}
   | DsDistBetabin {n : Param, a: Param, b : Param}
@@ -58,7 +58,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistPoisson d -> [d.lambda]
   | DsDistBinomial d -> [d.n,d.p]
   | DsDistUniform d -> [d.a,d.b]
-  | DsDistGamma d -> [d.shape,d.scale]
+  | DsDistGamma d -> [d.shape,d.rate]
   | DsDistExponential d -> [d.rate]
   | DsDistLomax d -> [d.shape,d.scale]
   | DsDistBetabin d -> [d.n,d.a,d.b]
@@ -264,9 +264,8 @@ lang DelayedSampling = DelayedGraph
     Some (DsDistNormal {mu = FloatParam ppM, sigma= FloatParam ppS,meanScale=1.,meanOffset=0.})
   | (DsDistGamma p, DsDistExponential l) ->
     let shape = unwrap p.shape in
-    let scale = unwrap p.scale in
-    let pScale = divf 1. scale in
-    Some (DsDistLomax {shape = FloatParam shape, scale = FloatParam pScale})
+    let rate = unwrap p.rate in
+    Some (DsDistLomax {shape = FloatParam shape, scale = FloatParam rate})
   | (DsDistDirichlet p, DsDistCategorical l) ->
     let a = unwrap p.a in
     let sum = foldl addf 0. a in
@@ -274,9 +273,9 @@ lang DelayedSampling = DelayedGraph
     Some (DsDistCategorical {p=SeqFParam p})
   | (DsDistGamma p, DsDistPoisson l) ->
     let shape = ceilfi (unwrap p.shape) in
-    let scale = unwrap p.scale in
-    let pSc = divf 1. (addf (mulf scale l.scale) 1.) in
-    Some (DsDistNegativeBinomial {n = IntParam shape, p = FloatParam pSc})
+    let rate = unwrap p.rate in
+    let pNB = divf rate (addf rate l.scale) in
+    Some (DsDistNegativeBinomial {n = IntParam shape, p = FloatParam pNB})
   | (_,_) -> None ()
 
   -- TODO 
@@ -309,11 +308,10 @@ lang DelayedSampling = DelayedGraph
     Some (DsDistNormal {mu=FloatParam pMu, sigma= FloatParam pSigma, meanScale=1., meanOffset=0.})
   | (DsDistGamma p, DsDistExponential l) ->
     let shape = unwrap p.shape in
-    let scale = unwrap p.scale in
+    let rate = unwrap p.rate in
     let pSh = addf shape 1. in
-    let pSc = addf 1. (mulf (unsafeCoerce obs) scale) in
-    let pSc = divf scale pSc in
-    Some (DsDistGamma {shape = FloatParam pSh, scale = FloatParam pSc})
+    let pRate = addf rate (unsafeCoerce obs) in
+    Some (DsDistGamma {shape = FloatParam pSh, rate = FloatParam pRate})
   | (DsDistDirichlet p, DsDistCategorical l) ->
     let a = unwrap p.a in
     let sum = foldl addf 0. a in
@@ -321,10 +319,10 @@ lang DelayedSampling = DelayedGraph
     Some (DsDistDirichlet {a=SeqFParam a})
   | (DsDistGamma p, DsDistPoisson l) ->
     let shape = unwrap p.shape in
-    let scale = unwrap p.scale in
+    let rate = unwrap p.rate in
     let pSh = addf shape (int2float (unsafeCoerce obs)) in
-    let pSc = divf scale (addf (mulf scale l.scale) 1.) in
-    Some (DsDistGamma {shape = FloatParam pSh, scale = FloatParam pSc})
+    let pRate = addf rate l.scale in
+    Some (DsDistGamma {shape = FloatParam pSh, rate = FloatParam pRate})
   | _ -> None () --neverr
 
   sem transformDsDist sampleT =
@@ -335,7 +333,7 @@ lang DelayedSampling = DelayedGraph
   | DsDistPoisson t -> DistPoisson {lambda = mulf t.scale (value (unsafeCoerce sampleT) t.lambda)}
   | DsDistBinomial t -> DistBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
   | DsDistUniform t -> DistUniform {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
-  | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, scale =  value (unsafeCoerce sampleT) t.scale}
+  | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, rate = value (unsafeCoerce sampleT) t.rate}
   | DsDistExponential t -> DistExponential {rate = value  (unsafeCoerce sampleT)  t.rate}
   | DsDistLomax t -> DistLomax {shape = value (unsafeCoerce sampleT) t.shape, scale = value (unsafeCoerce sampleT) t.scale}
   | DsDistDirichlet t -> DistDirichlet {a = value (unsafeCoerce sampleT) t.a}
