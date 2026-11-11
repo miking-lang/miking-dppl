@@ -87,9 +87,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DTreeInferenceCategorical { p = p , pairSets = pairSets} ->
     let cname = _getConExn "DistTreeInferenceCategorical" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("p", p), ("pairSets", pairSets)])))
-  | DUniform { a = a, b = b } ->
+  | DUniform { alpha = a, beta = b } ->
     let cname = _getConExn "DistUniform" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+    i (nconapp_ cname (i (autoty_record_ [("alpha", a), ("beta", b)])))
   | DDiscreteRange { lower = lower, upper = upper } ->
     let cname = _getConExn "DistDiscreteRange" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("lower", lower), ("upper", upper)])))

@@ -81,7 +81,7 @@ let systematicSample: all a. [a] -> [Float] -> Float -> Int -> [a] = lam seq. la
     else if ltf u (head weights) then systematicSampleRec seq weights (addf u step) (cons (head seq) out)
     else systematicSampleRec (tail seq) (tail weights) (subf u (head weights)) out
   in
-  systematicSampleRec seq weights (uniformContinuousSample 0. step) (toList [])
+  systematicSampleRec seq weights (uniformSample 0. step) (toList [])
 
 -- Computing the normalization constant using the log-sum-exp trick
 let normConstant : [Float] -> Float = lam res.

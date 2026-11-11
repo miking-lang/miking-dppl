@@ -114,10 +114,10 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
   | DCategorical {p = p} ->
     let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_SeqFParam" p) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistCategorical" (i (autoty_record_ [("p", p)])))
-  | DUniform {a = a, b = b} ->
+  | DUniform {alpha = a, beta = b} ->
     let a = match assignDCons env runtimeDelayEnv a with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" a) in
     let b = match assignDCons env runtimeDelayEnv b with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" b) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistUniform" (i (autoty_record_ [("a", a), ("b", b)])))
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistUniform" (i (autoty_record_ [("alpha", a), ("beta", b)])))
   | DPoisson {lambda = lambda} ->
     match lambda with TmVar v in
     let normalParams = let lambda = match assignDCons env runtimeDelayEnv lambda with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" lambda) in

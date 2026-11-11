@@ -93,7 +93,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistNegBinomial {alpha : Float, beta : Float}
   | DistPoisson {lambda : Float}
   | DistTreeInferenceCategorical {p:[Float], pairSets: [[Int]]}
-  | DistUniform {a : Float, b : Float}
+  | DistUniform {alpha : Float, beta : Float}
   | DistDiscreteRange {lower : Int, upper : Int}
   | DistReciprocal {a: Float, b: Float}
   | DistWiener {cps : Bool, a : ()}
@@ -115,7 +115,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistNegBinomial t -> unsafeCoerce (negBinomialSample t.alpha t.beta)
   | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalSample t.p t.pairSets)
-  | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
+  | DistUniform t -> unsafeCoerce (uniformSample t.alpha t.beta)
   | DistDiscreteRange t -> unsafeCoerce (discreteRangeSample t.lower t.upper)
   | DistReciprocal t -> unsafeCoerce (reciprocalSample t.a t.b)
   | DistWiener {cps = false, a = a} -> unsafeCoerce (wienerSample a)
@@ -138,7 +138,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistMultinomial t ->
     error "expectation undefined for the multinomial distribution"
   | DistPoisson t -> unsafeCoerce t.lambda
-  | DistUniform t -> unsafeCoerce (divf (addf t.a t.b) 2.)
+  | DistUniform t -> unsafeCoerce (divf (addf t.alpha t.beta) 2.)
   | DistDiscreteRange t -> unsafeCoerce (divf (int2float (addi t.lower t.upper)) 2.)
   | DistReciprocal t -> unsafeCoerce (divf (subf t.a t.b) (log (divf t.a t.b)))
   | DistWiener _ -> error "expectation undefined for the Wiener process"
@@ -164,7 +164,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistNegBinomial t -> unsafeCoerce (negBinomialLogPmf t.alpha t.beta)
   | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalLogPmf t.p t.pairSets)
-  | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
+  | DistUniform t -> unsafeCoerce (uniformLogPdf t.alpha t.beta)
   | DistDiscreteRange t -> unsafeCoerce (discreteRangeLogPmf t.lower t.upper)
   | DistReciprocal t -> unsafeCoerce (reciprocalLogPdf t.a t.b)
   | DistWiener _ -> error "logObserve undefined for the Wiener process"
@@ -273,7 +273,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     -- than the chosen value. The sample at this index is returned. Note that
     -- we use the final cumulative weight rather than 1 for y, to prevent
     -- rounding errors from skewing the probability of the last sample.
-    let x = uniformContinuousSample 0.0 (last t.cumulativeWeights) in
+    let x = uniformSample 0.0 (last t.cumulativeWeights) in
 
     -- NOTE(larshum, 2023-05-03): The sampled value 'x' cannot be greater than
     -- the last element of the sequence of cumulative weights, so we should

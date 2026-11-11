@@ -536,13 +536,13 @@ end
 
 lang UniformDist = Dist
   syn Dist =
-  | DUniform { a : Expr, b : Expr }
+  | DUniform { alpha : Expr, beta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DUniform t ->
-    match f acc t.a with (acc, a) in
-    match f acc t.b with (acc, b) in
-    (acc, DUniform { t with a = a, b = b })
+    match f acc t.alpha with (acc, alpha) in
+    match f acc t.beta with (acc, beta) in
+    (acc, DUniform { t with alpha = alpha, beta = beta })
 
   sem distTy info =
   | DUniform _ ->
@@ -657,7 +657,7 @@ let poisson_ = use PoissonDist in
   lam lambda. dist_ (DPoisson {lambda = lambda})
 
 let uniform_ = use UniformDist in
-  lam a. lam b. dist_ (DUniform {a = a, b = b})
+  lam alpha. lam beta. dist_ (DUniform {alpha = alpha, beta = beta})
 
 let discreteRange_ = use DiscreteRangeDist in
   lam lower. lam upper. dist_ (DDiscreteRange {lower = lower, upper = upper})

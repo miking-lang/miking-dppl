@@ -67,7 +67,7 @@ lang AutoDriftKernel = Assume + DistAll
     Some (dist_ (DDirichlet {a = map_ (ulam_ "x" (mulf_ driftScale (var_ "x"))) x}))
 
   | DExponential _ ->
-    Some (dist_ (DUniform {a = divf_ x driftScale, b = mulf_ x driftScale}))
+    Some (dist_ (DUniform {alpha = divf_ x driftScale, beta = mulf_ x driftScale}))
 
   | DGamma _ ->
     Some (dist_ (DGamma {k = divf_ x driftScale, rate = divf_ (float_ 1.0) driftScale}))
@@ -85,7 +85,7 @@ lang AutoDriftKernel = Assume + DistAll
   --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), theta = p})))
 
   | DUniform _ ->
-    Some (dist_ (DUniform {a = subf_ x driftScale, b = addf_ x driftScale}))
+    Some (dist_ (DUniform {alpha = subf_ x driftScale, beta = addf_ x driftScale}))
 
   | DReciprocal _ ->
     Some (dist_ (DReciprocal {a = subf_ x driftScale, b = addf_ x driftScale}))

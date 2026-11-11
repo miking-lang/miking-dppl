@@ -3716,7 +3716,7 @@ in
 -- │ Test Dist │
 -- └───────────┘
 
-utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DUniform {a = x, b = y}))
+utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DUniform {alpha = x, beta = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
