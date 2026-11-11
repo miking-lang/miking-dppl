@@ -221,8 +221,8 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , ty = TyUnknown {info = info}
     , info = info
     })
-  | "Chi2" -> Some (1, lam lst. TmDist
-    { dist = DChi2 {df = get lst 0}
+  | "ChiSquare" -> Some (1, lam lst. TmDist
+    { dist = DChiSquare {nu = get lst 0}
     , ty = TyUnknown {info = info}
     , info = info
     })

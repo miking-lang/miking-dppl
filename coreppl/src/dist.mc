@@ -349,22 +349,21 @@ lang CategoricalDist = Dist
   | DCategorical _ -> "Categorical"
 end
 
-lang Chi2Dist = Dist
+lang ChiSquareDist = Dist
   syn Dist =
-  | DChi2 { df : Expr }
+  | DChiSquare { nu : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
-  | DChi2 t ->
-    match f acc t.df with (acc, df) in
-    (acc, DChi2 { t with df = df })
+  | DChiSquare t ->
+    match f acc t.nu with (acc, nu) in
+    (acc, DChiSquare { t with nu = nu })
 
   sem distTy info =
-  | DChi2 _ ->
+  | DChiSquare _ ->
     let f = ityfloat_ info in
-    let i = ityint_ info in
-    ([], [i], f)
+    ([], [f], f)
   sem distName =
-  | DChi2 _ -> "Chi2"
+  | DChiSquare _ -> "ChiSquare"
 end
 
 lang DirichletDist = Dist
@@ -630,8 +629,8 @@ let binomial_ = use BinomialDist in
 let categorical_ = use CategoricalDist in
   lam p. dist_ (DCategorical {p = p})
 
-let chi2_ = use Chi2Dist in
-  lam df. dist_ (DChi2 {df = df})
+let chiSquare_ = use ChiSquareDist in
+  lam nu. dist_ (DChiSquare {nu = nu})
 
 let dirichlet_ = use DirichletDist in
   lam a. dist_ (DDirichlet {a = a})
@@ -676,7 +675,7 @@ let treeinferencecat_ = use TreeInferenceCategoricalDist in
 ---------------------------
 
 lang DistAll =
-  BernoulliDist + BetaDist + BinomialDist + CategoricalDist + Chi2Dist + DirichletDist +
+  BernoulliDist + BetaDist + BinomialDist + CategoricalDist + ChiSquareDist + DirichletDist +
   EmpiricalDist + ExponentialDist + GammaDist + NormalDist + GeometricDist + MultinomialDist +
   PoissonDist + TreeInferenceCategoricalDist + UniformDist + UniformDiscreteDist + ReciprocalDist + 
   WienerDist
@@ -697,7 +696,7 @@ let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmCategorical =
   categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
-let tmChi2 = chi2_ (int_ 1) in
+let tmChiSquare = chiSquare_ (float_ 1.0) in
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 let tmEmpirical = empirical_ (seq_ [
     utuple_ [float_ 1.0, float_ 1.5],
@@ -736,8 +735,8 @@ utest mexprToString tmCategorical with strJoin "\n" [
   "Categorical [ 0.3, 0.2, 0.5 ]"
 ] using eqString in
 
-utest mexprToString tmChi2 with strJoin "\n" [
-  "Chi2 1"
+utest mexprToString tmChiSquare with strJoin "\n" [
+  "ChiSquare 1."
 ] using eqString in
 
 utest mexprToString tmDirichlet with strJoin "\n" [
@@ -813,8 +812,8 @@ utest eqExpr tmCategorical
 utest eqExpr tmCategorical
   (categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.6])) with false in
 
-utest tmChi2 with tmChi2 using eqExpr in
-utest eqExpr tmChi2 (chi2_ (int_ 2)) with false in
+utest tmChiSquare with tmChiSquare using eqExpr in
+utest eqExpr tmChiSquare (chiSquare_ (float_ 2.0)) with false in
 
 utest tmDirichlet with tmDirichlet using eqExpr in
 utest eqExpr tmDirichlet
@@ -895,9 +894,9 @@ utest smap_Expr_Expr mapVar tmCategorical with categorical_ tmVar using eqExpr i
 utest sfold_Expr_Expr foldToSeq [] tmCategorical
 with [ seq_ [float_ 0.3, float_ 0.2, float_ 0.5] ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmChi2 with chi2_ tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmChi2
-with [ int_ 1 ] using eqSeq eqExpr in
+utest smap_Expr_Expr mapVar tmChiSquare with chiSquare_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmChiSquare
+with [ float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmDirichlet with dirichlet_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmDirichlet
@@ -958,7 +957,7 @@ utest symbolize tmBernoulli with tmBernoulli using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
 utest symbolize tmBinomial with tmBinomial using eqExpr in
 utest symbolize tmCategorical with tmCategorical using eqExpr in
-utest symbolize tmChi2 with tmChi2 using eqExpr in
+utest symbolize tmChiSquare with tmChiSquare using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmExponential with tmExponential using eqExpr in
@@ -981,7 +980,7 @@ utest tyTm (typeCheck tmBernoulli) with tydist_ tybool_ using eqType in
 utest tyTm (typeCheck tmBeta) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmCategorical) with tydist_ tyint_ using eqType in
-utest tyTm (typeCheck tmChi2) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmChiSquare) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
 utest tyTm (typeCheck tmEmpirical) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmExponential) with tydist_ tyfloat_ using eqType in
@@ -1013,7 +1012,7 @@ utest _anf tmCategorical with bindall_ [
   ulet_ "t1" (categorical_ (var_ "t"))](
   var_ "t1"
 ) using eqExpr in
-utest _anf tmChi2 with bind_ (ulet_ "t" tmChi2) (var_ "t") using eqExpr in
+utest _anf tmChiSquare with bind_ (ulet_ "t" tmChiSquare) (var_ "t") using eqExpr in
 utest _anf tmDirichlet with bindall_ [
   ulet_ "t" (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]),
   ulet_ "t1" (dirichlet_ (var_ "t"))](
@@ -1056,7 +1055,7 @@ utest (typeLift tmBernoulli).1 with tmBernoulli using eqExpr in
 utest (typeLift tmBeta).1 with tmBeta using eqExpr in
 utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
 utest (typeLift tmCategorical).1 with tmCategorical using eqExpr in
-utest (typeLift tmChi2).1 with tmChi2 using eqExpr in
+utest (typeLift tmChiSquare).1 with tmChiSquare using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmExponential).1 with tmExponential using eqExpr in

@@ -58,9 +58,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DCategorical { p = p } ->
     let cname = _getConExn "DistCategorical" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("p", p)])))
-  | DChi2 { df = df } ->
-    let cname = _getConExn "DistChi2" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("df", df)])))
+  | DChiSquare { nu = nu } ->
+    let cname = _getConExn "DistChiSquare" (_getLangEnvExn "RuntimeDist" env.env) in
+    i (nconapp_ cname (i (autoty_record_ [("nu", nu)])))
   | DDirichlet { a = a } ->
     let cname = _getConExn "DistDirichlet" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("a", a)])))

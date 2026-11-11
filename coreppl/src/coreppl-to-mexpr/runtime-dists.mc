@@ -82,7 +82,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBetaBinomial {n:Int, alpha: Float, beta: Float}
   | DistBinomial {n : Int, theta : Float}
   | DistCategorical {p : [Float]}
-  | DistChi2 {df : Int}
+  | DistChiSquare {nu : Float}
   | DistDirichlet {a : [Float]}
   | DistExponential {rate : Float}
   | DistGamma {shape : Float, rate : Float}
@@ -104,7 +104,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBetaBinomial t -> unsafeCoerce (betaBinomialSample t.n t.alpha t.beta)
   | DistBinomial t -> unsafeCoerce (binomialSample t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
-  | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
+  | DistChiSquare t -> unsafeCoerce (chiSquareSample t.nu)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
   | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.rate)
@@ -128,7 +128,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBinomial t -> unsafeCoerce (mulf t.theta (int2float t.n))
   | DistCategorical t ->
     error "expectation undefined for the categorical distribution"
-  | DistChi2 t -> unsafeCoerce t.df
+  | DistChiSquare t -> unsafeCoerce t.nu
   | DistDirichlet t ->
     error "expectation undefined for the Dirichlet distribution"
   | DistExponential t -> unsafeCoerce (divf 1. t.rate)
@@ -150,7 +150,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBetaBinomial t -> unsafeCoerce (betaBinomialLogPmf t.n t.alpha t.beta)
   | DistBinomial t -> unsafeCoerce (binomialLogPmf t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
-  | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)
+  | DistChiSquare t -> unsafeCoerce (chiSquareLogPdf t.nu)
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
   | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.rate)
