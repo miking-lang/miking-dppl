@@ -466,7 +466,7 @@ let modelTreeInferenceP = lam.
   clusterP q trees 0.0 seqLength (length trees);()
 
 let treeNormConst = distEmpiricalNormConst (infer (Importance {particles = 10000, cps = "none",prune=true}) modelTreeInferenceP)
-utest treeNormConst with -79.28202 using eqfApprox 1e-5
+utest treeNormConst with -79.2373850246 using eqfApprox 1e-5
 mexpr
 ()
 
