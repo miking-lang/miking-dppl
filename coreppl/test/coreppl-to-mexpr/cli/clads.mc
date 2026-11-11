@@ -21,11 +21,11 @@ let t = testCpplMExpr "diversification-models/clads2-synthetic.dppl" in
 -- NOTE(2023-06-30,dlunde): SMC with '--resample likelihood' peforms really
 -- poorly for this model, which is why we simply give lam. lam. true as the
 -- test equality function.
-utest r (t 1000 0 "-m is-lw --cps none"                            ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps partial"                         ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps partial --no-early-stop"         ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps full"                            ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps full --no-early-stop"            ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps none"                            ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps partial"                         ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps partial --no-early-stop"         ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps full"                            ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps full --no-early-stop"            ) with rhs using en in
 -- utest r (t 1000 0 "-m smc-bpf --cps partial --resample manual"     ) with rhs using en in
 utest r (t 1000 0 "-m smc-bpf --cps partial --resample align"      ) with rhs using en in
 utest r (t 1000 0 "-m smc-bpf --cps partial --resample likelihood" ) with rhs using lam. lam. true in
