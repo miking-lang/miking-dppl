@@ -313,13 +313,13 @@ end
 
 lang BinomialDist = Dist
   syn Dist =
-  | DBinomial { n : Expr, p : Expr }
+  | DBinomial { n : Expr, theta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DBinomial t ->
     match f acc t.n with (acc, n) in
-    match f acc t.p with (acc, p) in
-    (acc, DBinomial { t with n = n, p = p })
+    match f acc t.theta with (acc, theta) in
+    (acc, DBinomial { t with n = n, theta = theta })
 
   sem distTy info =
   | DBinomial _ ->
@@ -625,7 +625,7 @@ let beta_ = use BetaDist in
   lam alpha. lam beta. dist_ (DBeta {alpha = alpha, beta = beta})
 
 let binomial_ = use BinomialDist in
-  lam n. lam p. dist_ (DBinomial {n = n, p = p})
+  lam n. lam theta. dist_ (DBinomial {n = n, theta = theta})
 
 let categorical_ = use CategoricalDist in
   lam p. dist_ (DCategorical {p = p})

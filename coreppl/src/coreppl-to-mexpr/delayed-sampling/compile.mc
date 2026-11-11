@@ -132,10 +132,10 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
       else normalParams in
     -- here match lambda with AffineParam though only scale, what happens if addition?
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistPoisson" (i (autoty_record_ [("lambda", res.0),("scale",res.1)])))
-  | DBinomial {n = n, p = p} ->
+  | DBinomial {n = n, theta = theta} ->
     let n = match assignDCons env runtimeDelayEnv n with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_IntParam" n) in
-    let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBinomial" (i (autoty_record_ [("n", n), ("p", p)])))
+    let theta = match assignDCons env runtimeDelayEnv theta with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" theta) in
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBinomial" (i (autoty_record_ [("n", n), ("theta", theta)])))
   | DGamma {k = shape, rate = rate} ->
     let shape = match assignDCons env runtimeDelayEnv shape with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" shape) in
     let rate = match assignDCons env runtimeDelayEnv rate with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" rate) in

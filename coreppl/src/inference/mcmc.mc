@@ -59,7 +59,7 @@ lang AutoDriftKernel = Assume + DistAll
   --   let pBody = divf_ (subf_ x driftScale) x in
   --   let pName = nameSym "p" in
   --   let p = nvar_ pName in
-  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), p = p})))
+  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), theta = p})))
 
   -- | DBernoulli _ ->
 
@@ -82,7 +82,7 @@ lang AutoDriftKernel = Assume + DistAll
   --   let pBody = divf_ (subf_ x driftScale) x in
   --   let pName = nameSym "p" in
   --   let p = nvar_ pName in
-  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), p = p})))
+  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), theta = p})))
 
   | DUniform _ ->
     Some (dist_ (DUniform {a = subf_ x driftScale, b = addf_ x driftScale}))

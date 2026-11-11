@@ -80,7 +80,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBernoulli {p : Float}
   | DistBeta {alpha : Float, beta : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
-  | DistBinomial {n : Int, p : Float}
+  | DistBinomial {n : Int, theta : Float}
   | DistCategorical {p : [Float]}
   | DistChi2 {df : Int}
   | DistDirichlet {a : [Float]}
@@ -102,7 +102,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
   | DistBeta t -> unsafeCoerce (betaSample t.alpha t.beta)
   | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
-  | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
+  | DistBinomial t -> unsafeCoerce (binomialSample t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
   | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
@@ -125,7 +125,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   sem expectation +=
   | DistBernoulli t -> unsafeCoerce t.p
   | DistBeta t -> unsafeCoerce (divf t.alpha (addf t.alpha t.beta))
-  | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
+  | DistBinomial t -> unsafeCoerce (mulf t.theta (int2float t.n))
   | DistCategorical t ->
     error "expectation undefined for the categorical distribution"
   | DistChi2 t -> unsafeCoerce t.df
@@ -148,7 +148,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
   | DistBeta t -> unsafeCoerce (betaLogPdf t.alpha t.beta)
   | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
-  | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
+  | DistBinomial t -> unsafeCoerce (binomialLogPmf t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
   | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)

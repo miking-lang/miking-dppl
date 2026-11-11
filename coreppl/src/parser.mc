@@ -212,7 +212,7 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , info = info
     })
   | "Binomial" -> Some (2, lam lst. TmDist
-    { dist = DBinomial {n = get lst 0, p = get lst 1}
+    { dist = DBinomial {n = get lst 0, theta = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })
