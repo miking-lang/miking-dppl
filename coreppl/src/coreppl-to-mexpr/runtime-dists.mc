@@ -90,7 +90,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGeometric {p : Float}
   | DistLomax {scale: Float, shape : Float}
   | DistMultinomial {n : Int, p : [Float]}
-  | DistNegativeBinomial {n:Int, p: Float}
+  | DistNegBinomial {alpha : Float, beta : Float}
   | DistPoisson {lambda : Float}
   | DistTreeInferenceCategorical {p:[Float], pairSets: [[Int]]}
   | DistUniform {a : Float, b : Float}
@@ -112,7 +112,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGeometric t -> unsafeCoerce (geometricSample t.p)
   | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
   | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
-  | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
+  | DistNegBinomial t -> unsafeCoerce (negBinomialSample t.alpha t.beta)
   | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalSample t.p t.pairSets)
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
@@ -161,7 +161,7 @@ lang RuntimeDistElementary = RuntimeDistBase
     unsafeCoerce (lam o.
       if eqi t.n (foldl1 addi o) then multinomialLogPmf t.p o
       else negf inf)
-  | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
+  | DistNegBinomial t -> unsafeCoerce (negBinomialLogPmf t.alpha t.beta)
   | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalLogPmf t.p t.pairSets)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
