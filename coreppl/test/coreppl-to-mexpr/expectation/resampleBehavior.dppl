@@ -14,7 +14,7 @@ let out = ref initialAcc in
 
 let resampleBehavior: (Int, Int) -> Int -> ((Int, Int),([Bool], Int)) = 
   lam acc. lam length.
-    let valu = assume (UniformDiscrete 0 (subi length 1)) in
+    let valu = assume (DiscreteRange 0 (subi length 1)) in
     let vec = create length (lam. true) in
     let acc = (acc.0, addi acc.1 1) in
     modref out acc;

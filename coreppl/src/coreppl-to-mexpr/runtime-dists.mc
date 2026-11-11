@@ -94,7 +94,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistPoisson {lambda : Float}
   | DistTreeInferenceCategorical {p:[Float], pairSets: [[Int]]}
   | DistUniform {a : Float, b : Float}
-  | DistUniformDiscrete {a : Int, b : Int}
+  | DistDiscreteRange {lower : Int, upper : Int}
   | DistReciprocal {a: Float, b: Float}
   | DistWiener {cps : Bool, a : ()}
  
@@ -116,7 +116,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalSample t.p t.pairSets)
   | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
-  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteSample t.a t.b)
+  | DistDiscreteRange t -> unsafeCoerce (discreteRangeSample t.lower t.upper)
   | DistReciprocal t -> unsafeCoerce (reciprocalSample t.a t.b)
   | DistWiener {cps = false, a = a} -> unsafeCoerce (wienerSample a)
   | DistWiener {cps = true, a = a} -> unsafeCoerce (let w = wienerSample a in lam k. lam x. k (w x))
@@ -139,7 +139,7 @@ lang RuntimeDistElementary = RuntimeDistBase
     error "expectation undefined for the multinomial distribution"
   | DistPoisson t -> unsafeCoerce t.lambda
   | DistUniform t -> unsafeCoerce (divf (addf t.a t.b) 2.)
-  | DistUniformDiscrete t -> unsafeCoerce (divf (int2float (addi t.a t.b)) 2.)
+  | DistDiscreteRange t -> unsafeCoerce (divf (int2float (addi t.lower t.upper)) 2.)
   | DistReciprocal t -> unsafeCoerce (divf (subf t.a t.b) (log (divf t.a t.b)))
   | DistWiener _ -> error "expectation undefined for the Wiener process"
   | DistTreeInferenceCategorical t -> error "expectation undefined for the tree inference categorical distribution"
@@ -165,7 +165,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalLogPmf t.p t.pairSets)
   | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
-  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteLogPdf t.a t.b)
+  | DistDiscreteRange t -> unsafeCoerce (discreteRangeLogPmf t.lower t.upper)
   | DistReciprocal t -> unsafeCoerce (reciprocalLogPdf t.a t.b)
   | DistWiener _ -> error "logObserve undefined for the Wiener process"
 end

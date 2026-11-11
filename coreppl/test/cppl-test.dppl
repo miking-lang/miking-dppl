@@ -18,7 +18,7 @@ let resampleBehavior: all a. Float -> a -> Int -> (a,([Bool], Int)) =
     let valu = if (assume (Bernoulli globalProb)) then
       negi 1
     else
-      assume (UniformDiscrete 0 (subi length 1))
+      assume (DiscreteRange 0 (subi length 1))
     in
     let vec = create length (lam. true) in
     (acc,(vec, valu))

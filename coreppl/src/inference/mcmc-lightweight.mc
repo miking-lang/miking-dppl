@@ -67,7 +67,7 @@ lang LightweightMCMCMethod = InferMethodBase + Assume
           , if_ (assume_ (bern_ (float_ _mcmcLightweightGlobalProbDefault)))
           (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ false))) ,(negi_ (int_ 2))])
           (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ true))) ,
-            (assume_ (uniformDiscrete_ (int_ 0) (subi_ (var_ "length") (int_ 1))))])
+            (assume_ (discreteRange_ (int_ 0) (subi_ (var_ "length") (int_ 1))))])
           ]
         )))
         )
@@ -191,7 +191,7 @@ let mcmcLightweightOptions : OptParser (use LightweightMCMCMethod in InferMethod
           , if_ (assume_ (bern_ (float_ globalProb)))
           (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ false))) ,(negi_ (int_ 2))])
           (utuple_  [(create_ (var_ "length") (ulam_ "" (bool_ true))) ,
-            (assume_ (uniformDiscrete_ (int_ 0) (subi_ (var_ "length") (int_ 1))))])
+            (assume_ (discreteRange_ (int_ 0) (subi_ (var_ "length") (int_ 1))))])
           ]
         )))
     , debug = utuple_ [unit_, ulam_ "" (ulam_ "" unit_)]

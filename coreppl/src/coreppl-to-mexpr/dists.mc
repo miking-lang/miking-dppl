@@ -90,9 +90,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DUniform { a = a, b = b } ->
     let cname = _getConExn "DistUniform" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
-  | DUniformDiscrete { a = a, b = b } ->
-    let cname = _getConExn "DistUniformDiscrete" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+  | DDiscreteRange { lower = lower, upper = upper } ->
+    let cname = _getConExn "DistDiscreteRange" (_getLangEnvExn "RuntimeDist" env.env) in
+    i (nconapp_ cname (i (autoty_record_ [("lower", lower), ("upper", upper)])))
   | DReciprocal { a = a, b = b } ->
     let cname = _getConExn "DistReciprocal" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))

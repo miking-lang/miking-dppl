@@ -42,7 +42,7 @@ end
 -- === A simple store of assumes, generic enough to work for any model ===
 
 let _chooseUniform : all a. [a] -> a
-  = lam l. get l (uniformDiscreteSample 0 (subi (length l) 1))
+  = lam l. get l (discreteRangeSample 0 (subi (length l) 1))
 
 lang SimpleState = PValInterface
   syn SimpleState x =

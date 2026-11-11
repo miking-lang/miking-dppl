@@ -552,22 +552,22 @@ lang UniformDist = Dist
   | DUniform _ -> "Uniform"
 end
 
-lang UniformDiscreteDist = Dist
+lang DiscreteRangeDist = Dist
   syn Dist =
-  | DUniformDiscrete { a : Expr, b : Expr }
+  | DDiscreteRange { lower : Expr, upper : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
-  | DUniformDiscrete t ->
-    match f acc t.a with (acc, a) in
-    match f acc t.b with (acc, b) in
-    (acc, DUniformDiscrete { t with a = a, b = b })
+  | DDiscreteRange t ->
+    match f acc t.lower with (acc, lower) in
+    match f acc t.upper with (acc, upper) in
+    (acc, DDiscreteRange { t with lower = lower, upper = upper })
 
   sem distTy info =
-  | DUniformDiscrete _ ->
+  | DDiscreteRange _ ->
     let i = ityint_ info in ([], [i, i], i)
 
   sem distName =
-  | DUniformDiscrete _ -> "UniformDiscrete"
+  | DDiscreteRange _ -> "DiscreteRange"
 end
 
 lang ReciprocalDist = Dist
@@ -659,8 +659,8 @@ let poisson_ = use PoissonDist in
 let uniform_ = use UniformDist in
   lam a. lam b. dist_ (DUniform {a = a, b = b})
 
-let uniformDiscrete_ = use UniformDiscreteDist in
-  lam a. lam b. dist_ (DUniformDiscrete {a = a, b = b})
+let discreteRange_ = use DiscreteRangeDist in
+  lam lower. lam upper. dist_ (DDiscreteRange {lower = lower, upper = upper})
 
 let reciprocal_ = use ReciprocalDist in
   lam a. lam b. dist_ (DReciprocal {a = a, b = b})
@@ -677,7 +677,7 @@ let treeinferencecat_ = use TreeInferenceCategoricalDist in
 lang DistAll =
   BernoulliDist + BetaDist + BinomialDist + CategoricalDist + ChiSquareDist + DirichletDist +
   EmpiricalDist + ExponentialDist + GammaDist + NormalDist + GeometricDist + MultinomialDist +
-  PoissonDist + TreeInferenceCategoricalDist + UniformDist + UniformDiscreteDist + ReciprocalDist + 
+  PoissonDist + TreeInferenceCategoricalDist + UniformDist + DiscreteRangeDist + ReciprocalDist + 
   WienerDist
 end
 
@@ -710,7 +710,7 @@ let tmMultinomial =
   multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmPoisson = poisson_ (float_ 0.5) in
 let tmUniform = uniform_ (float_ 1.0) (float_ 2.0) in
-let tmUniformDiscrete = uniformDiscrete_ (int_ 1) (int_ 2) in
+let tmDiscreteRange = discreteRange_ (int_ 1) (int_ 2) in
 let tmReciprocal = reciprocal_ (float_ 1.0) (float_ 2.0) in
 let tmWiener = wiener_ in
 let tmTree = treeinferencecat_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [ seq_ [int_ 0, int_ 1]]) in
@@ -776,8 +776,8 @@ utest mexprToString tmUniform with strJoin "\n" [
   "Uniform 1. 2."
 ] using eqString in
 
-utest mexprToString tmUniformDiscrete with strJoin "\n" [
-  "UniformDiscrete 1 2"
+utest mexprToString tmDiscreteRange with strJoin "\n" [
+  "DiscreteRange 1 2"
 ] using eqString in
 
 utest mexprToString tmReciprocal with strJoin "\n" [
@@ -861,8 +861,8 @@ utest eqExpr tmTree tmBinomial with false in
 utest tmUniform with tmUniform using eqExpr in
 utest eqExpr tmUniform (uniform_ (float_ 1.0) (float_ 1.0)) with false in
 
-utest tmUniformDiscrete with tmUniformDiscrete using eqExpr in
-utest eqExpr tmUniformDiscrete (uniformDiscrete_ (int_ 1) (int_ 1)) with false in
+utest tmDiscreteRange with tmDiscreteRange using eqExpr in
+utest eqExpr tmDiscreteRange (discreteRange_ (int_ 1) (int_ 1)) with false in
 
 utest tmReciprocal with tmReciprocal using eqExpr in
 utest eqExpr tmReciprocal (reciprocal_ (float_ 1.0) (float_ 1.0)) with false in
@@ -937,8 +937,8 @@ utest smap_Expr_Expr mapVar tmUniform with uniform_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmUniform
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmUniformDiscrete with uniformDiscrete_ tmVar tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmUniformDiscrete
+utest smap_Expr_Expr mapVar tmDiscreteRange with discreteRange_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmDiscreteRange
 with [ int_ 2, int_ 1 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmReciprocal with reciprocal_ tmVar tmVar using eqExpr in
@@ -968,7 +968,7 @@ utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
 utest symbolize tmTree with tmTree using eqExpr in
 utest symbolize tmUniform with tmUniform using eqExpr in
-utest symbolize tmUniformDiscrete with tmUniformDiscrete using eqExpr in
+utest symbolize tmDiscreteRange with tmDiscreteRange using eqExpr in
 utest symbolize tmReciprocal with tmReciprocal using eqExpr in
 utest symbolize tmWiener with tmWiener using eqExpr in
 
@@ -991,7 +991,7 @@ utest tyTm (typeCheck tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType i
 utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmUniform) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmReciprocal) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeCheck tmUniformDiscrete) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmDiscreteRange) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_)
   using eqType
 in
@@ -1037,7 +1037,7 @@ utest _anf tmMultinomial with bindall_ [
 ) using eqExpr in
 utest _anf tmPoisson with bind_ (ulet_ "t" tmPoisson) (var_ "t") using eqExpr in
 utest _anf tmUniform with bind_ (ulet_ "t" tmUniform) (var_ "t") using eqExpr in
-utest _anf tmUniformDiscrete with bind_ (ulet_ "t" tmUniformDiscrete) (var_ "t") using eqExpr in
+utest _anf tmDiscreteRange with bind_ (ulet_ "t" tmDiscreteRange) (var_ "t") using eqExpr in
 utest _anf tmReciprocal with bind_ (ulet_ "t" tmReciprocal) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 utest _anf tmTree with bindall_ [
@@ -1066,7 +1066,7 @@ utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
 utest (typeLift tmTree).1 with tmTree using eqExpr in
 utest (typeLift tmUniform).1 with tmUniform using eqExpr in
-utest (typeLift tmUniformDiscrete).1 with tmUniformDiscrete using eqExpr in
+utest (typeLift tmDiscreteRange).1 with tmDiscreteRange using eqExpr in
 utest (typeLift tmReciprocal).1 with tmReciprocal using eqExpr in
 utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 

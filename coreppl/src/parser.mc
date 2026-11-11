@@ -276,8 +276,8 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , ty = TyUnknown {info = info}
     , info = info
     })
-  | "UniformDiscrete" -> Some (2, lam lst. TmDist
-    { dist = DUniformDiscrete {a = get lst 0, b = get lst 1}
+  | "DiscreteRange" -> Some (2, lam lst. TmDist
+    { dist = DDiscreteRange {lower = get lst 0, upper = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })

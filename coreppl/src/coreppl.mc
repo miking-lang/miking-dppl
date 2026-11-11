@@ -1527,7 +1527,7 @@ let pplKeywords = [
   "assume", "observe", "weight", "resample", "cancel",
   "Bernoulli", "Beta", "Binomial", "Categorical", "ChiSquare", "Dirichlet",
   "Empirical", "Exponential", "Gamma", "Normal", "Geometric", "Multinomial",
-  "Poisson", "Uniform", "UniformDiscrete", "Reciprocal", "Wiener"
+  "Poisson", "Uniform", "DiscreteRange", "Reciprocal", "Wiener"
 ]
 
 lang CoreDPL = Ast + SolveODE + Diff end
