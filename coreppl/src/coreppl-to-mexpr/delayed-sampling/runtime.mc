@@ -38,7 +38,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistBinomial {n : Param, theta : Param}
   | DsDistUniform {a : Param, b : Param}
   | DsDistGamma {shape : Param, rate : Param}
-  | DsDistExponential {rate : Param}
+  | DsDistExponential {beta : Param}
   | DsDistLomax {scale : Param, shape : Param}
   | DsDistBetaBinomial {n : Param, alpha : Param, beta : Param}
   | DsDistNegativeBinomial {n : Param, p: Param}
@@ -59,7 +59,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistBinomial d -> [d.n,d.theta]
   | DsDistUniform d -> [d.a,d.b]
   | DsDistGamma d -> [d.shape,d.rate]
-  | DsDistExponential d -> [d.rate]
+  | DsDistExponential d -> [d.beta]
   | DsDistLomax d -> [d.shape,d.scale]
   | DsDistBetaBinomial d -> [d.n,d.alpha,d.beta]
   | DsDistNegativeBinomial d -> [d.n,d.p]
@@ -334,7 +334,7 @@ lang DelayedSampling = DelayedGraph
   | DsDistBinomial t -> DistBinomial {n = value (unsafeCoerce sampleT) t.n, theta = value (unsafeCoerce sampleT) t.theta}
   | DsDistUniform t -> DistUniform {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
   | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, rate = value (unsafeCoerce sampleT) t.rate}
-  | DsDistExponential t -> DistExponential {rate = value  (unsafeCoerce sampleT)  t.rate}
+  | DsDistExponential t -> DistExponential {beta = value  (unsafeCoerce sampleT)  t.beta}
   | DsDistLomax t -> DistLomax {shape = value (unsafeCoerce sampleT) t.shape, scale = value (unsafeCoerce sampleT) t.scale}
   | DsDistDirichlet t -> DistDirichlet {a = value (unsafeCoerce sampleT) t.a}
   | DsDistMultinomial t -> DistMultinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}

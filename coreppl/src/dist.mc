@@ -408,12 +408,12 @@ end
 
 lang ExponentialDist = Dist
   syn Dist =
-  | DExponential { rate : Expr }
+  | DExponential { beta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DExponential t ->
-    match f acc t.rate with (acc, rate) in
-    (acc, DExponential { t with rate = rate })
+    match f acc t.beta with (acc, beta) in
+    (acc, DExponential { t with beta = beta })
 
   sem distTy info =
   | DExponential _ ->
@@ -638,8 +638,8 @@ let dirichlet_ = use DirichletDist in
 let empirical_ = use EmpiricalDist in
   lam lst. dist_ (DEmpirical {samples = lst})
 
-let exp_ = use ExponentialDist in
-  lam rate. dist_ (DExponential {rate = rate})
+let exp_ : use Dist in Expr -> Expr = use ExponentialDist in
+  lam beta. dist_ (DExponential {beta = beta})
 
 let gamma_ = use GammaDist in
   lam k. lam rate. dist_ (DGamma {k = k, rate = rate})

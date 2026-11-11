@@ -140,9 +140,9 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
     let shape = match assignDCons env runtimeDelayEnv shape with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" shape) in
     let rate = match assignDCons env runtimeDelayEnv rate with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" rate) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistGamma" (i (autoty_record_ [("shape", shape), ("rate", rate)])))
-  | DExponential {rate = rate} ->
-    let rate = match assignDCons env runtimeDelayEnv rate with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" rate) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistExponential" (i (autoty_record_ [("rate", rate)])))
+  | DExponential {beta = beta} ->
+    let beta = match assignDCons env runtimeDelayEnv beta with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" beta) in
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistExponential" (i (autoty_record_ [("beta", beta)])))
   | DDirichlet {a = a} -> let a = match assignDCons env runtimeDelayEnv a with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_SeqFParam" a) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistDirichlet" (i (autoty_record_ [("a", a)])))
   | DMultinomial {n = n, p = p} ->

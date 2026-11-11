@@ -66,9 +66,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
     i (nconapp_ cname (i (autoty_record_ [("a", a)])))
   | DEmpirical { samples = samples } ->
     i (appFromEnv {env with env = _getLangEnvExn "RuntimeDist" env.env} "constructDistEmpiricalHelper" [samples])
-  | DExponential { rate = rate } ->
+  | DExponential { beta = beta } ->
     let cname = _getConExn "DistExponential" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
+    i (nconapp_ cname (i (autoty_record_ [("beta", beta)])))
   | DGamma { k = k, rate = rate } ->
     let cname = _getConExn "DistGamma" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("shape", k), ("rate", rate)])))

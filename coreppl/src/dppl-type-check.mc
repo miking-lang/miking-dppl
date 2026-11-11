@@ -3752,7 +3752,7 @@ utest _typeOf [(_x, tyint_), (_y, tyseq_ (fltX []))]
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX [])] (dist_ (DExponential {rate = x}))
+utest _typeOf [(_x, fltX [])] (dist_ (DExponential {beta = x}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
@@ -3768,7 +3768,7 @@ utest _typeOf [] (dist_ (DWiener { cps = false, a = unit_ }))
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX [])] (dist_ (DExponential {rate = x}))
+utest _typeOf [(_x, fltX [])] (dist_ (DExponential {beta = x}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
@@ -3781,7 +3781,7 @@ utest
 in
 
 let _test = lam c.
-  _typeOf [(_x, flt c)] (dist_ (DExponential {rate = x}))
+  _typeOf [(_x, flt c)] (dist_ (DExponential {beta = x}))
 in
 
 utest _test _A

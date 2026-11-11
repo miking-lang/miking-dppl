@@ -237,7 +237,7 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , info = info
     })
   | "Exponential" -> Some (1, lam lst. TmDist
-    { dist = DExponential {rate = get lst 0}
+    { dist = DExponential {beta = get lst 0}
     , ty = TyUnknown {info = info}
     , info = info
     })
