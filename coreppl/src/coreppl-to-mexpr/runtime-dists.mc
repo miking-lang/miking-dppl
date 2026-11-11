@@ -79,7 +79,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   syn Dist a +=
   | DistBernoulli {p : Float}
   | DistBeta {alpha : Float, beta : Float}
-  | DistBetabin {n:Int, a: Float, b: Float}
+  | DistBetaBinomial {n:Int, alpha: Float, beta: Float}
   | DistBinomial {n : Int, theta : Float}
   | DistCategorical {p : [Float]}
   | DistChi2 {df : Int}
@@ -101,7 +101,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   sem sample +=
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
   | DistBeta t -> unsafeCoerce (betaSample t.alpha t.beta)
-  | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
+  | DistBetaBinomial t -> unsafeCoerce (betaBinomialSample t.n t.alpha t.beta)
   | DistBinomial t -> unsafeCoerce (binomialSample t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
   | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
@@ -147,7 +147,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   sem logObserve +=
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
   | DistBeta t -> unsafeCoerce (betaLogPdf t.alpha t.beta)
-  | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
+  | DistBetaBinomial t -> unsafeCoerce (betaBinomialLogPmf t.n t.alpha t.beta)
   | DistBinomial t -> unsafeCoerce (binomialLogPmf t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
   | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)

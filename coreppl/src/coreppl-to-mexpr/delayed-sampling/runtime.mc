@@ -40,7 +40,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistGamma {shape : Param, rate : Param}
   | DsDistExponential {rate : Param}
   | DsDistLomax {scale : Param, shape : Param}
-  | DsDistBetabin {n : Param, a: Param, b : Param}
+  | DsDistBetaBinomial {n : Param, alpha : Param, beta : Param}
   | DsDistNegativeBinomial {n : Param, p: Param}
 
   sem getParentsH  =
@@ -61,7 +61,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistGamma d -> [d.shape,d.rate]
   | DsDistExponential d -> [d.rate]
   | DsDistLomax d -> [d.shape,d.scale]
-  | DsDistBetabin d -> [d.n,d.a,d.b]
+  | DsDistBetaBinomial d -> [d.n,d.alpha,d.beta]
   | DsDistNegativeBinomial d -> [d.n,d.p]
   | _ -> never
 
@@ -103,7 +103,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistLomax d -> "DsDistLomax"
   | DsDistDirichlet d -> "DsDistDirichlet"
   | DsDistMultinomial d -> "DsDistMultinomial"
-  | DsDistBetabin d -> "DsDistBetabin"
+  | DsDistBetaBinomial d -> "DsDistBetaBinomial"
   | DsDistNegativeBinomial d -> "DsDistNegativeBinomial"
   | _ -> error "d2str: distribution is not supported"
 
@@ -252,7 +252,7 @@ lang DelayedSampling = DelayedGraph
     let pp = divf a (addf a b) in
     Some (DsDistBernoulli {l with p = FloatParam pp})
   | (DsDistBeta p, DsDistBinomial l) ->
-    Some (DsDistBetabin {n = l.n, a=p.alpha,b=p.beta})
+    Some (DsDistBetaBinomial {n = l.n, alpha = p.alpha, beta = p.beta})
   | (DsDistNormal p, DsDistNormal ({mu= DelayParam _}&l)) ->
     let mu0 = addf (mulf (unwrap p.mu) l.meanScale) l.meanOffset in
     let s0 = mulf (unwrap p.sigma) (absf l.meanScale) in
@@ -338,7 +338,7 @@ lang DelayedSampling = DelayedGraph
   | DsDistLomax t -> DistLomax {shape = value (unsafeCoerce sampleT) t.shape, scale = value (unsafeCoerce sampleT) t.scale}
   | DsDistDirichlet t -> DistDirichlet {a = value (unsafeCoerce sampleT) t.a}
   | DsDistMultinomial t -> DistMultinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
-  | DsDistBetabin t -> DistBetabin {n = value (unsafeCoerce sampleT) t.n, a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
+  | DsDistBetaBinomial t -> DistBetaBinomial {n = value (unsafeCoerce sampleT) t.n, alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
   | DsDistNegativeBinomial t -> DistNegativeBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
   | _ -> error "not supported currently."
 
