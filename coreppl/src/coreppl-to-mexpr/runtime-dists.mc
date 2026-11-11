@@ -88,7 +88,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGamma {shape : Float, rate : Float}
   | DistNormal {mu : Float, sigma : Float}
   | DistGeometric {p : Float}
-  | DistLomax {scale: Float, shape : Float}
+  | DistParetoType2 {mu : Float, lambda : Float, alpha : Float}
   | DistMultinomial {n : Int, p : [Float]}
   | DistNegBinomial {alpha : Float, beta : Float}
   | DistPoisson {lambda : Float}
@@ -110,7 +110,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGamma t -> unsafeCoerce (gammaSample t.shape t.rate)
   | DistNormal t -> unsafeCoerce (normalSample t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricSample t.p)
-  | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
+  | DistParetoType2 t -> unsafeCoerce (paretoType2Sample t.mu t.lambda t.alpha)
   | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
   | DistNegBinomial t -> unsafeCoerce (negBinomialSample t.alpha t.beta)
   | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
@@ -156,7 +156,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.rate)
   | DistNormal t -> unsafeCoerce (normalLogPdf t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricLogPmf t.p)
-  | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
+  | DistParetoType2 t -> unsafeCoerce (paretoType2LogPdf t.mu t.lambda t.alpha)
   | DistMultinomial t ->
     unsafeCoerce (lam o.
       if eqi t.n (foldl1 addi o) then multinomialLogPmf t.p o

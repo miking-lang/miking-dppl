@@ -39,7 +39,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistUniform {alpha : Param, beta : Param}
   | DsDistGamma {shape : Param, rate : Param}
   | DsDistExponential {beta : Param}
-  | DsDistLomax {scale : Param, shape : Param}
+  | DsDistParetoType2 {mu : Param, lambda : Param, alpha : Param}
   | DsDistBetaBinomial {n : Param, alpha : Param, beta : Param}
   | DsDistNegBinomial {alpha : Param, beta : Param}
 
@@ -60,7 +60,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistUniform d -> [d.alpha,d.beta]
   | DsDistGamma d -> [d.shape,d.rate]
   | DsDistExponential d -> [d.beta]
-  | DsDistLomax d -> [d.shape,d.scale]
+  | DsDistParetoType2 d -> [d.mu,d.lambda,d.alpha]
   | DsDistBetaBinomial d -> [d.n,d.alpha,d.beta]
   | DsDistNegBinomial d -> [d.alpha,d.beta]
   | _ -> never
@@ -100,7 +100,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   | DsDistUniform d -> "DsDistUniform"
   | DsDistGamma d -> "DsDistGamma"
   | DsDistExponential d -> "DsDistExponential"
-  | DsDistLomax d -> "DsDistLomax"
+  | DsDistParetoType2 d -> "DsDistParetoType2"
   | DsDistDirichlet d -> "DsDistDirichlet"
   | DsDistMultinomial d -> "DsDistMultinomial"
   | DsDistBetaBinomial d -> "DsDistBetaBinomial"
@@ -265,7 +265,7 @@ lang DelayedSampling = DelayedGraph
   | (DsDistGamma p, DsDistExponential l) ->
     let shape = unwrap p.shape in
     let rate = unwrap p.rate in
-    Some (DsDistLomax {shape = FloatParam shape, scale = FloatParam rate})
+    Some (DsDistParetoType2 {mu = FloatParam 0., lambda = FloatParam rate, alpha = FloatParam shape})
   | (DsDistDirichlet p, DsDistCategorical l) ->
     let a = unwrap p.a in
     let sum = foldl addf 0. a in
@@ -335,7 +335,7 @@ lang DelayedSampling = DelayedGraph
   | DsDistUniform t -> DistUniform {alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
   | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, rate = value (unsafeCoerce sampleT) t.rate}
   | DsDistExponential t -> DistExponential {beta = value  (unsafeCoerce sampleT)  t.beta}
-  | DsDistLomax t -> DistLomax {shape = value (unsafeCoerce sampleT) t.shape, scale = value (unsafeCoerce sampleT) t.scale}
+  | DsDistParetoType2 t -> DistParetoType2 {mu = value (unsafeCoerce sampleT) t.mu, lambda = value (unsafeCoerce sampleT) t.lambda, alpha = value (unsafeCoerce sampleT) t.alpha}
   | DsDistDirichlet t -> DistDirichlet {a = value (unsafeCoerce sampleT) t.a}
   | DsDistMultinomial t -> DistMultinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
   | DsDistBetaBinomial t -> DistBetaBinomial {n = value (unsafeCoerce sampleT) t.n, alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
