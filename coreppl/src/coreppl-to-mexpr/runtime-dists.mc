@@ -78,7 +78,7 @@ end
 lang RuntimeDistElementary = RuntimeDistBase
   syn Dist a +=
   | DistBernoulli {p : Float}
-  | DistBeta {a : Float, b : Float}
+  | DistBeta {alpha : Float, beta : Float}
   | DistBetabin {n:Int, a: Float, b: Float}
   | DistBinomial {n : Int, p : Float}
   | DistCategorical {p : [Float]}
@@ -100,7 +100,7 @@ lang RuntimeDistElementary = RuntimeDistBase
  
   sem sample +=
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
-  | DistBeta t -> unsafeCoerce (betaSample t.a t.b)
+  | DistBeta t -> unsafeCoerce (betaSample t.alpha t.beta)
   | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
   | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
@@ -124,7 +124,7 @@ lang RuntimeDistElementary = RuntimeDistBase
   -- Expectation of primitive distributions over real values
   sem expectation +=
   | DistBernoulli t -> unsafeCoerce t.p
-  | DistBeta t -> unsafeCoerce (divf t.a (addf t.a t.b))
+  | DistBeta t -> unsafeCoerce (divf t.alpha (addf t.alpha t.beta))
   | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
   | DistCategorical t ->
     error "expectation undefined for the categorical distribution"
@@ -146,7 +146,7 @@ lang RuntimeDistElementary = RuntimeDistBase
 
   sem logObserve +=
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
-  | DistBeta t -> unsafeCoerce (betaLogPdf t.a t.b)
+  | DistBeta t -> unsafeCoerce (betaLogPdf t.alpha t.beta)
   | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
   | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)

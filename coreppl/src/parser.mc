@@ -207,7 +207,7 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , info = info
     })
   | "Beta" -> Some (2, lam lst. TmDist
-    { dist = DBeta {a = get lst 0, b = get lst 1}
+    { dist = DBeta {alpha = get lst 0, beta = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })

@@ -230,7 +230,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   sem getParams: Dist -> Expr
   sem getParams =
   | DBernoulli d -> autoty_tuple_ [d.p]
-  | DBeta d -> autoty_tuple_ [d.a,d.b]
+  | DBeta d -> autoty_tuple_ [d.alpha,d.beta]
   | DNormal d -> autoty_tuple_ [d.mu, d.sigma]
   | DCategorical d -> autoty_tuple_ [d.p]
   | DDirichlet d -> autoty_tuple_ [d.a]
@@ -238,7 +238,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   sem changeParams: Name -> Dist -> Dist
   sem changeParams param =
   | DBernoulli d -> DBernoulli {d with p=tupleproj_ 0 (withType (tytuple_ [tyfloat_]) (nvar_ param))}
-  | DBeta d -> DBeta {{d with a=tupleproj_ 0 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))} with b=tupleproj_ 1 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param)) }
+  | DBeta d -> DBeta {{d with alpha=tupleproj_ 0 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))} with beta=tupleproj_ 1 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param)) }
   | DNormal d -> DNormal {{d with mu=tupleproj_ 0 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))} with sigma=tupleproj_ 1 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))}
   | DCategorical d -> DCategorical {d with p=tupleproj_ 0 (withType (tytuple_ [tyseq_ tyfloat_]) (nvar_ param))}
   | DDirichlet d -> DDirichlet {d with a=tupleproj_ 0 (withType (tytuple_ [tyseq_ tyfloat_]) (nvar_ param))}
@@ -250,20 +250,20 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let val = match obs with Some val then val else never in
     let aName = nameSym "postA" in
     let bName = nameSym "postB" in
-    let postAlpha = nulet_ aName (if_ val (addf_ d2.a (float_ 1.)) d2.a) in
-    let postBeta = nulet_ bName (if_ val d2.b (addf_ d2.b (float_ 1.))) in
+    let postAlpha = nulet_ aName (if_ val (addf_ d2.alpha (float_ 1.)) d2.alpha) in
+    let postBeta = nulet_ bName (if_ val d2.beta (addf_ d2.beta (float_ 1.))) in
     let code = match indices with Some (mInd, lInd) then
       let eqN =(nameSym "eq") in
        bindall_ [nulet_ eqN ((eqi_ (nvar_ mInd) lInd)),
-                nulet_ aName (if_ (nvar_ eqN) (if_ val (addf_ d2.a (float_ 1.)) d2.a) d2.a),
-                nulet_ bName (if_ (nvar_ eqN) (if_ val d2.b (addf_ d2.b (float_ 1.))) d2.b)
+                nulet_ aName (if_ (nvar_ eqN) (if_ val (addf_ d2.alpha (float_ 1.)) d2.alpha) d2.alpha),
+                nulet_ bName (if_ (nvar_ eqN) (if_ val d2.beta (addf_ d2.beta (float_ 1.))) d2.beta)
                 ]
                 unit_
       else ((bindall_ [postAlpha, postBeta] unit_)) in
     let tName = nameSym "paramR" in
     let rho = CodeBlockNode {ident=tName, code=code, ret=false, plateId=ref plateId} in
     let paramNames = [aName,bName] in
-    (rho, DBeta {{d2 with a=(nvar_ aName)} with b=(nvar_ bName)},paramNames)
+    (rho, DBeta {{d2 with alpha=(nvar_ aName)} with beta=(nvar_ bName)},paramNames)
   | (DNormal d1, DNormal d2) ->
     let muName = nameSym "postMu" in
     let sigmaName = nameSym "postSigma" in
@@ -312,7 +312,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   -- output (rho:Vertex, q:Expr)
   sem posteriorPredictive sqrtName plateId meanSO =
   | (DBernoulli d1, DBeta d2) ->
-    let postP = divf_ d2.a (addf_ d2.a d2.b) in
+    let postP = divf_ d2.alpha (addf_ d2.alpha d2.beta) in
     let tName = nameSym "param" in
     let pName = nameSym "margP" in
     let letT = bind_ (nulet_ pName postP) unit_ in

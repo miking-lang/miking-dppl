@@ -52,7 +52,7 @@ lang AutoDriftKernel = Assume + DistAll
   | _ -> None ()
 
   | DBeta _ ->
-    let dist = DBeta {a = mulf_ driftScale x, b = mulf_ driftScale (subf_ (float_ 1.) x)} in
+    let dist = DBeta {alpha = mulf_ driftScale x, beta = mulf_ driftScale (subf_ (float_ 1.) x)} in
     Some (dist_ dist)
 
   -- | DBinomial _ ->

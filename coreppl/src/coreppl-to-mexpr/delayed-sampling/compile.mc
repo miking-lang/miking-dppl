@@ -93,12 +93,12 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
   | AffineParam _ ->  t
 
   sem transformDsDist i env runtimeDelayEnv =
-  | DBeta {a = a, b = b} ->
+  | DBeta {alpha = a, beta = b} ->
     let a = match assignDCons env runtimeDelayEnv a with Some x then x else
       (conapp runtimeDelayEnv "DelayedGraph_FloatParam" a) in
     let b = match assignDCons env runtimeDelayEnv b with Some x then x else
       (conapp runtimeDelayEnv "DelayedGraph_FloatParam" b) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBeta" (i (autoty_record_ [("a", a), ("b", b)])))
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBeta" (i (autoty_record_ [("alpha", a), ("beta", b)])))
   | DBernoulli {p = p} ->
     let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistBernoulli" (i (autoty_record_ [("p", p)])))

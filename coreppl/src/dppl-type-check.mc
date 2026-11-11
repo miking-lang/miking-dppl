@@ -3731,7 +3731,7 @@ utest _typeOf [(_x, fltX [])] (dist_ (DPoisson {lambda = x}))
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DBeta {a = x, b = y}))
+utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DBeta {alpha = x, beta = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in

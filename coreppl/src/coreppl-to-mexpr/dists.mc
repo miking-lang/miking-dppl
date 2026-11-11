@@ -49,9 +49,9 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DBernoulli { p = p } ->
     let cname = _getConExn "DistBernoulli" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("p", p)])))
-  | DBeta { a = a, b = b } ->
+  | DBeta { alpha = a, beta = b } ->
     let cname = _getConExn "DistBeta" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+    i (nconapp_ cname (i (autoty_record_ [("alpha", a), ("beta", b)])))
   | DBinomial { n = n, p = p } ->
     let cname = _getConExn "DistBinomial" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))

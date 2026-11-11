@@ -295,13 +295,13 @@ end
 
 lang BetaDist = Dist
   syn Dist =
-  | DBeta { a : Expr, b : Expr }
+  | DBeta { alpha : Expr, beta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DBeta t ->
-    match f acc t.a with (acc, a) in
-    match f acc t.b with (acc, b) in
-    (acc, DBeta { t with a = a, b = b })
+    match f acc t.alpha with (acc, alpha) in
+    match f acc t.beta with (acc, beta) in
+    (acc, DBeta { t with alpha = alpha, beta = beta })
 
   sem distTy info =
   | DBeta _ ->
@@ -622,7 +622,7 @@ let bern_ = use BernoulliDist in
   lam p. dist_ (DBernoulli {p = p})
 
 let beta_ = use BetaDist in
-  lam a. lam b. dist_ (DBeta {a = a, b = b})
+  lam alpha. lam beta. dist_ (DBeta {alpha = alpha, beta = beta})
 
 let binomial_ = use BinomialDist in
   lam n. lam p. dist_ (DBinomial {n = n, p = p})

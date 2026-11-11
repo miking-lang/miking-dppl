@@ -29,7 +29,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   -- delayed distributions where parameters are not sampled directly
   syn DsDist =
   | DsDistBernoulli {p : Param}
-  | DsDistBeta  {a : Param, b : Param}
+  | DsDistBeta  {alpha : Param, beta : Param}
   | DsDistNormal {mu : Param, sigma : Param, meanScale : Float, meanOffset : Float}
   | DsDistMultinomial {n : Param, p : Param}
   | DsDistDirichlet {a: Param}
@@ -50,7 +50,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
 
   sem getParams =
   | DsDistBernoulli d -> [d.p]
-  | DsDistBeta d -> [d.a,d.b]
+  | DsDistBeta d -> [d.alpha,d.beta]
   | DsDistNormal d -> [d.mu,d.sigma]
   | DsDistMultinomial d -> [d.n,d.p]
   | DsDistDirichlet d -> [d.a]
@@ -247,12 +247,12 @@ lang DelayedSampling = DelayedGraph
   -- to marginalize
   sem posteriorPredictive =
   | (DsDistBeta p, DsDistBernoulli l) ->
-    let a = unwrap p.a in
-    let b = unwrap p.b in
+    let a = unwrap p.alpha in
+    let b = unwrap p.beta in
     let pp = divf a (addf a b) in
     Some (DsDistBernoulli {l with p = FloatParam pp})
   | (DsDistBeta p, DsDistBinomial l) ->
-    Some (DsDistBetabin {n = l.n, a=p.a,b=p.b})
+    Some (DsDistBetabin {n = l.n, a=p.alpha,b=p.beta})
   | (DsDistNormal p, DsDistNormal ({mu= DelayParam _}&l)) ->
     let mu0 = addf (mulf (unwrap p.mu) l.meanScale) l.meanOffset in
     let s0 = mulf (unwrap p.sigma) (absf l.meanScale) in
@@ -285,16 +285,16 @@ lang DelayedSampling = DelayedGraph
   --sem posterior: all a1. all a. a -> (DsDist a1, DsDist a) -> Option (DsDist a1)
   sem posterior obs =
   | (DsDistBeta p, DsDistBernoulli l) ->
-    let a = unwrap p.a in
-    let b = unwrap p.b in
+    let a = unwrap p.alpha in
+    let b = unwrap p.beta in
     let pAB = if unsafeCoerce obs then (addf a 1., b) else (a, addf b 1.) in
-    Some (DsDistBeta {a=FloatParam pAB.0,b=FloatParam pAB.1})
+    Some (DsDistBeta {alpha=FloatParam pAB.0,beta=FloatParam pAB.1})
   | (DsDistBeta p, DsDistBinomial l) ->
-    let a = unwrap p.a in
-    let b = unwrap p.b in
+    let a = unwrap p.alpha in
+    let b = unwrap p.beta in
     let n = unwrap l.n in
     let pAB = (addf a (int2float (unsafeCoerce obs)), addf b (int2float (subi n (unsafeCoerce obs)))) in
-    Some (DsDistBeta {a=FloatParam pAB.0,b=FloatParam pAB.1})
+    Some (DsDistBeta {alpha=FloatParam pAB.0,beta=FloatParam pAB.1})
   | (DsDistNormal p, DsDistNormal l) ->
     let mu0 = addf (mulf (unwrap p.mu) l.meanScale) l.meanOffset in
     let s0 = mulf (unwrap p.sigma) (absf l.meanScale) in
@@ -327,7 +327,7 @@ lang DelayedSampling = DelayedGraph
 
   sem transformDsDist sampleT =
   | DsDistBernoulli t -> DistBernoulli {p = value (unsafeCoerce sampleT) t.p}
-  | DsDistBeta t -> DistBeta {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
+  | DsDistBeta t -> DistBeta {alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
   | DsDistNormal t -> DistNormal {mu = addf t.meanOffset (mulf t.meanScale (value (unsafeCoerce sampleT) t.mu)), sigma = value (unsafeCoerce sampleT)  t.sigma}
   | DsDistCategorical t -> DistCategorical { p = value (unsafeCoerce sampleT) t.p}
   | DsDistPoisson t -> DistPoisson {lambda = mulf t.scale (value (unsafeCoerce sampleT) t.lambda)}
