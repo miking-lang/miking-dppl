@@ -230,7 +230,7 @@ let run : all acc. all dAcc. all a. Config a acc dAcc -> (State -> a) -> use Run
       if or (leqf weight (log 0.0)) (isNaN weight) then
         resetState state;
         (if eqi maxInitReSamp i then
-          printErrorLn (join ["Unable to find a sample with positive probability in ", int2string (i), " iterations. Set a higher value with --mcmc-max-init-rs <number>."]);
+          printErrorLn (join ["Unable to find a sample with positive probability in ", int2string (i), " iterations. Maybe try increasing the maximum number of attempts ?"]);
           -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
           exit 1
         else ());
