@@ -58,7 +58,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   sem smapAccumL_Dist_Expr : all a. (a -> Expr -> (a, Expr)) -> a -> Dist -> (a, Dist)
 
   -- Returns the parameter and sample type of a distribution. E.g.,
-  -- `distTy _ (Gaussian _)` = `([], [TyFloat _, TyFloat _], [TyFloat _])`.
+  -- `distTy _ (Normal _)` = `([], [TyFloat _, TyFloat _], [TyFloat _])`.
   sem distTy : Info -> Dist ->
     ([Name],                    -- The names of all type variables appearing in
                                 -- the distribution type.
@@ -442,22 +442,22 @@ lang GammaDist = Dist
   | DGamma _ -> "Gamma"
 end
 
-lang GaussianDist = Dist
+lang NormalDist = Dist
   syn Dist =
-  | DGaussian { mu : Expr, sigma : Expr }
+  | DNormal { mu : Expr, sigma : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
-  | DGaussian t ->
+  | DNormal t ->
     match f acc t.mu with (acc, mu) in
     match f acc t.sigma with (acc, sigma) in
-    (acc, DGaussian { t with mu = mu, sigma = sigma })
+    (acc, DNormal { t with mu = mu, sigma = sigma })
 
   sem distTy info =
-  | DGaussian _ ->
+  | DNormal _ ->
     let f = ityfloat_ info in ([], [f, f], f)
 
   sem distName =
-  | DGaussian _ -> "Gaussian"
+  | DNormal _ -> "Normal"
 end
 
 lang GeometricDist = Dist
@@ -645,8 +645,8 @@ let exp_ = use ExponentialDist in
 let gamma_ = use GammaDist in
   lam k. lam theta. dist_ (DGamma {k = k, theta = theta})
 
-let gaussian_ = use GaussianDist in
-  lam mu. lam sigma. dist_ (DGaussian {mu = mu, sigma = sigma})
+let normal_ = use NormalDist in
+  lam mu. lam sigma. dist_ (DNormal {mu = mu, sigma = sigma})
 
 let geometric_ = use GeometricDist in
   lam p. dist_ (DGeometric {p = p})
@@ -677,7 +677,7 @@ let treeinferencecat_ = use TreeInferenceCategoricalDist in
 
 lang DistAll =
   BernoulliDist + BetaDist + BinomialDist + CategoricalDist + Chi2Dist + DirichletDist +
-  EmpiricalDist + ExponentialDist + GammaDist + GaussianDist + GeometricDist + MultinomialDist +
+  EmpiricalDist + ExponentialDist + GammaDist + NormalDist + GeometricDist + MultinomialDist +
   PoissonDist + TreeInferenceCategoricalDist + UniformDist + UniformDiscreteDist + ReciprocalDist + 
   WienerDist
 end
@@ -705,7 +705,7 @@ let tmEmpirical = empirical_ (seq_ [
   ]) in
 let tmExponential = exp_ (float_ 1.0) in
 let tmGamma = gamma_ (float_ 1.0) (float_ 2.0) in
-let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
+let tmNormal = normal_ (float_ 0.0) (float_ 1.0) in
 let tmGeometric = geometric_ (float_ 0.5) in
 let tmMultinomial =
   multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
@@ -757,8 +757,8 @@ utest mexprToString tmGamma with strJoin "\n" [
   "Gamma 1. 2."
 ] using eqString in
 
-utest mexprToString tmGaussian with strJoin "\n" [
-  "Gaussian 0. 1."
+utest mexprToString tmNormal with strJoin "\n" [
+  "Normal 0. 1."
 ] using eqString in
 
 utest mexprToString tmGeometric with strJoin "\n" [
@@ -838,9 +838,9 @@ utest eqExpr tmExponential (exp_ (float_ 1.1)) with false in
 utest tmGamma with tmGamma using eqExpr in
 utest eqExpr tmGamma (gamma_ (float_ 1.0) (float_ 1.0)) with false in
 
-utest tmGaussian with tmGaussian using eqExpr in
-utest eqExpr tmGaussian
-  (gaussian_ (float_ 1.0) (float_ 1.0)) with false in
+utest tmNormal with tmNormal using eqExpr in
+utest eqExpr tmNormal
+  (normal_ (float_ 1.0) (float_ 1.0)) with false in
 
 utest tmGeometric with tmGeometric using eqExpr in
 utest eqExpr tmGeometric (geometric_ (float_ 0.1)) with false in
@@ -917,8 +917,8 @@ utest smap_Expr_Expr mapVar tmGamma with gamma_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmGamma
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmGaussian with gaussian_ tmVar tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmGaussian
+utest smap_Expr_Expr mapVar tmNormal with normal_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmNormal
 with [ float_ 1.0, float_ 0.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmGeometric with geometric_ tmVar using eqExpr in
@@ -963,7 +963,7 @@ utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmExponential with tmExponential using eqExpr in
 utest symbolize tmGamma with tmGamma using eqExpr in
-utest symbolize tmGaussian with tmGaussian using eqExpr in
+utest symbolize tmNormal with tmNormal using eqExpr in
 utest symbolize tmGeometric with tmGeometric using eqExpr in
 utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
@@ -986,7 +986,7 @@ utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType i
 utest tyTm (typeCheck tmEmpirical) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmExponential) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGamma) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmNormal) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
 utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
@@ -1029,7 +1029,7 @@ utest _anf tmEmpirical with bindall_ [
 -- print (mexprToString (_anf tmEmpirical)); print "\n";
 utest _anf tmExponential with bind_ (ulet_ "t" tmExponential) (var_ "t") using eqExpr in
 utest _anf tmGamma with bind_ (ulet_ "t" tmGamma) (var_ "t") using eqExpr in
-utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
+utest _anf tmNormal with bind_ (ulet_ "t" tmNormal) (var_ "t") using eqExpr in
 utest _anf tmGeometric with bind_ (ulet_ "t" tmGeometric) (var_ "t") using eqExpr in
 utest _anf tmMultinomial with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
@@ -1061,7 +1061,7 @@ utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmExponential).1 with tmExponential using eqExpr in
 utest (typeLift tmGamma).1 with tmGamma using eqExpr in
-utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
+utest (typeLift tmNormal).1 with tmNormal using eqExpr in
 utest (typeLift tmGeometric).1 with tmGeometric using eqExpr in
 utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in

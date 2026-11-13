@@ -51,7 +51,10 @@ install-coreppl: build/${CPPL_NAME}
 	@echo "Please, ensure that the PATH and the MCORE_LIBS environment variables have been set accordingly."
 	@echo "E.g. under Bash:"
 	@echo 'export PATH=$$PATH:'"${BIN_PATH}"
-	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"${SRC_PATH}\n${RESET}"
+	@echo 'export MCORE_LIBS=$$MCORE_LIBS:coreppl='"${SRC_PATH}\n"
+	@echo "Note also that ${CPPL_NAME} requires mi-stats (https://github.com/miking-lang/mi-stats),"
+	@echo "i.e., MCORE_LIBS must also contain 'mi-stats=<path>' and the mi_stats OCaml library"
+	@echo "must be installed.${RESET}"
 
 .PHONY: install-cppl
 install-cppl:

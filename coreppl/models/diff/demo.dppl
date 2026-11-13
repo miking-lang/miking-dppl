@@ -86,7 +86,7 @@ let model : () -> () = lam.
   -- │ Differentiating through assume Example 3 │
   -- └──────────────────────────────────────────┘
 
-  let f = lam x. assume (Gaussian x 1.) in
+  let f = lam x. assume (Normal x 1.) in
   -- assert "Differentiating through assume 3.1" (eqf (diff1 f 2.) 2.); -- Should result in a runtime error
 
   ()

@@ -3758,7 +3758,7 @@ utest _typeOf [(_x, fltX [])] (dist_ (DExponential {rate = x}))
 in
 
 utest
-  _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DGaussian {mu = x, sigma = y}))
+  _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DNormal {mu = x, sigma = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in

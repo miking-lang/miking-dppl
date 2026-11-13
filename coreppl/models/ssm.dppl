@@ -19,7 +19,7 @@ let model: () -> Float = lam.
   let holdingAltitude = 35000. in
   let altitudeRange = 100. in
   let position: Float = assume (Uniform 0. 1000.) in
-  let altitude: Float = assume (Gaussian holdingAltitude 200.) in
+  let altitude: Float = assume (Normal holdingAltitude 200.) in
 
   let positionStDev = 50. in
 
@@ -43,7 +43,7 @@ let model: () -> Float = lam.
 
     -- Observe position
     let dataPos: Float = get data t in
-    observe dataPos (Gaussian position (positionObsStDev altitude));
+    observe dataPos (Normal position (positionObsStDev altitude));
     -- resample; -- Should be added by both aligmnent analysis and likelihood resampling
     let t = addi t 1 in
 
@@ -55,8 +55,8 @@ let model: () -> Float = lam.
 
     -- Transition
     let position: Float =
-      assume (Gaussian (addf position (velocity altitude)) positionStDev) in
-    let altitude: Float = assume (Gaussian altitude altitudeStDev) in
+      assume (Normal (addf position (velocity altitude)) positionStDev) in
+    let altitude: Float = assume (Normal altitude altitudeStDev) in
 
     if eqi (length data) t then position
     else simulate t position altitude

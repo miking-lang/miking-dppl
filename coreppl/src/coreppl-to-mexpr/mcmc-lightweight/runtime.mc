@@ -2,6 +2,7 @@ include "bool.mc"
 include "common.mc"
 
 include "ext/dist-ext.mc"
+include "mi-stats::stats.mc"
 include "ext/math-ext.mc"
 include "math.mc"
 include "seq.mc"

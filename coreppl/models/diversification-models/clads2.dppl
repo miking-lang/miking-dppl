@@ -9,10 +9,10 @@ let clads2: Tree -> Float -> Float = lam tree. lam rho.
   let lambda = assume (Gamma 1.0 1.0) in
   let mu = assume (Gamma 1.0 0.5) in
   let sigma = sqrt (divf 0.2 (assume (Gamma 1.0 1.0))) in
-  let log_alpha = assume (Gaussian 0. sigma) in
+  let log_alpha = assume (Normal 0. sigma) in
 
   recursive let survives = lam tBeg. lam multiplier.
-    let multiplier = mulf multiplier (exp (assume (Gaussian log_alpha sigma))) in
+    let multiplier = mulf multiplier (exp (assume (Normal log_alpha sigma))) in
     if or (ltf multiplier 1e-5) (gtf multiplier 1e5) then
       true
     else
@@ -32,7 +32,7 @@ let clads2: Tree -> Float -> Float = lam tree. lam rho.
   in
 
   recursive let simHiddenSpeciation = lam nodeAge. lam tBeg. lam multiplier.
-    let multiplier = mulf multiplier (exp (assume (Gaussian log_alpha sigma))) in
+    let multiplier = mulf multiplier (exp (assume (Normal log_alpha sigma))) in
     if or (ltf multiplier 1e-5) (gtf multiplier 1e5) then
       weight (negf inf);
       multiplier
