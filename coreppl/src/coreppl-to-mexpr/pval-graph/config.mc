@@ -24,16 +24,23 @@ type SimplePValConfig ret =
 type SimpleMCMCConfig =
   { globalProb : Float
   , iterations : Int
+  , maxInitReSamp : Int
   }
+
 let simplePValGraphMCMC : all ret. SimpleMCMCConfig -> SimplePValRun ret = lam config.
   let acceptPred = lam prob. bernoulliSample (exp prob) in
   let f : SimplePValRun ret = lam interface.
-    recursive let init = lam.
+    recursive let init = lam i.
       let res = interface.instantiate () in
-      if eqf (interface.getWeight res.instance) (negf inf)
-      then init ()
+      if eqf (interface.getWeight res.instance) (negf inf) then
+        (if eqi config.maxInitReSamp i then
+          -- printErrorLn (join ["Unable to find a sample with positive probability in ", int2string (i), " iterations. Maybe try increasing the maximum number of attempts ?"]);
+          -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+          exit 1
+        else ());
+      init (addi i 1)
       else res in
-    match init () with {instance = instance, numAligned = numAligned} in
+    match init 1 with {instance = instance, numAligned = numAligned} in
     if eqi numAligned 0 then
       {mcmc = [(true, interface.getRet instance)], smc = []}
     else

@@ -54,6 +54,13 @@ let _mcmcLightweightGlobalProb : OptParser Float =
     , description = concat "The probability of performing a global MH step (non-global means only modify a single sample in the previous trace). Default: " (float2string _mcmcLightweightGlobalProbDefault)
     } in
   optOr opt (optPure _mcmcLightweightGlobalProbDefault)
+let _mcmcMaxInitialRejectSamplingDefault : Int = 1000
+let _mcmcMaxInitialRejectSampling : OptParser Int =
+  let opt = optArg
+    { optArgDefInt with long = "mcmc-max-init-rs"
+    , description = concat "The maximum number of iterations for the rejection sampling to find a first sample with positive probability for the MCMC chain. Returns an error if the limit is reached. Default: " (int2string _mcmcMaxInitialRejectSamplingDefault)
+    } in
+  optOr opt (optPure _mcmcMaxInitialRejectSamplingDefault)
 let _particlesDefault : Int = 5000
 let _particles : OptParser Int =
   let opt = optArg

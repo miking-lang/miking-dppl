@@ -20,4 +20,5 @@ type Config a acc dAcc =
   , temperature : acc -> Float
   , driftKernel : Bool
   , resampleBehavior : (acc -> Int -> (acc,([Bool], Int)))
+  , maxInitReSamp : Int
   }

@@ -39,6 +39,22 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
           mh (cons prevWeight weights) (cons prevSample samples) iter
   in
 
+    -- First sample -- call the model until we get a non-zero weight
+  recursive let firstSample : (State -> a) -> State -> Int -> Int -> a =
+    lam model. lam state. lam maxInitReSamp. lam i.
+      let sample = model state in
+      let weight = deref state in
+      if or (leqf weight (log 0.0)) (isNaN weight) then
+        modref state 0.;
+        (if eqi maxInitReSamp i then
+          printErrorLn (join ["Unable to find a sample with positive probability in ", int2string (i), " iterations. Maybe try increasing the maximum number of attempts ?"]);
+          -- printLn (join ["Try ", int2string i, " at sampling positive prob. sample. Sample weight: ", float2string (weight)]);
+          exit 1
+        else ());
+        firstSample model state maxInitReSamp (addi i 1)
+      else sample
+    in
+
   let runs = config.iterations in
 
   -- Used to keep track of acceptance ratio
@@ -46,7 +62,7 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
 
   -- Draw an initial sample first
   let state = ref 0. in
-  let sample = model state in
+  let sample = firstSample model state config.maxInitReSamp 1 in
   let weight = deref state in
   let iter: Int = subi runs 1 in
 
