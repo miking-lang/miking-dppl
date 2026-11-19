@@ -72,8 +72,8 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DGamma { k = k, theta = theta } ->
     let cname = _getConExn "DistGamma" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("shape", k), ("scale", theta)])))
-  | DGaussian { mu = mu, sigma = sigma } ->
-    let cname = _getConExn "DistGaussian" (_getLangEnvExn "RuntimeDist" env.env) in
+  | DNormal { mu = mu, sigma = sigma } ->
+    let cname = _getConExn "DistNormal" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("mu", mu), ("sigma", sigma)])))
   | DGeometric { p = p } ->
     let cname = _getConExn "DistGeometric" (_getLangEnvExn "RuntimeDist" env.env) in

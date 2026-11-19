@@ -10,6 +10,7 @@ If you came here from a paper:
 Miking DPPL currently depends on:
 - [Miking](https://github.com/miking-lang/miking)
 - [Owl](https://ocaml.xyz/). Essentially, `opam install owl`.
+- [mi-stats](https://github.com/miking-lang/mi-stats). Build and install it with `make install` in its repository, and make sure `MCORE_LIBS` contains `mi-stats=<path to its installed mcore files>` (`make install` prints a suggestion).
 
 ## Building, Installing, and Running Tests
 To build the CorePPL compiler `cppl`, simply run `make` in the project root, which produces the binary in `build/cppl`.

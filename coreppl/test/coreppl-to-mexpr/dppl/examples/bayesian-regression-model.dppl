@@ -8,7 +8,7 @@ let regressionModel =
       with (#var"θ", #var"𝜎²") in
     iter
       (lam t : (Float, Float).
-        match t with (y, z) in observe y (Gaussian z (sqrt #var"𝜎²")))
+        match t with (y, z) in observe y (Normal z (sqrt #var"𝜎²")))
       (zip (z #var"θ") d);
     #var"θ"
 

@@ -5,21 +5,27 @@
     flake-utils.url = "github:numtide/flake-utils";
     miking.url = "github:miking-lang/miking?dir=misc/packaging";
     miking.inputs.nixpkgs.follows = "nixpkgs";
+    mi-stats.url = "github:miking-lang/mi-stats?dir=misc/packaging";
+    mi-stats.inputs.nixpkgs.follows = "nixpkgs";
+    mi-stats.inputs.miking.follows = "miking";
   };
 
-  outputs = { self, nixpkgs, miking, flake-utils, relocatable }:
+  outputs = { self, nixpkgs, miking, mi-stats, flake-utils, relocatable }:
     let
       mkPkg = system:
         let
           pkgs = nixpkgs.legacyPackages.${system}.pkgs;
           mpkgs = miking.packages.${system};
+          mspkgs = mi-stats.packages.${system};
         in
           rec {
             packages.miking-dppl-lib = pkgs.callPackage ./miking-dppl-lib.nix {
               inherit (mpkgs) miking-lib;
+              inherit (mspkgs) mi-stats;
             };
             packages.miking-dppl-unwrapped = pkgs.callPackage ./miking-dppl-unwrapped.nix {
               inherit (mpkgs) miking-lib miking-unwrapped;
+              inherit (mspkgs) mi-stats;
             };
             packages.cppl-tmp-tar-gz = relocatable.bundlers.${system}.fixedLocationTarGz {
               drv = packages.miking-dppl-unwrapped;

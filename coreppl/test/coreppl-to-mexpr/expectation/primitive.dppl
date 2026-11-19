@@ -7,7 +7,7 @@ infer (Default ()) (lam. ());
 utest expectation (Gamma 2. 3.) with 6. in
 utest expectation (Exponential 2.) with 0.5 in
 utest expectation (Beta 2. 2.) with 0.5 in
-utest expectation (Gaussian 1. 2.) with 1. in
+utest expectation (Normal 1. 2.) with 1. in
 utest expectation (Uniform 2. 3.) with 2.5 in
 
 -- NOTE(oerikss, 2024-09-14): These expectations are supported in the runtime

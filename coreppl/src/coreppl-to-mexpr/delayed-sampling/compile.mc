@@ -15,7 +15,7 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
 
   -- a parameter of a distribution can be either
   syn DParam =
-  | DelayParam () -- a distribution, e.g Gaussian a 1. where a ~ Gaussian 3. 2.
+  | DelayParam () -- a distribution, e.g Normal a 1. where a ~ Normal 3. 2.
   | AffineParam {v:Expr,meanScale:Expr,meanOffset:Expr}
 
   sem affineAddTransform env id v =
@@ -102,7 +102,7 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
   | DBernoulli {p = p} ->
     let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistBernoulli" (i (autoty_record_ [("p", p)])))
-  | DGaussian {mu = mu, sigma = sigma} ->
+  | DNormal {mu = mu, sigma = sigma} ->
     match mu with TmVar v in
     let res = match mapLookup v.ident env with Some (AffineParam p) then
         let mu = match assignDCons env runtimeDelayEnv p.v with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p.v) in
@@ -110,7 +110,7 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
       else let mu = match assignDCons env runtimeDelayEnv mu with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" mu) in
         (mu, float_ 1.,float_ 0.) in
     let sigma = match assignDCons env runtimeDelayEnv sigma with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" sigma) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistGaussian" (i (autoty_record_ [("mu", res.0), ("sigma", sigma), ("meanScale", res.1), ("meanOffset",res.2)])))
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistNormal" (i (autoty_record_ [("mu", res.0), ("sigma", sigma), ("meanScale", res.1), ("meanOffset",res.2)])))
   | DCategorical {p = p} ->
     let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_SeqFParam" p) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistCategorical" (i (autoty_record_ [("p", p)])))

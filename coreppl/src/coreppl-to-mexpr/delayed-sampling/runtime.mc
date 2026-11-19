@@ -30,7 +30,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   syn DsDist =
   | DsDistBernoulli {p : Param}
   | DsDistBeta  {a : Param, b : Param}
-  | DsDistGaussian {mu : Param, sigma : Param, meanScale : Float, meanOffset : Float}
+  | DsDistNormal {mu : Param, sigma : Param, meanScale : Float, meanOffset : Float}
   | DsDistMultinomial {n : Param, p : Param}
   | DsDistDirichlet {a: Param}
   | DsDistCategorical {p : Param}
@@ -51,7 +51,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   sem getParams =
   | DsDistBernoulli d -> [d.p]
   | DsDistBeta d -> [d.a,d.b]
-  | DsDistGaussian d -> [d.mu,d.sigma]
+  | DsDistNormal d -> [d.mu,d.sigma]
   | DsDistMultinomial d -> [d.n,d.p]
   | DsDistDirichlet d -> [d.a]
   | DsDistCategorical d -> [d.p]
@@ -93,7 +93,7 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   sem d2str =
   | DsDistBernoulli d -> "DsDistBernoulli"
   | DsDistBeta d -> "DsDistBeta"
-  | DsDistGaussian d ->  "DsDistGaussian"
+  | DsDistNormal d ->  "DsDistNormal"
   | DsDistCategorical d -> "DsDistCategorical"
   | DsDistPoisson d -> "DsDistPoisson"
   | DsDistBinomial d -> "DsDistBinomial"
@@ -253,7 +253,7 @@ lang DelayedSampling = DelayedGraph
     Some (DsDistBernoulli {l with p = FloatParam pp})
   | (DsDistBeta p, DsDistBinomial l) ->
     Some (DsDistBetabin {n = l.n, a=p.a,b=p.b})
-  | (DsDistGaussian p, DsDistGaussian ({mu= DelayParam _}&l)) ->
+  | (DsDistNormal p, DsDistNormal ({mu= DelayParam _}&l)) ->
     let mu0 = addf (mulf (unwrap p.mu) l.meanScale) l.meanOffset in
     let s0 = mulf (unwrap p.sigma) (absf l.meanScale) in
     let s = unwrap l.sigma in
@@ -261,7 +261,7 @@ lang DelayedSampling = DelayedGraph
     let s02 = mulf s0 s0 in
     let ppM = mulf s02 (divf mu0 s02) in
     let ppS = externalSqrt (addf s02 s2) in
-    Some (DsDistGaussian {mu = FloatParam ppM, sigma= FloatParam ppS,meanScale=1.,meanOffset=0.})
+    Some (DsDistNormal {mu = FloatParam ppM, sigma= FloatParam ppS,meanScale=1.,meanOffset=0.})
   | (DsDistGamma p, DsDistExponential l) ->
     let shape = unwrap p.shape in
     let scale = unwrap p.scale in
@@ -296,7 +296,7 @@ lang DelayedSampling = DelayedGraph
     let n = unwrap l.n in
     let pAB = (addf a (int2float (unsafeCoerce obs)), addf b (int2float (subi n (unsafeCoerce obs)))) in
     Some (DsDistBeta {a=FloatParam pAB.0,b=FloatParam pAB.1})
-  | (DsDistGaussian p, DsDistGaussian l) ->
+  | (DsDistNormal p, DsDistNormal l) ->
     let mu0 = addf (mulf (unwrap p.mu) l.meanScale) l.meanOffset in
     let s0 = mulf (unwrap p.sigma) (absf l.meanScale) in
     let s = unwrap l.sigma in
@@ -306,7 +306,7 @@ lang DelayedSampling = DelayedGraph
     let muLHS = divf 1. (addf (divf 1. s02) (divf 1. s2)) in
     let pMu = divf (subf (mulf muRHS muLHS) l.meanOffset) l.meanScale in
     let pSigma = divf (externalSqrt (muLHS)) (absf l.meanScale) in
-    Some (DsDistGaussian {mu=FloatParam pMu, sigma= FloatParam pSigma, meanScale=1., meanOffset=0.})
+    Some (DsDistNormal {mu=FloatParam pMu, sigma= FloatParam pSigma, meanScale=1., meanOffset=0.})
   | (DsDistGamma p, DsDistExponential l) ->
     let shape = unwrap p.shape in
     let scale = unwrap p.scale in
@@ -330,7 +330,7 @@ lang DelayedSampling = DelayedGraph
   sem transformDsDist sampleT =
   | DsDistBernoulli t -> DistBernoulli {p = value (unsafeCoerce sampleT) t.p}
   | DsDistBeta t -> DistBeta {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
-  | DsDistGaussian t -> DistGaussian {mu = addf t.meanOffset (mulf t.meanScale (value (unsafeCoerce sampleT) t.mu)), sigma = value (unsafeCoerce sampleT)  t.sigma}
+  | DsDistNormal t -> DistNormal {mu = addf t.meanOffset (mulf t.meanScale (value (unsafeCoerce sampleT) t.mu)), sigma = value (unsafeCoerce sampleT)  t.sigma}
   | DsDistCategorical t -> DistCategorical { p = value (unsafeCoerce sampleT) t.p}
   | DsDistPoisson t -> DistPoisson {lambda = mulf t.scale (value (unsafeCoerce sampleT) t.lambda)}
   | DsDistBinomial t -> DistBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}

@@ -72,8 +72,8 @@ lang AutoDriftKernel = Assume + DistAll
   | DGamma _ ->
     Some (dist_ (DGamma {k = divf_ x driftScale, theta = driftScale}))
 
-  | DGaussian _ ->
-    Some (dist_ (DGaussian {mu = x, sigma = driftScale}))
+  | DNormal _ ->
+    Some (dist_ (DNormal {mu = x, sigma = driftScale}))
 
   -- | DMultinomial _ ->
   --   Some (dist_ (DMultinomial {n = ceilfi_ driftScale, p = map_ (divf_

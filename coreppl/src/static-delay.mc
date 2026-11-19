@@ -201,7 +201,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   sem isConjugatePrior: Name -> (Dist,Dist) -> Bool
   sem isConjugatePrior pid =
   | (DBernoulli _, DBeta _) -> true
-  | (DGaussian d1, DGaussian _) -> match d1.mu with TmVar v in nameEq v.ident pid
+  | (DNormal d1, DNormal _) -> match d1.mu with TmVar v in nameEq v.ident pid
   | (DCategorical _, DDirichlet _) -> true
   | _ -> false
 
@@ -231,7 +231,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   sem getParams =
   | DBernoulli d -> autoty_tuple_ [d.p]
   | DBeta d -> autoty_tuple_ [d.a,d.b]
-  | DGaussian d -> autoty_tuple_ [d.mu, d.sigma]
+  | DNormal d -> autoty_tuple_ [d.mu, d.sigma]
   | DCategorical d -> autoty_tuple_ [d.p]
   | DDirichlet d -> autoty_tuple_ [d.a]
 
@@ -239,7 +239,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
   sem changeParams param =
   | DBernoulli d -> DBernoulli {d with p=tupleproj_ 0 (withType (tytuple_ [tyfloat_]) (nvar_ param))}
   | DBeta d -> DBeta {{d with a=tupleproj_ 0 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))} with b=tupleproj_ 1 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param)) }
-  | DGaussian d -> DGaussian {{d with mu=tupleproj_ 0 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))} with sigma=tupleproj_ 1 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))}
+  | DNormal d -> DNormal {{d with mu=tupleproj_ 0 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))} with sigma=tupleproj_ 1 (withType (tytuple_ [tyfloat_,tyfloat_]) (nvar_ param))}
   | DCategorical d -> DCategorical {d with p=tupleproj_ 0 (withType (tytuple_ [tyseq_ tyfloat_]) (nvar_ param))}
   | DDirichlet d -> DDirichlet {d with a=tupleproj_ 0 (withType (tytuple_ [tyseq_ tyfloat_]) (nvar_ param))}
 
@@ -264,7 +264,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let rho = CodeBlockNode {ident=tName, code=code, ret=false, plateId=ref plateId} in
     let paramNames = [aName,bName] in
     (rho, DBeta {{d2 with a=(nvar_ aName)} with b=(nvar_ bName)},paramNames)
-  | (DGaussian d1, DGaussian d2) ->
+  | (DNormal d1, DNormal d2) ->
     let muName = nameSym "postMu" in
     let sigmaName = nameSym "postSigma" in
     match meanSO with (scale, offset) in
@@ -292,7 +292,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let tName = nameSym "paramR" in
     let rho = CodeBlockNode {ident=tName, code=code, ret=false,plateId=ref plateId} in
     let paramNames = [muName,sigmaName] in
-    (rho, DGaussian {{d2 with mu= nvar_ muName} with sigma= nvar_ sigmaName},paramNames)
+    (rho, DNormal {{d2 with mu= nvar_ muName} with sigma= nvar_ sigmaName},paramNames)
   | (DCategorical d1, DDirichlet d2) ->
     let val = match obs with Some val then val else never in
     let aName = nameSym "postA" in
@@ -318,7 +318,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let letT = bind_ (nulet_ pName postP) unit_ in
     let rho = CodeBlockNode {ident=tName, code=letT, ret=false,plateId=ref plateId} in
     Some (rho, DBernoulli {d1 with p=nvar_ pName})
-  | (DGaussian d1,DGaussian d2) ->
+  | (DNormal d1,DNormal d2) ->
     match meanSO with (scale, offset) in
     let mu0 =  addf_ (mulf_ scale d2.mu) offset in
     let absf = lam s. if_ (geqf_ s (float_ 0.)) s (negf_ s) in
@@ -332,7 +332,7 @@ lang ConjugatePrior = CorePPL + MExprAst + MExprPPL + PBNGraph
     let sName = nameSym "margSigma" in
     let letT = bindall_ [nulet_ mName postMu, nulet_ sName postSigma] unit_ in
     let rho = CodeBlockNode {ident=tName, code=letT, ret=false,plateId=ref plateId} in
-    Some (rho, DGaussian {{d1 with mu=nvar_ mName} with sigma=nvar_ sName})
+    Some (rho, DNormal {{d1 with mu=nvar_ mName} with sigma=nvar_ sName})
   | (DCategorical d1,DDirichlet d2) ->
     let sumName = nameSym "sum" in
     let sumai = nulet_ sumName (foldl_ (ulam_ "acc" (ulam_ "i" (addf_ (var_ "acc") (var_ "i")))) (float_ 0.0) (d2.a)) in
@@ -433,7 +433,7 @@ lang CreatePBN = ConjugatePrior
   | (Some (RandomVarNode r),Some (AffineNode a)) ->
     Some (mulf_ v.0 a.meanScale, mulf_ v.0 a.meanOffset, a.tVertex)
   | (Some (RandomVarNode r),Some (RandomVarNode r2)) ->
-    match deref r.dist with (DGaussian _) then
+    match deref r.dist with (DNormal _) then
         Some (v.1, float_ 0.,ref (RandomVarNode r))
       else None ()
   | (Some (AffineNode a),None ()) ->
@@ -441,11 +441,11 @@ lang CreatePBN = ConjugatePrior
   | (None (),Some (AffineNode a)) ->
      Some (mulf_ v.0 a.meanScale, mulf_ v.0 a.meanOffset, a.tVertex)
   | (Some (RandomVarNode r),None ()) ->
-      match deref r.dist with (DGaussian _) then
+      match deref r.dist with (DNormal _) then
         Some (v.1, float_ 0.,ref (RandomVarNode r))
       else None ()
   | (None (),Some (RandomVarNode r)) ->
-    match deref r.dist with (DGaussian _) then
+    match deref r.dist with (DNormal _) then
         Some (v.0, float_ 0.,ref (RandomVarNode r))
       else None ()
   | _ -> None ()
@@ -459,7 +459,7 @@ lang CreatePBN = ConjugatePrior
   | (Some (RandomVarNode r),Some (AffineNode a)) ->
     Some (a.meanScale, addf_ v.0 a.meanOffset, a.tVertex)
   | (Some (RandomVarNode r),Some (RandomVarNode r2)) ->
-     match deref r.dist with (DGaussian _) then
+     match deref r.dist with (DNormal _) then
         Some (float_ 1.,v.1,ref (RandomVarNode r))
       else None ()
   | (Some (AffineNode a),None ()) ->
@@ -467,11 +467,11 @@ lang CreatePBN = ConjugatePrior
   | (None (),Some (AffineNode a)) ->
        Some (a.meanScale, addf_ v.0 a.meanOffset,  a.tVertex)
   | (Some (RandomVarNode r),None ()) ->
-       match deref r.dist with (DGaussian _) then
+       match deref r.dist with (DNormal _) then
         Some (float_ 1.,v.1,ref (RandomVarNode r))
       else None ()
   | (None (),Some (RandomVarNode r)) ->
-    match deref r.dist with (DGaussian _) then
+    match deref r.dist with (DNormal _) then
         Some (float_ 1.,v.0,ref (RandomVarNode r))
       else None ()
   | _ -> None ()

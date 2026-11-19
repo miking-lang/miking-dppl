@@ -31,7 +31,7 @@ utest r (t 1000  0 "-m smc-apf --cps partial --resample likelihood"             
 -- utest r (t 1000  0 "-m smc-apf --cps full --resample manual"                          ) with rhs using e in
 utest r (t 1000  0 "-m smc-apf --cps full --resample align"                           ) with rhs using e in
 utest r (t 1000  0 "-m smc-apf --cps full --resample likelihood"                      ) with rhs using e in
-utest r (t 1000  500 "-m pmcmc-pimh"                                                  ) with rhs using e in
+utest r (t 10000 1000 "-m pmcmc-pimh"                                                  ) with rhs using e in
 utest r (t 10000 1000 "-m mcmc-trace"                                                 ) with rhs using e in
 utest r (t 10000 1000 "-m mcmc-naive"                                                 ) with rhs using e in
 utest r (t 10000 1000 "-m mcmc-lightweight"                                           ) with rhs using e in

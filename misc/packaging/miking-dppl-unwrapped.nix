@@ -1,6 +1,6 @@
 { lib, stdenv, nix-gitignore,
   ocamlPackages,
-  miking-lib, miking-unwrapped,
+  miking-lib, miking-unwrapped, mi-stats,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -12,6 +12,7 @@ stdenv.mkDerivation (finalAttrs: {
   nativeBuildInputs = [
     miking-unwrapped
     miking-lib
+    mi-stats
     ocamlPackages.findlib
     ocamlPackages.ocaml
     ocamlPackages.linenoise

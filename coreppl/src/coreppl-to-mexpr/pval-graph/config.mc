@@ -1,4 +1,5 @@
 include "ext/dist-ext.mc"
+include "mi-stats::stats.mc"
 include "ext/math-ext.mc"
 include "float.mc"
 
