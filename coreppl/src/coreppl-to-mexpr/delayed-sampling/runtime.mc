@@ -29,19 +29,19 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   -- delayed distributions where parameters are not sampled directly
   syn DsDist =
   | DsDistBernoulli {p : Param}
-  | DsDistBeta  {a : Param, b : Param}
-  | DsDistGaussian {mu : Param, sigma : Param, meanScale : Float, meanOffset : Float}
+  | DsDistBeta  {alpha : Param, beta : Param}
+  | DsDistNormal {mu : Param, sigma : Param, meanScale : Float, meanOffset : Float}
   | DsDistMultinomial {n : Param, p : Param}
   | DsDistDirichlet {a: Param}
   | DsDistCategorical {p : Param}
   | DsDistPoisson {lambda : Param, scale : Float}
-  | DsDistBinomial {n : Param, p : Param}
-  | DsDistUniform {a : Param, b : Param}
-  | DsDistGamma {shape : Param, scale : Param}
-  | DsDistExponential {rate : Param}
-  | DsDistLomax {scale : Param, shape : Param}
-  | DsDistBetabin {n : Param, a: Param, b : Param}
-  | DsDistNegativeBinomial {n : Param, p: Param}
+  | DsDistBinomial {n : Param, theta : Param}
+  | DsDistUniform {alpha : Param, beta : Param}
+  | DsDistGamma {shape : Param, rate : Param}
+  | DsDistExponential {beta : Param}
+  | DsDistParetoType2 {mu : Param, lambda : Param, alpha : Param}
+  | DsDistBetaBinomial {n : Param, alpha : Param, beta : Param}
+  | DsDistNegBinomial {alpha : Param, beta : Param}
 
   sem getParentsH  =
   | DelayParam v -> Some v
@@ -50,19 +50,19 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
 
   sem getParams =
   | DsDistBernoulli d -> [d.p]
-  | DsDistBeta d -> [d.a,d.b]
-  | DsDistGaussian d -> [d.mu,d.sigma]
+  | DsDistBeta d -> [d.alpha,d.beta]
+  | DsDistNormal d -> [d.mu,d.sigma]
   | DsDistMultinomial d -> [d.n,d.p]
   | DsDistDirichlet d -> [d.a]
   | DsDistCategorical d -> [d.p]
   | DsDistPoisson d -> [d.lambda]
-  | DsDistBinomial d -> [d.n,d.p]
-  | DsDistUniform d -> [d.a,d.b]
-  | DsDistGamma d -> [d.shape,d.scale]
-  | DsDistExponential d -> [d.rate]
-  | DsDistLomax d -> [d.shape,d.scale]
-  | DsDistBetabin d -> [d.n,d.a,d.b]
-  | DsDistNegativeBinomial d -> [d.n,d.p]
+  | DsDistBinomial d -> [d.n,d.theta]
+  | DsDistUniform d -> [d.alpha,d.beta]
+  | DsDistGamma d -> [d.shape,d.rate]
+  | DsDistExponential d -> [d.beta]
+  | DsDistParetoType2 d -> [d.mu,d.lambda,d.alpha]
+  | DsDistBetaBinomial d -> [d.n,d.alpha,d.beta]
+  | DsDistNegBinomial d -> [d.alpha,d.beta]
   | _ -> never
 
   sem getParents =
@@ -93,18 +93,18 @@ lang DelayedGraph = MExprAst + RuntimeDistElementary
   sem d2str =
   | DsDistBernoulli d -> "DsDistBernoulli"
   | DsDistBeta d -> "DsDistBeta"
-  | DsDistGaussian d ->  "DsDistGaussian"
+  | DsDistNormal d ->  "DsDistNormal"
   | DsDistCategorical d -> "DsDistCategorical"
   | DsDistPoisson d -> "DsDistPoisson"
   | DsDistBinomial d -> "DsDistBinomial"
   | DsDistUniform d -> "DsDistUniform"
   | DsDistGamma d -> "DsDistGamma"
   | DsDistExponential d -> "DsDistExponential"
-  | DsDistLomax d -> "DsDistLomax"
+  | DsDistParetoType2 d -> "DsDistParetoType2"
   | DsDistDirichlet d -> "DsDistDirichlet"
   | DsDistMultinomial d -> "DsDistMultinomial"
-  | DsDistBetabin d -> "DsDistBetabin"
-  | DsDistNegativeBinomial d -> "DsDistNegativeBinomial"
+  | DsDistBetaBinomial d -> "DsDistBetaBinomial"
+  | DsDistNegBinomial d -> "DsDistNegBinomial"
   | _ -> error "d2str: distribution is not supported"
 
   sem v2str: DelayVar -> String
@@ -247,13 +247,13 @@ lang DelayedSampling = DelayedGraph
   -- to marginalize
   sem posteriorPredictive =
   | (DsDistBeta p, DsDistBernoulli l) ->
-    let a = unwrap p.a in
-    let b = unwrap p.b in
+    let a = unwrap p.alpha in
+    let b = unwrap p.beta in
     let pp = divf a (addf a b) in
     Some (DsDistBernoulli {l with p = FloatParam pp})
   | (DsDistBeta p, DsDistBinomial l) ->
-    Some (DsDistBetabin {n = l.n, a=p.a,b=p.b})
-  | (DsDistGaussian p, DsDistGaussian ({mu= DelayParam _}&l)) ->
+    Some (DsDistBetaBinomial {n = l.n, alpha = p.alpha, beta = p.beta})
+  | (DsDistNormal p, DsDistNormal ({mu= DelayParam _}&l)) ->
     let mu0 = addf (mulf (unwrap p.mu) l.meanScale) l.meanOffset in
     let s0 = mulf (unwrap p.sigma) (absf l.meanScale) in
     let s = unwrap l.sigma in
@@ -261,22 +261,21 @@ lang DelayedSampling = DelayedGraph
     let s02 = mulf s0 s0 in
     let ppM = mulf s02 (divf mu0 s02) in
     let ppS = externalSqrt (addf s02 s2) in
-    Some (DsDistGaussian {mu = FloatParam ppM, sigma= FloatParam ppS,meanScale=1.,meanOffset=0.})
+    Some (DsDistNormal {mu = FloatParam ppM, sigma= FloatParam ppS,meanScale=1.,meanOffset=0.})
   | (DsDistGamma p, DsDistExponential l) ->
     let shape = unwrap p.shape in
-    let scale = unwrap p.scale in
-    let pScale = divf 1. scale in
-    Some (DsDistLomax {shape = FloatParam shape, scale = FloatParam pScale})
+    let rate = unwrap p.rate in
+    Some (DsDistParetoType2 {mu = FloatParam 0., lambda = FloatParam rate, alpha = FloatParam shape})
   | (DsDistDirichlet p, DsDistCategorical l) ->
     let a = unwrap p.a in
     let sum = foldl addf 0. a in
     let p = map (lam e. divf e sum) a in
     Some (DsDistCategorical {p=SeqFParam p})
   | (DsDistGamma p, DsDistPoisson l) ->
-    let shape = ceilfi (unwrap p.shape) in
-    let scale = unwrap p.scale in
-    let pSc = divf 1. (addf (mulf scale l.scale) 1.) in
-    Some (DsDistNegativeBinomial {n = IntParam shape, p = FloatParam pSc})
+    let shape = unwrap p.shape in
+    let rate = unwrap p.rate in
+    let beta = divf rate l.scale in
+    Some (DsDistNegBinomial {alpha = FloatParam shape, beta = FloatParam beta})
   | (_,_) -> None ()
 
   -- TODO 
@@ -286,17 +285,17 @@ lang DelayedSampling = DelayedGraph
   --sem posterior: all a1. all a. a -> (DsDist a1, DsDist a) -> Option (DsDist a1)
   sem posterior obs =
   | (DsDistBeta p, DsDistBernoulli l) ->
-    let a = unwrap p.a in
-    let b = unwrap p.b in
+    let a = unwrap p.alpha in
+    let b = unwrap p.beta in
     let pAB = if unsafeCoerce obs then (addf a 1., b) else (a, addf b 1.) in
-    Some (DsDistBeta {a=FloatParam pAB.0,b=FloatParam pAB.1})
+    Some (DsDistBeta {alpha=FloatParam pAB.0,beta=FloatParam pAB.1})
   | (DsDistBeta p, DsDistBinomial l) ->
-    let a = unwrap p.a in
-    let b = unwrap p.b in
+    let a = unwrap p.alpha in
+    let b = unwrap p.beta in
     let n = unwrap l.n in
     let pAB = (addf a (int2float (unsafeCoerce obs)), addf b (int2float (subi n (unsafeCoerce obs)))) in
-    Some (DsDistBeta {a=FloatParam pAB.0,b=FloatParam pAB.1})
-  | (DsDistGaussian p, DsDistGaussian l) ->
+    Some (DsDistBeta {alpha=FloatParam pAB.0,beta=FloatParam pAB.1})
+  | (DsDistNormal p, DsDistNormal l) ->
     let mu0 = addf (mulf (unwrap p.mu) l.meanScale) l.meanOffset in
     let s0 = mulf (unwrap p.sigma) (absf l.meanScale) in
     let s = unwrap l.sigma in
@@ -306,14 +305,13 @@ lang DelayedSampling = DelayedGraph
     let muLHS = divf 1. (addf (divf 1. s02) (divf 1. s2)) in
     let pMu = divf (subf (mulf muRHS muLHS) l.meanOffset) l.meanScale in
     let pSigma = divf (externalSqrt (muLHS)) (absf l.meanScale) in
-    Some (DsDistGaussian {mu=FloatParam pMu, sigma= FloatParam pSigma, meanScale=1., meanOffset=0.})
+    Some (DsDistNormal {mu=FloatParam pMu, sigma= FloatParam pSigma, meanScale=1., meanOffset=0.})
   | (DsDistGamma p, DsDistExponential l) ->
     let shape = unwrap p.shape in
-    let scale = unwrap p.scale in
+    let rate = unwrap p.rate in
     let pSh = addf shape 1. in
-    let pSc = addf 1. (mulf (unsafeCoerce obs) scale) in
-    let pSc = divf scale pSc in
-    Some (DsDistGamma {shape = FloatParam pSh, scale = FloatParam pSc})
+    let pRate = addf rate (unsafeCoerce obs) in
+    Some (DsDistGamma {shape = FloatParam pSh, rate = FloatParam pRate})
   | (DsDistDirichlet p, DsDistCategorical l) ->
     let a = unwrap p.a in
     let sum = foldl addf 0. a in
@@ -321,27 +319,27 @@ lang DelayedSampling = DelayedGraph
     Some (DsDistDirichlet {a=SeqFParam a})
   | (DsDistGamma p, DsDistPoisson l) ->
     let shape = unwrap p.shape in
-    let scale = unwrap p.scale in
+    let rate = unwrap p.rate in
     let pSh = addf shape (int2float (unsafeCoerce obs)) in
-    let pSc = divf scale (addf (mulf scale l.scale) 1.) in
-    Some (DsDistGamma {shape = FloatParam pSh, scale = FloatParam pSc})
+    let pRate = addf rate l.scale in
+    Some (DsDistGamma {shape = FloatParam pSh, rate = FloatParam pRate})
   | _ -> None () --neverr
 
   sem transformDsDist sampleT =
   | DsDistBernoulli t -> DistBernoulli {p = value (unsafeCoerce sampleT) t.p}
-  | DsDistBeta t -> DistBeta {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
-  | DsDistGaussian t -> DistGaussian {mu = addf t.meanOffset (mulf t.meanScale (value (unsafeCoerce sampleT) t.mu)), sigma = value (unsafeCoerce sampleT)  t.sigma}
+  | DsDistBeta t -> DistBeta {alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
+  | DsDistNormal t -> DistNormal {mu = addf t.meanOffset (mulf t.meanScale (value (unsafeCoerce sampleT) t.mu)), sigma = value (unsafeCoerce sampleT)  t.sigma}
   | DsDistCategorical t -> DistCategorical { p = value (unsafeCoerce sampleT) t.p}
   | DsDistPoisson t -> DistPoisson {lambda = mulf t.scale (value (unsafeCoerce sampleT) t.lambda)}
-  | DsDistBinomial t -> DistBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
-  | DsDistUniform t -> DistUniform {a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
-  | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, scale =  value (unsafeCoerce sampleT) t.scale}
-  | DsDistExponential t -> DistExponential {rate = value  (unsafeCoerce sampleT)  t.rate}
-  | DsDistLomax t -> DistLomax {shape = value (unsafeCoerce sampleT) t.shape, scale = value (unsafeCoerce sampleT) t.scale}
+  | DsDistBinomial t -> DistBinomial {n = value (unsafeCoerce sampleT) t.n, theta = value (unsafeCoerce sampleT) t.theta}
+  | DsDistUniform t -> DistUniform {alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
+  | DsDistGamma t -> DistGamma {shape = value (unsafeCoerce sampleT) t.shape, rate = value (unsafeCoerce sampleT) t.rate}
+  | DsDistExponential t -> DistExponential {beta = value  (unsafeCoerce sampleT)  t.beta}
+  | DsDistParetoType2 t -> DistParetoType2 {mu = value (unsafeCoerce sampleT) t.mu, lambda = value (unsafeCoerce sampleT) t.lambda, alpha = value (unsafeCoerce sampleT) t.alpha}
   | DsDistDirichlet t -> DistDirichlet {a = value (unsafeCoerce sampleT) t.a}
   | DsDistMultinomial t -> DistMultinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
-  | DsDistBetabin t -> DistBetabin {n = value (unsafeCoerce sampleT) t.n, a = value (unsafeCoerce sampleT) t.a, b = value (unsafeCoerce sampleT) t.b}
-  | DsDistNegativeBinomial t -> DistNegativeBinomial {n = value (unsafeCoerce sampleT) t.n, p = value (unsafeCoerce sampleT) t.p}
+  | DsDistBetaBinomial t -> DistBetaBinomial {n = value (unsafeCoerce sampleT) t.n, alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
+  | DsDistNegBinomial t -> DistNegBinomial {alpha = value (unsafeCoerce sampleT) t.alpha, beta = value (unsafeCoerce sampleT) t.beta}
   | _ -> error "not supported currently."
 
 end

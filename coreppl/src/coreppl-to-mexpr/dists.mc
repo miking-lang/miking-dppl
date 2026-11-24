@@ -49,31 +49,31 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DBernoulli { p = p } ->
     let cname = _getConExn "DistBernoulli" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("p", p)])))
-  | DBeta { a = a, b = b } ->
+  | DBeta { alpha = a, beta = b } ->
     let cname = _getConExn "DistBeta" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
-  | DBinomial { n = n, p = p } ->
+    i (nconapp_ cname (i (autoty_record_ [("alpha", a), ("beta", b)])))
+  | DBinomial { n = n, theta = theta } ->
     let cname = _getConExn "DistBinomial" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("n", n), ("p", p)])))
+    i (nconapp_ cname (i (autoty_record_ [("n", n), ("theta", theta)])))
   | DCategorical { p = p } ->
     let cname = _getConExn "DistCategorical" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("p", p)])))
-  | DChi2 { df = df } ->
-    let cname = _getConExn "DistChi2" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("df", df)])))
+  | DChiSquare { nu = nu } ->
+    let cname = _getConExn "DistChiSquare" (_getLangEnvExn "RuntimeDist" env.env) in
+    i (nconapp_ cname (i (autoty_record_ [("nu", nu)])))
   | DDirichlet { a = a } ->
     let cname = _getConExn "DistDirichlet" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("a", a)])))
   | DEmpirical { samples = samples } ->
     i (appFromEnv {env with env = _getLangEnvExn "RuntimeDist" env.env} "constructDistEmpiricalHelper" [samples])
-  | DExponential { rate = rate } ->
+  | DExponential { beta = beta } ->
     let cname = _getConExn "DistExponential" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("rate", rate)])))
-  | DGamma { k = k, theta = theta } ->
+    i (nconapp_ cname (i (autoty_record_ [("beta", beta)])))
+  | DGamma { k = k, rate = rate } ->
     let cname = _getConExn "DistGamma" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("shape", k), ("scale", theta)])))
-  | DGaussian { mu = mu, sigma = sigma } ->
-    let cname = _getConExn "DistGaussian" (_getLangEnvExn "RuntimeDist" env.env) in
+    i (nconapp_ cname (i (autoty_record_ [("shape", k), ("rate", rate)])))
+  | DNormal { mu = mu, sigma = sigma } ->
+    let cname = _getConExn "DistNormal" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("mu", mu), ("sigma", sigma)])))
   | DGeometric { p = p } ->
     let cname = _getConExn "DistGeometric" (_getLangEnvExn "RuntimeDist" env.env) in
@@ -87,12 +87,12 @@ lang TransformDist = TransformDistBase + InferenceInterface
   | DTreeInferenceCategorical { p = p , pairSets = pairSets} ->
     let cname = _getConExn "DistTreeInferenceCategorical" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("p", p), ("pairSets", pairSets)])))
-  | DUniform { a = a, b = b } ->
+  | DUniform { alpha = a, beta = b } ->
     let cname = _getConExn "DistUniform" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
-  | DUniformDiscrete { a = a, b = b } ->
-    let cname = _getConExn "DistUniformDiscrete" (_getLangEnvExn "RuntimeDist" env.env) in
-    i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))
+    i (nconapp_ cname (i (autoty_record_ [("alpha", a), ("beta", b)])))
+  | DDiscreteRange { lower = lower, upper = upper } ->
+    let cname = _getConExn "DistDiscreteRange" (_getLangEnvExn "RuntimeDist" env.env) in
+    i (nconapp_ cname (i (autoty_record_ [("lower", lower), ("upper", upper)])))
   | DReciprocal { a = a, b = b } ->
     let cname = _getConExn "DistReciprocal" (_getLangEnvExn "RuntimeDist" env.env) in
     i (nconapp_ cname (i (autoty_record_ [("a", a), ("b", b)])))

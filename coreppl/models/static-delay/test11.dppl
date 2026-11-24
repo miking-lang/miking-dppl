@@ -1,8 +1,8 @@
 mexpr
 iter (lam obs.
-	let a = assume (Gaussian 0. 1.) in
-	let b = assume (Gaussian a 1.) in
-	let c = assume (Gaussian a 1.) in
-	observe obs.0 (Gaussian b 1.);
-	observe obs.1 (Gaussian c 2.)
+	let a = assume (Normal 0. 1.) in
+	let b = assume (Normal a 1.) in
+	let c = assume (Normal a 1.) in
+	observe obs.0 (Normal b 1.);
+	observe obs.1 (Normal c 2.)
 	) [(1.5,1.6),(1.1,2.)]

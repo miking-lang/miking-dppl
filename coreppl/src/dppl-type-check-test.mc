@@ -150,7 +150,7 @@ utest _typeOf env (strJoin "\n" [
   "    with (theta, nu) in",
   "    iter",
   "      (lam t : (Float, Float).",
-  "         match t with (x, y) in observe x (Gaussian y nu))",
+  "         match t with (x, y) in observe x (Normal y nu))",
   "         (create (length d) (lam i : Int. (get d i, get (z theta) i)));",
   "      theta in",
   "infer (Default ()) (regressionModel d z)" ])

@@ -13,6 +13,14 @@ if [ -d ../miking ]; then
     path_add OCAMLPATH ../miking/build/lib
 fi
 
+if [ -d ../mi-stats ]; then
+    echo "Found a local mi-stats repository, using it:" $(expand_path ../mi-stats)
+    # Add the mi-stats mcore files
+    export MCORE_LIBS="${MCORE_LIBS-}${MCORE_LIBS:+:}mi-stats=$(expand_path ../mi-stats/src/lib)"
+    # Add the locally built mi_stats OCaml library to OCAMLPATH
+    path_add OCAMLPATH ../mi-stats/build/lib
+fi
+
 
 ### For development of CorePPL ###
 

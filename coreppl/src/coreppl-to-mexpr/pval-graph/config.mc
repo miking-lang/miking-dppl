@@ -1,4 +1,5 @@
 include "ext/dist-ext.mc"
+include "mi-stats::stats.mc"
 include "ext/math-ext.mc"
 include "float.mc"
 
@@ -49,7 +50,7 @@ let simplePValGraphMCMC : all ret. SimpleMCMCConfig -> SimplePValRun ret = lam c
       let toResample =
         if bernoulliSample config.globalProb
         then create numAligned (lam i. i)
-        else [uniformDiscreteSample 0 (subi numAligned 1)] in
+        else [discreteRangeSample 0 (subi numAligned 1)] in
       let res = interface.step acceptPred toResample acc.instance in
       let acc =
         { acc with iterations = subi acc.iterations 1

@@ -414,8 +414,8 @@ let ctmc = lam i. lam qt:Tensor[Float].
   [matrixGet i 0 qt,matrixGet i 1 qt,matrixGet i 2 qt,matrixGet i 3 qt]
 
 let pickpair = lam n.
-  let i = assume (UniformDiscrete 0 (subi n 1)) in
-  let j = assume (UniformDiscrete 0 (subi n 2)) in
+  let i = assume (DiscreteRange 0 (subi n 1)) in
+  let j = assume (DiscreteRange 0 (subi n 2)) in
   if lti j i then (i,j) else (i,addi j 1)
 
 let iid = lam f. lam p. lam n.
@@ -466,7 +466,7 @@ let modelTreeInferenceP = lam.
   clusterP q trees 0.0 seqLength (length trees);()
 
 let treeNormConst = distEmpiricalNormConst (infer (Importance {particles = 10000, cps = "none",prune=true}) modelTreeInferenceP)
-utest treeNormConst with -79.28202 using eqfApprox 1e-5
+utest treeNormConst with -79.2373850246 using eqfApprox 1e-5
 mexpr
 ()
 

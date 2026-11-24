@@ -1593,10 +1593,10 @@ let printFailure = lam l. lam r. strJoin "\n"
   ] in
 
 utest transform
-  [ "assume (Gaussian 0.0 1.0)"
+  [ "assume (Normal 0.0 1.0)"
   ]
 with strJoin "\n"
-  [ "px_assume (px_pure (Gaussian 0. 1.))"
+  [ "px_assume (px_pure (Normal 0. 1.))"
   ]
 using eqString
 else printFailure
@@ -1604,32 +1604,32 @@ in
 
 utest transform
   [ "let x = 0.0 in"
-  , "assume (Gaussian x 1.0)"
+  , "assume (Normal x 1.0)"
   ]
 with strJoin "\n"
-  [ "px_assume (px_pure (Gaussian 0. 1.))"
+  [ "px_assume (px_pure (Normal 0. 1.))"
   ]
 using eqString
 else printFailure
 in
 
 utest transform
-  [ "let x = assume (Gaussian 0.0 1.0) in"
-  , "assume (Gaussian x 1.0)"
+  [ "let x = assume (Normal 0.0 1.0) in"
+  , "assume (Normal x 1.0)"
   ]
 with strJoin "\n"
   [ "px_assume"
   , "  (px_map"
   , "     (/-temp-/lam x."
-  , "        Gaussian x 1.)"
-  , "     (px_assume (px_pure (Gaussian 0. 1.))))"
+  , "        Normal x 1.)"
+  , "     (px_assume (px_pure (Normal 0. 1.))))"
   ]
 using eqString
 else printFailure
 in
 
 utest transform
-  [ "addf (assume (Gaussian 0.0 1.0)) (assume (Gaussian 1.0 1.0))"
+  [ "addf (assume (Normal 0.0 1.0)) (assume (Normal 1.0 1.0))"
   ]
 with strJoin "\n"
   [ "px_apply"
@@ -1637,15 +1637,15 @@ with strJoin "\n"
   , "     (/-temp-/lam x."
   , "        /-temp-/lam x1."
   , "          addf x x1)"
-  , "     (px_assume (px_pure (Gaussian 0. 1.))))"
-  , "  (px_assume (px_pure (Gaussian 1. 1.)))"
+  , "     (px_assume (px_pure (Normal 0. 1.))))"
+  , "  (px_assume (px_pure (Normal 1. 1.)))"
   ]
 using eqString
 else printFailure
 in
 
 utest transform
-  [ "addf (addf (assume (Gaussian 0.0 1.0)) (assume (Gaussian 1.0 1.0))) 2.0"
+  [ "addf (addf (assume (Normal 0.0 1.0)) (assume (Normal 1.0 1.0))) 2.0"
   ]
 with strJoin "\n"
   [ "px_apply"
@@ -1653,8 +1653,8 @@ with strJoin "\n"
   , "     (/-temp-/lam x."
   , "        /-temp-/lam x1."
   , "          addf (addf x x1) 2.)"
-  , "     (px_assume (px_pure (Gaussian 0. 1.))))"
-  , "  (px_assume (px_pure (Gaussian 1. 1.)))"
+  , "     (px_assume (px_pure (Normal 0. 1.))))"
+  , "  (px_assume (px_pure (Normal 1. 1.)))"
   ]
 using eqString
 else printFailure
@@ -1673,7 +1673,7 @@ in
 
 utest transform
   [ "let f = lam a. addf a 1.0 in"
-  , "addf (f 1.0) (f (assume (Gaussian 0.0 1.0)))"
+  , "addf (f 1.0) (f (assume (Normal 0.0 1.0)))"
   ]
 with strJoin "\n"
   [ "let f = lam a1."
@@ -1683,24 +1683,24 @@ with strJoin "\n"
   , "px_map"
   , "  (/-temp-/lam x."
   , "     addf (f1 1.) (f x))"
-  , "  (px_assume (px_pure (Gaussian 0. 1.)))"
+  , "  (px_assume (px_pure (Normal 0. 1.)))"
   ]
 using eqString
 else printFailure
 in
 
 utest transform
-  [ "let f = lam a. assume (Gaussian a 1.0) in"
+  [ "let f = lam a. assume (Normal a 1.0) in"
   , "let g = lam a. f a in"
-  , "addf (g 1.0) (g (assume (Gaussian 0.0 1.0)))"
+  , "addf (g 1.0) (g (assume (Normal 0.0 1.0)))"
   ]
 with strJoin "\n"
   [ "let g = lam a1."
-  , "    px_assume (px_pure (Gaussian a1 1.)) in"
+  , "    px_assume (px_pure (Normal a1 1.)) in"
   , "let g1 ="
   , "  lam a."
   , "    px_assume (px_map (/-temp-/lam x2."
-  , "            Gaussian x2 1.) a)"
+  , "            Normal x2 1.) a)"
   , "in"
   , "px_apply"
   , "  (px_map"
@@ -1708,26 +1708,25 @@ with strJoin "\n"
   , "        /-temp-/lam x1."
   , "          addf x x1)"
   , "     (g 1.))"
-  , "  (g1 (px_assume (px_pure (Gaussian 0. 1.))))"
+  , "  (g1 (px_assume (px_pure (Normal 0. 1.))))"
   ]
 using eqString
 else printFailure
 in
 
 utest transform
-  [ "recursive let sum : Float -> Float = lam x. sum (assume (Gaussian x 1.0)) in"
+  [ "recursive let sum : Float -> Float = lam x. sum (assume (Normal x 1.0)) in"
   , "sum 1.0"
   ]
 with strJoin "\n"
   [ "recursive"
   , "  let sum = lam x."
-  , "      sum1 (px_assume (px_pure (Gaussian x 1.)))"
+  , "      sum1 (px_assume (px_pure (Normal x 1.)))"
   , "  let sum1 ="
   , "    lam x1."
   , "      sum1"
-  , "        (px_assume"
-  , "           (px_map (/-temp-/lam x2."
-  , "                 Gaussian x2 1.) x1))"
+  , "        (px_assume (px_map (/-temp-/lam x2."
+  , "                 Normal x2 1.) x1))"
   , "in"
   , "sum 1."
   ]
@@ -1737,20 +1736,19 @@ in
 
 utest transform
   [ "recursive"
-  , "  let odd : Float -> Bool = lam x. even (assume (Gaussian x 1.0))"
+  , "  let odd : Float -> Bool = lam x. even (assume (Normal x 1.0))"
   , "  let even = lam x. odd x"
   , "in even 1.0"
   ]
 with strJoin "\n"
   [ "recursive"
   , "  let even = lam x."
-  , "      even1 (px_assume (px_pure (Gaussian x 1.)))"
+  , "      even1 (px_assume (px_pure (Normal x 1.)))"
   , "  let even1 ="
   , "    lam x1."
   , "      even1"
-  , "        (px_assume"
-  , "           (px_map (/-temp-/lam x2."
-  , "                 Gaussian x2 1.) x1))"
+  , "        (px_assume (px_map (/-temp-/lam x2."
+  , "                 Normal x2 1.) x1))"
   , "in"
   , "even 1."
   ]
@@ -1769,11 +1767,11 @@ else printFailure
 in
 
 utest transform
-  [ "[1.0, assume (Gaussian 0.0 1.0)]"
+  [ "[1.0, assume (Normal 0.0 1.0)]"
   ]
 with strJoin "\n"
   [ "[ px_pure 1.,"
-  , "  px_assume (px_pure (Gaussian 0. 1.)) ]"
+  , "  px_assume (px_pure (Normal 0. 1.)) ]"
   ]
 using eqString
 else printFailure
@@ -1794,12 +1792,12 @@ else printFailure
 in
 
 utest transform
-  [ "if true then assume (Gaussian 0.0 1.0) else 42.0"
+  [ "if true then assume (Normal 0.0 1.0) else 42.0"
   ]
 with strJoin "\n"
   [ "match true with true"
   , "then"
-  , "  px_assume (px_pure (Gaussian 0. 1.))"
+  , "  px_assume (px_pure (Normal 0. 1.))"
   , "else"
   , "  px_pure 42."
   ]
@@ -1808,10 +1806,10 @@ else printFailure
 in
 
 utest transform
-  [ "match (assume (Gaussian 0.0 1.0), 2.0) with (a, b) in addf a b"
+  [ "match (assume (Normal 0.0 1.0), 2.0) with (a, b) in addf a b"
   ]
 with strJoin "\n"
-  [ "match (px_assume (px_pure (Gaussian 0. 1.)), 2.) with (field, field1)"
+  [ "match (px_assume (px_pure (Normal 0. 1.)), 2.) with (field, field1)"
   , "in"
   , "px_map (/-temp-/lam x."
   , "     addf x field1) field"
@@ -1858,21 +1856,21 @@ else printFailure
 in
 
 utest transform
-  [ "if true then (1, 2.0) else (2, assume (Gaussian 0.0 1.0))"
+  [ "if true then (1, 2.0) else (2, assume (Normal 0.0 1.0))"
   ]
 with strJoin "\n"
   [ "match true with true"
   , "then"
   , "  (1, px_pure 2.)"
   , "else"
-  , "  (2, px_assume (px_pure (Gaussian 0. 1.)))"
+  , "  (2, px_assume (px_pure (Normal 0. 1.)))"
   ]
 using eqString
 else printFailure
 in
 
 utest transform
-  [ "if assume (Bernoulli 0.5) then [1.0, 2.0] else [assume (Gaussian 0.0 1.0)]"
+  [ "if assume (Bernoulli 0.5) then [1.0, 2.0] else [assume (Normal 0.0 1.0)]"
   ]
 with strJoin "\n"
   [ "px_join"
@@ -1886,7 +1884,7 @@ with strJoin "\n"
   , "          px_map"
   , "            (/-temp-/lam x2."
   , "               [ x2 ])"
-  , "            (px_assume (px_pure (Gaussian 0. 1.))))"
+  , "            (px_assume (px_pure (Normal 0. 1.))))"
   , "     (px_assume (px_pure (Bernoulli 0.5))))"
   ]
 using eqString
@@ -1894,7 +1892,7 @@ else printFailure
 in
 
 utest transform
-  [ "if true then [1., 2.] else [assume (Gaussian 0.0 1.0)]"
+  [ "if true then [1., 2.] else [assume (Normal 0.0 1.0)]"
   ]
 with strJoin "\n"
   [ "match true with true"
@@ -1902,7 +1900,7 @@ with strJoin "\n"
   , "  [ px_pure 1.,"
   , "    px_pure 2. ]"
   , "else"
-  , "  [ px_assume (px_pure (Gaussian 0. 1.)) ]"
+  , "  [ px_assume (px_pure (Normal 0. 1.)) ]"
   ]
 using eqString
 else printFailure
@@ -1914,12 +1912,12 @@ in
 -- that would cause other issues, primarily related to no longer being
 -- able to spot rewrite opportunities.
 utest transform
-  [ "let draw = lam x. assume (Gaussian x 1.0) in"
+  [ "let draw = lam x. assume (Normal x 1.0) in"
   , "get [draw 0.0, draw 1.0] (assume (Categorical [0.5, 0.5]))"
   ]
 with strJoin "\n"
   [ "let draw = lam x."
-  , "    px_assume (px_pure (Gaussian x 1.)) in"
+  , "    px_assume (px_pure (Normal x 1.)) in"
   , "px_join"
   , "  (px_map"
   , "     (get [ draw 0.,"
@@ -1956,7 +1954,7 @@ utest transform
   [ "type Either a b in"
   , "con Left : all a. all b. a -> Either a b in"
   , "con Right : all a. all b. b -> Either a b in"
-  , "if true then Left 1.0 else let x = assume (Gaussian 1.0 0.0) in Left x"
+  , "if true then Left 1.0 else let x = assume (Normal 1.0 0.0) in Left x"
   ]
 with strJoin "\n"
   [ "type Either p p1 in"
@@ -1968,7 +1966,7 @@ with strJoin "\n"
   , "    (px_pure 1.)"
   , "else"
   , "  Left"
-  , "    (px_assume (px_pure (Gaussian 1. 0.)))"
+  , "    (px_assume (px_pure (Normal 1. 0.)))"
   ]
 using eqString
 else printFailure
@@ -2010,7 +2008,7 @@ utest transform
   , "con Left : all a. all b. a -> Either a b in"
   , "con Right : all a. all b. b -> Either a b in"
   , "if true then"
-  , "  let x = assume (Gaussian 1.0 0.0) in"
+  , "  let x = assume (Normal 1.0 0.0) in"
   , "  Left x"
   , "else"
   , "  if assume (Bernoulli 0.5) then Left 2.0 else Left 3.0"
@@ -2025,7 +2023,7 @@ with strJoin "\n"
   , "    (/-temp-/lam x."
   , "       Left"
   , "         x)"
-  , "    (px_assume (px_pure (Gaussian 1. 0.)))"
+  , "    (px_assume (px_pure (Normal 1. 0.)))"
   , "else"
   , "  px_map"
   , "    (/-temp-/lam x1."
@@ -2069,7 +2067,7 @@ utest transform
   [ "type Tree in"
   , "con Leaf : {x : Float} -> Tree in"
   , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
+  , "let x = assume (Normal 0.0 1.0) in"
   , "Node {x = 1.0, left = Leaf {x = x}, right = Leaf {x = 3.0}}"
   ]
 with strJoin "\n"
@@ -2079,9 +2077,8 @@ with strJoin "\n"
   , "in"
   , "Node"
   , "  { x = 1.,"
-  , "    left ="
-  , "      Leaf"
-  , "        { x = px_assume (px_pure (Gaussian 0. 1.)) },"
+  , "    left = Leaf"
+  , "        { x = px_assume (px_pure (Normal 0. 1.)) },"
   , "    right = Leaf"
   , "        { x = px_pure 3. } }"
   ]
@@ -2093,7 +2090,7 @@ utest transform
   [ "type Tree in"
   , "con Leaf : {x : Float} -> Tree in"
   , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
+  , "let x = assume (Normal 0.0 1.0) in"
   , "let l = if assume (Bernoulli 0.5) then Leaf {x = x} else Leaf {x = 2.0} in"
   , "Node {x = 1.0, left = l, right = Leaf {x = 3.0}}"
   ]
@@ -2117,7 +2114,7 @@ with strJoin "\n"
   , "               (/-temp-/lam x3."
   , "                  Leaf"
   , "                    { x = x3 })"
-  , "               (px_assume (px_pure (Gaussian 0. 1.)))"
+  , "               (px_assume (px_pure (Normal 0. 1.)))"
   , "           else"
   , "             px_pure (Leaf"
   , "                  { x = 2. }))"
@@ -2132,7 +2129,7 @@ utest transform
   , "con Leaf : {x : Float} -> Tree in"
   , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
   , "let merge = lam l. lam r."
-  , "  let x = assume (Gaussian 0.0 1.0) in"
+  , "  let x = assume (Normal 0.0 1.0) in"
   , "  Node {x = x, left = l, right = r} in"
   , "merge (merge (Leaf {x = 1.0}) (Leaf {x = 2.0})) (Leaf {x = 3.0})"
   ]
@@ -2145,13 +2142,13 @@ with strJoin "\n"
   , "  lam l1."
   , "    lam r1."
   , "      Node"
-  , "        { x = px_assume (px_pure (Gaussian 0. 1.)), left = l1, right = r1 }"
+  , "        { x = px_assume (px_pure (Normal 0. 1.)), left = l1, right = r1 }"
   , "in"
   , "let merge1 ="
   , "  lam l."
   , "    lam r."
   , "      Node"
-  , "        { x = px_assume (px_pure (Gaussian 0. 1.)), left = l, right = r }"
+  , "        { x = px_assume (px_pure (Normal 0. 1.)), left = l, right = r }"
   , "in"
   , "merge1"
   , "  (merge (Leaf"
@@ -2169,7 +2166,7 @@ utest transform
   , "con Leaf : {x : Float} -> Tree in"
   , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
   , "if assume (Bernoulli 0.5)"
-  , "then let x = assume (Gaussian 0.0 1.0) in Node {x = x, left = Leaf {x = 1.0}, right = Leaf {x = 2.0}}"
+  , "then let x = assume (Normal 0.0 1.0) in Node {x = x, left = Leaf {x = 1.0}, right = Leaf {x = 2.0}}"
   , "else Leaf {x = 1.0}"
   ]
 with strJoin "\n"
@@ -2191,7 +2188,7 @@ with strJoin "\n"
   , "                       { x = 1. },"
   , "                   right = Leaf"
   , "                       { x = 2. } })"
-  , "            (px_assume (px_pure (Gaussian 0. 1.)))"
+  , "            (px_assume (px_pure (Normal 0. 1.)))"
   , "        else"
   , "          px_pure (Leaf"
   , "               { x = 1. }))"
@@ -2213,7 +2210,7 @@ utest transform
   , "  match tmp with (tree, rest) in"
   , "  match rest with Cons tmp then"
   , "    match tmp with (r, trees) in"
-  , "    let newX = assume (Gaussian 0.0 1.0) in"
+  , "    let newX = assume (Normal 0.0 1.0) in"
   , "    cluster (Cons (Node {x = newX, left = tree, right = r}, trees))"
   , "  else tree in"
   , "cluster (Cons (Leaf {x = 0.0}, Cons (Leaf {x = 1.0}, Cons (Leaf {x = 2.0}, Nil ()))));"
@@ -2241,7 +2238,7 @@ with strJoin "\n"
   , "          cluster1"
   , "            (Cons"
   , "               (Node"
-  , "                 { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                 { x = px_assume (px_pure (Normal 0. 1.)),"
   , "                   left = field,"
   , "                   right = field2 }, field3))"
   , "        else"
@@ -2265,7 +2262,7 @@ with strJoin "\n"
   , "          cluster1"
   , "            (Cons"
   , "               (Node"
-  , "                 { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                 { x = px_assume (px_pure (Normal 0. 1.)),"
   , "                   left = field4,"
   , "                   right = field6 }, field7))"
   , "        else"
@@ -2303,7 +2300,7 @@ utest transform
   , "recursive let cluster = lam trees."
   , "  match trees with [tree] then tree else"
   , "  match trees with [l, r] ++ trees in"
-  , "  let newX = assume (Gaussian 0.0 1.0) in"
+  , "  let newX = assume (Normal 0.0 1.0) in"
   , "  cluster (cons (Node {x = newX, left = l, right = r}) trees) in"
   , "cluster [Leaf {x = 0.0}, Leaf {x = 1.0}, Leaf {x = 2.0}]"
   ]
@@ -2321,7 +2318,7 @@ with strJoin "\n"
   , "        cluster1"
   , "          (cons"
   , "             (Node"
-  , "                { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                { x = px_assume (px_pure (Normal 0. 1.)),"
   , "                  left = get trees 0,"
   , "                  right = get trees 1 })"
   , "             (splitAt trees 2).1)"
@@ -2332,7 +2329,7 @@ with strJoin "\n"
   , "        (print"
   , "             (snoc"
   , "                (concat"
-  , "                   \"ERROR <internal 6:2-7:41>:\\nUnmatched pattern: \""
+  , "                   \"ERROR <internal 6:2-7:39>:\\nUnmatched pattern: \""
   , "                   (match length trees with 0"
   , "                    then"
   , "                      \"[]\""
@@ -2348,7 +2345,7 @@ with strJoin "\n"
   , "        cluster1"
   , "          (cons"
   , "             (Node"
-  , "                { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                { x = px_assume (px_pure (Normal 0. 1.)),"
   , "                  left = get trees1 0,"
   , "                  right = get trees1 1 })"
   , "             (splitAt trees1 2).1)"
@@ -2360,7 +2357,7 @@ with strJoin "\n"
   , "          print"
   , "            (snoc"
   , "               (concat"
-  , "                  \"ERROR <internal 6:2-7:41>:\\nUnmatched pattern: \""
+  , "                  \"ERROR <internal 6:2-7:39>:\\nUnmatched pattern: \""
   , "                  (match length trees1 with 0"
   , "                   then"
   , "                     \"[]\""
@@ -2418,7 +2415,7 @@ utest transform
   [ "type Tree in"
   , "con Leaf : {x : Float} -> Tree in"
   , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
+  , "let x = assume (Normal 0.0 1.0) in"
   , "match head (cons (Leaf {x = x}) [Leaf {x = 1.0}]) with Leaf x in"
   , "addf x.x 1.0"
   ]
@@ -2431,7 +2428,7 @@ with strJoin "\n"
   , "  head"
   , "    (cons"
   , "       (Leaf"
-  , "          { x = px_assume (px_pure (Gaussian 0. 1.)) })"
+  , "          { x = px_assume (px_pure (Normal 0. 1.)) })"
   , "       [ Leaf"
   , "           { x = px_pure 1. } ])"
   , "with"
@@ -2454,7 +2451,7 @@ utest transform
   [ "type Tree in"
   , "con Leaf : {x : Float} -> Tree in"
   , "con Node : {x : Float, left : Tree, right : Tree} -> Tree in"
-  , "let x = assume (Gaussian 0.0 1.0) in"
+  , "let x = assume (Normal 0.0 1.0) in"
   , "match head (cons (Leaf {x = 1.0}) [Leaf {x = x}]) with Leaf x in"
   , "addf x.x 1.0"
   ]
@@ -2469,7 +2466,7 @@ with strJoin "\n"
   , "       (Leaf"
   , "          { x = px_pure 1. })"
   , "       [ Leaf"
-  , "           { x = px_assume (px_pure (Gaussian 0. 1.)) } ])"
+  , "           { x = px_assume (px_pure (Normal 0. 1.)) } ])"
   , "with"
   , "  Leaf carried"
   , "then"
@@ -2496,7 +2493,7 @@ utest transform
   , "recursive let cluster = lam trees."
   , "  match trees with Cons (tree, Nil _) then tree else"
   , "  match trees with Cons (l, Cons (r, trees)) in"
-  , "  let newX = assume (Gaussian 0.0 1.0) in"
+  , "  let newX = assume (Normal 0.0 1.0) in"
   , "  cluster (Cons (Node {x = newX, left = l, right = r}, trees)) in"
   , "cluster (Cons (Leaf {x = 0.0}, Cons (Leaf {x = 1.0}, Cons (Leaf {x = 2.0}, Nil ()))));"
   , "()"
@@ -2526,14 +2523,14 @@ with strJoin "\n"
   , "          cluster1"
   , "            (Cons"
   , "               (Node"
-  , "                 { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                 { x = px_assume (px_pure (Normal 0. 1.)),"
   , "                   left = field,"
   , "                   right = field2 }, field3))"
   , "        else"
   , "          (print"
   , "               (snoc"
   , "                  (concat"
-  , "                     \"ERROR <internal 9:2-10:41>:\\nUnmatched pattern: \""
+  , "                     \"ERROR <internal 9:2-10:39>:\\nUnmatched pattern: \""
   , "                     \"Cons (_, !_)\")"
   , "                  '\\n'))"
   , "          ; exit 1"
@@ -2541,7 +2538,7 @@ with strJoin "\n"
   , "        let #var\"1\" ="
   , "          print"
   , "            (snoc"
-  , "               (concat \"ERROR <internal 9:2-10:41>:\\nUnmatched pattern: \" \"Nil _\")"
+  , "               (concat \"ERROR <internal 9:2-10:39>:\\nUnmatched pattern: \" \"Nil _\")"
   , "               '\\n')"
   , "        in"
   , "        exit 1"
@@ -2561,7 +2558,7 @@ with strJoin "\n"
   , "          cluster1"
   , "            (Cons"
   , "               (Node"
-  , "                 { x = px_assume (px_pure (Gaussian 0. 1.)),"
+  , "                 { x = px_assume (px_pure (Normal 0. 1.)),"
   , "                   left = field4,"
   , "                   right = field6 }, field7))"
   , "        else"
@@ -2569,7 +2566,7 @@ with strJoin "\n"
   , "            print"
   , "              (snoc"
   , "                 (concat"
-  , "                    \"ERROR <internal 9:2-10:41>:\\nUnmatched pattern: \""
+  , "                    \"ERROR <internal 9:2-10:39>:\\nUnmatched pattern: \""
   , "                    \"Cons (_, !_)\")"
   , "                 '\\n')"
   , "          in"
@@ -2578,7 +2575,7 @@ with strJoin "\n"
   , "        let #var\"3\" ="
   , "          print"
   , "            (snoc"
-  , "               (concat \"ERROR <internal 9:2-10:41>:\\nUnmatched pattern: \" \"Nil _\")"
+  , "               (concat \"ERROR <internal 9:2-10:39>:\\nUnmatched pattern: \" \"Nil _\")"
   , "               '\\n')"
   , "        in"
   , "        exit 1"

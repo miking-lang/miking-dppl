@@ -3716,7 +3716,7 @@ in
 -- │ Test Dist │
 -- └───────────┘
 
-utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DUniform {a = x, b = y}))
+utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DUniform {alpha = x, beta = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
@@ -3731,12 +3731,12 @@ utest _typeOf [(_x, fltX [])] (dist_ (DPoisson {lambda = x}))
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DBeta {a = x, b = y}))
+utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DBeta {alpha = x, beta = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DGamma {k = x, theta = y}))
+utest _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DGamma {k = x, rate = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
@@ -3752,13 +3752,13 @@ utest _typeOf [(_x, tyint_), (_y, tyseq_ (fltX []))]
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX [])] (dist_ (DExponential {rate = x}))
+utest _typeOf [(_x, fltX [])] (dist_ (DExponential {beta = x}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
 
 utest
-  _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DGaussian {mu = x, sigma = y}))
+  _typeOf [(_x, fltX []), (_y, fltX [])] (dist_ (DNormal {mu = x, sigma = y}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
@@ -3768,7 +3768,7 @@ utest _typeOf [] (dist_ (DWiener { cps = false, a = unit_ }))
   using eq else onFail
 in
 
-utest _typeOf [(_x, fltX [])] (dist_ (DExponential {rate = x}))
+utest _typeOf [(_x, fltX [])] (dist_ (DExponential {beta = x}))
   with Right (_D, tydist_ (fltX []))
   using eq else onFail
 in
@@ -3781,7 +3781,7 @@ utest
 in
 
 let _test = lam c.
-  _typeOf [(_x, flt c)] (dist_ (DExponential {rate = x}))
+  _typeOf [(_x, flt c)] (dist_ (DExponential {beta = x}))
 in
 
 utest _test _A

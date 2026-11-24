@@ -33,7 +33,7 @@ utest r (t 0   "-m smc-apf --cps full --resample align"         ) with rhs using
 utest r (t 0   "-m smc-apf --cps full --resample likelihood"    ) with rhs using e in
 utest r (t 500 "-m pmcmc-pimh --cps partial"                    ) with rhs using e in
 utest r (t 500 "-m pmcmc-pimh --cps full"                       ) with rhs using e in
-utest r (t 500 "-m mcmc-trace"                                  ) with rhs using e in
+utest r (testCpplMExpr "sprinkler.dppl" 2000 1000 "-m mcmc-trace"                                  ) with rhs using e in
 utest r (t 500 "-m mcmc-naive"                                  ) with rhs using e in
 utest r (t 500 "-m mcmc-lightweight --align --cps none"         ) with rhs using e in
 utest r (t 500 "-m mcmc-lightweight --align --cps partial"      ) with rhs using e in

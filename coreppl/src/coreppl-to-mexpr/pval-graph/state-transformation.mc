@@ -424,11 +424,11 @@ let printFailure = lam l. lam r. strJoin "\n"
   ] in
 
 utest transform
-  [ "weight (addf (assume (Gaussian 0.0 1.0)) 2.0)"
+  [ "weight (addf (assume (Normal 0.0 1.0)) 2.0)"
   ]
 with strJoin "\n"
   [ "match"
-  , "  p_assume st simpleStoreAssume (p_pure (Gaussian 0. 1.))"
+  , "  p_assume st simpleStoreAssume (p_pure (Normal 0. 1.))"
   , "with"
   , "  (st1, x)"
   , "in"
@@ -441,11 +441,11 @@ in
 
 utest transform
   [ "let a = 2.0 in"
-  , "weight (addf (assume (Gaussian 0.0 1.0)) (addf a a))"
+  , "weight (addf (assume (Normal 0.0 1.0)) (addf a a))"
   ]
 with strJoin "\n"
   [ "match"
-  , "  p_assume st simpleStoreAssume (p_pure (Gaussian 0. 1.))"
+  , "  p_assume st simpleStoreAssume (p_pure (Normal 0. 1.))"
   , "with"
   , "  (st1, x)"
   , "in"
@@ -461,12 +461,12 @@ else printFailure
 in
 
 utest transform
-  [ "let a = assume (Gaussian 0.0 1.0) in"
+  [ "let a = assume (Normal 0.0 1.0) in"
   , "weight (addf a a)"
   ]
 with strJoin "\n"
   [ "match"
-  , "  p_assume st simpleStoreAssume (p_pure (Gaussian 0. 1.))"
+  , "  p_assume st simpleStoreAssume (p_pure (Normal 0. 1.))"
   , "with"
   , "  (st1, a)"
   , "in"
@@ -502,7 +502,7 @@ else printFailure
 in
 
 utest transform
-  [ "let f = lam x. addf (assume (Gaussian 1.0 0.0)) x in"
+  [ "let f = lam x. addf (assume (Normal 1.0 0.0)) x in"
   , "addf (f 1.0) (f 2.0)"
   ]
 with strJoin "\n"
@@ -510,7 +510,7 @@ with strJoin "\n"
   , "  lam st4."
   , "    lam x5."
   , "      match"
-  , "        p_assume st4 simpleStoreAssume (p_pure (Gaussian 1. 0.))"
+  , "        p_assume st4 simpleStoreAssume (p_pure (Normal 1. 0.))"
   , "      with"
   , "        (st5, x6)"
   , "      in"
@@ -538,14 +538,14 @@ in
 -- now, but there's an OPT comment in the idealized transformation
 -- about it
 utest transform
-  [ "let draw = lam x. assume (Gaussian x 1.0) in"
+  [ "let draw = lam x. assume (Normal x 1.0) in"
   , "get [draw 0.0, draw 1.0] (assume (Categorical [0.5, 0.5]))"
   ]
 with strJoin "\n"
   [ "let draw ="
   , "  lam st5."
   , "    lam x4."
-  , "      p_assume st5 simpleStoreAssume (p_pure (Gaussian x4 1.))"
+  , "      p_assume st5 simpleStoreAssume (p_pure (Normal x4 1.))"
   , "in"
   , "match"
   , "  p_assume st simpleStoreAssume (p_pure (Categorical [ 0.5, 0.5 ]))"
@@ -571,7 +571,7 @@ else printFailure
 in
 
 utest transform
-  [ "let draw = lam x. assume (Gaussian x 1.0) in"
+  [ "let draw = lam x. assume (Normal x 1.0) in"
   , "let a = draw 0.0 in"
   , "let b = draw 1.0 in"
   , "switch assume (Categorical [0.5, 0.5])"
@@ -583,7 +583,7 @@ with strJoin "\n"
   [ "let draw ="
   , "  lam st3."
   , "    lam x2."
-  , "      p_assume st3 simpleStoreAssume (p_pure (Gaussian x2 1.))"
+  , "      p_assume st3 simpleStoreAssume (p_pure (Normal x2 1.))"
   , "in"
   , "match"
   , "  p_assume st simpleStoreAssume (p_pure (Categorical [ 0.5, 0.5 ]))"
@@ -616,7 +616,7 @@ else printFailure
 in
 
 utest transform
-  [ "let draw = lam x. assume (Gaussian x 1.0) in"
+  [ "let draw = lam x. assume (Normal x 1.0) in"
   , "let a = draw 0.0 in"
   , "let b = draw 1.0 in"
   , "let z = addf a b in"
@@ -629,7 +629,7 @@ with strJoin "\n"
   [ "let draw ="
   , "  lam st6."
   , "    lam x5."
-  , "      p_assume st6 simpleStoreAssume (p_pure (Gaussian x5 1.))"
+  , "      p_assume st6 simpleStoreAssume (p_pure (Normal x5 1.))"
   , "in"
   , "match draw st 0. with (st1, a)"
   , "in"
@@ -673,7 +673,7 @@ in
 
 utest transform
   [ "if assume (Bernoulli 0.5)"
-  , "then [assume (Gaussian 0.0 1.0)]"
+  , "then [assume (Normal 0.0 1.0)]"
   , "else [2.0]"
   ]
 with strJoin "\n"
@@ -692,7 +692,7 @@ with strJoin "\n"
   , "       match x2 with true"
   , "       then"
   , "         match"
-  , "           p_assume st2 simpleStoreAssume (p_pure (Gaussian 0. 1.))"
+  , "           p_assume st2 simpleStoreAssume (p_pure (Normal 0. 1.))"
   , "         with"
   , "           (st3, x3)"
   , "         in"

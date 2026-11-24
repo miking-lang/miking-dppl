@@ -7,6 +7,7 @@ include "seq.mc"
 include "map.mc"
 include "float.mc"
 include "ext/dist-ext.mc"
+include "mi-stats::stats.mc"
 
 -- Weiner process
 let wienerSample : () -> Float -> Float = lam.
@@ -27,8 +28,8 @@ let wienerSample : () -> Float -> Float = lam.
           switch (mapFindLower t tr, mapFindUpper t tr)
           case (None _, None _) then
             error "impossible, trace should always be initialized with { 0 => 0 }"
-          case (Some (t1, a), None _) then gaussianSample a (sqrt (subf t t1))
-          case (None _, Some (t2, b)) then gaussianSample b (sqrt (subf t2 t))
+          case (Some (t1, a), None _) then normalSample a (sqrt (subf t t1))
+          case (None _, Some (t2, b)) then normalSample b (sqrt (subf t2 t))
           case (Some (t1, a), Some (t2, b)) then
             let mu =
               (addf
@@ -38,7 +39,7 @@ let wienerSample : () -> Float -> Float = lam.
             let sigma =
               sqrt (divf (mulf (subf t2 t) (subf t t1)) (subf t2 t1))
             in
-            gaussianSample mu sigma
+            normalSample mu sigma
           end
         in
         modref trace (mapInsert t w tr); w)
@@ -52,7 +53,7 @@ let wienerSampleUnsafe : () -> Float -> Float = lam.
   lam t2.
     match deref state with (w, t1) in
     if eqf t2 t1 then w else
-      let w = (gaussianSample w (sqrt (subf t2 t1))) in
+      let w = (normalSample w (sqrt (subf t2 t1))) in
       modref state (w, t2); w
 
 -- Base interface
@@ -77,45 +78,45 @@ end
 lang RuntimeDistElementary = RuntimeDistBase
   syn Dist a +=
   | DistBernoulli {p : Float}
-  | DistBeta {a : Float, b : Float}
-  | DistBetabin {n:Int, a: Float, b: Float}
-  | DistBinomial {n : Int, p : Float}
+  | DistBeta {alpha : Float, beta : Float}
+  | DistBetaBinomial {n:Int, alpha: Float, beta: Float}
+  | DistBinomial {n : Int, theta : Float}
   | DistCategorical {p : [Float]}
-  | DistChi2 {df : Int}
+  | DistChiSquare {nu : Float}
   | DistDirichlet {a : [Float]}
-  | DistExponential {rate : Float}
-  | DistGamma {shape : Float, scale : Float}
-  | DistGaussian {mu : Float, sigma : Float}
+  | DistExponential {beta : Float}
+  | DistGamma {shape : Float, rate : Float}
+  | DistNormal {mu : Float, sigma : Float}
   | DistGeometric {p : Float}
-  | DistLomax {scale: Float, shape : Float}
+  | DistParetoType2 {mu : Float, lambda : Float, alpha : Float}
   | DistMultinomial {n : Int, p : [Float]}
-  | DistNegativeBinomial {n:Int, p: Float}
+  | DistNegBinomial {alpha : Float, beta : Float}
   | DistPoisson {lambda : Float}
   | DistTreeInferenceCategorical {p:[Float], pairSets: [[Int]]}
-  | DistUniform {a : Float, b : Float}
-  | DistUniformDiscrete {a : Int, b : Int}
+  | DistUniform {alpha : Float, beta : Float}
+  | DistDiscreteRange {lower : Int, upper : Int}
   | DistReciprocal {a: Float, b: Float}
   | DistWiener {cps : Bool, a : ()}
  
   sem sample +=
   | DistBernoulli t -> unsafeCoerce (bernoulliSample t.p)
-  | DistBeta t -> unsafeCoerce (betaSample t.a t.b)
-  | DistBetabin t -> unsafeCoerce (betabinSample t.n t.a t.b)
-  | DistBinomial t -> unsafeCoerce (binomialSample t.p t.n)
+  | DistBeta t -> unsafeCoerce (betaSample t.alpha t.beta)
+  | DistBetaBinomial t -> unsafeCoerce (betaBinomialSample t.n t.alpha t.beta)
+  | DistBinomial t -> unsafeCoerce (binomialSample t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalSample t.p)
-  | DistChi2 t -> unsafeCoerce (chi2Sample t.df)
+  | DistChiSquare t -> unsafeCoerce (chiSquareSample t.nu)
   | DistDirichlet t -> unsafeCoerce (dirichletSample t.a)
-  | DistExponential t -> unsafeCoerce (exponentialSample t.rate)
-  | DistGamma t -> unsafeCoerce (gammaSample t.shape t.scale)
-  | DistGaussian t -> unsafeCoerce (gaussianSample t.mu t.sigma)
+  | DistExponential t -> unsafeCoerce (exponentialSample t.beta)
+  | DistGamma t -> unsafeCoerce (gammaSample t.shape t.rate)
+  | DistNormal t -> unsafeCoerce (normalSample t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricSample t.p)
-  | DistLomax t -> unsafeCoerce (lomaxSample t.shape t.scale)
+  | DistParetoType2 t -> unsafeCoerce (paretoType2Sample t.mu t.lambda t.alpha)
   | DistMultinomial t -> unsafeCoerce (multinomialSample t.p t.n)
-  | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialSample t.n t.p)
+  | DistNegBinomial t -> unsafeCoerce (negBinomialSample t.alpha t.beta)
   | DistPoisson t -> unsafeCoerce (poissonSample t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalSample t.p t.pairSets)
-  | DistUniform t -> unsafeCoerce (uniformContinuousSample t.a t.b)
-  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteSample t.a t.b)
+  | DistUniform t -> unsafeCoerce (uniformSample t.alpha t.beta)
+  | DistDiscreteRange t -> unsafeCoerce (discreteRangeSample t.lower t.upper)
   | DistReciprocal t -> unsafeCoerce (reciprocalSample t.a t.b)
   | DistWiener {cps = false, a = a} -> unsafeCoerce (wienerSample a)
   | DistWiener {cps = true, a = a} -> unsafeCoerce (let w = wienerSample a in lam k. lam x. k (w x))
@@ -123,48 +124,48 @@ lang RuntimeDistElementary = RuntimeDistBase
   -- Expectation of primitive distributions over real values
   sem expectation +=
   | DistBernoulli t -> unsafeCoerce t.p
-  | DistBeta t -> unsafeCoerce (divf t.a (addf t.a t.b))
-  | DistBinomial t -> unsafeCoerce (mulf t.p (int2float t.n))
+  | DistBeta t -> unsafeCoerce (divf t.alpha (addf t.alpha t.beta))
+  | DistBinomial t -> unsafeCoerce (mulf t.theta (int2float t.n))
   | DistCategorical t ->
     error "expectation undefined for the categorical distribution"
-  | DistChi2 t -> unsafeCoerce t.df
+  | DistChiSquare t -> unsafeCoerce t.nu
   | DistDirichlet t ->
     error "expectation undefined for the Dirichlet distribution"
-  | DistExponential t -> unsafeCoerce (divf 1. t.rate)
-  | DistGamma t -> unsafeCoerce (mulf t.shape t.scale)
-  | DistGaussian t -> unsafeCoerce t.mu
+  | DistExponential t -> unsafeCoerce (divf 1. t.beta)
+  | DistGamma t -> unsafeCoerce (divf t.shape t.rate)
+  | DistNormal t -> unsafeCoerce t.mu
   | DistGeometric t -> unsafeCoerce (divf (subf 1. t.p) t.p)
   | DistMultinomial t ->
     error "expectation undefined for the multinomial distribution"
   | DistPoisson t -> unsafeCoerce t.lambda
-  | DistUniform t -> unsafeCoerce (divf (addf t.a t.b) 2.)
-  | DistUniformDiscrete t -> unsafeCoerce (divf (int2float (addi t.a t.b)) 2.)
+  | DistUniform t -> unsafeCoerce (divf (addf t.alpha t.beta) 2.)
+  | DistDiscreteRange t -> unsafeCoerce (divf (int2float (addi t.lower t.upper)) 2.)
   | DistReciprocal t -> unsafeCoerce (divf (subf t.a t.b) (log (divf t.a t.b)))
   | DistWiener _ -> error "expectation undefined for the Wiener process"
   | DistTreeInferenceCategorical t -> error "expectation undefined for the tree inference categorical distribution"
 
   sem logObserve +=
   | DistBernoulli t -> unsafeCoerce (bernoulliLogPmf t.p)
-  | DistBeta t -> unsafeCoerce (betaLogPdf t.a t.b)
-  | DistBetabin t -> unsafeCoerce (betabinLogPmf t.n t.a t.b)
-  | DistBinomial t -> unsafeCoerce (binomialLogPmf t.p t.n)
+  | DistBeta t -> unsafeCoerce (betaLogPdf t.alpha t.beta)
+  | DistBetaBinomial t -> unsafeCoerce (betaBinomialLogPmf t.n t.alpha t.beta)
+  | DistBinomial t -> unsafeCoerce (binomialLogPmf t.n t.theta)
   | DistCategorical t -> unsafeCoerce (categoricalLogPmf t.p)
-  | DistChi2 t -> unsafeCoerce (chi2LogPdf t.df)
+  | DistChiSquare t -> unsafeCoerce (chiSquareLogPdf t.nu)
   | DistDirichlet t -> unsafeCoerce (dirichletLogPdf t.a)
-  | DistExponential t -> unsafeCoerce (exponentialLogPdf t.rate)
-  | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.scale)
-  | DistGaussian t -> unsafeCoerce (gaussianLogPdf t.mu t.sigma)
+  | DistExponential t -> unsafeCoerce (exponentialLogPdf t.beta)
+  | DistGamma t -> unsafeCoerce (gammaLogPdf t.shape t.rate)
+  | DistNormal t -> unsafeCoerce (normalLogPdf t.mu t.sigma)
   | DistGeometric t -> unsafeCoerce (geometricLogPmf t.p)
-  | DistLomax t -> unsafeCoerce (lomaxLogPdf t.shape t.scale)
+  | DistParetoType2 t -> unsafeCoerce (paretoType2LogPdf t.mu t.lambda t.alpha)
   | DistMultinomial t ->
     unsafeCoerce (lam o.
       if eqi t.n (foldl1 addi o) then multinomialLogPmf t.p o
       else negf inf)
-  | DistNegativeBinomial t -> unsafeCoerce (negativeBinomialLogPmf t.n t.p)
+  | DistNegBinomial t -> unsafeCoerce (negBinomialLogPmf t.alpha t.beta)
   | DistPoisson t -> unsafeCoerce (poissonLogPmf t.lambda)
   | DistTreeInferenceCategorical t -> unsafeCoerce (treeInferenceCategoricalLogPmf t.p t.pairSets)
-  | DistUniform t -> unsafeCoerce (uniformContinuousLogPdf t.a t.b)
-  | DistUniformDiscrete t -> unsafeCoerce (uniformDiscreteLogPdf t.a t.b)
+  | DistUniform t -> unsafeCoerce (uniformLogPdf t.alpha t.beta)
+  | DistDiscreteRange t -> unsafeCoerce (discreteRangeLogPmf t.lower t.upper)
   | DistReciprocal t -> unsafeCoerce (reciprocalLogPdf t.a t.b)
   | DistWiener _ -> error "logObserve undefined for the Wiener process"
 end
@@ -272,7 +273,7 @@ lang RuntimeDistEmpirical = RuntimeDistBase
     -- than the chosen value. The sample at this index is returned. Note that
     -- we use the final cumulative weight rather than 1 for y, to prevent
     -- rounding errors from skewing the probability of the last sample.
-    let x = uniformContinuousSample 0.0 (last t.cumulativeWeights) in
+    let x = uniformSample 0.0 (last t.cumulativeWeights) in
 
     -- NOTE(larshum, 2023-05-03): The sampled value 'x' cannot be greater than
     -- the last element of the sequence of cumulative weights, so we should
@@ -357,7 +358,7 @@ let logObserve : all a. use RuntimeDist in Dist a -> a -> Float =
 
 mexpr
 
-let randomTimes = create 10 (lam. gaussianSample 0. 1.) in
+let randomTimes = create 10 (lam. normalSample 0. 1.) in
 let w = wienerSample () in
 utest map w randomTimes with map w randomTimes in
 utest map w randomTimes with map w randomTimes in

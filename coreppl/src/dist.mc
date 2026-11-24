@@ -58,7 +58,7 @@ lang Dist = PrettyPrint + Eq + Sym + TypeCheck + ANF + TypeLift +
   sem smapAccumL_Dist_Expr : all a. (a -> Expr -> (a, Expr)) -> a -> Dist -> (a, Dist)
 
   -- Returns the parameter and sample type of a distribution. E.g.,
-  -- `distTy _ (Gaussian _)` = `([], [TyFloat _, TyFloat _], [TyFloat _])`.
+  -- `distTy _ (Normal _)` = `([], [TyFloat _, TyFloat _], [TyFloat _])`.
   sem distTy : Info -> Dist ->
     ([Name],                    -- The names of all type variables appearing in
                                 -- the distribution type.
@@ -295,13 +295,13 @@ end
 
 lang BetaDist = Dist
   syn Dist =
-  | DBeta { a : Expr, b : Expr }
+  | DBeta { alpha : Expr, beta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DBeta t ->
-    match f acc t.a with (acc, a) in
-    match f acc t.b with (acc, b) in
-    (acc, DBeta { t with a = a, b = b })
+    match f acc t.alpha with (acc, alpha) in
+    match f acc t.beta with (acc, beta) in
+    (acc, DBeta { t with alpha = alpha, beta = beta })
 
   sem distTy info =
   | DBeta _ ->
@@ -313,13 +313,13 @@ end
 
 lang BinomialDist = Dist
   syn Dist =
-  | DBinomial { n : Expr, p : Expr }
+  | DBinomial { n : Expr, theta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DBinomial t ->
     match f acc t.n with (acc, n) in
-    match f acc t.p with (acc, p) in
-    (acc, DBinomial { t with n = n, p = p })
+    match f acc t.theta with (acc, theta) in
+    (acc, DBinomial { t with n = n, theta = theta })
 
   sem distTy info =
   | DBinomial _ ->
@@ -349,22 +349,21 @@ lang CategoricalDist = Dist
   | DCategorical _ -> "Categorical"
 end
 
-lang Chi2Dist = Dist
+lang ChiSquareDist = Dist
   syn Dist =
-  | DChi2 { df : Expr }
+  | DChiSquare { nu : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
-  | DChi2 t ->
-    match f acc t.df with (acc, df) in
-    (acc, DChi2 { t with df = df })
+  | DChiSquare t ->
+    match f acc t.nu with (acc, nu) in
+    (acc, DChiSquare { t with nu = nu })
 
   sem distTy info =
-  | DChi2 _ ->
+  | DChiSquare _ ->
     let f = ityfloat_ info in
-    let i = ityint_ info in
-    ([], [i], f)
+    ([], [f], f)
   sem distName =
-  | DChi2 _ -> "Chi2"
+  | DChiSquare _ -> "ChiSquare"
 end
 
 lang DirichletDist = Dist
@@ -409,12 +408,12 @@ end
 
 lang ExponentialDist = Dist
   syn Dist =
-  | DExponential { rate : Expr }
+  | DExponential { beta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DExponential t ->
-    match f acc t.rate with (acc, rate) in
-    (acc, DExponential { t with rate = rate })
+    match f acc t.beta with (acc, beta) in
+    (acc, DExponential { t with beta = beta })
 
   sem distTy info =
   | DExponential _ ->
@@ -426,13 +425,13 @@ end
 
 lang GammaDist = Dist
   syn Dist =
-  | DGamma { k : Expr, theta : Expr }
+  | DGamma { k : Expr, rate : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DGamma t ->
     match f acc t.k with (acc, k) in
-    match f acc t.theta with (acc, theta) in
-    (acc, DGamma { t with k = k, theta = theta })
+    match f acc t.rate with (acc, rate) in
+    (acc, DGamma { t with k = k, rate = rate })
 
   sem distTy info =
   | DGamma _ ->
@@ -442,22 +441,22 @@ lang GammaDist = Dist
   | DGamma _ -> "Gamma"
 end
 
-lang GaussianDist = Dist
+lang NormalDist = Dist
   syn Dist =
-  | DGaussian { mu : Expr, sigma : Expr }
+  | DNormal { mu : Expr, sigma : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
-  | DGaussian t ->
+  | DNormal t ->
     match f acc t.mu with (acc, mu) in
     match f acc t.sigma with (acc, sigma) in
-    (acc, DGaussian { t with mu = mu, sigma = sigma })
+    (acc, DNormal { t with mu = mu, sigma = sigma })
 
   sem distTy info =
-  | DGaussian _ ->
+  | DNormal _ ->
     let f = ityfloat_ info in ([], [f, f], f)
 
   sem distName =
-  | DGaussian _ -> "Gaussian"
+  | DNormal _ -> "Normal"
 end
 
 lang GeometricDist = Dist
@@ -537,13 +536,13 @@ end
 
 lang UniformDist = Dist
   syn Dist =
-  | DUniform { a : Expr, b : Expr }
+  | DUniform { alpha : Expr, beta : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
   | DUniform t ->
-    match f acc t.a with (acc, a) in
-    match f acc t.b with (acc, b) in
-    (acc, DUniform { t with a = a, b = b })
+    match f acc t.alpha with (acc, alpha) in
+    match f acc t.beta with (acc, beta) in
+    (acc, DUniform { t with alpha = alpha, beta = beta })
 
   sem distTy info =
   | DUniform _ ->
@@ -553,22 +552,22 @@ lang UniformDist = Dist
   | DUniform _ -> "Uniform"
 end
 
-lang UniformDiscreteDist = Dist
+lang DiscreteRangeDist = Dist
   syn Dist =
-  | DUniformDiscrete { a : Expr, b : Expr }
+  | DDiscreteRange { lower : Expr, upper : Expr }
 
   sem smapAccumL_Dist_Expr f acc =
-  | DUniformDiscrete t ->
-    match f acc t.a with (acc, a) in
-    match f acc t.b with (acc, b) in
-    (acc, DUniformDiscrete { t with a = a, b = b })
+  | DDiscreteRange t ->
+    match f acc t.lower with (acc, lower) in
+    match f acc t.upper with (acc, upper) in
+    (acc, DDiscreteRange { t with lower = lower, upper = upper })
 
   sem distTy info =
-  | DUniformDiscrete _ ->
+  | DDiscreteRange _ ->
     let i = ityint_ info in ([], [i, i], i)
 
   sem distName =
-  | DUniformDiscrete _ -> "UniformDiscrete"
+  | DDiscreteRange _ -> "DiscreteRange"
 end
 
 lang ReciprocalDist = Dist
@@ -622,16 +621,16 @@ let bern_ = use BernoulliDist in
   lam p. dist_ (DBernoulli {p = p})
 
 let beta_ = use BetaDist in
-  lam a. lam b. dist_ (DBeta {a = a, b = b})
+  lam alpha. lam beta. dist_ (DBeta {alpha = alpha, beta = beta})
 
 let binomial_ = use BinomialDist in
-  lam n. lam p. dist_ (DBinomial {n = n, p = p})
+  lam n. lam theta. dist_ (DBinomial {n = n, theta = theta})
 
 let categorical_ = use CategoricalDist in
   lam p. dist_ (DCategorical {p = p})
 
-let chi2_ = use Chi2Dist in
-  lam df. dist_ (DChi2 {df = df})
+let chiSquare_ = use ChiSquareDist in
+  lam nu. dist_ (DChiSquare {nu = nu})
 
 let dirichlet_ = use DirichletDist in
   lam a. dist_ (DDirichlet {a = a})
@@ -639,14 +638,14 @@ let dirichlet_ = use DirichletDist in
 let empirical_ = use EmpiricalDist in
   lam lst. dist_ (DEmpirical {samples = lst})
 
-let exp_ = use ExponentialDist in
-  lam rate. dist_ (DExponential {rate = rate})
+let exp_ : use Dist in Expr -> Expr = use ExponentialDist in
+  lam beta. dist_ (DExponential {beta = beta})
 
 let gamma_ = use GammaDist in
-  lam k. lam theta. dist_ (DGamma {k = k, theta = theta})
+  lam k. lam rate. dist_ (DGamma {k = k, rate = rate})
 
-let gaussian_ = use GaussianDist in
-  lam mu. lam sigma. dist_ (DGaussian {mu = mu, sigma = sigma})
+let normal_ = use NormalDist in
+  lam mu. lam sigma. dist_ (DNormal {mu = mu, sigma = sigma})
 
 let geometric_ = use GeometricDist in
   lam p. dist_ (DGeometric {p = p})
@@ -658,10 +657,10 @@ let poisson_ = use PoissonDist in
   lam lambda. dist_ (DPoisson {lambda = lambda})
 
 let uniform_ = use UniformDist in
-  lam a. lam b. dist_ (DUniform {a = a, b = b})
+  lam alpha. lam beta. dist_ (DUniform {alpha = alpha, beta = beta})
 
-let uniformDiscrete_ = use UniformDiscreteDist in
-  lam a. lam b. dist_ (DUniformDiscrete {a = a, b = b})
+let discreteRange_ = use DiscreteRangeDist in
+  lam lower. lam upper. dist_ (DDiscreteRange {lower = lower, upper = upper})
 
 let reciprocal_ = use ReciprocalDist in
   lam a. lam b. dist_ (DReciprocal {a = a, b = b})
@@ -676,9 +675,9 @@ let treeinferencecat_ = use TreeInferenceCategoricalDist in
 ---------------------------
 
 lang DistAll =
-  BernoulliDist + BetaDist + BinomialDist + CategoricalDist + Chi2Dist + DirichletDist +
-  EmpiricalDist + ExponentialDist + GammaDist + GaussianDist + GeometricDist + MultinomialDist +
-  PoissonDist + TreeInferenceCategoricalDist + UniformDist + UniformDiscreteDist + ReciprocalDist + 
+  BernoulliDist + BetaDist + BinomialDist + CategoricalDist + ChiSquareDist + DirichletDist +
+  EmpiricalDist + ExponentialDist + GammaDist + NormalDist + GeometricDist + MultinomialDist +
+  PoissonDist + TreeInferenceCategoricalDist + UniformDist + DiscreteRangeDist + ReciprocalDist + 
   WienerDist
 end
 
@@ -697,21 +696,21 @@ let tmBeta = beta_ (float_ 1.0) (float_ 2.0) in
 let tmBinomial = binomial_ (int_ 5) (float_ 0.5) in
 let tmCategorical =
   categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
-let tmChi2 = chi2_ (int_ 1) in
+let tmChiSquare = chiSquare_ (float_ 1.0) in
 let tmDirichlet = dirichlet_ (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]) in
 let tmEmpirical = empirical_ (seq_ [
     utuple_ [float_ 1.0, float_ 1.5],
     utuple_ [float_ 3.0, float_ 1.3]
   ]) in
 let tmExponential = exp_ (float_ 1.0) in
-let tmGamma = gamma_ (float_ 1.0) (float_ 2.0) in
-let tmGaussian = gaussian_ (float_ 0.0) (float_ 1.0) in
+let tmGamma = gamma_ (float_ 1.0) (float_ 0.5) in
+let tmNormal = normal_ (float_ 0.0) (float_ 1.0) in
 let tmGeometric = geometric_ (float_ 0.5) in
 let tmMultinomial =
   multinomial_ (int_ 5) (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]) in
 let tmPoisson = poisson_ (float_ 0.5) in
 let tmUniform = uniform_ (float_ 1.0) (float_ 2.0) in
-let tmUniformDiscrete = uniformDiscrete_ (int_ 1) (int_ 2) in
+let tmDiscreteRange = discreteRange_ (int_ 1) (int_ 2) in
 let tmReciprocal = reciprocal_ (float_ 1.0) (float_ 2.0) in
 let tmWiener = wiener_ in
 let tmTree = treeinferencecat_ (seq_ [float_ 0.3, float_ 0.7]) (seq_ [ seq_ [int_ 0, int_ 1]]) in
@@ -736,8 +735,8 @@ utest mexprToString tmCategorical with strJoin "\n" [
   "Categorical [ 0.3, 0.2, 0.5 ]"
 ] using eqString in
 
-utest mexprToString tmChi2 with strJoin "\n" [
-  "Chi2 1"
+utest mexprToString tmChiSquare with strJoin "\n" [
+  "ChiSquare 1."
 ] using eqString in
 
 utest mexprToString tmDirichlet with strJoin "\n" [
@@ -754,11 +753,11 @@ utest mexprToString tmExponential with strJoin "\n" [
 ] using eqString in
 
 utest mexprToString tmGamma with strJoin "\n" [
-  "Gamma 1. 2."
+  "Gamma 1. 0.5"
 ] using eqString in
 
-utest mexprToString tmGaussian with strJoin "\n" [
-  "Gaussian 0. 1."
+utest mexprToString tmNormal with strJoin "\n" [
+  "Normal 0. 1."
 ] using eqString in
 
 utest mexprToString tmGeometric with strJoin "\n" [
@@ -777,8 +776,8 @@ utest mexprToString tmUniform with strJoin "\n" [
   "Uniform 1. 2."
 ] using eqString in
 
-utest mexprToString tmUniformDiscrete with strJoin "\n" [
-  "UniformDiscrete 1 2"
+utest mexprToString tmDiscreteRange with strJoin "\n" [
+  "DiscreteRange 1 2"
 ] using eqString in
 
 utest mexprToString tmReciprocal with strJoin "\n" [
@@ -813,8 +812,8 @@ utest eqExpr tmCategorical
 utest eqExpr tmCategorical
   (categorical_ (seq_ [float_ 0.3, float_ 0.2, float_ 0.6])) with false in
 
-utest tmChi2 with tmChi2 using eqExpr in
-utest eqExpr tmChi2 (chi2_ (int_ 2)) with false in
+utest tmChiSquare with tmChiSquare using eqExpr in
+utest eqExpr tmChiSquare (chiSquare_ (float_ 2.0)) with false in
 
 utest tmDirichlet with tmDirichlet using eqExpr in
 utest eqExpr tmDirichlet
@@ -838,9 +837,9 @@ utest eqExpr tmExponential (exp_ (float_ 1.1)) with false in
 utest tmGamma with tmGamma using eqExpr in
 utest eqExpr tmGamma (gamma_ (float_ 1.0) (float_ 1.0)) with false in
 
-utest tmGaussian with tmGaussian using eqExpr in
-utest eqExpr tmGaussian
-  (gaussian_ (float_ 1.0) (float_ 1.0)) with false in
+utest tmNormal with tmNormal using eqExpr in
+utest eqExpr tmNormal
+  (normal_ (float_ 1.0) (float_ 1.0)) with false in
 
 utest tmGeometric with tmGeometric using eqExpr in
 utest eqExpr tmGeometric (geometric_ (float_ 0.1)) with false in
@@ -862,8 +861,8 @@ utest eqExpr tmTree tmBinomial with false in
 utest tmUniform with tmUniform using eqExpr in
 utest eqExpr tmUniform (uniform_ (float_ 1.0) (float_ 1.0)) with false in
 
-utest tmUniformDiscrete with tmUniformDiscrete using eqExpr in
-utest eqExpr tmUniformDiscrete (uniformDiscrete_ (int_ 1) (int_ 1)) with false in
+utest tmDiscreteRange with tmDiscreteRange using eqExpr in
+utest eqExpr tmDiscreteRange (discreteRange_ (int_ 1) (int_ 1)) with false in
 
 utest tmReciprocal with tmReciprocal using eqExpr in
 utest eqExpr tmReciprocal (reciprocal_ (float_ 1.0) (float_ 1.0)) with false in
@@ -895,9 +894,9 @@ utest smap_Expr_Expr mapVar tmCategorical with categorical_ tmVar using eqExpr i
 utest sfold_Expr_Expr foldToSeq [] tmCategorical
 with [ seq_ [float_ 0.3, float_ 0.2, float_ 0.5] ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmChi2 with chi2_ tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmChi2
-with [ int_ 1 ] using eqSeq eqExpr in
+utest smap_Expr_Expr mapVar tmChiSquare with chiSquare_ tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmChiSquare
+with [ float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmDirichlet with dirichlet_ tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmDirichlet
@@ -915,10 +914,10 @@ with [ float_ 1.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmGamma with gamma_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmGamma
-with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
+with [ float_ 0.5, float_ 1.0 ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmGaussian with gaussian_ tmVar tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmGaussian
+utest smap_Expr_Expr mapVar tmNormal with normal_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmNormal
 with [ float_ 1.0, float_ 0.0 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmGeometric with geometric_ tmVar using eqExpr in
@@ -938,8 +937,8 @@ utest smap_Expr_Expr mapVar tmUniform with uniform_ tmVar tmVar using eqExpr in
 utest sfold_Expr_Expr foldToSeq [] tmUniform
 with [ float_ 2.0, float_ 1.0 ] using eqSeq eqExpr in
 
-utest smap_Expr_Expr mapVar tmUniformDiscrete with uniformDiscrete_ tmVar tmVar using eqExpr in
-utest sfold_Expr_Expr foldToSeq [] tmUniformDiscrete
+utest smap_Expr_Expr mapVar tmDiscreteRange with discreteRange_ tmVar tmVar using eqExpr in
+utest sfold_Expr_Expr foldToSeq [] tmDiscreteRange
 with [ int_ 2, int_ 1 ] using eqSeq eqExpr in
 
 utest smap_Expr_Expr mapVar tmReciprocal with reciprocal_ tmVar tmVar using eqExpr in
@@ -958,18 +957,18 @@ utest symbolize tmBernoulli with tmBernoulli using eqExpr in
 utest symbolize tmBeta with tmBeta using eqExpr in
 utest symbolize tmBinomial with tmBinomial using eqExpr in
 utest symbolize tmCategorical with tmCategorical using eqExpr in
-utest symbolize tmChi2 with tmChi2 using eqExpr in
+utest symbolize tmChiSquare with tmChiSquare using eqExpr in
 utest symbolize tmDirichlet with tmDirichlet using eqExpr in
 utest symbolize tmEmpirical with tmEmpirical using eqExpr in
 utest symbolize tmExponential with tmExponential using eqExpr in
 utest symbolize tmGamma with tmGamma using eqExpr in
-utest symbolize tmGaussian with tmGaussian using eqExpr in
+utest symbolize tmNormal with tmNormal using eqExpr in
 utest symbolize tmGeometric with tmGeometric using eqExpr in
 utest symbolize tmMultinomial with tmMultinomial using eqExpr in
 utest symbolize tmPoisson with tmPoisson using eqExpr in
 utest symbolize tmTree with tmTree using eqExpr in
 utest symbolize tmUniform with tmUniform using eqExpr in
-utest symbolize tmUniformDiscrete with tmUniformDiscrete using eqExpr in
+utest symbolize tmDiscreteRange with tmDiscreteRange using eqExpr in
 utest symbolize tmReciprocal with tmReciprocal using eqExpr in
 utest symbolize tmWiener with tmWiener using eqExpr in
 
@@ -981,18 +980,18 @@ utest tyTm (typeCheck tmBernoulli) with tydist_ tybool_ using eqType in
 utest tyTm (typeCheck tmBeta) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmBinomial) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmCategorical) with tydist_ tyint_ using eqType in
-utest tyTm (typeCheck tmChi2) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmChiSquare) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmDirichlet) with tydist_ (tyseq_ tyfloat_) using eqType in
 utest tyTm (typeCheck tmEmpirical) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmExponential) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGamma) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeCheck tmGaussian) with tydist_ tyfloat_ using eqType in
+utest tyTm (typeCheck tmNormal) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmGeometric) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmMultinomial) with tydist_ (tyseq_ tyint_) using eqType in
 utest tyTm (typeCheck tmPoisson) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmUniform) with tydist_ tyfloat_ using eqType in
 utest tyTm (typeCheck tmReciprocal) with tydist_ tyfloat_ using eqType in
-utest tyTm (typeCheck tmUniformDiscrete) with tydist_ tyint_ using eqType in
+utest tyTm (typeCheck tmDiscreteRange) with tydist_ tyint_ using eqType in
 utest tyTm (typeCheck tmWiener) with tydist_ (tyarrow_ tyfloat_ tyfloat_)
   using eqType
 in
@@ -1013,7 +1012,7 @@ utest _anf tmCategorical with bindall_ [
   ulet_ "t1" (categorical_ (var_ "t"))](
   var_ "t1"
 ) using eqExpr in
-utest _anf tmChi2 with bind_ (ulet_ "t" tmChi2) (var_ "t") using eqExpr in
+utest _anf tmChiSquare with bind_ (ulet_ "t" tmChiSquare) (var_ "t") using eqExpr in
 utest _anf tmDirichlet with bindall_ [
   ulet_ "t" (seq_ [float_ 1.3, float_ 1.3, float_ 1.5]),
   ulet_ "t1" (dirichlet_ (var_ "t"))](
@@ -1029,7 +1028,7 @@ utest _anf tmEmpirical with bindall_ [
 -- print (mexprToString (_anf tmEmpirical)); print "\n";
 utest _anf tmExponential with bind_ (ulet_ "t" tmExponential) (var_ "t") using eqExpr in
 utest _anf tmGamma with bind_ (ulet_ "t" tmGamma) (var_ "t") using eqExpr in
-utest _anf tmGaussian with bind_ (ulet_ "t" tmGaussian) (var_ "t") using eqExpr in
+utest _anf tmNormal with bind_ (ulet_ "t" tmNormal) (var_ "t") using eqExpr in
 utest _anf tmGeometric with bind_ (ulet_ "t" tmGeometric) (var_ "t") using eqExpr in
 utest _anf tmMultinomial with bindall_ [
   ulet_ "t" (seq_ [float_ 0.3, float_ 0.2, float_ 0.5]),
@@ -1038,7 +1037,7 @@ utest _anf tmMultinomial with bindall_ [
 ) using eqExpr in
 utest _anf tmPoisson with bind_ (ulet_ "t" tmPoisson) (var_ "t") using eqExpr in
 utest _anf tmUniform with bind_ (ulet_ "t" tmUniform) (var_ "t") using eqExpr in
-utest _anf tmUniformDiscrete with bind_ (ulet_ "t" tmUniformDiscrete) (var_ "t") using eqExpr in
+utest _anf tmDiscreteRange with bind_ (ulet_ "t" tmDiscreteRange) (var_ "t") using eqExpr in
 utest _anf tmReciprocal with bind_ (ulet_ "t" tmReciprocal) (var_ "t") using eqExpr in
 utest _anf tmWiener with bind_ (ulet_ "t" tmWiener) (var_ "t") using eqExpr in
 utest _anf tmTree with bindall_ [
@@ -1056,18 +1055,18 @@ utest (typeLift tmBernoulli).1 with tmBernoulli using eqExpr in
 utest (typeLift tmBeta).1 with tmBeta using eqExpr in
 utest (typeLift tmBinomial).1 with tmBinomial using eqExpr in
 utest (typeLift tmCategorical).1 with tmCategorical using eqExpr in
-utest (typeLift tmChi2).1 with tmChi2 using eqExpr in
+utest (typeLift tmChiSquare).1 with tmChiSquare using eqExpr in
 utest (typeLift tmDirichlet).1 with tmDirichlet using eqExpr in
 utest (typeLift tmEmpirical).1 with tmEmpirical using eqExpr in
 utest (typeLift tmExponential).1 with tmExponential using eqExpr in
 utest (typeLift tmGamma).1 with tmGamma using eqExpr in
-utest (typeLift tmGaussian).1 with tmGaussian using eqExpr in
+utest (typeLift tmNormal).1 with tmNormal using eqExpr in
 utest (typeLift tmGeometric).1 with tmGeometric using eqExpr in
 utest (typeLift tmMultinomial).1 with tmMultinomial using eqExpr in
 utest (typeLift tmPoisson).1 with tmPoisson using eqExpr in
 utest (typeLift tmTree).1 with tmTree using eqExpr in
 utest (typeLift tmUniform).1 with tmUniform using eqExpr in
-utest (typeLift tmUniformDiscrete).1 with tmUniformDiscrete using eqExpr in
+utest (typeLift tmDiscreteRange).1 with tmDiscreteRange using eqExpr in
 utest (typeLift tmReciprocal).1 with tmReciprocal using eqExpr in
 utest (typeLift tmWiener).1 with tmWiener using eqExpr in
 

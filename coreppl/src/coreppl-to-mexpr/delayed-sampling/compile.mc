@@ -15,7 +15,7 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
 
   -- a parameter of a distribution can be either
   syn DParam =
-  | DelayParam () -- a distribution, e.g Gaussian a 1. where a ~ Gaussian 3. 2.
+  | DelayParam () -- a distribution, e.g Normal a 1. where a ~ Normal 3. 2.
   | AffineParam {v:Expr,meanScale:Expr,meanOffset:Expr}
 
   sem affineAddTransform env id v =
@@ -93,16 +93,16 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
   | AffineParam _ ->  t
 
   sem transformDsDist i env runtimeDelayEnv =
-  | DBeta {a = a, b = b} ->
+  | DBeta {alpha = a, beta = b} ->
     let a = match assignDCons env runtimeDelayEnv a with Some x then x else
       (conapp runtimeDelayEnv "DelayedGraph_FloatParam" a) in
     let b = match assignDCons env runtimeDelayEnv b with Some x then x else
       (conapp runtimeDelayEnv "DelayedGraph_FloatParam" b) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBeta" (i (autoty_record_ [("a", a), ("b", b)])))
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBeta" (i (autoty_record_ [("alpha", a), ("beta", b)])))
   | DBernoulli {p = p} ->
     let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistBernoulli" (i (autoty_record_ [("p", p)])))
-  | DGaussian {mu = mu, sigma = sigma} ->
+  | DNormal {mu = mu, sigma = sigma} ->
     match mu with TmVar v in
     let res = match mapLookup v.ident env with Some (AffineParam p) then
         let mu = match assignDCons env runtimeDelayEnv p.v with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p.v) in
@@ -110,14 +110,14 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
       else let mu = match assignDCons env runtimeDelayEnv mu with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" mu) in
         (mu, float_ 1.,float_ 0.) in
     let sigma = match assignDCons env runtimeDelayEnv sigma with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" sigma) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistGaussian" (i (autoty_record_ [("mu", res.0), ("sigma", sigma), ("meanScale", res.1), ("meanOffset",res.2)])))
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistNormal" (i (autoty_record_ [("mu", res.0), ("sigma", sigma), ("meanScale", res.1), ("meanOffset",res.2)])))
   | DCategorical {p = p} ->
     let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_SeqFParam" p) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistCategorical" (i (autoty_record_ [("p", p)])))
-  | DUniform {a = a, b = b} ->
+  | DUniform {alpha = a, beta = b} ->
     let a = match assignDCons env runtimeDelayEnv a with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" a) in
     let b = match assignDCons env runtimeDelayEnv b with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" b) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistUniform" (i (autoty_record_ [("a", a), ("b", b)])))
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistUniform" (i (autoty_record_ [("alpha", a), ("beta", b)])))
   | DPoisson {lambda = lambda} ->
     match lambda with TmVar v in
     let normalParams = let lambda = match assignDCons env runtimeDelayEnv lambda with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" lambda) in
@@ -132,17 +132,17 @@ lang TransformDsDist = TransformDist + MExprPPL +DPPLParser
       else normalParams in
     -- here match lambda with AffineParam though only scale, what happens if addition?
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistPoisson" (i (autoty_record_ [("lambda", res.0),("scale",res.1)])))
-  | DBinomial {n = n, p = p} ->
+  | DBinomial {n = n, theta = theta} ->
     let n = match assignDCons env runtimeDelayEnv n with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_IntParam" n) in
-    let p = match assignDCons env runtimeDelayEnv p with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" p) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBinomial" (i (autoty_record_ [("n", n), ("p", p)])))
-  | DGamma {k = shape, theta = scale} ->
+    let theta = match assignDCons env runtimeDelayEnv theta with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" theta) in
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistBinomial" (i (autoty_record_ [("n", n), ("theta", theta)])))
+  | DGamma {k = shape, rate = rate} ->
     let shape = match assignDCons env runtimeDelayEnv shape with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" shape) in
-    let scale = match assignDCons env runtimeDelayEnv scale with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" scale) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistGamma" (i (autoty_record_ [("shape", shape), ("scale", scale)])))
-  | DExponential {rate = rate} ->
     let rate = match assignDCons env runtimeDelayEnv rate with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" rate) in
-    i (conapp runtimeDelayEnv "DelayedGraph_DsDistExponential" (i (autoty_record_ [("rate", rate)])))
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistGamma" (i (autoty_record_ [("shape", shape), ("rate", rate)])))
+  | DExponential {beta = beta} ->
+    let beta = match assignDCons env runtimeDelayEnv beta with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_FloatParam" beta) in
+    i (conapp runtimeDelayEnv "DelayedGraph_DsDistExponential" (i (autoty_record_ [("beta", beta)])))
   | DDirichlet {a = a} -> let a = match assignDCons env runtimeDelayEnv a with Some x then x else (conapp runtimeDelayEnv "DelayedGraph_SeqFParam" a) in
     i (conapp runtimeDelayEnv "DelayedGraph_DsDistDirichlet" (i (autoty_record_ [("a", a)])))
   | DMultinomial {n = n, p = p} ->

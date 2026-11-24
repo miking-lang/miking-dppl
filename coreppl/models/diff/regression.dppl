@@ -1,10 +1,10 @@
 let model: () -> Float = lam.
-  let a = assume (Gaussian 0.5 1.) in
+  let a = assume (Normal 0.5 1.) in
   let f = lam x. addf (mulf a (pow x 2.)) x in
   let df = lam x. diff f x 1. in
-  observe (df 1.) (Gaussian 3. 1.);
-  observe (df 2.) (Gaussian 5. 1.);
-  observe (df 3.) (Gaussian 7. 1.);
+  observe (df 1.) (Normal 3. 1.);
+  observe (df 2.) (Normal 5. 1.);
+  observe (df 3.) (Normal 7. 1.);
   a
 
 mexpr

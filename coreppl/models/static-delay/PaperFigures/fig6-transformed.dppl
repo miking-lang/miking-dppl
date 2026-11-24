@@ -92,7 +92,7 @@ let #var"1" =
        in
        let t1 =
          observe
-           o (Gaussian
+           o (Normal
               margMu margSigma)
        in
        let postMu =
@@ -204,11 +204,11 @@ in
 let postParam0 = get prPostP 0 in
 let postParam1 = get prPostP 1 in
 let r1 = assume
-    (Gaussian
+    (Normal
        postParam0.0 postParam0.1)
 in
 let r2 = assume
-    (Gaussian
+    (Normal
        postParam1.0 postParam1.1)
 in
 let l = [ r1,

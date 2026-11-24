@@ -21,11 +21,11 @@ let t = testCpplMExpr "diversification-models/clads2-synthetic.dppl" in
 -- NOTE(2023-06-30,dlunde): SMC with '--resample likelihood' peforms really
 -- poorly for this model, which is why we simply give lam. lam. true as the
 -- test equality function.
-utest r (t 1000 0 "-m is-lw --cps none"                            ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps partial"                         ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps partial --no-early-stop"         ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps full"                            ) with rhs using en in
-utest r (t 1000 0 "-m is-lw --cps full --no-early-stop"            ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps none"                            ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps partial"                         ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps partial --no-early-stop"         ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps full"                            ) with rhs using en in
+utest r (t 2000 0 "-m is-lw --cps full --no-early-stop"            ) with rhs using en in
 -- utest r (t 1000 0 "-m smc-bpf --cps partial --resample manual"     ) with rhs using en in
 utest r (t 1000 0 "-m smc-bpf --cps partial --resample align"      ) with rhs using en in
 utest r (t 1000 0 "-m smc-bpf --cps partial --resample likelihood" ) with rhs using lam. lam. true in
@@ -38,8 +38,8 @@ utest r (t 1000 0 "-m smc-apf --cps partial --resample likelihood" ) with rhs us
 -- utest r (t 1000 0 "-m smc-apf --cps full --resample manual"        ) with rhs using en in
 utest r (t 1000 0 "-m smc-apf --cps full --resample align"         ) with rhs using en in
 utest r (t 1000 0 "-m smc-apf --cps full --resample likelihood"    ) with rhs using lam. lam. true in
-utest r (t 1000 500 "-m pmcmc-pimh --cps partial"                  ) with rhs using e in
-utest r (t 1000 500 "-m pmcmc-pimh --cps full"                     ) with rhs using e in
+utest r (t 10000 500 "-m pmcmc-pimh --cps partial"                 ) with rhs using e in
+utest r (t 10000 500 "-m pmcmc-pimh --cps full"                    ) with rhs using e in
 utest r (t 10000 500 "-m mcmc-trace"                               ) with rhs using e in
 utest r (t 1000 500 "-m mcmc-naive"                                ) with rhs using e in
 utest r (t 1000 500 "-m mcmc-lightweight --align --cps none"       ) with rhs using e in

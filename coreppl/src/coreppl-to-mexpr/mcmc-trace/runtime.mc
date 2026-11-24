@@ -2,6 +2,7 @@ include "bool.mc"
 include "common.mc"
 
 include "ext/dist-ext.mc"
+include "mi-stats::stats.mc"
 include "ext/math-ext.mc"
 include "math.mc"
 include "seq.mc"
@@ -92,7 +93,7 @@ let run : all a. Unknown -> (State -> a) -> use RuntimeDistBase in Dist a =
           modref state.oldTrace (reverse (deref state.trace));
           modref state.trace emptyList;
           -- print "trace length: "; printLn (int2string (deref state.traceLength));
-          modref state.cut (uniformDiscreteSample 0 (subi prevTraceLength 1));
+          modref state.cut (discreteRangeSample 0 (subi prevTraceLength 1));
           -- print "cut: "; printLn (int2string (deref state.cut));
 
           let sample = model state in

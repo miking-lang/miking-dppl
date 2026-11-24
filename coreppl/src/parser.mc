@@ -207,12 +207,12 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , info = info
     })
   | "Beta" -> Some (2, lam lst. TmDist
-    { dist = DBeta {a = get lst 0, b = get lst 1}
+    { dist = DBeta {alpha = get lst 0, beta = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })
   | "Binomial" -> Some (2, lam lst. TmDist
-    { dist = DBinomial {n = get lst 0, p = get lst 1}
+    { dist = DBinomial {n = get lst 0, theta = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })
@@ -221,8 +221,8 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , ty = TyUnknown {info = info}
     , info = info
     })
-  | "Chi2" -> Some (1, lam lst. TmDist
-    { dist = DChi2 {df = get lst 0}
+  | "ChiSquare" -> Some (1, lam lst. TmDist
+    { dist = DChiSquare {nu = get lst 0}
     , ty = TyUnknown {info = info}
     , info = info
     })
@@ -237,17 +237,17 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , info = info
     })
   | "Exponential" -> Some (1, lam lst. TmDist
-    { dist = DExponential {rate = get lst 0}
+    { dist = DExponential {beta = get lst 0}
     , ty = TyUnknown {info = info}
     , info = info
     })
   | "Gamma" -> Some (2, lam lst. TmDist
-    { dist = DGamma {k = get lst 0, theta = get lst 1}
+    { dist = DGamma {k = get lst 0, rate = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })
-  | "Gaussian" -> Some (2, lam lst. TmDist
-    { dist = DGaussian {mu = get lst 0, sigma = get lst 1}
+  | "Normal" -> Some (2, lam lst. TmDist
+    { dist = DNormal {mu = get lst 0, sigma = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })
@@ -272,12 +272,12 @@ lang DPPLKeywordMaker = DPPLParser + KeywordMaker + KeywordMakerOpaque
     , info = info
     })
   | "Uniform" -> Some (2, lam lst. TmDist
-    { dist = DUniform {a = get lst 0, b = get lst 1}
+    { dist = DUniform {alpha = get lst 0, beta = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })
-  | "UniformDiscrete" -> Some (2, lam lst. TmDist
-    { dist = DUniformDiscrete {a = get lst 0, b = get lst 1}
+  | "DiscreteRange" -> Some (2, lam lst. TmDist
+    { dist = DDiscreteRange {lower = get lst 0, upper = get lst 1}
     , ty = TyUnknown {info = info}
     , info = info
     })

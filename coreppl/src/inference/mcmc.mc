@@ -52,14 +52,14 @@ lang AutoDriftKernel = Assume + DistAll
   | _ -> None ()
 
   | DBeta _ ->
-    let dist = DBeta {a = mulf_ driftScale x, b = mulf_ driftScale (subf_ (float_ 1.) x)} in
+    let dist = DBeta {alpha = mulf_ driftScale x, beta = mulf_ driftScale (subf_ (float_ 1.) x)} in
     Some (dist_ dist)
 
   -- | DBinomial _ ->
   --   let pBody = divf_ (subf_ x driftScale) x in
   --   let pName = nameSym "p" in
   --   let p = nvar_ pName in
-  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), p = p})))
+  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), theta = p})))
 
   -- | DBernoulli _ ->
 
@@ -67,13 +67,13 @@ lang AutoDriftKernel = Assume + DistAll
     Some (dist_ (DDirichlet {a = map_ (ulam_ "x" (mulf_ driftScale (var_ "x"))) x}))
 
   | DExponential _ ->
-    Some (dist_ (DUniform {a = divf_ x driftScale, b = mulf_ x driftScale}))
+    Some (dist_ (DUniform {alpha = divf_ x driftScale, beta = mulf_ x driftScale}))
 
   | DGamma _ ->
-    Some (dist_ (DGamma {k = divf_ x driftScale, theta = driftScale}))
+    Some (dist_ (DGamma {k = divf_ x driftScale, rate = divf_ (float_ 1.0) driftScale}))
 
-  | DGaussian _ ->
-    Some (dist_ (DGaussian {mu = x, sigma = driftScale}))
+  | DNormal _ ->
+    Some (dist_ (DNormal {mu = x, sigma = driftScale}))
 
   -- | DMultinomial _ ->
   --   Some (dist_ (DMultinomial {n = ceilfi_ driftScale, p = map_ (divf_
@@ -82,10 +82,10 @@ lang AutoDriftKernel = Assume + DistAll
   --   let pBody = divf_ (subf_ x driftScale) x in
   --   let pName = nameSym "p" in
   --   let p = nvar_ pName in
-  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), p = p})))
+  --   Some (bind_ (nulet_ pName pBody) (dist_ (DBinomial {n = ceilfi_ (divf_ x p), theta = p})))
 
   | DUniform _ ->
-    Some (dist_ (DUniform {a = subf_ x driftScale, b = addf_ x driftScale}))
+    Some (dist_ (DUniform {alpha = subf_ x driftScale, beta = addf_ x driftScale}))
 
   | DReciprocal _ ->
     Some (dist_ (DReciprocal {a = subf_ x driftScale, b = addf_ x driftScale}))
